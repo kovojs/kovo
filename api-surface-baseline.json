@@ -1130,8 +1130,6 @@
     "@kovojs/test./verifier-sql#parseSqlOperations",
     "@kovojs/test./verifier#DbObservationOptions",
     "@kovojs/test./verifier#DbVerificationConfig",
-    "@kovojs/test./verifier#DbVerificationDiagnostic",
-    "@kovojs/test./verifier#diagnosticMessage",
     "@kovojs/test./verifier#ObservedDbOperation",
     "@kovojs/ui./accordion#Accordion",
     "@kovojs/ui./accordion#accordionClasses",

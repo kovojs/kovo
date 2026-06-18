@@ -21,8 +21,6 @@ export type {
   DbVerificationConfig,
   ObservedDbOperation,
 } from './verifier-observation.js';
-export type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
-export { diagnosticMessage } from './verifier-diagnostics.js';
 
 /** Wraps a database to record operations and assert each write is covered by the touch graph. */
 export interface DbVerifier {

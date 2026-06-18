@@ -440,7 +440,6 @@ import {
   createDbVerifier,
   type DbObservationOptions,
   type DbVerificationConfig,
-  type DbVerificationDiagnostic,
   type DbVerifier,
   type ObservedDbOperation,
 } from '@kovojs/test/verifier';
@@ -448,7 +447,7 @@ import {
   diagnosticMessage,
   diagnosticsForObservations,
   type DiagnosticCode,
-  type DbVerificationDiagnostic as DirectDbVerificationDiagnostic,
+  type DbVerificationDiagnostic,
 } from '@kovojs/test/verifier-diagnostics';
 import {
   createVerificationFakeDb,
@@ -1795,7 +1794,6 @@ type _PublicSubpathTypes = [
   DbObservationOptions,
   DbVerificationConfig,
   DbVerificationDiagnostic,
-  DirectDbVerificationDiagnostic,
   DbVerifier,
   ObservedDbOperation,
   ViteGeneratedHandlerMiddlewareFact,

@@ -881,9 +881,12 @@ tsconfig.json --noEmit --pretty false`.
     `rg -n "@kovojs/test'|@kovojs/test\"" SPEC.md site/content site/tutorial packages/conformance-fixtures packages/test/src/assertions.ts`
     finds no root import sites outside `package.json`, and
     `corepack pnpm exec vitest run packages/conformance-fixtures/src/package-exports.test.ts packages/test/src/headers.test.ts packages/test/src/assertions.test.ts packages/test/src/harness.test.ts packages/test/src/test-case.test.ts packages/test/src/pglite.test.ts packages/test/src/verifier.test.ts`
-    passes. `corepack pnpm run check:exports` passes with the duplicate baseline
-    shrunk from 881 to 858; the remaining two `@kovojs/test` duplicates are
-    verifier/verifier-diagnostics overlap, not root aliases.
+    passes. Follow-up evidence: `packages/test/src/verifier.ts` no longer
+    re-exports `DbVerificationDiagnostic` or `diagnosticMessage`; their only
+    public home is `@kovojs/test/verifier-diagnostics`. Verification:
+    `corepack pnpm exec vitest --run packages/conformance-fixtures/src/package-exports.test.ts
+    packages/test/src/verifier.test.ts packages/test/src/verifier-diagnostics.test.ts`;
+    `corepack pnpm run check:exports`; `node scripts/api-surface-gate.mjs`.
 - [x] **Shrink `@kovojs/better-auth` to app-facing adapter APIs.**
   - Keep app-facing helpers such as `mount`, `betterAuthSession`, `authed`, and
     `role`/role types when their public use cases are documented and their type

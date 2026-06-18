@@ -146,42 +146,6 @@
       ],
       "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
       "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/test",
-      "symbol": "DbVerificationDiagnostic",
-      "homes": [
-        {
-          "importPath": "@kovojs/test/verifier",
-          "kind": "type",
-          "subpath": "./verifier"
-        },
-        {
-          "importPath": "@kovojs/test/verifier-diagnostics",
-          "kind": "type",
-          "subpath": "./verifier-diagnostics"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/test",
-      "symbol": "diagnosticMessage",
-      "homes": [
-        {
-          "importPath": "@kovojs/test/verifier",
-          "kind": "value",
-          "subpath": "./verifier"
-        },
-        {
-          "importPath": "@kovojs/test/verifier-diagnostics",
-          "kind": "value",
-          "subpath": "./verifier-diagnostics"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
     }
   ]
 }
