@@ -214,15 +214,16 @@ packages/runtime/src/inline-loader-artifact-minifier.test.ts` passed 64
     hash anchors to native browser navigation. Latest:
     `pnpm exec vitest --config vitest.browser.config.ts --run
 packages/runtime/src/inline-loader-navigation.browser.test.ts`
-    passed with 72 browser tests and proves target-document API hashes scroll
+    passed with 75 browser tests and proves target-document API hashes scroll
     after morphing, retry after post-morph layout shifts, preserve request
     fragments when real `fetch()` response URLs omit hashes, offset below sticky
     document chrome, update `location.href`, and restore saved scroll/hash URL
     state through browser `popstate`. It also proves popstate hash URLs with no
     saved scroll land on the requested target, same-path links with changed
     query strings and hashes remain enhanced navigations, and fresh clicks to
-    previously visited API symbol hashes ignore stale saved scroll and land on
-    the requested symbol.
+    previously visited or restored API symbol hashes ignore stale saved scroll
+    and land on the requested symbol, including a distinct new symbol after a
+    restored old hash.
     `pnpm --filter @kovojs/site run smoke:navigation` passed
     `site-navigation-smoke/v1 OK` after `pnpm --filter @kovojs/site run build`
     and proves actual enhanced docs/API clicks (`kovo:navigate` plus preserved
@@ -230,7 +231,9 @@ packages/runtime/src/inline-loader-navigation.browser.test.ts`
     rail hashes staying local to the current document, cross-page enhanced API
     symbol hashes, fresh API symbol clicks after leaving a previously visited
     symbol page, and back/forward restoration all land below the sticky docs
-    header with the active rail item visible in the exported site.
+    header with the active rail item visible in the exported site. It also
+    proves exported-site same-origin non-HTML responses and mismatched
+    `kovo-build` HTML fall back to full navigation without `kovo:navigate`.
     `pnpm exec vitest --run packages/runtime/src/inline-loader-navigation.test.ts`
     passed with 52 tests and proves `popstate` restores saved scroll without
     pushing another history entry while fresh clicks ignore saved scroll across
@@ -388,7 +391,10 @@ packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63359`
     proves full-document fetch, compatible leaf morphing, document shell updates,
     and body render-equivalence to the fetched target document; `packages/runtime/src/inline-loader-navigation.test.ts`
     proves build-token, non-HTML, duplicate-id morph, and missing navigation
-    segment fallback across all inline installer artifacts.
+    segment fallback across all inline installer artifacts. `pnpm --filter
+    @kovojs/site run smoke:navigation` passed `site-navigation-smoke/v1 OK`
+    after `pnpm --filter @kovojs/site run build` and proves exported-site
+    same-origin non-HTML fallback to full navigation.
 - [x] **Segment persistence:** unchanged layout island/media state survives;
       changed layout or leaf segments morph from server-rendered target HTML.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
@@ -409,6 +415,10 @@ packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63359`
     proves build-token mismatch, non-HTML fallback, final same-origin HTML
     redirects, and 403/404/500 shell morphing across inline artifacts.
     It also proves duplicate-id morph failure falls back to full GET.
+    `pnpm --filter @kovojs/site run smoke:navigation` passed
+    `site-navigation-smoke/v1 OK` after `pnpm --filter @kovojs/site run build`
+    and proves a mismatched exported-site `kovo-build` HTML document falls back
+    to full navigation.
 - [x] **Mutation/live after navigation:** preserved and inserted targets refresh
       correctly with no stale-target or double-morph races.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
@@ -421,7 +431,8 @@ packages/runtime/src/inline-loader-navigation.browser.test.ts --api 63359`
     proves focus, top scroll, decoded/encoded/named hash scroll, route-change
     announcement, delegated docs theme persistence, real-fetch request-fragment
     preservation, sticky-chrome hash offset, post-morph hash-scroll retry, fresh
-    API symbol clicks ignoring stale saved scroll, and newest-hash concurrency;
+    API symbol clicks ignoring stale saved scroll after previous visits or
+    restored old hashes, and newest-hash concurrency;
     `packages/runtime/src/inline-loader-navigation.test.ts` proves popstate
     scroll restoration; bfcache hygiene is covered by the runtime visible-return,
     pagehide, and conformance fixtures; `examples/commerce/src/enhanced-navigation.test.ts`

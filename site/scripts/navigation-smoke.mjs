@@ -155,6 +155,23 @@ async function assertApiRailState(page, hash, label) {
   );
 }
 
+async function assertFallbackNavigation(page, click, expectedPath, label) {
+  await page.evaluate(() => {
+    globalThis.__kovoNavigationSmokeEvents = [];
+  });
+  await click();
+  await page.waitForFunction((path) => location.pathname === path, expectedPath);
+  await check(label, () =>
+    page.evaluate(
+      (path) => {
+        const events = globalThis.__kovoNavigationSmokeEvents ?? [];
+        return location.pathname === path && events.length === 0;
+      },
+      expectedPath,
+    ),
+  );
+}
+
 async function deepApiRailHashFor(page, path) {
   return page.evaluate(async (urlPath) => {
     const html = await fetch(urlPath).then((response) => response.text());
@@ -165,6 +182,17 @@ async function deepApiRailHashFor(page, path) {
 }
 
 const server = createServer(async (request, response) => {
+  if (request.url?.startsWith('/__kovo-smoke-build-mismatch/')) {
+    const html = await readFile(path.join(distDir, 'index.html'), 'utf8');
+    const mismatched = html.replace(
+      /<meta name="kovo-build" content="[^"]*">/,
+      '<meta name="kovo-build" content="smoke-build-mismatch">',
+    );
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    response.end(mismatched);
+    return;
+  }
+
   const file = fileFor(request.url ?? '/');
   if (!existsSync(file)) {
     response.writeHead(404, { 'content-type': 'text/plain' });
@@ -186,7 +214,7 @@ try {
 
   await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
   await installNavigationProbe(page);
-  await page.click('button[on\\:click^="/c/theme.js"]');
+  await page.click('button[on\\:click$="theme.js#toggle"]');
   await page.waitForFunction(
     () =>
       document.documentElement.classList.contains('dark') &&
@@ -200,7 +228,7 @@ try {
   );
   await assertTheme(page, 'dark');
 
-  await page.click('button[on\\:click^="/c/theme.js"]');
+  await page.click('button[on\\:click$="theme.js#toggle"]');
   await page.waitForFunction(
     () =>
       !document.documentElement.classList.contains('dark') &&
@@ -354,6 +382,51 @@ try {
     await check('forward restores docs page scroll after API symbol popstate', () =>
       page.evaluate((expectedY) => Math.abs(window.scrollY - expectedY) <= 2, docsScroll),
     );
+
+    await installNavigationProbe(page);
+    await page.evaluate(() => {
+      const link = document.createElement('a');
+      link.id = 'synthetic-build-mismatch-link';
+      link.href = '/__kovo-smoke-build-mismatch/';
+      link.textContent = 'Mismatched build';
+      document.body.append(link);
+    });
+    await assertFallbackNavigation(
+      page,
+      () => page.click('#synthetic-build-mismatch-link'),
+      '/__kovo-smoke-build-mismatch/',
+      'build-token mismatch falls back to full navigation',
+    );
+    await check('build-token mismatch loads the fallback document shell', () =>
+      page.evaluate(
+        () =>
+          document.querySelector('meta[name="kovo-build"]')?.getAttribute('content') ===
+          'smoke-build-mismatch',
+      ),
+    );
+
+    await installNavigationProbe(page);
+    const stylesheetPath = await page.evaluate(() => {
+      const href = document.querySelector('link[rel="stylesheet"]')?.getAttribute('href');
+      return href ? new URL(href, location.href).pathname : '';
+    });
+    if (!stylesheetPath) {
+      failures.push('site exposes a stylesheet for non-HTML fallback smoke');
+    } else {
+      await page.evaluate((href) => {
+        const link = document.createElement('a');
+        link.id = 'synthetic-non-html-link';
+        link.href = href;
+        link.textContent = 'Stylesheet';
+        document.body.append(link);
+      }, stylesheetPath);
+      await assertFallbackNavigation(
+        page,
+        () => page.click('#synthetic-non-html-link'),
+        stylesheetPath,
+        'same-origin non-HTML response falls back to full navigation',
+      );
+    }
   }
 } finally {
   await browser.close();

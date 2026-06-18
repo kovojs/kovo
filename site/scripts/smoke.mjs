@@ -100,9 +100,12 @@ try {
   await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
   check(scriptRequests.length === 0, 'JS: zero island bytes before first interaction');
 
-  await page.click('button[on\\:click^="/c/search.js"]');
+  await page.click('button[on\\:click$="search.js#open"]');
   await page.waitForFunction(() => document.getElementById('site-search')?.open === true);
-  check(scriptRequests.includes('/c/search.js'), 'JS: search module loads on first interaction');
+  check(
+    scriptRequests.some((script) => script.endsWith('/search.js')),
+    'JS: search module loads on first interaction',
+  );
   check(
     (await page.locator('#site-search-results li.active a').getAttribute('href')) ===
       '/docs/quickstart/',
@@ -148,7 +151,7 @@ try {
   check(true, 'JS: ⌘K reopens after first use');
   await page.keyboard.press('Escape');
 
-  await page.click('button[on\\:click^="/c/theme.js"]');
+  await page.click('button[on\\:click$="theme.js#toggle"]');
   await page.waitForFunction(
     () =>
       document.documentElement.classList.contains('dark') &&
@@ -206,7 +209,10 @@ try {
   const galleryScripts = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (url.pathname.startsWith('/c/examples/gallery/src/generated/interactive/')) {
+    if (
+      url.pathname.startsWith('/c/') &&
+      url.pathname.includes('/examples/gallery/src/generated/interactive/')
+    ) {
       galleryScripts.push(url.pathname);
     }
   });
@@ -228,8 +234,8 @@ try {
     () => document.querySelector('#accordion-demo [data-state="open"]') !== null,
   );
   check(
-    galleryScripts.includes(
-      '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
+    galleryScripts.some((script) =>
+      script.endsWith('/examples/gallery/src/generated/interactive/accordion-demo.client.js'),
     ),
     'JS: interactive gallery client module loads on interaction',
   );
@@ -241,7 +247,9 @@ try {
       document.querySelector('#toggle-demo [data-demo-state="pressed"]')?.textContent === 'pressed',
   );
   check(
-    galleryScripts.includes('/c/examples/gallery/src/generated/interactive/toggle-demo.client.js'),
+    galleryScripts.some((script) =>
+      script.endsWith('/examples/gallery/src/generated/interactive/toggle-demo.client.js'),
+    ),
     'JS: folded toggle gallery page runs the compiled handler',
   );
 
@@ -253,7 +261,7 @@ try {
     { name: 'stackoverflow', marker: 'body', text: 'Questions' },
   ];
   for (const embed of EMBED_CHECKS) {
-    await page.goto(`${origin}/examples/${embed.name}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${origin}/examples/${embed.name}/`, { waitUntil: 'domcontentloaded' });
     check(
       (await page.locator('.example-source .code-window').count()) >= 2,
       `JS: ${embed.name} example shows authored source windows`,

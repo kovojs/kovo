@@ -879,6 +879,83 @@ describe('browser inline loader enhanced navigation', () => {
     }
   });
 
+  it('does not reuse restored hash scroll when a fresh click targets a different symbol', async () => {
+    history.replaceState({}, '', new URL('/api#symbols%2Fold', initialUrl).href);
+    document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>API old</title>';
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+      '<a id="to-docs" href="/docs">Docs</a>',
+      '<section kovo-nav-segment="page:/api-old" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<h2 id="symbols/old">Old symbol</h2>',
+      '</section>',
+      '</main>',
+    ].join('');
+    const scrolledIds: string[] = [];
+    const fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(requestInputHref(input), location.href);
+      const isApi = url.pathname === '/api';
+      return {
+        headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+        async text() {
+          const apiPage = url.hash === '#symbols%2Fnew' ? 'new' : 'old';
+          return [
+            '<!doctype html><html><head>',
+            '<meta name="kovo-build" content="build-a">',
+            `<title>${isApi ? `API ${apiPage}` : 'Docs'}</title>`,
+            '</head><body>',
+            '<main kovo-nav-segment="layout:Docs" kovo-nav-kind="layout" kovo-nav-name="Docs">',
+            '<a id="to-docs" href="/docs">Docs</a>',
+            '<a id="to-new-symbol" href="/api#symbols%2Fnew">New symbol</a>',
+            isApi
+              ? [
+                  `<section kovo-nav-segment="page:/api-${apiPage}" kovo-nav-kind="page" kovo-nav-name="page">`,
+                  `<h2 id="symbols/${apiPage}">${apiPage} symbol</h2>`,
+                  '</section>',
+                ].join('')
+              : '<section kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Docs</section>',
+            '</main>',
+            '</body></html>',
+          ].join('');
+        },
+        url: url.href,
+      };
+    });
+    const originalScrollIntoView = currentElementScrollIntoView();
+    Element.prototype.scrollIntoView = function scrollIntoView() {
+      scrolledIds.push((this as Element).id);
+    };
+    const scrollTo = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', scrollTo);
+
+    try {
+      installNavigationLoader();
+      vi.stubGlobal('scrollX', 11);
+      vi.stubGlobal('scrollY', 222);
+      dispatchAnchorLikeClick('/docs');
+      await vi.waitFor(() => expect(document.title).toBe('Docs'));
+
+      vi.stubGlobal('scrollX', 33);
+      vi.stubGlobal('scrollY', 444);
+      history.replaceState({}, '', new URL('/api#symbols%2Fold', initialUrl).href);
+      dispatchEvent(new PopStateEvent('popstate'));
+      await vi.waitFor(() => expect(document.title).toBe('API old'));
+      expect(scrollTo).toHaveBeenCalledWith(11, 222);
+
+      document.title = 'Docs';
+      history.replaceState({}, '', new URL('/docs', initialUrl).href);
+      dispatchAnchorLikeClick('/api#symbols%2Fnew');
+      await vi.waitFor(() => expect(document.title).toBe('API new'));
+
+      expect(location.href).toBe(new URL('/api#symbols%2Fnew', initialUrl).href);
+      expect(scrolledIds.at(-1)).toBe('symbols/new');
+      expect(scrolledIds).not.toContain('symbols/old');
+      expect(scrollTo).not.toHaveBeenCalledWith(33, 444);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
+
   it('offsets target-document hash scrolling below sticky document chrome', async () => {
     document.head.innerHTML = '<meta name="kovo-build" content="build-a"><title>Docs</title>';
     document.body.innerHTML = [
