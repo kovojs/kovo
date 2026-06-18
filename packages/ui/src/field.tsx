@@ -11,6 +11,8 @@ import {
 } from '@kovojs/headless-ui/field';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface FieldStyleOverrides {
@@ -266,6 +268,7 @@ export const Field = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -291,6 +294,7 @@ export const FieldLabel = component({
     return (
       <label
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -325,6 +329,7 @@ export const FieldControl = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         autoComplete={attrs.autoComplete}
@@ -369,6 +374,7 @@ export const FieldTextarea = component({
     return (
       <textarea
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         autoComplete={attrs.autoComplete}
@@ -409,6 +415,7 @@ export const FieldSelect = component({
     return (
       <select
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         data-disabled={attrs['data-disabled']}
@@ -434,6 +441,7 @@ export const FieldSelectOption = component({
     return (
       <option
         {...styleAttrs}
+        {...passThroughProps(props)}
         disabled={props.disabled}
         selected={props.selected}
         value={props.value}
@@ -458,6 +466,7 @@ export const FieldDescription = component({
     return (
       <p
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -484,6 +493,7 @@ export const FieldError = component({
     return (
       <p
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -514,6 +524,7 @@ export const Fieldset = component({
     return (
       <fieldset
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         data-disabled={attrs['data-disabled']}
@@ -543,6 +554,7 @@ export const FieldsetLegend = component({
     return (
       <legend
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-required={attrs['data-required']}
@@ -553,3 +565,5 @@ export const FieldsetLegend = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/field';

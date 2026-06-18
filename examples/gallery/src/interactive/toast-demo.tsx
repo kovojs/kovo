@@ -2,37 +2,21 @@
 import { component } from '@kovojs/core';
 import {
   normalizeToastDuration,
-  toastActionAttributes,
+  Toast,
+  ToastAction,
   toastActionClick as _toastActionClick,
   toastAnimationEnd as _toastAnimationEnd,
-  toastCloseAttributes,
+  ToastClose,
   toastCloseClick as _toastCloseClick,
-  toastDescriptionAttributes,
+  ToastDescription,
   toastEscapeKeyDown as _toastEscapeKeyDown,
-  toastRootAttributes,
-  toastTitleAttributes,
-  toastViewportAttributes,
+  ToastTitle,
+  ToastViewport,
   toastViewportKeyDown as _toastViewportKeyDown,
-} from '@kovojs/headless-ui/toast';
-import {
-  toastViewportClasses,
-  toastClasses,
-  toastTitleClasses,
-  toastDescriptionClasses,
-  toastActionClasses,
-  toastCloseClasses,
 } from '@kovojs/ui/toast';
 
-const VIEWPORT_CLASS = toastViewportClasses.join(' ');
-const TOAST_CLASS = toastClasses.join(' ');
-const TIMER_CLASS =
-  '[animation:gallery-toast-auto-dismiss_5000ms_linear] hover:[animation-play-state:paused] focus-within:[animation-play-state:paused] data-[state=closed]:[animation:none]';
 const TRIGGER_CLASS =
   'inline-flex h-9 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950';
-const TITLE_CLASS = toastTitleClasses.join(' ');
-const DESCRIPTION_CLASS = toastDescriptionClasses.join(' ');
-const ACTION_CLASS = toastActionClasses.join(' ');
-const CLOSE_CLASS = toastCloseClasses.join(' ');
 
 export interface GalleryToastDemoState {
   activeCount: number;
@@ -63,14 +47,11 @@ export const GalleryToastDemo = component({
     };
 
     return (
-      <section
-        {...toastViewportAttributes({
-          id: 'gallery-toast-viewport',
-          label: 'Gallery notifications',
-        })}
-        class={VIEWPORT_CLASS}
+      <ToastViewport
         data-gallery-interactive="toast"
         data-toast-duration-ms={durationMs}
+        id="gallery-toast-viewport"
+        label="Gallery notifications"
         onKeyDown={() => {
           if (_toastViewportKeyDown(Object(event))) return;
 
@@ -108,27 +89,19 @@ export const GalleryToastDemo = component({
         >
           Show toast
         </button>
-        <div
-          {...toastRootAttributes(previousToastState)}
-          class={TOAST_CLASS}
+        <Toast
+          {...previousToastState}
           data-state={state.previousOpen ? 'open' : 'closed'}
           hidden={!state.previousOpen}
         >
-          <strong
-            {...toastTitleAttributes({ id: 'gallery-toast-previous-title' })}
-            class={TITLE_CLASS}
-          >
+          <ToastTitle id="gallery-toast-previous-title">
             Previous save
-          </strong>
-          <p
-            {...toastDescriptionAttributes({ id: 'gallery-toast-previous-description' })}
-            class={DESCRIPTION_CLASS}
-          >
-            {'Gallery settings update #' + state.previousCount}
-          </p>
-          <button
-            {...toastCloseAttributes(previousToastState)}
-            class={CLOSE_CLASS}
+          </ToastTitle>
+          <ToastDescription id="gallery-toast-previous-description">
+            Gallery settings update.
+          </ToastDescription>
+          <ToastClose
+            {...previousToastState}
             data-state={state.previousOpen ? 'open' : 'closed'}
             onClick={() => {
               const result = _toastCloseClick(Object(event), {
@@ -140,11 +113,10 @@ export const GalleryToastDemo = component({
             }}
           >
             Dismiss
-          </button>
-        </div>
-        <div
-          {...toastRootAttributes(activeToastState)}
-          class={TOAST_CLASS + ' ' + TIMER_CLASS}
+          </ToastClose>
+        </Toast>
+        <Toast
+          {...activeToastState}
           data-state={state.activeOpen ? 'open' : 'closed'}
           hidden={!state.activeOpen}
           onAnimationEnd={() => {
@@ -156,19 +128,17 @@ export const GalleryToastDemo = component({
             if (!result?.changed) return;
             state.activeOpen = result.open;
           }}
+          style={{
+            animationDuration: `${durationMs}ms`,
+            animationName: 'gallery-toast-auto-dismiss',
+            animationTimingFunction: 'linear',
+          }}
         >
-          <strong {...toastTitleAttributes({ id: 'gallery-toast-title' })} class={TITLE_CLASS}>
-            Saved
-          </strong>
-          <p
-            {...toastDescriptionAttributes({ id: 'gallery-toast-description' })}
-            class={DESCRIPTION_CLASS}
-          >
-            {'Gallery settings update #' + state.activeCount}
-          </p>
-          <button
-            {...toastActionAttributes({ ...activeToastState, actionValue: 'undo' })}
-            class={ACTION_CLASS}
+          <ToastTitle id="gallery-toast-title">Saved</ToastTitle>
+          <ToastDescription id="gallery-toast-description">Gallery settings update.</ToastDescription>
+          <ToastAction
+            {...activeToastState}
+            actionValue="undo"
             onClick={() => {
               const result = _toastActionClick(Object(event), {
                 id: 'gallery-toast',
@@ -179,15 +149,12 @@ export const GalleryToastDemo = component({
             }}
           >
             Undo
-          </button>
-          <button
-            {...toastActionAttributes({
-              ...activeToastState,
-              actionValue: 'keep-open',
-              dismissOnAction: false,
-            })}
-            class={ACTION_CLASS}
+          </ToastAction>
+          <ToastAction
+            {...activeToastState}
+            actionValue="keep-open"
             data-toast-cancel-dismiss=""
+            dismissOnAction={false}
             onClick={() => {
               const result = _toastActionClick(
                 Object(event),
@@ -198,10 +165,9 @@ export const GalleryToastDemo = component({
             }}
           >
             Keep open
-          </button>
-          <button
-            {...toastCloseAttributes(activeToastState)}
-            class={CLOSE_CLASS}
+          </ToastAction>
+          <ToastClose
+            {...activeToastState}
             data-state={state.activeOpen ? 'open' : 'closed'}
             onClick={() => {
               const result = _toastCloseClick(Object(event), {
@@ -213,16 +179,13 @@ export const GalleryToastDemo = component({
             }}
           >
             Dismiss
-          </button>
-          <button
-            {...toastActionAttributes({
-              ...activeToastState,
-              actionValue: 'blocked',
-              disabled: true,
-              dismissOnAction: false,
-            })}
-            class={ACTION_CLASS}
+          </ToastClose>
+          <ToastAction
+            {...activeToastState}
+            actionValue="blocked"
             data-toast-disabled-action=""
+            disabled={true}
+            dismissOnAction={false}
             onClick={() => {
               _toastActionClick(Object(event), {
                 disabled: true,
@@ -232,13 +195,13 @@ export const GalleryToastDemo = component({
             }}
           >
             Blocked
-          </button>
-        </div>
+          </ToastAction>
+        </Toast>
         <output data-demo-state="toast-open">
           {state.activeOpen ? 'open' : state.previousOpen ? 'stacked' : 'empty'}
         </output>
         <output data-demo-state="toast-count">{state.activeCount}</output>
-      </section>
+      </ToastViewport>
     );
   },
 });

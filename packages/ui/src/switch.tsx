@@ -3,6 +3,8 @@ import { component } from '@kovojs/core';
 import { switchRootAttributes } from '@kovojs/headless-ui/switch';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface SwitchStyleOverrides {
@@ -84,11 +86,13 @@ export const Switch = component({
     return (
       <label
         {...rootStyleAttrs}
+        {...passThroughProps(props, { events: false })}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
       >
         <input
           {...inputStyleAttrs}
+          {...passThroughProps(props)}
           aria-checked={attrs['aria-checked']}
           aria-describedby={props.describedBy}
           aria-labelledby={props.labelledBy}
@@ -109,3 +113,5 @@ export const Switch = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/switch';

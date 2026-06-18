@@ -2,6 +2,8 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
@@ -127,6 +129,7 @@ export const Button = component({
     return (
       <button
         {...attrs}
+        {...passThroughProps(props)}
         disabled={props.disabled}
         form={props.form}
         name={props.name}

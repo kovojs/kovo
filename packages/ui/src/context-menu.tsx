@@ -12,6 +12,8 @@ import {
 } from '@kovojs/headless-ui/context-menu';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface ContextMenuStyleOverrides {
@@ -189,6 +191,7 @@ export const ContextMenu = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -221,6 +224,7 @@ export const ContextMenuTrigger = component({
         aria-haspopup={attrs['aria-haspopup']}
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -251,6 +255,7 @@ export const ContextMenuContent = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-anchor-x={attrs['data-anchor-x']}
         data-anchor-y={attrs['data-anchor-y']}
         data-disabled={attrs['data-disabled']}
@@ -285,6 +290,7 @@ export const ContextMenuItem = component({
       <button
         aria-disabled={attrs['aria-disabled']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -318,6 +324,7 @@ export const ContextMenuGroup = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -337,3 +344,5 @@ export const ContextMenuSeparator = component({
     return <div {...styleAttrs} id={attrs.id} role={attrs.role} />;
   },
 });
+
+export * from '@kovojs/headless-ui/context-menu';

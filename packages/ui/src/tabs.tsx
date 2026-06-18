@@ -11,6 +11,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface TabsStyleOverrides {
@@ -170,6 +172,7 @@ export const Tabs = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={attrs.id}
@@ -201,6 +204,7 @@ export const TabsList = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-label={attrs['aria-label']}
@@ -238,6 +242,7 @@ export const TabsTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-selected={attrs['aria-selected']}
         data-disabled={attrs['data-disabled']}
@@ -276,6 +281,7 @@ export const TabsPanel = component({
     return (
       <section
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-labelledby={attrs['aria-labelledby']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
@@ -289,3 +295,5 @@ export const TabsPanel = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/tabs';

@@ -10,6 +10,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface CheckboxGroupStyleOverrides {
@@ -160,6 +162,7 @@ export const CheckboxGroup = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
@@ -201,6 +204,7 @@ export const CheckboxGroupItem = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -234,6 +238,7 @@ export const CheckboxGroupControl = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-checked={attrs['aria-checked']}
         checked={attrs.checked}
         data-disabled={attrs['data-disabled']}
@@ -275,6 +280,7 @@ export const CheckboxGroupLabel = component({
     return (
       <label
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         for={attrs.for}
@@ -285,3 +291,5 @@ export const CheckboxGroupLabel = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/checkbox-group';

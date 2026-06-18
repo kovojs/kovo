@@ -1,21 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  toggleGroupButtonAttributes,
-  toggleGroupItemAttributes,
+  ToggleGroup,
+  ToggleGroupButton,
+  ToggleGroupItem,
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
-  toggleGroupRootAttributes,
-} from '@kovojs/headless-ui/toggle-group';
-import {
-  toggleGroupClasses,
-  toggleGroupItemClasses,
-  toggleGroupButtonClasses,
 } from '@kovojs/ui/toggle-group';
-
-const GROUP_CLASS = toggleGroupClasses.join(' ');
-const ITEM_CLASS = toggleGroupItemClasses.join(' ');
-const BUTTON_CLASS = toggleGroupButtonClasses.join(' ');
 
 export interface GalleryToggleGroupDemoState {
   activeValue: string;
@@ -46,47 +37,40 @@ export const GalleryToggleGroupDemo = component({
     const italicState = { ...groupState, itemValue: 'italic' };
 
     return (
-      <section
-        {...toggleGroupRootAttributes({
-          ...groupState,
-          labelledBy: 'gallery-toggle-group-label',
-        })}
-        class="grid gap-2 text-sm text-neutral-950"
-        data-gallery-interactive="toggle-group"
-        onKeyDown={() => {
-          const result = _toggleGroupKeyDown(Object(event), {
-            activeValue: state.activeValue,
-            items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
-            type: 'multiple',
-            value:
-              state.value === 'bold,italic'
-                ? ['bold', 'italic']
-                : state.value === ''
-                  ? []
-                  : [state.value],
-          });
-          if (!result?.value) return;
-          state.activeValue = result.value;
-          const root = Object(event)['target']?.closest?.('[role="group"]');
-          const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
-          Object(next)['focus']?.call(next);
-        }}
-      >
+      <section class="grid gap-2 text-sm text-neutral-950" data-gallery-interactive="toggle-group">
         <h3 id="gallery-toggle-group-label" class="text-sm font-medium">
           Text style
         </h3>
-        <div class={GROUP_CLASS}>
-          <span {...toggleGroupItemAttributes(boldState)} class={ITEM_CLASS}>
-            <button
-              {...toggleGroupButtonAttributes({
-                ...boldState,
-                id: 'gallery-toggle-group-bold',
-              })}
+        <ToggleGroup
+          {...groupState}
+          labelledBy="gallery-toggle-group-label"
+          onKeyDown={() => {
+            const result = _toggleGroupKeyDown(Object(event), {
+              activeValue: state.activeValue,
+              items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
+              type: 'multiple',
+              value:
+                state.value === 'bold,italic'
+                  ? ['bold', 'italic']
+                  : state.value === ''
+                    ? []
+                    : [state.value],
+            });
+            if (!result?.value) return;
+            state.activeValue = result.value;
+            const root = Object(event)['target']?.closest?.('[role="group"]');
+            const next = Object(root)?.querySelector?.(`[value="${result.value}"]`);
+            Object(next)['focus']?.call(next);
+          }}
+        >
+          <ToggleGroupItem {...boldState}>
+            <ToggleGroupButton
+              {...boldState}
               aria-pressed={String(state.value === 'bold' || state.value === 'bold,italic')}
-              class={BUTTON_CLASS}
               data-state={
                 state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off'
               }
+              id="gallery-toggle-group-bold"
               onClick={() => {
                 const result = _toggleGroupItemClick(Object(event), {
                   itemValue: 'bold',
@@ -110,32 +94,27 @@ export const GalleryToggleGroupDemo = component({
               tabIndex={state.activeValue === 'bold' ? 0 : -1}
             >
               Bold
-            </button>
-          </span>
-          <span {...toggleGroupItemAttributes(strikeState)} class={ITEM_CLASS}>
-            <button
-              {...toggleGroupButtonAttributes({
-                ...strikeState,
-                id: 'gallery-toggle-group-strike',
-              })}
-              class={BUTTON_CLASS}
+            </ToggleGroupButton>
+          </ToggleGroupItem>
+          <ToggleGroupItem {...strikeState}>
+            <ToggleGroupButton
+              {...strikeState}
               data-state="off"
+              id="gallery-toggle-group-strike"
+              itemDisabled={true}
               tabIndex={-1}
             >
               Strike
-            </button>
-          </span>
-          <span {...toggleGroupItemAttributes(italicState)} class={ITEM_CLASS}>
-            <button
-              {...toggleGroupButtonAttributes({
-                ...italicState,
-                id: 'gallery-toggle-group-italic',
-              })}
+            </ToggleGroupButton>
+          </ToggleGroupItem>
+          <ToggleGroupItem {...italicState}>
+            <ToggleGroupButton
+              {...italicState}
               aria-pressed={String(state.value === 'italic' || state.value === 'bold,italic')}
-              class={BUTTON_CLASS}
               data-state={
                 state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off'
               }
+              id="gallery-toggle-group-italic"
               onClick={() => {
                 const result = _toggleGroupItemClick(Object(event), {
                   itemValue: 'italic',
@@ -159,9 +138,9 @@ export const GalleryToggleGroupDemo = component({
               tabIndex={state.activeValue === 'italic' ? 0 : -1}
             >
               Italic
-            </button>
-          </span>
-        </div>
+            </ToggleGroupButton>
+          </ToggleGroupItem>
+        </ToggleGroup>
         <output class="text-xs text-neutral-500" data-demo-state="toggle-group-value">
           {state.value || 'none'}
         </output>

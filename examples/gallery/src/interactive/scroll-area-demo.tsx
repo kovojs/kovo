@@ -1,34 +1,22 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  scrollAreaCornerAttributes,
-  scrollAreaRootAttributes,
-  scrollAreaScrollbarAttributes,
-  scrollAreaThumbAttributes,
+  ScrollArea,
+  ScrollAreaCorner,
+  ScrollAreaScrollbar,
+  ScrollAreaThumb,
   scrollAreaThumbDrag as _scrollAreaThumbDrag,
   scrollAreaThumbDragStart as _scrollAreaThumbDragStart,
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
-  scrollAreaViewportAttributes,
+  ScrollAreaViewport,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
-} from '@kovojs/headless-ui/scroll-area';
-import {
-  scrollAreaClasses,
-  scrollAreaViewportClasses,
-  scrollAreaScrollbarClasses,
-  scrollAreaThumbClasses,
-  scrollAreaCornerClasses,
 } from '@kovojs/ui/scroll-area';
 
 // The viewport keeps its inline max-height/overflow style so the demo stays short
 // enough to scroll; that inline style wins over the @kovojs/ui max-h-56 utility.
 // The jump-to-end control keeps local demo button classes because it is not part
 // of the scroll-area component surface.
-const ROOT_CLASS = scrollAreaClasses.join(' ');
-const VIEWPORT_CLASS = scrollAreaViewportClasses.join(' ');
-const SCROLLBAR_CLASS = scrollAreaScrollbarClasses.join(' ');
-const THUMB_CLASS = scrollAreaThumbClasses.join(' ');
-const CORNER_CLASS = scrollAreaCornerClasses.join(' ');
 const TOGGLE_CLASS =
   'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
@@ -71,14 +59,14 @@ export const GalleryScrollAreaDemo = component({
     const viewportId = 'gallery-scroll-area-viewport';
 
     return (
-      <section
-        {...scrollAreaRootAttributes({ ...rootState, id: 'gallery-scroll-area-root' })}
-        class={ROOT_CLASS}
+      <ScrollArea
+        {...rootState}
         data-dragging={state.dragging ? '' : null}
         data-gallery-interactive="scroll-area"
         data-has-overflow-y={state.hasOverflowY ? '' : null}
         data-hovering={state.hovering ? '' : null}
         data-scrolling={state.scrolling ? '' : null}
+        id="gallery-scroll-area-root"
         onPointerEnter={() => {
           state.hovering = true;
         }}
@@ -87,18 +75,15 @@ export const GalleryScrollAreaDemo = component({
           state.dragging = false;
         }}
       >
-        <div
-          {...scrollAreaViewportAttributes({
-            ...rootState,
-            id: viewportId,
-            label: 'Release notes',
-            scrollY: state.scrollY,
-          })}
-          class={VIEWPORT_CLASS}
+        <ScrollAreaViewport
+          {...rootState}
           data-has-overflow-y={state.hasOverflowY ? '' : null}
           data-scrolling={state.scrolling ? '' : null}
           data-scroll-y={state.scrollY}
+          id={viewportId}
+          label="Release notes"
           scrollTop={state.scrollTop}
+          scrollY={state.scrollY}
           style="max-height: 72px; overflow: auto;"
           onScroll={() => {
             const result = _scrollAreaViewportScroll(Object(event), { scrollbars: 'vertical' });
@@ -123,15 +108,9 @@ export const GalleryScrollAreaDemo = component({
             <p>Browser coverage checks focusability, labels, and live scroll position.</p>
             <p>Generated handlers can coordinate visible state without authoring lowered IR.</p>
           </div>
-        </div>
-        <div
-          {...scrollAreaScrollbarAttributes({
-            ...rootState,
-            id: 'gallery-scroll-area-scrollbar',
-            orientation: 'vertical',
-            visible: state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
-          })}
-          class={SCROLLBAR_CLASS}
+        </ScrollAreaViewport>
+        <ScrollAreaScrollbar
+          {...rootState}
           data-has-overflow-y={state.hasOverflowY ? '' : null}
           data-hovering={state.hovering ? '' : null}
           data-scrolling={state.scrolling ? '' : null}
@@ -141,6 +120,7 @@ export const GalleryScrollAreaDemo = component({
               : 'hidden'
           }
           hidden={!(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))}
+          id="gallery-scroll-area-scrollbar"
           onPointerDown={() => {
             const result = _scrollAreaTrackPointerDown(
               Object(event),
@@ -181,17 +161,11 @@ export const GalleryScrollAreaDemo = component({
             state.scrolling = true;
             state.verticalVisible = geometry.visible;
           }}
+          orientation="vertical"
+          visible={state.verticalVisible && (state.hovering || state.scrolling || state.dragging)}
         >
-          <span
-            {...scrollAreaThumbAttributes({
-              ...rootState,
-              id: 'gallery-scroll-area-thumb',
-              orientation: 'vertical',
-              scrollPosition: state.scrollY,
-              visible:
-                state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
-            })}
-            class={THUMB_CLASS}
+          <ScrollAreaThumb
+            {...rootState}
             data-dragging={state.dragging ? '' : null}
             data-has-overflow-y={state.hasOverflowY ? '' : null}
             data-hovering={state.hovering ? '' : null}
@@ -205,6 +179,7 @@ export const GalleryScrollAreaDemo = component({
             hidden={
               !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))
             }
+            id="gallery-scroll-area-thumb"
             style={{ height: `${state.thumbSize}%`, top: `${state.thumbOffset}%` }}
             onPointerDown={() => {
               const result = _scrollAreaThumbDragStart(
@@ -280,16 +255,12 @@ export const GalleryScrollAreaDemo = component({
               state.dragging = false;
               state.scrolling = false;
             }}
+            orientation="vertical"
+            scrollPosition={state.scrollY}
+            visible={state.verticalVisible && (state.hovering || state.scrolling || state.dragging)}
           />
-        </div>
-        <div
-          {...scrollAreaCornerAttributes({
-            ...rootState,
-            id: 'gallery-scroll-area-corner',
-            visible: false,
-          })}
-          class={CORNER_CLASS}
-        />
+        </ScrollAreaScrollbar>
+        <ScrollAreaCorner {...rootState} id="gallery-scroll-area-corner" visible={false} />
         <button
           aria-controls={viewportId}
           aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
@@ -306,7 +277,7 @@ export const GalleryScrollAreaDemo = component({
           <span>{state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}</span>
         </button>
         <output data-demo-state="scroll-area-position">{state.scrollY}</output>
-      </section>
+      </ScrollArea>
     );
   },
 });

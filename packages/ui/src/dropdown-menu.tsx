@@ -11,6 +11,8 @@ import {
 } from '@kovojs/headless-ui/dropdown-menu';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface DropdownMenuStyleOverrides {
@@ -198,6 +200,7 @@ export const DropdownMenu = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -228,6 +231,7 @@ export const DropdownMenuTrigger = component({
         aria-haspopup={attrs['aria-haspopup']}
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -256,6 +260,7 @@ export const DropdownMenuContent = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -287,6 +292,7 @@ export const DropdownMenuItem = component({
       <button
         aria-disabled={attrs['aria-disabled']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -319,6 +325,7 @@ export const DropdownMenuGroup = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -338,3 +345,5 @@ export const DropdownMenuSeparator = component({
     return <div {...styleAttrs} id={attrs.id} role={attrs.role} />;
   },
 });
+
+export * from '@kovojs/headless-ui/dropdown-menu';

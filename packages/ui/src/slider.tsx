@@ -10,6 +10,8 @@ import {
 } from '@kovojs/headless-ui/slider';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface SliderStyleOverrides {
@@ -157,6 +159,7 @@ export const Slider = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-max={attrs['data-max']}
@@ -197,6 +200,7 @@ export const SliderInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-invalid={attrs['aria-invalid']}
         aria-label={attrs['aria-label']}
@@ -244,6 +248,7 @@ export const SliderTrack = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-hidden={attrs['aria-hidden']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -281,6 +286,7 @@ export const SliderRange = component({
     return (
       <span
         {...styleAttrs}
+        {...passThroughProps(props, { style: true })}
         aria-hidden={attrs['aria-hidden']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -323,6 +329,7 @@ export const SliderThumb = component({
     return (
       <span
         {...styleAttrs}
+        {...passThroughProps(props, { style: true })}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
@@ -349,3 +356,5 @@ export const SliderThumb = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/slider';

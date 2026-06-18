@@ -10,6 +10,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface RadioGroupStyleOverrides {
@@ -151,6 +153,7 @@ export const RadioGroup = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
@@ -191,6 +194,7 @@ export const RadioGroupItem = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={attrs.id}
@@ -223,6 +227,7 @@ export const RadioGroupRadio = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-checked={attrs['aria-checked']}
         checked={attrs.checked}
         data-disabled={attrs['data-disabled']}
@@ -263,6 +268,7 @@ export const RadioGroupLabel = component({
     return (
       <label
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         for={attrs.for}
@@ -273,3 +279,5 @@ export const RadioGroupLabel = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/radio-group';

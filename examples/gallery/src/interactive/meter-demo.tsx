@@ -1,18 +1,13 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { Button } from '@kovojs/ui/button';
 import {
-  meterRootAttributes,
+  Meter,
   meterValueState as _meterValueState,
   type MeterDataState,
-} from '@kovojs/headless-ui/meter';
-import { meterClasses } from '@kovojs/ui/meter';
+} from '@kovojs/ui/meter';
 
-// METER_CLASS comes from @kovojs/ui/meter; the wrapper and control button keep
-// local demo layout classes because they are not the meter component surface.
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
-const METER_CLASS = meterClasses.join(' ');
-const BUTTON_CLASS =
-  'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
 
 export interface GalleryMeterDemoState {
   dataState: MeterDataState;
@@ -37,18 +32,23 @@ export const GalleryMeterDemo = component({
     return (
       <section class={ROOT_CLASS} data-gallery-interactive="meter">
         <label for="gallery-meter-value">Storage capacity</label>
-        <meter
-          {...meterRootAttributes(meterState)}
+        <Meter
           aria-valuetext={`${state.value} percent capacity`}
-          class={METER_CLASS}
           data-state={state.dataState}
-          data-value={String(state.value)}
+          high={meterState.high}
           id="gallery-meter-value"
+          low={meterState.low}
+          max={meterState.max}
+          min={meterState.min}
+          optimum={meterState.optimum}
           value={state.value}
-        />
-        <button
+          valueText={meterState.valueText}
+        >
+          Storage capacity
+        </Meter>
+        <Button
           type="button"
-          class={BUTTON_CLASS}
+          variant="secondary"
           onClick={() => {
             const value = state.value === 92 ? 72 : 92;
             state.value = value;
@@ -63,7 +63,7 @@ export const GalleryMeterDemo = component({
           }}
         >
           Optimize capacity
-        </button>
+        </Button>
         <output data-demo-state="meter-value">{String(state.value)}</output>
       </section>
     );

@@ -14,6 +14,8 @@ import {
 import type { CollectionOrientation, TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface NavigationMenuStyleOverrides {
@@ -266,6 +268,7 @@ export const NavigationMenu = component({
         aria-labelledby={attrs['aria-labelledby']}
         aria-orientation={attrs['aria-orientation']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         data-state={attrs['data-state']}
@@ -290,6 +293,7 @@ export const NavigationMenuList = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         data-state={attrs['data-state']}
@@ -315,6 +319,7 @@ export const NavigationMenuItem = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -345,6 +350,7 @@ export const NavigationMenuTrigger = component({
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -378,6 +384,7 @@ export const NavigationMenuContent = component({
       <div
         aria-labelledby={attrs['aria-labelledby']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -407,6 +414,7 @@ export const NavigationMenuLink = component({
       <a
         aria-disabled={attrs['aria-disabled']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-highlighted={attrs['data-highlighted']}
         data-state={attrs['data-state']}
@@ -434,6 +442,7 @@ export const NavigationMenuViewport = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -453,6 +462,7 @@ export const NavigationMenuIndicator = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
@@ -476,3 +486,5 @@ function toNavigationState(props: NavigationMenuPartProps) {
     ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
   };
 }
+
+export * from '@kovojs/headless-ui/navigation-menu';

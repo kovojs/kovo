@@ -1,23 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogTrigger,
   dialogCancel as _dialogCancel,
-  dialogCloseAttributes,
   dialogCloseClick as _dialogCloseClick,
-  dialogContentAttributes,
-  dialogRootAttributes,
   dialogTriggerClick as _dialogTriggerClick,
-  dialogTriggerAttributes,
-} from '@kovojs/headless-ui/dialog';
-import {
-  dialogTriggerClasses,
-  dialogContentClasses,
-  dialogCloseClasses,
 } from '@kovojs/ui/dialog';
 
-const TRIGGER_CLASS = dialogTriggerClasses.join(' ');
-const CONTENT_CLASS = dialogContentClasses.join(' ');
-const CLOSE_CLASS = dialogCloseClasses.join(' ');
 const TITLE_CLASS = 'text-base font-semibold';
 const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
 
@@ -35,35 +27,28 @@ export const GalleryDialogDemo = component({
     const descriptionId = 'gallery-dialog-description';
 
     return (
-      <section
-        {...dialogRootAttributes({ open: state.open })}
-        class="grid gap-2"
-        data-gallery-interactive="dialog"
-        data-state={state.open ? 'open' : 'closed'}
-      >
-        <button
-          {...dialogTriggerAttributes({ contentId, open: state.open })}
-          class={TRIGGER_CLASS}
-          aria-expanded={state.open ? 'true' : 'false'}
-          data-state={state.open ? 'open' : 'closed'}
+      <Dialog data-gallery-interactive="dialog" open={state.open}>
+        <DialogTrigger
+          contentId={contentId}
           onClick={() => {
             const result = _dialogTriggerClick(Object(event), { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
+          open={state.open}
         >
           Review cart
-        </button>
-        <dialog
-          {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
-          class={CONTENT_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
-          open={state.open}
+        </DialogTrigger>
+        <DialogContent
+          contentId={contentId}
+          descriptionId={descriptionId}
           onCancel={() => {
             const result = _dialogCancel(Object(event), { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
+          open={state.open}
+          titleId={titleId}
         >
           <h2 class={TITLE_CLASS} id={titleId}>
             Cart review
@@ -71,21 +56,20 @@ export const GalleryDialogDemo = component({
           <p class={DESCRIPTION_CLASS} id={descriptionId}>
             Confirm the current cart before checkout.
           </p>
-          <button
-            {...dialogCloseAttributes({ contentId, open: state.open })}
-            class={CLOSE_CLASS}
-            data-state={state.open ? 'open' : 'closed'}
+          <DialogClose
+            contentId={contentId}
             onClick={() => {
               const result = _dialogCloseClick(Object(event), { open: state.open });
               if (!result?.changed) return;
               state.open = result.open;
             }}
+            open={state.open}
           >
             Close review
-          </button>
-        </dialog>
+          </DialogClose>
+        </DialogContent>
         <output data-demo-state="open">{state.open ? 'open' : 'closed'}</output>
-      </section>
+      </Dialog>
     );
   },
 });

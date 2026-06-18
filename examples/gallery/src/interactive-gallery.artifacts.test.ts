@@ -122,7 +122,7 @@ describe('compiled interactive gallery demos', () => {
         ),
         'utf8',
       );
-      expect(progressClient).toContain('GalleryProgressDemo$button_click');
+      expect(progressClient).toContain('GalleryProgressDemo$Button_click');
 
       const tabsClient = readFileSync(
         join(

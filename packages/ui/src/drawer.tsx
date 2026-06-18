@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/dialog';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export type DrawerSide = 'top' | 'right' | 'bottom' | 'left';
@@ -35,6 +37,43 @@ export interface DrawerProps {
   styles?: DrawerStyleOverrides;
   title: string;
   trigger?: string;
+}
+
+export interface DrawerStateProps {
+  disabled?: boolean;
+  open?: boolean;
+  styles?: DrawerStyleOverrides;
+}
+
+export interface DrawerRootProps extends DrawerStateProps {
+  children?: string;
+  id?: string;
+}
+
+export interface DrawerTriggerProps extends DrawerStateProps {
+  children?: string;
+  contentId: string;
+  id?: string;
+}
+
+export interface DrawerContentProps extends DrawerStateProps {
+  children?: string;
+  contentId: string;
+  descriptionId?: string;
+  side?: DrawerSide;
+  titleId: string;
+}
+
+export interface DrawerPartProps {
+  children?: string;
+  id?: string;
+  styles?: DrawerStyleOverrides;
+}
+
+export interface DrawerCloseProps extends DrawerStateProps {
+  children?: string;
+  contentId: string;
+  id?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -232,11 +271,13 @@ export const Drawer = component({
     return (
       <div
         {...rootStyleAttrs}
+        {...passThroughProps(props)}
         data-disabled={rootAttrs['data-disabled']}
         data-state={rootAttrs['data-state']}
       >
         <button
           {...triggerStyleAttrs}
+          {...passThroughProps(props)}
           aria-controls={triggerAttrs['aria-controls']}
           aria-expanded={triggerAttrs['aria-expanded']}
           aria-haspopup={triggerAttrs['aria-haspopup']}
@@ -251,6 +292,7 @@ export const Drawer = component({
         </button>
         <dialog
           {...contentStyleAttrs}
+          {...passThroughProps(props)}
           aria-describedby={contentAttrs['aria-describedby']}
           aria-labelledby={contentAttrs['aria-labelledby']}
           closedby={contentAttrs.closedby}
@@ -274,6 +316,7 @@ export const Drawer = component({
           <div {...bodyStyleAttrs}>{props.children}</div>
           <button
             {...closeStyleAttrs}
+            {...passThroughProps(props)}
             command={closeAttrs.command}
             commandfor={closeAttrs.commandfor}
             data-disabled={closeAttrs['data-disabled']}
@@ -285,6 +328,157 @@ export const Drawer = component({
           </button>
         </dialog>
       </div>
+    );
+  },
+});
+
+export const DrawerRoot = component({
+  render(props: DrawerRootProps) {
+    const attrs = dialogRootAttributes({
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      ...(props.open === undefined ? {} : { open: props.open }),
+    });
+    const styleAttrs = style.attrs(drawerStyles.root, props.styles?.root);
+
+    return (
+      <div
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-disabled={attrs['data-disabled']}
+        data-state={attrs['data-state']}
+        id={props.id}
+      >
+        {props.children}
+      </div>
+    );
+  },
+});
+
+export const DrawerTrigger = component({
+  render(props: DrawerTriggerProps) {
+    const attrs = dialogTriggerAttributes({
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      contentId: props.contentId,
+      ...(props.open === undefined ? {} : { open: props.open }),
+    });
+    const styleAttrs = style.attrs(drawerStyles.trigger, props.styles?.trigger);
+
+    return (
+      <button
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        aria-controls={attrs['aria-controls']}
+        aria-expanded={attrs['aria-expanded']}
+        aria-haspopup={attrs['aria-haspopup']}
+        command={attrs.command}
+        commandfor={attrs.commandfor}
+        data-disabled={attrs['data-disabled']}
+        data-state={attrs['data-state']}
+        disabled={attrs.disabled}
+        id={props.id}
+        type={attrs.type}
+      >
+        {props.children}
+      </button>
+    );
+  },
+});
+
+export const DrawerContent = component({
+  render(props: DrawerContentProps) {
+    const side = props.side ?? 'bottom';
+    const attrs = dialogContentAttributes({
+      contentId: props.contentId,
+      ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
+      ...(props.open === undefined ? {} : { open: props.open }),
+      titleId: props.titleId,
+    });
+    const styleAttrs = style.attrs(
+      drawerStyles.content,
+      drawerSideStyles[side],
+      props.styles?.content,
+    );
+
+    return (
+      <dialog
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        aria-describedby={attrs['aria-describedby']}
+        aria-labelledby={attrs['aria-labelledby']}
+        closedby={attrs.closedby}
+        data-state={attrs['data-state']}
+        id={attrs.id}
+        open={attrs.open}
+      >
+        {props.children}
+      </dialog>
+    );
+  },
+});
+
+export const DrawerHandle = component({
+  render(props: DrawerPartProps) {
+    const styleAttrs = style.attrs(drawerStyles.handle, props.styles?.handle);
+    return <div {...styleAttrs} {...passThroughProps(props)} aria-hidden="true" id={props.id} />;
+  },
+});
+
+export const DrawerHeader = component({
+  render(props: DrawerPartProps) {
+    const styleAttrs = style.attrs(drawerStyles.header, props.styles?.header);
+    return (
+      <header {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </header>
+    );
+  },
+});
+
+export const DrawerTitle = component({
+  render(props: DrawerPartProps) {
+    const styleAttrs = style.attrs(drawerStyles.title, props.styles?.title);
+    return (
+      <h2 {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </h2>
+    );
+  },
+});
+
+export const DrawerDescription = component({
+  render(props: DrawerPartProps) {
+    const styleAttrs = style.attrs(drawerStyles.description, props.styles?.description);
+    return (
+      <p {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </p>
+    );
+  },
+});
+
+export const DrawerClose = component({
+  render(props: DrawerCloseProps) {
+    const attrs = dialogCloseAttributes({
+      ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
+      contentId: props.contentId,
+      ...(props.open === undefined ? {} : { open: props.open }),
+    });
+    const styleAttrs = style.attrs(drawerStyles.close, props.styles?.close);
+
+    return (
+      <button
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        command={attrs.command}
+        commandfor={attrs.commandfor}
+        data-disabled={attrs['data-disabled']}
+        data-state={attrs['data-state']}
+        disabled={attrs.disabled}
+        id={props.id}
+        type={attrs.type}
+      >
+        {props.children ?? 'Close'}
+      </button>
     );
   },
 });

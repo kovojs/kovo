@@ -1,25 +1,13 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
+import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/ui/checkbox';
 import {
-  checkboxGroupClasses,
-  checkboxGroupItemClasses,
-  checkboxGroupControlClasses,
-  checkboxGroupLabelClasses,
-} from '@kovojs/ui/checkbox-group';
-
-import {
+  CheckboxGroup,
+  CheckboxGroupControl,
+  CheckboxGroupItem,
+  CheckboxGroupLabel,
   checkboxGroupItemClick as _checkboxGroupItemClick,
-  checkboxGroupControlAttributes,
-  checkboxGroupItemAttributes,
-  checkboxGroupLabelAttributes,
-  checkboxGroupRootAttributes,
-} from '@kovojs/headless-ui/checkbox-group';
-
-const ROOT_CLASS = checkboxGroupClasses.join(' ');
-const ITEM_CLASS = checkboxGroupItemClasses.join(' ');
-const CONTROL_CLASS = checkboxGroupControlClasses.join(' ');
-const LABEL_CLASS = checkboxGroupLabelClasses.join(' ');
+} from '@kovojs/ui/checkbox-group';
 
 export interface GalleryCheckboxGroupDemoState {
   activeValue: string;
@@ -50,25 +38,21 @@ export const GalleryCheckboxGroupDemo = component({
     const billingState = { ...groupState, itemValue: 'billing' };
 
     return (
-      <section
-        {...checkboxGroupRootAttributes({
-          ...groupState,
-          labelledBy: 'gallery-checkbox-group-label',
-        })}
-        class={ROOT_CLASS}
+      <CheckboxGroup
+        {...groupState}
         data-gallery-interactive="checkbox-group"
+        labelledBy="gallery-checkbox-group-label"
       >
         <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
         <h3 id="gallery-checkbox-group-label" class="text-sm font-medium">
           Notifications
         </h3>
-        <label class={ITEM_CLASS}>
+        <label class="inline-flex items-center gap-2">
           <input
             aria-checked={
               state.value === 'updates,billing' ? 'true' : state.value === '' ? 'false' : 'mixed'
             }
             checked={state.value === 'updates,billing'}
-            class={CONTROL_CLASS}
             data-state={
               state.value === 'updates,billing'
                 ? 'checked'
@@ -92,17 +76,14 @@ export const GalleryCheckboxGroupDemo = component({
             }}
             type="checkbox"
           />
-          <span class={LABEL_CLASS}>All notifications</span>
+          <span>All notifications</span>
         </label>
-        <div {...checkboxGroupItemAttributes(updatesState)} class={ITEM_CLASS}>
-          <input
-            {...checkboxGroupControlAttributes({
-              ...updatesState,
-              controlId: 'gallery-checkbox-group-updates',
-            })}
+        <CheckboxGroupItem {...updatesState}>
+          <CheckboxGroupControl
+            {...updatesState}
             aria-checked={String(state.value === 'updates' || state.value === 'updates,billing')}
             checked={state.value === 'updates' || state.value === 'updates,billing'}
-            class={CONTROL_CLASS}
+            controlId="gallery-checkbox-group-updates"
             data-state={
               state.value === 'updates' || state.value === 'updates,billing'
                 ? 'checked'
@@ -125,12 +106,9 @@ export const GalleryCheckboxGroupDemo = component({
             }}
             tabIndex={0}
           />
-          <label
-            {...checkboxGroupLabelAttributes({
-              ...updatesState,
-              controlId: 'gallery-checkbox-group-updates',
-            })}
-            class={LABEL_CLASS}
+          <CheckboxGroupLabel
+            {...updatesState}
+            controlId="gallery-checkbox-group-updates"
             data-state={
               state.value === 'updates' || state.value === 'updates,billing'
                 ? 'checked'
@@ -138,17 +116,14 @@ export const GalleryCheckboxGroupDemo = component({
             }
           >
             Product updates
-          </label>
-        </div>
-        <div {...checkboxGroupItemAttributes(billingState)} class={ITEM_CLASS}>
-          <input
-            {...checkboxGroupControlAttributes({
-              ...billingState,
-              controlId: 'gallery-checkbox-group-billing',
-            })}
+          </CheckboxGroupLabel>
+        </CheckboxGroupItem>
+        <CheckboxGroupItem {...billingState}>
+          <CheckboxGroupControl
+            {...billingState}
             aria-checked={String(state.value === 'billing' || state.value === 'updates,billing')}
             checked={state.value === 'billing' || state.value === 'updates,billing'}
-            class={CONTROL_CLASS}
+            controlId="gallery-checkbox-group-billing"
             data-state={
               state.value === 'billing' || state.value === 'updates,billing'
                 ? 'checked'
@@ -171,12 +146,9 @@ export const GalleryCheckboxGroupDemo = component({
             }}
             tabIndex={0}
           />
-          <label
-            {...checkboxGroupLabelAttributes({
-              ...billingState,
-              controlId: 'gallery-checkbox-group-billing',
-            })}
-            class={LABEL_CLASS}
+          <CheckboxGroupLabel
+            {...billingState}
+            controlId="gallery-checkbox-group-billing"
             data-state={
               state.value === 'billing' || state.value === 'updates,billing'
                 ? 'checked'
@@ -184,12 +156,12 @@ export const GalleryCheckboxGroupDemo = component({
             }
           >
             Billing notices
-          </label>
-        </div>
+          </CheckboxGroupLabel>
+        </CheckboxGroupItem>
         <output class="text-xs text-neutral-500" data-demo-state="checkbox-group-value">
           {state.value || 'none'}
         </output>
-      </section>
+      </CheckboxGroup>
     );
   },
 });

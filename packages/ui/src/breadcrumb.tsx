@@ -4,6 +4,8 @@ import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
 import { safeUrl } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface BreadcrumbStyleOverrides {
@@ -112,6 +114,7 @@ export const BreadcrumbLink = component({
     return (
       <a
         {...attrs}
+        {...passThroughProps(props)}
         aria-current={current ? 'page' : undefined}
         // SECURITY_FINDINGS.md H3: route the caller href through safeUrl so a
         // `javascript:`/`data:` scheme is neutralized; keep the existing
@@ -132,6 +135,7 @@ export const BreadcrumbSeparator = component({
     return (
       <li
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-hidden="true"
         data-orientation={attrs['data-orientation']}
         role={attrs.role}

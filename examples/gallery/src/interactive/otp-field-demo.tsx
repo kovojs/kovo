@@ -1,24 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  otpFieldHiddenInputAttributes,
+  OtpField,
+  OtpFieldGroup,
+  OtpFieldHiddenInput,
   otpFieldInput as _otpFieldInput,
-  otpFieldInputAttributes,
+  OtpFieldInput,
   otpFieldKeyDown as _otpFieldKeyDown,
   otpFieldPaste as _otpFieldPaste,
-  otpFieldRootAttributes,
-} from '@kovojs/headless-ui/otp-field';
-import {
-  otpFieldClasses,
-  otpFieldGroupClasses,
-  otpFieldHiddenInputClasses,
-  otpFieldInputClasses,
 } from '@kovojs/ui/otp-field';
 
-const ROOT_CLASS = otpFieldClasses.join(' ');
-const GROUP_CLASS = otpFieldGroupClasses.join(' ');
-const HIDDEN_INPUT_CLASS = otpFieldHiddenInputClasses.join(' ');
-const INPUT_CLASS = otpFieldInputClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 const DESCRIPTION_CLASS = 'text-sm text-neutral-500';
 const OUTPUT_CLASS = 'text-xs text-neutral-500';
@@ -44,16 +35,13 @@ export const GalleryOtpFieldDemo = component({
     };
 
     return (
-      <section
-        {...otpFieldRootAttributes({
-          ...fieldState,
-          descriptionId: 'gallery-interactive-otp-description',
-          id: 'gallery-interactive-otp',
-          labelledBy: 'gallery-interactive-otp-label',
-        })}
-        class={ROOT_CLASS}
+      <OtpField
+        {...fieldState}
         data-complete={state.value.length === 4 ? '' : null}
         data-gallery-interactive="otp-field"
+        descriptionId="gallery-interactive-otp-description"
+        id="gallery-interactive-otp"
+        labelledBy="gallery-interactive-otp-label"
       >
         <form id={formId} data-gallery-form="otp-field" />
         <label
@@ -63,27 +51,20 @@ export const GalleryOtpFieldDemo = component({
         >
           Verification code
         </label>
-        <input
-          {...otpFieldHiddenInputAttributes({
-            ...fieldState,
-            id: 'gallery-interactive-otp-hidden',
-          })}
-          id="gallery-interactive-otp-hidden"
-          class={HIDDEN_INPUT_CLASS}
+        <OtpFieldHiddenInput
+          {...fieldState}
           data-complete={state.value.length === 4 ? '' : null}
+          id="gallery-interactive-otp-hidden"
           value={state.value}
         />
-        <div class={GROUP_CLASS}>
-          <input
-            {...otpFieldInputAttributes({
-              ...fieldState,
-              id: 'gallery-interactive-otp-slot-0',
-              label: 'Verification code digit 1',
-              slotIndex: 0,
-            })}
-            class={INPUT_CLASS}
+        <OtpFieldGroup>
+          <OtpFieldInput
+            {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
             data-filled={(state.value[0] ?? '') === '' ? null : ''}
+            id="gallery-interactive-otp-slot-0"
+            label="Verification code digit 1"
+            slotIndex={0}
             tabIndex={state.activeSlot === 0 ? 0 : -1}
             value={state.value[0] ?? ''}
             onInput={() => {
@@ -117,16 +98,13 @@ export const GalleryOtpFieldDemo = component({
               if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
-          <input
-            {...otpFieldInputAttributes({
-              ...fieldState,
-              id: 'gallery-interactive-otp-slot-1',
-              label: 'Verification code digit 2',
-              slotIndex: 1,
-            })}
-            class={INPUT_CLASS}
+          <OtpFieldInput
+            {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
             data-filled={(state.value[1] ?? '') === '' ? null : ''}
+            id="gallery-interactive-otp-slot-1"
+            label="Verification code digit 2"
+            slotIndex={1}
             tabIndex={state.activeSlot === 1 ? 0 : -1}
             value={state.value[1] ?? ''}
             onInput={() => {
@@ -160,16 +138,13 @@ export const GalleryOtpFieldDemo = component({
               if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
-          <input
-            {...otpFieldInputAttributes({
-              ...fieldState,
-              id: 'gallery-interactive-otp-slot-2',
-              label: 'Verification code digit 3',
-              slotIndex: 2,
-            })}
-            class={INPUT_CLASS}
+          <OtpFieldInput
+            {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
             data-filled={(state.value[2] ?? '') === '' ? null : ''}
+            id="gallery-interactive-otp-slot-2"
+            label="Verification code digit 3"
+            slotIndex={2}
             tabIndex={state.activeSlot === 2 ? 0 : -1}
             value={state.value[2] ?? ''}
             onInput={() => {
@@ -203,16 +178,13 @@ export const GalleryOtpFieldDemo = component({
               if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
-          <input
-            {...otpFieldInputAttributes({
-              ...fieldState,
-              id: 'gallery-interactive-otp-slot-3',
-              label: 'Verification code digit 4',
-              slotIndex: 3,
-            })}
-            class={INPUT_CLASS}
+          <OtpFieldInput
+            {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
             data-filled={(state.value[3] ?? '') === '' ? null : ''}
+            id="gallery-interactive-otp-slot-3"
+            label="Verification code digit 4"
+            slotIndex={3}
             tabIndex={state.activeSlot === 3 ? 0 : -1}
             value={state.value[3] ?? ''}
             onInput={() => {
@@ -246,14 +218,14 @@ export const GalleryOtpFieldDemo = component({
               if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
             }}
           />
-        </div>
+        </OtpFieldGroup>
         <p id="gallery-interactive-otp-description" class={DESCRIPTION_CLASS}>
           Enter the four digit code.
         </p>
         <output data-demo-state="otp-value" class={OUTPUT_CLASS}>
           {state.value}
         </output>
-      </section>
+      </OtpField>
     );
   },
 });

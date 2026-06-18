@@ -1,20 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   popoverBeforeToggle as _popoverBeforeToggle,
-  popoverContentAttributes,
-  popoverRootAttributes,
-  popoverTriggerAttributes,
-} from '@kovojs/headless-ui/popover';
-import {
-  popoverClasses,
-  popoverTriggerClasses,
-  popoverContentClasses,
 } from '@kovojs/ui/popover';
-
-const ROOT_CLASS = popoverClasses.join(' ');
-const TRIGGER_CLASS = popoverTriggerClasses.join(' ');
-const CONTENT_CLASS = popoverContentClasses.join(' ');
 
 export interface GalleryPopoverDemoState {
   open: boolean;
@@ -28,34 +19,23 @@ export const GalleryPopoverDemo = component({
     const contentId = 'gallery-popover-content';
 
     return (
-      <section
-        {...popoverRootAttributes({ open: state.open })}
-        class={ROOT_CLASS}
-        data-gallery-interactive="popover"
-        data-state={state.open ? 'open' : 'closed'}
-      >
-        <button
-          {...popoverTriggerAttributes({ contentId, open: state.open })}
-          aria-expanded={state.open ? 'true' : 'false'}
-          class={TRIGGER_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
-        >
+      <Popover data-gallery-interactive="popover" open={state.open}>
+        <PopoverTrigger contentId={contentId} open={state.open}>
           Delivery window
-        </button>
-        <div
-          {...popoverContentAttributes({ contentId, open: state.open })}
-          class={CONTENT_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
+        </PopoverTrigger>
+        <PopoverContent
+          contentId={contentId}
           onBeforeToggle={() => {
             const result = _popoverBeforeToggle(Object(event), { open: state.open });
             if (!result) return;
             state.open = result.open;
           }}
+          open={state.open}
         >
           Weekday arrivals are available from 9 AM to 5 PM.
-        </div>
+        </PopoverContent>
         <output data-demo-state="popover-open">{state.open ? 'open' : 'closed'}</output>
-      </section>
+      </Popover>
     );
   },
 });

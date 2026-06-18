@@ -1,27 +1,21 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { collapsibleTriggerClick as _collapsibleTriggerClick } from '@kovojs/headless-ui/collapsible';
+import { collapsibleTriggerClick as _collapsibleTriggerClick } from '@kovojs/ui/collapsible';
 
-export const GalleryCollapsibleDemo$summary_click = handler((event, ctx) => {
+export const GalleryCollapsibleDemo$CollapsibleTrigger_click = handler((event, ctx) => {
   const result = _collapsibleTriggerClick(Object(event), { open: ctx.state.open });
   if (!result) return;
   Object(event)['preventDefault']?.call(event);
   ctx.state.open = result.open;
 });
 
-export const GalleryCollapsibleDemo$details_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryCollapsibleDemo$details_open_derive = derive(['state'], (state) =>
+export const GalleryCollapsibleDemo$Collapsible_open_derive = derive(['state'], (state) =>
   state.open ? '' : null,
 );
-export const GalleryCollapsibleDemo$summary_aria_expanded_derive = derive(['state'], (state) =>
-  String(state.open),
+export const GalleryCollapsibleDemo$CollapsibleTrigger_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
 );
-export const GalleryCollapsibleDemo$summary_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryCollapsibleDemo$div_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryCollapsibleDemo$CollapsibleContent_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
 );
