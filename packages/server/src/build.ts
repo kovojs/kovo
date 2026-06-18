@@ -1,7 +1,9 @@
-import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { KovoApp } from './app-types.js';
+import { exportStaticApp } from './static-export.js';
+import type { StaticExportAssetInput } from './static-export-types.js';
 import { resolvedFileSystemPath, viteDistSourcePath } from './vite-build-assets.js';
 import {
   createKovoAppShellViteBuild,
@@ -138,7 +140,7 @@ export function node(options: NodePresetOptions = {}): NodePreset {
       return emitNodePreset(build, context, options);
     },
     inspect(build, _context) {
-      return build.serverHandlerPath === undefined
+      return build.serverHandlerPath === undefined && build.staticOutput === undefined
         ? [
             {
               code: 'node-missing-handler',
@@ -166,7 +168,7 @@ export function vercel(options: VercelPresetOptions = {}): VercelPreset {
       return emitVercelPreset(build, context, options);
     },
     inspect(build, _context) {
-      return build.serverHandlerPath === undefined
+      return build.serverHandlerPath === undefined && build.staticOutput === undefined
         ? [
             {
               code: 'vercel-missing-handler',
@@ -194,7 +196,7 @@ export function cloudflare(options: CloudflarePresetOptions = {}): CloudflarePre
     },
     async inspect(build, context) {
       const diagnostics: PresetDiagnostic[] =
-        build.serverHandlerPath === undefined
+        build.serverHandlerPath === undefined && build.staticOutput === undefined
           ? [
               {
                 code: 'cloudflare-missing-handler',
@@ -257,6 +259,13 @@ export interface KovoNeutralBuild {
     href: string;
     path: string;
   }[];
+  /** Fully static output when every route was proven exportable. */
+  staticOutput?: {
+    /** Absolute path to the neutral static export directory. */
+    dir: string;
+    /** Absolute path to the static export manifest JSON file. */
+    manifestPath: string;
+  };
   /** Neutral artifact schema version. */
   version: typeof neutralBuildVersion;
 }
@@ -312,6 +321,12 @@ export async function writeKovoNeutralBuild(
   const manifestPath = path.join(outDir, 'manifest.json');
   const routesPath = path.join(outDir, 'routes.json');
   const metaPath = path.join(outDir, 'meta.json');
+  const staticOutput = await writeNeutralStaticOutput({
+    app: appShellBuild.app,
+    assets: appShellBuild.assets,
+    manifestDistDir,
+    outDir,
+  });
   const neutral: KovoNeutralBuild = {
     clientDir,
     clientModules: appShellBuild.clientModules,
@@ -323,6 +338,7 @@ export async function writeKovoNeutralBuild(
     serverDir,
     ...(serverHandlerPath === undefined ? {} : { serverHandlerPath }),
     staticAssets: appShellBuild.assets,
+    ...(staticOutput === undefined ? {} : { staticOutput }),
     version: neutralBuildVersion,
   };
 
@@ -338,6 +354,7 @@ export async function writeKovoNeutralBuild(
   });
   await writeJson(metaPath, {
     hasServerHandler: serverHandlerPath !== undefined,
+    staticOnly: staticOutput !== undefined,
     version: neutralBuildVersion,
   });
 
@@ -349,6 +366,14 @@ async function emitNodePreset(
   context: PresetContext,
   options: NodePresetOptions,
 ): Promise<void> {
+  if (build.staticOutput !== undefined) {
+    const outDir = resolvedFileSystemPath(context.outDir);
+    await mkdir(outDir, { recursive: true });
+    await cp(build.staticOutput.dir, outDir, { recursive: true });
+    context.log(`Emitted Kovo node static preset output to ${outDir}`);
+    return;
+  }
+
   if (build.serverHandlerPath === undefined) {
     throw new Error('The node preset requires a neutral build with server/handler.mjs.');
   }
@@ -371,6 +396,15 @@ async function emitVercelPreset(
   context: PresetContext,
   options: VercelPresetOptions,
 ): Promise<void> {
+  if (build.staticOutput !== undefined) {
+    const outDir = resolvedFileSystemPath(context.outDir);
+    await mkdir(outDir, { recursive: true });
+    await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
+    await writeJson(path.join(outDir, 'config.json'), { version: 3 });
+    context.log(`Emitted Kovo vercel static preset output to ${outDir}`);
+    return;
+  }
+
   if (build.serverHandlerPath === undefined) {
     throw new Error('The vercel preset requires a neutral build with server/handler.mjs.');
   }
@@ -401,6 +435,15 @@ async function emitCloudflarePreset(
   context: PresetContext,
   options: CloudflarePresetOptions,
 ): Promise<void> {
+  if (build.staticOutput !== undefined) {
+    const outDir = resolvedFileSystemPath(context.outDir);
+    await mkdir(outDir, { recursive: true });
+    await cp(build.staticOutput.dir, path.join(outDir, 'client'), { recursive: true });
+    await writeFile(path.join(outDir, 'wrangler.toml'), wranglerTomlSource(options), 'utf8');
+    context.log(`Emitted Kovo cloudflare static preset output to ${outDir}`);
+    return;
+  }
+
   if (build.serverHandlerPath === undefined) {
     throw new Error('The cloudflare preset requires a neutral build with server/handler.mjs.');
   }
@@ -414,6 +457,62 @@ async function emitCloudflarePreset(
   await writeFile(path.join(outDir, 'wrangler.toml'), wranglerTomlSource(options), 'utf8');
 
   context.log(`Emitted Kovo cloudflare preset output to ${outDir}`);
+}
+
+interface NeutralStaticOutputOptions {
+  app: KovoApp;
+  assets: readonly KovoNeutralBuild['staticAssets'][number][];
+  manifestDistDir: string | undefined;
+  outDir: string;
+}
+
+async function writeNeutralStaticOutput({
+  app,
+  assets,
+  manifestDistDir,
+  outDir,
+}: NeutralStaticOutputOptions): Promise<KovoNeutralBuild['staticOutput'] | undefined> {
+  if (app.endpoints.length > 0 || app.mutations.length > 0 || app.queries.length > 0) {
+    return undefined;
+  }
+
+  const staticDir = path.join(outDir, 'static');
+
+  try {
+    const result = await exportStaticApp(app, {
+      ...(manifestDistDir === undefined
+        ? {}
+        : { assets: neutralStaticExportAssets(assets, manifestDistDir) }),
+      outDir: staticDir,
+    });
+    if (result.diagnostics.length > 0) {
+      await rmNeutralStaticOutput(staticDir);
+      return undefined;
+    }
+  } catch {
+    await rmNeutralStaticOutput(staticDir);
+    return undefined;
+  }
+
+  const manifestPath = path.join(staticDir, 'kovo-static-manifest.json');
+  await writeJson(manifestPath, {
+    version: neutralBuildVersion,
+  });
+  return { dir: staticDir, manifestPath };
+}
+
+function neutralStaticExportAssets(
+  assets: readonly KovoNeutralBuild['staticAssets'][number][],
+  manifestDistDir: string,
+): StaticExportAssetInput[] {
+  return assets.map((asset) => ({
+    path: asset.path,
+    source: viteDistSourcePath(manifestDistDir, asset.file),
+  }));
+}
+
+async function rmNeutralStaticOutput(staticDir: string): Promise<void> {
+  await rm(staticDir, { force: true, recursive: true });
 }
 
 async function copyNeutralStaticAssets(

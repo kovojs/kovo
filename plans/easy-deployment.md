@@ -91,11 +91,18 @@ adapter-*` packages. Selection is host **auto-detection** (`VERCEL` / `CF_PAGES`
 
 **The gap (what this plan builds):**
 
-- [ ] **Production serve path is not yet fully switched over.** `kovo build`
-      emits a self-contained Node output, but examples/docs still present Vite
-      `middlewareMode` from source as the production story. Evidence gap:
-      `examples/commerce/scripts/serve.mjs` still uses `createViteServer`, and
-      Phase 4 examples/docs switch remains open.
+- [x] **Production serve path is switched over for the template/example path.**
+      `kovo build` emits self-contained Node output and the template/commerce
+      production serve story uses the generated preset output; Vite
+      `middlewareMode` remains scoped to dev/demo checks.
+  - Evidence: `examples/commerce/package.json` uses
+    `kovo build ./src/app-shell.tsx --preset node` for `build`,
+    `node dist/server/server.mjs` for `start`, and
+    `pnpm run build && node dist/server/server.mjs` for `serve:prod`, while
+    `examples/commerce/scripts/serve.mjs` is only `serve:dev`.
+    `packages/create-kovo/templates/docs/deployment.md` documents `kovo build`
+    plus native Node/Vercel/Cloudflare deploy flows and states that `vp dev` /
+    `serve:dev` are not the production serve path.
 - [x] **App-author build command exists for the Node preset.** `packages/cli/src/
 index.ts` dispatches `kovo build`, loads `.mjs` and `.ts` app modules through
       build-time Vite SSR, runs the client manifest build, writes the neutral
@@ -222,6 +229,16 @@ Design decisions to lock in code review:
       tree and presets prefer static output (Vercel static, CF Pages/Assets, plain
       Nginx) — no server function needed. Mixed apps get both: static where provable,
       the function for the rest.
+  - Partial evidence: `packages/server/src/build.ts` now attempts a neutral static
+    export only when the app has no endpoints, mutations, or queries; if export
+    diagnostics are empty, `KovoNeutralBuild.staticOutput` points at the static tree
+    and `node()`, `vercel()`, and `cloudflare()` prefer it over a server handler.
+    `packages/server/src/build.test.ts` verifies the neutral static tree includes
+    HTML, `/c/` client modules, and `/assets/` files, and verifies all three
+    presets omit their server/function/worker entry for a proven static-only app.
+    `packages/cli/src/index.kovo-build.test.ts` verifies `VERCEL=1` static-only
+    apps emit `.vercel/output/static` with no function. Gap: mixed apps still emit
+    dynamic preset output only; per-route static plus function routing remains open.
 - [ ] **Immutable `/c/` retention across deploys (`SPEC.md` §6.6).** Versioned
       client-module URLs must survive deploys until referencing documents age out.
       Each preset documents/implements "don't overwrite, accrete": e.g. the node preset
@@ -377,13 +394,18 @@ packages/cli/src/index.kovo-build.test.ts -t "generated node Dockerfile"`.
     headers, filesystem routing, and catch-all function routing. Verification:
     `corepack pnpm exec vitest --run packages/server/src/build.test.ts
 packages/cli/src/index.kovo-build.test.ts`.
-- [ ] Auto-detect on `VERCEL` env; static-only apps emit pure static (no function).
-  - Partial evidence: `packages/cli/src/index.ts` now allows the `vercel` preset,
-    selects `vercel()` for `VERCEL=1` and `KOVO_PRESET=vercel`, and writes
-    `.vercel/output` as the preset output directory. `packages/cli/src/
-index.kovo-build.test.ts` verifies Vercel host auto-detection emits the Build
-    Output API files and that `KOVO_PRESET=cloudflare` still wins over
-    `VERCEL=1`. The full item remains open for the static-only optimization.
+- [x] Auto-detect on `VERCEL` env; static-only apps emit pure static (no function).
+  - Evidence: `packages/cli/src/index.ts` allows the `vercel` preset, selects
+    `vercel()` for `VERCEL=1` and `KOVO_PRESET=vercel`, and writes
+    `.vercel/output` as the preset output directory.
+    `packages/cli/src/index.kovo-build.test.ts` verifies Vercel host
+    auto-detection emits Build Output API files, verifies `KOVO_PRESET=cloudflare`
+    still wins over `VERCEL=1`, and verifies a `VERCEL=1` static-only app emits
+    `.vercel/output/static/index.html`, `.kovo/meta.json` with `staticOnly: true`,
+    `config.json` with `version: 3`, and no `functions/kovo.func/index.cjs`.
+    `packages/server/src/build.test.ts` verifies `vercel().emit()` prefers
+    `KovoNeutralBuild.staticOutput` and omits the Vercel function for a proven
+    static-only neutral build.
 - [ ] Evidence: `vercel build`/`--prebuilt` dry-run validates the output dir;
       golden-file test on `config.json` + function manifest.
   - Partial evidence: golden-file coverage exists in `packages/server/src/
@@ -502,6 +524,8 @@ site/scripts/api-ref.test.mjs`; `corepack pnpm run check:publish`;
 packages/cli/src/index.kovo-build.test.ts packages/cli/src/commands-manifest.test.ts`;
   `corepack pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 - `kovo build` + node preset container, pruned deps: _(Phase 1, still open)_
-- `vercel build --prebuilt` dry-run + golden config: _(Phase 2)_
+- `vercel build --prebuilt` dry-run + golden config: golden config/function/static
+  coverage is in `corepack pnpm exec vitest --run packages/server/src/build.test.ts
+  packages/cli/src/index.kovo-build.test.ts`; Vercel CLI dry-run remains open.
 - `wrangler deploy --dry-run` + `inspect()` diagnostics: _(Phase 3)_
 - Example commerce served via the node preset (no Vite at runtime): _(Phase 4)_

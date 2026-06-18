@@ -57,7 +57,7 @@ describe('server build-time deployment API', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart</main>';
+                return '<main>Cart <button on:click="/c/cart.client.js?v=cart-v1#Cart$click">Click</button></main>';
               },
             }),
           ],
@@ -90,6 +90,15 @@ describe('server build-time deployment API', () => {
       await expect(readFile(join(outDir, 'server/handler.mjs'), 'utf8')).resolves.toBe(
         'export default async function handler() { return new Response("ok"); }\n',
       );
+      await expect(readFile(join(outDir, 'static/cart/index.html'), 'utf8')).resolves.toContain(
+        'Cart <button',
+      );
+      await expect(readFile(join(outDir, 'static/c/cart.client.js'), 'utf8')).resolves.toBe(
+        'export const cart = true;',
+      );
+      await expect(readFile(join(outDir, 'static/assets/cart.css'), 'utf8')).resolves.toBe(
+        '.cart { color: green; }',
+      );
       await expect(readJson(join(outDir, 'manifest.json'))).resolves.toEqual({
         assets: [
           { file: 'assets/cart.css', href: '/assets/cart.css', path: '/assets/cart.css' },
@@ -120,6 +129,7 @@ describe('server build-time deployment API', () => {
       });
       await expect(readJson(join(outDir, 'meta.json'))).resolves.toEqual({
         hasServerHandler: true,
+        staticOnly: true,
         version: 'kovo-neutral-build/v1',
       });
       expect(build).toMatchObject({
@@ -127,6 +137,10 @@ describe('server build-time deployment API', () => {
         outDir,
         routeHints: [{ routePath: '/cart' }],
         serverHandlerPath: join(outDir, 'server/handler.mjs'),
+        staticOutput: {
+          dir: join(outDir, 'static'),
+          manifestPath: join(outDir, 'static/kovo-static-manifest.json'),
+        },
         version: 'kovo-neutral-build/v1',
       });
     } finally {
@@ -212,6 +226,7 @@ describe('server build-time deployment API', () => {
         app: createApp({
           routes: [
             route('/hello', {
+              guard: () => true,
               page() {
                 return '<main>Hello</main>';
               },
@@ -300,6 +315,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/', {
+              guard: () => true,
               page() {
                 return '<main>Home</main>';
               },
@@ -353,6 +369,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/hello', {
+              guard: () => true,
               page() {
                 return '<main>Hello</main>';
               },
@@ -449,6 +466,86 @@ export default async function handler(request) {
     }
   });
 
+  it('lets presets prefer a proven static-only neutral build', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-static-preset-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                return '<main>Static Home</main>';
+              },
+            }),
+          ],
+        }),
+        clientModules: [
+          {
+            path: '/c/static.client.js',
+            source: 'export const staticClient = true;',
+            version: 'static-v1',
+          },
+        ],
+        outDir: join(root, '.kovo'),
+        serverHandlerSource:
+          'export default async function handler() { return new Response("dynamic"); }\n',
+      });
+
+      expect(build.staticOutput).toMatchObject({ dir: join(root, '.kovo/static') });
+
+      const nodeOutDir = join(root, 'node-static');
+      await node().emit(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await expect(readFile(join(nodeOutDir, 'index.html'), 'utf8')).resolves.toContain(
+        'Static Home',
+      );
+      await expect(readFile(join(nodeOutDir, 'server.mjs'), 'utf8')).rejects.toThrow();
+
+      const vercelOutDir = join(root, '.vercel/output');
+      await vercel().emit(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: vercelOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await expect(readFile(join(vercelOutDir, 'static/index.html'), 'utf8')).resolves.toContain(
+        'Static Home',
+      );
+      await expect(
+        readFile(join(vercelOutDir, 'functions/kovo.func/index.cjs'), 'utf8'),
+      ).rejects.toThrow();
+      await expect(readJson(join(vercelOutDir, 'config.json'))).resolves.toEqual({ version: 3 });
+
+      const cloudflareOutDir = join(root, 'cloudflare-static');
+      await cloudflare().emit(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: cloudflareOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await expect(
+        readFile(join(cloudflareOutDir, 'client/index.html'), 'utf8'),
+      ).resolves.toContain('Static Home');
+      await expect(readFile(join(cloudflareOutDir, 'worker.mjs'), 'utf8')).rejects.toThrow();
+      await expect(readFile(join(cloudflareOutDir, 'wrangler.toml'), 'utf8')).resolves.toContain(
+        'directory = "./client"',
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits a Cloudflare Workers project with assets binding and node compatibility', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-cloudflare-preset-'));
 
@@ -458,6 +555,7 @@ export default async function handler(request) {
         app: createApp({
           routes: [
             route('/hello', {
+              guard: () => true,
               page() {
                 return '<main>Hello</main>';
               },

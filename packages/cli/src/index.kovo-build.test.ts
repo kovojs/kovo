@@ -388,6 +388,41 @@ describe('kovo build', () => {
     }
   });
 
+  it('auto-detects Vercel and emits pure static output for static-only apps', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-vercel-static-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeFileSync(appPath, staticAppModuleSource(), 'utf8');
+      writeClientEntry(root);
+
+      const exitCode = await withEnv({ VERCEL: '1' }, () =>
+        mainAsync(['build', appPath, '--out', outDir]),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('SUMMARY preset=vercel');
+      expect(readBuildJson(join(outDir, '.kovo/meta.json'))).toMatchObject({ staticOnly: true });
+      expect(readFileSync(join(outDir, '.vercel/output/static/index.html'), 'utf8')).toContain(
+        '<main>Static Home</main>',
+      );
+      expect(existsSync(join(outDir, '.vercel/output/functions/kovo.func/index.cjs'))).toBe(false);
+      expect(readBuildJson(join(outDir, '.vercel/output/config.json'))).toEqual({ version: 3 });
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('uses KOVO_PRESET before host auto-detection', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-cloudflare-'));
     const appPath = join(root, 'app.mjs');
@@ -582,6 +617,20 @@ export default createApp({
 `;
 }
 
+function staticAppModuleSource(): string {
+  return `
+import { createApp, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/', {
+      page: () => '<main>Static Home</main>',
+    }),
+  ],
+});
+`;
+}
+
 function databaseEnvAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
@@ -644,11 +693,17 @@ function readBuildJson(filePath: string): unknown {
 
 function typescriptAppModuleSource(): string {
   return `
-import { createApp, route } from '@kovojs/server';
+import { createApp, domain, query, route } from '@kovojs/server';
 
 const db: { count: number } = { count: 4 };
+const typed = domain('typed');
+const typedQuery = query('typed', {
+  load: () => ({ count: db.count }),
+  reads: [typed],
+});
 
 export default createApp({
+  queries: [typedQuery],
   routes: [
     route('/typed', {
       page: () => '<main>Typed Cart ' + db.count + '</main>',
