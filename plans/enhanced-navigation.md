@@ -190,8 +190,8 @@ through client navigation.
     `location.href = url` on any unsupported case.
   - Evidence: `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     covers eligible anchor interception, full-document fetch, head/title update,
-    unchanged layout preservation, changed leaf replacement, and modified-click
-    native behavior; `packages/runtime/src/inline-loader-navigation.test.ts`
+    unchanged layout preservation, changed leaf replacement, and shared inline
+    morph application; `packages/runtime/src/inline-loader-navigation.test.ts`
     covers build-token mismatch fallback across all inline installer artifacts;
     `packages/runtime/src/inline-loader-artifact-minifier.test.ts` pins the
     minified navigation parser/segment hooks; `pnpm --filter @kovojs/runtime run
@@ -203,8 +203,9 @@ through client navigation.
     inline loader registers `popstate`; `packages/runtime/src/inline-loader-navigation.browser.test.ts`
     proves successful enhanced navigation focuses the preserved layout root,
     sets manual scroll restoration, scrolls to top, and emits the full-document
-    navigation path. Remaining gap: dedicated back/forward, hash restoration,
-    stale-navigation cancellation, route announcement, and bfcache evidence.
+    `kovo:navigate` announcement, and proves stale full-document responses do
+    not override a newer navigation. Remaining gap: dedicated back/forward, hash
+    restoration, and bfcache evidence.
 - [ ] **4. Mutation/live composition after enhanced navigation.**
   - Prove `Kovo-Targets`/`Kovo-Live-Targets` snapshots include preserved layout
     targets after navigation, inserted leaf targets are discoverable, and stale
