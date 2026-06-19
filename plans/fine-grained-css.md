@@ -333,9 +333,15 @@ routes/<route>.css]` (theme stays on `base`/app), using
     `/assets/routes/contacts-de2015d1.css` at 2,062 bytes and inlines 16,705
     bytes; `/deals/d1` links `/assets/routes/deals-id-2de2f59d.css` at 3,089
     bytes and inlines 25,654 bytes.
+    `node --input-type=module` probe over
+    `examples/stackoverflow/scripts/serve.mjs` records Stack Overflow dev route
+    totals: `/` links `/assets/styles.css` +
+    `/assets/routes/index-317cb718.css` at 4,336 bytes and inlines 14,908
+    bytes; `/questions/q1` links `/assets/routes/questions-id-57301277.css`
+    at 3,468 bytes and inlines 17,040 bytes.
   - Gap:
-    Stack Overflow, create-kovo starter, and site still need comparable
-    route-byte proof before this checkbox can close.
+    create-kovo starter and site still need comparable route-byte proof before
+    this checkbox can close.
 
 ### Phase 7 — Overship regression gate
 
