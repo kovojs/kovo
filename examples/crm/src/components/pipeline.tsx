@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { csrfField, mutationFormAttributes } from '@kovojs/server';
+import { mutationFormAttributes } from '@kovojs/server';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
 import { tokens } from '@kovojs/style';
@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@kovojs/ui/table';
 
-import { createDeal, crmCsrf, type CrmRequest } from '../mutations.js';
+import { createDeal, type CrmRequest } from '../mutations.js';
 import {
   contactListQuery,
   openDealsQuery,
@@ -229,7 +229,6 @@ export const PipelineRegion = component({
         <section>
           <h2 style={pipelineStyles.sectionLabel}>New deal</h2>
           <form {...mutationFormAttributes(createDeal)} style={pipelineStyles.formPanel}>
-            {slots.request ? csrfField(slots.request, crmCsrf) : ''}
             <input type="hidden" name="id" value={freshId('d')} />
             <input type="hidden" name="ownerId" value="u1" />
             <div style={pipelineStyles.formGrid}>

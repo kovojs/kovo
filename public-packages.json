@@ -38,12 +38,14 @@
           "./app-shell/static-export",
           "./build",
           "./jsx-runtime",
-          "./jsx-dev-runtime"
+          "./jsx-dev-runtime",
+          "./vite"
         ],
         "generated": [],
         "internal": [
           "./internal/app-shell-vite",
           "./internal/client-modules",
+          "./internal/csrf",
           "./internal/execution",
           "./internal/html",
           "./internal/route",

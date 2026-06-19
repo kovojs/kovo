@@ -266,6 +266,13 @@ function renderSemanticAttributes(
     if (attribute.name === 'viewTransitionName' || isQueryExpressionAttribute(model, attribute)) {
       continue;
     }
+    if (
+      element.tag === 'form' &&
+      attribute.name === 'mutation' &&
+      hasGeneratedMutationFormAttributes(element)
+    ) {
+      continue;
+    }
     if (formMutation?.generatedAttributeNames.has(attribute.name)) {
       if (attribute.name === 'mutation')
         semanticAttributes.push(...formMutation.semanticAttributes);
@@ -277,7 +284,6 @@ function renderSemanticAttributes(
         : renderSemanticAttribute(attribute);
     if (rendered) semanticAttributes.push(rendered);
   }
-
   return semanticAttributes
     .concat(
       viewTransitionStyle && !element.attributes.some((attribute) => attribute.name === 'style')
@@ -534,11 +540,22 @@ function renderSemanticExpression(model: ComponentModuleModel, container: Source
     (candidate) =>
       candidate.containerStart === container.start && candidate.containerEnd === container.end,
   );
-  return expression ? `{${normalizeGeneratedSemanticExpression(expression.expression)}}` : '';
+  if (!expression) return '';
+  const normalized = normalizeGeneratedSemanticExpression(expression.expression);
+  return normalized === '' ? '' : `{${normalized}}`;
 }
 
 function normalizeGeneratedSemanticExpression(expression: string): string {
-  return expression.replace(/\bescapeText\(([^()]+)\)/g, '$1');
+  return expression
+    .replace(/\bescapeText\(([^()]+)\)/g, '$1')
+    .replace(/\b__kovoRenderMutationCsrfField\([^()]+\)/g, '');
+}
+
+function hasGeneratedMutationFormAttributes(element: JsxElementModel): boolean {
+  return (
+    element.attributes.some((attribute) => attribute.name === 'action') &&
+    element.attributes.some((attribute) => attribute.name === 'data-mutation')
+  );
 }
 
 function childBodySlice(
@@ -1023,6 +1040,7 @@ function enhancedMutationFormRenderLowering(
   const diagnostics: CompilerDiagnostic[] = [];
   const replacements: SourceReplacement[] = [];
   const outputContexts: GeneratedOutputWriteFact[] = [];
+  let needsCsrfImport = false;
 
   for (const element of model.jsxElements) {
     const repeatableDiagnostic = repeatableMutationFormDiagnostic(model, element, options);
@@ -1037,6 +1055,7 @@ function enhancedMutationFormRenderLowering(
     if (!lowering) continue;
 
     replacements.push(...lowering.replacements);
+    needsCsrfImport ||= lowering.importsMutationCsrfField;
     outputContexts.push(...lowering.outputContexts);
     if (options) {
       diagnostics.push(
@@ -1053,6 +1072,16 @@ function enhancedMutationFormRenderLowering(
     }
   }
 
+  if (needsCsrfImport && options && !importsMutationCsrfField(model)) {
+    const start = compilerHelperImportInsertionOffset(options.source);
+    replacements.push({
+      end: start,
+      replacement:
+        "import { renderMutationCsrfField as __kovoRenderMutationCsrfField } from '@kovojs/server/internal/csrf';\n",
+      start,
+    });
+  }
+
   return { diagnostics, outputContexts, replacements };
 }
 
@@ -1063,6 +1092,7 @@ interface EnhancedMutationFormConflict {
 interface EnhancedMutationFormLowering {
   conflicts: readonly EnhancedMutationFormConflict[];
   generatedAttributeNames: ReadonlySet<string>;
+  importsMutationCsrfField: boolean;
   outputContexts: readonly GeneratedOutputWriteFact[];
   replacements: readonly SourceReplacement[];
   semanticAttributes: readonly string[];
@@ -1092,6 +1122,7 @@ function enhancedMutationFormLowering(
     return {
       conflicts,
       generatedAttributeNames: new Set(),
+      importsMutationCsrfField: false,
       outputContexts: [],
       replacements: [],
       semanticAttributes: [],
@@ -1119,6 +1150,9 @@ function enhancedMutationFormLowering(
       start: mutationAttribute.start,
     },
     ...(keyAttribute ? [submittedFormKeyReplacement(keyAttribute)] : []),
+    ...(preserveRuntimeMutation
+      ? []
+      : [submittedFormCsrfReplacement(element, mutationAttribute.expressionBareIdentifierName)]),
   ];
   const semanticAttributes = [
     ...(methodAttribute ? [] : [' method="post"']),
@@ -1138,6 +1172,7 @@ function enhancedMutationFormLowering(
   return {
     conflicts,
     generatedAttributeNames,
+    importsMutationCsrfField: !preserveRuntimeMutation,
     outputContexts: [
       ...(methodAttribute
         ? []
@@ -1162,6 +1197,19 @@ function enhancedMutationFormLowering(
     replacements,
     semanticAttributes,
   };
+}
+
+function importsMutationCsrfField(model: ComponentModuleModel): boolean {
+  return model.namedImports.some(
+    (entry) =>
+      entry.moduleSpecifier === '@kovojs/server/internal/csrf' &&
+      entry.importedName === 'renderMutationCsrfField',
+  );
+}
+
+function compilerHelperImportInsertionOffset(source: string): number {
+  const jsxImportSource = /^\/\*\* @jsxImportSource [\s\S]*?\*\/\s*/.exec(source);
+  return jsxImportSource?.[0].length ?? 0;
 }
 
 function repeatableMutationFormDiagnostic(
@@ -1196,6 +1244,20 @@ function enhancedMutationFormConflicts(element: JsxElementModel): EnhancedMutati
       ['action', 'data-mutation', 'kovo-fragment-target', 'kovo-key'].includes(attribute.name),
     )
     .map((attribute) => ({ attribute }));
+}
+
+function submittedFormCsrfReplacement(
+  element: JsxElementModel,
+  localName: string,
+): SourceReplacement {
+  const position = element.childBody
+    ? element.childBody.offset + element.childBody.source.length
+    : element.closingStart;
+  return {
+    end: position,
+    replacement: `{__kovoRenderMutationCsrfField(${localName})}`,
+    start: position,
+  };
 }
 
 function localMutationKey(

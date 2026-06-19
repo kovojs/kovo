@@ -7,6 +7,7 @@ import * as packageNodeApi from '@kovojs/server/app-shell/node';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
 import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
+import * as packageInternalCsrfApi from '@kovojs/server/internal/csrf';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
 import * as packageInternalRouteApi from '@kovojs/server/internal/route';
@@ -23,6 +24,7 @@ import * as publicApi from '../index.js';
 import * as clientModulesApi from './app-shell/client-modules.js';
 import * as coreApi from './app-shell/core.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
+import * as internalCsrfApi from '../internal/csrf.js';
 import * as internalExecutionApi from '../internal/execution.js';
 import * as internalHtmlApi from '../internal/html.js';
 import * as internalRouteApi from '../internal/route.js';
@@ -221,6 +223,9 @@ type InternalVersionedClientModuleRequest =
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalVersionedClientModuleResponse =
   import('@kovojs/server/internal/client-modules').VersionedClientModuleResponse;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalRenderMutationCsrfField =
+  typeof import('@kovojs/server/internal/csrf').renderMutationCsrfField;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedNodeHandlerOptions =
   // @ts-expect-error SPEC.md §9.5: Node adapter companion types now have the root
@@ -504,6 +509,8 @@ describe('server app-shell public API barrels', () => {
       'renderVersionedClientModuleResponse',
       'versionedClientModuleHref',
     ]);
+    expect(moduleValueKeys(packageInternalCsrfApi)).toEqual(['renderMutationCsrfField']);
+    expect(packageInternalCsrfApi).toEqual(internalCsrfApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
       'endpointMatches',
       'runEndpoint',
@@ -603,6 +610,7 @@ describe('server app-shell public API barrels', () => {
     });
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './internal/client-modules': './src/internal/client-modules.ts',
+      './internal/csrf': './src/internal/csrf.ts',
       './internal/execution': './src/internal/execution.ts',
     });
   });

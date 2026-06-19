@@ -1,4 +1,7 @@
 /** @jsxImportSource @kovojs/server */
+import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
+import { Badge } from '@kovojs/ui/badge';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { voteUpMutation } from '../mutations.js';

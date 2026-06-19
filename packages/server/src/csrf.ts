@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import { escapeAttribute } from './html.js';
+import { currentJsxFrameworkContext } from './jsx-context.js';
 import { formLikeToRecord } from './schema.js';
 
 /** CSRF config: a `secret` and a `sessionId` extractor that binds the token to a session. */
@@ -50,6 +51,19 @@ export function csrfField<Request>(
   options: CsrfOptions<Request> & { field?: string },
 ): string {
   return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options))}">`;
+}
+
+/** @internal Render the framework-owned CSRF field for compiler-emitted mutation forms. */
+export function renderMutationCsrfField<Request>(definition: {
+  csrf?: CsrfValidationOptions<Request> | false;
+  key: string;
+}): string {
+  if (definition.csrf === false) return '';
+  const context = currentJsxFrameworkContext();
+  const csrf = definition.csrf ?? context?.csrf;
+  if (!context || !csrf) return '';
+  if (!csrf.sessionId(context.request as Request)) return '';
+  return csrfField(context.request as Request, csrf);
 }
 
 export function validateCsrfToken<Request>(

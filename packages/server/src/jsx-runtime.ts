@@ -12,7 +12,7 @@ import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/runtime/inter
 import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
 
 import { componentMutationFailureSlots } from './component-render.js';
-import { csrfField, type CsrfValidationOptions } from './csrf.js';
+import { renderMutationCsrfField, type CsrfValidationOptions } from './csrf.js';
 import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
@@ -253,12 +253,7 @@ function renderFormKeyContent(props: JsxProps, jsxKey?: unknown): string {
 
 function renderFormCsrfContent(props: JsxProps): string {
   if (!isMutationDefinitionLike(props.mutation)) return '';
-  if (props.mutation.csrf === false) return '';
-  const context = currentJsxFrameworkContext();
-  const csrf = props.mutation.csrf ?? context?.csrf;
-  if (!context || !csrf) return '';
-  if (!csrf.sessionId(context.request)) return '';
-  return csrfField(context.request, csrf);
+  return renderMutationCsrfField(props.mutation);
 }
 
 function isMutationDefinitionLike(

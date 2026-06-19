@@ -1,11 +1,11 @@
 // @kovojs-ir — lowered from examples/stackoverflow/src/components/question-list.tsx by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with `pnpm run emit-components`.
 /** @jsxImportSource @kovojs/server */
+import { renderMutationCsrfField as __kovoRenderMutationCsrfField } from '@kovojs/server/internal/csrf';
 import { escapeText } from '@kovojs/server/internal/html';
 import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
-import { csrfField } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
-import { soCsrf } from '../mutations.js';
+import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
 import {
@@ -285,8 +285,7 @@ const listStyles = style.create(
       color: '#c22e32',
       fontSize: 13,
     },
-  },
-  { namespace: 'so-question-list', source: 'examples/stackoverflow/src/components/question-list.tsx' },
+  }
 );
 
 export const questionListStyleCss = style.emitAtomicCss(
@@ -296,16 +295,16 @@ export const questionListStyleCss = style.emitAtomicCss(
 function renderAnswerStat(answerCount: number): string {
   if (answerCount > 0) {
     return (
-      <div class="kv-so-question-list-align-dow0hd kv-so-question-list-bd-z9lprh kv-so-question-list-bd-sdq6l5 kv-so-question-list-bd-1xrysw kv-so-question-list-bd-17zwtb kv-so-question-list-fg-2oulfq kv-so-question-list-d-suujph kv-so-question-list-flex-se7p8j kv-so-question-list-gap-1xqawc kv-so-question-list-pad-134lwd kv-so-question-list-pad-g3xfsf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBox">
-        <span class="kv-so-question-list-font-9vsq2l kv-so-question-list-font-1gvvc3 kv-so-question-list-font-c5751w kv-so-question-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxNum">{answerCount}</span>
-        <span class="kv-so-question-list-font-vriodq kv-so-question-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxLabel">{answerCount === 1 ? 'answer' : 'answers'}</span>
+      <div class="kv-list-align-dow0hd kv-list-bd-z9lprh kv-list-bd-sdq6l5 kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-fg-2oulfq kv-list-d-suujph kv-list-flex-se7p8j kv-list-gap-1xqawc kv-list-pad-134lwd kv-list-pad-g3xfsf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBox">
+        <span class="kv-list-font-9vsq2l kv-list-font-1gvvc3 kv-list-font-c5751w kv-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxNum">{answerCount}</span>
+        <span class="kv-list-font-vriodq kv-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxLabel">{answerCount === 1 ? 'answer' : 'answers'}</span>
       </div>
     );
   }
   return (
-    <div class="kv-so-question-list-align-dow0hd kv-so-question-list-fg-19jegf kv-so-question-list-d-suujph kv-so-question-list-flex-se7p8j kv-so-question-list-gap-1xqawc kv-so-question-list-pad-134lwd" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statPlain">
-      <span class="kv-so-question-list-font-9vsq2l kv-so-question-list-font-1gvvc3 kv-so-question-list-font-c5751w kv-so-question-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxNum">0</span>
-      <span class="kv-so-question-list-font-vriodq kv-so-question-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxLabel">answers</span>
+    <div class="kv-list-align-dow0hd kv-list-fg-19jegf kv-list-d-suujph kv-list-flex-se7p8j kv-list-gap-1xqawc kv-list-pad-134lwd" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statPlain">
+      <span class="kv-list-font-9vsq2l kv-list-font-1gvvc3 kv-list-font-c5751w kv-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxNum">0</span>
+      <span class="kv-list-font-vriodq kv-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statBoxLabel">answers</span>
     </div>
   );
 }
@@ -314,21 +313,21 @@ function renderQuestionRow(question: QuestionListItem): string {
   const tags = parseTags(question.tags);
   const views = viewsFor(question.id, question.score);
   return (
-    <li kovo-key={question.id} class="kv-so-question-list-bd-1mtk9b kv-so-question-list-bd-1ku9ml kv-so-question-list-bd-193fd6 kv-so-question-list-d-suujph kv-so-question-list-gap-1hjykv kv-so-question-list-pad-1b3ioz" data-style-src="examples/stackoverflow/src/components/question-list.tsx#row">
-      <div class="kv-so-question-list-fg-19jegf kv-so-question-list-d-suujph kv-so-question-list-flex-se7p8j kv-so-question-list-flex-1mn74f kv-so-question-list-font-1r07r6 kv-so-question-list-gap-1tj6rf kv-so-question-list-pad-1rl1mi kv-so-question-list-w-lwaztp" data-style-src="examples/stackoverflow/src/components/question-list.tsx#stats">
-        <div class="kv-so-question-list-align-dow0hd kv-so-question-list-d-suujph kv-so-question-list-flex-se7p8j kv-so-question-list-gap-1910oy" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statVotes">
+    <li kovo-key={question.id} class="kv-list-bd-1mtk9b kv-list-bd-1ku9ml kv-list-bd-193fd6 kv-list-d-suujph kv-list-gap-1hjykv kv-list-pad-1b3ioz" data-style-src="examples/stackoverflow/src/components/question-list.tsx#row">
+      <div class="kv-list-fg-19jegf kv-list-d-suujph kv-list-flex-se7p8j kv-list-flex-1mn74f kv-list-font-1r07r6 kv-list-gap-1tj6rf kv-list-pad-1rl1mi kv-list-w-lwaztp" data-style-src="examples/stackoverflow/src/components/question-list.tsx#stats">
+        <div class="kv-list-align-dow0hd kv-list-d-suujph kv-list-flex-se7p8j kv-list-gap-1910oy" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statVotes">
           {voteButton(question.id, question.score)}
-          <span class="kv-so-question-list-fg-19jegf kv-so-question-list-font-1r07r6 kv-so-question-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statVotesLabel">votes</span>
+          <span class="kv-list-fg-19jegf kv-list-font-1r07r6 kv-list-line-1k8e2e" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statVotesLabel">votes</span>
         </div>
         {renderAnswerStat(question.answerCount)}
-        <span class="kv-so-question-list-fg-2mobxg kv-so-question-list-font-vriodq kv-so-question-list-text-dkfmln" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statViews">{`${compactCount(views)} views`}</span>
+        <span class="kv-list-fg-2mobxg kv-list-font-vriodq kv-list-text-dkfmln" data-style-src="examples/stackoverflow/src/components/question-list.tsx#statViews">{`${compactCount(views)} views`}</span>
       </div>
-      <div class="kv-so-question-list-d-7k5ll4 kv-so-question-list-flex-vyulks kv-so-question-list-gap-13r5ks kv-so-question-list-min-mk1ffb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowMain">
-        <a class="kv-so-question-list-fg-1837qt kv-so-question-list-font-xv03xf kv-so-question-list-font-c5751w kv-so-question-list-line-yriicd kv-so-question-list-text-1tmi32 kv-so-question-list-fg-1xz1yy" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowTitle" href={`/questions/${question.id}`}>
+      <div class="kv-list-d-7k5ll4 kv-list-flex-vyulks kv-list-gap-13r5ks kv-list-min-mk1ffb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowMain">
+        <a class="kv-list-fg-1837qt kv-list-font-xv03xf kv-list-font-c5751w kv-list-line-yriicd kv-list-text-1tmi32 kv-list-fg-1xz1yy" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowTitle" href={`/questions/${question.id}`}>
           {escapeText(question.title)}
         </a>
-        {question.body ? <p class="kv-so-question-list-fg-19jegf kv-so-question-list-d-xao6br kv-so-question-list-font-1r07r6 kv-so-question-list-line-274ua4 kv-so-question-list-m-113xoj kv-so-question-list-overflow-1f3mmb kv-so-question-list--2pe3qp kv-so-question-list--nogayy" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowExcerpt">{escapeText(question.body)}</p> : ''}
-        <div class="kv-so-question-list-align-1fvo3s kv-so-question-list-column-1191qg kv-so-question-list-d-suujph kv-so-question-list-flex-1scymt kv-so-question-list-justify-fgu9ef kv-so-question-list-m-s60ix5 kv-so-question-list-row-1x4q8m" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowMeta">
+        {question.body ? <p class="kv-list-fg-19jegf kv-list-d-xao6br kv-list-font-1r07r6 kv-list-line-274ua4 kv-list-m-113xoj kv-list-overflow-1f3mmb kv-list--2pe3qp kv-list--nogayy" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowExcerpt">{escapeText(question.body)}</p> : ''}
+        <div class="kv-list-align-1fvo3s kv-list-column-1191qg kv-list-d-suujph kv-list-flex-1scymt kv-list-justify-fgu9ef kv-list-m-s60ix5 kv-list-row-1x4q8m" data-style-src="examples/stackoverflow/src/components/question-list.tsx#rowMeta">
           {renderTags(tags)}
           {renderUserCard(question.authorName, question.createdAt, 'asked')}
         </div>
@@ -357,33 +356,33 @@ export const QuestionListRegion = component({
 
     return (
       <div kovo-c="question-list-region" kovo-deps="questionList questionScore" kovo-fragment-target="question-list-region" kovo-live-component="components/question-list/question-list-region">
-        <div class="kv-so-question-list-align-dow0hd kv-so-question-list-d-suujph kv-so-question-list-gap-1hjykv kv-so-question-list-justify-fgu9ef kv-so-question-list-m-1hf0q0" data-style-src="examples/stackoverflow/src/components/question-list.tsx#pageHead">
-          <h1 class="kv-so-question-list-fg-xnwxoc kv-so-question-list-font-akymas kv-so-question-list-font-c5751w kv-so-question-list-m-113xoj" data-style-src="examples/stackoverflow/src/components/question-list.tsx#pageTitle">All Questions</h1>
-          <a href="#ask-question" class="kv-so-question-list-bg-nl1060 kv-so-question-list-bd-12ru5p kv-so-question-list-bd-sdq6l5 kv-so-question-list-bd-1xrysw kv-so-question-list-bd-17zwtb kv-so-question-list-fg-1g4csz kv-so-question-list-flex-1mn74f kv-so-question-list-font-1r07r6 kv-so-question-list-pad-1tf3mn kv-so-question-list-pad-qqgusf kv-so-question-list-text-1tmi32 kv-so-question-list-bg-wz972k" data-style-src="examples/stackoverflow/src/components/question-list.tsx#askButton">
+        <div class="kv-list-align-dow0hd kv-list-d-suujph kv-list-gap-1hjykv kv-list-justify-fgu9ef kv-list-m-1hf0q0" data-style-src="examples/stackoverflow/src/components/question-list.tsx#pageHead">
+          <h1 class="kv-list-fg-xnwxoc kv-list-font-akymas kv-list-font-c5751w kv-list-m-113xoj" data-style-src="examples/stackoverflow/src/components/question-list.tsx#pageTitle">All Questions</h1>
+          <a href="#ask-question" class="kv-list-bg-nl1060 kv-list-bd-12ru5p kv-list-bd-sdq6l5 kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-fg-1g4csz kv-list-flex-1mn74f kv-list-font-1r07r6 kv-list-pad-1tf3mn kv-list-pad-qqgusf kv-list-text-1tmi32 kv-list-bg-wz972k" data-style-src="examples/stackoverflow/src/components/question-list.tsx#askButton">
             Ask Question
           </a>
         </div>
-        <div class="kv-so-question-list-align-dow0hd kv-so-question-list-d-suujph kv-so-question-list-flex-1scymt kv-so-question-list-gap-1i7puk kv-so-question-list-justify-fgu9ef kv-so-question-list-m-1v15fb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#subHead">
-          <span class="kv-so-question-list-fg-1ecxq4 kv-so-question-list-font-xv03xf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#count">
+        <div class="kv-list-align-dow0hd kv-list-d-suujph kv-list-flex-1scymt kv-list-gap-1i7puk kv-list-justify-fgu9ef kv-list-m-1v15fb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#subHead">
+          <span class="kv-list-fg-1ecxq4 kv-list-font-xv03xf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#count">
             {questions.length.toLocaleString('en-US')} questions
           </span>
-          <div class="kv-so-question-list-bd-1fs11q kv-so-question-list-bd-1hxazk kv-so-question-list-bd-1xrysw kv-so-question-list-bd-17zwtb kv-so-question-list-d-o3p01s kv-so-question-list-overflow-1f3mmb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tabs">
-            <a href="/" class="kv-so-question-list-bd-65jqli kv-so-question-list-bd-atzfi6 kv-so-question-list-font-1r07r6 kv-so-question-list-pad-nsmmd9 kv-so-question-list-pad-qqgusf kv-so-question-list-text-1tmi32 kv-so-question-list-bg-1hqvrl kv-so-question-list-fg-1szrun kv-so-question-list-bd-ew53ga kv-so-question-list-bg-t92jsj kv-so-question-list-fg-1ecxq4" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab; examples/stackoverflow/src/components/question-list.tsx#tabFirst; examples/stackoverflow/src/components/question-list.tsx#tabActive">
+          <div class="kv-list-bd-1fs11q kv-list-bd-1hxazk kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-d-o3p01s kv-list-overflow-1f3mmb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tabs">
+            <a href="/" class="kv-list-bd-65jqli kv-list-bd-atzfi6 kv-list-font-1r07r6 kv-list-pad-nsmmd9 kv-list-pad-qqgusf kv-list-text-1tmi32 kv-list-bg-1hqvrl kv-list-fg-1szrun kv-list-bd-ew53ga kv-list-bg-t92jsj kv-list-fg-1ecxq4" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab; examples/stackoverflow/src/components/question-list.tsx#tabFirst; examples/stackoverflow/src/components/question-list.tsx#tabActive">
               Newest
             </a>
-            <a href="/" class="kv-so-question-list-bd-65jqli kv-so-question-list-bd-atzfi6 kv-so-question-list-bd-nhyibz kv-so-question-list-fg-19jegf kv-so-question-list-font-1r07r6 kv-so-question-list-pad-nsmmd9 kv-so-question-list-pad-qqgusf kv-so-question-list-text-1tmi32 kv-so-question-list-bg-1hqvrl kv-so-question-list-fg-1szrun" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab">
+            <a href="/" class="kv-list-bd-65jqli kv-list-bd-atzfi6 kv-list-bd-nhyibz kv-list-fg-19jegf kv-list-font-1r07r6 kv-list-pad-nsmmd9 kv-list-pad-qqgusf kv-list-text-1tmi32 kv-list-bg-1hqvrl kv-list-fg-1szrun" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab">
               Active
             </a>
-            <a href="/" class="kv-so-question-list-bd-65jqli kv-so-question-list-bd-atzfi6 kv-so-question-list-bd-nhyibz kv-so-question-list-fg-19jegf kv-so-question-list-font-1r07r6 kv-so-question-list-pad-nsmmd9 kv-so-question-list-pad-qqgusf kv-so-question-list-text-1tmi32 kv-so-question-list-bg-1hqvrl kv-so-question-list-fg-1szrun" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab">
+            <a href="/" class="kv-list-bd-65jqli kv-list-bd-atzfi6 kv-list-bd-nhyibz kv-list-fg-19jegf kv-list-font-1r07r6 kv-list-pad-nsmmd9 kv-list-pad-qqgusf kv-list-text-1tmi32 kv-list-bg-1hqvrl kv-list-fg-1szrun" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab">
               Bountied
             </a>
-            <a href="/" class="kv-so-question-list-bd-65jqli kv-so-question-list-bd-atzfi6 kv-so-question-list-bd-nhyibz kv-so-question-list-fg-19jegf kv-so-question-list-font-1r07r6 kv-so-question-list-pad-nsmmd9 kv-so-question-list-pad-qqgusf kv-so-question-list-text-1tmi32 kv-so-question-list-bg-1hqvrl kv-so-question-list-fg-1szrun" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab">
+            <a href="/" class="kv-list-bd-65jqli kv-list-bd-atzfi6 kv-list-bd-nhyibz kv-list-fg-19jegf kv-list-font-1r07r6 kv-list-pad-nsmmd9 kv-list-pad-qqgusf kv-list-text-1tmi32 kv-list-bg-1hqvrl kv-list-fg-1szrun" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab">
               Unanswered
             </a>
           </div>
         </div>
 
-        <ul class="kv-so-question-list-bd-93yw0a kv-so-question-list-bd-5emlhs kv-so-question-list-bd-1g9l04 kv-so-question-list-list-13bp8i kv-so-question-list-m-113xoj kv-so-question-list-pad-18rrwl" data-style-src="examples/stackoverflow/src/components/question-list.tsx#list">
+        <ul class="kv-list-bd-93yw0a kv-list-bd-5emlhs kv-list-bd-1g9l04 kv-list-list-13bp8i kv-list-m-113xoj kv-list-pad-18rrwl" data-style-src="examples/stackoverflow/src/components/question-list.tsx#list">
           {questions.map((question) => renderQuestionRow(question))}
         </ul>
 
@@ -392,20 +391,16 @@ export const QuestionListRegion = component({
           enhance
           method="post" action="/_m/postQuestion" data-mutation="postQuestion" kovo-fragment-target="post-question-mutation"
           id="ask-question"
-          class="kv-so-question-list-bg-13mapp kv-so-question-list-bd-g86ugw kv-so-question-list-bd-1hxazk kv-so-question-list-bd-1xrysw kv-so-question-list-bd-17zwtb kv-so-question-list-d-7k5ll4 kv-so-question-list-gap-y2fx34 kv-so-question-list-m-1qc9py kv-so-question-list-pad-1j0dfe" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composer"
+          class="kv-list-bg-13mapp kv-list-bd-g86ugw kv-list-bd-1hxazk kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-d-7k5ll4 kv-list-gap-y2fx34 kv-list-m-1qc9py kv-list-pad-1j0dfe" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composer"
         >
-          {/* This form is compiler-lowered, so the `mutation` prop is replaced by
-              concrete attributes and the JSX runtime's automatic CSRF field is not
-              emitted — unlike the runtime-rendered voteButton. Add it explicitly. */}
-          {slots.request ? csrfField(slots.request, soCsrf) : ''}
           <input type="hidden" name="id" value={freshId('q')} />
           <input type="hidden" name="authorId" value="demo-viewer" />
-          <p class="kv-so-question-list-fg-xnwxoc kv-so-question-list-font-9vsq2l kv-so-question-list-font-1chcq6 kv-so-question-list-m-113xoj" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerTitle">Ask a public question</p>
-          <p class="kv-so-question-list-fg-19jegf kv-so-question-list-font-1r07r6 kv-so-question-list-m-fu5lgo" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerHint">
+          <p class="kv-list-fg-xnwxoc kv-list-font-9vsq2l kv-list-font-1chcq6 kv-list-m-113xoj" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerTitle">Ask a public question</p>
+          <p class="kv-list-fg-19jegf kv-list-font-1r07r6 kv-list-m-fu5lgo" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerHint">
             {totalVotes} votes cast across the community — be specific and imagine you're asking
             another person.
           </p>
-          <label class="kv-so-question-list-fg-xnwxoc kv-so-question-list-font-m89wix kv-so-question-list-font-1chcq6" data-style-src="examples/stackoverflow/src/components/question-list.tsx#label" for="ask-title">
+          <label class="kv-list-fg-xnwxoc kv-list-font-m89wix kv-list-font-1chcq6" data-style-src="examples/stackoverflow/src/components/question-list.tsx#label" for="ask-title">
             Title
           </label>
           <input
@@ -413,9 +408,9 @@ export const QuestionListRegion = component({
             name="title"
             required
             placeholder="e.g. How do I center a div with flexbox?"
-            class="kv-so-question-list-bg-1r5soy kv-so-question-list-bd-1fs11q kv-so-question-list-bd-sdq6l5 kv-so-question-list-bd-1xrysw kv-so-question-list-bd-17zwtb kv-so-question-list-box-1gvzd3 kv-so-question-list-fg-xnwxoc kv-so-question-list-font-1r07r6 kv-so-question-list-pad-i3n451 kv-so-question-list-pad-qqgusf kv-so-question-list-w-lhhf6b kv-so-question-list-bd-m5fnx7 kv-so-question-list-box-1g9a2w kv-so-question-list-outline-405iyf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#input"
+            class="kv-list-bg-1r5soy kv-list-bd-1fs11q kv-list-bd-sdq6l5 kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-box-1gvzd3 kv-list-fg-xnwxoc kv-list-font-1r07r6 kv-list-pad-i3n451 kv-list-pad-qqgusf kv-list-w-lhhf6b kv-list-bd-m5fnx7 kv-list-box-1g9a2w kv-list-outline-405iyf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#input"
           />
-          <label class="kv-so-question-list-fg-xnwxoc kv-so-question-list-font-m89wix kv-so-question-list-font-1chcq6" data-style-src="examples/stackoverflow/src/components/question-list.tsx#label" for="ask-body">
+          <label class="kv-list-fg-xnwxoc kv-list-font-m89wix kv-list-font-1chcq6" data-style-src="examples/stackoverflow/src/components/question-list.tsx#label" for="ask-body">
             Body
           </label>
           <textarea
@@ -424,15 +419,15 @@ export const QuestionListRegion = component({
             required
             rows="3"
             placeholder="Include all the information someone would need to answer your question…"
-            class="kv-so-question-list-bg-1r5soy kv-so-question-list-bd-1fs11q kv-so-question-list-bd-sdq6l5 kv-so-question-list-bd-1xrysw kv-so-question-list-bd-17zwtb kv-so-question-list-box-1gvzd3 kv-so-question-list-fg-xnwxoc kv-so-question-list-font-1r07r6 kv-so-question-list-pad-i3n451 kv-so-question-list-pad-qqgusf kv-so-question-list-w-lhhf6b kv-so-question-list-bd-m5fnx7 kv-so-question-list-box-1g9a2w kv-so-question-list-outline-405iyf kv-so-question-list-line-274ua4 kv-so-question-list-resize-bvf20l" data-style-src="examples/stackoverflow/src/components/question-list.tsx#input; examples/stackoverflow/src/components/question-list.tsx#textarea"
+            class="kv-list-bg-1r5soy kv-list-bd-1fs11q kv-list-bd-sdq6l5 kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-box-1gvzd3 kv-list-fg-xnwxoc kv-list-font-1r07r6 kv-list-pad-i3n451 kv-list-pad-qqgusf kv-list-w-lhhf6b kv-list-bd-m5fnx7 kv-list-box-1g9a2w kv-list-outline-405iyf kv-list-line-274ua4 kv-list-resize-bvf20l" data-style-src="examples/stackoverflow/src/components/question-list.tsx#input; examples/stackoverflow/src/components/question-list.tsx#textarea"
           />
-          {FormError({ "failure": slots.forms.postQuestion.failure, "code": "DUPLICATE_TITLE", "class": "kv-so-question-list-fg-11kzz2 kv-so-question-list-font-1r07r6", "data-style-src": "examples/stackoverflow/src/components/question-list.tsx#error", "message": (failure: DuplicateTitleFailure) =>
+          {FormError({ "failure": slots.forms.postQuestion.failure, "code": "DUPLICATE_TITLE", "class": "kv-list-fg-11kzz2 kv-list-font-1r07r6", "data-style-src": "examples/stackoverflow/src/components/question-list.tsx#error", "message": (failure: DuplicateTitleFailure) =>
               `A question titled "${failure.payload.title}" already exists.` })}
-          <div class="kv-so-question-list-d-suujph kv-so-question-list-justify-12aoua" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerActions">
-            <button type="submit" class="kv-so-question-list-bg-nl1060 kv-so-question-list-bd-12ru5p kv-so-question-list-bd-sdq6l5 kv-so-question-list-bd-1xrysw kv-so-question-list-bd-17zwtb kv-so-question-list-fg-1g4csz kv-so-question-list-font-1r07r6 kv-so-question-list-pad-1tf3mn kv-so-question-list-pad-qqgusf kv-so-question-list-bg-wz972k" data-style-src="examples/stackoverflow/src/components/question-list.tsx#submitButton">
+          <div class="kv-list-d-suujph kv-list-justify-12aoua" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerActions">
+            <button type="submit" class="kv-list-bg-nl1060 kv-list-bd-12ru5p kv-list-bd-sdq6l5 kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-fg-1g4csz kv-list-font-1r07r6 kv-list-pad-1tf3mn kv-list-pad-qqgusf kv-list-bg-wz972k" data-style-src="examples/stackoverflow/src/components/question-list.tsx#submitButton">
               Post your question
             </button>
-          </div>
+          </div>{__kovoRenderMutationCsrfField(postQuestionMutation)}
         </form>
       </div>
     );

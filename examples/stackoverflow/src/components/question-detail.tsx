@@ -1,9 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { csrfField } from '@kovojs/server';
+import { Badge } from '@kovojs/ui/badge';
+import { Button } from '@kovojs/ui/button';
+import { Card } from '@kovojs/ui/card';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
-import { postAnswerMutation, soCsrf } from '../mutations.js';
+import { postAnswerMutation } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
 import type { QuestionAnswersResult, QuestionDetailResult, SoRequest } from '../model.js';
 import {
@@ -329,9 +332,6 @@ export const QuestionDetailRegion = component({
           id="your-answer"
           style={detailStyles.composer}
         >
-          {/* Compiler-lowered form: add the CSRF field explicitly (see the note on
-              the question-list composer). */}
-          {slots.request ? csrfField(slots.request, soCsrf) : ''}
           <input type="hidden" name="id" value={freshId('a')} />
           <input type="hidden" name="questionId" value={questionId} />
           <input type="hidden" name="authorId" value="demo-viewer" />

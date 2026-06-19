@@ -1,10 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { csrfField, mutationFormAttributes } from '@kovojs/server';
+import { mutationFormAttributes } from '@kovojs/server';
 import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
-import { closeDeal, crmCsrf, moveDeal, type CrmRequest } from '../mutations.js';
+import { closeDeal, moveDeal, type CrmRequest } from '../mutations.js';
 import {
   activityListQuery,
   contactListQuery,
@@ -214,7 +214,6 @@ export const DealDetailRegion = component({
           <div style={dealDetailStyles.stageWrap}>
             {MOVE_STAGES.map((stage) => (
               <form key={`${deal.id}:${stage}`} {...mutationFormAttributes(moveDeal)}>
-                {slots.request ? csrfField(slots.request, crmCsrf) : ''}
                 <input type="hidden" name="dealId" value={deal.id} />
                 <input type="hidden" name="stage" value={stage} />
                 {deal.stage === stage ? (
@@ -240,7 +239,6 @@ export const DealDetailRegion = component({
               </p>
             ) : (
               <form key={`${deal.id}:close`} {...mutationFormAttributes(closeDeal)}>
-                {slots.request ? csrfField(slots.request, crmCsrf) : ''}
                 <input type="hidden" name="dealId" value={deal.id} />
                 <button
                   type="submit"

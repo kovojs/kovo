@@ -4,7 +4,10 @@ import { trustedHtml } from '@kovojs/runtime';
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
+import { csrfToken } from './csrf.js';
+import { runWithJsxRequestContext } from './jsx-context.js';
 import { Fragment, jsx, jsxDEV, jsxs } from './jsx-runtime.js';
+import { mutationFormAttributes } from './mutation.js';
 
 describe('server jsx runtime', () => {
   it('renders intrinsic elements to light-DOM HTML strings', () => {
@@ -66,6 +69,65 @@ describe('server jsx runtime', () => {
     expect(jsx('form', { key: 'p2', enhance: true, children: '' })).toBe(
       '<form kovo-key="p2" enhance></form>',
     );
+  });
+
+  it('renders one session-bound CSRF field for direct server JSX mutation forms', () => {
+    const request = { session: { id: 's1' } };
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-secret',
+      sessionId: (value: typeof request) => value.session.id,
+    };
+    const addToCart = { csrf, key: 'cart/add' } as const;
+
+    const html = runWithJsxRequestContext(request, () =>
+      jsx('form', {
+        enhance: true,
+        mutation: addToCart,
+        children: '',
+      }),
+    );
+
+    expect(html).toBe(
+      `<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="csrf" value="${csrfToken(
+        request,
+        csrf,
+      )}"></form>`,
+    );
+    expect(String(html).match(/name="csrf"/g)).toHaveLength(1);
+  });
+
+  it('does not render CSRF fields for csrf:false mutation forms', () => {
+    const html = runWithJsxRequestContext({ session: { id: 's1' } }, () =>
+      jsx('form', {
+        enhance: true,
+        mutation: { csrf: false, key: 'cart/add' },
+        children: '',
+      }),
+    );
+
+    expect(html).not.toContain('name="kovo-csrf"');
+  });
+
+  it('renders CSRF for mutationFormAttributes spreads through the retained mutation value', () => {
+    const request = { session: { id: 's1' } };
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-secret',
+      sessionId: (value: typeof request) => value.session.id,
+    };
+    const addToCart = { csrf, key: 'cart/add' } as const;
+
+    const html = runWithJsxRequestContext(request, () =>
+      jsx('form', {
+        ...mutationFormAttributes(addToCart),
+        children: '',
+      }),
+    );
+
+    expect(html).toContain('action="/_m/cart/add"');
+    expect(html).toContain(`name="csrf" value="${csrfToken(request, csrf)}"`);
+    expect(String(html).match(/name="csrf"/g)).toHaveLength(1);
   });
 
   it('escapes attribute values', () => {

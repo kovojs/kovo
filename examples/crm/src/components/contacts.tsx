@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
-import { csrfField, mutationFormAttributes } from '@kovojs/server';
+import { mutationFormAttributes } from '@kovojs/server';
 import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
@@ -8,7 +8,7 @@ import { Card } from '@kovojs/ui/card';
 import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
-import { addContact, crmCsrf, type CrmRequest } from '../mutations.js';
+import { addContact, type CrmRequest } from '../mutations.js';
 import { addContactForm } from '../model.js';
 import { contactListQuery, type ContactListResult, type ContactRow } from '../queries.js';
 import { freshId } from '../components/chrome.js';
@@ -158,7 +158,6 @@ export const ContactsRegion = component({
 
         {/* The refreshed fragment resets the form with a fresh contact id. */}
         <form {...mutationFormAttributes(addContact)} style={contactStyles.formPanel}>
-          {slots.request ? csrfField(slots.request, crmCsrf) : ''}
           <input type="hidden" name="id" value={freshId('c')} />
           <input type="hidden" name="ownerId" value="u1" />
           <div style={contactStyles.formGrid}>

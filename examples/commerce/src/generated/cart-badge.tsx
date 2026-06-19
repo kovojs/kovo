@@ -41,8 +41,7 @@ const cartBadgeStyles = style.create(
       minWidth: 20,
       paddingInline: 6,
     },
-  },
-  { namespace: 'commerce-cart-badge', source: 'examples/commerce/src/components/cart-badge.tsx' },
+  }
 );
 
 export const cartBadgeStyleCss = style.emitAtomicCss(
@@ -52,9 +51,9 @@ export const cartBadgeStyleCss = style.emitAtomicCss(
 export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartQueryResult }) => (
-    <cart-badge class="kv-commerce-cart-badge-align-1n0np7 kv-commerce-cart-badge-bg-z64ku4 kv-commerce-cart-badge-bd-5rajyo kv-commerce-cart-badge-bd-zehgw2 kv-commerce-cart-badge-bd-169px8 kv-commerce-cart-badge-bd-19c8ne kv-commerce-cart-badge-fg-ulvh0s kv-commerce-cart-badge-d-rjc9a1 kv-commerce-cart-badge-font-wfjt8u kv-commerce-cart-badge-font-69d2ez kv-commerce-cart-badge-gap-th4gxo kv-commerce-cart-badge-pad-82ra0h kv-commerce-cart-badge-pad-1xb6c1" data-style-src="examples/commerce/src/components/cart-badge.tsx#badge" kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-live-component="components/cart-badge/cart-badge">
+    <cart-badge class="kv-cart-badge-align-1n0np7 kv-cart-badge-bg-z64ku4 kv-cart-badge-bd-5rajyo kv-cart-badge-bd-zehgw2 kv-cart-badge-bd-169px8 kv-cart-badge-bd-19c8ne kv-cart-badge-fg-ulvh0s kv-cart-badge-d-rjc9a1 kv-cart-badge-font-wfjt8u kv-cart-badge-font-69d2ez kv-cart-badge-gap-th4gxo kv-cart-badge-pad-82ra0h kv-cart-badge-pad-1xb6c1" data-style-src="examples/commerce/src/components/cart-badge.tsx#badge" kovo-deps="cart" kovo-fragment-target="cart-badge" kovo-live-component="components/cart-badge/cart-badge">
       <span>{t(commerceMessages, 'cartLabel')}</span>
-      <span class="kv-commerce-cart-badge-align-1n0np7 kv-commerce-cart-badge-bg-73eir6 kv-commerce-cart-badge-bd-1ans0m kv-commerce-cart-badge-fg-1d7izn kv-commerce-cart-badge-d-rjc9a1 kv-commerce-cart-badge-font-hgn7l4 kv-commerce-cart-badge-font-8pgwt0 kv-commerce-cart-badge-font-o2m1ue kv-commerce-cart-badge-h-1wd2oy kv-commerce-cart-badge-justify-olqh3l kv-commerce-cart-badge-min-6nuqyp kv-commerce-cart-badge-pad-88ob6b" data-style-src="examples/commerce/src/components/cart-badge.tsx#count" data-bind="cart.count">{cart.count}</span>
+      <span class="kv-cart-badge-align-1n0np7 kv-cart-badge-bg-73eir6 kv-cart-badge-bd-1ans0m kv-cart-badge-fg-1d7izn kv-cart-badge-d-rjc9a1 kv-cart-badge-font-hgn7l4 kv-cart-badge-font-8pgwt0 kv-cart-badge-font-o2m1ue kv-cart-badge-h-1wd2oy kv-cart-badge-justify-olqh3l kv-cart-badge-min-6nuqyp kv-cart-badge-pad-88ob6b" data-style-src="examples/commerce/src/components/cart-badge.tsx#count" data-bind="cart.count">{cart.count}</span>
     </cart-badge>
   ),
 });

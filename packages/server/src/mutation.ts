@@ -190,6 +190,8 @@ export interface MutationFormAttributes<Key extends string = string> {
   enhance: true;
   /** Mutation forms post by default. */
   method: 'post';
+  /** Typed mutation value retained for server JSX runtime CSRF injection. */
+  mutation: Pick<MutationDefinition<Key>, 'csrf' | 'key'>;
 }
 
 export interface RunMutationOptions<
@@ -276,13 +278,14 @@ export function mutation<
  * server-rendered templates from hard-coding `/_m/*` URLs.
  */
 export function mutationFormAttributes<const Key extends string>(
-  definition: Pick<MutationDefinition<Key>, 'key'>,
+  definition: Pick<MutationDefinition<Key>, 'csrf' | 'key'>,
 ): MutationFormAttributes<Key> {
   return {
     action: `/_m/${definition.key}`,
     'data-mutation': definition.key,
     enhance: true,
     method: 'post',
+    mutation: definition,
   };
 }
 

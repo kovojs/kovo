@@ -1,9 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
-import { csrfField } from '@kovojs/server';
+import { Badge } from '@kovojs/ui/badge';
+import { Button } from '@kovojs/ui/button';
+import { Card } from '@kovojs/ui/card';
+import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
-import { postQuestionMutation, soCsrf } from '../mutations.js';
+import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
 import {
@@ -389,10 +392,6 @@ export const QuestionListRegion = component({
           id="ask-question"
           style={listStyles.composer}
         >
-          {/* This form is compiler-lowered, so the `mutation` prop is replaced by
-              concrete attributes and the JSX runtime's automatic CSRF field is not
-              emitted — unlike the runtime-rendered voteButton. Add it explicitly. */}
-          {slots.request ? csrfField(slots.request, soCsrf) : ''}
           <input type="hidden" name="id" value={freshId('q')} />
           <input type="hidden" name="authorId" value="demo-viewer" />
           <p style={listStyles.composerTitle}>Ask a public question</p>

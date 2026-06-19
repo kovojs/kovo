@@ -223,6 +223,12 @@ export const AddToCartForm = component({
     expect(result.loweredSource).toContain(
       '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId} class="add"',
     );
+    expect(result.loweredSource).toContain(
+      "import { renderMutationCsrfField as __kovoRenderMutationCsrfField } from '@kovojs/server/internal/csrf';",
+    );
+    expect(result.loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(
+      1,
+    );
     expect(result.loweredSource).not.toContain('mutation={addToCart}');
     expect(result.loweredSource).not.toMatch(/\skey=\{slots\.productId\}/);
     expect(result.outputContextFacts).toEqual(
@@ -277,6 +283,36 @@ export const ProductGrid = component({
     expect(result.loweredSource).toContain(
       '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId}',
     );
+    expect(result.loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(
+      1,
+    );
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('does not emit duplicate CSRF helpers when runtime mutation props are preserved', () => {
+    const result = compileComponentModule({
+      fileName: 'add-to-cart-form.tsx',
+      source: `
+export const addToCart = mutation('cart/add', {
+  handler() {
+    return null;
+  },
+});
+
+export const AddToCartForm = component({
+  render: () => (
+    <form enhance mutation={addToCart} key="p1">
+      <input type="hidden" name="productId" value="p1" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.loweredSource).toContain('mutation={addToCart}');
+    expect(result.loweredSource).not.toContain('__kovoRenderMutationCsrfField(addToCart)');
     expect(() => assertRenderEquivalence(result)).not.toThrow();
     expect(() => assertFixpoint(result)).not.toThrow();
   });

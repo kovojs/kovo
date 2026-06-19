@@ -28,6 +28,7 @@ describe('server mutation lifecycle', () => {
       'data-mutation': 'cart/add',
       enhance: true,
       method: 'post',
+      mutation: addToCart,
     });
     expect(renderMutationFormAttributes(addToCart)).toBe(
       'method="post" action="/_m/cart/add" enhance data-mutation="cart/add"',

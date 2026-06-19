@@ -67,8 +67,7 @@ const commerceAppStyles = style.create(
       maxWidth: 448,
       padding: 24,
     },
-  },
-  { namespace: 'commerce-app', source: 'examples/commerce/src/app.tsx' },
+  }
 );
 
 export const commerceAppStyleCss = style.emitAtomicCss(
