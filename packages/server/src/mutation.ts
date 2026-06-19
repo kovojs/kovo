@@ -27,7 +27,12 @@ import {
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
-import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
+import {
+  renderDoneWireHtml,
+  renderFragmentWireHtml,
+  renderQueryWireHtml,
+  renderTextWireHtml,
+} from './wire-html.js';
 import {
   readQueryInstanceKey,
   readQueryVersion,
@@ -47,6 +52,7 @@ import {
   type LiveTargetRenderer,
   type MutationLiveTargetDescriptor,
   type MutationLiveTarget,
+  type BufferedMutationWireResponse,
   type MutationEndpointRequest,
   type MutationEndpointResponse,
   type MutationWireRequest,
@@ -91,6 +97,122 @@ export interface MutationSuccess<Value, Input = unknown> {
 }
 
 export type MutationResult<Value, Input = unknown> = MutationFail | MutationSuccess<Value, Input>;
+
+/** A server-rendered fragment chunk for a SPEC §9.1 streaming mutation response. */
+export interface MutationStreamFragmentChunk {
+  html: string;
+  kind: 'fragment';
+  mode?: 'append' | 'replace';
+  target: string;
+}
+
+/** An escaped text-source chunk for a SPEC §9.1 streaming mutation response. */
+export interface MutationStreamTextChunk {
+  kind: 'text';
+  mode?: 'append' | 'checkpoint';
+  target: string;
+  text: string;
+}
+
+/** A query-truth chunk for a SPEC §9.1 streaming mutation response. */
+export interface MutationStreamQueryChunk {
+  delta?: boolean;
+  key?: string;
+  kind: 'query';
+  name: string;
+  value: unknown;
+  version?: number | string;
+}
+
+/** A readable terminal marker for a SPEC §9.1 streaming mutation response. */
+export interface MutationStreamDoneChunk {
+  kind: 'done';
+  reason?: string;
+}
+
+/** A typed chunk yielded by a streaming mutation author function (SPEC §9.1). */
+export type MutationStreamChunk =
+  | MutationStreamDoneChunk
+  | MutationStreamFragmentChunk
+  | MutationStreamQueryChunk
+  | MutationStreamTextChunk;
+
+/** Context passed to a streaming mutation author function after the mutation succeeds. */
+export interface MutationStreamContext<
+  Value = unknown,
+  Input = unknown,
+  Request = unknown,
+> {
+  input: Input;
+  request: Request;
+  result: MutationSuccess<Value, Input>;
+}
+
+/** Iterable chunk source returned by a streaming mutation author function. */
+export type MutationStreamSource<Value, Input, Request> =
+  | AsyncIterable<MutationStreamChunk>
+  | Iterable<MutationStreamChunk>;
+
+/** Coarse server-side text coalescing policy for streaming mutation text chunks. */
+export interface MutationTextCoalescingPolicy {
+  maxDelayMs?: number;
+  maxTextChars?: number;
+}
+
+const defaultMutationTextCoalescingPolicy: Required<MutationTextCoalescingPolicy> = {
+  maxDelayMs: 32,
+  maxTextChars: 2048,
+};
+
+/**
+ * Build SPEC §9.1 streaming mutation wire chunks. Text chunks are escaped by the server
+ * renderer and are coalesced before being written to the response stream.
+ */
+export const stream = {
+  done(options: { reason?: string } = {}): MutationStreamDoneChunk {
+    return { kind: 'done', ...(options.reason === undefined ? {} : { reason: options.reason }) };
+  },
+  fragment(options: {
+    html: string;
+    mode?: 'append' | 'replace';
+    target: string;
+  }): MutationStreamFragmentChunk {
+    return {
+      html: options.html,
+      kind: 'fragment',
+      ...(options.mode === undefined ? {} : { mode: options.mode }),
+      target: options.target,
+    };
+  },
+  query(options: {
+    delta?: boolean;
+    key?: string;
+    name: string;
+    value: unknown;
+    version?: number | string;
+  }): MutationStreamQueryChunk {
+    return {
+      ...(options.delta === undefined ? {} : { delta: options.delta }),
+      ...(options.key === undefined ? {} : { key: options.key }),
+      kind: 'query',
+      name: options.name,
+      value: options.value,
+      ...(options.version === undefined ? {} : { version: options.version }),
+    };
+  },
+  text(
+    target: string,
+    text: string,
+    options: { mode?: 'append' | 'checkpoint' } = {},
+  ): MutationStreamTextChunk {
+    return {
+      kind: 'text',
+      ...(options.mode === undefined ? {} : { mode: options.mode }),
+      target,
+      text,
+    };
+  },
+};
 
 export interface MutationContext<Errors extends Record<string, Schema<unknown>>> {
   fail<const Code extends Extract<keyof Errors, string>>(
@@ -234,6 +356,9 @@ export interface MutationDefinition<
   /** Mutation-local success redirect policy for dynamic POST-redirect-GET targets. */
   redirectTo?: string | ((result: MutationSuccess<Value, InferSchema<InputSchema>>) => string);
   registry?: MutationRegistry;
+  stream?: (
+    context: MutationStreamContext<Value, InferSchema<InputSchema>, GuardedRequest>,
+  ) => MutationStreamSource<Value, InferSchema<InputSchema>, GuardedRequest>;
   transaction?: <Result>(
     request: Request,
     run: (transactionRequest: GuardedRequest) => Promise<Result>,
@@ -585,7 +710,7 @@ export async function renderMutationResponse<
   const reservation =
     reservationResult.kind === 'reserved' ? reservationResult.reservation : undefined;
 
-  let result: MutationResult<Value>;
+  let result: MutationResult<Value, InferSchema<InputSchema>>;
   try {
     result = await runMutation(
       definition,
@@ -632,77 +757,250 @@ export async function renderMutationResponse<
   }
 
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
-  return commitReservedMutationReplay(reservation, async () => {
-    let queryChunks: string[];
-    let fragmentChunks: string[];
-    try {
-      const selection = selectMutationResponseTargets({
-        fragmentRenderers: wireRequest.fragmentRenderers ?? [],
-        liveTargetDescriptors: wireRequest.liveTargetDescriptors ?? [],
-        liveTargetRenderers: wireRequest.liveTargetRenderers ?? [],
-        liveTargets: wireRequest.liveTargets,
-        rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
-        targets: wireRequest.targets ?? [],
-      });
-      queryChunks = await renderQueryChunks(
-        definition.registry?.queries ?? [],
-        selection.rerunQueries,
-        renderInput,
-        wireRequest.request,
-        result.changes,
-      );
-      fragmentChunks = await renderFragmentChunks(
-        wireRequest.fragmentRenderers ?? [],
-        selection.fragmentTargets,
-        renderInput,
-      );
-      fragmentChunks = [
-        ...(await renderLiveTargetChunks(
-          wireRequest.liveTargetRenderers ?? [],
-          selection.liveTargetDescriptors,
-          renderInput,
-          wireRequest.request,
-          wireRequest.csrf,
-        )),
-        ...fragmentChunks,
-      ];
-    } catch (error) {
-      reportServerError(wireRequest.onError, error, {
-        mutationKey: definition.key,
-        operation: 'mutation-render',
-        request: wireRequest.request,
-        ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
-      });
-      return mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders);
+  let finalResponse: BufferedMutationWireResponse;
+  try {
+    finalResponse = await renderSuccessfulMutationWireResponse(
+      definition,
+      wireRequest,
+      result,
+      renderInput,
+    );
+  } catch (error) {
+    reportServerError(wireRequest.onError, error, {
+      mutationKey: definition.key,
+      operation: 'mutation-render',
+      request: wireRequest.request,
+      ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+    });
+    return commitReservedMutationReplay(reservation, async () =>
+      mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders),
+    );
+  }
+
+  if (wireRequest.stream === true && definition.stream) {
+    reservation?.commit(finalResponse);
+    return renderStreamingMutationWireResponse(
+      definition.stream({
+        input: result.input,
+        request: wireRequest.request as GuardedRequest,
+        result,
+      }),
+      finalResponse,
+    );
+  }
+
+  reservation?.commit(finalResponse);
+  return finalResponse;
+}
+
+async function renderSuccessfulMutationWireResponse<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  wireRequest: MutationWireRequest<Request>,
+  result: MutationSuccess<Value, InferSchema<InputSchema>>,
+  renderInput: unknown,
+): Promise<BufferedMutationWireResponse> {
+  const selection = selectMutationResponseTargets({
+    fragmentRenderers: wireRequest.fragmentRenderers ?? [],
+    liveTargetDescriptors: wireRequest.liveTargetDescriptors ?? [],
+    liveTargetRenderers: wireRequest.liveTargetRenderers ?? [],
+    liveTargets: wireRequest.liveTargets,
+    rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
+    targets: wireRequest.targets ?? [],
+  });
+  const queryChunks = await renderQueryChunks(
+    definition.registry?.queries ?? [],
+    selection.rerunQueries,
+    renderInput,
+    wireRequest.request,
+    result.changes,
+  );
+  const fragmentChunks = [
+    ...(await renderLiveTargetChunks(
+      wireRequest.liveTargetRenderers ?? [],
+      selection.liveTargetDescriptors,
+      renderInput,
+      wireRequest.request,
+      wireRequest.csrf,
+    )),
+    ...(await renderFragmentChunks(
+      wireRequest.fragmentRenderers ?? [],
+      selection.fragmentTargets,
+      renderInput,
+    )),
+  ];
+
+  // Kovo-Build header: present on every 200 mutation response when a build token
+  // is known, so the client can detect deploy skew (SPEC §5.1, §9.1.1).
+  const buildHeaders: MutationResponseHeaders =
+    wireRequest.buildToken !== undefined && wireRequest.buildToken !== ''
+      ? { 'Kovo-Build': wireRequest.buildToken }
+      : {};
+
+  return {
+    body: [...queryChunks, ...fragmentChunks].join('\n'),
+    headers: mergeMutationResponseHeaders(
+      mutationWireResponseHeaders(wireRequest),
+      {
+        'Kovo-Changes': mutationWireChangeHeader(result.changes),
+      },
+      buildHeaders,
+      result.responseHeaders,
+    ),
+    status: 200,
+  };
+}
+
+function renderStreamingMutationWireResponse(
+  chunks: MutationStreamSource<unknown, unknown, unknown>,
+  finalResponse: BufferedMutationWireResponse,
+): MutationWireResponse {
+  const encoder = new TextEncoder();
+  const source = coalesceMutationStreamChunks(chunks);
+
+  return {
+    body: new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const chunk of source) {
+            controller.enqueue(encoder.encode(`${renderMutationStreamChunk(chunk)}\n`));
+          }
+          if (finalResponse.body) controller.enqueue(encoder.encode(`${finalResponse.body}\n`));
+          controller.enqueue(encoder.encode(`${renderDoneWireHtml()}\n`));
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    }),
+    headers: finalResponse.headers,
+    status: finalResponse.status,
+  };
+}
+
+export async function* coalesceMutationStreamChunks(
+  chunks: MutationStreamSource<unknown, unknown, unknown>,
+  policy: MutationTextCoalescingPolicy = {},
+): AsyncIterable<MutationStreamChunk> {
+  const maxDelayMs = policy.maxDelayMs ?? defaultMutationTextCoalescingPolicy.maxDelayMs;
+  const maxTextChars = policy.maxTextChars ?? defaultMutationTextCoalescingPolicy.maxTextChars;
+  const iterator = toAsyncIterator(chunks);
+  let pendingRead: Promise<IteratorResult<MutationStreamChunk>> | undefined;
+  let bufferedText: MutationStreamTextChunk | undefined;
+  let bufferedSince = 0;
+  let timer: Promise<'flush'> | undefined;
+
+  const flush = function* (): Generator<MutationStreamTextChunk> {
+    if (!bufferedText) return;
+    const chunk = bufferedText;
+    bufferedText = undefined;
+    bufferedSince = 0;
+    timer = undefined;
+    yield chunk;
+  };
+
+  for (;;) {
+    pendingRead ??= iterator.next();
+    if (bufferedText && maxDelayMs <= 0) {
+      yield* flush();
+      continue;
+    }
+    timer ??=
+      bufferedText && maxDelayMs > 0
+        ? new Promise<'flush'>((resolve) => setTimeout(() => resolve('flush'), maxDelayMs))
+        : undefined;
+
+    const next =
+      timer === undefined ? await pendingRead : await Promise.race([pendingRead, timer]);
+    if (next === 'flush') {
+      yield* flush();
+      continue;
     }
 
-    // Kovo-Build header: present on every 200 mutation response when a build token
-    // is known, so the client can detect deploy skew (SPEC §5.1, §9.1.1).
-    const buildHeaders: MutationResponseHeaders =
-      wireRequest.buildToken !== undefined && wireRequest.buildToken !== ''
-        ? { 'Kovo-Build': wireRequest.buildToken }
-        : {};
+    pendingRead = undefined;
+    if (next.done) {
+      yield* flush();
+      return;
+    }
 
-    return {
-      body: [...queryChunks, ...fragmentChunks].join('\n'),
-      headers: mergeMutationResponseHeaders(
-        mutationWireResponseHeaders(wireRequest),
-        {
-          'Kovo-Changes': mutationWireChangeHeader(result.changes),
-        },
-        buildHeaders,
-        result.responseHeaders,
-      ),
-      status: 200,
-    };
-  });
+    const chunk = next.value;
+    if (chunk.kind !== 'text' || chunk.mode === 'checkpoint') {
+      yield* flush();
+      yield chunk;
+      continue;
+    }
+
+    if (!bufferedText) {
+      bufferedText = { ...chunk, mode: 'append' };
+      bufferedSince = Date.now();
+      timer = undefined;
+    } else if (bufferedText.target === chunk.target) {
+      bufferedText = {
+        ...bufferedText,
+        text: `${bufferedText.text}${chunk.text}`,
+      };
+    } else {
+      yield* flush();
+      bufferedText = { ...chunk, mode: 'append' };
+      bufferedSince = Date.now();
+    }
+
+    if (
+      bufferedText.text.length >= maxTextChars ||
+      (bufferedSince > 0 && Date.now() - bufferedSince >= maxDelayMs)
+    ) {
+      yield* flush();
+    }
+  }
+}
+
+function toAsyncIterator(
+  chunks: MutationStreamSource<unknown, unknown, unknown>,
+): AsyncIterator<MutationStreamChunk> {
+  if (Symbol.asyncIterator in chunks) return chunks[Symbol.asyncIterator]();
+  return (async function* () {
+    yield* chunks;
+  })()[Symbol.asyncIterator]();
+}
+
+function renderMutationStreamChunk(chunk: MutationStreamChunk): string {
+  switch (chunk.kind) {
+    case 'done':
+      return renderDoneWireHtml({ reason: chunk.reason });
+    case 'fragment':
+      return renderFragmentWireHtml({
+        html: chunk.html,
+        mode: chunk.mode,
+        target: chunk.target,
+      });
+    case 'query':
+      return renderQueryWireHtml({
+        delta: chunk.delta,
+        key: chunk.key,
+        name: chunk.name,
+        value: chunk.value,
+        version: chunk.version,
+      });
+    case 'text':
+      return renderTextWireHtml({
+        mode: chunk.mode,
+        target: chunk.target,
+        text: chunk.text,
+      });
+  }
 }
 
 function mutationRenderErrorResponse<Request>(
   changes: readonly ChangeRecord[],
   wireRequest: MutationWireRequest<Request>,
   responseHeaders?: MutationResponseHeaders,
-): MutationWireResponse {
+): BufferedMutationWireResponse {
   return {
     body: renderMutationRenderErrorFragment(wireRequest),
     headers: mergeMutationResponseHeaders(

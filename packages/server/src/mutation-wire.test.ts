@@ -32,6 +32,7 @@ describe('mutation wire headers', () => {
         { deps: ['cart'], target: 'cart-badge' },
         { deps: ['product:p1'], target: 'recommendations' },
       ],
+      stream: false,
       targets: ['cart-badge', 'recommendations'],
     });
   });
@@ -45,6 +46,7 @@ describe('mutation wire headers', () => {
           ['Kovo-Fragment', 'true'],
           ['Kovo-Form-Target', 'product-form:p1'],
           ['Kovo-Idem', 'idem_01HY'],
+          ['Kovo-Stream', 'true'],
           [
             'Kovo-Live-Targets',
             'product-form:p1#components/product-form/product-form:{"productId":"p1"}',
@@ -69,6 +71,7 @@ describe('mutation wire headers', () => {
       rawInput: { productId: 'p1', quantity: 99 },
       replayStore,
       request: { sessionId: 's1' },
+      stream: true,
       submittedFormTarget: 'product-form:p1',
       targets: ['product-form:p1'],
     });

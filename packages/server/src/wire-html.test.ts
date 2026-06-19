@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderFragmentWireHtml, renderQueryScript, renderQueryWireHtml } from './wire-html.js';
+import {
+  renderDoneWireHtml,
+  renderFragmentWireHtml,
+  renderQueryScript,
+  renderQueryWireHtml,
+  renderTextWireHtml,
+} from './wire-html.js';
 
 describe('renderQueryWireHtml', () => {
   it('emits a full query chunk without delta attribute by default', () => {
@@ -88,5 +94,23 @@ describe('server wire html emitters', () => {
         target: 'content',
       }),
     ).toBe('<kovo-fragment target="content"><main>Updated</main></kovo-fragment>');
+  });
+
+  it('renders escaped kovo-text chunks with checkpoint mode', () => {
+    expect(
+      renderTextWireHtml({
+        mode: 'checkpoint',
+        target: 'assistant&a1',
+        text: '<strong>safe & escaped</strong>',
+      }),
+    ).toBe(
+      '<kovo-text target="assistant&amp;a1" mode="checkpoint">&lt;strong&gt;safe &amp; escaped&lt;/strong&gt;</kovo-text>',
+    );
+  });
+
+  it('renders a readable terminal stream marker', () => {
+    expect(renderDoneWireHtml({ reason: 'complete&verified' })).toBe(
+      '<kovo-done reason="complete&amp;verified"></kovo-done>',
+    );
   });
 });

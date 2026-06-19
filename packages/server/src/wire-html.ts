@@ -34,6 +34,16 @@ export interface FragmentWireRenderOptions {
   target: string;
 }
 
+export interface TextWireRenderOptions {
+  mode?: 'append' | 'checkpoint' | undefined;
+  target: string;
+  text: string;
+}
+
+export interface DoneWireRenderOptions {
+  reason?: string | undefined;
+}
+
 export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
   const versionAttribute =
@@ -77,4 +87,18 @@ export function renderFragmentWireHtml(options: FragmentWireRenderOptions): stri
   const html = `${renderStylesheetLinks(options.stylesheets ?? [])}${options.html}`;
 
   return `<kovo-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${html}</kovo-fragment>`;
+}
+
+export function renderTextWireHtml(options: TextWireRenderOptions): string {
+  const modeAttribute =
+    options.mode === undefined || options.mode === 'append' ? '' : ' mode="checkpoint"';
+
+  return `<kovo-text target="${escapeAttribute(options.target)}"${modeAttribute}>${escapeHtml(options.text)}</kovo-text>`;
+}
+
+export function renderDoneWireHtml(options: DoneWireRenderOptions = {}): string {
+  const reasonAttribute =
+    options.reason === undefined ? '' : ` reason="${escapeAttribute(options.reason)}"`;
+
+  return `<kovo-done${reasonAttribute}></kovo-done>`;
 }

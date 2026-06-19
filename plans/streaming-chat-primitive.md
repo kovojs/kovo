@@ -89,17 +89,17 @@ state as the final UI.
 
 ## Proposed Author API
 
-- [ ] **Streaming mutation authoring.**
+- [x] **Streaming mutation authoring.**
   - Add one streaming declaration shape, tentatively `async *stream(...)`, to
     `mutation(...)`. The regular `handler(...)` remains the canonical
     non-streaming/no-JS behavior, or the framework derives the final commit path
     from the same implementation only when the contract is unambiguous.
-  - Evidence: pending type tests.
-- [ ] **Stream chunk builders.**
+  - Evidence: `corepack pnpm exec tsc --noEmit --pretty false`; `packages/server/src/mutation-response.test.ts` proves `stream(...)` runs only on the streaming enhanced path and not validation/buffered paths.
+- [x] **Stream chunk builders.**
   - Add typed server helpers, tentatively `stream.fragment(...)`,
     `stream.text(...)`, `stream.query(...)`, and `stream.done(...)`. These emit
     the same legible wire chunks the runtime consumes.
-  - Evidence: pending public API baseline diff and server unit tests.
+  - Evidence: `corepack pnpm run check:api-surface`; `corepack pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/wire-fixtures.test.ts --reporter verbose`.
 - [x] **Form opt-in syntax.**
   - Define author TSX syntax, tentatively `<form enhance stream
 mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
@@ -112,13 +112,13 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     source is appendable by `<kovo-text>`. App code must not rely on arbitrary
     CSS selectors.
   - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose` passed on 2026-06-19; `packages/compiler/src/stamps.test.ts` proves `streamText="message:a1"` lowers to `data-stream-text="message:a1"` and KV243 rejects selector/unscoped literal targets.
-- [ ] **Optional stream sink renderer contract.**
+- [x] **Optional stream sink renderer contract.**
   - Define how a component can declare an app/client-module renderer for the
     accumulated stream source, tentatively
     `data-stream-renderer="/c/markdown.client.js#renderMarkdownStream"`. Kovo
     buffers and delivers escaped text; the component owns Markdown, log, JSON,
     transcript, or other presentation behavior.
-  - Evidence: pending runtime renderer hook tests and docs example.
+  - Evidence: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose` covers `data-stream-renderer` import, accumulated source delivery, and renderer failure through `onError` while preserving source text; `site/content/guides/streaming.md` documents app-owned renderers.
 
 ## Proposed Wire Shape
 
@@ -135,23 +135,23 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
   - Evidence: `packages/browser/src/wire-parser.test.ts` and
     `packages/browser/src/mutation-response-apply.test.ts` cover escaped
     HTML-looking `<kovo-text>` payloads and `data-stream-text` target lookup.
-- [ ] **High-volume text append is coalesced.**
+- [x] **High-volume text append is coalesced.**
   - The wire/runtime must support many model tokens without one DOM write per
     token. `stream.text(...)` yields may be coalesced into larger `<kovo-text>`
     chunks by the server adapter, and the runtime buffers incoming text per
     stream source before flushing to the DOM or sink renderer.
-  - Evidence: pending runtime batching tests and browser performance fixture.
+  - Evidence: `packages/browser/src/mutation-response-apply.test.ts` covers buffered appends, threshold flush, fake-timer flush, completion flush, and checkpoint replacement; `packages/server/src/mutation-response.test.ts` covers size/checkpoint coalescing and fake-timer flush behavior.
 - [x] **Checkpoint chunks are allowed for long streams.**
   - Long-running streams may send a checkpoint with canonical source text so far,
     letting the runtime replace accumulated text with server-confirmed content
     before final message reconciliation.
   - Evidence: `packages/browser/src/mutation-response-apply.test.ts` verifies
     `mode="checkpoint"` replaces accumulated source text before later appends.
-- [ ] **Final reconciliation uses existing fragment/query machinery.**
+- [x] **Final reconciliation uses existing fragment/query machinery.**
   - Completion sends a canonical `<kovo-fragment>` or `<kovo-query>` update for
     the assistant message or full message list. The final state must be
     equivalent to a non-streaming mutation response.
-  - Evidence: pending render-equivalence test.
+  - Evidence: `packages/server/src/mutation-response.test.ts` compares the final streamed reconciliation chunk with the same mutation's buffered enhanced response.
 - [ ] **Errors use the existing mutation failure vocabulary.**
   - Validation and typed mutation failures should still re-render the submitted
     form target with typed failure state. Mid-stream generation failures need a
@@ -173,23 +173,22 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     HTML chunks directly into the document.
   - Evidence: `packages/browser/src/mutation-response-apply.test.ts` verifies
     HTML-looking streamed payloads remain textContent, not inserted HTML.
-- [ ] **Text flushing is bounded and deterministic.**
+- [x] **Text flushing is bounded and deterministic.**
   - The default flush policy should be framework-owned: flush on a short time
     budget, a byte/character threshold, a checkpoint, completion, or error.
     Apps may tune coarse latency/throughput policy later, but ordinary chat
     should not hand-author per-token throttling.
-  - Evidence: pending unit tests with fake timers and a no-layout-thrash browser
-    assertion.
-- [ ] **CSRF, guards, session, replay, and idempotency still run first.**
+  - Evidence: `packages/browser/src/mutation-response-apply.test.ts` covers threshold, timer, completion, and checkpoint flushes with deterministic timers.
+- [x] **CSRF, guards, session, replay, and idempotency still run first.**
   - The server must validate the mutation request before streaming user-visible
     assistant chunks. Duplicate idempotency keys must not create duplicate
     message rows or duplicate generation jobs.
-  - Evidence: pending server tests for guard, CSRF, and replay.
-- [ ] **Targets are derived or registry-checked.**
+  - Evidence: `packages/server/src/mutation-response.test.ts` covers CSRF, schema, guard, and replay/idempotency gating before stream invocation.
+- [x] **Targets are derived or registry-checked.**
   - `messages:c1` and `assistant-message:a1` must be validated against the same
     fragment/live-target model as other mutation responses. Streaming must not
     introduce hand-authored global selectors.
-  - Evidence: pending compiler/runtime target tests.
+  - Evidence: `packages/compiler/src/stamps.test.ts` proves `streamText="message:a1"` lowering and KV243 rejects selector/unscoped literal targets; `packages/browser/src/mutation-response-apply.test.ts` applies only declared `data-stream-text` targets.
 - [ ] **Abort is structural.**
   - User cancellation, navigation, island removal, or request disconnect should
     abort the generation signal and close the response. Removed islands must not
@@ -229,21 +228,21 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     accept headers, read `response.body`, apply chunks incrementally, publish
     query events, preserve pending/error behavior, and fall back cleanly.
   - Evidence: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose` covers `data-stream` submit opt-in, streaming request headers, readable body application, query application, and fallback to buffered submit for non-opted forms.
-- [ ] **5. Server streaming mutation response.**
+- [x] **5. Server streaming mutation response.**
   - Add server support for async chunk emission from mutations after CSRF,
     schema, guard, idempotency, and replay checks. Preserve the existing
     buffered mutation path for ordinary enhanced forms.
-  - Evidence: pending `packages/server` mutation stream tests.
-- [ ] **6. Server text coalescing policy.**
+  - Evidence: `corepack pnpm exec vitest --run packages/server/src/mutation-response.test.ts --reporter verbose`; `corepack pnpm exec tsc --noEmit --pretty false`.
+- [x] **6. Server text coalescing policy.**
   - Coalesce many small `stream.text(...)` yields into larger wire chunks using a
     deterministic default policy such as 25-50ms, 1-4KB, checkpoint,
     completion, or error. The exact numbers belong in SPEC/tests before coding.
-  - Evidence: pending server fake-timer/coalescing tests.
-- [ ] **7. Compiler authoring support.**
+  - Evidence: `packages/server/src/mutation-response.test.ts` covers size/checkpoint coalescing and fake-timer flush behavior.
+- [x] **7. Compiler authoring support.**
   - Lower `<form enhance stream mutation={...}>`, stream text targets, and
     optional stream renderer refs into authorable IR. Reject unvalidated or
     ambiguous stream targets with teaching diagnostics.
-  - Evidence: pending compiler fixtures and fixpoint tests.
+  - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose` passed on 2026-06-19, proving streaming mutation form lowering, non-stream parity, stream text target lowering/fixpoint, and KV243 target diagnostics.
 - [ ] **8. Chat reference fixture.**
   - Add a small chat fixture proving user-message append, assistant-shell append,
     Markdown source streaming, app-authored Markdown renderer updates for
@@ -273,8 +272,8 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
   - Evidence: 2 files / 18 tests passed.
 - [x] browser typecheck: `corepack pnpm exec tsc --noEmit --pretty false`
   - Evidence: passed.
-- [ ] server text coalescing: pending targeted `packages/server` test file
-- [ ] server streaming mutation path: pending targeted `packages/server` test file
+- [x] server text coalescing: `corepack pnpm exec vitest --run packages/server/src/mutation-response.test.ts --reporter verbose`
+- [x] server streaming mutation path: `corepack pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/wire-fixtures.test.ts --reporter verbose`
 - [x] compiler lowering/fixpoint: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose`
   - Evidence: 2026-06-19 same-session run passed 3 files / 43 tests, proving streaming mutation form lowering, non-stream parity, stream text target lowering/fixpoint, and KV243 target diagnostics.
 - [ ] chat browser fixture: pending `tests/integration/specs/streaming-chat.spec.ts`

@@ -12,6 +12,7 @@ export {
 export {
   mutationWireRequestFromHeaders,
   readMutationWireHeaders,
+  type BufferedMutationWireResponse,
   type ErrorBoundaryRenderer,
   type FragmentRenderer,
   type LiveTargetRenderContext,

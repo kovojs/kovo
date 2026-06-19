@@ -2,12 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { component, form } from '@kovojs/core';
 
 import {
+  coalesceMutationStreamChunks,
   errorBoundary,
+  mutation as defineMutation,
   renderMutationEndpointResponse,
   renderMutationResponse,
+  stream,
 } from './mutation.js';
 import { renderComponentMutationFailure } from './component-render.js';
 import { domain } from './domain.js';
+import { createMemoryMutationReplayStore } from './replay.js';
 import { query } from './query.js';
 import { s } from './schema.js';
 import {
@@ -803,4 +807,311 @@ describe('server mutation primitives', () => {
       status: 422,
     });
   });
+
+  it('streams mutation chunks after validation and reconciles with final server truth', async () => {
+    const chat = domain('chat');
+    const chatQuery = query('chat', {
+      load: () => ({ messages: 2 }),
+      reads: [chat],
+    });
+    const sendMessage = mutation('chat/send', {
+      input: s.object({ body: s.string() }),
+      registry: {
+        queries: [chatQuery],
+        touches: [chat],
+      },
+      handler(input, _request, context) {
+        context.invalidate(chat);
+        return { assistantId: 'a1', body: input.body };
+      },
+      async *stream({ result }) {
+        yield stream.fragment({
+          html: '<article data-role="assistant"><span data-stream-text="assistant:a1"></span></article>',
+          mode: 'append',
+          target: 'messages',
+        });
+        yield stream.text('assistant:a1', 'Hel');
+        yield stream.text('assistant:a1', 'lo <strong>');
+        yield stream.text('assistant:a1', 'Hello server', { mode: 'checkpoint' });
+        yield stream.text('assistant:a1', ` truth:${result.value.assistantId}`);
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      fragmentRenderers: [
+        {
+          render: () =>
+            '<article data-role="assistant"><p>Hello server truth:a1</p></article>',
+          target: 'messages',
+        },
+      ],
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Stream': 'true',
+        'Kovo-Targets': 'messages=chat',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    const body = await readResponseBody(response.body);
+    expect(body).toBe(
+      [
+        '<kovo-fragment target="messages" mode="append"><article data-role="assistant"><span data-stream-text="assistant:a1"></span></article></kovo-fragment>',
+        '<kovo-text target="assistant:a1">Hello &lt;strong&gt;</kovo-text>',
+        '<kovo-text target="assistant:a1" mode="checkpoint">Hello server</kovo-text>',
+        '<kovo-text target="assistant:a1"> truth:a1</kovo-text>',
+        '<kovo-fragment target="messages"><article data-role="assistant"><p>Hello server truth:a1</p></article></kovo-fragment>',
+        '<kovo-done></kovo-done>',
+        '',
+      ].join('\n'),
+    );
+
+    const bufferedResponse = await renderMutationEndpointResponse(sendMessage, {
+      fragmentRenderers: [
+        {
+          render: () =>
+            '<article data-role="assistant"><p>Hello server truth:a1</p></article>',
+          target: 'messages',
+        },
+      ],
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'messages=chat',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+    expect(typeof bufferedResponse.body).toBe('string');
+    expect(body).toContain(bufferedResponse.body as string);
+  });
+
+  it('keeps the buffered enhanced mutation path when Kovo-Stream is absent', async () => {
+    const chat = domain('chat-buffered');
+    const chatQuery = query('chatBuffered', {
+      load: () => ({ messages: 1 }),
+      reads: [chat],
+    });
+    const streamSpy = vi.fn();
+    const sendMessage = mutation('chat/send-buffered', {
+      input: s.object({ body: s.string() }),
+      registry: {
+        queries: [chatQuery],
+        touches: [chat],
+      },
+      handler(input) {
+        return input;
+      },
+      *stream() {
+        streamSpy();
+        yield stream.text('assistant:a1', 'should not run');
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'messages=chat-buffered',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+
+    expect(response).toMatchObject({
+      body: '',
+      status: 200,
+    });
+    expect(response.body).not.toBeInstanceOf(ReadableStream);
+    expect(streamSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not invoke mutation streams for CSRF failures', async () => {
+    const streamSpy = vi.fn();
+    const sendMessage = defineMutation('chat/send-csrf', {
+      input: s.object({ body: s.string() }),
+      handler(input) {
+        return input;
+      },
+      *stream() {
+        streamSpy();
+        yield stream.text('assistant:a1', 'should not run');
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(sendMessage, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Stream': 'true',
+        },
+        rawInput: { body: 'Hi' },
+        redirectTo: '/chat',
+        request: {},
+      }),
+    ).resolves.toMatchObject({ status: 422 });
+    expect(streamSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not invoke mutation streams for schema failures', async () => {
+    const streamSpy = vi.fn();
+    const sendMessage = mutation('chat/send-invalid', {
+      input: s.object({ body: s.string() }),
+      handler(input) {
+        return input;
+      },
+      *stream() {
+        streamSpy();
+        yield stream.text('assistant:a1', 'should not run');
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(sendMessage, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Stream': 'true',
+        },
+        rawInput: {},
+        redirectTo: '/chat',
+        request: {},
+      }),
+    ).resolves.toMatchObject({ status: 422 });
+    expect(streamSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not invoke mutation streams for guard failures', async () => {
+    const streamSpy = vi.fn();
+    const sendMessage = mutation('chat/send-guarded', {
+      guard: () => false,
+      input: s.object({ body: s.string() }),
+      handler(input) {
+        return input;
+      },
+      *stream() {
+        streamSpy();
+        yield stream.text('assistant:a1', 'should not run');
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(sendMessage, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Stream': 'true',
+        },
+        rawInput: { body: 'Hi' },
+        redirectTo: '/chat',
+        request: {},
+      }),
+    ).resolves.toMatchObject({ status: 422 });
+    expect(streamSpy).not.toHaveBeenCalled();
+  });
+
+  it('commits streaming responses to replay without rerunning the handler or stream', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    const streamSpy = vi.fn();
+    const handlerSpy = vi.fn((input: { body: string }) => input);
+    const sendMessage = mutation('chat/send-replay', {
+      input: s.object({ body: s.string() }),
+      handler: handlerSpy,
+      *stream() {
+        streamSpy();
+        yield stream.text('assistant:a1', 'first response only');
+      },
+    });
+    const request = {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_stream',
+        'Kovo-Stream': 'true',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = await renderMutationEndpointResponse(sendMessage, request);
+    expect(first.body).toBeInstanceOf(ReadableStream);
+    await expect(readResponseBody(first.body)).resolves.toContain('first response only');
+
+    const second = await renderMutationEndpointResponse(sendMessage, request);
+    expect(second.body).toBe('');
+    expect(handlerSpy).toHaveBeenCalledOnce();
+    expect(streamSpy).toHaveBeenCalledOnce();
+  });
+
+  it('coalesces small text chunks by size and checkpoint boundaries', async () => {
+    await expect(
+      collectAsync(
+        coalesceMutationStreamChunks(
+          [
+            stream.text('assistant:a1', 'He'),
+            stream.text('assistant:a1', 'llo'),
+            stream.text('assistant:a1', ' server', { mode: 'checkpoint' }),
+            stream.text('assistant:a1', '!'),
+          ],
+          { maxTextChars: 5 },
+        ),
+      ),
+    ).resolves.toEqual([
+      stream.text('assistant:a1', 'Hello', { mode: 'append' }),
+      stream.text('assistant:a1', ' server', { mode: 'checkpoint' }),
+      stream.text('assistant:a1', '!', { mode: 'append' }),
+    ]);
+  });
+
+  it('coalesces small text chunks by a deterministic flush timer', async () => {
+    vi.useFakeTimers();
+    try {
+      const iterator = coalesceMutationStreamChunks(delayedTextChunks(), {
+        maxDelayMs: 25,
+        maxTextChars: 100,
+      })[Symbol.asyncIterator]();
+
+      const first = iterator.next();
+      await vi.advanceTimersByTimeAsync(24);
+      const pending = vi.fn();
+      void first.then(pending);
+      await Promise.resolve();
+      expect(pending).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(first).resolves.toEqual({
+        done: false,
+        value: stream.text('assistant:a1', 'Hel', { mode: 'append' }),
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
+
+async function readResponseBody(body: ReadableStream<Uint8Array> | string): Promise<string> {
+  if (typeof body === 'string') return body;
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let output = '';
+
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) return output;
+    output += decoder.decode(chunk.value, { stream: true });
+  }
+}
+
+async function collectAsync<T>(iterable: AsyncIterable<T>): Promise<T[]> {
+  const values: T[] = [];
+  for await (const value of iterable) values.push(value);
+  return values;
+}
+
+async function* delayedTextChunks(): AsyncIterable<ReturnType<typeof stream.text>> {
+  yield stream.text('assistant:a1', 'Hel');
+  await new Promise<never>(() => undefined);
+}

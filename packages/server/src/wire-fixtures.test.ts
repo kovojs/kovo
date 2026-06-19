@@ -82,7 +82,7 @@ describe('server wire fixture contracts', () => {
       version: 7,
     });
 
-    const response = await renderMutationResponse(addToCart, {
+    const response = expectBufferedWireResponse(await renderMutationResponse(addToCart, {
       idem: 'idem_01HX',
       liveTargetDescriptors: [
         {
@@ -102,7 +102,7 @@ describe('server wire fixture contracts', () => {
       rawInput: { productId: 'p1', quantity: 1 },
       request: {},
       targets: ['cart-badge'],
-    });
+    }));
     const fixture = await readFile(
       new URL('../../../fixtures/wire/enhanced-mutation.http', import.meta.url),
       'utf8',
@@ -143,7 +143,7 @@ describe('server wire fixture contracts', () => {
       try {
         await routeWireFixtureRequest(request, response, {
           enhancedAddToCart: async (headers, rawInput) =>
-            renderMutationEndpointResponse(addToCart, {
+            expectBufferedWireResponse(await renderMutationEndpointResponse(addToCart, {
               failureTarget: 'product-form:p1',
               headers,
               liveTargetRenderers: [
@@ -171,14 +171,14 @@ describe('server wire fixture contracts', () => {
               },
               request: {},
               redirectTo: '/cart',
-            }),
+            })),
           noJsAddToCart: async (headers, rawInput) =>
-            renderMutationEndpointResponse(addToCart, {
+            expectBufferedWireResponse(await renderMutationEndpointResponse(addToCart, {
               headers,
               rawInput,
               redirectTo: '/cart',
               request: {},
-            }),
+            })),
           product: async (search) =>
             renderQueryEndpointResponse(productQuery, {
               request: {},
@@ -259,7 +259,7 @@ describe('server wire fixture contracts', () => {
       },
     });
 
-    const response = await renderMutationResponse(addToCart, {
+    const response = expectBufferedWireResponse(await renderMutationResponse(addToCart, {
       failureTarget: 'product-form:p1',
       idem: 'idem_01HY',
       rawInput: { productId: 'p1', quantity: 99 },
@@ -277,7 +277,7 @@ describe('server wire fixture contracts', () => {
       },
       request: {},
       targets: ['product-form:p1'],
-    });
+    }));
     const fixture = await readFile(
       new URL('../../../fixtures/wire/validation-422-fragment.http', import.meta.url),
       'utf8',
@@ -560,6 +560,20 @@ function normalizeWireResponse(
     ),
     statusLine: `HTTP/1.1 ${response.status} ${reason}`,
   };
+}
+
+function expectBufferedWireResponse<
+  Response extends {
+    body: ReadableStream<Uint8Array> | string;
+    headers: Record<string, MutationResponseHeaderValue>;
+    status: number;
+  },
+>(response: Response): Response & { body: string } {
+  if (typeof response.body !== 'string') {
+    throw new Error('Expected buffered wire response for string fixture normalization.');
+  }
+
+  return response as Response & { body: string };
 }
 
 function readFixtureResponses(

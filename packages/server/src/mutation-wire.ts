@@ -62,9 +62,10 @@ export interface MutationWireRequest<
   liveTargets?: readonly MutationLiveTarget[];
   mutationKey?: string;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-  replayStore?: MutationReplayStore<MutationWireResponse>;
+  replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
   rawInput: unknown;
   request: Request;
+  stream?: boolean;
   submittedFormTarget?: string;
   targets?: readonly string[];
 }
@@ -115,6 +116,16 @@ export interface LiveTargetRenderContext<Request = unknown> {
 }
 
 /**
+ * @internal Replay-cacheable mutation wire response. Streaming mutation responses commit
+ * this buffered final-truth response to replay storage instead of caching a one-shot stream.
+ */
+export interface BufferedMutationWireResponse extends ServerResponseBase<
+  string,
+  MutationResponseHeaders,
+  200 | 422 | 429 | 500
+> {}
+
+/**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). The parsed
  * `Kovo-Fragment`/`Kovo-Idem`/`Kovo-Targets` request headers. Exported only for in-repo
  * consumers and compiler-emitted code, not app authors.
@@ -124,6 +135,7 @@ export interface MutationWireHeaders {
   idem?: string;
   liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
   liveTargets: readonly MutationLiveTarget[];
+  stream: boolean;
   submittedFormTarget?: string;
   targets: readonly string[];
 }
@@ -155,7 +167,7 @@ export interface MutationWireRequestOptions<
   mutationKey?: string;
   rawInput: unknown;
   renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
-  replayStore?: MutationReplayStore<MutationWireResponse>;
+  replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
   request: Request;
 }
 
@@ -165,7 +177,7 @@ export interface MutationWireRequestOptions<
  * app authors.
  */
 export interface MutationWireResponse extends ServerResponseBase<
-  string,
+  ReadableStream<Uint8Array> | string,
   MutationResponseHeaders,
   200 | 422 | 429 | 500
 > {}
@@ -228,6 +240,7 @@ export type MutationEndpointResponse = MutationWireResponse | NoJsMutationRespon
 export function readMutationWireHeaders(headers: MutationWireHeaderSource): MutationWireHeaders {
   const fragment = readHeader(headers, 'Kovo-Fragment')?.toLowerCase() === 'true';
   const idem = readHeader(headers, 'Kovo-Idem')?.trim();
+  const stream = readHeader(headers, 'Kovo-Stream')?.toLowerCase() === 'true';
   const submittedFormTarget = readHeader(headers, 'Kovo-Form-Target')?.trim();
   const liveTargets = parseLiveTargetHeader(readHeader(headers, 'Kovo-Targets') ?? '');
   const liveTargetDescriptors = parseLiveTargetDescriptorHeader(
@@ -240,6 +253,7 @@ export function readMutationWireHeaders(headers: MutationWireHeaderSource): Muta
     ...(idem ? { idem } : {}),
     liveTargetDescriptors,
     liveTargets,
+    stream,
     ...(submittedFormTarget ? { submittedFormTarget } : {}),
     targets,
   };
@@ -286,6 +300,7 @@ export function mutationWireRequestFromHeaders<Request>(
     ...(headers.submittedFormTarget === undefined
       ? {}
       : { submittedFormTarget: headers.submittedFormTarget }),
+    stream: headers.stream,
     targets: headers.targets,
   };
 }
