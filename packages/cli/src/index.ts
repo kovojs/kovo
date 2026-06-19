@@ -24,7 +24,7 @@ import {
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
-import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
+import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 
@@ -2477,9 +2477,14 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       kovoClientBuildRoot(resolvedAppModulePath),
       resolvedAppModulePath,
     );
+    const buildCssAssets = mergeKovoBuildStylesheetAssets([
+      buildStylesheetCss.assets,
+      clientBuild.assets,
+    ]);
+    const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets);
     const neutralBuild = await writeKovoNeutralBuild({
-      app,
-      buildStylesheetCss: [...buildStylesheetCss, ...clientBuild.stylesheetCss],
+      app: buildApp,
+      buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
       manifestFile: clientBuild.manifestFile,
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
@@ -2556,9 +2561,7 @@ function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string 
   return join(outDir, 'server');
 }
 
-async function kovoBuildStylesheetCss(
-  appModulePath: string,
-): Promise<readonly KovoBuildStylesheetCss[]> {
+async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildStylesheetBuild> {
   const [
     { extractAppComponentCss, extractAppRouteCssTargets, extractPackageComponentCss },
     { collectCssAssetManifest },
@@ -2583,17 +2586,21 @@ async function kovoBuildStylesheetCss(
           { cssAssets: appResult.cssAssets },
           { split: { routes: appRouteTargets.routeTargets } },
         );
-  const appSplitStylesheetCss = stylesheetCssFromCssSplitChunks(appSplitManifest?.chunks);
+  const appSplitAssets = stylesheetAssetsFromCssSplitChunks(appSplitManifest?.chunks);
 
-  if (!packageResult.css && !appResult.css) return [];
+  if (!packageResult.css && !appResult.css)
+    return { assets: emptyKovoBuildStylesheetAssets(), stylesheetCss: [] };
   const tokenCss = kovoUiTokenSheetCss.replace(/@theme[^{]*\{[\s\S]*?\n\}/, '').trim();
-  return [
-    {
-      css: [tokenCss, packageResult.css, appResult.css].filter(Boolean).join('\n'),
-      href: '/assets/styles.css',
-    },
-    ...appSplitStylesheetCss,
-  ];
+  return {
+    assets: appSplitAssets,
+    stylesheetCss: [
+      {
+        css: [tokenCss, packageResult.css, appResult.css].filter(Boolean).join('\n'),
+        href: '/assets/styles.css',
+      },
+      ...stylesheetCssFromBuildStylesheetAssets(appSplitAssets),
+    ],
+  };
 }
 
 function selectedKovoBuildPreset(
@@ -2715,13 +2722,25 @@ function isKovoPreset(value: unknown): value is KovoPreset {
 }
 
 interface KovoClientManifestBuild {
+  assets: KovoBuildStylesheetAssets;
   manifestFile: string;
+  stylesheetCss: readonly KovoBuildStylesheetCss[];
+}
+
+interface KovoBuildStylesheetBuild {
+  assets: KovoBuildStylesheetAssets;
   stylesheetCss: readonly KovoBuildStylesheetCss[];
 }
 
 interface KovoBuildStylesheetCss {
   css: string;
   href: string;
+}
+
+interface KovoBuildStylesheetAssets {
+  app: readonly StylesheetAsset[];
+  fragments: Readonly<Record<string, readonly StylesheetAsset[]>>;
+  routes: Readonly<Record<string, readonly StylesheetAsset[]>>;
 }
 
 interface KovoBuildCssSplitChunk {
@@ -2774,27 +2793,128 @@ async function buildKovoClientManifest(
       asset.criticalCss ? [asset.criticalCss] : [],
     ),
   );
-  const splitStylesheetCss = stylesheetCssFromCssSplitChunks(cssAssetManifest?.chunks);
+  const splitStylesheetAssets = stylesheetAssetsFromCssSplitChunks(cssAssetManifest?.chunks);
 
   return {
+    assets: splitStylesheetAssets,
     manifestFile: join(outDir, '.vite/manifest.json'),
     stylesheetCss: [
       ...(appCss ? [{ css: appCss, href: '/assets/styles.css' }] : []),
-      ...splitStylesheetCss,
+      ...stylesheetCssFromBuildStylesheetAssets(splitStylesheetAssets),
     ],
   };
 }
 
-function stylesheetCssFromCssSplitChunks(
+function stylesheetAssetsFromCssSplitChunks(
   chunks: KovoBuildCssSplitChunks | undefined,
-): KovoBuildStylesheetCss[] {
-  if (!chunks) return [];
+): KovoBuildStylesheetAssets {
+  if (!chunks) return emptyKovoBuildStylesheetAssets();
 
+  return {
+    app: buildStylesheetAssets(chunks.base),
+    fragments: Object.fromEntries(
+      Object.entries(chunks.fragments).map(([fragment, assets]) => [
+        fragment,
+        buildStylesheetAssets(assets),
+      ]),
+    ),
+    routes: Object.fromEntries(
+      Object.entries(chunks.routes).map(([route, assets]) => [
+        route,
+        buildStylesheetAssets(assets),
+      ]),
+    ),
+  };
+}
+
+function emptyKovoBuildStylesheetAssets(): KovoBuildStylesheetAssets {
+  return { app: [], fragments: {}, routes: {} };
+}
+
+function buildStylesheetAssets(
+  assets: readonly KovoBuildCssSplitChunk[],
+): readonly StylesheetAsset[] {
+  return assets.flatMap((asset) =>
+    asset.criticalCss ? [{ criticalCss: asset.criticalCss, href: asset.href }] : [],
+  );
+}
+
+function stylesheetCssFromBuildStylesheetAssets(
+  assets: KovoBuildStylesheetAssets,
+): KovoBuildStylesheetCss[] {
   return [
-    ...chunks.base,
-    ...Object.values(chunks.routes).flat(),
-    ...Object.values(chunks.fragments).flat(),
+    ...assets.app,
+    ...Object.values(assets.routes).flat(),
+    ...Object.values(assets.fragments).flat(),
   ].flatMap((asset) => (asset.criticalCss ? [{ css: asset.criticalCss, href: asset.href }] : []));
+}
+
+function mergeKovoBuildStylesheetAssets(
+  assetSets: readonly KovoBuildStylesheetAssets[],
+): KovoBuildStylesheetAssets {
+  const routes: Record<string, StylesheetAsset[]> = {};
+  const fragments: Record<string, StylesheetAsset[]> = {};
+
+  for (const assets of assetSets) {
+    mergeStylesheetAssetsInto(routes, assets.routes);
+    mergeStylesheetAssetsInto(fragments, assets.fragments);
+  }
+
+  return {
+    app: mergeStylesheetAssets(assetSets.flatMap((assets) => assets.app)),
+    fragments,
+    routes,
+  };
+}
+
+function mergeStylesheetAssetsInto(
+  target: Record<string, StylesheetAsset[]>,
+  source: Readonly<Record<string, readonly StylesheetAsset[]>>,
+): void {
+  for (const [key, assets] of Object.entries(source)) {
+    target[key] = mergeStylesheetAssets([...(target[key] ?? []), ...assets]);
+  }
+}
+
+function mergeStylesheetAssets(assets: readonly (string | StylesheetAsset)[]): StylesheetAsset[] {
+  const byHref = new Map<string, string[]>();
+  const hrefOrder: string[] = [];
+  for (const asset of assets) {
+    const href = typeof asset === 'string' ? asset : asset.href;
+    if (!byHref.has(href)) hrefOrder.push(href);
+    const chunks = byHref.get(href) ?? [];
+    if (typeof asset !== 'string' && asset.criticalCss) chunks.push(asset.criticalCss);
+    byHref.set(href, chunks);
+  }
+
+  return hrefOrder.map((href) => {
+    const criticalCss = (byHref.get(href) ?? [])
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .join('\n');
+    return {
+      ...(criticalCss ? { criticalCss } : {}),
+      href,
+    };
+  });
+}
+
+function appWithBuildStylesheetAssets(app: KovoApp, assets: KovoBuildStylesheetAssets): KovoApp {
+  if (assets.app.length === 0 && Object.keys(assets.routes).length === 0) return app;
+
+  return {
+    ...app,
+    stylesheets: mergeStylesheetAssets([...app.stylesheets, ...assets.app]),
+    routes: app.routes.map((route) => {
+      const routeAssets = assets.routes[route.path] ?? [];
+      if (routeAssets.length === 0) return route;
+
+      return {
+        ...route,
+        stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]),
+      };
+    }),
+  };
 }
 
 function kovoClientBuildRoot(appModulePath: string): string {

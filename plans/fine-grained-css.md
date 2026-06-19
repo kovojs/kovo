@@ -193,14 +193,25 @@ mutation pulls `fragments/cart.css` if not already present.
     proves route facts map into splitter targets, Vite-collected CSS uses
     app-relative source names, and `kovo build` emits
     `.kovo/client/assets/routes/index.css` for a route-owned component.
-- [ ] Materialize each chunk as a real emitted asset
-      (`base.css`, `routes/*.css`, `fragments/*.css`) through
-      `stylesheetCssByPath` / `vite-build-assets`, replacing the single-sink
-      write at `build.ts:651`. Keep content-hashed hrefs for caching. - Evidence: `kovo build` of an example writes the chunk files; `git
+- [x] Materialize route chunks as real emitted assets through the neutral build
+      stylesheet writer.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS"`
+    verifies `kovo build` writes `.kovo/client/assets/routes/index.css`.
+- [ ] Materialize base and fragment chunks as real emitted assets
+      (`base.css`, `fragments/*.css`) and keep content-hashed hrefs for caching.
+      Evidence: `kovo build` of an example writes the chunk files; `git
 diff --check` clean; bytes-per-route report from Phase 0 drops.
 
 ### Phase 3 — Link/inline only the route's chunks (Seam E)
 
+- [x] Add emitted route chunks to built route stylesheet hints so the active
+      route document links and inlines its route chunk.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS"`
+    verifies `.kovo/static/index.html` contains
+    `data-kovo-critical-href="/assets/routes/index.css"` and links
+    `/assets/routes/index.css`.
 - [ ] Rewrite each route's resolved `stylesheets` to `[base.css,
 routes/<route>.css]` (theme stays on `base`/app), using
       `createCssAssetResolver` (`css.ts:202`) at the document boundary

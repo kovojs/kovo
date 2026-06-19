@@ -168,6 +168,9 @@ describe('kovo build', () => {
       expect(readFileSync(join(outDir, '.kovo/client/assets/routes/index.css'), 'utf8')).toContain(
         'auto-css-card',
       );
+      const routeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
+      expect(routeDocument).toContain('data-kovo-critical-href="/assets/routes/index.css"');
+      expect(routeDocument).toContain('<link rel="stylesheet" href="/assets/routes/index.css">');
       const viteStylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
         'main{color:#639}',
