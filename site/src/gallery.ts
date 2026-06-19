@@ -6,8 +6,17 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { createServer } from 'vite-plus';
 
+import { galleryComponentCatalog } from '../../examples/gallery/src/component-catalog.js';
+
 import type { GalleryRouteView } from './components/gallery.js';
 import type { DocsRouteContent } from './route-data.js';
+
+// Authored one-liner per component (component-catalog.ts), used on the /gallery/
+// index and surfaced to agents via aux.ts. Kept 1:1 with galleryRoutes by
+// component-catalog.test.ts.
+const gallerySummaries = new Map<string, string>(
+  galleryComponentCatalog.map((entry) => [entry.component, entry.summary]),
+);
 
 // Gallery section: rendered component fixtures + compiled interactive demos.
 //
@@ -297,6 +306,7 @@ export async function buildGalleryRoutePages({
       section: {
         key: 'gallery',
         pages: galleryRoutes.map((galleryRoute) => ({
+          description: gallerySummaries.get(galleryRoute.component),
           title: galleryRoute.title,
           url: galleryUrl(galleryRoute.path),
         })),
