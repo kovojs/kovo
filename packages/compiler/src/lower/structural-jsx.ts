@@ -54,6 +54,11 @@ import {
   type PlatformSubstitution,
 } from './platform.js';
 import { staticHrefAttributeValue } from './navigation.js';
+import { primitiveReactiveAttrs } from '../generated/primitive-reactive-attrs.js';
+import {
+  isKovoUiModuleSpecifier,
+  primitiveReactiveComponents,
+} from './primitive-reactive-registry.js';
 
 type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
@@ -96,6 +101,7 @@ export const structuralJsxPhaseOrder = [
   'href-attributes',
   'view-transition-name',
   'inline-attribute-derives',
+  'primitive-reactive-attributes',
   'inline-text-bindings',
   'static-text-escaping',
   'helper-import-insertion',
@@ -145,6 +151,16 @@ export function lowerStructuralJsx(
       outputContexts,
       nameCounts,
     ) || needsStylePropertyHelper;
+  lowerPrimitiveReactiveAttributes(
+    model,
+    tree.elements,
+    componentName,
+    options,
+    deriveExports,
+    stateDerives,
+    outputContexts,
+    nameCounts,
+  );
   lowerInlineTextBindings(
     tree.elements,
     model,
@@ -601,6 +617,174 @@ function lowerAttributeDerive(
       options,
     ),
   );
+}
+
+/**
+ * SPEC.md §4.6 (KV232): @kovojs/ui primitives own their reactive state attributes
+ * (aria-checked / aria-pressed / aria-expanded / data-state / hidden / checked).
+ * When an author forwards a reactive boolean control prop to a @kovojs/ui
+ * component (e.g. `<Switch checked={state.checked}>`), the component derives all
+ * those attributes internally, but a static SSR render freezes them on the
+ * client. This pass emits a `data-bind:<attr>` + `derive(...)` for each
+ * primitive-owned reactive attribute so the runtime keeps them in sync; the
+ * component's `passThroughProps` forwards the `data-bind:*` attribute to the
+ * underlying element (same vector the existing `data-bind:checked` uses).
+ *
+ * Runs AFTER {@link lowerInlineAttributeDerivesInIr} so the author's literal
+ * control-prop derive (e.g. `data-bind:checked`) is already emitted, and BEFORE
+ * the text-binding pass. Idempotent: never re-binds an attribute that already
+ * has a `data-bind:<attr>`, and never re-derives an author-written attribute
+ * (avoids the KV233 double-bind).
+ */
+function lowerPrimitiveReactiveAttributes(
+  model: ComponentModuleModel,
+  elements: readonly JsxIrElement[],
+  componentName: string,
+  options: StructuralJsxLoweringOptions,
+  deriveExports: string[],
+  stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
+  nameCounts: Map<string, number>,
+): void {
+  for (const element of elements) {
+    const entry = primitiveReactiveComponentForTag(model, element.tag);
+    if (!entry) continue;
+    const manifest = primitiveReactiveAttrs[entry.primitiveKey];
+    if (!manifest) continue;
+
+    // Read the control prop from the original parsed element (typed facts), not
+    // the mutated IR: the inline-attribute-derive pass may have already rewritten
+    // the authored attribute and dropped its source model (SPEC.md §5.2 / hard
+    // rule 9 keeps state-path detection on typed parser facts).
+    const control = element.element.attributes.find(
+      (attribute) => attribute.name === entry.controlProp,
+    );
+    const statePath = reactiveStatePath(control);
+    if (statePath === null) continue;
+
+    for (const [attrName, attr] of Object.entries(manifest.attrs)) {
+      // Idempotency: skip attributes already bound (by this pass on a previous
+      // lowering, or by the inline-attribute-derive pass for the control prop
+      // itself, e.g. `data-bind:checked`). Skip author-written attributes to
+      // avoid the KV233 double-bind.
+      if (hasAttribute(element, stateBindingAttributeName(attrName))) continue;
+      if (hasAuthoredAttribute(element, attrName)) continue;
+
+      lowerPrimitiveReactiveAttribute(
+        element,
+        componentName,
+        attrName,
+        attr,
+        statePath,
+        options,
+        deriveExports,
+        stateDerives,
+        outputContexts,
+        nameCounts,
+      );
+    }
+  }
+}
+
+function lowerPrimitiveReactiveAttribute(
+  element: JsxIrElement,
+  componentName: string,
+  attrName: string,
+  attr: { booleanPresence: boolean; whenFalse: boolean | string; whenTrue: boolean | string },
+  statePath: string,
+  options: StructuralJsxLoweringOptions,
+  deriveExports: string[],
+  stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
+  nameCounts: Map<string, number>,
+): void {
+  const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attrName)}_derive`;
+  const exportName = nextExportName(baseName, nameCounts);
+  const stampName = `state.${exportName}`;
+  const expression = primitiveReactiveExpression(statePath, attr);
+
+  deriveExports.push(
+    `export const ${exportName} = derive(["state"], (state: any) => ${expression});`,
+  );
+  const outputContext = outputWriteFact({
+    context: outputContextForAttribute(attrName),
+    expression,
+    sink: attrName,
+    source: 'client-state',
+    writer: 'primitive reactive attribute derive',
+  });
+  stateDerives.push({
+    attr: attrName,
+    expression,
+    exportName,
+    input: 'state',
+    name: exportName,
+    outputContext,
+    param: 'state',
+    placeholder: stampName,
+  });
+  outputContexts.push(outputContext);
+
+  setJsxIrAttribute(
+    element,
+    generatedJsxIrAttribute(
+      stateBindingAttributeName(attrName),
+      { kind: 'string', value: stampName },
+      'primitive reactive attribute derive',
+      options,
+    ),
+  );
+}
+
+function primitiveReactiveExpression(
+  statePath: string,
+  attr: { booleanPresence: boolean; whenFalse: boolean | string; whenTrue: boolean | string },
+): string {
+  if (attr.booleanPresence) {
+    // Boolean-presence attributes (checked/hidden/open ...) signal via presence:
+    // emit `""` when the attribute should be present, `null` when it should be
+    // absent. Matches how the inline-attribute-derive pass emits `checked`.
+    const truthy = attr.whenTrue === true ? '""' : 'null';
+    const falsy = attr.whenFalse === true ? '""' : 'null';
+    return `((${statePath}) ? ${truthy} : ${falsy})`;
+  }
+  return `((${statePath}) ? ${JSON.stringify(String(attr.whenTrue))} : ${JSON.stringify(String(attr.whenFalse))})`;
+}
+
+/**
+ * Resolve the @kovojs/ui reactive primitive entry for an element tag, requiring
+ * the tag to be imported from the public @kovojs/ui surface. Uses typed import
+ * facts (SPEC.md §5.2 / compiler hard rule 9): the tag's local name resolves to
+ * a named import whose module specifier is `@kovojs/ui` or `@kovojs/ui/<entry>`,
+ * and whose imported (export) name is in the registry.
+ */
+function primitiveReactiveComponentForTag(
+  model: ComponentModuleModel,
+  tag: string,
+): { controlProp: string; primitiveKey: string } | null {
+  if (!isComponentTag(tag)) return null;
+  const localName = tag.includes('.') ? tag.slice(0, tag.indexOf('.')) : tag;
+  const namedImport = model.namedImports.find(
+    (entry) => entry.localName === localName && isKovoUiModuleSpecifier(entry.moduleSpecifier),
+  );
+  if (!namedImport) return null;
+  return primitiveReactiveComponents[namedImport.importedName] ?? null;
+}
+
+/**
+ * The state path an author forwarded as a reactive boolean control prop, or null
+ * when the prop is absent, not an expression, or references anything other than
+ * `state`. Mirrors the state-only detection used by inline attribute derives.
+ */
+function reactiveStatePath(control: JsxAttributeModel | undefined): string | null {
+  if (!control || control.expression === undefined) return null;
+  const roots = new Set(
+    (control.expressionPropertyAccesses ?? [])
+      .map((access) => queryNameFromPath(access.path))
+      .filter((root): root is string => root !== null),
+  );
+  if (roots.size === 0 || ![...roots].every((root) => root === 'state')) return null;
+  return control.expression.trim();
 }
 
 function lowerInlineTextBindings(
