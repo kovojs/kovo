@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { registerHooks } from 'node:module';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import type { StylesheetAsset } from './hints.js';
@@ -126,6 +127,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
 
       return module.kovoVitePlugin({
+        include: [(fileName: string) => isAuthoredAppSourceFile(fileName, app, root)],
         onModuleDiagnostics(report: unknown) {
           onModuleDiagnostics?.(report);
         },
@@ -211,6 +213,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
   } as KovoVitePlugin;
 }
 
+let compilerSourceResolutionHooksRegistered = false;
+
 function authoredAppEntry(app: string): string {
   if (typeof app !== 'string' || app.trim() === '') {
     throw new TypeError('kovo({ app }) requires an authored app entry module.');
@@ -242,6 +246,17 @@ function rootRelativeRouteTargets(
     ...target,
     sourceFileNames: target.sourceFileNames.map((fileName) => `${prefix}/${fileName}`),
   }));
+}
+
+function isAuthoredAppSourceFile(fileName: string, app: string, root: string): boolean {
+  const appDir = dirname(appEntryFileName(app, root));
+  const relativeAppDir = slashPath(relative(root, appDir));
+  if (!relativeAppDir || relativeAppDir.startsWith('..')) {
+    return slashPath(fileName).startsWith(`${slashPath(appDir)}/`);
+  }
+
+  const normalized = slashPath(fileName);
+  return normalized === relativeAppDir || normalized.startsWith(`${relativeAppDir}/`);
 }
 
 function stylesheetAssetsFromCssSplitChunks(
@@ -285,6 +300,7 @@ function slashPath(value: string): string {
 }
 
 async function importKovoCompilerViteModule(): Promise<Record<string, unknown>> {
+  registerCompilerSourceResolutionHooks();
   try {
     return await importOptionalModule('@kovojs/compiler/vite');
   } catch (error) {
@@ -295,6 +311,7 @@ async function importKovoCompilerViteModule(): Promise<Record<string, unknown>> 
 }
 
 async function importKovoCompilerPackageStylesModule(): Promise<Record<string, unknown>> {
+  registerCompilerSourceResolutionHooks();
   try {
     return await importOptionalModule('@kovojs/compiler/package-styles');
   } catch (error) {
@@ -306,6 +323,22 @@ async function importKovoCompilerPackageStylesModule(): Promise<Record<string, u
 
 async function importOptionalModule(specifier: string): Promise<Record<string, unknown>> {
   return (await import(specifier)) as Record<string, unknown>;
+}
+
+function registerCompilerSourceResolutionHooks(): void {
+  if (compilerSourceResolutionHooksRegistered) return;
+  compilerSourceResolutionHooksRegistered = true;
+
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+        const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
+        if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+      }
+
+      return nextResolve(specifier, context);
+    },
+  });
 }
 
 function missingCompilerError(cause: unknown): Error {
