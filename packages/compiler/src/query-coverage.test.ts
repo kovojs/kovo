@@ -40,6 +40,87 @@ export const MessageRow = component({
     ]);
   });
 
+  it('reports KV312 when a rendered position reads an undeclared clock input', () => {
+    const result = compileComponentModule({
+      fileName: 'message-row.tsx',
+      source: `
+export const MessageRow = component({
+  queries: { messages: messagesQuery },
+  render: ({ messages, now }) => (
+    <message-row>
+      <time>{relativeTime(now.ago, messages.createdAt)}</time>
+    </message-row>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV312',
+        message: 'Time-dependent rendered position lacks a declared cadence. now.ago',
+        severity: 'error',
+        start: { column: 27, line: 6 },
+      }),
+    );
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV303' }));
+  });
+
+  it('accepts rendered now reads that resolve to declared component clocks', () => {
+    const result = compileComponentModule({
+      fileName: 'message-row.tsx',
+      source: `
+export const MessageRow = component({
+  queries: { messages: messagesQuery },
+  clocks: { ago: { every: '30s' } },
+  render: ({ messages, now }) => (
+    <message-row>
+      <time>{relativeTime(now.ago, messages.createdAt)}</time>
+    </message-row>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV312' }));
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV303' }));
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('does not treat event-handler clock arguments as rendered positions', () => {
+    const result = compileComponentModule({
+      fileName: 'message-row.tsx',
+      source: `
+export const MessageRow = component({
+  render: ({ now }) => (
+    <message-row>
+      <button onClick={() => track(now.ago)}>Track</button>
+    </message-row>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV312' }));
+  });
+
+  it('accepts renderOnce as the explicit clock-freeze escape for rendered positions', () => {
+    const result = compileComponentModule({
+      fileName: 'message-row.tsx',
+      source: `
+export const MessageRow = component({
+  render: ({ now }) => (
+    <message-row>
+      <time>{renderOnce(formatPublishTime(now.pub))}</time>
+    </message-row>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV312' }));
+  });
+
   it('lowers inline attribute expressions into compiled query update stamps', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

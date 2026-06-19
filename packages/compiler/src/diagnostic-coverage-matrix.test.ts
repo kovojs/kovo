@@ -862,6 +862,29 @@ export const CoverageBad = component({
       }).diagnostics,
   },
   {
+    code: 'KV312',
+    spec: 'SPEC.md §4.8/§4.9',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'clock-render-ok.tsx',
+        source: `
+export const ClockRenderOk = component({
+  clocks: { ago: { every: '30s' } },
+  render: ({ now }) => <time>{formatRelative(now.ago)}</time>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'clock-render-bad.tsx',
+        source: `
+export const ClockRenderBad = component({
+  render: ({ now }) => <time>{formatRelative(now.ago)}</time>,
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV315',
     spec: 'SPEC.md §4.8/§4.9',
     positive: () =>
@@ -944,6 +967,11 @@ const outOfScopeCompilerDiagnostics = [
     reason:
       'Compiler-owned, but emitted by the optimistic coverage/check path (`tests/kovo-check.node.mjs`) rather than compileComponentModule/deriveAppGraph/query-shape validation.',
   },
+  {
+    code: 'KV314',
+    reason:
+      'Compiler-owned, but emitted by the kovo check coverage graph path (`packages/cli/src/index.kovo-check.test.ts`) rather than compileComponentModule/deriveAppGraph/query-shape validation.',
+  },
 ] as const satisfies readonly OutOfScopeDiagnosticRow[];
 
 describe('compiler diagnostic coverage matrix', () => {
@@ -959,6 +987,10 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV310",
           "reason": "Compiler-owned, but emitted by the optimistic coverage/check path (\`tests/kovo-check.node.mjs\`) rather than compileComponentModule/deriveAppGraph/query-shape validation.",
+        },
+        {
+          "code": "KV314",
+          "reason": "Compiler-owned, but emitted by the kovo check coverage graph path (\`packages/cli/src/index.kovo-check.test.ts\`) rather than compileComponentModule/deriveAppGraph/query-shape validation.",
         },
       ]
     `);
@@ -1177,6 +1209,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "negativeCount": 1,
           "positiveCount": 0,
           "spec": "SPEC.md §4.9",
+        },
+        {
+          "code": "KV312",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8/§4.9",
         },
         {
           "code": "KV315",
@@ -1687,6 +1725,22 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 44,
             "line": 5,
+          },
+        },
+        {
+          "code": "KV312",
+          "fileName": "clock-render-bad.tsx",
+          "help": "Would lower to: an explicit clocks input or query refresh cadence that re-runs the time-dependent rendered position.
+      Blocked reason: the position reads wall-clock-sensitive data without a declared cadence, so rendered output can go stale without any modeled write.
+      Fixes: declare a component clocks entry, add a query .refresh({ every | at | until }) binding modifier, or mark the clock renderOnce when freezing the value is intentional.
+      SPEC §4.8 and §4.9 require every changing rendered fact, including time, to have declared update coverage.
+      Escape: renderOnce is the documented suppression for intentionally immutable clock output.",
+          "length": 7,
+          "message": "Time-dependent rendered position lacks a declared cadence. now.ago",
+          "severity": "error",
+          "start": {
+            "column": 46,
+            "line": 3,
           },
         },
         {

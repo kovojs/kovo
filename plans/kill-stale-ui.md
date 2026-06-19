@@ -273,6 +273,15 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
         position reading a `volatile:'time'` query field must have a `.refresh({…})`
         on its binding — else KV312. `clocks` is always a `name → spec` map;
         `now` is always an object keyed by clock name.
+    - [x] Client `now.<name>` reads in rendered JSX positions emit KV312 unless
+          `<name>` resolves to a component `clocks` entry; event-handler reads are
+          excluded and `renderOnce(now.<name>)` is accepted as the explicit freeze
+          escape.
+      - Evidence 2026-06-19: `corepack pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts`
+        covers undeclared `now.ago` emitting KV312, declared `clocks.ago`
+        clearing it, event-handler exclusion, and `renderOnce` suppression.
+    - [ ] Server `volatile:'time'` query-field reads and the per-binding
+          `.refresh({ every | at | until })` classifier remain open.
   - [x] Co-locate freshness on the query: a `.refresh({ every | at | until })`
         binding modifier parallel to `.args()` (returns a per-use binding, so the
         shared query object is untouched); `at`/`until` receive the query's value.

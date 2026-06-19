@@ -154,6 +154,8 @@ function declaredRenderInputRoots(model: ComponentModuleModel, includeState: boo
     ...componentOptionObjectKeys(model, 'queries'),
     ...componentOptionObjectKeys(model, 'props'),
     ...model.moduleScopeBindings.map((binding) => binding.name),
+    // SPEC §4.8/§4.9: `now` is the compiler-owned clock input; KV312 validates names.
+    'now',
     ...(includeState ? ['state'] : []),
   ]);
 }
