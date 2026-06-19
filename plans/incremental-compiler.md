@@ -127,9 +127,13 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
       inputs.
   - Evidence target: a test compiling the same corpus twice in two processes yields byte-identical
     `files[]` + `registryFacts` for all 125 perf-corpus files.
-- [ ] Define `compilerBuildId` — a stable identity for the compiler+deps that, when changed, must
+- [x] Define `compilerBuildId` — a stable identity for the compiler+deps that, when changed, must
       bust every cache entry (package version + a content hash of `packages/compiler/dist` or the
       source tree in dev). Single exported helper consumed by the key builder.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/cache-identity.test.ts` proves
+    `compilerBuildId()` canonicalizes source fingerprint ordering and changes
+    when a compiler source fingerprint changes.
 
 ## Phase 1 — In-memory per-module cache (single process)
 
