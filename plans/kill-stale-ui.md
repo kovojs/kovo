@@ -273,9 +273,13 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
         position reading a `volatile:'time'` query field must have a `.refresh({…})`
         on its binding — else KV312. `clocks` is always a `name → spec` map;
         `now` is always an object keyed by clock name.
-  - [ ] Co-locate freshness on the query: a `.refresh({ every | at | until })`
+  - [x] Co-locate freshness on the query: a `.refresh({ every | at | until })`
         binding modifier parallel to `.args()` (returns a per-use binding, so the
         shared query object is untouched); `at`/`until` receive the query's value.
+    - Evidence 2026-06-19: `packages/core/src/index.test.ts` covers
+      query-level and args-level `.refresh()` metadata without mutating the
+      shared handle; `packages/compiler/src/registry.test.ts` proves refreshed
+      bindings still emit query/args facts for server refresh.
   - [ ] Ship one shared coalesced rAF/interval tick-bus (mirroring the §4.7
         shared IntersectionObserver) driving every `clocks` derive on the page;
         lint-gated and budget-printed in `kovo explain` (clock inputs + cadences).

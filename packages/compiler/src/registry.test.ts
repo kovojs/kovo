@@ -132,6 +132,39 @@ export const ProductDetail = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('unwraps refresh modifiers when emitting component query binding facts', () => {
+    const result = compileComponentModule({
+      fileName: 'components/products/product-detail.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { productQuery, reviewsQuery } from '../queries.js';
+
+export const ProductDetail = component({
+  props: { productId: String },
+  queries: {
+    product: productQuery.args((props) => ({ id: props.productId })).refresh({ every: '30s' }),
+    reviews: reviewsQuery.refresh({ at: (reviews) => reviews.nextRefreshAt }).args((props) => ({
+      id: props.productId,
+    })),
+  },
+  render: ({ product, reviews }) => (
+    <section>
+      <h1>{product.name}</h1>
+      <span>{reviews.count}</span>
+    </section>
+  ),
+});
+`,
+    });
+
+    const registry = result.files[2]?.source ?? '';
+
+    expect(registry).toContain(
+      `queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }, { name: 'reviews'; queryExpression: "reviewsQuery"; argsExpression: "({\\n      id: props.productId,\\n    })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }]`,
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('emits generated renderer facts for a route-param-backed component', () => {
     const component = compileComponentModule({
       fileName: 'components/questions/question-detail.tsx',

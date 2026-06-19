@@ -188,6 +188,35 @@ export function ErrorBoundary(props: ErrorBoundaryProps): ComponentRenderResult 
 export interface QueryArgsBinding<Key extends string, Result, Props, Args> {
   args: (props: Props) => Args;
   key: Key;
+  refresh<PropsSpec extends QueryRefreshSpec<Result>>(
+    spec: PropsSpec,
+  ): QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: PropsSpec };
+  refreshSpec?: QueryRefreshSpec<Result>;
+  result?: Result;
+}
+
+/** Per-use query freshness cadence for clock-like server values (SPEC §4.9). */
+export interface QueryRefreshSpec<Result> {
+  at?: (value: Result) => unknown;
+  every?: string;
+  renderOnce?: true;
+  until?: (value: Result) => unknown;
+}
+
+/** A typed query binding with a per-use refresh cadence and optional prop args. */
+export interface QueryRefreshBinding<
+  Key extends string,
+  Result,
+  Spec extends QueryRefreshSpec<Result>,
+> {
+  args<Props extends Record<string, JsonValue>, Args extends Record<string, JsonValue>>(
+    mapper: (props: Props) => Args,
+  ): QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: Spec };
+  key: Key;
+  refresh<PropsSpec extends QueryRefreshSpec<Result>>(
+    spec: PropsSpec,
+  ): QueryRefreshBinding<Key, Result, PropsSpec>;
+  refreshSpec: Spec;
   result?: Result;
 }
 
@@ -197,6 +226,10 @@ export interface Query<Key extends string, Result> {
     mapper: (props: Props) => Args,
   ): QueryArgsBinding<Key, Result, Props, Args>;
   key: Key;
+  refresh<Spec extends QueryRefreshSpec<Result>>(
+    spec: Spec,
+  ): QueryRefreshBinding<Key, Result, Spec>;
+  refreshSpec?: undefined;
   result?: Result;
 }
 
@@ -411,12 +444,77 @@ export function query<
   const Key extends RegistryKey<QueryRegistry>,
   Result = Key extends keyof QueryRegistry ? QueryRegistry[Key] : unknown,
 >(key: Key): Query<Key, Result> {
+  return queryBinding<Key, Result>(key);
+}
+
+function queryBinding<Key extends string, Result>(key: Key): Query<Key, Result>;
+function queryBinding<Key extends string, Result, Spec extends QueryRefreshSpec<Result>>(
+  key: Key,
+  refreshSpec: Spec,
+): QueryRefreshBinding<Key, Result, Spec>;
+function queryBinding<Key extends string, Result>(
+  key: Key,
+  refreshSpec?: QueryRefreshSpec<Result>,
+): Query<Key, Result> | QueryRefreshBinding<Key, Result, QueryRefreshSpec<Result>> {
+  const args = <Props extends Record<string, JsonValue>, Args extends Record<string, JsonValue>>(
+    mapper: (props: Props) => Args,
+  ) =>
+    refreshSpec === undefined
+      ? queryArgsBinding<Key, Result, Props, Args>(key, mapper)
+      : queryArgsBinding<Key, Result, Props, Args, QueryRefreshSpec<Result>>(
+          key,
+          mapper,
+          refreshSpec,
+        );
+  const refresh = <Spec extends QueryRefreshSpec<Result>>(nextSpec: Spec) =>
+    queryBinding<Key, Result, Spec>(key, nextSpec);
   return {
-    args(mapper) {
-      return { args: mapper, key };
-    },
+    args,
     key,
-  };
+    ...(refreshSpec === undefined ? {} : { refreshSpec }),
+    refresh,
+  } as unknown as Query<Key, Result> | QueryRefreshBinding<Key, Result, QueryRefreshSpec<Result>>;
+}
+
+function queryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args extends Record<string, JsonValue>,
+>(key: Key, mapper: (props: Props) => Args): QueryArgsBinding<Key, Result, Props, Args>;
+function queryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args extends Record<string, JsonValue>,
+  Spec extends QueryRefreshSpec<Result>,
+>(
+  key: Key,
+  mapper: (props: Props) => Args,
+  refreshSpec: Spec,
+): QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: Spec };
+function queryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args extends Record<string, JsonValue>,
+>(
+  key: Key,
+  mapper: (props: Props) => Args,
+  refreshSpec?: QueryRefreshSpec<Result>,
+):
+  | QueryArgsBinding<Key, Result, Props, Args>
+  | (QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: QueryRefreshSpec<Result> }) {
+  const refresh = <Spec extends QueryRefreshSpec<Result>>(nextSpec: Spec) =>
+    queryArgsBinding<Key, Result, Props, Args, Spec>(key, mapper, nextSpec);
+  return {
+    args: mapper,
+    key,
+    ...(refreshSpec === undefined ? {} : { refreshSpec }),
+    refresh,
+  } as unknown as
+    | QueryArgsBinding<Key, Result, Props, Args>
+    | (QueryArgsBinding<Key, Result, Props, Args> & { refreshSpec: QueryRefreshSpec<Result> });
 }
 
 /** A typed accessor for one search field of a GET form (`form.get(...).input(name)`). */

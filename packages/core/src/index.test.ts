@@ -176,10 +176,23 @@ describe('core authoring APIs', () => {
     const cartForProduct = cart.args((props: { productId: string }) => ({
       id: props.productId,
     }));
+    const staleCart = cart.refresh({ every: '30s' });
+    const cartUntil = cart.refresh({ until: (value) => value.count > 10 });
+    const cartProductUntil = cartForProduct.refresh({ at: (value) => value.count });
 
     expect(cart.key).toBe('cart');
+    expect(cart.refreshSpec).toBeUndefined();
     expect(cartForProduct.key).toBe('cart');
     expect(cartForProduct.args({ productId: 'p1' })).toEqual({ id: 'p1' });
+    expect(staleCart).not.toBe(cart);
+    expect(staleCart.key).toBe('cart');
+    expect(staleCart.refreshSpec.every).toBe('30s');
+    expect(
+      staleCart.args((props: { productId: string }) => ({ id: props.productId })).refreshSpec,
+    ).toBe(staleCart.refreshSpec);
+    expect(cartUntil.refreshSpec.until({ count: 11 })).toBe(true);
+    expect(cartProductUntil.refreshSpec.at({ count: 3 })).toBe(3);
+    expect(cartProductUntil.args({ productId: 'p1' })).toEqual({ id: 'p1' });
     expect(form('cart/add').key).toBe('cart/add');
 
     const assertUnknownQuery = () => {

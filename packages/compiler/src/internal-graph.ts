@@ -404,22 +404,44 @@ function queryBindingFromExpression(
   const expression = statement.declarationList.declarations[0]?.initializer;
   if (!expression) return null;
 
+  return queryBindingFromParsedExpression(sourceFile, expression);
+}
+
+function queryBindingFromParsedExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): Omit<LiveTargetQueryBindingFact, 'name'> | null {
+  const unwrappedExpression = unwrapQueryRefreshExpression(expression);
+
   if (
-    ts.isCallExpression(expression) &&
-    ts.isPropertyAccessExpression(expression.expression) &&
-    expression.expression.name.text === 'args'
+    ts.isCallExpression(unwrappedExpression) &&
+    ts.isPropertyAccessExpression(unwrappedExpression.expression) &&
+    unwrappedExpression.expression.name.text === 'args'
   ) {
-    const [mapper] = expression.arguments;
+    const [mapper] = unwrappedExpression.arguments;
     const arrow = mapper && ts.isArrowFunction(mapper) ? mapper : null;
     return {
       ...(arrow ? queryArgsArrowFacts(sourceFile, arrow) : {}),
-      queryExpression: expression.expression.expression.getText(sourceFile),
+      queryExpression: unwrapQueryRefreshExpression(
+        unwrappedExpression.expression.expression,
+      ).getText(sourceFile),
     };
   }
 
   return {
-    queryExpression: expression.getText(sourceFile),
+    queryExpression: unwrappedExpression.getText(sourceFile),
   };
+}
+
+function unwrapQueryRefreshExpression(expression: ts.Expression): ts.Expression {
+  if (
+    ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    expression.expression.name.text === 'refresh'
+  ) {
+    return unwrapQueryRefreshExpression(expression.expression.expression);
+  }
+  return expression;
 }
 
 function queryArgsArrowFacts(
