@@ -12,6 +12,7 @@ import type { EnhancedMutationSubmitOptions } from './mutation-submit.js';
 import { optimisticChangeFromInput, resolveOptimisticKeys } from './optimism.js';
 import type {
   MutationChangeRecord,
+  OptimisticEntry,
   OptimisticChange,
   OptimisticPlan,
   OptimisticRebaser,
@@ -116,12 +117,16 @@ function optimisticMutationRuntimeApplyHooks<Input>(
       return { value: options.store.get(query.name, query.key) };
     },
     beforeApplyQueries(queryChunks) {
-      const uncoveredQueries = uncoveredOptimisticQueries(queryChunks, queryNames, optimisticKeys);
-      for (const queryName of uncoveredQueries) {
+      const uncoveredQueries = uncoveredOptimisticQueries(
+        queryChunks,
+        options.optimistic.transforms,
+        optimisticKeys,
+      );
+      for (const { queryName, status } of uncoveredQueries) {
         options.rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
         reportRuntimeError(
           options.onError,
-          uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName]),
+          uncoveredOptimisticQueryError(queryName, optimisticKeys[queryName], status),
         );
       }
       options.rebaser.settle(idem);
@@ -129,18 +134,41 @@ function optimisticMutationRuntimeApplyHooks<Input>(
   };
 }
 
-function uncoveredOptimisticQueries(
-  queryChunks: readonly QueryChunk[],
-  queryNames: readonly string[],
-  optimisticKeys: Readonly<Record<string, string | undefined>>,
-): string[] {
-  const covered = new Set(queryChunks.map((query) => queryStoreKey(query.name, query.key)));
-  return queryNames.filter(
-    (queryName) => !covered.has(queryStoreKey(queryName, optimisticKeys[queryName])),
-  );
+interface UncoveredOptimisticQuery {
+  queryName: string;
+  status: 'await-fragment' | 'transform';
 }
 
-function uncoveredOptimisticQueryError(queryName: string, key?: string): Error {
+function uncoveredOptimisticQueries<Input>(
+  queryChunks: readonly QueryChunk[],
+  transforms: Readonly<Record<string, OptimisticEntry<Input>>>,
+  optimisticKeys: Readonly<Record<string, string | undefined>>,
+): UncoveredOptimisticQuery[] {
+  const covered = new Set(queryChunks.map((query) => queryStoreKey(query.name, query.key)));
+  const uncovered: UncoveredOptimisticQuery[] = [];
+
+  for (const [queryName, transform] of Object.entries(transforms)) {
+    if (covered.has(queryStoreKey(queryName, optimisticKeys[queryName]))) continue;
+
+    uncovered.push({
+      queryName,
+      status: transform === 'await-fragment' ? 'await-fragment' : 'transform',
+    });
+  }
+
+  return uncovered;
+}
+
+function uncoveredOptimisticQueryError(
+  queryName: string,
+  key: string | undefined,
+  status: UncoveredOptimisticQuery['status'],
+): Error {
   const identity = key ? `${queryName}:${key}` : queryName;
+  if (status === 'await-fragment') {
+    return new Error(
+      `Await-fragment position for ${identity} produced no server query truth after guard rerun.`,
+    );
+  }
   return new Error(`Optimistic transform for ${identity} was not covered by server query truth.`);
 }

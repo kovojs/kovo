@@ -121,6 +121,100 @@ describe('optimistic enhanced mutation failure handling', () => {
     });
   });
 
+  it('reports omitted await-fragment server truth through the missing-server-truth channel', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const productGrid = new FakePendingElement({ 'kovo-deps': 'productGrid' });
+    const pendingRoot = new FakePendingRoot([productGrid]);
+    const onError = vi.fn();
+    root.deps = [{ id: 'product-grid' }];
+    root.targets.set('product-grid', new FakeMorphTarget());
+    store.set('productGrid', { products: [{ id: 'p1', stock: 2 }] });
+
+    const result = await submitOptimisticEnhancedMutation({
+      fetch: vi.fn(async () => ({
+        async text() {
+          return '<kovo-fragment target="product-grid"><section>stale</section></kovo-fragment>';
+        },
+      })),
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_await_fragment_missing_truth',
+      input: { productId: 'p1' },
+      onError,
+      optimistic: {
+        transforms: {
+          productGrid: 'await-fragment',
+        },
+      },
+      pendingRoot,
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual([]);
+    expect(root.targets.get('product-grid')?.html).toBe('<section>stale</section>');
+    // SPEC.md §10.4: await-fragment waits for server truth; omission is a
+    // visible missing-server-truth diagnostic, not a silent fragment-only pass.
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message:
+          'Await-fragment position for productGrid produced no server query truth after guard rerun.',
+      }),
+    );
+    expect(store.get('productGrid')).toEqual({ products: [{ id: 'p1', stock: 2 }] });
+    expect(rebaser.pendingCount('productGrid')).toBe(0);
+    expect(productGrid.attributes).not.toHaveProperty('kovo-pending');
+    expect(productGrid.attributes).not.toHaveProperty('aria-busy');
+  });
+
+  it('accepts await-fragment server truth without reporting a missing-truth diagnostic', async () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    const productGrid = new FakePendingElement({ 'kovo-deps': 'productGrid' });
+    const pendingRoot = new FakePendingRoot([productGrid]);
+    const onError = vi.fn();
+    root.deps = [{ id: 'product-grid' }];
+    root.targets.set('product-grid', new FakeMorphTarget());
+    store.set('productGrid', { products: [{ id: 'p1', stock: 2 }] });
+
+    const result = await submitOptimisticEnhancedMutation({
+      fetch: vi.fn(async () => ({
+        async text() {
+          return [
+            '<kovo-query name="productGrid">{"products":[{"id":"p1","stock":1}]}</kovo-query>',
+            '<kovo-fragment target="product-grid"><section>fresh</section></kovo-fragment>',
+          ].join('\n');
+        },
+      })),
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_await_fragment_server_truth',
+      input: { productId: 'p1' },
+      onError,
+      optimistic: {
+        transforms: {
+          productGrid: 'await-fragment',
+        },
+      },
+      pendingRoot,
+      rebaser,
+      root,
+      store,
+    });
+
+    expect(result.queries).toEqual(['productGrid']);
+    expect(root.targets.get('product-grid')?.html).toBe('<section>fresh</section>');
+    expect(onError).not.toHaveBeenCalled();
+    expect(store.get('productGrid')).toEqual({ products: [{ id: 'p1', stock: 1 }] });
+    expect(rebaser.pendingCount('productGrid')).toBe(0);
+    expect(productGrid.attributes).not.toHaveProperty('kovo-pending');
+    expect(productGrid.attributes).not.toHaveProperty('aria-busy');
+  });
+
   it('reports malformed optimistic server query chunks while applying unrelated fragments', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
