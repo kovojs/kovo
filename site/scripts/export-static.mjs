@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { cp, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,6 +19,73 @@ const cssDistDir = path.join(siteRoot, 'dist-css');
 const publicDir = path.join(siteRoot, 'public');
 const defaultDistDir = path.join(siteRoot, 'dist');
 
+// The served stylesheet must carry the gallery's @kovojs/ui component atoms; a
+// correct build is ~93KB. Guard against the broken-install case where a stale
+// short sheet (chrome atoms only, no component atoms) would ship the gallery
+// unstyled with no diagnostic (SPEC §6.1.1, §13.1). Floor is well under the real
+// size but well over a tokens-only sheet.
+const SITE_CSS_MIN_BYTES = 40_000;
+const SITE_CSS_REQUIRED_ATOMS = ['kv-button-', 'kv-switch-', 'kv-dialog-'];
+
+// Pure content guard for the served stylesheet: throw a clear, actionable error
+// if it is short or missing component atoms. Exported for resilience tests.
+export function assertServedStylesheetContent(css, stylesheetPath) {
+  const problems = [];
+  if (css.length < SITE_CSS_MIN_BYTES) {
+    problems.push(
+      `is only ${css.length} bytes (expected > ${SITE_CSS_MIN_BYTES}; a correct build is ~93KB)`,
+    );
+  }
+  const missingAtoms = SITE_CSS_REQUIRED_ATOMS.filter((atom) => !css.includes(atom));
+  if (missingAtoms.length > 0) {
+    problems.push(`is missing required component atoms (${missingAtoms.join(', ')})`);
+  }
+  if (problems.length > 0) {
+    throw new Error(
+      `site export: the served stylesheet ${stylesheetPath} ${problems.join(' and ')}. ` +
+        `The gallery would render unstyled. This usually means @kovojs/ui's component CSS was ` +
+        `not extracted — check that site/node_modules/@kovojs/{ui,headless-ui} are valid ` +
+        `workspace symlinks (run \`pnpm install\` at the repo root) and that emit-ui-css ran.`,
+    );
+  }
+}
+
+// Resolve the bundled stylesheet from the Vite manifest, then assert it exceeds
+// the size floor and contains the representative component atoms.
+function assertServedStylesheet() {
+  const manifestPath = path.join(cssDistDir, '.vite/manifest.json');
+  let stylesheetRelPath;
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    stylesheetRelPath = manifest['src/styles.css']?.file;
+  } catch (error) {
+    throw new Error(
+      `site export: could not read the CSS build manifest at ${manifestPath}; ` +
+        `the bundled /assets/site.css cannot be verified. Did \`vp build\` run?` +
+        `\nUnderlying error: ${error?.message ?? error}`,
+    );
+  }
+  if (!stylesheetRelPath) {
+    throw new Error(
+      `site export: CSS build manifest at ${manifestPath} has no "src/styles.css" entry; ` +
+        `the bundled /assets/site.css cannot be located.`,
+    );
+  }
+
+  const stylesheetPath = path.join(cssDistDir, stylesheetRelPath);
+  let css;
+  try {
+    css = readFileSync(stylesheetPath, 'utf8');
+  } catch (error) {
+    throw new Error(
+      `site export: bundled stylesheet ${stylesheetPath} is missing; \`vp build\` did not ` +
+        `produce the served /assets/site.css.\nUnderlying error: ${error?.message ?? error}`,
+    );
+  }
+
+  assertServedStylesheetContent(css, stylesheetPath);
+}
+
 export async function exportSiteStaticApp({
   createViteServer = createServer,
   outDir = defaultDistDir,
@@ -31,6 +99,9 @@ export async function exportSiteStaticApp({
   await rm(outDir, { force: true, recursive: true });
   emitSiteUiCss();
   execFileSync('vp', ['build'], { cwd: siteRoot, stdio: 'inherit' });
+  // Fail loudly if the bundled stylesheet is short or missing component atoms,
+  // rather than shipping an unstyled gallery (SPEC §6.1.1, §13.1).
+  assertServedStylesheet();
 
   const manifestFile = path.join(cssDistDir, '.vite/manifest.json');
   const viteServer = await createViteServer({
