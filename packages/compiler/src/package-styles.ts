@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, type Dirent } from 'node:fs';
+import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 
 import { UNITLESS_CSS_PROPERTIES } from '@kovojs/style/internal';
 
@@ -43,6 +43,16 @@ export interface PackageComponentCssResult {
   readonly sourceFiles: readonly string[];
 }
 
+/** Result returned by the app-source CSS extraction build helper. */
+export interface AppComponentCssResult {
+  /** Deduped CSS across every styled app source file. */
+  readonly css: string | null;
+  /** Styled files whose CSS could not be statically lowered. */
+  readonly diagnostics: readonly PackageComponentCssDiagnostic[];
+  /** Absolute app source files scanned, in stable order. */
+  readonly sourceFiles: readonly string[];
+}
+
 interface ResolvedPackage {
   readonly manifest: { exports?: Record<string, unknown>; name?: string };
   readonly packageDir: string;
@@ -64,7 +74,37 @@ export function extractPackageComponentCss(
     return { css: null, diagnostics: [], sourceFiles: [] };
   }
 
-  const sourceFiles = packageComponentSourceFiles(resolved);
+  return extractComponentCssFromFiles(packageComponentSourceFiles(resolved), {
+    rootDir: resolved.packageDir,
+    resolveStaticImport: resolveLocalStaticImport(resolved.packageDir),
+  });
+}
+
+/**
+ * Extract the StyleX CSS for authored app source files under the app entry's
+ * directory. This covers app/layout modules that use `style.create(...)` but are
+ * not themselves compiled component modules, so build-owned CSS does not depend
+ * on hand-authored `emitAtomicCss(... __rules ...)` exports.
+ */
+export function extractAppComponentCss(
+  options: PackageComponentPrefixDiscoveryOptions,
+): AppComponentCssResult {
+  const rootDir = dirname(resolve(options.fileName));
+  return extractComponentCssFromFiles(appComponentSourceFiles(rootDir), {
+    rootDir,
+    resolveStaticImport: resolveLocalStaticImport(rootDir),
+  });
+}
+
+interface ExtractComponentCssFromFilesOptions {
+  readonly resolveStaticImport: (fromFileName: string, specifier: string) => string | null;
+  readonly rootDir: string;
+}
+
+function extractComponentCssFromFiles(
+  sourceFiles: readonly string[],
+  options: ExtractComponentCssFromFilesOptions,
+): PackageComponentCssResult {
   const chunks: string[] = [];
   const diagnostics: PackageComponentCssDiagnostic[] = [];
 
@@ -80,13 +120,13 @@ export function extractPackageComponentCss(
 
     const model = parseComponentModule(fileName, source);
     const extraction = extractKovoStyles(fileName, source, model, 'Component', {
-      resolveStaticImport: resolvePackageStaticImport(resolved.packageDir),
+      resolveStaticImport: options.resolveStaticImport,
     });
     if (extraction.css) {
       chunks.push(extraction.css);
     } else {
       diagnostics.push({
-        fileName: relativeToPackage(resolved.packageDir, fileName),
+        fileName: relativeToRoot(options.rootDir, fileName),
         message:
           'style.create(...) present but no CSS was extracted; the component would render ' +
           'unstyled. Ensure styles are static so identity can be derived from the binding and file.',
@@ -105,15 +145,15 @@ export function extractPackageComponentCss(
   };
 }
 
-function resolvePackageStaticImport(
-  packageDir: string,
+function resolveLocalStaticImport(
+  rootDir: string,
 ): (fromFileName: string, specifier: string) => string | null {
   return (fromFileName, specifier) => {
     if (!specifier.startsWith('.')) return null;
     const absolute = resolve(dirname(fromFileName), specifier);
-    if (!isInsideDirectory(packageDir, absolute)) return null;
+    if (!isInsideDirectory(rootDir, absolute)) return null;
     for (const candidate of staticImportCandidates(absolute)) {
-      if (!isInsideDirectory(packageDir, candidate)) continue;
+      if (!isInsideDirectory(rootDir, candidate)) continue;
       if (existsSync(candidate)) return readFileSync(candidate, 'utf8');
     }
     return null;
@@ -228,6 +268,40 @@ function packageComponentSourceFiles(resolved: ResolvedPackage): string[] {
   return [...files].sort((left, right) => left.localeCompare(right));
 }
 
+function appComponentSourceFiles(rootDir: string): string[] {
+  const files: string[] = [];
+  collectAppComponentSourceFiles(rootDir, files);
+  return files.sort((left, right) => left.localeCompare(right));
+}
+
+function collectAppComponentSourceFiles(dir: string, files: string[]): void {
+  let entries: Dirent[];
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const absolute = resolve(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (ignoredAppSourceDirectory(entry.name)) continue;
+      collectAppComponentSourceFiles(absolute, files);
+      continue;
+    }
+    if (!entry.isFile() || !appSourceExtension(absolute)) continue;
+    files.push(absolute);
+  }
+}
+
+function ignoredAppSourceDirectory(name: string): boolean {
+  return name === 'generated' || name === 'node_modules' || name === 'dist' || name.startsWith('.');
+}
+
+function appSourceExtension(fileName: string): boolean {
+  return ['.js', '.jsx', '.ts', '.tsx'].includes(extname(fileName));
+}
+
 function exportTargetPath(target: unknown): string | null {
   if (typeof target === 'string') return target;
   // Conditional exports object ({ import, default, ... }): take the first string.
@@ -240,6 +314,6 @@ function exportTargetPath(target: unknown): string | null {
   return null;
 }
 
-function relativeToPackage(packageDir: string, fileName: string): string {
-  return fileName.startsWith(packageDir) ? fileName.slice(packageDir.length + 1) : fileName;
+function relativeToRoot(rootDir: string, fileName: string): string {
+  return fileName.startsWith(rootDir) ? fileName.slice(rootDir.length + 1) : fileName;
 }

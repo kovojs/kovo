@@ -1,10 +1,11 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { extractPackageComponentCss } from './package-styles.js';
+import { extractAppComponentCss, extractPackageComponentCss } from './package-styles.js';
 
 // Walk up from this test file to the monorepo root (the dir that holds the
 // `examples/` workspace + the hoisted `node_modules/@kovojs/ui` symlink).
@@ -74,5 +75,56 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
       'src/progress.tsx',
       'src/skeleton.tsx',
     ]);
+  });
+});
+
+describe('extractAppComponentCss', () => {
+  it('extracts app-authored style.create CSS without generated artifacts', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-app-css-'));
+
+    try {
+      mkdirSync(join(root, 'generated'), { recursive: true });
+      writeFileSync(
+        join(root, 'app.tsx'),
+        `
+import { tokens } from '@kovojs/style';
+import * as style from '@kovojs/style';
+
+const appStyles = style.create({
+  root: {
+    color: tokens.sys.color.primary,
+    padding: 8,
+  },
+});
+
+export function App() {
+  return <main {...style.attrs(appStyles.root)}>App</main>;
+}
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'generated/ignored.tsx'),
+        `
+import * as style from '@kovojs/style';
+const generatedStyles = style.create({ root: { color: 'red' } });
+`,
+        'utf8',
+      );
+
+      const result = extractAppComponentCss({
+        fileName: join(root, 'app.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: '',
+      });
+
+      expect(result.sourceFiles).toEqual([join(root, 'app.tsx')]);
+      expect(result.diagnostics).toEqual([]);
+      expect(result.css).toContain('color:var(--kovo-theme-sys-color-primary)');
+      expect(result.css).toContain('padding:8px');
+      expect(result.css).not.toContain('red');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 });

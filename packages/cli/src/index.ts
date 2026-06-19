@@ -2558,19 +2558,27 @@ function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string 
 async function kovoBuildStylesheetCss(
   appModulePath: string,
 ): Promise<readonly { css: string; href: string }[]> {
-  const [{ extractPackageComponentCss }, { kovoUiTokenSheetCss }] = await Promise.all([
-    import('@kovojs/compiler/package-styles'),
-    import('@kovojs/headless-ui/internal'),
-  ]);
-  const result = extractPackageComponentCss('@kovojs/ui', {
+  const [{ extractAppComponentCss, extractPackageComponentCss }, { kovoUiTokenSheetCss }] =
+    await Promise.all([
+      import('@kovojs/compiler/package-styles'),
+      import('@kovojs/headless-ui/internal'),
+    ]);
+  const extractionOptions = {
     fileName: appModulePath,
     packagePrefixDiscoveryRoot: dirname(appModulePath),
     source: existsSync(appModulePath) ? readFileSync(appModulePath, 'utf8') : '',
-  });
+  };
+  const packageResult = extractPackageComponentCss('@kovojs/ui', extractionOptions);
+  const appResult = extractAppComponentCss(extractionOptions);
 
-  if (!result.css) return [];
+  if (!packageResult.css && !appResult.css) return [];
   const tokenCss = kovoUiTokenSheetCss.replace(/@theme[^{]*\{[\s\S]*?\n\}/, '').trim();
-  return [{ css: `${tokenCss}\n${result.css}`, href: '/assets/styles.css' }];
+  return [
+    {
+      css: [tokenCss, packageResult.css, appResult.css].filter(Boolean).join('\n'),
+      href: '/assets/styles.css',
+    },
+  ];
 }
 
 function selectedKovoBuildPreset(

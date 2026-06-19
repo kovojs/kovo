@@ -110,6 +110,8 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
       produces one `CssAssetManifest` via `collectCssAssetManifest`. (Seam A/C)
   - Evidence 2026-06-19:
     `npx vitest --run packages/compiler/src/vite.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/build.test.ts -t "CSS asset manifest|auto-collects compiled component CSS|materializes declared and build-owned CSS"` proves `createKovoVitePlugin().getCssAssetManifest()` dedupes compiled `cssAssets`.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/package-styles.test.ts packages/cli/src/index.kovo-build.test.ts -t "extractAppComponentCss|auto-collects compiled component CSS"` proves `extractAppComponentCss()` scans app-authored `style.create(...)` modules and skips generated artifacts.
 - [x] Make `kovo build` emit the served stylesheet from that manifest: the sink
       referenced by `stylesheet('./styles.css')` is filled with collected
       component CSS without a per-component `criticalCss` argument. (Seam A)
