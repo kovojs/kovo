@@ -295,12 +295,23 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
     manifest, and the CLI usage manifest exposes the new flag. `packages/cli/src/index.ts` threads
     `kovo build --no-cache` into `kovoVitePlugin({ cache: options.cache })`, so build-time Vite
     emits use the same persistent-cache/cold-cache switch.
-- [ ] Coordinate with the `vp` task cache (`vite.config.ts:31`): the fine-grained module cache lives
+- [x] Coordinate with the `vp` task cache (`vite.config.ts:31`): the fine-grained module cache lives
       _beneath_ the coarse task cache. Ensure task `input` lists for compile-driven tasks
       (`build`, `compiler-perf`, example builds) stay correct now that lowering reads `.kovo/cache`
       rather than committed IR (ties into `no-checked-in-generated.md` Phase "CI cache churn" risk).
-- [ ] `.github/workflows/`: cache `.kovo/cache` across CI runs keyed by `compilerBuildId` + source,
+  - Evidence 2026-06-19:
+    `rg -n "\\.kovo/cache|compiler-cache-key|actions/cache|compiler-build-id\\.mjs|fine-grained compiler cache" .github/workflows vite.config.ts scripts plans/incremental-compiler.md -S`
+    proves `vite.config.ts` documents `.kovo/cache` as a restored side cache kept out of `vp` task
+    inputs/outputs, while workflow cache restore/save owns the cache directory explicitly.
+- [x] `.github/workflows/`: cache `.kovo/cache` across CI runs keyed by `compilerBuildId` + source,
       so CI warm-starts. Confirm a cache miss (compiler change) cleanly rebuilds.
+  - Evidence 2026-06-19:
+    `node scripts/compiler-build-id.mjs` emits
+    `@kovojs/compiler@0.1.0/048504b82a4bbfd6`; `.github/workflows/{ci,pages}.yml`
+    compute that id with `vp exec node scripts/compiler-build-id.mjs` after `vp install`, restore
+    `.kovo/cache` and `**/.kovo/cache` with `actions/cache@v4`, and key the cache by runner OS,
+    compiler build id, compiler source/package manifests, and `pnpm-lock.yaml`, so compiler/source
+    changes produce clean misses.
 
 ## Phase 6 — Perf budgets + gates
 

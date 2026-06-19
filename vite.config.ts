@@ -45,6 +45,8 @@ export default defineConfig({
       scripts: true,
       tasks: true,
     },
+    // The fine-grained compiler cache is restored separately under `.kovo/cache`.
+    // Keep it out of task inputs/outputs so cache writes do not invalidate coarse `vp` tasks.
     tasks: {
       build: {
         command: 'vp pack && node scripts/prod-emit-check.mjs',

@@ -15,6 +15,16 @@ jobs:
         with:
           node-version: 24
       - run: vp install
+      - id: compiler-cache-key
+        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .kovo/cache
+            **/.kovo/cache
+          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp check
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp test
