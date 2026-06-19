@@ -43,12 +43,18 @@ export interface InteractiveGalleryDemo {
 
 type InteractiveDemoComponent = {
   definition: {
-    render: (queries: Record<string, never>, state: unknown) => Promise<string> | string;
-    state: () => unknown;
+    render(queries: Record<string, never>, state: unknown): Promise<string> | string;
+    state(): unknown;
   };
 };
 
 type InteractiveDemoModule = Record<string, InteractiveDemoComponent | undefined>;
+
+declare global {
+  interface ImportMeta {
+    glob<TModule>(pattern: string, options: { eager: true }): Record<string, TModule>;
+  }
+}
 
 const generatedInteractiveDemoModules = import.meta.glob<InteractiveDemoModule>(
   './generated/interactive/*-demo.tsx',

@@ -94,6 +94,7 @@ Use the failed log line to choose the narrowest local reproduction:
   ```
 
   Run site-scoped commands from `site/` when the workflow does.
+
 - Browser failure: make sure the workflow installs the matching Playwright browser before
   running the browser gate. In this repo, use `vp exec playwright install --with-deps ...`.
 

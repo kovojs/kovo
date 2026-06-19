@@ -81,7 +81,9 @@ function workspacePatterns(rootPackage) {
 
 function expandWorkspacePattern(cwd, pattern) {
   if (!pattern.includes('*')) {
-    return existsSync(path.join(cwd, pattern, 'package.json')) ? [path.join(pattern, 'package.json')] : [];
+    return existsSync(path.join(cwd, pattern, 'package.json'))
+      ? [path.join(pattern, 'package.json')]
+      : [];
   }
 
   if (!pattern.endsWith('/*') || pattern.indexOf('*') !== pattern.length - 1) {
@@ -141,7 +143,9 @@ function formatRows(rows) {
   const divider = widths.map((width) => '-'.repeat(width)).join('  ');
   const body = rows
     .map((_, rowIndex) =>
-      columns.map((column, columnIndex) => column[rowIndex + 1].padEnd(widths[columnIndex])).join('  '),
+      columns
+        .map((column, columnIndex) => column[rowIndex + 1].padEnd(widths[columnIndex]))
+        .join('  '),
     )
     .join('\n');
   return `${header}\n${divider}\n${body}`;
@@ -250,7 +254,9 @@ export async function runBump({ cwd = repoRoot, args = process.argv.slice(2) } =
 
   const updatedPaths = writeBumpedPackages(rows, nextVersion, { cwd });
   const commit = commitPackageChanges(updatedPaths, nextVersion, { cwd });
-  process.stdout.write(`\nUpdated ${updatedPaths.length} package.json files and committed ${commit}.\n`);
+  process.stdout.write(
+    `\nUpdated ${updatedPaths.length} package.json files and committed ${commit}.\n`,
+  );
   return 0;
 }
 

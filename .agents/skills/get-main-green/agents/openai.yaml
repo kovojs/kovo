@@ -1,4 +1,4 @@
 interface:
-  display_name: "Get Main Green"
-  short_description: "Fix failing main GitHub Actions checks"
-  default_prompt: "Use $get-main-green to inspect the latest main commit, fix failing GitHub Actions checks, push the repair, and monitor the follow-up run."
+  display_name: 'Get Main Green'
+  short_description: 'Fix failing main GitHub Actions checks'
+  default_prompt: 'Use $get-main-green to inspect the latest main commit, fix failing GitHub Actions checks, push the repair, and monitor the follow-up run.'

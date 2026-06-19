@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@kovojs/browser": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/server": "workspace:*",
