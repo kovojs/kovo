@@ -22,6 +22,7 @@ registerHooks({
 });
 
 const { kovoUiTokenSheetCss } = await import('@kovojs/headless-ui');
+const { siteThemeCss } = await import('../src/theme.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const siteRoot = resolve(scriptDir, '..');
@@ -57,7 +58,7 @@ export function emitSiteUiCss() {
       '   @kovojs/ui design tokens + component StyleX CSS (SPEC §6.1.1, §13.1). */\n';
     const tokenCss = kovoUiTokenSheetCss.replace(/@theme[^{]*\{[\s\S]*?\n\}/, '').trimStart();
     const componentCss = readFileSync(componentCssPath, 'utf8');
-    const css = `${banner}\n${tokenCss}\n${componentCss}\n`;
+    const css = `${banner}\n${siteThemeCss}\n\n${tokenCss}\n${componentCss}\n`;
 
     mkdirSync(dirname(outPath), { recursive: true });
     writeFileSync(outPath, css);
