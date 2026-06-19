@@ -4,14 +4,20 @@ import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { UNITLESS_CSS_PROPERTIES } from '@kovojs/style/internal';
 
 import { dedupeCss } from './css.js';
-import type { ComponentCssAsset } from './css.js';
+import {
+  cssRouteSplitTargetsFromRouteFacts,
+  type ComponentCssAsset,
+  type CssRouteSplitTarget,
+} from './css.js';
 import { cssIrHeader } from './ir.js';
 import {
   resolvePackageManifestPath,
   type PackageComponentPrefixDiscoveryOptions,
 } from './package-prefixes.js';
 import { parseComponentModule } from './scan/parse.js';
+import { compileRouteModule } from './route-pages.js';
 import { extractKovoStyles } from './style.js';
+import type { RoutePageFact } from './types.js';
 
 // SPEC §6.1.1 + §13.1: a first-party component package (one that declares a
 // `kovo.prefix`, e.g. `@kovojs/ui` → `kovo-ui-`) authors its styled components
@@ -58,6 +64,13 @@ export interface AppComponentCssResult {
   readonly sourceFiles: readonly string[];
 }
 
+/** Result returned by the app route CSS target extraction helper. */
+export interface AppRouteCssTargetsResult {
+  readonly routePageFacts: readonly RoutePageFact[];
+  readonly routeTargets: readonly CssRouteSplitTarget[];
+  readonly sourceFiles: readonly string[];
+}
+
 interface ResolvedPackage {
   readonly manifest: { exports?: Record<string, unknown>; name?: string };
   readonly packageDir: string;
@@ -99,6 +112,38 @@ export function extractAppComponentCss(
     rootDir,
     resolveStaticImport: resolveLocalStaticImport(rootDir),
   });
+}
+
+/** Extract route-level CSS split targets from authored app source files. */
+export function extractAppRouteCssTargets(
+  options: PackageComponentPrefixDiscoveryOptions,
+): AppRouteCssTargetsResult {
+  const rootDir = dirname(resolve(options.fileName));
+  const sourceFiles = appComponentSourceFiles(rootDir);
+  const routePageFacts: RoutePageFact[] = [];
+
+  for (const fileName of sourceFiles) {
+    let source: string;
+    try {
+      source = readFileSync(fileName, 'utf8');
+    } catch {
+      continue;
+    }
+    if (!source.includes('route(')) continue;
+
+    routePageFacts.push(
+      ...compileRouteModule({
+        fileName: relativeToRoot(rootDir, fileName),
+        source,
+      }).routePageFacts,
+    );
+  }
+
+  return {
+    routePageFacts,
+    routeTargets: cssRouteSplitTargetsFromRouteFacts(routePageFacts),
+    sourceFiles,
+  };
 }
 
 interface ExtractComponentCssFromFilesOptions {

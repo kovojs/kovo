@@ -5,7 +5,11 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { extractAppComponentCss, extractPackageComponentCss } from './package-styles.js';
+import {
+  extractAppComponentCss,
+  extractAppRouteCssTargets,
+  extractPackageComponentCss,
+} from './package-styles.js';
 
 // Walk up from this test file to the monorepo root (the dir that holds the
 // `examples/` workspace + the hoisted `node_modules/@kovojs/ui` symlink).
@@ -129,6 +133,54 @@ const generatedStyles = style.create({ root: { color: 'red' } });
           href: '/assets/app.css',
           sourceFileName: 'app.css',
         }),
+      ]);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('extracts route CSS split targets relative to the app source root', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-app-route-css-'));
+
+    try {
+      mkdirSync(join(root, 'components'), { recursive: true });
+      writeFileSync(
+        join(root, 'routes.tsx'),
+        `
+import { route } from '@kovojs/server';
+import { CartBadge } from './components/cart-badge.js';
+
+export const cart = route('/cart', {
+  page: () => <CartBadge />,
+});
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'components/cart-badge.tsx'),
+        `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const styles = style.create({ root: { color: 'teal' } });
+export const CartBadge = component({
+  render: () => <cart-badge {...style.attrs(styles.root)}>Cart</cart-badge>,
+});
+`,
+        'utf8',
+      );
+
+      const result = extractAppRouteCssTargets({
+        fileName: join(root, 'routes.tsx'),
+        packagePrefixDiscoveryRoot: root,
+        source: '',
+      });
+
+      expect(result.routeTargets).toEqual([
+        {
+          route: '/cart',
+          sourceFileNames: ['components/cart-badge.css'],
+        },
       ]);
     } finally {
       rmSync(root, { force: true, recursive: true });
