@@ -38,7 +38,7 @@ jobs:
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp exec pnpm --filter @kovojs/example-gallery run emit:interactive-gallery
       - run: vp run build
-      - run: vp run export
+      - run: vp run --no-cache export
         working-directory: site
       - run: vp run check-links
         working-directory: site

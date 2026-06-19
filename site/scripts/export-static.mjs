@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { cp, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,23 +18,35 @@ const cssDistDir = path.join(siteRoot, 'dist-css');
 const publicDir = path.join(siteRoot, 'public');
 const defaultDistDir = path.join(siteRoot, 'dist');
 
-// The global served stylesheet carries site-global CSS and theme tokens. The
-// gallery's @kovojs/ui atoms are copied separately to /assets/kovo-ui.css so
-// docs/landing routes do not pay for package component CSS they never render.
+// The global served stylesheet carries site-global CSS, theme tokens, and the
+// extracted app atoms. The gallery's @kovojs/ui atoms are copied separately to
+// /assets/kovo-ui.css so docs/landing routes do not pay for package component
+// CSS they never render.
 const SITE_CSS_MIN_BYTES = 5_000;
 const SITE_CSS_REQUIRED_ATOMS = ['kv-button-', 'kv-switch-', 'kv-dialog-'];
+const SITE_APP_CSS_REQUIRED_ATOMS = [
+  'kv-site-landing-',
+  'kv-site-chrome-',
+  'kv-site-docs-layout-',
+  'kv-site-gallery-',
+  'kv-site-search-dialog-',
+];
 
 // Pure content guard for the served stylesheet: throw a clear, actionable error
-// if it is short or missing component atoms. Exported for resilience tests.
+// if it is short or missing site app atoms. Exported for resilience tests.
 export function assertServedStylesheetContent(css, stylesheetPath) {
   const problems = [];
   if (css.length < SITE_CSS_MIN_BYTES) {
     problems.push(`is only ${css.length} bytes (expected > ${SITE_CSS_MIN_BYTES})`);
   }
+  const missingAtoms = SITE_APP_CSS_REQUIRED_ATOMS.filter((atom) => !css.includes(atom));
+  if (missingAtoms.length > 0) {
+    problems.push(`is missing site app atoms (${missingAtoms.join(', ')})`);
+  }
   if (problems.length > 0) {
     throw new Error(
       `site export: the served stylesheet ${stylesheetPath} ${problems.join(' and ')}. ` +
-        `The docs shell would render without its global CSS. Check that \`vp build\` ran.`,
+        `The docs shell would render without its app CSS. Check that app CSS extraction ran.`,
     );
   }
 }
@@ -51,9 +63,8 @@ export function assertServedUiStylesheetContent(css, stylesheetPath) {
   );
 }
 
-// Resolve the bundled stylesheet from the Vite manifest, then assert it exceeds
-// the size floor and contains the representative component atoms.
-function assertServedStylesheet() {
+// Resolve the bundled stylesheet from the Vite manifest.
+function builtStylesheetPath() {
   const manifestPath = path.join(cssDistDir, '.vite/manifest.json');
   let stylesheetRelPath;
   try {
@@ -73,7 +84,11 @@ function assertServedStylesheet() {
     );
   }
 
-  const stylesheetPath = path.join(cssDistDir, stylesheetRelPath);
+  return path.join(cssDistDir, stylesheetRelPath);
+}
+
+function assertServedStylesheet() {
+  const stylesheetPath = builtStylesheetPath();
   let css;
   try {
     css = readFileSync(stylesheetPath, 'utf8');
@@ -91,6 +106,44 @@ function assertServedStylesheet() {
   );
 }
 
+export function assertExtractedSiteAppCss(css) {
+  const missingAtoms = SITE_APP_CSS_REQUIRED_ATOMS.filter((atom) => !css.includes(atom));
+  if (missingAtoms.length === 0) return;
+
+  throw new Error(
+    `site export: extracted site app CSS is missing required atoms (${missingAtoms.join(', ')}). ` +
+      `The docs shell would render unstyled. Ensure site/src components use static style.create(...) ` +
+      `values that the compiler can extract.`,
+  );
+}
+
+async function appendSiteAppCssToBuiltStylesheet() {
+  const appModulePath = path.join(siteRoot, 'src/app.tsx');
+  const { extractAppComponentCss } = await import('@kovojs/compiler/package-styles');
+  const result = extractAppComponentCss({
+    fileName: appModulePath,
+    packagePrefixDiscoveryRoot: path.dirname(appModulePath),
+    source: readFileSync(appModulePath, 'utf8'),
+  });
+  if (!result.css) {
+    throw new Error(
+      'site export: no site app CSS was extracted; the docs shell would render unstyled.',
+    );
+  }
+  if (result.diagnostics.length > 0) {
+    throw new Error(
+      `site export: site app CSS extraction warnings:\n${result.diagnostics
+        .map((diagnostic) => `- ${diagnostic.fileName}: ${diagnostic.message}`)
+        .join('\n')}`,
+    );
+  }
+
+  assertExtractedSiteAppCss(result.css);
+  const stylesheetPath = builtStylesheetPath();
+  const currentCss = readFileSync(stylesheetPath, 'utf8');
+  writeFileSync(stylesheetPath, `${currentCss.trimEnd()}\n\n${result.css.trim()}\n`);
+}
+
 export async function exportSiteStaticApp({
   createViteServer = createServer,
   outDir = defaultDistDir,
@@ -103,8 +156,9 @@ export async function exportSiteStaticApp({
   await rm(outDir, { force: true, recursive: true });
   emitSiteUiCss();
   execFileSync('vp', ['build'], { cwd: siteRoot, stdio: 'inherit' });
-  // Fail loudly if the bundled stylesheet is short or missing component atoms,
-  // rather than shipping an unstyled gallery (SPEC §6.1.1, §13.1).
+  await appendSiteAppCssToBuiltStylesheet();
+  // Fail loudly if the bundled stylesheet is short or missing app atoms,
+  // rather than shipping an unstyled docs shell (SPEC §6.1.1, §13.1).
   assertServedStylesheet();
 
   const manifestFile = path.join(cssDistDir, '.vite/manifest.json');

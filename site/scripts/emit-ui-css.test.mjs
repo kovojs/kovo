@@ -6,6 +6,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { assertExtractedComponentCss, emitSiteUiCss } from './emit-ui-css.mjs';
 import {
+  assertExtractedSiteAppCss,
   assertServedStylesheetContent,
   assertServedUiStylesheetContent,
 } from './export-static.mjs';
@@ -71,9 +72,16 @@ describe('emit-ui-css component CSS guard', () => {
 });
 
 describe('export-static served stylesheet guard', () => {
-  const goodCss = ':root{--site-token:1}'.padEnd(12_000, ' ');
+  const goodCss = `
+    :root{--site-token:1}
+    .kv-site-landing-a{}
+    .kv-site-chrome-b{}
+    .kv-site-docs-layout-c{}
+    .kv-site-gallery-d{}
+    .kv-site-search-dialog-e{}
+  `.padEnd(12_000, ' ');
 
-  it('passes for a healthy global stylesheet', () => {
+  it('passes for a healthy global app stylesheet', () => {
     expect(() => assertServedStylesheetContent(goodCss, '/dist-css/assets/site.css')).not.toThrow();
   });
 
@@ -92,6 +100,20 @@ describe('export-static served stylesheet guard', () => {
     const short = ':root{--site-token:1}'.padEnd(3_000, ' ');
     expect(() => assertServedStylesheetContent(short, '/dist-css/assets/site.css')).toThrow(
       /only \d+ bytes/,
+    );
+  });
+
+  it('throws when the served stylesheet is missing site app atoms', () => {
+    const globalOnly = ':root{--site-token:1}'.padEnd(12_000, ' ');
+    expect(() => assertServedStylesheetContent(globalOnly, '/dist-css/assets/site.css')).toThrow(
+      /missing site app atoms/,
+    );
+  });
+
+  it('validates extracted site app CSS atoms', () => {
+    expect(() => assertExtractedSiteAppCss(goodCss)).not.toThrow();
+    expect(() => assertExtractedSiteAppCss('.kv-site-landing-a{}')).toThrow(
+      /kv-site-chrome-, kv-site-docs-layout-, kv-site-gallery-, kv-site-search-dialog-/,
     );
   });
 
