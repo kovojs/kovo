@@ -7,7 +7,11 @@ import {
   compileRouteModule,
   deriveAppGraph,
 } from './index.js';
-import { deriveRegistryFactsFromGraph } from './internal-graph.js';
+import {
+  appGraphContributionHash,
+  deriveRegistryFactsFromGraph,
+  IncrementalAppGraphCache,
+} from './internal-graph.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
@@ -344,6 +348,35 @@ export const products = route('/products', {
 }`);
     expect(registry).toContain('export type DomainKey = "cart" | "order" | "product";');
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('caches app graph derivation by the multiset of contributing fact hashes', () => {
+    const cart = {
+      componentGraphFacts: [{ domName: 'cart-badge', name: 'components/cart/cart-badge' }],
+    };
+    const product = {
+      componentGraphFacts: [{ domName: 'product-card', name: 'components/product/product-card' }],
+    };
+    const firstOptions = { components: [cart, product] };
+    const reorderedOptions = { components: [product, cart] };
+    const changedOptions = {
+      components: [
+        cart,
+        {
+          componentGraphFacts: [
+            { domName: 'product-summary', name: 'components/product/product-summary' },
+          ],
+        },
+      ],
+    };
+    const cache = new IncrementalAppGraphCache();
+
+    expect(appGraphContributionHash(firstOptions)).toBe(appGraphContributionHash(reorderedOptions));
+    expect(appGraphContributionHash(firstOptions)).not.toBe(
+      appGraphContributionHash(changedOptions),
+    );
+    expect(cache.derive(reorderedOptions)).toBe(cache.derive(firstOptions));
+    expect(cache.derive(changedOptions)).not.toBe(cache.derive(firstOptions));
   });
 
   it('derives route registry facts from compiled route-page JSX facts', () => {

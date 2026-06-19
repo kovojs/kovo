@@ -17,6 +17,7 @@ export {
   type PersistentCompileCacheManifest,
 } from './persistent-compile-cache.js';
 export type { PlatformSubstitution } from './lower/platform.js';
+export { appGraphContributionHash, IncrementalAppGraphCache } from './internal-graph.js';
 export type {
   AttributeMergeResult,
   MergeableAttribute,

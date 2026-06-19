@@ -259,9 +259,14 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
 
 ## Phase 4 — Incremental whole-program graph
 
-- [ ] Make `deriveAppGraph` incremental: cache the merged `RegistryGraphInput`/`RegistryFacts`
+- [x] Make `deriveAppGraph` incremental: cache the merged `RegistryGraphInput`/`RegistryFacts`
       keyed by the multiset of contributing per-module fact hashes, and re-merge only the changed
       contributions instead of rebuilding from all components each edit.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/registry.test.ts -t "multiset of contributing fact hashes|derives registry facts"`
+    proves `IncrementalAppGraphCache` keys app graph derivation by a stable multiset hash of
+    component/route contributions: reordered unchanged contributions return the cached merged
+    graph/facts object, while a changed contribution misses and derives a new result.
 - [ ] Diff registry facts across rebuilds and feed the diff into Phase 2's inverse index so a graph
       change recompiles exactly the dependent modules (closing the loop: per-module edit → fact
       change → graph re-merge → targeted dependent recompile).
