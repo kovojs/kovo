@@ -5,8 +5,21 @@
 example specifically should **read as Stack Overflow** — recognizable layout, color, and
 typography — while staying fully functional (upvote / ask / answer flows really work).
 
-**Status:** Diagnosis complete (2026-06-18). Root causes proven from a running server +
-screenshots. Implementation not started.
+**Status (2026-06-18):** Phase 1 (engine fix) + Phase 2/3 (Stack Overflow redesign & function)
+**DONE and verified**. Branch `agent/awesome-examples`. The SO example now reads as Stack Overflow
+(logo, top bar + search, left sidebar, votes/answers/views stat rail, blue titles, tag pills, user
+cards) and all three interactive flows round-trip in a real browser (upvote morphs in place, ask
+adds a row, answer adds an answer). The engine fix benefits every example: `commerce` and `crm` now
+render correctly (were near-unstyled); `crm` is fully functional. Remaining: aesthetic polish of
+`commerce`/`devtool`/`gallery`/`reference`, and one framework gap (lowered forms + CSRF, below).
+
+**Proving commands (this session):**
+- `npx vitest run packages` → 2856 passed; the 13 failures are **pre-existing** (verified by
+  reverting the 3 engine files to base — identical failure set). Engine change adds zero regressions.
+- `npx vitest run examples/stackoverflow/src/interactive-app.test.ts` → 6/6 pass (incl. the
+  "styles.css stays authored resets" guard).
+- Browser (Playwright): SO upvote score 0→1 morphs in place; ask 7→8 rows; answer 2→3 — all
+  mutations 200.
 
 **Behavior source of truth:** `SPEC.md` (§6.1.1 atomic CSS, §13.1 stylesheet linking, §9.1/§9.5
 the SO app). When a fix and SPEC conflict, follow SPEC and record the conflict.
@@ -62,6 +75,16 @@ badge/card/button/avatar primitive classes), which the stale dist never picked u
    is the runtime fallback that gets superseded once the external sheet loads. The external sheet is
    the stale, class-less file, so after load the page loses even the (already unit-broken) inline styles.
 
+### Root cause B′ — a SECOND engine gap: invalid `@layer` names (found during implementation)
+
+`emitAtomicCss` also emitted `@layer kovo-style.1000` — a layer-name segment cannot start with a
+digit, so a browser drops the **entire** at-rule block. The compiler's `normalizeLayerNames` fixed
+this for served package CSS (`kovo-style.1000` → `kovo-style-1000`) but, like the px gap, the runtime
+emit path did not. So even after the px fix the critical CSS still failed to apply until the layer
+names were also made valid at the engine. (The "stale committed `dist`" angle in B turned out to be a
+red herring: the committed `styles.css` is authored-resets-only and the redesign dropped `@kovojs/ui`
+entirely, so no `generated/kovo-ui.css` is needed — all styling rides the inline critical CSS.)
+
 ### Root cause C — even fully styled, the SO demo is a generic clone, not "Stack Overflow"
 
 The current design is "DevOverflow" with an orange seed and a centered 832px column. Real Stack
@@ -78,65 +101,68 @@ Matching that is a design pass on top of the mechanical fixes.
 
 ### Phase 1 — Fix the CSS pipeline so authored styles actually render (unblocks everything)
 
-- [ ] **A1. Close the unitless-length gap at the engine level.** Make `@kovojs/style`'s atomic CSS
-      emit browser-valid lengths so the runtime `emitAtomicCss` path matches the compiler's served
-      output. Preferred: lift `normalizeNumericLengths` + the `UNITLESS_CSS_PROPERTIES` allowlist out
-      of `packages/compiler/src/package-styles.ts` into `@kovojs/style` and apply it inside the emit
-      so bare-number lengths get `px` (keeping the class-name hash on the raw value, per the existing
-      comment's lockstep note). Update `packages/compiler` to consume the shared normalizer instead of
-      its private copy. SPEC §6.1.1.
-      - Risk: this will churn `@kovojs/style` and example/UI CSS snapshots — budget for snapshot
-        regen and an api-surface check. Verify the class-name hash is unchanged (so `style.attrs`
-        output and the stylesheet stay in lockstep).
-      - Evidence to capture: a `@kovojs/style` unit test asserting `style.emitAtomicCss` produces
-        `max-width:832px` / `gap:8px` (not `:832`/`:8`), and that `opacity`/`z-index`/`line-height`
-        stay unitless.
-- [ ] **A2. If A1 is deferred,** apply the normalizer to the examples' critical-CSS strings at the
-      call site (wrap `soChromeStyleCss` etc.) as a stopgap. Prefer A1; record here only if A1 is
-      blocked and why.
-- [ ] **B1. Regenerate every example's served stylesheet and stop committing stale `dist`.** Re-run
-      `pnpm --filter @kovojs/example-stackoverflow run emit-ui-css` then `vp build` so
-      `dist/assets/styles.css` carries the current `generated/kovo-ui.css` (assert `kv-badge`,
-      `kv-card`, `kv-button` classes present and non-zero `kv-` count). Decide and document whether
-      built `dist` should be git-ignored for examples (serve builds on demand) vs. committed-and-fresh;
-      a stale committed `dist` is the trap here. Apply the same to `crm`/`commerce`.
-- [ ] **B2. Verify the critical-CSS handoff.** After A1+B1, confirm that with the external sheet
-      loaded the page is fully styled (no regression when the inline critical `<style>` is superseded).
-      Screenshot `/` with `waitUntil:'networkidle'` and confirm cards/spacing survive.
+- [x] **A1. Close the unitless-length gap at the engine level.** Added shared `UNITLESS_CSS_PROPERTIES`
+      + `cssLengthValue()` to `packages/style/src/internal.ts`; `atomicRule` now appends `px` to
+      bare-number lengths (class-name hash still uses the raw value, so `style.attrs` stays in
+      lockstep). `packages/compiler/src/package-styles.ts` imports the shared set; its
+      `normalizeNumericLengths` is now idempotent defense-in-depth. Evidence: new test in
+      `packages/style/src/index.test.ts` ("emits browser-valid lengths…") asserts `max-width:832px`,
+      `gap:8px`, and that `0`/`line-height`/`z-index`/`opacity`/`flex-shrink` stay unitless. Commit
+      `64c4abb9`. SPEC §6.1.1.
+- [x] **A1b. Fix the invalid-`@layer`-name gap (Root cause B′).** `emitAtomicCss` now emits
+      `@layer kovo-style-<priority>` (was `kovo-style.<priority>`). Updated the 3 affected assertions
+      (`packages/style/src/index.test.ts`, `compiler/src/structural-jsx-ir.test.ts`, `compiler/src/style.test.ts`).
+      Commit `64c4abb9`.
+- [x] **B. styles.css stays authored-resets-only.** Resolved by the redesign dropping `@kovojs/ui`
+      (no `kovo-ui.css` needed); `examples/stackoverflow/src/interactive-app.test.ts` enforces
+      "no `./generated/` in styles.css" and passes. Built `dist` is git-ignored, so no stale-artifact trap.
+- [x] **B2. Critical-CSS handoff verified.** With the external sheet loaded (`networkidle`), the page is
+      fully styled — the inline critical `<style>` persists; styling does not depend on a superseding sheet.
 
-### Phase 2 — Make Stack Overflow look like Stack Overflow
+### Phase 2 — Make Stack Overflow look like Stack Overflow — **DONE (commit `e3bb73de`)**
 
-- [ ] **C1. Shell redesign** (`src/components/chrome.tsx`): white top bar with logo + (visual) global
-      search, a left sidebar nav (Home / Questions / Tags / Users), main content to the right. Match
-      SO color tokens via `src/theme.ts`: link blue `#0074cc`/`#0a95ff`, tag pill `#e1ecf4`/`#39739d`,
-      Ask-button orange `#f48024`, neutral `#232629` text on `#ffffff`/`#f8f9f9` surfaces.
-- [ ] **C2. Question-list row** (`src/components/question-list.tsx`): left stat rail with votes /
-      answers / views blocks (accepted-answer count in a green outlined box), blue title link,
-      2-line excerpt, blue tag pills, bottom-right author user-card with rep + relative time. "All
-      Questions" / "Top Questions" header with the orange **Ask Question** button top-right.
-- [ ] **C3. Question detail** (`src/components/question-detail.tsx`): large vote gutter (caret / score
-      / caret), question body, accepted-answer check, answer list with the same vote gutter, and the
-      "Your Answer" composer matching SO spacing/typography.
-- [ ] **C4. Seed data polish** (`src/demo-data.ts`): realistic titles, tags, view counts, and author
-      names/reputation so the populated page reads convincingly (avoid "Anonymous" avatars).
+- [x] **C1. Shell** (`chrome.tsx`): orange-hairline white top bar with the stacks logo + "stack overflow"
+      wordmark + search + Log in/Sign up; left sidebar (Home/Questions(active)/Tags/Users/Companies).
+- [x] **C2. Question-list row** (`question-list.tsx`): votes / answers (green box) / views stat rail,
+      blue title, 2-line excerpt, light-blue tag pills, bottom-right user card; "All Questions" header
+      with the blue **Ask Question** button and filter tabs.
+- [x] **C3. Question detail** (`question-detail.tsx`): vote gutter + body + tags + user card, "N Answers"
+      heading, accepted-answer check, and the "Your Answer" composer.
+- [x] **C4. Seed polish** (`demo-data.ts`): presentation-only overlay enriches the base q1/q2 rows
+      (authors, tags, bodies) so the first rows read convincingly.
+- Note: compiler-lowered components must inline literal style values (the static extractor cannot
+  resolve an imported palette object → `KV236`); the SO palette is literals in the two lowered
+  components and the shared `so` object only in the runtime-rendered chrome. Filter tabs are unrolled
+  (no conditional-spread `style=`, which also tripped `KV236`).
 
-### Phase 3 — Functionality must still work (regression gate)
+### Phase 3 — Functionality works — **DONE**
 
-- [ ] **D1. Interactive flows verified end-to-end** against a running server: upvote increments and
-      morphs in place; Ask question posts and the new row appears; duplicate-title shows the
-      `FormError`; post-answer adds an answer and refreshes the detail region. Prove with the existing
-      `src/interactive-app.test.ts` plus a manual screenshot of a post-upvote state.
-- [ ] **D2. Run example gates:** `pnpm --filter @kovojs/example-stackoverflow test` and the repo
-      `vp run typecheck-examples`; refresh demo snapshots only where the visual change is intended.
+- [x] **D1. Interactive flows verified in a real browser** (Playwright): upvote score morphs 0→1 in
+      place; ask adds a row (7→8); answer adds one (2→3) — all mutations 200. **Fixed a real bug:** the
+      browser upvote silently 422'd because the runtime JSX auto-injects a CSRF field for
+      `<form mutation={…}>` and the example added a second one manually → duplicate `csrf` parsed as an
+      array → validation failed. Dropped the manual field on the runtime `voteButton`; kept it on the
+      compiler-lowered `postQuestion`/`postAnswer` forms (whose `mutation` prop is stripped during
+      lowering, so nothing is auto-injected).
+- [x] **D2. Gates:** `interactive-app.test.ts` 6/6; `npx vitest run packages` adds zero regressions
+      (13 pre-existing failures, confirmed by base comparison); tsc adds zero new errors.
 
-### Phase 4 — Apply the same treatment to the other examples
+### Phase 4 — Other examples — engine fix applied; polish open
 
-- [ ] **E1. commerce** — same Phase-1 fix benefits it (5 runtime emit sites). Screenshot-audit `/`
-      and a product page; polish to a credible storefront.
-- [ ] **E2. crm** — stale `dist/assets/styles.css` confirmed (0 `kv-` refs). Re-emit + redesign list/detail.
-- [ ] **E3. devtool / gallery / reference** — screenshot-audit each, fix any remaining unstyled
-      regions, confirm the gallery demos render correctly (gallery has a large pending generated diff
-      in `git status` — reconcile it as part of this).
+- [x] **Engine fix lands for all** — `commerce` and `crm` now render correctly (were near-unstyled).
+- [x] **E2. crm** — renders cleanly and is fully functional (Create-deal mutation round-trips, 200).
+- [ ] **E1. commerce** — renders (product list/cart) but is **sparse**: needs header chrome, a real
+      storefront layout, and styled buttons. Functional note: add-to-cart 422s **without login** because
+      `commerceCsrf.sessionId = request.session?.id` and the anonymous served session has no id — this is
+      commerce's auth design (log in via `auth-forms.tsx` first), pre-existing, not a regression.
+- [ ] **E3. devtool / gallery / reference** — no `serve.mjs` (different harness); screenshot-audit each
+      and polish. `gallery` had a large pending generated diff in the parent tree — reconcile separately.
+- [ ] **Framework follow-up (high value):** compiler-lowered `enhance` + `mutation` forms do **not**
+      auto-inject CSRF (the runtime does, keyed on the `mutation` prop the lowering strips). Today each
+      example must add `csrfField` manually on lowered forms (SO, crm) — and `commerce` simply doesn't,
+      so its forms are CSRF-less by construction. Making the lowering emit the CSRF field (as it already
+      emits `kovo-form-key`) would fix this class of bug once for all examples and remove the per-example
+      manual call. Out of scope for this branch (compiler change); track separately.
 
 ---
 
@@ -148,19 +174,19 @@ Matching that is a design pass on top of the mechanical fixes.
    with `waitUntil:'networkidle'` so the critical-CSS swap has completed.
 3. Diff against the intended design; iterate. Attach before/after to the closing evidence line.
 
-**Reproduction recorded this session (the "before"):** SO `/` and `/questions/q1` render unstyled;
-inline critical CSS has 98 unitless length declarations; served `/assets/styles.css` is 5185 bytes
-with 0 `kv-` classes. These are the baselines Phase 1 must eliminate.
+**Reproduction recorded this session (the "before"):** SO `/` and `/questions/q1` rendered unstyled;
+inline critical CSS had 98 unitless length declarations and `@layer kovo-style.NNNN` invalid blocks.
+Both eliminated by the engine fix (verified: `max-width:832px`, `@layer kovo-style-2000` in the
+served critical CSS; pages fully styled at `networkidle`).
 
 ---
 
-## Notes / open questions
+## Notes / open questions (remaining)
 
-- A1 (engine-level unit fix) is the highest-leverage item — it fixes all three runtime-emit examples
-  at once and removes a documented latent gap. Sequencing: A1 → B1 → screenshot-verify → design.
-- Confirm whether examples should commit `dist` at all. If kept, add a check that `dist` is fresh
-  (or build in CI) so a stale artifact can't silently break the served styles again.
-- The `@kovojs/style` snapshot churn from A1 is expected and acceptable; treat snapshot regen as part
-  of the slice, not a surprise.
-</content>
-</invoke>
+- The engine-level fix (A1/A1b) was the highest-leverage item — one change unblocked every
+  runtime-emit example and removed two documented latent gaps. The expected `@kovojs/style` test churn
+  was limited to ~5 layer-name assertions (no length-snapshot churn — committed package CSS already
+  carried `px` via the compiler).
+- **commerce polish + devtool/gallery/reference polish** are the open aesthetic items (Phase 4).
+- **Compiler CSRF auto-injection for lowered forms** is the open framework item — see Phase 4. It is
+  the clean fix for commerce's add-to-cart and would let SO/crm drop their manual `csrfField` calls.
