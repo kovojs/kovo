@@ -117,9 +117,12 @@ export const tabsStyles = style.create(
     },
     trigger: {
       alignItems: 'center',
+      appearance: 'none',
       backgroundColor: 'transparent',
       borderRadius: uiTheme.radius.sm,
+      borderStyle: 'none',
       color: uiTheme.color.foregroundMuted,
+      cursor: 'pointer',
       display: 'inline-flex',
       fontSize: 14,
       fontWeight: 500,
