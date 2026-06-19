@@ -3554,6 +3554,10 @@ export function kovoCheck(
   }
 
   if (includeAll || family === 'coverage') {
+    for (const conflict of renderOnceInvalidationConflicts(graph)) {
+      pushFinding(renderOnceInvalidationConflictLine(conflict), true);
+    }
+
     for (const fact of sortedUpdateCoverage(graph.updateCoverage ?? [])) {
       pushFinding(updateCoverageLine(fact), fact.status === 'UNHANDLED');
     }
@@ -4223,6 +4227,69 @@ function updateCoverageLine(fact: CoreGraph.UpdateCoverageFact): string {
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+interface RenderOnceInvalidationConflict {
+  fact: CoreGraph.UpdateCoverageFact;
+  invalidators: readonly string[];
+}
+
+function renderOnceInvalidationConflicts(
+  input: CoreGraph.KovoCheckInput,
+): RenderOnceInvalidationConflict[] {
+  const queries = input.queries ?? [];
+  const conflicts: RenderOnceInvalidationConflict[] = [];
+
+  for (const fact of input.updateCoverage ?? []) {
+    if (fact.status !== 'renderOnce' || fact.source === 'state') continue;
+
+    const invalidators = new Set<string>();
+    for (const query of matchingQueriesForCoverageFact(fact, queries)) {
+      for (const mutation of input.mutations ?? []) {
+        const domains = mutationAffectedDomains(mutation);
+        if (query.domains.some((domain) => domains.has(domain))) {
+          invalidators.add(mutation.key);
+        }
+      }
+
+      for (const [writeName, entry] of Object.entries(input.touchGraph ?? {})) {
+        const domains = new Set(entry.touches.map((touch) => touch.domain));
+        if (query.domains.some((domain) => domains.has(domain))) {
+          invalidators.add(writeName);
+        }
+      }
+    }
+
+    if (invalidators.size > 0) {
+      conflicts.push({ fact, invalidators: [...invalidators].sort() });
+    }
+  }
+
+  return conflicts.sort((left, right) => compareUpdateCoverage(left.fact, right.fact));
+}
+
+function matchingQueriesForCoverageFact(
+  fact: CoreGraph.UpdateCoverageFact,
+  queries: readonly CoreGraph.QueryReadSet[],
+): CoreGraph.QueryReadSet[] {
+  const root = queryRoot(fact.query);
+  return queries.filter((query) => query.query === fact.query || query.query === root);
+}
+
+function queryRoot(path: string): string {
+  return path.split('.')[0] ?? path;
+}
+
+function renderOnceInvalidationConflictLine(conflict: RenderOnceInvalidationConflict): string {
+  const { fact, invalidators } = conflict;
+  return [
+    'ERROR KV314',
+    `component=${fact.component}`,
+    `query=${fact.query}`,
+    `position=${JSON.stringify(fact.position)}`,
+    `invalidatedBy=${invalidators.join(',')}`,
+    diagnosticDefinitions.KV314.message,
+  ].join(' ');
 }
 
 function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAuditFact[] {

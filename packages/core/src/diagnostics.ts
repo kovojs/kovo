@@ -35,6 +35,7 @@ export type DiagnosticCode =
   | 'KV304'
   | 'KV310'
   | 'KV311'
+  | 'KV314'
   | 'KV320'
   | 'KV330'
   | 'KV402'
@@ -149,6 +150,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV304: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV310: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV311: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
+  KV314: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
@@ -511,6 +513,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'warn',
     message: 'Query/state-dependent DOM position has no update status.',
+  },
+  KV314: {
+    code: 'KV314',
+    help: [
+      'Would lower to: immutable render output that never receives query update plans or fragment refresh.',
+      'Blocked reason: a modeled write invalidates the query read by this renderOnce position, so the immutable declaration would hide stale UI.',
+      'Fixes: remove renderOnce, add a data-bind/query update plan, move the position behind a fragment target, or narrow the write invalidation set.',
+      'SPEC §4.9 requires write -> invalidated query -> rendered position coverage to be checked edge by edge.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'renderOnce position reads a query invalidated by a modeled write.',
   },
   KV320: {
     code: 'KV320',

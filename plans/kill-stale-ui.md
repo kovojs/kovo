@@ -169,10 +169,11 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
       leaks: `disableServerRefresh` over a PUNTed position, an `isomorphic` render
       reading a module global, an `await-fragment` whose guard the actor's own
       mutation revokes.
-  - [ ] **X5 / KV314:** a `renderOnce`/'never' position may not read a query path
+  - [x] **X5 / KV314:** a `renderOnce`/'never' position may not read a query path
         in the union of any modeled write's invalidation set (intersect
         `UpdateCoverageFact.query` × touch-graph invalidation sets, §4.9 × §11.1);
         hard error naming the conflicting mutation(s).
+    - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/diagnostics.test.ts` covers `kovo check coverage` emitting `ERROR KV314` for a `renderOnce` query path invalidated by modeled mutation/touch domains and allowing non-overlapping modeled writes.
   - [ ] Extend the render-input ⊆ (queries ∪ stamped props ∪ state) check
         (currently gated on fragment targets) to `isomorphic` islands.
   - [ ] A PUNTed/Opaque position under `disableServerRefresh:true` must carry its

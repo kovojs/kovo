@@ -93,6 +93,68 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails KV314 when renderOnce reads a query invalidated by modeled writes', () => {
+    expect(
+      kovoCheck(
+        {
+          mutations: [{ key: 'cart/add', writes: ['cart'] }],
+          queries: [{ domains: ['cart'], query: 'cart' }],
+          touchGraph: {
+            'cart.addItem': {
+              touches: [
+                { domain: 'cart', keys: null, site: 'cart.domain.ts:1', via: 'cart_items' },
+              ],
+              unresolved: [],
+            },
+          },
+          updateCoverage: [
+            {
+              component: 'CartBadge',
+              detail: 'declared renderOnce',
+              position: 'expression',
+              query: 'cart.count',
+              status: 'renderOnce',
+            },
+          ],
+        },
+        { family: 'coverage' },
+      ),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR KV314 component=CartBadge query=cart.count position="expression" invalidatedBy=cart.addItem,cart/add renderOnce position reads a query invalidated by a modeled write.',
+        'COVERAGE component=CartBadge query=cart.count position="expression" status=renderOnce detail="declared renderOnce"',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('allows renderOnce coverage when modeled writes do not invalidate that query', () => {
+    expect(
+      kovoCheck(
+        {
+          mutations: [{ key: 'product/update', writes: ['product'] }],
+          queries: [{ domains: ['cart'], query: 'cart' }],
+          updateCoverage: [
+            {
+              component: 'CartBadge',
+              detail: 'declared renderOnce',
+              position: 'expression',
+              query: 'cart.currency',
+              status: 'renderOnce',
+            },
+          ],
+        },
+        { family: 'coverage' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output:
+        'kovo-check/v1\nCOVERAGE component=CartBadge query=cart.currency position="expression" status=renderOnce detail="declared renderOnce"\n',
+    });
+  });
+
   it('prints state update coverage source markers when present', () => {
     expect(
       kovoCheck({
