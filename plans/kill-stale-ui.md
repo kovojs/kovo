@@ -166,7 +166,11 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   - [ ] **X2 static derive (zero annotation):** parse `references()/onDelete`
         into a cascade graph — a `delete(parent)`/key-update auto-unions
         cascade/set-null child domains into the touch set; run the existing query
-        extractor over `pgView('n').as((qb)=>…)` to derive view read-sets.
+        extractor over `pgView('n').as((qb)=>…)` to derive view read-sets. - Partial evidence 2026-06-19: `pnpm --filter @kovojs/drizzle exec vitest --run src/index.writes-receivers.test.ts`
+        covers project-mode `references(() => products.id, { onDelete:
+"cascade", onUpdate: "set null" })`; parent `delete(products)` and
+        `update(products)` now also touch the child `cart` domain. View read-set
+        derivation remains open.
   - [ ] **X3 declared seam:** `kovo({ fans:[{ via, domain, when }] })` for opaque
         PL/pgSQL triggers (**KV413** if a detected trigger source lacks it);
         `kovo({ view:{ of, refresh } })` for matviews — async-`REFRESH` matviews

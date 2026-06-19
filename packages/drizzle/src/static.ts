@@ -189,6 +189,14 @@ interface ExtractedTable {
   annotation: ExtractedTableAnnotation;
   columns: Readonly<Record<string, QueryShape>>;
   exported: boolean;
+  foreignKeys?: readonly ExtractedForeignKey[];
+}
+
+interface ExtractedForeignKey {
+  column: string;
+  onDelete?: string;
+  onUpdate?: string;
+  targetTableExpression: string;
 }
 
 /** @internal */
@@ -2516,6 +2524,147 @@ function tableColumnShapes(
   }
 
   return shapes;
+}
+
+function projectForeignKeysForTable(
+  initializer: Node,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames,
+): ExtractedForeignKey[] {
+  const call = Node.isCallExpression(initializer) ? initializer : undefined;
+  const columns = call?.getArguments()[1];
+  if (!columns || !Node.isObjectLiteralExpression(columns)) return [];
+
+  const foreignKeys: ExtractedForeignKey[] = [];
+  for (const property of columns.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+
+    const column = propertyNameText(property.getNameNode());
+    const columnInitializer = property.getInitializer();
+    if (!column || !columnInitializer) continue;
+
+    const foreignKey = projectForeignKeyForColumn(
+      column,
+      columnInitializer,
+      tableNamesBySymbol,
+      namespaceTableNames,
+    );
+    if (foreignKey) foreignKeys.push(foreignKey);
+  }
+
+  return foreignKeys;
+}
+
+function projectForeignKeyForColumn(
+  column: string,
+  initializer: Node,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames,
+): ExtractedForeignKey | null {
+  const calls = [
+    ...(Node.isCallExpression(initializer) ? [initializer] : []),
+    ...initializer.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  const referencesCall = calls.find((call) => propertyAccessCallName(call) === 'references');
+  if (!referencesCall) return null;
+
+  const target = foreignKeyTargetTableExpression(
+    referencesCall.getArguments()[0],
+    tableNamesBySymbol,
+    namespaceTableNames,
+  );
+  if (!target) return null;
+
+  return {
+    column,
+    ...foreignKeyActions(referencesCall, calls),
+    targetTableExpression: target,
+  };
+}
+
+function foreignKeyTargetTableExpression(
+  callback: Node | undefined,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames,
+): string | undefined {
+  const target = foreignKeyCallbackReturnExpression(callback);
+  if (!target) return undefined;
+
+  const tableExpression = Node.isPropertyAccessExpression(target)
+    ? target.getExpression()
+    : Node.isElementAccessExpression(target)
+      ? target.getExpression()
+      : target;
+  return projectTableNameForNode(tableExpression, tableNamesBySymbol, namespaceTableNames);
+}
+
+function foreignKeyCallbackReturnExpression(callback: Node | undefined): Node | undefined {
+  if (!callback) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(callback);
+  if (Node.isArrowFunction(expression)) {
+    const body = expression.getBody();
+    return Node.isBlock(body) ? blockSingleReturnExpression(body) : body;
+  }
+  if (Node.isFunctionExpression(expression)) {
+    const body = expression.getBody();
+    return body ? blockSingleReturnExpression(body) : undefined;
+  }
+
+  return undefined;
+}
+
+function blockSingleReturnExpression(body: Node): Node | undefined {
+  if (!Node.isBlock(body)) return undefined;
+
+  const statements = body.getStatements();
+  if (statements.length !== 1) return undefined;
+
+  const statement = statements[0];
+  if (!statement || !Node.isReturnStatement(statement)) return undefined;
+
+  return statement.getExpression();
+}
+
+function foreignKeyActions(
+  referencesCall: CallExpression,
+  calls: readonly CallExpression[],
+): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
+  const optionObject = referencesCall.getArguments()[1];
+  return {
+    ...foreignKeyActionOptions(optionObject),
+    ...foreignKeyActionMethods(calls),
+  };
+}
+
+function foreignKeyActionOptions(
+  options: Node | undefined,
+): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
+  if (!options || !Node.isObjectLiteralExpression(options)) return {};
+
+  const onDelete = stringPropertyFromObject(options, 'onDelete');
+  const onUpdate = stringPropertyFromObject(options, 'onUpdate');
+  return {
+    ...(onDelete ? { onDelete } : {}),
+    ...(onUpdate ? { onUpdate } : {}),
+  };
+}
+
+function foreignKeyActionMethods(
+  calls: readonly CallExpression[],
+): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
+  const actions: Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> = {};
+
+  for (const call of calls) {
+    const name = propertyAccessCallName(call);
+    if (name !== 'onDelete' && name !== 'onUpdate') continue;
+
+    const action = call.getArguments()[0];
+    if (!action || !Node.isStringLiteral(action)) continue;
+    actions[name] = action.getLiteralText();
+  }
+
+  return actions;
 }
 
 function projectColumnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
@@ -5334,6 +5483,7 @@ function directSummaryForFunction(
           ...(writePredicate.predicate ? { predicate: writePredicate.predicate } : {}),
           ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
         });
+        appendForeignKeyCascadeWriteSummaries(writes, call, site, table.annotation, tables);
       }
       if (unresolvedIdentifiers.has(call.tableExpression)) {
         unresolved.push({
@@ -5410,6 +5560,54 @@ function appendReadSourceSummaries(
       site,
     });
   }
+}
+
+function appendForeignKeyCascadeWriteSummaries(
+  writes: WriteSummaryInput[],
+  call: ExtractedWriteCall,
+  site: string,
+  parentTable: ExtractedTableAnnotation,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): void {
+  if (!isDomainExtractedTableAnnotation(parentTable)) return;
+
+  const action =
+    call.operation === 'delete' ? 'onDelete' : call.operation === 'update' ? 'onUpdate' : null;
+  if (!action) return;
+
+  for (const entries of tables.values()) {
+    for (const childTable of entries) {
+      if (!isDomainExtractedTableAnnotation(childTable.annotation)) continue;
+
+      for (const foreignKey of childTable.foreignKeys ?? []) {
+        const foreignKeyAction = action === 'onDelete' ? foreignKey.onDelete : foreignKey.onUpdate;
+        if (!isTouchingForeignKeyAction(foreignKeyAction)) continue;
+        if (!foreignKeyTargetsTable(foreignKey, parentTable, tables)) continue;
+
+        writes.push({
+          operation: `${call.operation}-${foreignKeyAction}`,
+          site,
+          table: childTable.annotation,
+        });
+      }
+    }
+  }
+}
+
+function isTouchingForeignKeyAction(action: string | undefined): action is string {
+  return action === 'cascade' || action === 'set null' || action === 'set default';
+}
+
+function foreignKeyTargetsTable(
+  foreignKey: ExtractedForeignKey,
+  parentTable: KovoDomainTableAnnotation & { name: string },
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): boolean {
+  return (tables.get(foreignKey.targetTableExpression) ?? []).some(
+    (targetTable) =>
+      isDomainExtractedTableAnnotation(targetTable.annotation) &&
+      targetTable.annotation.name === parentTable.name,
+  );
 }
 
 function functionTouchSummariesForFile(
@@ -5707,6 +5905,10 @@ function projectTablesBySyntheticName(
   const tables = new Map<string, ExtractedTable>();
 
   for (const sourceFile of extraction.sourceFiles) {
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
     for (const declaration of sourceFile.getVariableDeclarations()) {
       const name = declaration.getNameNode();
       const initializer = declaration.getInitializer();
@@ -5729,6 +5931,11 @@ function projectTablesBySyntheticName(
           extraction.columnShapesByTable.get(syntheticName) ??
           tableColumnShapes(initializer, 'project'),
         exported: variableDeclarationIsExported(declaration),
+        foreignKeys: projectForeignKeysForTable(
+          initializer,
+          extraction.tableNamesBySymbol,
+          namespaceTableNames,
+        ),
       });
     }
   }
@@ -5746,6 +5953,7 @@ function projectTablesBySyntheticName(
       annotation: firstTable.annotation,
       columns: firstTable.columns,
       exported: false,
+      ...(firstTable.foreignKeys ? { foreignKeys: firstTable.foreignKeys } : {}),
     });
   }
 

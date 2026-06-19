@@ -342,6 +342,57 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('derives child touches from Drizzle foreign-key cascade actions', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'delete(table: unknown): Promise<void>;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "product", key: "id" }));',
+            'export const cartItems = pgTable("cart_items", {',
+            '  id: text("id").primaryKey(),',
+            '  productId: text("product_id").references(() => products.id, { onDelete: "cascade", onUpdate: "set null" }),',
+            '}, kovo({ domain: "cart", key: "id" }));',
+            '',
+            'export const removeProduct = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.delete(products);',
+            '};',
+            'export const renameProduct = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.update(products).set({ id: "p2" });',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      removeProduct: {
+        reads: [],
+        touches: [
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:12', via: 'cart_items' },
+          { domain: 'product', keys: null, site: 'cart.domain.ts:12', via: 'products' },
+        ],
+        unresolved: [],
+      },
+      renameProduct: {
+        reads: [],
+        touches: [
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:15', via: 'cart_items' },
+          { domain: 'product', keys: null, site: 'cart.domain.ts:15', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('recognizes project-mode pgTable initializers with kovo annotations as tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [
