@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   dropdownMenuContentAttributes as exportedDropdownMenuContentAttributes,
@@ -603,6 +603,81 @@ describe('headless-ui dropdown-menu primitive', () => {
 
     scheduled.forEach((callback) => callback());
     expect(deferredFocusCount).toBe(1);
+  });
+
+  it('routes default deferred focus through the runtime post-commit hook (SPEC §4.3)', () => {
+    let deferredFocusCount = 0;
+    const event = {
+      target: {
+        ownerDocument: {
+          getElementById(id: string) {
+            return id === 'team-item'
+              ? {
+                  focus() {
+                    deferredFocusCount += 1;
+                  },
+                }
+              : undefined;
+          },
+        },
+      },
+    } as Event & {
+      target: { ownerDocument: { getElementById(id: string): unknown } };
+    };
+
+    const postCommit: Array<() => void> = [];
+    const globalRecord = globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void };
+    const previous = globalRecord.__kovo_postCommitSchedule;
+    globalRecord.__kovo_postCommitSchedule = (callback) => {
+      postCommit.push(callback);
+    };
+    try {
+      // No `schedule` override: must prefer the installed post-commit hook so
+      // focus only runs after the runtime reveals the menu content.
+      expect(dropdownMenuFocusElement(event, 'team-item', { defer: true })).toBe(true);
+      expect(postCommit).toHaveLength(1);
+      expect(deferredFocusCount).toBe(0);
+      postCommit.forEach((callback) => callback());
+      expect(deferredFocusCount).toBe(1);
+    } finally {
+      if (previous === undefined) delete globalRecord.__kovo_postCommitSchedule;
+      else globalRecord.__kovo_postCommitSchedule = previous;
+    }
+  });
+
+  it('default deferred focus falls back to setTimeout when no runtime hook is active', () => {
+    vi.useFakeTimers();
+    let deferredFocusCount = 0;
+    const event = {
+      target: {
+        ownerDocument: {
+          getElementById(id: string) {
+            return id === 'team-item'
+              ? {
+                  focus() {
+                    deferredFocusCount += 1;
+                  },
+                }
+              : undefined;
+          },
+        },
+      },
+    } as Event & {
+      target: { ownerDocument: { getElementById(id: string): unknown } };
+    };
+
+    const globalRecord = globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void };
+    const previous = globalRecord.__kovo_postCommitSchedule;
+    delete globalRecord.__kovo_postCommitSchedule;
+    try {
+      expect(dropdownMenuFocusElement(event, 'team-item', { defer: true })).toBe(true);
+      expect(deferredFocusCount).toBe(0);
+      vi.runAllTimers();
+      expect(deferredFocusCount).toBe(1);
+    } finally {
+      if (previous !== undefined) globalRecord.__kovo_postCommitSchedule = previous;
+      vi.useRealTimers();
+    }
   });
 
   it('exports dropdown-menu helpers from package and primitives barrels', () => {

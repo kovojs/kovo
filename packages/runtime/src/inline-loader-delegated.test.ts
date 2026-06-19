@@ -192,6 +192,50 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'drains post-commit callbacks after the async derive un-hide through %s',
+    async (_name, installSource) => {
+      // SPEC.md §4.4 / focus-race fix: deferred menu focus is enqueued on the
+      // post-commit hook during the handler and must run only after the awaited
+      // derive binding reveals the menu content (`data-bind:hidden` via import).
+      const order: string[] = [];
+      const host = new FakeStatefulBindingElement({
+        'kovo-state': '{"open":false}',
+        'on:click': '/c/menu.js#open',
+      });
+      const content = new FakeStatefulBindingElement(
+        { 'data-bind:hidden': '/c/menu.js#contentHidden', hidden: '' },
+        { parent: host },
+      );
+      const importModule = vi.fn(async () => ({
+        open(_event: unknown, ctx: { state: { open: boolean } }) {
+          ctx.state.open = true;
+          (
+            globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void }
+          ).__kovo_postCommitSchedule?.(() => {
+            order.push(`focus:hidden=${content.getAttribute('hidden')}`);
+          });
+        },
+        contentHidden: {
+          run(value: unknown) {
+            order.push('derive-unhide');
+            return (value as { open: boolean }).open ? null : '';
+          },
+        },
+      }));
+
+      const globalRecord = globalThis as { __kovo_postCommitSchedule?: unknown };
+      const previousHook = globalRecord.__kovo_postCommitSchedule;
+      await dispatchInlineDelegatedClick(host, importModule, installSource);
+
+      // Focus callback runs strictly after the un-hide, and sees a revealed menu.
+      expect(order).toEqual(['derive-unhide', 'focus:hidden=null']);
+      expect(content.getAttribute('hidden')).toBeNull();
+      // The global hook is restored after dispatch (no cross-dispatch leak).
+      expect(globalRecord.__kovo_postCommitSchedule).toBe(previousHook);
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'reuses inline ctx.signal for the same island through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;

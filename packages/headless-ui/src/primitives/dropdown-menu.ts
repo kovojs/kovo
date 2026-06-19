@@ -8,6 +8,7 @@ import {
   navigationIntentFromKey,
   nextTypeaheadState,
   openState,
+  scheduleDeferred,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -472,7 +473,9 @@ export function dropdownMenuFocusElement(
     (target as { focus(): void }).focus();
   };
   if (options.defer === true) {
-    (options.schedule ?? ((callback) => setTimeout(callback, 0)))(focus);
+    // SPEC §4.3/§4.8: defer focus past the runtime update plan so the target is
+    // revealed (un-hidden) before `.focus()` runs; see scheduleDeferred.
+    (options.schedule ?? scheduleDeferred)(focus);
   } else {
     focus();
   }

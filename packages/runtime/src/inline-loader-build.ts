@@ -543,16 +543,26 @@ function installInlineKovoLoader(im) {
       const val = attr.value;
       params[name] = type === 'number' ? Number(val) : type === 'boolean' ? val === 'true' : val;
     }
+    const pc = [];
     for (const ref of refs.split(/\s+/).filter(Boolean)) {
       const hi = ref.lastIndexOf('#');
       if (hi <= 0 || hi === ref.length - 1) throw Error('Invalid handler reference: ' + ref);
       const mod = await im(ref.slice(0, hi));
       const fn = mod[ref.slice(hi + 1)];
       if (typeof fn !== 'function') throw Error('Handler export not found: ' + ref);
-      await fn(event, context);
+      const prev = globalThis.__kovo_postCommitSchedule;
+      globalThis.__kovo_postCommitSchedule = (cb) => pc.push(cb);
+      let run;
+      try {
+        run = fn(event, context);
+      } finally {
+        globalThis.__kovo_postCommitSchedule = prev;
+      }
+      await run;
     }
     st?.setAttribute?.('kovo-state', JSON.stringify(state));
     if (st) await as(st, state);
+    for (const cb of pc) try { cb(); } catch {}
   };
   const trigger = (type, target) => {
     void dispatch({ target, type });
