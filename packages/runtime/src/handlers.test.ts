@@ -109,6 +109,55 @@ describe('delegated handler reference dispatch', () => {
     expect(output.textContent).toBe('3');
   });
 
+  it('drains post-commit callbacks after the async derive binding flush (SPEC §4.3)', async () => {
+    // Reproduces the menu focus race: a derive `data-bind` reveals content via
+    // an awaited dynamic import (a later microtask). A callback scheduled during
+    // the handler through the runtime post-commit hook must run only AFTER that
+    // flush, otherwise focus would land while the target is still hidden.
+    const order: string[] = [];
+    const host = new FakeStatefulBindingElement({
+      'kovo-state': '{"open":false}',
+      'on:click': '/c/menu.js#open',
+    });
+    // A derive-style binding: `url#exportName` is resolved via importModule and
+    // its derive.run() writes the revealed value, recording the flush ordering.
+    new FakeStatefulBindingElement(
+      { 'data-bind': '/c/menu.js#hiddenDerive' },
+      { parent: host, textContent: '' },
+    );
+
+    const open = vi.fn((_event, ctx: { state: { open: boolean } }) => {
+      ctx.state.open = true;
+      // The primitive's default scheduler routes through this global hook.
+      const schedule = (globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void })
+        .__kovo_postCommitSchedule;
+      expect(typeof schedule).toBe('function');
+      schedule?.(() => {
+        order.push('post-commit-focus');
+      });
+    });
+    const hiddenDerive = {
+      run() {
+        order.push('derive-flush');
+        return 'revealed';
+      },
+    };
+    const importModule = vi.fn(async () => {
+      // Resolve on a later microtask, like a real dynamic import.
+      await Promise.resolve();
+      return { open, hiddenDerive };
+    });
+
+    await dispatchDelegatedEvent({ target: host, type: 'click' }, importModule);
+
+    // The deferred focus runs strictly after the binding/derive flush.
+    expect(order).toEqual(['derive-flush', 'post-commit-focus']);
+    // The global hook is cleaned up after dispatch (no leak across dispatches).
+    expect(
+      (globalThis as { __kovo_postCommitSchedule?: unknown }).__kovo_postCommitSchedule,
+    ).toBeUndefined();
+  });
+
   it('serializes overlapping delegated state writes for the same island', async () => {
     let releaseFirst: (() => void) | undefined;
     const firstCanFinish = new Promise<void>((resolve) => {

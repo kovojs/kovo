@@ -37,6 +37,9 @@ export type { PrimitiveDataAttributes, PrimitiveStateToken } from './state-attri
 export { createChangeDetail, dispatchCancelableChange } from './change-details.js';
 export type { PrimitiveChangeDetail, PrimitiveChangeDetailInput } from './change-details.js';
 
+export { scheduleDeferred } from './deferred-scheduler.js';
+export type { DeferredCallback, DeferredScheduler } from './deferred-scheduler.js';
+
 export { moveCollectionIndex, navigationIntentFromKey } from './keyboard-navigation.js';
 export type {
   CollectionOrientation,
