@@ -303,7 +303,9 @@ function compileDrizzleStatic(input) {
 }
 
 // ── Write or --check ───────────────────────────────────────────────────────────
-if (process.argv.includes('--check')) {
+if (process.argv.includes('--print-graph-json')) {
+  process.stdout.write(graphJson);
+} else if (process.argv.includes('--check')) {
   assert.equal(readFileSync(graphPath, 'utf8'), graphJson, 'generated graph.json is stale');
   assert.equal(
     readFileSync(touchGraphPath, 'utf8'),

@@ -162,17 +162,20 @@ authored components/routes, and convert or relocate artifact tests.
     wrapper was deleted, `rg -n "generated-fixtures|app\\.generated|/src/generated/app\\.kovo-route|generated/app\\.kovo-route|from './generated" examples/commerce --glob '!src/generated/**'`
     finds only emit-script references, and `pnpm --filter @kovojs/example-commerce test` passes
     with the compiler plugin active.
-- [ ] **CRM** — same; reconcile `mutations.ts`/`optimistic-merge.ts` with non-committed optimistic
+- [x] **CRM** — same; reconcile `mutations.ts`/`optimistic-merge.ts` with non-committed optimistic
       plans (authored mutation exports own the runtime plan; generated optimistic is emit-only).
-  - Progress evidence: `interactive-app.generated-fixtures.ts` and the generated artifact test were
-    removed, `scripts/demo-serve.mjs` now SSR-loads `/src/interactive-app.tsx`, and
-    `pnpm --filter @kovojs/example-crm test` passes. Gap: `src/graph.test.ts` still reads
-    `src/generated/graph.json`.
-- [ ] **StackOverflow** — same as Commerce.
-  - Progress evidence: `interactive-app.generated-fixtures.ts` and the generated artifact test were
-    removed, `scripts/demo-serve.mjs` now SSR-loads `/src/interactive-app.tsx`, and
-    `pnpm --filter @kovojs/example-stackoverflow test` passes. Gap:
-    `src/kovo-graph.test.ts` still imports `src/generated/touch-graph.ts`.
+  - Evidence: `interactive-app.generated-fixtures.ts` and the generated artifact test were
+    removed, `scripts/demo-serve.mjs` SSR-loads `/src/interactive-app.tsx`, `src/graph.test.ts`
+    derives graph JSON from authored source via `scripts/emit-graph.mjs --print-graph-json`,
+    `rg -n "generated-fixtures|interactive-app\\.generated|/src/generated/interactive-app\\.kovo-route|generated/interactive-app\\.kovo-route|src/generated/graph\\.json|from './generated" examples/crm --glob '!src/generated/**'`
+    finds only emit-script references, and `pnpm --filter @kovojs/example-crm test` passes.
+- [x] **StackOverflow** — same as Commerce.
+  - Evidence: `interactive-app.generated-fixtures.ts` and the generated artifact test were
+    removed, `scripts/demo-serve.mjs` SSR-loads `/src/interactive-app.tsx`,
+    `src/kovo-graph.test.ts` derives graph JSON from authored source via
+    `scripts/emit-graph.mjs --print-graph-json`, `rg -n "generated-fixtures|interactive-app\\.generated|/src/generated/interactive-app\\.kovo-route|generated/interactive-app\\.kovo-route|src/generated/graph\\.json|src/generated/touch-graph|from './generated" examples/stackoverflow --glob '!src/generated/**'`
+    finds only emit-script references, and `pnpm --filter @kovojs/example-stackoverflow test`
+    passes.
 - [ ] **Gallery** — `interactive-docs.tsx` and browser fixtures import authored
       `src/interactive/*.tsx`; lower via the test plugin (Phase 1). Retire
       `interactive-docs.generated-fixtures.tsx` and `*.generated-browser-fixtures.ts`.

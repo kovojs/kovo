@@ -1,19 +1,28 @@
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 import { kovoCheck } from '@kovojs/cli';
 import { describe, expect, it } from 'vitest';
 
-import { createSoGraph } from './graph.js';
-import { soQueryDomains, soTouchGraph } from './generated/touch-graph.js';
+const soRoot = fileURLToPath(new URL('..', import.meta.url));
+const soGraph = JSON.parse(
+  execFileSync(process.execPath, [join(soRoot, 'scripts/emit-graph.mjs'), '--print-graph-json'], {
+    cwd: soRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }),
+) as KovoExplainInput;
 
 describe('stackoverflow graph', () => {
   it('connects the demo mutations to the queries they refresh', () => {
-    const soGraph = createSoGraph(soTouchGraph, soQueryDomains);
-
-    expect(soGraph.mutations.map((mutation) => mutation.key)).toEqual([
+    expect((soGraph.mutations ?? []).map((mutation) => mutation.key)).toEqual([
       'postQuestion',
       'postAnswer',
       'voteUp',
     ]);
-    expect(soGraph.queries.map((query) => query.query)).toEqual([
+    expect((soGraph.queries ?? []).map((query) => query.query)).toEqual([
       'questionList',
       'answerList',
       'questionDetail',

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,7 +8,11 @@ import { describe, expect, it } from 'vitest';
 
 const crmRoot = fileURLToPath(new URL('..', import.meta.url));
 const graph = JSON.parse(
-  readFileSync(join(crmRoot, 'src/generated/graph.json'), 'utf8'),
+  execFileSync(process.execPath, [join(crmRoot, 'scripts/emit-graph.mjs'), '--print-graph-json'], {
+    cwd: crmRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }),
 ) as KovoExplainInput;
 
 describe('CRM generated graph', () => {
@@ -35,7 +39,8 @@ describe('CRM generated graph', () => {
       optimistic: true,
       target: 'moveDeal',
     });
-    expect(moveExplain.output).toContain('OPTIMISTIC-PUNT openDeals: membership entry: stage');
+    expect(moveExplain.output).toContain('OPTIMISTIC openDeals await-fragment');
+    expect(moveExplain.output).toContain('OPTIMISTIC pipelineByStage await-fragment');
   });
 });
 

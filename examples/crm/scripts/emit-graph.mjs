@@ -293,7 +293,9 @@ const touchGraphPath = resolve(crmRoot, 'src/generated/touch-graph.ts');
 const optimisticDir = resolve(crmRoot, 'src/generated/optimistic');
 const modulePath = (key) => resolve(optimisticDir, `${kebab(key)}.ts`);
 
-if (process.argv.includes('--check')) {
+if (process.argv.includes('--print-graph-json')) {
+  process.stdout.write(graphJson);
+} else if (process.argv.includes('--check')) {
   assertFile(graphPath, graphJson, 'generated graph.json');
   assertFile(touchGraphPath, touchGraphSource, 'generated touch-graph.ts');
   for (const module of generatedModules) {
