@@ -79,14 +79,13 @@ A copied component depends only on public, versioned packages:
 
    ```tsx
    /** @jsxImportSource @kovojs/server */
-   import { tokens } from '@kovojs/style';
    import * as style from '@kovojs/style';
    import { Button } from './components/ui/button.js';
 
    const styles = style.create({
      danger: {
-       backgroundColor: tokens.sys.color.errorContainer,
-       color: tokens.sys.color.onErrorContainer,
+       backgroundColor: style.tokens.sys.color.errorContainer,
+       color: style.tokens.sys.color.onErrorContainer,
      },
    });
 
@@ -111,24 +110,23 @@ A static component imports `@kovojs/style` and `component()`:
 ```tsx
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 export const buttonStyles = style.create({
   root: {
     alignItems: 'center',
-    borderRadius: tokens.sys.shape.cornerMedium,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
     display: 'inline-flex',
     fontSize: 14,
     justifyContent: 'center',
   },
   primary: {
-    backgroundColor: tokens.sys.color.primary,
-    color: tokens.sys.color.onPrimary,
+    backgroundColor: style.tokens.sys.color.primary,
+    color: style.tokens.sys.color.onPrimary,
   },
   ghost: {
     backgroundColor: 'transparent',
-    color: tokens.sys.color.onSurface,
+    color: style.tokens.sys.color.onSurface,
   },
 });
 

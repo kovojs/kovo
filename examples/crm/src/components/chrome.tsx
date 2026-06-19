@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { Badge, type BadgeVariant } from '@kovojs/ui/badge';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 // Shared page chrome and formatting helpers for the CRM example UI.
@@ -14,13 +13,13 @@ const NAV: { href: string; label: string; section: CrmSection }[] = [
 
 const chromeStyles = style.create({
   appRoot: {
-    backgroundColor: tokens.sys.color.surface,
-    color: tokens.sys.color.onSurface,
+    backgroundColor: style.tokens.sys.color.surface,
+    color: style.tokens.sys.color.onSurface,
     minHeight: '100vh',
   },
   brand: {
     alignItems: 'center',
-    color: tokens.sys.color.onSurface,
+    color: style.tokens.sys.color.onSurface,
     display: 'flex',
     fontSize: 14,
     fontWeight: 600,
@@ -29,9 +28,9 @@ const chromeStyles = style.create({
     textDecoration: 'none',
   },
   brandMark: {
-    backgroundColor: tokens.sys.color.primary,
-    borderRadius: tokens.sys.shape.cornerMedium,
-    color: tokens.sys.color.onPrimary,
+    backgroundColor: style.tokens.sys.color.primary,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
+    color: style.tokens.sys.color.onPrimary,
     display: 'grid',
     fontSize: 12,
     fontWeight: 700,
@@ -40,8 +39,8 @@ const chromeStyles = style.create({
     width: 28,
   },
   header: {
-    backgroundColor: tokens.sys.color.surfaceContainerLowest,
-    borderBottomColor: tokens.sys.color.outlineVariant,
+    backgroundColor: style.tokens.sys.color.surfaceContainerLowest,
+    borderBottomColor: style.tokens.sys.color.outlineVariant,
     borderBottomStyle: 'solid',
     borderBottomWidth: 1,
   },
@@ -67,21 +66,21 @@ const chromeStyles = style.create({
     gap: 4,
   },
   navLink: {
-    borderRadius: tokens.sys.shape.cornerMedium,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
     fontWeight: 500,
     paddingBlock: 6,
     paddingInline: 12,
     textDecoration: 'none',
   },
   navLinkActive: {
-    backgroundColor: tokens.sys.color.primary,
-    color: tokens.sys.color.onPrimary,
+    backgroundColor: style.tokens.sys.color.primary,
+    color: style.tokens.sys.color.onPrimary,
   },
   navLinkInactive: {
-    color: tokens.sys.color.onSurfaceVariant,
+    color: style.tokens.sys.color.onSurfaceVariant,
     ':hover': {
-      backgroundColor: tokens.sys.color.surfaceContainer,
-      color: tokens.sys.color.onSurface,
+      backgroundColor: style.tokens.sys.color.surfaceContainer,
+      color: style.tokens.sys.color.onSurface,
     },
   },
   stageText: {

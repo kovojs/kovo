@@ -27,7 +27,6 @@ import {
   type CommerceDb,
   type CommerceSession,
 } from './domain.js';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 import { LoginForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
@@ -52,8 +51,8 @@ export interface CommerceApp {
 
 const commerceAppStyles = style.create({
   appRoot: {
-    backgroundColor: tokens.sys.color.surface,
-    color: tokens.sys.color.onSurface,
+    backgroundColor: style.tokens.sys.color.surface,
+    color: style.tokens.sys.color.onSurface,
     minHeight: '100dvh',
   },
   cartShell: {

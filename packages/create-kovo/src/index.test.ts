@@ -215,7 +215,7 @@ describe('create-kovo starter', () => {
       expect(existsSync(join(root, 'src/app.fixpoint.test.ts'))).toBe(false);
       const appSource = readFileSync(join(root, 'src/app.tsx'), 'utf8');
       expect(appSource).toContain('@jsxImportSource @kovojs/server');
-      expect(appSource).toContain("import { tokens } from '@kovojs/style';");
+      expect(appSource).not.toContain("import { tokens } from '@kovojs/style';");
       expect(appSource).toContain("import * as style from '@kovojs/style';");
       expect(appSource).toContain('style.create(');
       expect(appSource).toContain('style.attrs(appStyles.root)');
@@ -230,8 +230,8 @@ describe('create-kovo starter', () => {
       );
       expect(appSource).not.toContain('mx-auto');
       expect(appSource).not.toContain('text-kovo-accent');
-      expect(appSource).toContain('tokens.sys.color.primary');
-      expect(appSource).toContain("tokens.customColor('success').colorContainer");
+      expect(appSource).toContain('style.tokens.sys.color.primary');
+      expect(appSource).toContain("style.tokens.customColor('success').colorContainer");
       expect(appSource).not.toMatch(/render:\s*\(\)\s*=>\s*['"`]</);
       const appShellSource = readFileSync(join(root, 'src/app-shell.ts'), 'utf8');
       expect(appShellSource).toContain("from '@kovojs/server'");

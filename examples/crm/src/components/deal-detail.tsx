@@ -1,7 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { mutationFormAttributes } from '@kovojs/server';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { closeDeal, moveDeal, type CrmRequest } from '../mutations.js';
@@ -31,31 +30,31 @@ const dealDetailStyles = style.create({
   },
   backLink: {
     alignItems: 'center',
-    color: tokens.sys.color.onSurfaceVariant,
+    color: style.tokens.sys.color.onSurfaceVariant,
     display: 'inline-flex',
     fontSize: 14,
     gap: 4,
     textDecoration: 'none',
     ':hover': {
-      color: tokens.sys.color.onSurface,
+      color: style.tokens.sys.color.onSurface,
     },
   },
   card: {
-    backgroundColor: tokens.sys.color.surfaceContainerLowest,
-    borderColor: tokens.sys.color.outlineVariant,
-    borderRadius: tokens.sys.shape.cornerMedium,
+    backgroundColor: style.tokens.sys.color.surfaceContainerLowest,
+    borderColor: style.tokens.sys.color.outlineVariant,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
     borderStyle: 'solid',
     borderWidth: 1,
     padding: 24,
   },
   dividerTop: {
-    borderColor: tokens.sys.color.outlineVariant,
+    borderColor: style.tokens.sys.color.outlineVariant,
     borderTopStyle: 'solid',
     borderTopWidth: 1,
     paddingTop: 16,
   },
   heading: {
-    color: tokens.sys.color.onSurface,
+    color: style.tokens.sys.color.onSurface,
     fontSize: 24,
     fontWeight: 700,
     letterSpacing: 0,
@@ -63,7 +62,7 @@ const dealDetailStyles = style.create({
     margin: 0,
   },
   muted: {
-    color: tokens.sys.color.onSurfaceVariant,
+    color: style.tokens.sys.color.onSurfaceVariant,
     fontSize: 14,
   },
   rowBetween: {
@@ -73,7 +72,7 @@ const dealDetailStyles = style.create({
     justifyContent: 'space-between',
   },
   sectionLabel: {
-    color: tokens.sys.color.onSurfaceVariant,
+    color: style.tokens.sys.color.onSurfaceVariant,
     fontSize: 12,
     fontWeight: 600,
     letterSpacing: '0.025em',
@@ -96,18 +95,18 @@ const dealDetailStyles = style.create({
     gap: 8,
   },
   stageButton: {
-    borderColor: tokens.sys.color.outline,
-    borderRadius: tokens.sys.shape.cornerSmall,
+    borderColor: style.tokens.sys.color.outline,
+    borderRadius: style.tokens.sys.shape.cornerSmall,
     borderStyle: 'solid',
     borderWidth: 1,
-    color: tokens.sys.color.onSurfaceVariant,
+    color: style.tokens.sys.color.onSurfaceVariant,
     fontSize: 14,
     fontWeight: 500,
     paddingBlock: 6,
     paddingInline: 12,
     textTransform: 'capitalize',
     ':hover': {
-      backgroundColor: tokens.sys.color.surfaceContainer,
+      backgroundColor: style.tokens.sys.color.surfaceContainer,
     },
     ':disabled': {
       cursor: 'not-allowed',
@@ -115,9 +114,9 @@ const dealDetailStyles = style.create({
     },
   },
   stageButtonActive: {
-    backgroundColor: tokens.sys.color.primary,
-    borderColor: tokens.sys.color.primary,
-    color: tokens.sys.color.onPrimary,
+    backgroundColor: style.tokens.sys.color.primary,
+    borderColor: style.tokens.sys.color.primary,
+    color: style.tokens.sys.color.onPrimary,
     cursor: 'default',
   },
   tabularStrong: {

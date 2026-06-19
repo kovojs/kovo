@@ -5,7 +5,6 @@ import { Avatar, AvatarFallback } from '@kovojs/ui/avatar';
 import { Badge } from '@kovojs/ui/badge';
 import { Button } from '@kovojs/ui/button';
 import { Card } from '@kovojs/ui/card';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { addContact, type CrmRequest } from '../mutations.js';
@@ -41,15 +40,15 @@ const contactStyles = style.create({
     },
   },
   formPanel: {
-    backgroundColor: tokens.sys.color.surfaceContainerLowest,
-    borderColor: tokens.sys.color.outlineVariant,
-    borderRadius: tokens.sys.shape.cornerMedium,
+    backgroundColor: style.tokens.sys.color.surfaceContainerLowest,
+    borderColor: style.tokens.sys.color.outlineVariant,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
     borderStyle: 'solid',
     borderWidth: 1,
     padding: 16,
   },
   heading: {
-    color: tokens.sys.color.onSurface,
+    color: style.tokens.sys.color.onSurface,
     fontSize: 24,
     fontWeight: 700,
     letterSpacing: 0,
@@ -57,13 +56,13 @@ const contactStyles = style.create({
     margin: 0,
   },
   input: {
-    backgroundColor: tokens.sys.color.surfaceContainerLowest,
-    borderColor: tokens.sys.color.outline,
-    borderRadius: tokens.sys.shape.cornerSmall,
+    backgroundColor: style.tokens.sys.color.surfaceContainerLowest,
+    borderColor: style.tokens.sys.color.outline,
+    borderRadius: style.tokens.sys.shape.cornerSmall,
     borderStyle: 'solid',
     borderWidth: 1,
     boxSizing: 'border-box',
-    color: tokens.sys.color.onSurface,
+    color: style.tokens.sys.color.onSurface,
     fontSize: 14,
     paddingBlock: 8,
     paddingInline: 12,
@@ -80,7 +79,7 @@ const contactStyles = style.create({
     },
   },
   muted: {
-    color: tokens.sys.color.onSurfaceVariant,
+    color: style.tokens.sys.color.onSurfaceVariant,
     fontSize: 14,
   },
   row: {

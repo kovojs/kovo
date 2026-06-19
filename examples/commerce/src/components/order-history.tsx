@@ -1,7 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import type { OrderHistoryResult } from '../domain.js';
@@ -11,9 +10,9 @@ import { priceLabel } from './product-grid.js';
 const orderHistoryStyles = style.create({
   item: {
     alignItems: 'center',
-    backgroundColor: tokens.sys.color.surfaceContainerLowest,
-    borderColor: tokens.sys.color.outlineVariant,
-    borderRadius: tokens.sys.shape.cornerMedium,
+    backgroundColor: style.tokens.sys.color.surfaceContainerLowest,
+    borderColor: style.tokens.sys.color.outlineVariant,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
     borderStyle: 'solid',
     borderWidth: 1,
     display: 'flex',
@@ -22,7 +21,7 @@ const orderHistoryStyles = style.create({
     paddingInline: 16,
   },
   mutedText: {
-    color: tokens.sys.color.onSurfaceVariant,
+    color: style.tokens.sys.color.onSurfaceVariant,
     fontSize: 12,
   },
   row: {
@@ -43,7 +42,7 @@ const orderHistoryStyles = style.create({
     fontWeight: 600,
   },
   title: {
-    color: tokens.sys.color.onSurface,
+    color: style.tokens.sys.color.onSurface,
     fontWeight: 600,
     letterSpacing: 0,
     margin: 0,

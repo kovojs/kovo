@@ -205,12 +205,22 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 
 ### Phase 5 — Authoring ergonomics polish
 
-- [ ] Collapse the double import: drop `import { tokens }` in favor of the
+- [x] Collapse the double import: drop `import { tokens }` in favor of the
       namespace re-export (already present, `index.ts:2`) or ship a single
       `{ style, tokens }` entry; update examples/docs.
+  - Evidence 2026-06-19:
+    `rg -n "import \\{ tokens \\} from '@kovojs/style';" packages/create-kovo/templates/src examples/commerce/src examples/crm/src site/content/guides packages/create-kovo/src/index.test.ts -g'*.ts' -g'*.tsx' -g'*.md'`
+    has no app/doc source hits after moving those call sites to `style.tokens`;
+    `npx vitest --run packages/create-kovo/src/index.test.ts examples/commerce/src/app.rendering.test.ts examples/crm/src/interactive-app.test.ts site/src/route-kit.test.ts`
+    passes.
 - [ ] Inject `style.create` provenance (`namespace`/`source`) from the compiler
       call site so authors stop hand-typing
       `{ namespace: 'button', source: 'button.tsx' }` (`packages/ui/src/*.tsx`).
+  - Gap:
+    `packages/ui` components currently need the runtime `style.attrs` class names
+    to match package CSS extracted outside a component transform. Removing the
+    hand-authored identities requires a design that injects provenance for both
+    extracted CSS and runtime SSR classes.
 
 ## Out of scope
 

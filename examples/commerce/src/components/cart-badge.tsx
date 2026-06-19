@@ -1,7 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { t } from '@kovojs/server';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { commerceMessages, type CartQueryResult } from '../domain.js';
@@ -10,12 +9,12 @@ import { cartQuery } from '../queries.js';
 const cartBadgeStyles = style.create({
   badge: {
     alignItems: 'center',
-    backgroundColor: tokens.sys.color.surfaceContainerLowest,
-    borderColor: tokens.sys.color.outlineVariant,
-    borderRadius: tokens.sys.shape.cornerMedium,
+    backgroundColor: style.tokens.sys.color.surfaceContainerLowest,
+    borderColor: style.tokens.sys.color.outlineVariant,
+    borderRadius: style.tokens.sys.shape.cornerMedium,
     borderStyle: 'solid',
     borderWidth: 1,
-    color: tokens.sys.color.onSurface,
+    color: style.tokens.sys.color.onSurface,
     display: 'inline-flex',
     fontSize: 14,
     fontWeight: 500,
@@ -25,9 +24,9 @@ const cartBadgeStyles = style.create({
   },
   count: {
     alignItems: 'center',
-    backgroundColor: tokens.sys.color.primary,
-    borderRadius: tokens.sys.shape.cornerFull,
-    color: tokens.sys.color.onPrimary,
+    backgroundColor: style.tokens.sys.color.primary,
+    borderRadius: style.tokens.sys.shape.cornerFull,
+    color: style.tokens.sys.color.onPrimary,
     display: 'inline-flex',
     fontSize: 12,
     fontVariantNumeric: 'tabular-nums',
