@@ -1,21 +1,23 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import type { NavigationMenuItem as GalleryNavigationMenuItem } from '@kovojs/headless-ui/navigation-menu';
 import {
-  NavigationMenu,
-  NavigationMenuContent,
   navigationMenuFocusElement as _navigationMenuFocusElement,
-  NavigationMenuItem,
   navigationMenuKeyDown as _navigationMenuKeyDown,
-  NavigationMenuLink,
   navigationMenuLinkClick as _navigationMenuLinkClick,
-  NavigationMenuList,
   navigationMenuMove as _navigationMenuMove,
-  NavigationMenuTrigger,
   navigationMenuTriggerClick as _navigationMenuTriggerClick,
   navigationMenuTriggerFocus as _navigationMenuTriggerFocus,
   navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
   navigationMenuTypeahead as _navigationMenuTypeahead,
+  type NavigationMenuItem as GalleryNavigationMenuItem,
+} from '@kovojs/headless-ui/navigation-menu';
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
   NavigationMenuViewport,
 } from '@kovojs/ui/navigation-menu';
 

@@ -5,6 +5,10 @@ import type { QueryStore } from './query-store.js';
 import { readQueryScriptChunk, readQueryScriptChunks } from './wire-parser.js';
 import type { QueryChunk, QueryScriptChunkLike } from './wire-parser.js';
 
+/**
+ * An inline `<kovo-query>` script element the loader hydrates the query store
+ * from on first paint (SPEC §9.4): exposes `getAttribute` and `textContent`.
+ */
 export interface QueryScriptLike extends QueryScriptChunkLike {}
 
 export interface QueryScriptHydrationLedger {

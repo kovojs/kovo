@@ -9,7 +9,7 @@ import {
   menubarMove as _menubarMove,
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
-} from '@kovojs/ui/menubar';
+} from '@kovojs/headless-ui/menubar';
 
 export const GalleryMenubarDemo$section_keydown = handler((event, ctx) => {
   const keyResult = _menubarKeyDown(Object(event), {

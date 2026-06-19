@@ -27,6 +27,7 @@ export interface StaticExportAssetArtifact {
   status: number;
 }
 
+/** @internal */
 export type StaticExportInventoryItem =
   | {
       headers: Record<string, string>;
@@ -49,6 +50,7 @@ export type StaticExportInventoryItem =
       status: number;
     };
 
+/** @internal */
 export interface StaticExportManifest {
   assets: readonly StaticExportManifestAsset[];
   clientModules: readonly StaticExportManifestClientModule[];
@@ -56,12 +58,14 @@ export interface StaticExportManifest {
   routeDocuments: readonly StaticExportManifestRouteDocument[];
 }
 
+/** @internal */
 export interface StaticExportManifestRouteDocument {
   headers: Record<string, string>;
   path: string;
   status: number;
 }
 
+/** @internal */
 export interface StaticExportManifestClientModule {
   headers: Record<string, string>;
   href: string;
@@ -69,6 +73,7 @@ export interface StaticExportManifestClientModule {
   status: number;
 }
 
+/** @internal */
 export interface StaticExportManifestAsset {
   headers: Record<string, string>;
   path: string;
@@ -76,6 +81,10 @@ export interface StaticExportManifestAsset {
   status: number;
 }
 
+/**
+ * Policy for `StaticExportOptions.onNonExportable`: `'error'` fails the export
+ * when a route cannot be statically rendered, `'skip'` omits it (SPEC.md §12).
+ */
 export type StaticExportNonExportablePolicy = 'error' | 'skip';
 
 /** Options for exporting a `KovoApp` request shell to static route documents. */

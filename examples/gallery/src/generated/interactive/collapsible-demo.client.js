@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { collapsibleTriggerClick as _collapsibleTriggerClick } from '@kovojs/ui/collapsible';
+import { collapsibleTriggerClick as _collapsibleTriggerClick } from '@kovojs/headless-ui/collapsible';
 
 export const GalleryCollapsibleDemo$CollapsibleTrigger_click = handler((event, ctx) => {
   const result = _collapsibleTriggerClick(Object(event), { open: ctx.state.open });

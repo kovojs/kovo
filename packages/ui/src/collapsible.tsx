@@ -186,5 +186,3 @@ export const CollapsibleContent = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/collapsible';

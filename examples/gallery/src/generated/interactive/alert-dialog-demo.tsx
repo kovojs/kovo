@@ -76,32 +76,32 @@ export const GalleryAlertDialogDemo = component({
         style="display:grid;gap:0.5rem"
         data-gallery-interactive="alert-dialog"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialog_data_state_derive"
+        data-bind:data-state="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialog_data_state_derive"
         open={state.open}
-        data-bind:open="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialog_open_derive"
+        data-bind:open="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialog_open_derive"
         kovo-state='{"open":false}'
       >
         <AlertDialogTrigger
           contentId={contentId}
-          on:click="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_click"
+          on:click="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_click"
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_data_state_derive"
+          data-bind:data-state="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_data_state_derive"
           open={state.open}
-          data-bind:open="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_open_derive"
+          data-bind:open="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogTrigger_open_derive"
         >
           Delete workspace
         </AlertDialogTrigger>
         <AlertDialogContent
           contentId={contentId}
           descriptionId={descriptionId}
-          on:cancel="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogContent_cancel"
+          on:cancel="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogContent_cancel"
           titleId={titleId}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogContent_data_state_derive"
+          data-bind:data-state="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogContent_data_state_derive"
           open={state.open}
-          data-bind:open="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogContent_open_derive"
+          data-bind:open="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogContent_open_derive"
         >
           <h2 style="font-size:1rem;font-weight:600" id={titleId}>
             Delete workspace?
@@ -112,22 +112,22 @@ export const GalleryAlertDialogDemo = component({
           <AlertDialogCancel
             autoFocus={true}
             contentId={contentId}
-            on:click="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogCancel_click"
+            on:click="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogCancel_click"
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogCancel_data_state_derive"
+            data-bind:data-state="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogCancel_data_state_derive"
             open={state.open}
-            data-bind:open="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogCancel_open_derive"
+            data-bind:open="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogCancel_open_derive"
           >
             Keep workspace
           </AlertDialogCancel>
           <AlertDialogAction
             contentId={contentId}
             intent="destructive"
-            on:click="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogAction_click"
+            on:click="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogAction_click"
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogAction_data_state_derive"
+            data-bind:data-state="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogAction_data_state_derive"
             open={state.open}
-            data-bind:open="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogAction_open_derive"
+            data-bind:open="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$AlertDialogAction_open_derive"
           >
             Delete
           </AlertDialogAction>
@@ -135,7 +135,7 @@ export const GalleryAlertDialogDemo = component({
         <output
           style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="alert-dialog-open"
-          data-bind="/c/__v/288aed02/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$output_text_derive"
+          data-bind="/c/__v/28ad4c12/examples/gallery/src/generated/interactive/alert-dialog-demo.client.js#GalleryAlertDialogDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

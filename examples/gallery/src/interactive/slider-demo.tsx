@@ -1,16 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  Slider,
-  SliderInput,
   sliderKeyDown as _sliderKeyDown,
-  SliderRange,
   sliderThumbDrag as _sliderThumbDrag,
   sliderThumbDragStart as _sliderThumbDragStart,
-  SliderThumb,
   sliderTrackPointerDown as _sliderTrackPointerDown,
-  SliderTrack,
-} from '@kovojs/ui/slider';
+} from '@kovojs/headless-ui/slider';
+import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from '@kovojs/ui/slider';
 
 
 export interface GallerySliderDemoState {

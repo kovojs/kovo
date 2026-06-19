@@ -291,5 +291,3 @@ export const CheckboxGroupLabel = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/checkbox-group';

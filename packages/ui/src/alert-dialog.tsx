@@ -357,5 +357,3 @@ export const AlertDialogAction = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/alert-dialog';

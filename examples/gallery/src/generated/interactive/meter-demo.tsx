@@ -17,7 +17,8 @@ export const GalleryMeterDemo$output_text_derive = derive(['state'], (state: any
 
 import { component } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
-import { Meter, type MeterDataState } from '@kovojs/ui/meter';
+import { type MeterDataState } from '@kovojs/headless-ui/meter';
+import { Meter } from '@kovojs/ui/meter';
 
 export interface GalleryMeterDemoState {
   dataState: MeterDataState;
@@ -56,25 +57,25 @@ export const GalleryMeterDemo = component({
           optimum={meterState.optimum}
           valueText={meterState.valueText}
           aria-valuetext={`${state.value} percent capacity`}
-          data-bind:aria-valuetext="/c/__v/b4ef4e1c/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Meter_aria_valuetext_derive"
+          data-bind:aria-valuetext="/c/__v/aa2f4d9a/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Meter_aria_valuetext_derive"
           data-state={state.dataState}
-          data-bind:data-state="/c/__v/b4ef4e1c/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Meter_data_state_derive"
+          data-bind:data-state="/c/__v/aa2f4d9a/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Meter_data_state_derive"
           value={state.value}
-          data-bind:value="/c/__v/b4ef4e1c/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Meter_value_derive"
+          data-bind:value="/c/__v/aa2f4d9a/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Meter_value_derive"
         >
           Storage capacity
         </Meter>
         <Button
           type="button"
           variant="secondary"
-          on:click="/c/__v/b4ef4e1c/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Button_click"
+          on:click="/c/__v/aa2f4d9a/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$Button_click"
         >
           Optimize capacity
         </Button>
         <output
           style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="meter-value"
-          data-bind="/c/__v/b4ef4e1c/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$output_text_derive"
+          data-bind="/c/__v/aa2f4d9a/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

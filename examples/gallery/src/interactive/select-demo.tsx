@@ -1,16 +1,18 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import type { SelectItem as GallerySelectItem } from '@kovojs/headless-ui/select';
+import {
+  selectItemClick as _selectItemClick,
+  selectKeyDown as _selectKeyDown,
+  selectMove as _selectMove,
+  selectTriggerClick as _selectTriggerClick,
+  type SelectItem as GallerySelectItem,
+} from '@kovojs/headless-ui/select';
 import {
   Select,
   SelectContent,
   SelectHiddenInput,
-  selectItemClick as _selectItemClick,
   SelectItem,
-  selectKeyDown as _selectKeyDown,
-  selectMove as _selectMove,
   SelectTrigger,
-  selectTriggerClick as _selectTriggerClick,
   SelectValue,
 } from '@kovojs/ui/select';
 

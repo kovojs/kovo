@@ -31,6 +31,7 @@ export interface QueryLoadContext<Request = unknown> {
   request: Request;
 }
 
+/** @internal */
 export interface QueryEndpointRequest<
   Request = unknown,
   SessionValue = unknown,
@@ -39,17 +40,20 @@ export interface QueryEndpointRequest<
   search?: QuerySearchInput;
 }
 
+/** @internal */
 export type QuerySearchInput =
   | URLSearchParams
   | Iterable<readonly [string, string]>
   | Record<string, readonly string[] | string | undefined>;
 
+/** @internal */
 export interface QueryEndpointResponse extends ServerResponseBase<
   string,
   Record<string, string>,
   200 | 303 | 403 | 404 | 422 | 429 | 500
 > {}
 
+/** @internal */
 export interface QueryEndpointRegistry<Request = unknown> {
   queries: readonly QueryDefinition<string, unknown, unknown, Request>[];
 }
@@ -123,6 +127,7 @@ type BivariantQueryVersion = {
   call(input: unknown, value: unknown): number | string | undefined;
 }['call'];
 
+/** @internal */
 export interface RegisteredQueryDefinition {
   args?: Schema<unknown>;
   /**
@@ -271,16 +276,19 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   return { input, ok: true, value: outputResult.value };
 }
 
+/** @internal */
 export type QueryEndpointResult<Value, Input = unknown> =
   | QueryEndpointSuccess<Value, Input>
   | QueryEndpointFailure;
 
+/** @internal */
 export interface QueryEndpointSuccess<Value, Input = unknown> {
   input: Input;
   ok: true;
   value: Value;
 }
 
+/** @internal */
 export interface QueryEndpointFailure {
   auth?: ResolvedGuardFailure['auth'];
   error: {

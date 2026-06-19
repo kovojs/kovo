@@ -319,5 +319,3 @@ export const RadioGroupLabel = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/radio-group';

@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { stampPendingQueries as stampPendingQueriesFromIndex } from './client.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import { FakePendingElement, FakePendingRoot } from './runtime-test-fakes.js';
 
 describe('pending query stamps', () => {
-  it('exports the pending stamper through the runtime barrel', () => {
-    expect(stampPendingQueriesFromIndex).toBe(stampPendingQueries);
-  });
-
   it('stamps only islands that depend on affected queries', () => {
     const cart = new FakePendingElement({ 'kovo-deps': 'cart' });
     const recommendations = new FakePendingElement({ 'kovo-deps': 'product:p1, cart' });

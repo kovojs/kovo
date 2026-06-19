@@ -341,5 +341,3 @@ export const NumberFieldIncrement = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/number-field';

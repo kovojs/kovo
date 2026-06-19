@@ -35,24 +35,23 @@ import {
   queryShapesFromFacts,
 } from '../dist/compiler/src/internal.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/internal/diagnostics.mjs';
+import { createQueryStore, installKovoLoader } from '../dist/runtime/src/client.mjs';
+import { derive } from '../dist/runtime/src/index.mjs';
+import {
+  applyDeferredStreamResponseToRuntime,
+  kovoEscapeHtml,
+} from '../dist/runtime/src/generated.mjs';
+import { refetchQueries, kovoLoaderSource } from '../dist/runtime/src/internal/inline-loader.mjs';
+import { DomMorphTarget, morphStructuralTree } from '../dist/runtime/src/internal/morph.mjs';
 import {
   applyCompiledQueryUpdatePlan,
-  applyDeferredStreamResponseToRuntime,
-  createQueryStore,
-  DomMorphTarget,
   installPagehideOptimismCleanup,
-  installKovoLoader,
-  morphStructuralTree,
   OptimisticRebaser,
-  readElementParams,
-  refetchQueries,
   stampPendingQueries,
   submitEnhancedMutation,
   submitOptimisticEnhancedMutation,
-} from '../dist/runtime/src/client.mjs';
-import { derive } from '../dist/runtime/src/index.mjs';
-import { kovoEscapeHtml } from '../dist/runtime/src/generated.mjs';
-import { kovoLoaderSource } from '../dist/runtime/src/internal/inline-loader.mjs';
+} from '../dist/runtime/src/internal/mutation.mjs';
+import { readElementParams } from '../dist/runtime/src/internal/delegation.mjs';
 import { createKovoTestHarness } from '../dist/test/src/harness.mjs';
 import { createDbVerifier } from '../dist/test/src/verifier.mjs';
 import {
@@ -186,7 +185,6 @@ import {
   route as serverRoute,
   session,
   s,
-  stylesheetsForTargets,
   t,
   exportStaticApp,
 } from '../dist/server/src/index.mjs';
@@ -197,6 +195,7 @@ import {
   renderDocumentQueryScript,
   renderPageHints,
   renderQueryScript,
+  stylesheetsForTargets,
 } from '../dist/server/src/internal/html.mjs';
 import { renderRoutePageResponse } from '../dist/server/src/internal/route.mjs';
 import {

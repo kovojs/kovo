@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { Switch, switchTriggerClick as _switchTriggerClick } from '@kovojs/ui/switch';
+import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/switch';
+import { Switch } from '@kovojs/ui/switch';
 
 export interface GallerySwitchDemoState {
   checked: boolean;

@@ -659,33 +659,55 @@ export async function executeStarterClientTemplate(
       return [];
     },
   };
+  class StarterDomMorphTarget {
+    element: StarterClientElement;
+
+    constructor(element: StarterClientElement) {
+      this.element = element;
+    }
+
+    appendHtml(html: string) {
+      this.element.insertAdjacentHTML('beforeend', html);
+    }
+
+    readHtml() {
+      return this.element.innerHTML;
+    }
+
+    replaceWithHtml(html: string) {
+      this.element.innerHTML = html;
+    }
+  }
   const runtime = {
     applyDeferredStreamResponseToRuntime(options: unknown) {
       deferredApplications.push(options);
       return { applied: true };
     },
+    // Mirror the real `createBrowserKovoRoot` fragment-target resolution: look up
+    // by id, fall back to the `[kovo-fragment-target=...]` selector, and wrap the
+    // matched element in a DOM morph target (post facade-shrink this surface is
+    // imported rather than defined locally in the starter template).
+    createBrowserKovoRoot() {
+      return {
+        findFragmentTarget(target: string) {
+          const element =
+            documentRoot.getElementById(target) ??
+            documentRoot.querySelector(`[kovo-fragment-target="${target}"]`);
+          return element ? new StarterDomMorphTarget(element as StarterClientElement) : null;
+        },
+        querySelectorAll() {
+          return documentRoot.querySelectorAll();
+        },
+      };
+    },
     createQueryStore() {
       return queryStore;
     },
-    DomMorphTarget: class StarterDomMorphTarget {
-      element: StarterClientElement;
-
-      constructor(element: StarterClientElement) {
-        this.element = element;
-      }
-
-      appendHtml(html: string) {
-        this.element.insertAdjacentHTML('beforeend', html);
-      }
-
-      readHtml() {
-        return this.element.innerHTML;
-      }
-
-      replaceWithHtml(html: string) {
-        this.element.innerHTML = html;
-      }
+    defaultEnhancedFetch(url: string, options: Record<string, unknown>) {
+      fetchCalls.push([url, options]);
+      return { ok: true };
     },
+    DomMorphTarget: StarterDomMorphTarget,
     installKovoLoader(options: unknown) {
       loaderInstalls.push(options);
     },
@@ -707,7 +729,13 @@ export async function executeStarterClientTemplate(
     },
     module,
     require(specifier: string) {
-      if (specifier === '@kovojs/runtime/client') return runtime;
+      // The starter client template imports its bootstrap surface from the public
+      // `@kovojs/runtime/client` facade and the deferred-stream applier from the
+      // public `@kovojs/runtime/generated` subpath (post facade-shrink). Both map
+      // to the single white-box runtime shim above.
+      if (specifier === '@kovojs/runtime/client' || specifier === '@kovojs/runtime/generated') {
+        return runtime;
+      }
       assert.fail(`unexpected starter client import ${specifier}`);
     },
   });

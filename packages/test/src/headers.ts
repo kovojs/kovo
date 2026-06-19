@@ -1,7 +1,8 @@
+/** A plain header bag accepted by the header helpers alongside a `Headers` instance. */
 export type HeaderRecord = Record<string, string | string[] | undefined>;
-export type HeaderSource = Headers | HeaderRecord | undefined;
 
-export function headerValues(source: HeaderSource, name: string): string[] {
+/** Read all values for header `name` from a `Headers` or {@link HeaderRecord}, case-insensitively (handles `set-cookie`). */
+export function headerValues(source: Headers | HeaderRecord | undefined, name: string): string[] {
   if (!source) return [];
 
   if (isHeaders(source)) {
@@ -21,15 +22,18 @@ export function headerValues(source: HeaderSource, name: string): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
-export function setCookieValues(source: HeaderSource): string[] {
+/** Read all `set-cookie` header values from a `Headers` or {@link HeaderRecord}. */
+export function setCookieValues(source: Headers | HeaderRecord | undefined): string[] {
   return headerValues(source, 'set-cookie');
 }
 
+/** Return the `name=value` pair of a raw `set-cookie` string (drops attributes). */
 export function cookiePair(setCookie: string | undefined): string {
   return setCookie?.split(';', 1)[0] ?? '';
 }
 
-export function firstSetCookiePair(source: HeaderSource): string {
+/** Return the `name=value` pair of the first `set-cookie` on a `Headers` or {@link HeaderRecord}. */
+export function firstSetCookiePair(source: Headers | HeaderRecord | undefined): string {
   return cookiePair(setCookieValues(source)[0]);
 }
 
@@ -67,7 +71,7 @@ export function enhancedMutationHeaders(
   };
 }
 
-function isHeaders(source: HeaderSource): source is Headers {
+function isHeaders(source: Headers | HeaderRecord | undefined): source is Headers {
   return typeof (source as Headers | undefined)?.get === 'function';
 }
 

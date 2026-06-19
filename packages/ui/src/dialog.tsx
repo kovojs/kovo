@@ -266,5 +266,3 @@ export const DialogClose = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/dialog';

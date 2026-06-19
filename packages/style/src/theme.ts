@@ -70,7 +70,11 @@ export interface ThemeFromSeedOptions {
   readonly variant?: ThemeVariant;
 }
 
-/** Override form for deriving one app theme from a generated base theme. */
+/**
+ * @internal Override form for deriving one app theme from a generated base
+ * theme. Not part of the v1 public surface: `defineTheme` advertises the
+ * seed form (SPEC.md §13.1); the base-derivation arm is repo-internal.
+ */
 export interface DefineThemeFromBaseOptions {
   readonly base: KovoTheme;
   readonly component?: ThemeComponentTokensInput;
@@ -80,10 +84,8 @@ export interface DefineThemeFromBaseOptions {
   readonly sys?: ThemeSystemOverrides;
 }
 
-/** Common app-facing theme definition. */
-export type DefineThemeOptions =
-  | ({ readonly seed: ThemeSeed } & ThemeFromSeedOptions)
-  | DefineThemeFromBaseOptions;
+/** App-facing theme definition. The v1 public surface is the seed form (SPEC.md §13.1). */
+export type DefineThemeOptions = { readonly seed: ThemeSeed } & ThemeFromSeedOptions;
 
 /** Material reference palette groups exposed by Kovo themes. */
 export type ThemeReferencePaletteName =
@@ -192,10 +194,10 @@ export type ThemeSystemColorValues = Readonly<Record<ThemeSystemColorName, strin
 /** Concrete Kovo shape token values. */
 export type ThemeShapeValues = Readonly<Record<ThemeShapeTokenName, string>>;
 
-/** Concrete component token values emitted as `--kovo-theme-component-*`. */
+/** @internal Concrete component token values emitted as `--kovo-theme-component-*` (base-derivation only). */
 export type ThemeComponentTokensInput = Readonly<Record<string, string | number>>;
 
-/** Concrete system-token overrides for derived themes. */
+/** @internal Concrete system-token overrides for derived themes (base-derivation only). */
 export interface ThemeSystemOverrides {
   readonly color?: Partial<ThemeSystemColorValues>;
   readonly shape?: Partial<ThemeShapeValues>;
@@ -304,8 +306,10 @@ export const tokens = Object.freeze({
 }) satisfies ThemeTokens;
 
 /**
- * Generate a Kovo theme from one seed color. Color math is build-time and wraps
- * Material Color Utilities without leaking upstream classes into app code.
+ * @internal Generate a Kovo theme from one seed color. Color math is build-time
+ * and wraps Material Color Utilities without leaking upstream classes into app
+ * code. The public seed entry point is `defineTheme({ seed })` (SPEC.md §13.1),
+ * which delegates here.
  */
 export function themeFromSeed(seed: ThemeSeed, options: ThemeFromSeedOptions = {}): KovoTheme {
   const argb = seedToArgb(seed);
@@ -361,15 +365,20 @@ function dynamicThemeFromSeed(
 }
 
 /**
- * Define the app theme. The common form is seed-based; the `base` form derives
- * one final theme from generated values without callback overrides.
+ * Define the app theme from one seed color. The v1 public surface is the
+ * seed form (SPEC.md §13.1); deriving from a generated base theme is a
+ * repo-internal capability exposed through `defineThemeFromBase`.
  */
 export function defineTheme(options: DefineThemeOptions): KovoTheme {
-  if ('base' in options) return defineThemeFromBase(options);
   return themeFromSeed(options.seed, options);
 }
 
-function defineThemeFromBase(options: DefineThemeFromBaseOptions): KovoTheme {
+/**
+ * @internal Derive one final theme from a generated base theme without callback
+ * overrides. Not part of the v1 public surface; kept for repo-internal callers
+ * and conformance tests (SPEC.md §13.1).
+ */
+export function defineThemeFromBase(options: DefineThemeFromBaseOptions): KovoTheme {
   const light = mergeScheme(options.base.light, options.sys, options.shape);
   const dark = mergeScheme(options.base.dark, options.sys, options.shape);
   const component = options.component ?? {};

@@ -163,5 +163,3 @@ export const Checkbox = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/checkbox';

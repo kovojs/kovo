@@ -99,7 +99,7 @@ function drainPostCommitQueue(queue: ReadonlyArray<() => void>): void {
   }
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Resolve and run the island handler bound to a delegated event (SPEC §4.4). */
 export async function dispatchDelegatedEvent(
   event: DelegatedEvent,
   importModule: ImportHandlerModule,

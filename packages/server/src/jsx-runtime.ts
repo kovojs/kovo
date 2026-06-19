@@ -50,8 +50,10 @@ const voidElements = new Set([
 const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
 
+/** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
 export type JsxNode = JsxNode[] | boolean | null | number | Promise<JsxNode> | string | undefined;
 
+/** @generated JSX automatic-runtime ABI props type (compiler-emitted). */
 export interface JsxProps {
   children?: JsxNode;
   [attribute: string]: unknown;
@@ -59,6 +61,7 @@ export interface JsxProps {
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
+/** @generated JSX automatic-runtime ABI component type (compiler-emitted). */
 export type JsxComponent = (props: any) => any;
 
 type KovoJsxComponent = Component<ComponentDefinitionInput>;
@@ -75,10 +78,12 @@ interface MutationFormHelperRegistry {
   placeholders: Map<number, MutationFormHelperPlaceholder>;
 }
 
+/** @generated JSX automatic-runtime ABI `Fragment` (compiler-emitted). */
 export function Fragment(props: JsxProps): MaybePromise<string> {
   return renderJsxChildren(props.children);
 }
 
+/** @generated JSX automatic-runtime ABI `jsx` factory (compiler-emitted). */
 export function jsx(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
@@ -143,8 +148,10 @@ function isMutationFormHelperComponent(
   return type === helper || (typeof type === 'function' && type.name === name);
 }
 
+/** @generated JSX automatic-runtime ABI `jsxs` factory (compiler-emitted). */
 export const jsxs = jsx;
 
+/** @generated JSX automatic-runtime ABI `jsxDEV` factory (compiler-emitted). */
 export function jsxDEV(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
@@ -702,6 +709,7 @@ function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Valu
   return isRecord(value) && typeof value.then === 'function';
 }
 
+/** @generated JSX automatic-runtime ABI `JSX` namespace (compiler-emitted). */
 export declare namespace JSX {
   type Element = any;
   type ElementType = JsxComponent | KovoJsxComponent | string;

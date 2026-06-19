@@ -1,9 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
   hoverCardContentPointerEnter as _hoverCardContentPointerEnter,
   hoverCardContentPointerLeave as _hoverCardContentPointerLeave,
   hoverCardEscapeKeyDown as _hoverCardEscapeKeyDown,
@@ -11,7 +8,8 @@ import {
   hoverCardTriggerFocus as _hoverCardTriggerFocus,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@kovojs/ui/hover-card';
+} from '@kovojs/headless-ui/hover-card';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@kovojs/ui/hover-card';
 
 export interface GalleryHoverCardDemoState {
   open: boolean;

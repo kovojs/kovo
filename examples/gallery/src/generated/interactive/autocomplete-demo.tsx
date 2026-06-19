@@ -89,13 +89,13 @@ export const GalleryAutocompleteDemo$AutocompleteOption_tabIndex_derive_2 = deri
 );
 
 import { component } from '@kovojs/core';
+import { type AutocompleteItem } from '@kovojs/headless-ui/autocomplete';
 import {
   Autocomplete,
   AutocompleteInput,
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  type AutocompleteItem,
 } from '@kovojs/ui/autocomplete';
 
 export interface GalleryAutocompleteDemoState {
@@ -145,7 +145,7 @@ export const GalleryAutocompleteDemo = component({
         id="gallery-autocomplete-root"
         {...autocompleteState}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$Autocomplete_data_state_derive"
+        data-bind:data-state="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$Autocomplete_data_state_derive"
         kovo-state='{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}'
       >
         <label
@@ -159,8 +159,8 @@ export const GalleryAutocompleteDemo = component({
         <AutocompleteInput
           id="gallery-autocomplete-input"
           labelledBy="gallery-autocomplete-label"
-          on:input="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_input"
-          on:keydown="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_keydown"
+          on:input="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_input"
+          on:keydown="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_keydown"
           {...autocompleteState}
           aria-activedescendant={
             state.highlightedValue === 'development'
@@ -171,64 +171,64 @@ export const GalleryAutocompleteDemo = component({
                   ? 'gallery-autocomplete-list-option-0'
                   : null
           }
-          data-bind:aria-activedescendant="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_aria_activedescendant_derive"
+          data-bind:aria-activedescendant="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_aria_activedescendant_derive"
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_aria_expanded_derive"
           data-placeholder={state.inputValue === '' ? '' : null}
-          data-bind:data-placeholder="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_data_placeholder_derive"
+          data-bind:data-placeholder="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_data_placeholder_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_data_state_derive"
+          data-bind:data-state="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_data_state_derive"
           value={state.inputValue}
-          data-bind:value="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_value_derive"
+          data-bind:value="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteInput_value_derive"
         />
         <AutocompleteList
           id={listId}
           labelledBy="gallery-autocomplete-label"
           {...autocompleteState}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteList_data_state_derive"
+          data-bind:data-state="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteList_data_state_derive"
           hidden={!state.open}
-          data-bind:hidden="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteList_hidden_derive"
+          data-bind:hidden="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteList_hidden_derive"
         >
           <AutocompleteOption
             id="gallery-autocomplete-list-option-0"
             itemLabel="Design"
             itemValue="design"
-            on:click="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_click"
+            on:click="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_click"
             {...autocompleteState}
             aria-selected={state.value === 'design' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_aria_selected_derive"
+            data-bind:aria-selected="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_aria_selected_derive"
             data-highlighted={state.highlightedValue === 'design' ? '' : null}
-            data-bind:data-highlighted="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_highlighted_derive"
+            data-bind:data-highlighted="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_highlighted_derive"
             data-state={state.value === 'design' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_state_derive"
+            data-bind:data-state="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_state_derive"
             hidden={
               state.inputValue !== '' && !'design'.startsWith(state.inputValue.toLocaleLowerCase())
             }
-            data-bind:hidden="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_hidden_derive"
+            data-bind:hidden="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_hidden_derive"
             tabIndex={state.highlightedValue === 'design' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_tabIndex_derive"
+            data-bind:tabIndex="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_tabIndex_derive"
           >
             Design
           </AutocompleteOption>
           <AutocompleteOption
             id="gallery-autocomplete-list-option-2"
             itemValue="development"
-            on:click="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_click_2"
+            on:click="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_click_2"
             {...autocompleteState}
             aria-selected={state.value === 'development' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_aria_selected_derive_2"
+            data-bind:aria-selected="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_aria_selected_derive_2"
             data-highlighted={state.highlightedValue === 'development' ? '' : null}
-            data-bind:data-highlighted="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_highlighted_derive_2"
+            data-bind:data-highlighted="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_highlighted_derive_2"
             data-state={state.value === 'development' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_state_derive_2"
+            data-bind:data-state="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_data_state_derive_2"
             hidden={
               state.inputValue !== '' &&
               !'development'.startsWith(state.inputValue.toLocaleLowerCase())
             }
-            data-bind:hidden="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_hidden_derive_2"
+            data-bind:hidden="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_hidden_derive_2"
             tabIndex={state.highlightedValue === 'development' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_tabIndex_derive_2"
+            data-bind:tabIndex="/c/__v/89c67af8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$AutocompleteOption_tabIndex_derive_2"
           >
             Development
           </AutocompleteOption>

@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/ui/toggle';
+import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/toggle';
 
 export const GalleryToggleDemo$Toggle_click = handler((event, ctx) => {
   const result = _toggleTriggerClick(Object(event), { pressed: ctx.state.pressed });

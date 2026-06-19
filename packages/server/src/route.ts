@@ -686,20 +686,25 @@ function unescapeAttribute(value: string): string {
     .replaceAll('&amp;', '&');
 }
 
+/** @internal */
 export type RoutePageResult<Page> = RoutePageSuccess<Page> | RoutePageFailure;
 
+/** @internal */
 export type RoutePageSuccess<Page> = RoutePageRenderSuccess<Page> | RoutePageOutcomeSuccess;
 
+/** @internal */
 export interface RoutePageRenderSuccess<Page> {
   ok: true;
   value: Page;
 }
 
+/** @internal */
 export interface RoutePageOutcomeSuccess {
   ok: true;
   outcome: RouteResponseOutcome;
 }
 
+/** @internal */
 export interface RoutePageFailure {
   auth?: ResolvedGuardFailure['auth'];
   error?: {

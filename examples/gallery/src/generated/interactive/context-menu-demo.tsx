@@ -59,13 +59,15 @@ export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (stat
 );
 
 import { component } from '@kovojs/core';
-import type { ContextMenuItem as GalleryContextMenuItem } from '@kovojs/headless-ui/context-menu';
+import {
+  type ContextMenuItem as GalleryContextMenuItem,
+  type ContextMenuPoint,
+} from '@kovojs/headless-ui/context-menu';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  type ContextMenuPoint,
 } from '@kovojs/ui/context-menu';
 
 export interface GalleryContextMenuDemoState {
@@ -99,20 +101,20 @@ export const GalleryContextMenuDemo = component({
         data-gallery-interactive="context-menu"
         {...menuState}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenu_data_state_derive"
+        data-bind:data-state="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenu_data_state_derive"
         kovo-state='{"highlightedValue":"copy","open":false,"point":{"x":24,"y":40},"value":"copy"}'
       >
         <ContextMenuTrigger
           contentId={contentId}
           id="gallery-context-menu-trigger"
-          on:contextmenu="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_contextmenu"
-          on:keydown="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_keydown"
+          on:contextmenu="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_contextmenu"
+          on:keydown="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_keydown"
           tabIndex="0"
           {...menuState}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_data_state_derive"
+          data-bind:data-state="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuTrigger_data_state_derive"
         >
           Right click target
         </ContextMenuTrigger>
@@ -120,27 +122,27 @@ export const GalleryContextMenuDemo = component({
           id={contentId}
           {...menuState}
           data-anchor-x={String(state.point.x)}
-          data-bind:data-anchor-x="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_data_anchor_x_derive"
+          data-bind:data-anchor-x="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_data_anchor_x_derive"
           data-anchor-y={String(state.point.y)}
-          data-bind:data-anchor-y="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_data_anchor_y_derive"
+          data-bind:data-anchor-y="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_data_anchor_y_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_data_state_derive"
+          data-bind:data-state="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_data_state_derive"
           hidden={!state.open}
-          data-bind:hidden="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_hidden_derive"
+          data-bind:hidden="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuContent_hidden_derive"
         >
           <ContextMenuItem
             id="gallery-context-menu-copy"
             itemLabel="Copy link"
             itemValue="copy"
-            on:keydown="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_keydown"
-            on:click="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_click"
+            on:keydown="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_keydown"
+            on:click="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_click"
             {...menuState}
             data-highlighted={state.highlightedValue === 'copy' ? '' : null}
-            data-bind:data-highlighted="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_highlighted_derive"
+            data-bind:data-highlighted="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_highlighted_derive"
             data-state={state.highlightedValue === 'copy' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_state_derive"
+            data-bind:data-state="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_state_derive"
             tabIndex={state.highlightedValue === 'copy' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_tabIndex_derive"
+            data-bind:tabIndex="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_tabIndex_derive"
           >
             Copy link
           </ContextMenuItem>
@@ -157,22 +159,22 @@ export const GalleryContextMenuDemo = component({
             id="gallery-context-menu-inspect"
             itemLabel="Inspect"
             itemValue="inspect"
-            on:keydown="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_keydown_2"
-            on:click="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_click_2"
+            on:keydown="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_keydown_2"
+            on:click="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_click_2"
             {...menuState}
             data-highlighted={state.highlightedValue === 'inspect' ? '' : null}
-            data-bind:data-highlighted="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_highlighted_derive_2"
+            data-bind:data-highlighted="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_highlighted_derive_2"
             data-state={state.highlightedValue === 'inspect' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_state_derive_2"
+            data-bind:data-state="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_data_state_derive_2"
             tabIndex={state.highlightedValue === 'inspect' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_tabIndex_derive_2"
+            data-bind:tabIndex="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$ContextMenuItem_tabIndex_derive_2"
           >
             Inspect
           </ContextMenuItem>
         </ContextMenuContent>
         <output
           data-demo-state="context-open"
-          data-bind="/c/__v/31ebc968/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$output_text_derive"
+          data-bind="/c/__v/aa9d02bc/examples/gallery/src/generated/interactive/context-menu-demo.client.js#GalleryContextMenuDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

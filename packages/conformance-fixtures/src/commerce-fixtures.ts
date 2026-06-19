@@ -8,7 +8,7 @@ import {
 import { graphFragmentTargetForQuery, type KovoGraphFixture } from './graph-fixtures.js';
 import { kovoResponseBodyFact } from '@kovojs/test/html-fragment';
 import type { QueryDefinition } from '@kovojs/server';
-import type { DbVerificationDiagnostic } from '@kovojs/test/verifier-diagnostics';
+import type { DbVerificationDiagnostic } from '@kovojs/test/harness';
 
 export interface CommerceFixtureFile {
   arrayBuffer(): Promise<ArrayBuffer>;

@@ -6,7 +6,7 @@ import {
   selectKeyDown as _selectKeyDown,
   selectMove as _selectMove,
   selectTriggerClick as _selectTriggerClick,
-} from '@kovojs/ui/select';
+} from '@kovojs/headless-ui/select';
 
 export const GallerySelectDemo$SelectTrigger_click = handler((event, ctx) => {
   const result = _selectTriggerClick(Object(event), {

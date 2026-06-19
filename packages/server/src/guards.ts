@@ -126,6 +126,7 @@ export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> 
   ([DbValue] extends [never] ? {} : { db: DbValue });
 
 /** Per-request options shared across the lifecycle: error hook plus session/db providers. */
+/** @internal */
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   onError?: ServerErrorHandler;
@@ -149,6 +150,7 @@ export type ForbiddenRenderer<Request> = (
   context: ForbiddenContext<Request>,
 ) => string | Promise<string>;
 
+/** @internal */
 export interface GuardFailureResponseOptions<
   Request,
   SessionValue = unknown,

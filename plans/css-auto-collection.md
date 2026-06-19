@@ -115,6 +115,10 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
         critical CSS inlined in the page `<style>` (`hints.ts:202`).
 
 ### Phase 2 — Route-scoped critical CSS (optional, builds on existing splitter)
+> Moved to `plans/fine-grained-css.md`, which owns route/fragment CSS splitting
+> end-to-end (route facts → splitter → per-route link/inline). The Seam B work
+> below is the shared prerequisite; check this item off with a pointer to that
+> ledger when fine-grained-css Phases 1–3 land.
 - [ ] Have `compileRouteModule` emit route→component CSS facts so the build can
       feed `CssRouteSplitTarget` and use `createCssAssetResolver`
       (`css.ts:202`) to inline only the active route's critical CSS while the

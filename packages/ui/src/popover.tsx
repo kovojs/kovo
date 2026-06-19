@@ -186,5 +186,3 @@ export const PopoverContent = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/popover';

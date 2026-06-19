@@ -1,16 +1,18 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  ScrollArea,
-  ScrollAreaCorner,
-  ScrollAreaScrollbar,
-  ScrollAreaThumb,
   scrollAreaThumbDrag as _scrollAreaThumbDrag,
   scrollAreaThumbDragStart as _scrollAreaThumbDragStart,
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
-  ScrollAreaViewport,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
+} from '@kovojs/headless-ui/scroll-area';
+import {
+  ScrollArea,
+  ScrollAreaCorner,
+  ScrollAreaScrollbar,
+  ScrollAreaThumb,
+  ScrollAreaViewport,
 } from '@kovojs/ui/scroll-area';
 
 // The viewport keeps its inline max-height/overflow style so the demo stays short

@@ -2,7 +2,7 @@ export { csrfField, csrfToken } from '../csrf.js';
 export type { CsrfOptions, CsrfValidationOptions } from '../csrf.js';
 export { domain, tag } from '../domain.js';
 export type { Domain, Tag } from '../domain.js';
-export { errorBoundary, invalidate, mutation, write } from '../mutation.js';
+export { errorBoundary, mutation, write } from '../mutation.js';
 /** Build JSX-spread attributes for a SPEC §6.3 enhanced mutation form. */
 export { mutationFormAttributes } from '../mutation.js';
 /** Render string-template attributes for a SPEC §6.3 enhanced mutation form. */
@@ -14,39 +14,20 @@ export type {
   MutationDefinition,
   MutationFail,
   MutationFormDefinition,
-  MutationRegistry,
   MutationResult,
   MutationSuccess,
-  MutationTouchSite,
-  QueryRerun,
-  RunMutationOptions,
   WriteDefinition,
 } from '../mutation.js';
 /** Attribute object returned by `mutationFormAttributes(...)`. */
 export type { MutationFormAttributes } from '../mutation.js';
-export type {
-  QueryDefinition,
-  QueryEndpointFailure,
-  QueryEndpointRegistry,
-  QueryEndpointRequest,
-  QueryEndpointResponse,
-  QueryEndpointResult,
-  QueryEndpointSuccess,
-  QueryLoadContext,
-  QueryResult,
-  QuerySearchInput,
-  RegisteredQueryDefinition,
-} from '../query.js';
+export type { QueryDefinition, QueryLoadContext, QueryResult } from '../query.js';
 export { query } from '../query.js';
-export { createMemoryMutationReplayStore } from '../replay.js';
-export type { MutationReplayReservation, MutationReplayStore } from '../replay.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
   FileLike,
   FileSchema,
   FileSchemaOptions,
   InferSchema,
-  MaybePromise,
   NumberSchema,
   Schema,
   StoredFileSchema,
@@ -55,3 +36,8 @@ export type {
   ValidationFailurePayload,
   ValidationIssue,
 } from '../schema.js';
+// SPEC §9.1 idempotent replay store: apps provision and hold a store for webhook
+// and mutation handlers (real consumer: conformance/webhook-spike). The default
+// in-memory implementation and its contract types stay public at the root.
+export { createMemoryMutationReplayStore } from '../replay.js';
+export type { MutationReplayReservation, MutationReplayStore } from '../replay.js';

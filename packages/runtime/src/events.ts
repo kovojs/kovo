@@ -1,5 +1,6 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import type { EventDefinition, JsonValue } from '@kovojs/core';
+import type { EventDefinition } from '@kovojs/core/internal/event';
+import type { JsonValue } from '@kovojs/core';
 import type {
   AttributeElementLike,
   AttributeWriterLike,
@@ -31,7 +32,7 @@ export interface UploadProgressElementLike extends AttributeWriterLike {
   setAttribute(name: string, value: string): void;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Map an `EventDefinition` tuple to its `{ name: payload }` event map (SPEC §4.3). */
 export type EventPayloadMap<Definitions extends readonly EventDefinition<string, JsonValue>[]> = {
   [Definition in Definitions[number] as Definition['name']]: Definition extends EventDefinition<
     string,
@@ -47,15 +48,15 @@ export interface TypedEvent<Name extends string = string, Payload = unknown> {
   payload: Payload;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal A typed event-bus listener invoked with a {@link TypedEvent} (SPEC §4.3). */
 export type EventListener<Payload> = (event: TypedEvent<string, Payload>) => void | Promise<void>;
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal A handle returned by `on()` whose `off()` unsubscribes the listener (SPEC §4.3). */
 export interface EventSubscription {
   off(): void;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal The typed cross-island event bus: `emit`/`on` over a declared event map (SPEC §4.3). */
 export interface TypedEventBus<EventMap extends Record<string, unknown>> {
   emit<Name extends Extract<keyof EventMap, string>>(name: Name, payload: EventMap[Name]): void;
   events: readonly Extract<keyof EventMap, string>[];
@@ -65,7 +66,7 @@ export interface TypedEventBus<EventMap extends Record<string, unknown>> {
   ): EventSubscription;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for {@link createEventBus}: an error hook and query-data guard keys (SPEC §4.3). */
 export interface EventBusOptions {
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
   queryDataKeys?: readonly string[];
@@ -83,7 +84,7 @@ export interface RuntimeErrorContext {
     | 'query-hydration';
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Build a typed cross-island event bus from declared `EventDefinition`s (SPEC §4.3). */
 export function createEventBus<
   const Definitions extends readonly EventDefinition<string, JsonValue>[],
 >(

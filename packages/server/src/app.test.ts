@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import {
-  createMemoryVersionedClientModuleRegistry,
-  versionedClientModuleHref,
-} from './client-modules.js';
+import { versionedClientModuleHref } from './client-modules.js';
 import { domain } from './domain.js';
 import { endpoint } from './endpoint.js';
 import { guards } from './guards.js';
@@ -559,26 +556,23 @@ describe('server createApp request shell', () => {
   });
 
   it('dispatches stored query and client-module registries through web Responses', async () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
-    const href = registry.put({
+    const app = createApp({
+      queries: [
+        query('cart', {
+          args: s.object({ id: s.string() }),
+          load: (input: { id: string }) => ({ id: input.id, total: 42 }),
+          reads: [],
+        }),
+      ],
+    });
+    const href = app.clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const ok = true;',
       version: 'v1',
     });
     expect(href).toBe(versionedClientModuleHref('/c/cart.client.js', 'v1'));
 
-    const handler = createRequestHandler(
-      createApp({
-        clientModules: registry,
-        queries: [
-          query('cart', {
-            args: s.object({ id: s.string() }),
-            load: (input: { id: string }) => ({ id: input.id, total: 42 }),
-            reads: [],
-          }),
-        ],
-      }),
-    );
+    const handler = createRequestHandler(app);
 
     const queryResponse = await handler(new Request('https://example.test/_q/cart?id=c1'));
     expect(queryResponse.status).toBe(200);

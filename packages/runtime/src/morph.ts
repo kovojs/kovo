@@ -19,7 +19,7 @@ export interface MorphRoot {
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export type MorphFragment = (target: MorphTarget, html: string) => void;
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal A {@link MorphTarget} backed by a live DOM `Element` (SPEC §9.1). */
 export class DomMorphTarget implements MorphTarget {
   element: Element;
 
@@ -72,7 +72,7 @@ function isFragmentResourceHint(element: Element): boolean {
   );
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal A {@link MorphRoot} over a live DOM {@link FragmentTargetRoot} (SPEC §9.1). */
 export class DomMorphRoot implements MorphRoot {
   private readonly root: FragmentTargetRoot;
 
@@ -87,7 +87,7 @@ export class DomMorphRoot implements MorphRoot {
   }
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal The default {@link MorphFragment}: replace the target with the fragment HTML (SPEC §9.1). */
 export const keyedDomMorph: MorphFragment = (target, html) => {
   target.replaceWithHtml(html);
 };
@@ -118,7 +118,7 @@ export interface StructuralMorphNode {
   type: string;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Apply response fragments to a {@link MorphRoot} via the runtime morph engine (SPEC §9.1). */
 export function applyFragments(
   root: MorphRoot,
   fragments: readonly FragmentChunk[],
@@ -157,7 +157,7 @@ export function morphStructuralTree(
   return current;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Reconcile a DOM element in place against its next shape, preserving focus/state (SPEC §9.1). */
 export function morphDomElement(current: Element, next: Element): Element {
   if (!canReuseDomElement(current, next)) {
     current.replaceWith(next);

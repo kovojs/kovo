@@ -1,14 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
   dialogCancel as _dialogCancel,
   dialogCloseClick as _dialogCloseClick,
   dialogTriggerClick as _dialogTriggerClick,
-} from '@kovojs/ui/dialog';
+} from '@kovojs/headless-ui/dialog';
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@kovojs/ui/dialog';
 
 
 export interface GalleryDialogDemoState {

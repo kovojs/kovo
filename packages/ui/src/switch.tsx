@@ -164,5 +164,3 @@ export const Switch = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/switch';

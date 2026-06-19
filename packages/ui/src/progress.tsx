@@ -132,5 +132,3 @@ export const Progress = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/progress';

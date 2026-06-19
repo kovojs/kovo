@@ -1,15 +1,13 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
   tooltipEscapeKeyDown as _tooltipEscapeKeyDown,
   tooltipTriggerBlur as _tooltipTriggerBlur,
   tooltipTriggerFocus as _tooltipTriggerFocus,
   tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
-} from '@kovojs/ui/tooltip';
+} from '@kovojs/headless-ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@kovojs/ui/tooltip';
 
 export interface GalleryTooltipDemoState {
   open: boolean;

@@ -1,32 +1,14 @@
 import {
-  applyDeferredStreamResponseToRuntime,
+  createBrowserKovoRoot,
   createQueryStore,
-  DomMorphTarget,
+  defaultEnhancedFetch,
   installKovoLoader,
-  type EnhancedMutationFetch,
-  type MorphRoot,
-  type TargetCollectorRoot,
 } from '@kovojs/runtime/client';
+import { applyDeferredStreamResponseToRuntime } from '@kovojs/runtime/generated';
 
 const store = createQueryStore();
 const queryPlans = {};
-const root = createBrowserKovoRoot(document);
-
-const enhancedFetch: EnhancedMutationFetch = (url, options) => {
-  const init: RequestInit = {
-    headers: options.headers,
-    keepalive: options.keepalive,
-    method: options.method,
-  };
-
-  if (options.body !== undefined) {
-    init.body = options.body as BodyInit | null;
-  }
-
-  return fetch(url, init);
-};
-
-type BrowserKovoRoot = MorphRoot & TargetCollectorRoot;
+const root = createBrowserKovoRoot();
 
 type DeferredStreamOptions = {
   boundary?: string;
@@ -39,7 +21,7 @@ installKovoLoader({
   root: document,
   queryStore: store,
   enhancedMutations: {
-    fetch: enhancedFetch,
+    fetch: defaultEnhancedFetch,
     queryPlans,
     root,
     store,
@@ -55,19 +37,4 @@ export function applyKovoDeferredStreamResponse(body: string, options: DeferredS
     root: options.root ?? root,
     store,
   });
-}
-
-function createBrowserKovoRoot(documentRoot: Document): BrowserKovoRoot {
-  return {
-    findFragmentTarget(target) {
-      const element =
-        documentRoot.getElementById(target) ??
-        documentRoot.querySelector('[kovo-fragment-target="' + CSS.escape(target) + '"]');
-
-      return element ? new DomMorphTarget(element) : null;
-    },
-    querySelectorAll(selector) {
-      return documentRoot.querySelectorAll(selector);
-    },
-  };
 }

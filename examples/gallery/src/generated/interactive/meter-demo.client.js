@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { meterValueState as _meterValueState } from '@kovojs/ui/meter';
+import { meterValueState as _meterValueState } from '@kovojs/headless-ui/meter';
 
 export const GalleryMeterDemo$Button_click = handler((_event, ctx) => {
   const value = ctx.state.value === 92 ? 72 : 92;

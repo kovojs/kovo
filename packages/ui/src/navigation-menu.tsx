@@ -498,5 +498,3 @@ function toNavigationState(props: NavigationMenuPartProps) {
     ...(props.orientation === undefined ? {} : { orientation: props.orientation }),
   };
 }
-
-export * from '@kovojs/headless-ui/navigation-menu';

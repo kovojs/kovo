@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  createQueryStore,
-  installMutationBroadcast,
-  submitEnhancedMutation,
-  type EnhancedMutationFetchOptions,
-} from './client.js';
+import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
+import { installMutationBroadcast } from './broadcast.js';
+import { submitEnhancedMutation } from './mutation-submit.js';
 import {
   FakeBroadcastChannel,
   FakeMorphRoot,

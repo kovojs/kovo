@@ -1,16 +1,18 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  Autocomplete,
   autocompleteInput as _autocompleteInput,
-  AutocompleteInput,
   autocompleteKeyDown as _autocompleteKeyDown,
-  AutocompleteList,
-  AutocompleteOption,
   autocompleteOptionClick as _autocompleteOptionClick,
   autocompleteSuggestions as _autocompleteSuggestions,
-  AutocompleteValue,
   type AutocompleteItem,
+} from '@kovojs/headless-ui/autocomplete';
+import {
+  Autocomplete,
+  AutocompleteInput,
+  AutocompleteList,
+  AutocompleteOption,
+  AutocompleteValue,
 } from '@kovojs/ui/autocomplete';
 
 

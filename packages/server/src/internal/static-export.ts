@@ -24,3 +24,10 @@ export {
 } from '../static-export-result.js';
 export { staticExportOutputTargets } from '../static-export-output-targets.js';
 export type { StaticExportOutputTarget } from '../static-export-output-targets.js';
+export type {
+  StaticExportInventoryItem,
+  StaticExportManifest,
+  StaticExportManifestAsset,
+  StaticExportManifestClientModule,
+  StaticExportManifestRouteDocument,
+} from '../static-export-types.js';

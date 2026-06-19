@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { form, formFields, href, Link, redirect, type Route } from '@kovojs/core';
 
-import {
-  createQueryStore,
-  createSubmitContext,
-  type EnhancedMutationFetchOptions,
-} from './client.js';
-import { createSubmitContext as createSubmitContextFromSubmitContextModule } from './submit-context.js';
+import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
+import { createSubmitContext } from './submit-context.js';
 import {
   FakeMorphRoot,
   FakeMorphTarget,
@@ -27,10 +23,6 @@ declare module '@kovojs/core' {
 // runtime apply seam (store writes, update plans, fragment morphing). The 422
 // failure-parsing behavior lives in the sibling submit-context-failure.test.ts.
 describe('submit context apply', () => {
-  it('exports the split submit context implementation through the public runtime barrel', () => {
-    expect(createSubmitContext).toBe(createSubmitContextFromSubmitContextModule);
-  });
-
   it('submits typed forms through a ctx.submit-style helper', async () => {
     const addToCart = form<'cart/add', { productId: string; quantity: number }>('cart/add');
     const store = createQueryStore();

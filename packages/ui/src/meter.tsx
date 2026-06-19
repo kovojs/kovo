@@ -143,5 +143,3 @@ export const Meter = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/meter';

@@ -264,5 +264,3 @@ export const OtpFieldInput = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/otp-field';

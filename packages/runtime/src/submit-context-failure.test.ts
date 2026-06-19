@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { form, type FormFailure, type Route } from '@kovojs/core';
 
-import { createQueryStore, createSubmitContext } from './client.js';
+import { createQueryStore } from './client.js';
+import { createSubmitContext } from './submit-context.js';
 import { FakeMorphRoot } from './runtime-test-fakes.js';
 
 declare module '@kovojs/core' {

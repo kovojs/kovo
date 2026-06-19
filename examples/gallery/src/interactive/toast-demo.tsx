@@ -2,17 +2,19 @@
 import { component } from '@kovojs/core';
 import {
   normalizeToastDuration,
-  Toast,
-  ToastAction,
   toastActionClick as _toastActionClick,
   toastAnimationEnd as _toastAnimationEnd,
-  ToastClose,
   toastCloseClick as _toastCloseClick,
-  ToastDescription,
   toastEscapeKeyDown as _toastEscapeKeyDown,
+  toastViewportKeyDown as _toastViewportKeyDown,
+} from '@kovojs/headless-ui/toast';
+import {
+  Toast,
+  ToastAction,
+  ToastClose,
+  ToastDescription,
   ToastTitle,
   ToastViewport,
-  toastViewportKeyDown as _toastViewportKeyDown,
 } from '@kovojs/ui/toast';
 
 

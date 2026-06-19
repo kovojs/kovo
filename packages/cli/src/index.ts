@@ -25,13 +25,8 @@ import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
-import type {
-  KovoConfig,
-  KovoNeutralBuild,
-  KovoPreset,
-  PresetContext,
-  PresetDiagnostic,
-} from '@kovojs/server/build';
+import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
+import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 
 import {
   availableAddComponents,
@@ -1931,7 +1926,7 @@ interface DrizzleOptimisticCommandInput {
 async function runCompileDrizzleOptimisticCommand(
   options: CompileDrizzleOptimisticCommandOptions,
 ): Promise<CliCommandResult> {
-  const { deriveOptimistic } = await import('@kovojs/drizzle/derive');
+  const { deriveOptimistic } = await import('@kovojs/drizzle/internal/derive');
   const { serializeDerivedOptimistic } = await import('@kovojs/drizzle/internal/derive-codegen');
   const input = readJsonFile(options.inputPath) as DrizzleOptimisticCommandInput;
   const derivedEntries: Parameters<typeof serializeDerivedOptimistic>[0]['entries'][number][] = [];
@@ -2388,9 +2383,10 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     const loadedConfig = await loadKovoBuildConfig(process.cwd());
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     const resolvedAppModulePath = resolve(options.appModulePath);
-    const [{ cloudflare, node, vercel, writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
+    const [{ cloudflare, node, vercel }, { writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
       await Promise.all([
         import('@kovojs/server/build'),
+        import('@kovojs/server/internal/build'),
         loadBuildAppModule(resolvedAppModulePath, process.cwd()),
         kovoBuildStylesheetCss(resolvedAppModulePath),
       ]);

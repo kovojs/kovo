@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import type { KovoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { endpoint } from './endpoint.js';
 import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
 import { mutation } from './mutation.js';
@@ -13,13 +12,12 @@ import { s } from './schema.js';
 
 describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 client-module dispatch through the app registry', async () => {
-    const clientModules = createMemoryVersionedClientModuleRegistry();
-    const href = clientModules.put({
+    const app = createApp();
+    const href = app.clientModules.put({
       path: '/c/cart.client.js',
       source: 'export const cart = "ok";',
       version: 'v1',
     });
-    const app = createApp({ clientModules });
     const request = new Request(`https://shop.example.test${href}`);
 
     const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));

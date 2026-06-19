@@ -289,7 +289,6 @@ describe('server app shell Vite dev seam', () => {
       version: 'r7',
     });
     const app = createApp({
-      clientModules,
       routes: [
         route('/', {
           modulepreloads: [moduleHref],
@@ -299,6 +298,7 @@ describe('server app shell Vite dev seam', () => {
         }),
       ],
     });
+    app.clientModules = clientModules;
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
 
@@ -552,7 +552,6 @@ describe('server app shell Vite dev seam', () => {
       version: 'cart-v1',
     });
     const app = createApp({
-      clientModules,
       routes: [
         route('/cart', {
           page() {
@@ -561,6 +560,7 @@ describe('server app shell Vite dev seam', () => {
         }),
       ],
     });
+    app.clientModules = clientModules;
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
 
@@ -701,9 +701,9 @@ describe('server app shell Vite dev seam', () => {
       stylesheets: ['/assets/cart.css'],
     };
     const app = createApp({
-      clientModules,
       liveTargetRenderers: [cartRenderer],
     });
+    app.clientModules = clientModules;
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({ moduleId: '/src/app-shell.ts' });
 

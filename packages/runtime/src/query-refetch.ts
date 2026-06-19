@@ -42,7 +42,7 @@ export interface QueryRefetchResponse {
   text(): Promise<string> | string;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for refetching named queries over the typed-read endpoint (SPEC §9.4). */
 export interface RefetchQueriesOptions extends QueryRefetchOptions {
   applyQuery?: QueryApplyInterposition;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -51,7 +51,7 @@ export interface RefetchQueriesOptions extends QueryRefetchOptions {
   root?: unknown;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal The applied result of a refetched query: empty fragments plus query wire keys (SPEC §9.4). */
 export interface RefetchedQueryResponse {
   fragments: [];
   queries: readonly string[];
@@ -66,7 +66,7 @@ interface AppliedRefetchedQueryBody extends RefetchedQueryResponse {
 }
 
 /**
- * Refetch named queries over the typed-read endpoint and apply the results to
+ * @internal Refetch named queries over the typed-read endpoint and apply the results to
  * the query store and bindings. A background "visible return" layer: individual
  * query failures are reported via `onError` and skipped while the rest continue
  * (SPEC §4.4, §9.4).
@@ -134,7 +134,7 @@ export async function refetchQueries(
     .map(({ decodedQueryCount: _decodedQueryCount, ...body }) => body);
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for building the default delta-miss refetch callback (SPEC §9.1.1). */
 export interface CreateDeltaMissRefetcherOptions extends QueryRefetchOptions {
   applyQuery?: QueryApplyInterposition;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -143,7 +143,7 @@ export interface CreateDeltaMissRefetcherOptions extends QueryRefetchOptions {
 }
 
 /**
- * Create a default `onDeltaMiss` callback that GETs `/_q/<wireKey>`, parses the
+ * @internal Create a default `onDeltaMiss` callback that GETs `/_q/<wireKey>`, parses the
  * full `<kovo-query>` body, and applies it to the store (SPEC §9.1.1 refetch-full
  * path). The returned callback is fire-and-forget (async); errors are routed to
  * `options.onError`. Injectable via `options.fetch` for tests.

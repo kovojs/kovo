@@ -4,7 +4,7 @@ import {
   dialogCancel as _dialogCancel,
   dialogCloseClick as _dialogCloseClick,
   dialogTriggerClick as _dialogTriggerClick,
-} from '@kovojs/ui/dialog';
+} from '@kovojs/headless-ui/dialog';
 import {
   DrawerClose,
   DrawerContent,

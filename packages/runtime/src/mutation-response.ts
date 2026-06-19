@@ -4,14 +4,14 @@ import type { RuntimeErrorReporter } from './error-policy.js';
 import { parseJsonValue } from './json.js';
 import type { MutationChangeRecord } from './optimism.js';
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Minimal response shape exposing the headers read for mutation changes (SPEC §9.1). */
 export interface MutationResponseHeaderLike {
   headers?: {
     get(name: string): string | null;
   };
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Parse the `Kovo-Changes` header into sanitized change records (SPEC §9.1). */
 export function readMutationChangeHeader(
   response: MutationResponseHeaderLike,
   onError?: RuntimeErrorReporter,
@@ -32,7 +32,7 @@ export function readMutationChangeHeader(
   });
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Type guard for a same-user mutation-response broadcast message (SPEC §9.2). */
 export function isMutationBroadcastMessage(value: unknown): value is {
   body: string;
   changes: MutationChangeRecord[];
@@ -55,7 +55,7 @@ function isMutationChangeRecord(value: unknown): value is MutationChangeRecord {
   return sanitizeMutationChangeRecord(value) !== null;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Validate and normalize an untrusted value into a MutationChangeRecord (SPEC §9.1). */
 export function sanitizeMutationChangeRecord(value: unknown): MutationChangeRecord | null {
   if (typeof value !== 'object' || value === null) return null;
   if (!('domain' in value) || typeof value.domain !== 'string') return null;
@@ -75,7 +75,7 @@ export function sanitizeMutationChangeRecord(value: unknown): MutationChangeReco
 
 let generatedMutationIdemCounter = 0;
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Mint a stable per-request `Kovo-Idem` metadata value (SPEC §9.1). */
 export function createMutationIdem(): string {
   // SPEC.md §9.1: enhanced mutation requests carry stable Kovo-Idem metadata.
   // Browser crypto is preferred; this fallback only needs per-tab uniqueness.

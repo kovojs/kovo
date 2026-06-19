@@ -14,10 +14,13 @@ import {
   type MutationResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import type { InferSchema, MaybePromise, Schema } from './schema.js';
+import type { InferSchema, Schema } from './schema.js';
 
+/** @internal */
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
+/** @internal */
 export type WebhookSuccessStatus = 200;
+/** @internal */
 export type WebhookResponseStatus = WebhookFailureStatus | WebhookSuccessStatus;
 
 export interface WebhookFail<Code extends string = string, Payload = unknown> {
@@ -27,7 +30,7 @@ export interface WebhookFail<Code extends string = string, Payload = unknown> {
   };
   ok: false;
   retryAfter?: number;
-  status: WebhookFailureStatus;
+  status: 400 | 401 | 422 | 429 | 500;
 }
 
 export interface WebhookChangeOptions<Input = unknown> {
@@ -36,18 +39,21 @@ export interface WebhookChangeOptions<Input = unknown> {
   reason?: string;
 }
 
+/** @internal */
 export interface WebhookWireResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
   WebhookResponseStatus
 > {}
 
+/** @internal */
 export interface WebhookReplayStore {
   get(scope: string, idem: string): Promise<WebhookWireResponse> | WebhookWireResponse | undefined;
   reserve(scope: string, idem: string): WebhookReplayReservation | undefined;
   set(scope: string, idem: string, response: WebhookWireResponse): void;
 }
 
+/** @internal */
 export interface WebhookReplayReservation {
   commit(response: WebhookWireResponse): void;
 }
@@ -56,7 +62,7 @@ export interface WebhookHandlerContext<Input, Tx = unknown> {
   fail<Code extends string, Payload>(
     code: Code,
     payload: Payload,
-    options?: { retryAfter?: number; status?: WebhookFailureStatus },
+    options?: { retryAfter?: number; status?: 400 | 401 | 422 | 429 | 500 },
   ): WebhookFail<Code, Payload>;
   rawBody: Uint8Array;
   recordChange<const DomainKey extends string, ChangeInput = Input>(
@@ -80,7 +86,7 @@ interface WebhookDefinitionBase<InputSchema extends Schema<unknown>, Value, Tx> 
   handler: (
     input: WebhookInputFor<InputSchema>,
     context: WebhookHandlerContext<WebhookInputFor<InputSchema>, Tx>,
-  ) => MaybePromise<Value | WebhookFail>;
+  ) => Promise<Value | WebhookFail> | (Value | WebhookFail);
   idempotency?: (input: WebhookInputFor<InputSchema>) => string | undefined;
   input: InputSchema;
   replayStore?: WebhookReplayStore;

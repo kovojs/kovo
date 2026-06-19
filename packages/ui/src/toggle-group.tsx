@@ -232,5 +232,3 @@ export const ToggleGroupButton = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/toggle-group';

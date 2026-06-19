@@ -55,8 +55,10 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(packageJson.exports).toEqual({
       '.': './src/runtime.ts',
       // SPEC.md §10.5: the source-agnostic derivation algebra is a ts-morph-free
-      // entrypoint (it consumes the shared IR, not Drizzle source).
-      './derive': './src/derive.ts',
+      // entrypoint (it consumes the shared IR, not Drizzle source). api-cleanup:
+      // moved behind ./internal/derive — its signature is built from
+      // @kovojs/core/internal/derivation types, so it cannot be public.
+      './internal/derive': './src/derive.ts',
       './internal/derive-codegen': './src/derive-codegen.ts',
       './internal/static': './src/static.ts',
     });

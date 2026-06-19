@@ -6,7 +6,7 @@ import {
   sliderThumbDrag as _sliderThumbDrag,
   sliderThumbDragStart as _sliderThumbDragStart,
   sliderTrackPointerDown as _sliderTrackPointerDown,
-} from '@kovojs/ui/slider';
+} from '@kovojs/headless-ui/slider';
 
 export const GallerySliderDemo$SliderTrack_pointerdown = handler((event, ctx) => {
   const result = _sliderTrackPointerDown(Object(event), {

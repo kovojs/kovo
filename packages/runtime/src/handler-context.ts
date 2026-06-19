@@ -59,7 +59,7 @@ export function createDelegatedHandlerContext(
   };
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Read an island element's `data-p-*` params into a typed params object (SPEC §4.3). */
 export function readElementParams(element: EventElementLike): Record<string, ElementParamValue> {
   const paramTypes = readElementParamTypes(element.getAttribute?.('kovo-param-types'));
   const params: Record<string, ElementParamValue> = {};
@@ -92,7 +92,7 @@ function coerceElementParam(value: string, type: string | undefined): ElementPar
   return value;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Read an island element's serialized `kovo-state`, defaulting malformed state to `{}` (SPEC §4.3). */
 export function readElementState(element: EventElementLike): JsonValue {
   const stateHost = readElementStateHost(element);
   const state = stateHost?.getAttribute('kovo-state');
@@ -105,7 +105,7 @@ export function readElementState(element: EventElementLike): JsonValue {
   }
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Serialize island state back onto the element's `kovo-state` attribute (SPEC §4.3). */
 export function writeElementState(element: EventElementLike, state: JsonValue): void {
   element.setAttribute?.('kovo-state', JSON.stringify(state));
 }
@@ -139,7 +139,7 @@ function islandSignalKey(element: EventElementLike): string | null {
   );
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Abort `ctx.signal` for islands removed/replaced during a fragment morph (SPEC §4.7). */
 export function abortRemovedIslandSignals(
   currentHtml: string,
   nextHtml: string,

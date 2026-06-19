@@ -9,7 +9,6 @@
  */
 export { kovoCheck, kovoExplain, runKovoCommand } from './index.js';
 
-export type { DiagnosticCode } from '@kovojs/core';
 import type {
   KovoCheckInput as CoreKovoCheckInput,
   KovoExplainInput as CoreKovoExplainInput,

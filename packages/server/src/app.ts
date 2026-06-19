@@ -94,10 +94,10 @@ export function createApp<
     stylesheets: options.stylesheets ?? [],
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.db === undefined ? {} : { db: options.db }),
+    mutationResponses: options.mutationResponses ?? {},
     ...(options.mutationReplayStore === undefined
       ? {}
       : { mutationReplayStore: options.mutationReplayStore }),
-    mutationResponses: options.mutationResponses ?? {},
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),

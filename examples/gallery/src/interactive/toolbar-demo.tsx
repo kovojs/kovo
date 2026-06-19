@@ -1,11 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import {
-  Toolbar,
-  ToolbarButton,
-  ToolbarItem,
-  toolbarKeyDown as _toolbarKeyDown,
-} from '@kovojs/ui/toolbar';
+import { toolbarKeyDown as _toolbarKeyDown } from '@kovojs/headless-ui/toolbar';
+import { Toolbar, ToolbarButton, ToolbarItem } from '@kovojs/ui/toolbar';
 
 export interface GalleryToolbarDemoState {
   activeValue: string;

@@ -4,7 +4,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { csrfField, csrfToken, domain, mutation, query, s } from '@kovojs/server';
 
 import { createKovoTestHarness } from '@kovojs/test/harness';
-import { createDbVerifier } from '@kovojs/test/verifier';
+import { createDbVerifier } from '@kovojs/test/internal/verifier';
 import {
   createVerificationFakeDb,
   verificationLayerBehaviorFact,

@@ -6,15 +6,19 @@ import { galleryRoot, readCompiledDemo, readGenerated } from './interactive-gall
 
 describe('compiled interactive gallery demos', () => {
   it('keeps app-authored interactive demos on the styled UI surface', () => {
+    // rules/api-surface.md forbids `@kovojs/ui` re-exporting its `@kovojs/headless-ui`
+    // dependency (no `export *` on a public barrel), so the styled component surface now
+    // comes from `@kovojs/ui/<primitive>` while behavior handlers/state come from
+    // `@kovojs/headless-ui/<primitive>`. The invariant is that every interactive demo still
+    // renders styled `@kovojs/ui` components rather than dropping to raw markup.
     const interactiveRoot = resolve(galleryRoot, 'src/interactive');
     const sources: Array<[string, string]> = readdirSync(interactiveRoot)
       .filter((fileName) => fileName.endsWith('.tsx'))
       .map((fileName) => [fileName, readFileSync(resolve(interactiveRoot, fileName), 'utf8')]);
 
     for (const [fileName, source] of sources) {
-      const valueImportsOnly = source.replace(/^import type [\s\S]*?;\n/gm, '');
-      expect(valueImportsOnly, `${fileName} imports styled @kovojs/ui values`).not.toContain(
-        '@kovojs/headless-ui',
+      expect(source, `${fileName} imports styled @kovojs/ui values`).toMatch(
+        /from '@kovojs\/ui\/[a-z-]+';/,
       );
     }
   });

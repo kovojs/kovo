@@ -1,13 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  Tabs,
-  TabsList,
-  TabsPanel,
-  TabsTrigger,
   tabsKeyDown as _tabsKeyDown,
   tabsTriggerClick as _tabsTriggerClick,
-} from '@kovojs/ui/tabs';
+} from '@kovojs/headless-ui/tabs';
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from '@kovojs/ui/tabs';
 
 export interface GalleryTabsDemoState {
   activeValue: string;

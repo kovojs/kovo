@@ -11,6 +11,12 @@ import { createDbVerifier } from './verifier.js';
 import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 import type { DbVerificationConfig } from './verifier-observation.js';
 
+// SPEC.md §11: the harness verification API returns `DbVerificationDiagnostic`s
+// and the `page()` API returns a `PageAssertion`, so both documented types are
+// re-exported here to keep the harness public surface self-contained.
+export type { PageAssertion } from './page.js';
+export type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
+
 /** The context a Kovo test receives: the `db`, and helpers to `exec` mutations, run `query`s, load a `page`, and read verification diagnostics. */
 export interface KovoTestContext<Db = unknown> {
   db: Db;
@@ -28,10 +34,6 @@ export interface KovoTestContext<Db = unknown> {
   page: (path: string) => Promise<PageAssertion>;
   query: (query: QueryDefinition, input?: unknown) => Promise<unknown>;
   verificationDiagnostics(): readonly DbVerificationDiagnostic[];
-}
-
-export interface KovoTestRequest<Db> {
-  db: Db;
 }
 
 /** Options for `createKovoTestHarness`: the `db`, optional `pages`, request stub, touch graph, and verification config. */

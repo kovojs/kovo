@@ -7,7 +7,7 @@
   "type": "module",
   "exports": {
     ".": "./src/runtime.ts",
-    "./derive": "./src/derive.ts",
+    "./internal/derive": "./src/derive.ts",
     "./internal/derive-codegen": "./src/derive-codegen.ts",
     "./internal/static": "./src/static.ts"
   },
@@ -17,7 +17,7 @@
         "types": "./dist/runtime.d.mts",
         "default": "./dist/runtime.mjs"
       },
-      "./derive": {
+      "./internal/derive": {
         "types": "./dist/derive.d.mts",
         "default": "./dist/derive.mjs"
       },

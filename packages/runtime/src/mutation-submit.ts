@@ -66,7 +66,7 @@ interface EnhancedFormSubmitHooks {
   onAppliedQueries?: (queries: readonly string[]) => void;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Handle a delegated form submit as an enhanced mutation, falling back to native submit (SPEC §9.2). */
 export async function dispatchEnhancedFormSubmit(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
@@ -118,7 +118,7 @@ export async function dispatchEnhancedFormSubmit(
   return true;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Report whether a delegated submit event targets an enhanced mutation form (SPEC §9.2). */
 export function isEnhancedSubmitEvent(
   event: DelegatedEvent,
   options: EnhancedMutationLoaderOptions | undefined,
@@ -139,7 +139,7 @@ function formDataForSubmit(form: EnhancedFormElementLike, event: DelegatedEvent)
   return new FormData(form as HTMLFormElement);
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for submitting a single enhanced mutation request (SPEC §9.1). */
 export interface EnhancedMutationSubmitOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -174,7 +174,7 @@ export interface EnhancedMutationSubmitOptions {
   store: QueryStore;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Submit an enhanced mutation and apply the response to the runtime (SPEC §9.1). */
 export async function submitEnhancedMutation(
   options: EnhancedMutationSubmitOptions,
 ): Promise<EnhancedMutationAppliedResult> {

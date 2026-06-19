@@ -2,12 +2,14 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { observeSqlStatementArgument } from './sql-observer.js';
 
+/** @internal Verification config: which tables map to which domains/keys (SPEC.md §11). */
 export interface DbVerificationConfig {
   domainByTable: Record<string, string>;
   exemptTables?: readonly string[];
   keyByTable?: Record<string, string>;
 }
 
+/** @internal A single observed database read/write operation (SPEC.md §11.2). */
 export interface ObservedDbOperation {
   branch: string | undefined;
   domain: string | undefined;
@@ -18,6 +20,7 @@ export interface ObservedDbOperation {
   table: string;
 }
 
+/** @internal Per-operation observation hints (branch/rowKey) passed through the db seam. */
 export interface DbObservationOptions {
   branch?: string;
   rowKey?: string;

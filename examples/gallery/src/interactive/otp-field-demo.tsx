@@ -1,14 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  OtpField,
-  OtpFieldGroup,
-  OtpFieldHiddenInput,
   otpFieldInput as _otpFieldInput,
-  OtpFieldInput,
   otpFieldKeyDown as _otpFieldKeyDown,
   otpFieldPaste as _otpFieldPaste,
-} from '@kovojs/ui/otp-field';
+} from '@kovojs/headless-ui/otp-field';
+import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from '@kovojs/ui/otp-field';
 
 
 export interface GalleryOtpFieldDemoState {

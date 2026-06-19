@@ -1,12 +1,11 @@
 import {
   createQueryStore,
-  DomMorphRoot,
   installKovoLoader,
-  keyedDomMorph,
   type EnhancedMutationFetch,
   type MorphRoot,
   type TargetCollectorRoot,
 } from '@kovojs/runtime/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
 
 declare global {
   interface Window {

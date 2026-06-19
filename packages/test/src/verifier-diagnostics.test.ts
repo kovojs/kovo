@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { diagnosticsForObservations } from '@kovojs/test/verifier-diagnostics';
+import { diagnosticsForObservations } from '@kovojs/test/internal/verifier-diagnostics';
 import { expectedDiagnosticMessage } from './test-fixtures.js';
 
 describe('@kovojs/test verifier diagnostics', () => {

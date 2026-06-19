@@ -104,11 +104,8 @@ On a server-rendered stream the loader handles this. The runtime primitive it us
 the starter's `client.ts` wires it for programmatic use:
 
 ```ts
-import {
-  applyDeferredStreamResponseToRuntime,
-  createQueryStore,
-  installKovoLoader,
-} from '@kovojs/runtime/client';
+import { createQueryStore, installKovoLoader } from '@kovojs/runtime/client';
+import { applyDeferredStreamResponseToRuntime } from '@kovojs/runtime/generated';
 
 const store = createQueryStore();
 installKovoLoader({ importModule: (s) => import(s), root: document, queryStore: store });

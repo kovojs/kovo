@@ -1,16 +1,17 @@
 import {
-  applyCompiledQueryUpdatePlan,
   createQueryStore,
-  DomMorphRoot,
   type EnhancedMutationFetch,
   type MorphRoot,
   type TargetCollectorRoot,
   installKovoLoader,
-  keyedDomMorph,
+} from '@kovojs/runtime/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
+import {
+  applyCompiledQueryUpdatePlan,
   OptimisticRebaser,
   stampPendingQueries,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/runtime/client';
+} from '@kovojs/runtime/internal/mutation';
 
 type NavCounter = Record<string, unknown> & {
   value: number;
