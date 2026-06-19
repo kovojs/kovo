@@ -19,6 +19,8 @@ import { loadSiteContent } from './content.js';
 import { buildExamplesLlmsSection } from '../scripts/examples.mjs';
 import { buildLlmsFull, buildLlmsIndex } from '../scripts/llms.mjs';
 
+import { buildGalleryLlmsSection } from './gallery-llms.js';
+
 const SITE_ORIGIN = 'https://kovo.sh';
 
 // scripts/examples.mjs lives at site/scripts/; the repo root is two levels up
@@ -31,7 +33,8 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
   // Synthetic Examples section so the agent layer surfaces the runnable example
   // apps (otherwise a bespoke human-only route family invisible to llms.txt).
   const examplesSection = await buildExamplesLlmsSection({ repoRootPath });
-  const sections = [...content.sections, examplesSection];
+  // Gallery before Examples to match the human sidebar order (content.ts navGroups).
+  const sections = [...content.sections, buildGalleryLlmsSection(SITE_ORIGIN), examplesSection];
 
   // Search index.
   await writeFile(path.join(outDir, 'search-index.json'), JSON.stringify(content.search), 'utf8');

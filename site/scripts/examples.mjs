@@ -92,8 +92,9 @@ export const EXAMPLES = [
  * reference (auth/security example) have no live demo service to embed, so they
  * stay out of EXAMPLES (keeping the human route working) and are listed here so
  * agents still get their authored source. Same ExampleManifest shape, minus the
- * embed/service fields the human route needs. `gallery` is intentionally omitted
- * (it has its own pipeline).
+ * embed/service fields the human route needs. The component gallery has its own
+ * agent-layer section (site/src/aux.ts buildGalleryLlmsSection, sourced from
+ * examples/gallery/src/component-catalog.ts), so it is not listed here.
  *
  * @type {Array<{ name: string, title: string, blurb: string, dir: string, sources: Array<string | { name?: string, path: string }> }>}
  */
