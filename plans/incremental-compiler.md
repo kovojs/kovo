@@ -146,9 +146,14 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
     proves the internal `CompileCache` dedupes work, keys by source and the
     whole passed registry fact set, and still preserves Vite repeated-transform
     cache behavior.
-- [ ] Wrap the `transform` hot path: `compileViteComponentModule` (`vite.ts:241`) consults the cache
-      before calling `compileComponentModule`. Same wrap for the test-pipeline plugin call site and
-      the temp-emit helper from the predecessor plan.
+- [x] Wrap the Vite `transform`/client-module hot path so `compileViteComponentModule`
+      consults `CompileCache` before calling `compileComponentModule`.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/cache-identity.test.ts -t "CompileCache|caches repeated transforms by source hash and compile context|compilerBuildId"`
+    proves repeated Vite transforms use the shared `CompileCache` and preserve
+    existing client-module behavior.
+- [ ] Wrap the test-pipeline plugin call site and the temp-emit helper from the
+      predecessor plan with the same `CompileCache` abstraction.
 - [x] Add a process-lifetime cache in the Vite plugin closure (alongside `clientModules`/`hmrImpacts`)
       so repeated imports of the same module within one dev session / test run never recompile.
   - Evidence 2026-06-19:
