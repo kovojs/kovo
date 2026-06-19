@@ -46,26 +46,26 @@ export const GalleryDisclosureDemo = component({
     <Disclosure
       data-gallery-interactive="disclosure"
       open={state.open}
-      data-bind:open="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$Disclosure_open_derive"
-      data-bind:data-state="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$Disclosure_data_state_derive"
+      data-bind:open="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$Disclosure_open_derive"
+      data-bind:data-state="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$Disclosure_data_state_derive"
       kovo-state='{"open":false}'
     >
       <DisclosureTrigger
         contentId="gallery-interactive-disclosure-panel"
-        on:click="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_click"
+        on:click="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_click"
         open={state.open}
-        data-bind:open="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_open_derive"
-        data-bind:aria-expanded="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_aria_expanded_derive"
-        data-bind:data-state="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_data_state_derive"
+        data-bind:open="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_open_derive"
+        data-bind:aria-expanded="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_aria_expanded_derive"
+        data-bind:data-state="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_data_state_derive"
       >
         Shipping rules
       </DisclosureTrigger>
       <DisclosureContent
         contentId="gallery-interactive-disclosure-panel"
         open={state.open}
-        data-bind:open="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_open_derive"
-        data-bind:data-state="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_data_state_derive"
-        data-bind:hidden="/c/__v/218eec16/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_hidden_derive"
+        data-bind:open="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_open_derive"
+        data-bind:data-state="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_data_state_derive"
+        data-bind:hidden="/c/__v/f68e6d34/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_hidden_derive"
       >
         Orders over $50 ship free.
       </DisclosureContent>

@@ -31,20 +31,20 @@ export const GallerySwitchDemo = component({
       data-gallery-interactive="switch"
       form="gallery-switch-form"
       name="gallery-notifications"
-      on:click="/c/__v/44ed888b/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_click"
-      on:keydown="/c/__v/44ed888b/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_keydown"
+      on:click="/c/__v/bfb47abd/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_click"
+      on:keydown="/c/__v/bfb47abd/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_keydown"
       value="enabled"
       checked={state.checked}
-      data-bind:checked="/c/__v/44ed888b/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_checked_derive"
-      data-bind:aria-checked="/c/__v/44ed888b/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_aria_checked_derive"
-      data-bind:data-state="/c/__v/44ed888b/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_data_state_derive"
+      data-bind:checked="/c/__v/bfb47abd/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_checked_derive"
+      data-bind:aria-checked="/c/__v/bfb47abd/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_aria_checked_derive"
+      data-bind:data-state="/c/__v/bfb47abd/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_data_state_derive"
       kovo-state='{"checked":false}'
     >
       <span style="user-select:none;line-height:1">Notifications</span>
       <output
         style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
         data-demo-state="checked"
-        data-bind="/c/__v/44ed888b/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$output_text_derive"
+        data-bind="/c/__v/bfb47abd/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$output_text_derive"
       >
         {state.checked ? 'on' : 'off'}
       </output>

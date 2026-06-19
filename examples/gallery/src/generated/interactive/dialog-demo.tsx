@@ -47,26 +47,26 @@ export const GalleryDialogDemo = component({
       <Dialog
         data-gallery-interactive="dialog"
         open={state.open}
-        data-bind:open="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$Dialog_open_derive"
-        data-bind:data-state="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$Dialog_data_state_derive"
+        data-bind:open="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$Dialog_open_derive"
+        data-bind:data-state="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$Dialog_data_state_derive"
         kovo-state='{"open":false}'
       >
         <DialogTrigger
           contentId={contentId}
-          on:click="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_click"
+          on:click="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_click"
           open={state.open}
-          data-bind:open="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_open_derive"
+          data-bind:open="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_open_derive"
         >
           Review cart
         </DialogTrigger>
         <DialogContent
           contentId={contentId}
           descriptionId={descriptionId}
-          on:cancel="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_cancel"
+          on:cancel="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_cancel"
           titleId={titleId}
           open={state.open}
-          data-bind:open="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_open_derive"
-          data-bind:data-state="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_data_state_derive"
+          data-bind:open="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_open_derive"
+          data-bind:data-state="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_data_state_derive"
         >
           <h2 style="font-size:1rem;font-weight:600" id={titleId}>
             Cart review
@@ -76,10 +76,10 @@ export const GalleryDialogDemo = component({
           </p>
           <DialogClose
             contentId={contentId}
-            on:click="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_click"
+            on:click="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_click"
             open={state.open}
-            data-bind:open="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_open_derive"
-            data-bind:data-state="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_data_state_derive"
+            data-bind:open="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_open_derive"
+            data-bind:data-state="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_data_state_derive"
           >
             Close review
           </DialogClose>
@@ -87,7 +87,7 @@ export const GalleryDialogDemo = component({
         <output
           style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="open"
-          data-bind="/c/__v/ae86869b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$output_text_derive"
+          data-bind="/c/__v/ffae152d/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>
