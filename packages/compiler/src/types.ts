@@ -128,9 +128,9 @@ export type RegistryMutationInputFacts = Readonly<
 >;
 
 /**
- * @internal Conservative cross-module dependency footprint for one component compile. Phase 2 of
- * the incremental compiler narrows this from whole declared fact sets to the exact slices read by
- * lowering; until then it is intentionally over-broad and correctness-preserving.
+ * @internal Cross-module dependency footprint for one component compile. It records the fact
+ * slices lowering or diagnostics read so the incremental compiler can later hash only relevant
+ * inputs while preserving SPEC.md §5.2 determinism.
  */
 export interface CompileDependencyFootprint {
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];

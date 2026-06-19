@@ -187,10 +187,16 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
     proves `CompileResult.dependencyFootprint` records effective package prefixes, registry facts,
     previous registry facts, query-shape inputs, and compile roots; `corepack pnpm exec vitest --run tests/compiler-determinism.test.ts`
     proves the new internal field remains byte-stable across two fresh processes.
-- [ ] Narrow `CompileResult.dependencyFootprint` from the whole declared fact set to the
+- [x] Narrow `CompileResult.dependencyFootprint` from the whole declared fact set to the
       cross-module facts actually consumed (which package prefixes resolved, which mutation inputs
       referenced, which registry facts read). This is the per-file "referenced signatures" of the
       `.tsbuildinfo` analogue.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "dependency footprint"`
+    proves dependency footprints keep only query shapes referenced by the component, only previous
+    registry component names with matching DOM leaves, and only mutation input schemas referenced
+    by rendered mutation forms while retaining app-wide registry slices that generated registry
+    artifacts still read. `corepack pnpm exec tsc --noEmit --pretty false` passed.
 - [ ] Narrow the Phase 1 key from "all facts" to `hash(footprint slice)`, so a change to an
       unrelated module's facts does not invalidate this module.
 - [ ] Build the inverse index (fact → dependent modules) so when the whole-program graph changes,

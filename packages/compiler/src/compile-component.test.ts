@@ -75,9 +75,14 @@ describe('compileComponentModule', () => {
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
-  it('records a conservative compile dependency footprint for incremental cache invalidation', () => {
+  it('records the consumed compile dependency footprint for incremental cache invalidation', () => {
     const packageComponentPrefixes = [{ packageName: '@acme/widgets', prefix: 'acme-' }];
-    const previousRegistryFacts = { components: ['components/legacy-card/legacy-card'] };
+    const previousRegistryFacts = {
+      components: [
+        'components/legacy-card/legacy-card',
+        'components/previous-cart/cart-badge',
+      ],
+    };
     const queryShapeFacts = [
       {
         query: 'cart',
@@ -85,7 +90,7 @@ describe('compileComponentModule', () => {
         source: 'generated/queries/cart.shape.ts',
       },
     ] as const;
-    const queryShapes = { cart: { count: 'number' } } as const;
+    const queryShapes = { cart: { count: 'number' }, product: { name: 'string' } } as const;
     const registryFacts = {
       mutationInputs: { 'cart/add': [] },
       queries: { cart: 'CartQuery' },
@@ -106,10 +111,67 @@ describe('compileComponentModule', () => {
     expect(result.dependencyFootprint).toEqual({
       packageComponentPrefixes,
       packagePrefixDiscoveryRoot: '/workspace/app',
-      previousRegistryFacts,
+      previousRegistryFacts: { components: ['components/previous-cart/cart-badge'] },
       queryShapeFacts,
-      queryShapes,
-      registryFacts,
+      queryShapes: { cart: { count: 'number' } },
+      registryFacts: {
+        queries: { cart: 'CartQuery' },
+        routes: ['/cart'],
+      },
+    });
+
+    const formResult = compileComponentModule({
+      fileName: 'components/cart/add-to-cart-form.tsx',
+      registryFacts: {
+        mutationInputs: {
+          'cart/add': [
+            {
+              coercion: 'number',
+              defaulted: false,
+              name: 'quantity',
+              optional: false,
+              provenance: 'registry',
+              required: true,
+            },
+          ],
+          'product/save': [],
+        },
+        mutations: {
+          'cart/add': 'typeof addToCart',
+          'product/save': 'typeof saveProduct',
+        },
+      },
+      source: `
+import { component } from '@kovojs/core';
+
+export const AddToCartForm = component({
+  mutations: { addToCart },
+  render: () => (
+    <form mutation={addToCart}>
+      <input name="quantity" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(formResult.dependencyFootprint.registryFacts).toEqual({
+      mutationInputs: {
+        'cart/add': [
+          {
+            coercion: 'number',
+            defaulted: false,
+            name: 'quantity',
+            optional: false,
+            provenance: 'registry',
+            required: true,
+          },
+        ],
+      },
+      mutations: {
+        'cart/add': 'typeof addToCart',
+        'product/save': 'typeof saveProduct',
+      },
     });
   });
 

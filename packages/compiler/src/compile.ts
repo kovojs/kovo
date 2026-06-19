@@ -67,6 +67,7 @@ import type {
   QueryUpdatePlanFact,
   StateDeriveFact,
   StateDeriveReferenceFact,
+  RegistryFacts,
 } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
 
@@ -201,6 +202,11 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     model,
     updateCoverage,
   );
+  const mutationForms = mutationFormExplainFacts(model, {
+    fileName: options.fileName,
+    ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
+    source,
+  });
   const componentGraphFacts = [
     componentGraphFact(
       componentNames.registryKey,
@@ -209,11 +215,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
       fragmentTargets,
       styleExtraction.ruleUsages,
       firstComponentModel(originalModel)?.localName,
-      mutationFormExplainFacts(model, {
-        fileName: options.fileName,
-        ...(compileOptions.registryFacts ? { registryFacts: compileOptions.registryFacts } : {}),
-        source,
-      }),
+      mutationForms,
     ),
   ];
   const cssAssets = cssSource
@@ -286,7 +288,14 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
 
   return {
     componentGraphFacts,
-    dependencyFootprint: compileDependencyFootprint(compileOptions),
+    dependencyFootprint: compileDependencyFootprint(compileOptions, {
+      fileName: options.fileName,
+      fragmentTargets,
+      model,
+      mutationForms,
+      queryUpdatePlans,
+      viewTransitionNames: structuralLowering.viewTransitionStamps.map((stamp) => stamp.name),
+    }),
     diagnostics,
     files: [
       { fileName: fileNames.server, kind: 'server', source: serverModule.source },
@@ -332,7 +341,43 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   };
 }
 
-function compileDependencyFootprint(options: CompileComponentOptions): CompileDependencyFootprint {
+interface CompileDependencyFootprintUsage {
+  fileName: string;
+  fragmentTargets: readonly string[];
+  model: ComponentModuleModel;
+  mutationForms: readonly { mutation: string }[];
+  queryUpdatePlans: readonly QueryUpdatePlanFact[];
+  viewTransitionNames: readonly string[];
+}
+
+function compileDependencyFootprint(
+  options: CompileComponentOptions,
+  usage?: CompileDependencyFootprintUsage,
+): CompileDependencyFootprint {
+  if (!usage) return conservativeCompileDependencyFootprint(options);
+
+  const queryNames = referencedQueryNames(usage);
+  const previousRegistryFacts = slicePreviousRegistryFacts(options.previousRegistryFacts, usage);
+  const queryShapes = sliceRecord(options.queryShapes, queryNames);
+  const registryFacts = sliceRegistryFacts(options.registryFacts, usage);
+
+  return {
+    ...(options.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: options.packageComponentPrefixes }),
+    ...(options.packagePrefixDiscoveryRoot === undefined
+      ? {}
+      : { packagePrefixDiscoveryRoot: options.packagePrefixDiscoveryRoot }),
+    ...(previousRegistryFacts === undefined ? {} : { previousRegistryFacts }),
+    ...(options.queryShapeFacts === undefined ? {} : { queryShapeFacts: options.queryShapeFacts }),
+    ...(queryShapes === undefined ? {} : { queryShapes }),
+    ...(registryFacts === undefined ? {} : { registryFacts }),
+  };
+}
+
+function conservativeCompileDependencyFootprint(
+  options: CompileComponentOptions,
+): CompileDependencyFootprint {
   return {
     ...(options.packageComponentPrefixes === undefined
       ? {}
@@ -347,6 +392,80 @@ function compileDependencyFootprint(options: CompileComponentOptions): CompileDe
     ...(options.queryShapes === undefined ? {} : { queryShapes: options.queryShapes }),
     ...(options.registryFacts === undefined ? {} : { registryFacts: options.registryFacts }),
   };
+}
+
+function referencedQueryNames(usage: CompileDependencyFootprintUsage): Set<string> {
+  const names = new Set<string>();
+  for (const plan of usage.queryUpdatePlans) names.add(plan.query);
+  for (const component of usage.model.components) {
+    for (const option of component.options) {
+      if (option.key !== 'queries') continue;
+      for (const entry of option.objectEntries ?? []) names.add(entry.key);
+    }
+  }
+  return names;
+}
+
+function slicePreviousRegistryFacts(
+  facts: RegistryFacts | undefined,
+  usage: CompileDependencyFootprintUsage,
+): RegistryFacts | undefined {
+  const previousComponents = facts?.components;
+  if (!previousComponents) return undefined;
+
+  const domLeaves = new Set(
+    usage.model.components.map((component) =>
+      deriveComponentNames(usage.fileName, component).domName,
+    ),
+  );
+  const components = previousComponents.filter((name) => domLeaves.has(registryNameLeaf(name)));
+  return components.length === 0 ? undefined : { components };
+}
+
+function sliceRegistryFacts(
+  facts: RegistryFacts | undefined,
+  usage: CompileDependencyFootprintUsage,
+): RegistryFacts | undefined {
+  if (!facts) return undefined;
+
+  const mutationKeys = new Set(usage.mutationForms.map((form) => form.mutation));
+  const mutationInputs = sliceRecord(facts.mutationInputs, mutationKeys);
+  const fragmentTargets = sliceArray(facts.fragmentTargets, new Set(usage.fragmentTargets));
+  const viewTransitions = sliceArray(facts.viewTransitions, new Set(usage.viewTransitionNames));
+  const sliced: RegistryFacts = {
+    ...(facts.components === undefined ? {} : { components: facts.components }),
+    ...(facts.domainKeys === undefined ? {} : { domainKeys: facts.domainKeys }),
+    ...(fragmentTargets === undefined ? {} : { fragmentTargets }),
+    ...(facts.invalidations === undefined ? {} : { invalidations: facts.invalidations }),
+    ...(facts.liveTargets === undefined ? {} : { liveTargets: facts.liveTargets }),
+    ...(mutationInputs === undefined ? {} : { mutationInputs }),
+    ...(facts.mutations === undefined ? {} : { mutations: facts.mutations }),
+    ...(facts.queries === undefined ? {} : { queries: facts.queries }),
+    ...(facts.routes === undefined ? {} : { routes: facts.routes }),
+    ...(viewTransitions === undefined ? {} : { viewTransitions }),
+  };
+  return Object.keys(sliced).length === 0 ? undefined : sliced;
+}
+
+function sliceRecord<T>(
+  record: Readonly<Record<string, T>> | undefined,
+  keys: ReadonlySet<string>,
+): Record<string, T> | undefined {
+  if (!record || keys.size === 0) return undefined;
+
+  const entries = Object.entries(record).filter(([key]) => keys.has(key));
+  return entries.length === 0 ? undefined : Object.fromEntries(entries);
+}
+
+function sliceArray<T>(items: readonly T[] | undefined, keys: ReadonlySet<T>): T[] | undefined {
+  if (!items || keys.size === 0) return undefined;
+
+  const selected = items.filter((item) => keys.has(item));
+  return selected.length === 0 ? undefined : selected;
+}
+
+function registryNameLeaf(registryName: string): string {
+  return registryName.split('/').at(-1) ?? registryName;
 }
 
 function collectClockUpdatePlans(
