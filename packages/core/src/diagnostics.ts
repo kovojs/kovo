@@ -47,7 +47,8 @@ export type DiagnosticCode =
   | 'KV408'
   | 'KV409'
   | 'KV410'
-  | 'KV411';
+  | 'KV411'
+  | 'KV412';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -596,5 +597,10 @@ export const diagnosticDefinitions = {
     code: 'KV411',
     severity: 'error',
     message: 'Query read set includes an exempt table.',
+  },
+  KV412: {
+    code: 'KV412',
+    severity: 'error',
+    message: 'Query reads an unmodeled relation.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

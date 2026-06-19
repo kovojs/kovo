@@ -54,6 +54,7 @@ describe('diagnostic registry', () => {
       'KV409',
       'KV410',
       'KV411',
+      'KV412',
     ]);
   });
 
@@ -426,6 +427,11 @@ describe('diagnostic registry', () => {
         "KV411": {
           "code": "KV411",
           "message": "Query read set includes an exempt table.",
+          "severity": "error",
+        },
+        "KV412": {
+          "code": "KV412",
+          "message": "Query reads an unmodeled relation.",
           "severity": "error",
         },
       }

@@ -171,8 +171,13 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
         PL/pgSQL triggers (**KV413** if a detected trigger source lacks it);
         `kovo({ view:{ of, refresh } })` for matviews — async-`REFRESH` matviews
         force optimistic status `await-fragment`.
-  - [ ] **KV412** build error when a query's resolved `.from()`/join target is a
+  - [x] **KV412** build error when a query's resolved `.from()`/join target is a
         view/matview with no derived or declared domain.
+    - Evidence 2026-06-19: `packages/drizzle/src/static.ts` detects
+      `pgView(...).as(...)` and `pgMaterializedView(...).as(...)` query reads as
+      unmodeled relations, `packages/core/src/diagnostics.ts` registers KV412,
+      and `SPEC.md` §11.3 lists the diagnostic. Focused tests passed:
+      Drizzle query-shapes, core diagnostics, CLI kovo-check, and `tsc --noEmit`.
   - [ ] Backstop all of the above with **X1** (observed per-table affected-row
         deltas after COMMIT vs the static graph).
   - Acceptance: cascade/trigger/view fixtures each produce the correct

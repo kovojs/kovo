@@ -1176,6 +1176,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV409 | notice     | Non-eq predicate — degraded to table-level invalidation                                                                                                                        |
 | KV410 | error      | Opaque query projection (`sql<T>`, raw SQL) — declared output schema required, shape runtime-verified (§10.2)                                                                  |
 | KV411 | error      | Query read set includes an `exempt` table — exemption is write-side only (§10.1), runtime-verified (§11.2)                                                                     |
+| KV412 | error      | Query reads an unmodeled relation (view / materialized view) with no derived or declared domain (§10.1/§11.1)                                                                  |
 
 The shared `diagnosticDefinitions` registry is the source of each diagnostic's severity; surfaces
 must not override severity or invent local blocking policies. A diagnostic with `error` severity

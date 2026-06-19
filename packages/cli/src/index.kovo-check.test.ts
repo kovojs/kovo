@@ -558,7 +558,7 @@ describe('kovo check', () => {
     });
   });
 
-  it('prints static Drizzle KV410 diagnostics as kovo check findings', () => {
+  it('prints static Drizzle query diagnostics as kovo check findings', () => {
     expect(
       kovoCheck({
         diagnostics: [
@@ -566,12 +566,18 @@ describe('kovo check', () => {
             code: 'KV410',
             site: 'cart.queries.ts:5',
           },
+          {
+            code: 'KV412',
+            message:
+              'Query reads an unmodeled relation. view product_search has no derived or declared domain.',
+            site: 'product.queries.ts:9',
+          },
         ],
       }),
     ).toEqual({
       exitCode: 1,
       output:
-        'kovo-check/v1\nERROR KV410 cart.queries.ts:5 Query result shape failed declared output schema.\n',
+        'kovo-check/v1\nERROR KV410 cart.queries.ts:5 Query result shape failed declared output schema.\nERROR KV412 product.queries.ts:9 Query reads an unmodeled relation. view product_search has no derived or declared domain.\n',
     });
   });
 

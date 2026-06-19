@@ -111,6 +111,7 @@ const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
   'refreshMaterializedView',
 ]);
 const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
+const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set(['pgMaterializedView', 'pgView']);
 const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   ...DRIZZLE_SELECT_QUERY_METHODS,
   'delete',
@@ -122,6 +123,7 @@ const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
 const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
+const UNMODELED_RELATION_EXPRESSION_PREFIX = '__kovoUnmodeledRelation';
 const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
 const TOUCH_BODY_ITERATION_CALLBACK_METHODS = new Set([
   'filter',
@@ -322,6 +324,7 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
             sourceFile,
             extraction.tableNamesBySymbol,
           ),
+          unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
           tableNamesBySymbol: extraction.tableNamesBySymbol,
         });
       },
@@ -341,6 +344,7 @@ interface ProjectExtraction {
   files: readonly SourceFileInput[];
   sourceFiles: readonly SourceFile[];
   tableNamesBySymbol: ReadonlyMap<string, string>;
+  unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>;
 }
 
 function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtraction {
@@ -363,6 +367,9 @@ function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtr
     }),
   );
   const tableNamesBySymbol = new Map(projectTableNamesBySymbol(sourceFiles));
+  const unmodeledRelationNamesBySymbol = new Map(
+    projectUnmodeledRelationNamesBySymbol(sourceFiles),
+  );
   const conditionalTableTargetsBySyntheticName = appendProjectConditionalTableNames(
     sourceFiles,
     tableNamesBySymbol,
@@ -378,6 +385,7 @@ function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtr
     files: options.files,
     sourceFiles,
     tableNamesBySymbol,
+    unmodeledRelationNamesBySymbol,
   };
 }
 
@@ -1969,6 +1977,7 @@ function extractQueryFactsFromPreparedFiles(
       )
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
+        .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, site))
         .concat(exemptQueryReadDiagnostics(query.tableExpressions, fileTables, site))
         .concat(localQueryHelperDiagnostics(localHelperSummary));
       const allReads = [...new Set([...reads, ...helperReads])].sort();
@@ -2218,6 +2227,111 @@ function projectTableNamesBySymbol(
 
   appendProjectAliasTableNames(sourceFiles, namesBySymbol);
   return namesBySymbol;
+}
+
+interface UnmodeledRelationFact {
+  expression: string;
+  kind: 'materialized-view' | 'view';
+  name: string;
+}
+
+function projectUnmodeledRelationNamesBySymbol(
+  sourceFiles: readonly SourceFile[],
+): ReadonlyMap<string, string> {
+  const namesBySymbol = new Map<string, string>();
+
+  for (const sourceFile of sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const initializer = declaration.getInitializer();
+      const relation = unmodeledRelationForInitializer(initializer);
+      if (!relation) continue;
+
+      const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
+      if (!symbolKey) continue;
+
+      namesBySymbol.set(symbolKey, unmodeledRelationExpression(relation.kind, relation.name));
+    }
+  }
+
+  return namesBySymbol;
+}
+
+function projectUnmodeledRelationNameForNode(
+  node: Node,
+  relationNamesBySymbol: ReadonlyMap<string, string>,
+): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (expression !== node) {
+    return projectUnmodeledRelationNameForNode(expression, relationNamesBySymbol);
+  }
+
+  if (Node.isPropertyAccessExpression(node)) {
+    return projectUnmodeledRelationNameForSymbol(node.getNameNode(), relationNamesBySymbol);
+  }
+  if (Node.isElementAccessExpression(node)) {
+    return projectUnmodeledRelationNameForSymbol(node, relationNamesBySymbol);
+  }
+
+  return projectUnmodeledRelationNameForSymbol(node, relationNamesBySymbol);
+}
+
+function projectUnmodeledRelationNameForSymbol(
+  node: Node,
+  relationNamesBySymbol: ReadonlyMap<string, string>,
+): string | undefined {
+  const symbolKey = resolvedSymbolKey(node.getSymbol());
+  if (!symbolKey) return undefined;
+  return relationNamesBySymbol.get(symbolKey);
+}
+
+function unmodeledRelationForInitializer(
+  initializer: Node | undefined,
+): Pick<UnmodeledRelationFact, 'kind' | 'name'> | undefined {
+  if (!initializer || !Node.isCallExpression(initializer)) return undefined;
+
+  const rootCall = rootCallExpression(initializer);
+  const expression = unwrappedStaticExpressionNode(rootCall.getExpression());
+  const factoryName = Node.isIdentifier(expression)
+    ? (projectPgCoreIdentifierExportName(expression) ?? expression.getText())
+    : Node.isPropertyAccessExpression(expression) && isDrizzlePgCoreNamespaceMember(expression)
+      ? expression.getName()
+      : undefined;
+  if (!factoryName || !DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES.has(factoryName)) {
+    return undefined;
+  }
+
+  return {
+    kind: factoryName === 'pgMaterializedView' ? 'materialized-view' : 'view',
+    name: tableNameArgument(rootCall) ?? '<unknown>',
+  };
+}
+
+function rootCallExpression(call: CallExpression): CallExpression {
+  let current = call;
+
+  while (true) {
+    const receiver = staticAccessExpression(current.getExpression());
+    if (!receiver || !Node.isCallExpression(receiver)) return current;
+    current = receiver;
+  }
+}
+
+function unmodeledRelationExpression(kind: UnmodeledRelationFact['kind'], name: string): string {
+  return `${UNMODELED_RELATION_EXPRESSION_PREFIX}:${kind}:${name}`;
+}
+
+function unmodeledRelationFromExpression(expression: string): UnmodeledRelationFact | undefined {
+  const [prefix, kind, ...nameParts] = expression.split(':');
+  const name = nameParts.join(':');
+  if (
+    prefix !== UNMODELED_RELATION_EXPRESSION_PREFIX ||
+    (kind !== 'materialized-view' && kind !== 'view') ||
+    name.length === 0
+  ) {
+    return undefined;
+  }
+
+  return { expression, kind, name };
 }
 
 function appendProjectAliasTableNames(
@@ -2874,6 +2988,7 @@ interface ProjectQueryDefinitionOptions {
   namespaceTableNames: ProjectNamespaceTableNames;
   relationalTableNames: ReadonlyMap<string, string>;
   tableNamesBySymbol: ReadonlyMap<string, string>;
+  unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>;
 }
 
 function extractProjectQueryDefinitions(
@@ -2881,7 +2996,8 @@ function extractProjectQueryDefinitions(
   options: ProjectQueryDefinitionOptions,
 ): ExtractedQueryDefinition[] {
   const resolveTableIdentifier = (node: Node) =>
-    projectTableNameForNode(node, options.tableNamesBySymbol, options.namespaceTableNames);
+    projectTableNameForNode(node, options.tableNamesBySymbol, options.namespaceTableNames) ??
+    projectUnmodeledRelationNameForNode(node, options.unmodeledRelationNamesBySymbol);
 
   return extractQueryDefinitionsFromSourceFile(sourceFile, {
     ...(options.columnShapes ? { columnShapes: options.columnShapes } : {}),
@@ -4762,6 +4878,27 @@ function exemptQueryReadDiagnostics(
       site,
     },
   ];
+}
+
+function unmodeledRelationReadDiagnostics(
+  tableExpressions: readonly string[],
+  site: string,
+): TouchGraphDiagnostic[] {
+  const relations = tableExpressions
+    .map(unmodeledRelationFromExpression)
+    .filter((relation): relation is UnmodeledRelationFact => relation !== undefined);
+  if (relations.length === 0) return [];
+
+  return [...new Map(relations.map((relation) => [relation.expression, relation])).values()]
+    .sort(
+      (left, right) => left.name.localeCompare(right.name) || left.kind.localeCompare(right.kind),
+    )
+    .map((relation) => ({
+      code: 'KV412' as const,
+      message: `${diagnosticDefinitions.KV412.message} ${relation.kind} ${relation.name} has no derived or declared domain.`,
+      severity: diagnosticDefinitions.KV412.severity,
+      site,
+    }));
 }
 
 function queryTableExpressions(
