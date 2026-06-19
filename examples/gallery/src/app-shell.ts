@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
@@ -93,8 +93,7 @@ export const galleryInteractiveNodeHandler = galleryInteractiveAppShell.nodeHand
 export default galleryInteractiveAppShell.app;
 
 function registerGalleryInteractiveClientModule(demoName: string): string {
-  const modulePath = `/c/src/interactive/${demoName}.client.js`;
-  const rawClientSource = compileGalleryInteractiveClientModule(demoName);
+  const { modulePath, source: rawClientSource } = galleryInteractiveClientModule(demoName);
   const generatedClientSource = rewriteGalleryClientImports(rawClientSource);
   const version = galleryClientModuleVersion(rawClientSource);
   const href = galleryInteractiveClientModules.put({
@@ -110,8 +109,28 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
   return href;
 }
 
-function compileGalleryInteractiveClientModule(demoName: string): string {
-  const fileName = `src/interactive/${demoName}.tsx`;
+function galleryInteractiveClientModule(demoName: string): { modulePath: string; source: string } {
+  const generatedClientUrl = new URL(
+    `./generated/interactive/${demoName}.client.js`,
+    import.meta.url,
+  );
+  if (existsSync(generatedClientUrl)) {
+    return {
+      modulePath: `/c/examples/gallery/src/generated/interactive/${demoName}.client.js`,
+      source: compileGalleryInteractiveClientModule(
+        demoName,
+        `examples/gallery/src/generated/interactive/${demoName}.tsx`,
+      ),
+    };
+  }
+
+  return {
+    modulePath: `/c/src/interactive/${demoName}.client.js`,
+    source: compileGalleryInteractiveClientModule(demoName, `src/interactive/${demoName}.tsx`),
+  };
+}
+
+function compileGalleryInteractiveClientModule(demoName: string, fileName: string): string {
   const source = readFileSync(new URL(`./interactive/${demoName}.tsx`, import.meta.url), 'utf8');
   const result = compileComponentModule({ fileName, source });
   const clientSource = result.files.find((file) => file.kind === 'client')?.source;

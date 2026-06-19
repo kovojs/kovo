@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -173,9 +173,8 @@ function registerGalleryInteractiveClientModules(
   demos: readonly InteractiveDemo[],
 ): void {
   for (const demo of demos) {
-    const rawClientSource = compileGalleryInteractiveClientModule(demo.name);
+    const { pathName, source: rawClientSource } = galleryInteractiveClientModule(demo.name);
     const source = rewriteGalleryClientImports(rawClientSource, support);
-    const pathName = `/c/src/interactive/${demo.name}.client.js`;
     clientModules.put({
       path: pathName,
       source,
@@ -184,8 +183,29 @@ function registerGalleryInteractiveClientModules(
   }
 }
 
-function compileGalleryInteractiveClientModule(demoName: string): string {
-  const fileName = `src/interactive/${demoName}.tsx`;
+function galleryInteractiveClientModule(demoName: string): { pathName: string; source: string } {
+  const generatedClientPath = path.join(
+    repoRoot,
+    'examples/gallery/src/generated/interactive',
+    `${demoName}.client.js`,
+  );
+  if (existsSync(generatedClientPath)) {
+    return {
+      pathName: `/c/examples/gallery/src/generated/interactive/${demoName}.client.js`,
+      source: compileGalleryInteractiveClientModule(
+        demoName,
+        `examples/gallery/src/generated/interactive/${demoName}.tsx`,
+      ),
+    };
+  }
+
+  return {
+    pathName: `/c/src/interactive/${demoName}.client.js`,
+    source: compileGalleryInteractiveClientModule(demoName, `src/interactive/${demoName}.tsx`),
+  };
+}
+
+function compileGalleryInteractiveClientModule(demoName: string, fileName: string): string {
   const source = readFileSync(
     path.join(repoRoot, 'examples/gallery/src/interactive', `${demoName}.tsx`),
     'utf8',

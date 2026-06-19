@@ -36,7 +36,10 @@ describe('compiled interactive gallery demos', () => {
     const compiledDemos = interactiveDemoNames();
     const docsDemos = interactiveGalleryDemos.map((demo) => demo.name).sort(compareStrings);
     const clientModuleDemos = galleryInteractiveClientModuleHrefs
-      .map((href) => href.match(/\/src\/interactive\/([^/]+)\.client\.js$/)?.[1] ?? '')
+      .map(
+        (href) =>
+          href.match(/\/(?:src\/)?(?:generated\/)?interactive\/([^/]+)\.client\.js$/)?.[1] ?? '',
+      )
       .sort(compareStrings);
 
     expect(
@@ -114,7 +117,7 @@ describe('compiled interactive gallery demos', () => {
           distDir,
           exportedModulePath(
             galleryInteractiveClientModuleHrefs.find((href) =>
-              href.endsWith('/src/interactive/progress-demo.client.js'),
+              href.endsWith('/interactive/progress-demo.client.js'),
             ) ?? '',
           ),
         ),
@@ -127,7 +130,7 @@ describe('compiled interactive gallery demos', () => {
           distDir,
           exportedModulePath(
             galleryInteractiveClientModuleHrefs.find((href) =>
-              href.endsWith('/src/interactive/tabs-demo.client.js'),
+              href.endsWith('/interactive/tabs-demo.client.js'),
             ) ?? '',
           ),
         ),
