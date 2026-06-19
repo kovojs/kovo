@@ -60,7 +60,7 @@ export const EXAMPLES = [
       'src/components/deal-detail.tsx',
       'src/queries.ts',
       'src/mutations.ts',
-      'src/optimistic-merge.ts',
+      'scripts/emit-graph.mjs',
     ],
   },
   {

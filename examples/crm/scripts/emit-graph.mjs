@@ -216,22 +216,9 @@ for (const mutation of MUTATIONS) {
     })),
   );
   const baseSource = readFileSync(optimisticSourcePath, 'utf8');
-  // SPEC.md §10.4: a complete (fully-derived) plan `satisfies OptimisticFor` and
-  // is already typed. A partial plan (override path) is emitted satisfies-free by
-  // the serializer; we add the example-local `CrmDerivedSubset` contextual type
-  // over exactly the DERIVED query names so the generated source stays strict (no
-  // implicit any) without demanding the overridden keys the mutation module owns.
-  const moduleSource =
-    overrides.size === 0
-      ? baseSource
-      : typeDerivedSubset(
-          baseSource,
-          mutation.form,
-          facts.filter((entry) => entry.status === 'derived').map((entry) => entry.query),
-        );
   generatedModules.push({
     key: mutation.key,
-    source: formatSource(moduleSource, `optimistic/${kebab(mutation.key)}.ts`),
+    source: formatSource(baseSource, `optimistic/${kebab(mutation.key)}.ts`),
   });
 }
 
@@ -337,29 +324,6 @@ if (process.argv.includes('--print-graph-json')) {
 }
 
 // ── helpers ───────────────────────────────────────────────────────────────────
-
-// Add the `CrmDerivedSubset` import + a `satisfies` clause to a satisfies-free
-// (override-path) generated module, typing the derived transforms against exactly
-// the derived query names. Pure string surgery on the serializer output keeps the
-// serializer contract untouched (no changes outside examples/crm/**).
-function typeDerivedSubset(source, formName, derivedQueries) {
-  const keysUnion =
-    derivedQueries.length === 0
-      ? 'never'
-      : [...derivedQueries]
-          .sort((left, right) => left.localeCompare(right))
-          .map((query) => JSON.stringify(query))
-          .join(' | ');
-  const withImport = source.replace(
-    "import type { OptimisticFor } from '@kovojs/browser';\n",
-    "import type { CrmDerivedSubset } from '../../optimistic-merge.js';\n",
-  );
-  assert.notEqual(withImport, source, 'expected the OptimisticFor import to rewrite');
-  // The serializer ends a partial plan with `}` followed by a trailing `;`.
-  const closing = '\n};\n';
-  assert.ok(withImport.endsWith(closing), 'expected a satisfies-free plan close');
-  return `${withImport.slice(0, -closing.length)}\n} satisfies CrmDerivedSubset<typeof ${formName}, ${keysUnion}>;\n`;
-}
 
 function deriveGraphViaCli(input) {
   const inputPath = resolve(tempRoot, 'graph-input.json');

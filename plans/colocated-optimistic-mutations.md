@@ -15,22 +15,16 @@ no return value.
 
 ## Current state (verified)
 
-- `MutationDefinition` has **no** `optimistic` field (`packages/server/src/mutation.ts:154-181`).
-- Transforms are a free-floating const keyed off the **form**, not the mutation:
-  `const addContactDerivedOptimistic = { queue, transforms: {...} } satisfies OptimisticFor<typeof addContactForm>`
-  (`examples/crm/src/mutations.ts:53-71`). `OptimisticFor` is defined at
-  `packages/browser/src/optimism.ts:70-80`.
-- Partially-derived mutations need a bespoke contextual type to splice hand-written pairs
-  into the generated plan: `CrmDerivedSubset<...>` (`examples/crm/src/optimistic-merge.ts`).
-- Derived transforms generate into `generated/optimistic/*` (e.g.
-  `examples/crm/src/generated/optimistic/create-deal.ts`); hand-written live in the
-  mutation module; the two are merged by hand.
-- Exhaustiveness (KV310) is enforced today via `OptimisticFor` requiring an entry per
-  invalidated query plus `kovo check optimistic` (SPEC §10.6; `InvalidationSets` in §6.1).
-
-Net: the prediction is separated from its write, the mutation's identity and its
-invalidated-query set are restated by hand (Constitution #2 smell), and a partial-derive
-case drags in helper-type gymnastics.
+- `MutationDefinition` accepts sibling `queue` plus inline `optimistic`, typed from
+  `InvalidationSets`, `QueryRegistry`, and the sibling input schema.
+- The browser optimism runtime and Drizzle generated transforms are draft-style:
+  `(draft, input) => void`; legacy returned values remain accepted during migration.
+- CRM declares its mixed optimistic plans inline on the mutations; the
+  `CrmDerivedSubset` helper and checked-in override files are gone. Commerce has no
+  checked-in generated optimistic file; its script still derives the fully generated
+  artifact on demand.
+- Remaining work is compiler lowering/merge semantics for inline-plus-derived plans,
+  KV310's missing non-derivable-key proof, and public docs.
 
 ## Target authoring shape
 
@@ -134,12 +128,17 @@ export const addContact = mutation('addContact', {
       `kovo check optimistic` (the CI/agent surface, SPEC §10.6) must both still fire off
       the same `InvalidationSets`-derived set. Evidence target: a mutation that omits a
       punted query fails `kovo check` and shows the editor error.
-- [ ] **Migrate examples; delete the boilerplate.** Move CRM + commerce optimistic consts
+- [x] **Migrate examples; delete the boilerplate.** Move CRM + commerce optimistic consts
       inline; remove `examples/crm/src/optimistic-merge.ts` (`CrmDerivedSubset`) and the
       hand-written `generated/optimistic/*` override files those pairs produced. Keep
       compiler-derived generated transforms as-is. Synergy: `plans/no-checked-in-generated.md`.
       Evidence target: CRM/commerce compile, `kovo check optimistic` clean, optimistic
       browser/integration tests green, helper file gone.
+  - Evidence 2026-06-19:
+    `npx vitest --run examples/crm/src/optimistic.test.ts examples/crm/src/graph.test.ts packages/server/src/mutation.test.ts`
+    covers CRM inline draft-style optimistic behavior and `kovo check` graph status;
+    `find examples/commerce examples/crm -path '*generated/optimistic*' -type f -print`
+    returned no checked-in files; `corepack pnpm exec vp check` passed.
 - [ ] **Docs.** Update `site/content/guides/mutations.md` (and optimistic guide) to teach
       the inline field as the default; keep standalone `OptimisticFor` documented as the
       escape hatch for the rare case a transform cannot be inlined.
@@ -164,7 +163,12 @@ export const addContact = mutation('addContact', {
 
 ## Latest verification
 
-2026-06-19 slice:
+2026-06-19 latest slice:
+`npx vitest --run examples/crm/src/optimistic.test.ts examples/crm/src/graph.test.ts packages/server/src/mutation.test.ts`;
+`corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
+`git diff --check`.
+
+2026-06-19 earlier slice:
 `npx vitest --run packages/drizzle/src/derive-codegen.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `git diff --check`;
 `corepack pnpm exec vp check`.

@@ -1,19 +1,9 @@
 import { guards, mutation, s, type MutationContext } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
-import type { OptimisticFor } from '@kovojs/browser';
+import type { OptimisticPlan } from '@kovojs/browser';
 
 import type { CrmDb } from './db.js';
-import {
-  addContactForm,
-  closeDealForm,
-  createDealForm,
-  moveDealForm,
-  type AddContactInput,
-  type CloseDealInput,
-  type CreateDealInput,
-  type MoveDealInput,
-} from './model.js';
-import type { CrmDerivedSubset } from './optimistic-merge.js';
+import type { AddContactInput, CloseDealInput, CreateDealInput, MoveDealInput } from './model.js';
 import { contacts, deals } from './schema.js';
 
 import type {
@@ -23,6 +13,23 @@ import type {
   OpenDealsResult,
   PipelineByStageResult,
 } from './queries.js';
+
+declare module '@kovojs/core' {
+  interface QueryRegistry {
+    contactDealCount: ContactDealCountResult;
+    contactList: ContactListResult;
+    dealList: DealListResult;
+    openDeals: OpenDealsResult;
+    pipelineByStage: PipelineByStageResult;
+  }
+
+  interface InvalidationSets {
+    addContact: 'contactList';
+    closeDeal: 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+    createDeal: 'contactDealCount' | 'contactList' | 'dealList' | 'openDeals' | 'pipelineByStage';
+    moveDeal: 'contactDealCount' | 'dealList' | 'openDeals' | 'pipelineByStage';
+  }
+}
 
 /**
  * The per-request value handed to every CRM mutation: a Drizzle/PGlite db plus
@@ -54,89 +61,6 @@ const authed = guards.authed<CrmRequest>();
 
 const duplicateEmailError = s.object({ email: s.string() });
 
-const addContactDerivedOptimistic = {
-  queue: 'crm',
-  transforms: {
-    contactList: (current: ContactListResult, $input: AddContactInput) => {
-      const next = structuredClone(current);
-      const row = {
-        dealCount: 0,
-        email: $input.email,
-        id: $input.id,
-        name: $input.name,
-        ownerId: $input.ownerId,
-      };
-      const index = next.items.findIndex((entry) => entry.id > row.id);
-      if (index < 0) next.items.push(row);
-      else next.items.splice(index, 0, row);
-      return next;
-    },
-  },
-} satisfies OptimisticFor<typeof addContactForm>;
-
-const createDealDerivedOptimistic = {
-  queue: 'crm',
-  transforms: {
-    contactDealCount: (current: ContactDealCountResult, _$input: CreateDealInput) => {
-      const next = structuredClone(current);
-      next.count = (next.count ?? 0) + 1;
-      return next;
-    },
-    dealList: (current: DealListResult, $input: CreateDealInput) => {
-      const next = structuredClone(current);
-      const row = {
-        amount: $input.amount,
-        contactId: $input.contactId,
-        id: $input.id,
-        ownerId: $input.ownerId,
-        stage: $input.stage,
-      };
-      const rowId = row.id ?? '';
-      const index = next.items.findIndex((entry) => entry.id > rowId);
-      if (index < 0) next.items.push(row);
-      else next.items.splice(index, 0, row);
-      return next;
-    },
-    openDeals: (current: OpenDealsResult, $input: CreateDealInput) => {
-      const next = structuredClone(current);
-      const row = {
-        amount: $input.amount,
-        contactId: $input.contactId,
-        id: $input.id,
-        ownerId: $input.ownerId,
-        stage: $input.stage,
-      };
-      const rowId = row.id ?? '';
-      const index = next.items.findIndex((entry) => entry.id > rowId);
-      if (index < 0) next.items.push(row);
-      else next.items.splice(index, 0, row);
-      return next;
-    },
-  },
-} satisfies CrmDerivedSubset<typeof createDealForm, 'contactDealCount' | 'dealList' | 'openDeals'>;
-
-const moveDealDerivedOptimistic = {
-  queue: 'crm',
-  transforms: {
-    contactDealCount: (current: ContactDealCountResult, _$input: MoveDealInput) =>
-      structuredClone(current),
-    dealList: (current: DealListResult, $input: MoveDealInput) => {
-      const next = structuredClone(current);
-      const target = next.items.find((entry) => entry.id === $input.dealId);
-      if (target) target.stage = $input.stage;
-      return next;
-    },
-  },
-} satisfies CrmDerivedSubset<typeof moveDealForm, 'contactDealCount' | 'dealList'>;
-
-const closeDealDerivedOptimistic = {
-  queue: 'crm',
-  transforms: {
-    contactDealCount: (current: ContactDealCountResult, _$input: CloseDealInput) =>
-      structuredClone(current),
-  },
-} satisfies CrmDerivedSubset<typeof closeDealForm, 'contactDealCount'>;
-
 export async function addContactHandler(
   { id, name, email, ownerId }: AddContactInput,
   request: CrmRequest,
@@ -164,10 +88,25 @@ export const addContact = mutation('addContact', {
     email: s.string(),
     ownerId: s.string(),
   }),
+  optimistic: {
+    contactList(draft, $input) {
+      const row = {
+        dealCount: 0,
+        email: $input.email,
+        id: $input.id,
+        name: $input.name,
+        ownerId: $input.ownerId,
+      };
+      const index = draft.items.findIndex((entry) => entry.id > row.id);
+      if (index < 0) draft.items.push(row);
+      else draft.items.splice(index, 0, row);
+    },
+  },
+  queue: 'crm',
   handler: addContactHandler,
 });
 
-export const addContactOptimistic = addContactDerivedOptimistic;
+export const addContactOptimistic = optimisticPlan<AddContactInput>(addContact);
 
 export async function createDealHandler(
   { id, contactId, stage, amount, ownerId }: CreateDealInput,
@@ -192,32 +131,55 @@ export const createDeal = mutation('createDeal', {
     amount: s.number().int().min(0),
     ownerId: s.string(),
   }),
+  optimistic: {
+    contactDealCount(draft, _$input) {
+      draft.count = (draft.count ?? 0) + 1;
+    },
+    // Hand-written optimistic patches for UI values the generated plan cannot know:
+    // contactList needs the server-side dealCount increment, and pipelineByStage is a
+    // grouped summary.
+    contactList(draft, $input) {
+      const target = draft.items.find((item) => item.id === $input.contactId);
+      if (target) target.dealCount += 1;
+    },
+    dealList(draft, $input) {
+      const row = {
+        amount: $input.amount,
+        contactId: $input.contactId,
+        id: $input.id,
+        ownerId: $input.ownerId,
+        stage: $input.stage,
+      };
+      const rowId = row.id ?? '';
+      const index = draft.items.findIndex((entry) => entry.id > rowId);
+      if (index < 0) draft.items.push(row);
+      else draft.items.splice(index, 0, row);
+    },
+    openDeals(draft, $input) {
+      const row = {
+        amount: $input.amount,
+        contactId: $input.contactId,
+        id: $input.id,
+        ownerId: $input.ownerId,
+        stage: $input.stage,
+      };
+      const rowId = row.id ?? '';
+      const index = draft.items.findIndex((entry) => entry.id > rowId);
+      if (index < 0) draft.items.push(row);
+      else draft.items.splice(index, 0, row);
+    },
+    pipelineByStage(draft, $input) {
+      const bucket = draft.buckets.find((entry) => entry.stage === $input.stage);
+      if (bucket) bucket.total += $input.amount;
+      else draft.buckets.push({ stage: $input.stage, total: $input.amount });
+      draft.buckets.sort((left, right) => left.stage.localeCompare(right.stage));
+    },
+  },
+  queue: 'crm',
   handler: createDealHandler,
 });
 
-// Hand-written optimistic patches for UI values the generated plan cannot know:
-// contactList needs the server-side dealCount increment, and pipelineByStage is a
-// grouped summary.
-export const createDealOptimistic = {
-  ...createDealDerivedOptimistic,
-  transforms: {
-    ...createDealDerivedOptimistic.transforms,
-    contactList: (current: ContactListResult, $input: CreateDealInput) => {
-      const next = structuredClone(current);
-      const target = next.items.find((item) => item.id === $input.contactId);
-      if (target) target.dealCount += 1;
-      return next;
-    },
-    pipelineByStage: (current: PipelineByStageResult, $input: CreateDealInput) => {
-      const next = structuredClone(current);
-      const bucket = next.buckets.find((entry) => entry.stage === $input.stage);
-      if (bucket) bucket.total += $input.amount;
-      else next.buckets.push({ stage: $input.stage, total: $input.amount });
-      next.buckets.sort((left, right) => left.stage.localeCompare(right.stage));
-      return next;
-    },
-  },
-} satisfies OptimisticFor<typeof createDealForm>;
+export const createDealOptimistic = optimisticPlan<CreateDealInput>(createDeal);
 
 export async function moveDealHandler({ dealId, stage }: MoveDealInput, request: CrmRequest) {
   const db = request.db;
@@ -232,19 +194,22 @@ export const moveDeal = mutation('moveDeal', {
     dealId: s.string(),
     stage: s.string(),
   }),
-  handler: moveDealHandler,
-});
-
-// Moving a deal can change filtered and grouped views in ways that need row
-// context, so the demo waits for the server fragment for those regions.
-export const moveDealOptimistic = {
-  ...moveDealDerivedOptimistic,
-  transforms: {
-    ...moveDealDerivedOptimistic.transforms,
+  optimistic: {
+    contactDealCount(_draft, _$input) {},
+    dealList(draft, $input) {
+      const target = draft.items.find((entry) => entry.id === $input.dealId);
+      if (target) target.stage = $input.stage;
+    },
+    // Moving a deal can change filtered and grouped views in ways that need row
+    // context, so the demo waits for the server fragment for those regions.
     openDeals: 'await-fragment',
     pipelineByStage: 'await-fragment',
   },
-} satisfies OptimisticFor<typeof moveDealForm>;
+  queue: 'crm',
+  handler: moveDealHandler,
+});
+
+export const moveDealOptimistic = optimisticPlan<MoveDealInput>(moveDeal);
 
 /**
  * Row-carrying helper for updating pipelineByStage when the old stage and amount
@@ -283,24 +248,31 @@ export const closeDeal = mutation('closeDeal', {
   input: s.object({
     dealId: s.string(),
   }),
-  handler: closeDealHandler,
-});
-
-// A closed deal leaves the open list immediately. Views that include the
-// server-computed commission wait for the returned fragment.
-export const closeDealOptimistic = {
-  ...closeDealDerivedOptimistic,
-  transforms: {
-    ...closeDealDerivedOptimistic.transforms,
-    openDeals: (current: OpenDealsResult, $input: CloseDealInput) => {
-      const next = structuredClone(current);
-      const index = next.items.findIndex((item) => item.id === $input.dealId);
-      if (index >= 0) next.items.splice(index, 1);
-      return next;
+  optimistic: {
+    contactDealCount(_draft, _$input) {},
+    // A closed deal leaves the open list immediately. Views that include the
+    // server-computed commission wait for the returned fragment.
+    openDeals(draft, $input) {
+      const index = draft.items.findIndex((item) => item.id === $input.dealId);
+      if (index >= 0) draft.items.splice(index, 1);
     },
     dealList: 'await-fragment',
     pipelineByStage: 'await-fragment',
   },
-} satisfies OptimisticFor<typeof closeDealForm>;
+  queue: 'crm',
+  handler: closeDealHandler,
+});
+
+export const closeDealOptimistic = optimisticPlan<CloseDealInput>(closeDeal);
 
 export const crmMutations = [addContact, createDeal, moveDeal, closeDeal];
+
+function optimisticPlan<Input>(definition: {
+  optimistic?: Record<string, unknown>;
+  queue?: string;
+}): OptimisticPlan<Input> {
+  return {
+    ...(definition.queue ? { queue: definition.queue } : {}),
+    transforms: (definition.optimistic ?? {}) as OptimisticPlan<Input>['transforms'],
+  };
+}

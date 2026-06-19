@@ -12,18 +12,16 @@ optimism spectrum: it mixes **compiler-derived** optimistic updates with a few
   deal (`/deals/:id`); zero hydration.
 - **Typed queries** (`src/queries.ts`) over Drizzle (`src/schema.ts`, `src/model.ts`,
   `src/db.ts`) backed by PGlite, each declaring the domains it reads.
-- **Mixed optimism** (`src/mutations.ts` + `src/generated/optimistic/`):
-  - `create-deal`, `move-deal`, `add-contact` — optimistic updates the compiler
-    **derives** from write set ⋈ read set.
-  - `close-deal` plus `src/optimistic-merge.ts` — a **hand-written** merge where
-    the derived form is insufficient.
+- **Mixed optimism** (`src/mutations.ts`): mutations declare inline optimistic
+  patches next to their writes, mixing compiler-derivable rows with hand-written
+  summaries and explicit `await-fragment` choices.
 - **Components** (`src/components/`): `pipeline`, `contacts`, `deal-detail`,
   `chrome` — styled with `@kovojs/style` tokens (`src/theme.ts`).
 - **Behavior graph** (`src/graph.ts`, `src/graph.test.ts`) the compiler proves and
   CI can check.
 
-`src/generated/**` are compiler **artifacts** (lowered components, optimistic
-stamps, `graph.json`) — author the TSX/TS sources, not the lowered IR (SPEC §5.2).
+`src/generated/**` are compiler **artifacts** (lowered components, stamps,
+`graph.json`) — author the TSX/TS sources, not the lowered IR (SPEC §5.2).
 
 ## Run
 

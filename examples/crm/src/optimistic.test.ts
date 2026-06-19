@@ -24,6 +24,15 @@ async function beforeAndAfter<Value>(
   return { before, after: await load(db) };
 }
 
+function applyTransform<Value, Input>(transform: unknown, before: Value, input: Input): Value {
+  expect(typeof transform).toBe('function');
+  if (typeof transform !== 'function') return before;
+
+  const draft = structuredClone(before);
+  const returned = (transform as (draft: Value, input: Input) => unknown)(draft, input);
+  return returned === undefined ? draft : (returned as Value);
+}
+
 describe('CRM optimistic demo behavior', () => {
   it('updates the contact list and pipeline summary for a new deal', async () => {
     const input: CreateDealInput = {
@@ -38,17 +47,17 @@ describe('CRM optimistic demo behavior', () => {
       (db) => contactListQuery.load(undefined, db),
       createDealEffect(input),
     );
-    expect(createDealOptimistic.transforms.contactList(contactList.before, input)).toEqual(
-      contactList.after,
-    );
+    expect(
+      applyTransform(createDealOptimistic.transforms.contactList, contactList.before, input),
+    ).toEqual(contactList.after);
 
     const pipeline = await beforeAndAfter(
       (db) => pipelineByStageQuery.load(undefined, db),
       createDealEffect(input),
     );
-    expect(createDealOptimistic.transforms.pipelineByStage(pipeline.before, input)).toEqual(
-      pipeline.after,
-    );
+    expect(
+      applyTransform(createDealOptimistic.transforms.pipelineByStage, pipeline.before, input),
+    ).toEqual(pipeline.after);
   });
 
   it('uses server fragments for stage moves, but keeps a row-carrying helper for summaries', async () => {
@@ -79,10 +88,7 @@ describe('CRM optimistic demo behavior', () => {
     );
 
     const openDealsTransform = closeDealOptimistic.transforms.openDeals;
-    expect(typeof openDealsTransform).toBe('function');
-    if (typeof openDealsTransform === 'function') {
-      expect(openDealsTransform(before, input)).toEqual(after);
-    }
+    expect(applyTransform(openDealsTransform, before, input)).toEqual(after);
     expect(closeDealOptimistic.transforms.dealList).toBe('await-fragment');
     expect(closeDealOptimistic.transforms.pipelineByStage).toBe('await-fragment');
   });
