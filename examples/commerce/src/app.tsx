@@ -31,7 +31,11 @@ import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 import { LoginForm, authFormStyleCss } from './components/auth-forms.js';
 import { CartBadge, cartBadgeStyleCss } from './components/cart-badge.js';
-import { OrderHistory, orderHistoryStyleCss } from './components/order-history.js';
+import {
+  OrderHistory,
+  orderHistoryStyleCss,
+  renderOrderHistory,
+} from './components/order-history.js';
 import { ProductGrid, ProductGridError, productGridStyleCss } from './components/product-grid.js';
 import { commerceTheme } from './theme.js';
 
@@ -98,11 +102,7 @@ function CommerceCartPage({ request }: { request: CommerceRouteRequest }): strin
       <ErrorBoundary fallback={<ProductGridError />}>
         <ProductGrid />
       </ErrorBoundary>
-      {request.session?.user?.id ? (
-        <OrderHistory />
-      ) : (
-        OrderHistory.definition.render({ orderHistory: { items: [] } })
-      )}
+      {request.session?.user?.id ? <OrderHistory /> : renderOrderHistory({ items: [] })}
     </>
   );
 }

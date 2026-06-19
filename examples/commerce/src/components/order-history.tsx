@@ -56,9 +56,8 @@ export const orderHistoryStyleCss = style.emitAtomicCss(
 
 export const OrderHistory = component({
   queries: { orderHistory: orderHistoryQuery },
-  render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) => (
-    <ol style={orderHistoryStyles.stack}>{renderOrderHistoryItems(orderHistory)}</ol>
-  ),
+  render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) =>
+    renderOrderHistory(orderHistory),
 });
 
 interface OrderHistoryItem {
@@ -85,4 +84,8 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): string {
       ))}
     </>
   );
+}
+
+export function renderOrderHistory(result: OrderHistoryResult): string {
+  return <ol style={orderHistoryStyles.stack}>{renderOrderHistoryItems(result)}</ol>;
 }
