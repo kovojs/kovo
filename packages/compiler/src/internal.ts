@@ -7,6 +7,13 @@ export {
   type CompileCacheKeyInput,
   type CompileDependencyFactChange,
 } from './compile-cache.js';
+export {
+  persistentCompileCacheDir,
+  readPersistentCompileCacheManifest,
+  writePersistentCompileCacheEntry,
+  type PersistentCompileCacheEntry,
+  type PersistentCompileCacheManifest,
+} from './persistent-compile-cache.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export type {
   AttributeMergeResult,

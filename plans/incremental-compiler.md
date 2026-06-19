@@ -226,10 +226,15 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 
 ## Phase 3 — Persistent on-disk cache (the `.tsbuildinfo` equivalent)
 
-- [ ] Define the on-disk format: a versioned manifest (`cacheKey → { artifactRefs, footprint,
+- [x] Define the on-disk format: a versioned manifest (`cacheKey → { artifactRefs, footprint,
 compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo/cache/`.
       Atomic write (temp + rename), format-version prefix, corruption-tolerant (a bad/partial entry
       is a miss, never a crash).
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/compile-cache.test.ts -t "persistent compile cache|CompileCache|invalidates only"`
+    proves the compiler cache format writes a `kovo-compile-cache/v1` manifest under
+    `.kovo/cache/compiler`, stores result blobs by content hash, writes through temp+rename, and
+    treats missing/corrupt manifests as empty cache misses.
 - [ ] Persistence round-trip in Vite + CLI: warm-load the manifest at startup, write back new
       entries, so a _second_ process on unchanged source hits disk instead of recompiling.
 - [ ] Concurrency safety for parallel vitest workers and parallel builds (per-entry atomic writes;
