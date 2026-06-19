@@ -141,6 +141,40 @@ describe('kovo build', () => {
     }
   });
 
+  it('auto-collects compiled component CSS into the build stylesheet asset', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-app-css-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      writeReactJsxRuntimeStub(root);
+      writeFileSync(appPath, staticStylesheetAppModuleSource(), 'utf8');
+      writeStyledComponentClientEntry(root);
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const stylesheet = readFileSync(join(outDir, '.kovo/client/assets/styles.css'), 'utf8');
+      expect(stylesheet).toContain('auto-css-card');
+      expect(stylesheet).toContain('color: teal');
+      const viteStylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
+      expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
+        'main{color:#639}',
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('boots emitted node preset output from production dependencies with dev-package guards', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-prod-deps-'));
     const appPath = join(root, 'app.mjs');
@@ -685,6 +719,21 @@ export default createApp({
 `;
 }
 
+function staticStylesheetAppModuleSource(): string {
+  return `
+import { createApp, route, stylesheet } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/', {
+      page: () => '<main>Static Home</main>',
+    }),
+  ],
+  stylesheets: [stylesheet('./styles.css')],
+});
+`;
+}
+
 function databaseEnvAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
@@ -730,6 +779,55 @@ function writeClientEntry(root: string): void {
     'utf8',
   );
   writeFileSync(join(root, 'src/style.css'), 'main { color: rebeccapurple; }\n', 'utf8');
+}
+
+function writeStyledComponentClientEntry(root: string): void {
+  writeClientEntry(root);
+  writeFileSync(
+    join(root, 'src/client.ts'),
+    "import './style.css';\nimport './auto-css-card.tsx';\nexport const client = true;\n",
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/auto-css-card.tsx'),
+    `
+import { component } from '@kovojs/core';
+
+export const AutoCssCard = component({
+  css: \`
+    auto-css-card { color: teal; }
+  \`,
+  render: () => <auto-css-card>Auto CSS</auto-css-card>,
+});
+`,
+    'utf8',
+  );
+}
+
+function writeReactJsxRuntimeStub(root: string): void {
+  const reactDir = join(root, 'node_modules/react');
+  mkdirSync(reactDir, { recursive: true });
+  writeFileSync(
+    join(reactDir, 'package.json'),
+    JSON.stringify({
+      exports: {
+        './jsx-dev-runtime': './jsx-dev-runtime.js',
+        './jsx-runtime': './jsx-runtime.js',
+      },
+      name: 'react',
+      type: 'module',
+    }),
+    'utf8',
+  );
+  const runtime = [
+    'export function jsx() { return null; }',
+    'export function jsxs() { return null; }',
+    'export function jsxDEV() { return null; }',
+    'export const Fragment = Symbol.for("react.fragment");',
+    '',
+  ].join('\n');
+  writeFileSync(join(reactDir, 'jsx-dev-runtime.js'), runtime, 'utf8');
+  writeFileSync(join(reactDir, 'jsx-runtime.js'), runtime, 'utf8');
 }
 
 function builtAssetPath(outDir: string, predicate: (path: string) => boolean): string {

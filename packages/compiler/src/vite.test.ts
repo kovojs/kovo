@@ -217,6 +217,34 @@ export function renderSource() {
     expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
   });
 
+  it('surfaces a deduped CSS asset manifest for transformed app components', async () => {
+    const plugin = createKovoVitePlugin(() => ({
+      cssAssets: [
+        {
+          componentName: 'cart-badge',
+          criticalCss: '.cart-badge{color:teal}',
+          fragmentTargets: ['components/cart/cart-badge/cart-badge'],
+          href: '/assets/components/cart/cart-badge.css',
+          sourceFileName: 'components/cart/cart-badge.css',
+        },
+      ],
+      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+    }));
+
+    await plugin.transform('component(', 'components/cart/cart-badge.tsx');
+    await plugin.transform('component(', 'components/cart/cart-badge.tsx');
+
+    expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([
+      expect.objectContaining({
+        componentName: 'cart-badge',
+        criticalCss: '.cart-badge{color:teal}',
+        fragmentTargets: ['components/cart/cart-badge/cart-badge'],
+        href: '/assets/components/cart/cart-badge.css',
+        sourceFileName: 'components/cart/cart-badge.css',
+      }),
+    ]);
+  });
+
   it('serves project-relative client modules when Vite passes absolute ids', async () => {
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];

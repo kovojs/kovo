@@ -3,6 +3,12 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
+import {
+  collectCssAssetManifest,
+  type ComponentCssAsset,
+  type CssAssetManifest,
+  type CssAssetManifestOptions,
+} from './css.js';
 import type {
   HmrImpactClassification,
   HmrImpactMetadata,
@@ -19,7 +25,9 @@ import type {
  */
 export interface KovoVitePlugin {
   configureServer?: (server: KovoViteDevServer) => void;
+  enforce?: 'pre';
   handleHotUpdate?: (context: KovoViteHotUpdateContext) => Promise<readonly unknown[]>;
+  getCssAssetManifest?: (options?: CssAssetManifestOptions) => CssAssetManifest;
   load?: (id: string) => null | Promise<null | string> | string;
   name: 'kovo';
   resolveId?: (source: string, importer?: string) => null | Promise<null | string> | string;
@@ -156,6 +164,7 @@ interface ViteCompileOptions {
 }
 
 interface ViteCompileResult {
+  cssAssets?: readonly ComponentCssAsset[];
   diagnostics?: readonly CompilerDiagnostic[];
   files: readonly {
     kind: string;
@@ -179,10 +188,12 @@ export function createKovoVitePlugin(
 ): KovoVitePlugin {
   const compileCache = new Map<string, MaybePromise<ViteCompileResult>>();
   const clientModules = new Map<string, string>();
+  const cssAssetsByFileName = new Map<string, readonly ComponentCssAsset[]>();
   const hmrImpacts = new Map<string, HmrImpactMetadata>();
   let root = process.cwd();
 
   return {
+    enforce: 'pre',
     configureServer(server) {
       root = server.config?.root ?? root;
       server.middlewares.use((req, res, next) => {
@@ -197,6 +208,12 @@ export function createKovoVitePlugin(
         res.setHeader('Content-Type', 'text/javascript');
         res.end(source);
       });
+    },
+    getCssAssetManifest(manifestOptions = {}) {
+      return collectCssAssetManifest(
+        [...cssAssetsByFileName.values()].map((cssAssets) => ({ cssAssets })),
+        manifestOptions,
+      );
     },
     name: 'kovo',
     resolveId(source: string, importer?: string): null | string {
@@ -224,6 +241,7 @@ export function createKovoVitePlugin(
         return result.then((resolvedResult) =>
           transformViteCompileResult(
             clientModules,
+            cssAssetsByFileName,
             hmrImpacts,
             options,
             fileName,
@@ -235,6 +253,7 @@ export function createKovoVitePlugin(
 
       return transformViteCompileResult(
         clientModules,
+        cssAssetsByFileName,
         hmrImpacts,
         options,
         fileName,
@@ -269,7 +288,7 @@ export function createKovoVitePlugin(
         return [];
       }
 
-      recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
+      recordViteCompileResult(clientModules, cssAssetsByFileName, hmrImpacts, fileName, result);
       const classification = classifyViteHmrImpact(previous, next);
       const event = eventForHmrClassification(classification);
       sendKovoHmrEvent(context.server, event, previous, next, classification);
@@ -284,6 +303,7 @@ export function createKovoVitePlugin(
 
 function transformViteCompileResult(
   clientModules: Map<string, string>,
+  cssAssetsByFileName: Map<string, readonly ComponentCssAsset[]>,
   hmrImpacts: Map<string, HmrImpactMetadata>,
   options: KovoVitePluginOptions,
   fileName: string,
@@ -292,7 +312,7 @@ function transformViteCompileResult(
 ): { code: string; map: null } {
   const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
   if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
-  recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
+  recordViteCompileResult(clientModules, cssAssetsByFileName, hmrImpacts, fileName, result);
 
   return {
     code:
@@ -515,6 +535,7 @@ function reportViteDiagnostics(
 
 function recordViteCompileResult(
   clientModules: Map<string, string>,
+  cssAssetsByFileName: Map<string, readonly ComponentCssAsset[]>,
   hmrImpacts: Map<string, HmrImpactMetadata>,
   fileName: string,
   result: ViteCompileResult,
@@ -526,6 +547,12 @@ function recordViteCompileResult(
         file.source,
       );
     }
+  }
+
+  if (result.cssAssets && result.cssAssets.length > 0) {
+    cssAssetsByFileName.set(fileName, result.cssAssets);
+  } else {
+    cssAssetsByFileName.delete(fileName);
   }
 
   if (result.hmrImpact) hmrImpacts.set(fileName, result.hmrImpact);

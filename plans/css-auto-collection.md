@@ -106,23 +106,29 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 
 ### Phase 1 — App-source CSS collection in the build (core)
 
-- [ ] Add an app-scoped collector that runs `extractKovoStyles` over the app's
-      compiled component graph and produces one `CssAssetManifest`
-      (reuse `collectCssAssetManifest`). Model it on `extractPackageComponentCss`
-      but discover app component sources from the route/component graph rather
-      than a package `exports` map. (Seam A/C)
-- [ ] Make the build emit the served stylesheet from that manifest: the sink
-      referenced by `stylesheet('./styles.css')` is filled with the collected
-      atomic CSS, and critical CSS is auto-inlined — no per-component
-      `criticalCss` argument. Extend `stylesheetCssByPath()`
-      (`build.ts:659`) to merge manifest assets into the declared sink instead
-      of only reading hand-supplied `criticalCss`. (Seam A)
-- [ ] Wire the Vite plugin (`vite.ts:153`) to accumulate each compiled
-      component's `cssAssets` and surface the manifest to the build (dev + prod
-      parity), so `kovo build` and `vite build` produce identical sheets. - Evidence: a build test asserting an app component's atom (e.g.
-      `productGridStyles.field` background) appears in the emitted
-      `/assets/styles.css` **without** any `emitAtomicCss` export in app source;
-      critical CSS inlined in the page `<style>` (`hints.ts:202`).
+- [x] Add an app-scoped collector over the compiled component graph that
+      produces one `CssAssetManifest` via `collectCssAssetManifest`. (Seam A/C)
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/vite.test.ts packages/cli/src/index.kovo-build.test.ts packages/server/src/build.test.ts -t "CSS asset manifest|auto-collects compiled component CSS|materializes declared and build-owned CSS"` proves `createKovoVitePlugin().getCssAssetManifest()` dedupes compiled `cssAssets`.
+- [x] Make `kovo build` emit the served stylesheet from that manifest: the sink
+      referenced by `stylesheet('./styles.css')` is filled with collected
+      component CSS without a per-component `criticalCss` argument. (Seam A)
+  - Evidence 2026-06-19:
+    `packages/cli/src/index.kovo-build.test.ts` builds a TSX component with a
+    `css:` block and `stylesheet('./styles.css')`, then verifies
+    `.kovo/client/assets/styles.css` contains the component CSS while Vite CSS
+    remains in its manifest asset.
+- [x] Wire the Vite plugin to accumulate each compiled component's `cssAssets`
+      and surface the manifest to the build. (Seam A)
+  - Evidence 2026-06-19:
+    `packages/compiler/src/vite.test.ts` covers plugin accumulation; `packages/cli/src/index.ts`
+    passes the manifest CSS into `writeKovoNeutralBuild()`.
+- [ ] Inline route-critical CSS from the collected manifest during document
+      rendering.
+  - Gap:
+    route-scoped critical selection is tracked by `plans/fine-grained-css.md`;
+    this phase currently emits a served stylesheet sink, not route-specific
+    `<style>` inlining.
 
 ### Phase 2 — Route-scoped critical CSS (optional, builds on existing splitter)
 

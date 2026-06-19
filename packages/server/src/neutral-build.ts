@@ -362,11 +362,9 @@ function stylesheetCssByPath(
 ): Map<string, string[]> {
   const cssByPath = new Map<string, string[]>();
 
-  for (const asset of app.stylesheets) {
-    addStylesheetCriticalCss(cssByPath, asset);
-  }
+  for (const asset of app.stylesheets) addStylesheetDeclarationCss(cssByPath, asset);
   for (const route of app.routes) {
-    for (const asset of route.stylesheets ?? []) addStylesheetCriticalCss(cssByPath, asset);
+    for (const asset of route.stylesheets ?? []) addStylesheetDeclarationCss(cssByPath, asset);
   }
   const cssAssetPaths = assets
     .map((asset) => asset.path)
@@ -393,11 +391,13 @@ function buildStylesheetCssHref(
   return href;
 }
 
-function addStylesheetCriticalCss(
+function addStylesheetDeclarationCss(
   cssByPath: Map<string, string[]>,
   asset: string | StylesheetAsset,
 ): void {
   if (typeof asset === 'string') return;
+  const assetPath = localStylesheetAssetPath(asset.href);
+  if (assetPath && !cssByPath.has(assetPath)) cssByPath.set(assetPath, []);
   addStylesheetCss(cssByPath, asset.href, asset.criticalCss);
 }
 

@@ -2472,14 +2472,14 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     const app = appFromModule(appModule, options.appModulePath);
     const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath);
     const outDir = resolve(options.outDir);
-    const clientManifestFile = await buildKovoClientManifest(
+    const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
       kovoClientBuildRoot(resolvedAppModulePath),
     );
     const neutralBuild = await writeKovoNeutralBuild({
       app,
-      buildStylesheetCss,
-      manifestFile: clientManifestFile,
+      buildStylesheetCss: [...buildStylesheetCss, ...clientBuild.stylesheetCss],
+      manifestFile: clientBuild.manifestFile,
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
     });
@@ -2691,8 +2691,22 @@ function isKovoPreset(value: unknown): value is KovoPreset {
   );
 }
 
-async function buildKovoClientManifest(outDir: string, root: string): Promise<string> {
-  const { build } = await import('vite-plus');
+interface KovoClientManifestBuild {
+  manifestFile: string;
+  stylesheetCss: readonly { css: string; href: string }[];
+}
+
+async function buildKovoClientManifest(
+  outDir: string,
+  root: string,
+): Promise<KovoClientManifestBuild> {
+  const [{ kovoVitePlugin }, { dedupeCss }, { build }] = await Promise.all([
+    import('@kovojs/compiler'),
+    import('@kovojs/compiler/internal'),
+    import('vite-plus'),
+  ]);
+  const kovoPlugin = kovoVitePlugin();
+
   await build({
     appType: 'custom',
     build: {
@@ -2701,10 +2715,20 @@ async function buildKovoClientManifest(outDir: string, root: string): Promise<st
       outDir,
     },
     logLevel: 'silent',
+    plugins: [kovoPlugin],
     root,
   });
 
-  return join(outDir, '.vite/manifest.json');
+  const appCss = dedupeCss(
+    (kovoPlugin.getCssAssetManifest?.().stylesheets ?? []).flatMap((asset) =>
+      asset.criticalCss ? [asset.criticalCss] : [],
+    ),
+  );
+
+  return {
+    manifestFile: join(outDir, '.vite/manifest.json'),
+    stylesheetCss: appCss ? [{ css: appCss, href: '/assets/styles.css' }] : [],
+  };
 }
 
 function kovoClientBuildRoot(appModulePath: string): string {
