@@ -149,10 +149,7 @@ export function validateFragmentTargetInputs(
   );
 }
 
-function declaredRenderInputRoots(
-  model: ComponentModuleModel,
-  includeState: boolean,
-): Set<string> {
+function declaredRenderInputRoots(model: ComponentModuleModel, includeState: boolean): Set<string> {
   return new Set([
     ...componentOptionObjectKeys(model, 'queries'),
     ...componentOptionObjectKeys(model, 'props'),

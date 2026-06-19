@@ -202,10 +202,14 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
       covers isomorphic islands accepting declared query/prop/state/static render
       inputs and emitting KV303 for undeclared render inputs or non-static module
       globals.
-  - [ ] A PUNTed/Opaque position under `disableServerRefresh:true` must carry its
+  - [x] A PUNTed/Opaque position under `disableServerRefresh:true` must carry its
         own non-fragment status — do not let a same-path sibling's `plan` coverage
         satisfy it (use the §10.5 punt list, already named in
         `kovo explain --optimistic`).
+    - Evidence 2026-06-19: `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/state-bindings.test.ts`
+      covers a `disableServerRefresh:true` component where `data-bind` plan
+      coverage for `cart.count` no longer hides a same-path class expression;
+      the unstamped position emits `UNHANDLED` coverage and KV311.
   - [ ] Make "guard rerun produced no server truth for an await-fragment
         position" a visible dev/CI diagnostic (reuse the §10.4 missing-server-truth
         channel).

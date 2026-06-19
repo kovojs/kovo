@@ -473,6 +473,56 @@ export const CartRow = component({
     );
   });
 
+  it('does not let same-path plan coverage hide disabled-refresh expressions', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-row.tsx',
+      source: `
+export const CartRow = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => (
+    <cart-row>
+      <span>{cart.count}</span>
+      <strong className={cart.count > 0 ? 'hot' : 'cold'}>Cart</strong>
+    </cart-row>
+  ),
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'CartRow',
+        detail: 'data-bind',
+        position: 'binding',
+        query: 'cart.count',
+        status: 'plan',
+      }),
+    );
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'CartRow',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(
+      result.updateCoverage.filter(
+        (fact) => fact.query === 'cart.count' && fact.status === 'UNHANDLED',
+      ),
+    ).toHaveLength(1);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        help: expect.stringContaining('disableServerRefresh: true'),
+        message:
+          'Query/state-dependent DOM position has no update status. CartRow cart.count expression',
+      }),
+    );
+  });
+
   it('does not classify fragment-target state expressions as fragment-covered', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
