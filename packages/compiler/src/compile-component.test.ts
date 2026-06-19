@@ -650,7 +650,7 @@ export const CartBadge = component({
     expect(registry).toContain(`export interface LiveTargetRegistry {
   'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; targetBase: 'cart-badge'; identityProps: readonly []; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; coverage: readonly [{ query: 'cart.count'; position: "binding"; status: 'plan' }]; };
 }`);
-    expect(registry).toContain(`declare module '@kovojs/core' {`);
+    expect(registry).toContain(`declare module '@kovojs/core/generated' {`);
     expect(registry).toContain(`  interface ComponentRegistry {
   'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
   }`);
@@ -660,6 +660,7 @@ export const CartBadge = component({
     expect(registry).toContain(`  interface LiveTargetRegistry {
   'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; targetBase: 'cart-badge'; identityProps: readonly []; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; coverage: readonly [{ query: 'cart.count'; position: "binding"; status: 'plan' }]; };
   }`);
+    expect(registry).toContain(`declare module '@kovojs/core' {`);
     expect(registry).toContain(`  interface QueryRegistry {\n\n  }`);
     expect(registry).toContain(`  interface MutationRegistry {\n\n  }`);
     expect(registry).toContain(`  interface RouteRegistry {\n\n  }`);

@@ -8,7 +8,7 @@
       "kind": "library",
       "apiBoundary": {
         "public": ["."],
-        "generated": [],
+        "generated": ["./generated"],
         "internal": [
           "./internal/derivation",
           "./internal/diagnostics",
@@ -223,7 +223,7 @@
           "./tooltip"
         ],
         "generated": [],
-        "internal": []
+        "internal": ["./internal"]
       }
     },
     {

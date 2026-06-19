@@ -117,7 +117,7 @@ export interface InvalidationSets {
 ${invalidationSetLines}
 }
 
-declare module '@kovojs/core' {
+declare module '@kovojs/core/generated' {
   interface ComponentRegistry {
 ${componentRegistryLines}
   }
@@ -129,7 +129,9 @@ ${fragmentTargetLines}
   interface LiveTargetRegistry {
 ${liveTargetLines}
   }
+}
 
+declare module '@kovojs/core' {
   interface QueryRegistry {
 ${queryRegistryLines}
   }

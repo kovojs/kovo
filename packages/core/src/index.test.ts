@@ -58,20 +58,22 @@ declare module './index.js' {
     'cart/price': PriceUpdateRegistryMutation;
   }
 
-  interface FragmentTargets {
-    'cart-row': { rowId: string };
-  }
-
-  interface ComponentRegistry {
-    'components/cart/cart-badge/cart-badge': KovoComponent<ComponentDefinitionInput>;
-  }
-
   interface RouteRegistry {
     '/cart': ReturnType<typeof route<'/cart'>>;
     '/products': ReturnType<typeof route<'/products', {}, { max: number; sort: string }>>;
     '/products/:id': ReturnType<
       typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
     >;
+  }
+}
+
+declare module './generated.js' {
+  interface FragmentTargets {
+    'cart-row': { rowId: string };
+  }
+
+  interface ComponentRegistry {
+    'components/cart/cart-badge/cart-badge': KovoComponent<ComponentDefinitionInput>;
   }
 }
 
@@ -118,7 +120,7 @@ describe('core authoring APIs', () => {
     expect(CartBadge.definition.queries?.cart.key).toBe('cart');
 
     const assertRegisteredComponent = (
-      value: import('./index.js').ComponentRegistry['components/cart/cart-badge/cart-badge'],
+      value: import('./generated.js').ComponentRegistry['components/cart/cart-badge/cart-badge'],
     ) => value;
     expect(assertRegisteredComponent(CartBadge)).toBe(CartBadge);
   });

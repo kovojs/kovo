@@ -2481,7 +2481,7 @@ async function kovoBuildStylesheetCss(
 ): Promise<readonly { css: string; href: string }[]> {
   const [{ extractPackageComponentCss }, { kovoUiTokenSheetCss }] = await Promise.all([
     import('@kovojs/compiler/package-styles'),
-    import('@kovojs/headless-ui'),
+    import('@kovojs/headless-ui/internal'),
   ]);
   const result = extractPackageComponentCss('@kovojs/ui', {
     fileName: appModulePath,
@@ -3147,6 +3147,24 @@ export interface KovoUnscopedExplainOptions {
 }
 
 /**
+ * Opaque graph input accepted by `kovoCheck`.
+ *
+ * Kovo validates this value at runtime before reading graph fields, so the
+ * public CLI facade does not expose the internal verifier graph declarations
+ * (SPEC.md §11.4; rules/api-surface.md recursive publicness).
+ */
+export type KovoCheckInput = unknown;
+
+/**
+ * Opaque graph input accepted by `kovoExplain`.
+ *
+ * Kovo validates this value at runtime before reading graph fields, so the
+ * public CLI facade does not expose the internal verifier graph declarations
+ * (SPEC.md §11.4; rules/api-surface.md recursive publicness).
+ */
+export type KovoExplainInput = unknown;
+
+/**
  * Run the `kovo explain` verifier in-process against an extracted graph.
  *
  * Prints the stable `kovo-explain/v1` graph view selected by `options`: a single
@@ -3157,18 +3175,16 @@ export interface KovoUnscopedExplainOptions {
  * code that is non-zero only when an audit ran with `failOnFindings` and findings
  * were present.
  */
-export function kovoExplain(
-  input: CoreGraph.KovoExplainInput,
-  options: KovoExplainOptions,
-): KovoCheckResult {
+export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(explainOutputVersion, validationErrors);
 
+  const graph = input as CoreGraph.KovoExplainInput;
   const lines = [explainOutputVersion];
 
   if ('unscoped' in options) {
-    const findings = unscopedAccesses(input);
+    const findings = unscopedAccesses(graph);
     lines.push('UNSCOPED');
 
     for (const finding of findings) {
@@ -3180,7 +3196,7 @@ export function kovoExplain(
   }
 
   if ('unguarded' in options) {
-    const accesses = unguardedAccesses(input);
+    const accesses = unguardedAccesses(graph);
     lines.push('UNGUARDED');
 
     for (const access of accesses) {
@@ -3192,7 +3208,7 @@ export function kovoExplain(
   }
 
   if ('endpoints' in options) {
-    const endpoints = [...(input.endpoints ?? [])].sort(compareEndpointExplain);
+    const endpoints = [...(graph.endpoints ?? [])].sort(compareEndpointExplain);
     lines.push('ENDPOINTS');
 
     for (const endpoint of endpoints) {
@@ -3204,7 +3220,7 @@ export function kovoExplain(
   }
 
   if (options.kind === 'context') {
-    const provider = input.requestProviders?.find((item) => item.kind === options.target);
+    const provider = graph.requestProviders?.find((item) => item.kind === options.target);
     if (!provider) return notFound(options);
 
     lines.push(`CONTEXT ${provider.kind}`);
@@ -3215,9 +3231,9 @@ export function kovoExplain(
   }
 
   if (options.kind === 'component') {
-    const component = findComponentExplain(input.components, options.target);
+    const component = findComponentExplain(graph.components, options.target);
     if (!component) return notFound(options);
-    const provenance = componentPrefixProvenance(component, options.target, input);
+    const provenance = componentPrefixProvenance(component, options.target, graph);
 
     lines.push(`COMPONENT ${component.name}`);
     if (provenance) lines.push(provenance);
@@ -3315,7 +3331,7 @@ export function kovoExplain(
   }
 
   if (options.kind === 'mutation') {
-    const mutation = input.mutations?.find((item) => item.key === options.target);
+    const mutation = graph.mutations?.find((item) => item.key === options.target);
     if (!mutation) return notFound(options);
 
     lines.push(`MUTATION ${mutation.key}`);
@@ -3328,10 +3344,10 @@ export function kovoExplain(
     lines.push(`writes: ${list(mutation.writes)}`);
     lines.push(`invalidates: ${list(mutation.invalidates)}`);
     lines.push(`manual-invalidates: ${list(mutation.manualInvalidates)}`);
-    lines.push(`updates: ${listMutationUpdates(mutationUpdates(mutation, input))}`);
+    lines.push(`updates: ${listMutationUpdates(mutationUpdates(mutation, graph))}`);
 
     if (options.optimistic) {
-      const coverages = optimisticCoverageForMutation(mutation, input);
+      const coverages = optimisticCoverageForMutation(mutation, graph);
 
       for (const coverage of coverages) {
         // SPEC.md §10.5/§10.6: report transform coverage (status, incl. `derived`)
@@ -3358,18 +3374,18 @@ export function kovoExplain(
   }
 
   if (options.kind === 'query') {
-    const query = input.queries?.find((item) => item.query === options.target);
+    const query = graph.queries?.find((item) => item.query === options.target);
     if (!query) return notFound(options);
 
     lines.push(`QUERY ${query.query}`);
     lines.push(`reads: ${list(query.domains)}`);
-    lines.push(`consumers: ${list(queryConsumers(query.query, input))}`);
-    lines.push(`invalidated-by: ${list(invalidatedBy(query, input))}`);
-    lines.push(`domain-writes: ${list(domainWritesFor(query, input))}`);
+    lines.push(`consumers: ${list(queryConsumers(query.query, graph))}`);
+    lines.push(`invalidated-by: ${list(invalidatedBy(query, graph))}`);
+    lines.push(`domain-writes: ${list(domainWritesFor(query, graph))}`);
     return ok(lines);
   }
 
-  const page = input.pages?.find((item) => item.route === options.target);
+  const page = graph.pages?.find((item) => item.route === options.target);
   if (!page) return notFound(options);
 
   lines.push(`PAGE ${page.route}`);
@@ -3474,12 +3490,13 @@ export function kovoAudit(
  * any error-severity finding is present (SPEC.md §1.1 proof claims).
  */
 export function kovoCheck(
-  input: CoreGraph.KovoCheckInput,
+  input: KovoCheckInput,
   options: { family?: KovoCheckFamily } = {},
 ): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0) return invalidGraphInputResult(outputVersion, validationErrors);
 
+  const graph = input as CoreGraph.KovoCheckInput;
   const lines = [outputVersion];
   const family = options.family ?? 'all';
   const includeAll = family === 'all';
@@ -3491,7 +3508,7 @@ export function kovoCheck(
   };
 
   if (includeAll) {
-    const diagnostics = diagnosticsForTouchGraph(input.touchGraph ?? {});
+    const diagnostics = diagnosticsForTouchGraph(graph.touchGraph ?? {});
 
     for (const diagnostic of diagnostics) {
       pushFinding(
@@ -3500,11 +3517,11 @@ export function kovoCheck(
       );
     }
 
-    for (const diagnostic of input.diagnostics ?? []) {
+    for (const diagnostic of graph.diagnostics ?? []) {
       pushFinding(staticDiagnosticLine(diagnostic), diagnosticSeverity(diagnostic) === 'error');
     }
 
-    for (const diagnostic of input.verificationDiagnostics ?? []) {
+    for (const diagnostic of graph.verificationDiagnostics ?? []) {
       pushFinding(
         verificationDiagnosticLine(diagnostic),
         diagnosticSeverity(diagnostic) === 'error',
@@ -3514,55 +3531,55 @@ export function kovoCheck(
 
   if (includeAll || family === 'optimistic') {
     for (const warning of optimisticCoverageWarnings(
-      input.mutations ?? [],
-      input.queries ?? [],
-      input.optimistic ?? [],
+      graph.mutations ?? [],
+      graph.queries ?? [],
+      graph.optimistic ?? [],
     )) {
       pushFinding(warning, true);
     }
   }
 
   if (includeAll || family === 'coverage') {
-    for (const fact of sortedUpdateCoverage(input.updateCoverage ?? [])) {
+    for (const fact of sortedUpdateCoverage(graph.updateCoverage ?? [])) {
       pushFinding(updateCoverageLine(fact), fact.status === 'UNHANDLED');
     }
   }
 
   if (includeAll) {
-    for (const finding of unscopedAccesses(input)) {
+    for (const finding of unscopedAccesses(graph)) {
       pushFinding(`WARN ${unscopedLine(finding)}`);
     }
 
-    for (const lint of input.lints ?? []) {
+    for (const lint of graph.lints ?? []) {
       pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
     }
 
-    for (const lint of eventPayloadQueryLints(input.eventPayloads ?? [], input.queryData ?? [])) {
+    for (const lint of eventPayloadQueryLints(graph.eventPayloads ?? [], graph.queryData ?? [])) {
       pushFinding(`LINT ${lint.code} ${lint.site} ${lintMessage(lint)}`);
     }
 
-    for (const failure of fixpointFailures(input.fixpointChecks ?? [])) {
+    for (const failure of fixpointFailures(graph.fixpointChecks ?? [])) {
       pushFinding(fixpointFailureLine(failure), true);
     }
 
-    for (const failure of renderEquivalenceFailures(input.renderEquivalenceChecks ?? [])) {
+    for (const failure of renderEquivalenceFailures(graph.renderEquivalenceChecks ?? [])) {
       pushFinding(renderEquivalenceFailureLine(failure), true);
     }
 
     for (const missed of missedQueryInvalidations(
-      input.queries ?? [],
-      input.touchGraph ?? {},
-      input.mutations ?? [],
+      graph.queries ?? [],
+      graph.touchGraph ?? {},
+      graph.mutations ?? [],
     )) {
       const message = diagnosticDefinitionText('KV407', { includeHelp: true });
       pushFinding(`ERROR KV407 ${missed.query} reads ${missed.domain}. ${message}`, true);
     }
 
-    for (const access of unguardedAccesses(input)) {
+    for (const access of unguardedAccesses(graph)) {
       pushFinding(unguardedWarningLine(access));
     }
 
-    for (const endpoint of input.endpoints ?? []) {
+    for (const endpoint of graph.endpoints ?? []) {
       if (endpoint.csrf === 'exempt' && !endpoint.csrfJustification) {
         pushFinding(
           `WARN ENDPOINT ${endpointName(endpoint)} csrf exemption requires a named justification.`,
@@ -3570,7 +3587,7 @@ export function kovoCheck(
       }
     }
 
-    for (const mutation of input.mutations ?? []) {
+    for (const mutation of graph.mutations ?? []) {
       for (const domain of mutation.manualInvalidates ?? []) {
         pushFinding(
           `WARN INVALIDATE ${mutation.key} -> ${domain} Manual invalidate escape hatch requires review.`,

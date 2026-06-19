@@ -21,7 +21,7 @@ registerHooks({
   },
 });
 
-const { kovoUiTokenSheetCss } = await import('@kovojs/headless-ui');
+const { kovoUiTokenSheetCss } = await import('@kovojs/headless-ui/internal');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const crmRoot = resolve(scriptDir, '..');

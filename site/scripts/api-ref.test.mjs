@@ -284,7 +284,7 @@ describe('api-ref generator', () => {
     // surface (e.g. @kovojs/test dropped its internalized verifier subpaths and
     // @kovojs/style grew its documented exports); they must not silently regress.
     const expected = {
-      '@kovojs/core': 71,
+      '@kovojs/core': 68,
       '@kovojs/drizzle': 4,
       '@kovojs/runtime': 90,
       '@kovojs/server': 160,

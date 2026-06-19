@@ -7,6 +7,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./generated": "./src/generated.ts",
     "./internal/component-render": "./src/internal/component-render.ts",
     "./internal/derivation": "./src/internal/derivation.ts",
     "./internal/diagnostics": "./src/internal/diagnostics.ts",
@@ -22,6 +23,10 @@
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./generated": {
+        "types": "./dist/generated.d.mts",
+        "default": "./dist/generated.mjs"
       },
       "./internal/component-render": {
         "types": "./dist/internal/component-render.d.mts",
@@ -62,7 +67,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/storage.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/storage.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

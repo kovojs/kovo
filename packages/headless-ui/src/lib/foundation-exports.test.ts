@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  cn as rootCn,
-  defineVariants as rootDefineVariants,
-  kovoUiTokenSheet as rootTokenSheet,
-  kovoUiTokenSheetCss as rootTokenSheetCss,
-} from '../index.js';
+  cn as internalCn,
+  defineVariants as internalDefineVariants,
+  kovoUiTokenSheet as internalTokenSheet,
+  kovoUiTokenSheetCss as internalTokenSheetCss,
+} from '../internal.js';
 import {
   cn as libCn,
   defineVariants as libDefineVariants,
@@ -14,16 +14,16 @@ import {
 } from './index.js';
 
 describe('foundation helper exports', () => {
-  it('exports class helpers from the package root and lib subpath barrels', () => {
-    expect(rootCn('inline-flex', { hidden: false })).toBe('inline-flex');
+  it('exports class helpers from the internal and lib subpath barrels', () => {
+    expect(internalCn('inline-flex', { hidden: false })).toBe('inline-flex');
     expect(libCn('inline-flex', { hidden: false })).toBe('inline-flex');
 
-    expect(rootDefineVariants).toBe(libDefineVariants);
+    expect(internalDefineVariants).toBe(libDefineVariants);
   });
 
-  it('exports token sheet helpers from the package root and lib subpath barrels', () => {
-    expect(rootTokenSheet).toBe(libTokenSheet);
-    expect(rootTokenSheetCss).toBe(libTokenSheetCss);
-    expect(rootTokenSheetCss).toContain('--kovo-color-background');
+  it('exports token sheet helpers from the internal and lib subpath barrels', () => {
+    expect(internalTokenSheet).toBe(libTokenSheet);
+    expect(internalTokenSheetCss).toBe(libTokenSheetCss);
+    expect(internalTokenSheetCss).toContain('--kovo-color-background');
   });
 });

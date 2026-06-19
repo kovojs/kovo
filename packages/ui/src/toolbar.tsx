@@ -7,9 +7,9 @@ import {
   type ToolbarItem as HeadlessToolbarItem,
   type ToolbarOrientation,
 } from '@kovojs/headless-ui/toolbar';
-import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import type { TextDirection } from './navigation-types.js';
 import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';

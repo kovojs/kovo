@@ -5,10 +5,10 @@ import {
   hoverCardRootAttributes,
   hoverCardTriggerAttributes,
 } from '@kovojs/headless-ui/hover-card';
-import { safeUrl } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
+import { safeUrl } from './safe-url.js';
 
 import { uiTheme } from './theme.js';
 

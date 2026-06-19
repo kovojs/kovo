@@ -9,9 +9,9 @@ import {
   type AccordionType,
   type AccordionValue,
 } from '@kovojs/headless-ui/accordion';
-import type { CollectionOrientation } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import type { CollectionOrientation } from './navigation-types.js';
 import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';

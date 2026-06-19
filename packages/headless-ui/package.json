@@ -22,6 +22,7 @@
     "./dropdown-menu": "./src/primitives/dropdown-menu.ts",
     "./field": "./src/primitives/field.ts",
     "./hover-card": "./src/primitives/hover-card.ts",
+    "./internal": "./src/internal.ts",
     "./menubar": "./src/primitives/menubar.ts",
     "./meter": "./src/primitives/meter.ts",
     "./navigation-menu": "./src/primitives/navigation-menu.ts",
@@ -108,6 +109,10 @@
         "types": "./dist/primitives/hover-card.d.mts",
         "default": "./dist/primitives/hover-card.mjs"
       },
+      "./internal": {
+        "types": "./dist/internal.d.mts",
+        "default": "./dist/internal.mjs"
+      },
       "./menubar": {
         "types": "./dist/primitives/menubar.d.mts",
         "default": "./dist/primitives/menubar.mjs"
@@ -188,7 +193,7 @@
   },
   "scripts": {
     "lint:primitives": "rm -rf .lint-primitives && tsc --ignoreConfig --module NodeNext --moduleResolution NodeNext --target ES2024 --types node --skipLibCheck --strict --outDir .lint-primitives --rootDir src src/tooling/lint-primitives.ts && node .lint-primitives/tooling/lint-primitives.js; status=$?; rm -rf .lint-primitives; exit $status",
-    "build:dist": "vp pack src/index.ts src/primitives/accordion.ts src/primitives/alert-dialog.ts src/primitives/autocomplete.ts src/primitives/avatar.ts src/primitives/checkbox-group.ts src/primitives/checkbox.ts src/primitives/collapsible.ts src/primitives/combobox.ts src/primitives/command.ts src/primitives/context-menu.ts src/primitives/dialog.ts src/primitives/disclosure.ts src/primitives/dropdown-menu.ts src/primitives/field.ts src/primitives/hover-card.ts src/primitives/menubar.ts src/primitives/meter.ts src/primitives/navigation-menu.ts src/primitives/number-field.ts src/primitives/otp-field.ts src/primitives/popover.ts src/primitives/progress.ts src/primitives/radio-group.ts src/primitives/scroll-area.ts src/primitives/select.ts src/primitives/separator.ts src/primitives/slider.ts src/primitives/switch.ts src/primitives/tabs.ts src/primitives/toast.ts src/primitives/toggle-group.ts src/primitives/toggle.ts src/primitives/toolbar.ts src/primitives/tooltip.ts --dts",
+    "build:dist": "vp pack src/index.ts src/internal.ts src/primitives/accordion.ts src/primitives/alert-dialog.ts src/primitives/autocomplete.ts src/primitives/avatar.ts src/primitives/checkbox-group.ts src/primitives/checkbox.ts src/primitives/collapsible.ts src/primitives/combobox.ts src/primitives/command.ts src/primitives/context-menu.ts src/primitives/dialog.ts src/primitives/disclosure.ts src/primitives/dropdown-menu.ts src/primitives/field.ts src/primitives/hover-card.ts src/primitives/menubar.ts src/primitives/meter.ts src/primitives/navigation-menu.ts src/primitives/number-field.ts src/primitives/otp-field.ts src/primitives/popover.ts src/primitives/progress.ts src/primitives/radio-group.ts src/primitives/scroll-area.ts src/primitives/select.ts src/primitives/separator.ts src/primitives/slider.ts src/primitives/switch.ts src/primitives/tabs.ts src/primitives/toast.ts src/primitives/toggle-group.ts src/primitives/toggle.ts src/primitives/toolbar.ts src/primitives/tooltip.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

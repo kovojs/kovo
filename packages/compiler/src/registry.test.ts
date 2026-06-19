@@ -71,7 +71,7 @@ describe('compiler registry and graph emission', () => {
     expect(registry).toContain(`export interface LiveTargetRegistry {
   'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; targetBase: 'cart-badge'; identityProps: readonly []; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; coverage: readonly [{ query: 'cart.count'; position: "binding"; status: 'plan' }]; };
 }`);
-    expect(registry).toContain(`declare module '@kovojs/core' {`);
+    expect(registry).toContain(`declare module '@kovojs/core/generated' {`);
     expect(registry).toContain(`  interface ComponentRegistry {
   'components/cart/cart-badge/cart-badge': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
   'components/products/product-grid/product-grid': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;
@@ -82,6 +82,7 @@ describe('compiler registry and graph emission', () => {
     expect(registry).toContain(`  interface LiveTargetRegistry {
   'components/cart/cart-badge/cart-badge': { component: 'components/cart/cart-badge/cart-badge'; targetBase: 'cart-badge'; identityProps: readonly []; queries: readonly ['cart']; queryBindings: readonly [{ name: 'cart'; queryExpression: "{}" }]; props: {}; coverage: readonly [{ query: 'cart.count'; position: "binding"; status: 'plan' }]; };
   }`);
+    expect(registry).toContain(`declare module '@kovojs/core' {`);
     expect(registry).toContain(`  interface QueryRegistry {
   'cart': typeof cartQuery;
   'productGrid': typeof productGridQuery;

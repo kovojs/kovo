@@ -1,4 +1,4 @@
-import type { FragmentTargets } from '../index.js';
+import type { FragmentTargets } from '../generated.js';
 
 type RegistryKey<Registry> = keyof Registry extends never
   ? string

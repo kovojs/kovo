@@ -41,7 +41,7 @@ const missingDepHint = (dep, cause) =>
 
 let kovoUiTokenSheetCss;
 try {
-  ({ kovoUiTokenSheetCss } = await import('@kovojs/headless-ui'));
+  ({ kovoUiTokenSheetCss } = await import('@kovojs/headless-ui/internal'));
 } catch (error) {
   throw missingDepHint('@kovojs/headless-ui', error?.message ?? error);
 }

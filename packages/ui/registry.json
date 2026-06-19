@@ -26,13 +26,12 @@
           "accordionRootAttributes",
           "accordionTriggerAttributes",
           "AccordionType",
-          "AccordionValue",
-          "CollectionOrientation"
+          "AccordionValue"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "alert-dialog",
@@ -69,7 +68,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["theme"]
     },
     {
       "name": "autocomplete",
@@ -124,7 +123,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["theme"]
     },
     {
       "name": "breadcrumb",
@@ -132,11 +131,11 @@
       "files": ["src/breadcrumb.tsx"],
       "exports": ["Breadcrumb", "BreadcrumbItem", "BreadcrumbLink", "BreadcrumbSeparator"],
       "dependencies": {
-        "@kovojs/headless-ui": ["safeUrl", "separatorRootAttributes"],
+        "@kovojs/headless-ui": ["separatorRootAttributes"],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
       "name": "button",
@@ -160,7 +159,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["theme"]
     },
     {
       "name": "checkbox-group",
@@ -178,14 +177,12 @@
           "CheckboxGroupItem",
           "checkboxGroupItemAttributes",
           "checkboxGroupLabelAttributes",
-          "checkboxGroupRootAttributes",
-          "CollectionOrientation",
-          "TextDirection"
+          "checkboxGroupRootAttributes"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "checkbox",
@@ -429,13 +426,12 @@
         "@kovojs/headless-ui": [
           "hoverCardContentAttributes",
           "hoverCardRootAttributes",
-          "hoverCardTriggerAttributes",
-          "safeUrl"
+          "hoverCardTriggerAttributes"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
       "name": "kbd",
@@ -447,7 +443,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["theme"]
     },
     {
       "name": "menubar",
@@ -456,19 +452,17 @@
       "exports": ["Menubar", "MenubarItem", "MenubarSubmenu", "MenubarGroup", "MenubarSeparator"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "CollectionOrientation",
           "menubarGroupAttributes",
           "MenubarItem",
           "menubarItemAttributes",
           "menubarRootAttributes",
           "menubarSeparatorAttributes",
-          "menubarSubmenuAttributes",
-          "TextDirection"
+          "menubarSubmenuAttributes"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "meter",
@@ -498,7 +492,6 @@
       ],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "CollectionOrientation",
           "navigationMenuContentAttributes",
           "navigationMenuIndicatorAttributes",
           "NavigationMenuItem",
@@ -507,13 +500,12 @@
           "navigationMenuListAttributes",
           "navigationMenuRootAttributes",
           "navigationMenuTriggerAttributes",
-          "navigationMenuViewportAttributes",
-          "TextDirection"
+          "navigationMenuViewportAttributes"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "number-field",
@@ -591,18 +583,16 @@
       "exports": ["RadioGroup", "RadioGroupItem", "RadioGroupRadio", "RadioGroupLabel"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "CollectionOrientation",
           "RadioGroupItem",
           "radioGroupItemAttributes",
           "radioGroupLabelAttributes",
           "radioGroupRadioAttributes",
-          "radioGroupRootAttributes",
-          "TextDirection"
+          "radioGroupRootAttributes"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "scroll-area",
@@ -624,13 +614,12 @@
           "ScrollAreaScrollbars",
           "ScrollAreaScrollPosition",
           "scrollAreaThumbAttributes",
-          "scrollAreaViewportAttributes",
-          "TextDirection"
+          "scrollAreaViewportAttributes"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "select",
@@ -708,7 +697,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["theme"]
     },
     {
       "name": "slider",
@@ -751,7 +740,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["theme"]
     },
     {
       "name": "tabs",
@@ -760,19 +749,17 @@
       "exports": ["Tabs", "TabsList", "TabsTrigger", "TabsPanel"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "CollectionOrientation",
           "TabsActivationMode",
           "TabsItem",
           "tabsListAttributes",
           "tabsPanelAttributes",
           "tabsRootAttributes",
-          "tabsTriggerAttributes",
-          "TextDirection"
+          "tabsTriggerAttributes"
         ],
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "toast",
@@ -810,8 +797,6 @@
       "exports": ["ToggleGroup", "ToggleGroupItem", "ToggleGroupButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "CollectionOrientation",
-          "TextDirection",
           "toggleGroupButtonAttributes",
           "ToggleGroupItem",
           "toggleGroupItemAttributes",
@@ -822,7 +807,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "toggle",
@@ -843,7 +828,6 @@
       "exports": ["Toolbar", "ToolbarItem", "ToolbarButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
-          "TextDirection",
           "toolbarButtonAttributes",
           "ToolbarItem",
           "toolbarItemAttributes",
@@ -853,7 +837,7 @@
         "@kovojs/style": ["*"],
         "@kovojs/core": ["component"]
       },
-      "uiComponents": ["pass-through", "theme"]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "name": "tooltip",

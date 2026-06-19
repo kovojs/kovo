@@ -10,9 +10,9 @@ import {
   type ScrollAreaScrollPosition,
   type ScrollAreaScrollbars,
 } from '@kovojs/headless-ui/scroll-area';
-import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import type { TextDirection } from './navigation-types.js';
 import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';

@@ -1,10 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
-import { safeUrl } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
+import { safeUrl } from './safe-url.js';
 
 import { uiTheme } from './theme.js';
 
