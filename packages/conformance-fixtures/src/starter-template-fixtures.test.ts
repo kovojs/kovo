@@ -96,6 +96,7 @@ describe('@kovojs/test starter template fixtures', () => {
 
     try {
       await mkdir(join(root, '.github/workflows'), { recursive: true });
+      await mkdir(join(root, 'scripts'), { recursive: true });
       await mkdir(join(root, 'src'), { recursive: true });
       await writeFile(
         join(root, '.github/workflows/ci.yml'),
@@ -117,6 +118,10 @@ describe('@kovojs/test starter template fixtures', () => {
       await writeFile(join(root, 'src/app.tsx'), 'export const app = "loaded";');
       await writeFile(join(root, 'src/client.ts'), 'export const client = "loaded";');
       await writeFile(join(root, 'src/styles.css'), ':root { color-scheme: light; }\n');
+      await writeFile(
+        join(root, 'scripts/emit-graph.mjs'),
+        'import { writeFileSync } from \'node:fs\';\nwriteFileSync(\'graph.json\', \'{"pages":[{"route":"/"}]}\');\n',
+      );
       await writeFile(
         join(root, 'vite.config.ts'),
         [

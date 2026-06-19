@@ -373,6 +373,7 @@ async function emitStarterTemplateGraphSource(paths: StarterTemplateFixturePaths
 
   try {
     await cp(paths.templateRoot, fixtureRoot, { recursive: true });
+    await writeCompilerShim(fixtureRoot, compilerModuleUrlFor(paths));
     execFileSync('node', ['scripts/emit-graph.mjs'], {
       cwd: fixtureRoot,
       encoding: 'utf8',

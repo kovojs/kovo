@@ -265,7 +265,7 @@ export const compilerSpecCoverageMap = [
     referenceApp: [
       {
         file: 'packages/compiler/src/compiler-conformance.test.ts',
-        testName: 'checks committed Commerce component IR freshness through the package §5.2 gate',
+        testName: 'checks Commerce component IR through the package §5.2 gate on demand',
       },
     ],
   },
@@ -398,8 +398,8 @@ export const compilerSpecCoverageMap = [
     ],
     referenceApp: [
       {
-        file: 'examples/commerce/src/app.generated-artifacts.test.ts',
-        testName: 'stamps generated live-target hooks into the rendered cart document',
+        file: 'examples/commerce/src/app.live-targets.test.ts',
+        testName: 'stamps live-target hooks into the rendered cart document',
       },
       {
         file: 'examples/reference/src/app.test.ts',

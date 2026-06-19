@@ -341,7 +341,7 @@ describe('compiler SPEC coverage map', () => {
             },
           ],
           "referenceApp": [
-            "examples/commerce/src/app.generated-artifacts.test.ts",
+            "examples/commerce/src/app.live-targets.test.ts",
             "examples/reference/src/app.test.ts",
           ],
         },

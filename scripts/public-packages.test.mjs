@@ -77,6 +77,7 @@ describe('public-packages manifest', () => {
       './internal',
       './internal/graph',
       './package-styles',
+      './vite',
     ]);
 
     const cli = manifest.find((pkg) => pkg.name === '@kovojs/cli');

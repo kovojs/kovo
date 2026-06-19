@@ -1,6 +1,15 @@
 import { defineConfig } from 'vite-plus';
 
+import { commerceRegistryFacts, exampleKovoCompilerPlugin } from './examples/vite-kovo-compiler.js';
+
 export default defineConfig({
+  plugins: [
+    exampleKovoCompilerPlugin({ include: ['site/tutorial/steps'] }),
+    exampleKovoCompilerPlugin({
+      include: ['examples/commerce/src/components'],
+      registryFacts: commerceRegistryFacts,
+    }),
+  ],
   lint: {
     // Starter templates are copied verbatim; lint governs authored workspace code.
     ignorePatterns: ['packages/create-kovo/templates/**'],

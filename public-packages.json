@@ -266,7 +266,7 @@
       "apiBoundary": {
         "public": [],
         "generated": [],
-        "internal": [".", "./graph", "./internal", "./internal/graph", "./package-styles"]
+        "internal": [".", "./graph", "./internal", "./internal/graph", "./package-styles", "./vite"]
       }
     },
     {

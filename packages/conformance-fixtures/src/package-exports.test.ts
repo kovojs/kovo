@@ -8,6 +8,11 @@
 // private @kovojs/conformance-fixtures package (api-cleanup R5); this suite
 // lives here because that package can import both the public @kovojs/test subpath
 // surface and its own fixtures while keeping the dependency graph acyclic.
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   type MutationErrorExpectation,
@@ -1517,16 +1522,29 @@ describe('@kovojs/test package subpath exports', () => {
       authoredLoweredStampAttributes: [],
       generatedHasLoweredIrMarker: true,
     } satisfies GeneratedComponentSourceFacts);
-    expect(
-      generatedComponentSourceFileFacts({
-        components: ['cart-badge'],
-        sourceRootUrl: new URL('../../../examples/commerce/src/', import.meta.url),
-      })[0],
-    ).toMatchObject({
-      authoredPath: 'components/cart-badge.tsx',
-      generatedPath: 'generated/cart-badge.tsx',
-      name: 'cart-badge',
-    } satisfies Partial<GeneratedComponentSourceFileFact>);
+    const generatedSourceRoot = mkdtempSync(join(tmpdir(), 'kovo-generated-source-facts-'));
+    try {
+      mkdirSync(join(generatedSourceRoot, 'components'), { recursive: true });
+      mkdirSync(join(generatedSourceRoot, 'generated'), { recursive: true });
+      writeFileSync(
+        join(generatedSourceRoot, 'components/cart-badge.tsx'),
+        '<cart-badge></cart-badge>',
+      );
+      writeFileSync(join(generatedSourceRoot, 'generated/cart-badge.tsx'), '// @kovojs-ir');
+
+      expect(
+        generatedComponentSourceFileFacts({
+          components: ['cart-badge'],
+          sourceRootUrl: pathToFileURL(`${generatedSourceRoot}/`),
+        })[0],
+      ).toMatchObject({
+        authoredPath: 'components/cart-badge.tsx',
+        generatedPath: 'generated/cart-badge.tsx',
+        name: 'cart-badge',
+      } satisfies Partial<GeneratedComponentSourceFileFact>);
+    } finally {
+      rmSync(generatedSourceRoot, { force: true, recursive: true });
+    }
     expect(generatedComponentCommittedIrFacts).toBeTypeOf('function');
     expect({
       authoredLoweredStampAttributes: [],

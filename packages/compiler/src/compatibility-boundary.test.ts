@@ -22,6 +22,7 @@ describe('compatibility path boundaries', () => {
       './internal',
       './internal/graph',
       './package-styles',
+      './vite',
     ]);
     expect(publicIndexSource).not.toContain('capturesUnserializableReferences');
     expect(publicIndexSource).not.toMatch(/lower\/handlers/);

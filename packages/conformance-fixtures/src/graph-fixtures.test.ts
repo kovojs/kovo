@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import {
   commerceGraphBehaviorFact,
@@ -584,43 +587,57 @@ describe('@kovojs/test graph fixture seam', () => {
   });
 
   it('loads checked-in graph artifacts through the graph fixture seam', async () => {
-    await expect(
-      graphFixtureFile(process.cwd(), 'examples/commerce/src/generated/graph.json'),
-    ).resolves.toMatchObject({
-      pages: expect.arrayContaining([expect.objectContaining({ route: '/cart' })]),
-      queries: expect.arrayContaining([expect.objectContaining({ query: 'cart' })]),
-    });
+    const root = await mkdtemp(join(tmpdir(), 'kovo-graph-fixture-file-'));
+    try {
+      await mkdir(join(root, 'generated'), { recursive: true });
+      await writeFile(join(root, 'generated/graph.json'), JSON.stringify(graph));
+
+      await expect(graphFixtureFile(root, 'generated/graph.json')).resolves.toMatchObject({
+        pages: expect.arrayContaining([expect.objectContaining({ route: '/cart' })]),
+        queries: expect.arrayContaining([expect.objectContaining({ query: 'cart' })]),
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('runs project graph artifact acceptance checks through one public fixture', async () => {
-    await expect(
-      generatedGraphArtifactAcceptanceProjectFact({
-        artifactPath: 'examples/commerce/src/generated/graph.json',
-        emitCheck: {
-          args: ['-e', ''],
-          command: process.execPath,
-          cwd: process.cwd(),
-        },
-        kovoCheck: () => ({
-          exitCode: 0,
-          output: 'kovo-check/v1\nOK\n',
+    const root = await mkdtemp(join(tmpdir(), 'kovo-graph-fixture-acceptance-'));
+    try {
+      await mkdir(join(root, 'generated'), { recursive: true });
+      await writeFile(join(root, 'generated/graph.json'), JSON.stringify(graph));
+
+      await expect(
+        generatedGraphArtifactAcceptanceProjectFact({
+          artifactPath: 'generated/graph.json',
+          emitCheck: {
+            args: ['-e', ''],
+            command: process.execPath,
+            cwd: root,
+          },
+          kovoCheck: () => ({
+            exitCode: 0,
+            output: 'kovo-check/v1\nOK\n',
+          }),
+          rootPath: root,
         }),
-        rootPath: process.cwd(),
-      }),
-    ).resolves.toMatchObject({
-      checklist: {
-        emitCheckClean: true,
-        kovoCheckOk: true,
-        invalidationKeys: ['cart/add'],
-        touchGraph: {
-          unresolvedMutations: [],
+      ).resolves.toMatchObject({
+        checklist: {
+          emitCheckClean: true,
+          kovoCheckOk: true,
+          invalidationKeys: ['cart/add'],
+          touchGraph: {
+            unresolvedMutations: [],
+          },
         },
-      },
-      emitCheck: {
-        stderr: '',
-        stdout: '',
-      },
-    });
+        emitCheck: {
+          stderr: '',
+          stdout: '',
+        },
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('fails loudly when required graph facts are absent', () => {

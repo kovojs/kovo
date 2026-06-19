@@ -132,21 +132,31 @@ describe('@kovojs/test generated module fixtures', () => {
     });
   });
 
-  it('loads generated component source pairs by component name', () => {
-    expect(
-      generatedComponentSourceFileFacts({
-        components: ['cart-badge'],
-        sourceRootUrl: new URL('../../../examples/commerce/src/', import.meta.url),
-      }),
-    ).toEqual([
-      {
-        authoredLoweredStampAttributes: [],
-        authoredPath: 'components/cart-badge.tsx',
-        generatedHasLoweredIrMarker: true,
-        generatedPath: 'generated/cart-badge.tsx',
-        name: 'cart-badge',
-      },
-    ]);
+  it('loads generated component source pairs by component name', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-generated-source-pairs-'));
+    try {
+      await mkdir(join(root, 'components'), { recursive: true });
+      await mkdir(join(root, 'generated'), { recursive: true });
+      await writeFile(join(root, 'components/cart-badge.tsx'), '<cart-badge />');
+      await writeFile(join(root, 'generated/cart-badge.tsx'), '// @kovojs-ir\n<cart-badge />');
+
+      expect(
+        generatedComponentSourceFileFacts({
+          components: ['cart-badge'],
+          sourceRootUrl: pathToFileURL(`${root}/`),
+        }),
+      ).toEqual([
+        {
+          authoredLoweredStampAttributes: [],
+          authoredPath: 'components/cart-badge.tsx',
+          generatedHasLoweredIrMarker: true,
+          generatedPath: 'generated/cart-badge.tsx',
+          name: 'cart-badge',
+        },
+      ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('compares committed generated IR to compiler output through a fixture seam', async () => {

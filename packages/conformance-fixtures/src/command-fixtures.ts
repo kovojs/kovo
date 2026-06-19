@@ -568,6 +568,12 @@ export async function loadVitePlusConfig(source: string): Promise<VitePlusConfig
         fixturePlugin.__esModule = true;
         return fixturePlugin;
       }
+      if (specifier === './examples/vite-kovo-compiler.js') {
+        return {
+          commerceRegistryFacts: {},
+          exampleKovoCompilerPlugin: () => ({ enforce: 'pre', name: 'kovo-compiler-test-stub' }),
+        };
+      }
       assert.fail(`unexpected Vite+ config import ${specifier}`);
     },
   });

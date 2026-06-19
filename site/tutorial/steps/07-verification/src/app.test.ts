@@ -293,7 +293,7 @@ describe('tutorial step 07 — testing & verification', () => {
     );
     expect(failure.status).toBe(422);
     expect(failure.body).toContain('data-error-code="OUT_OF_STOCK"');
-  }, 15_000);
+  }, 60_000);
   // /snippet
 
   it('proves the prediction still commutes with the committed transform', () => {

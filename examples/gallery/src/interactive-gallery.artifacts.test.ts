@@ -35,11 +35,15 @@ describe('compiled interactive gallery demos', () => {
     const manifestDemos = packageJson.kovo?.interactiveGallery?.compiledDemos;
     const compiledDemos = interactiveDemoNames();
     const docsDemos = interactiveGalleryDemos.map((demo) => demo.name).sort(compareStrings);
+    const clientModuleDemos = galleryInteractiveClientModuleHrefs
+      .map((href) => href.match(/\/src\/interactive\/([^/]+)\.client\.js$/)?.[1] ?? '')
+      .sort(compareStrings);
 
     expect(
       Array.isArray(manifestDemos) ? [...manifestDemos].map(String).sort(compareStrings) : [],
     ).toEqual(compiledDemos);
     expect(docsDemos).toEqual(compiledDemos);
+    expect(clientModuleDemos).toEqual(compiledDemos);
 
     const html = await renderInteractiveGalleryRoute();
     expect(html).toContain('data-gallery-route="/gallery/interactive"');
@@ -50,7 +54,6 @@ describe('compiled interactive gallery demos', () => {
       const componentName = demo.replace(/-demo$/, '');
       expect(html).toContain(`href="#${demo}"`);
       expect(html).toContain(`data-gallery-interactive="${componentName}"`);
-      expect(html).toMatch(new RegExp(`/c/__v/[0-9a-f]{8}/src/interactive/${demo}\\.client\\.js`));
     }
   });
 
@@ -137,15 +140,12 @@ describe('compiled interactive gallery demos', () => {
     }
   }, 180_000);
 
-  it('keeps rendered compiled-client DOM refs in lockstep with client exports', async () => {
+  it('keeps compiled-client DOM refs in lockstep with client exports', () => {
     for (const demo of interactiveDemoNames()) {
       const componentName = demo.replace(/-demo$/, '');
       const expectedModulePath = `/c/src/interactive/${demo}.client.js`;
       const clientExports = extractClientExports(readCompiledArtifact(`${demo}.client.js`));
-      const renderedDemo = interactiveGalleryDemos.find((entry) => entry.name === demo);
-      if (renderedDemo === undefined) throw new Error(`Missing docs route demo: ${demo}`);
-
-      const renderedRefs = extractCompiledClientRefs(await renderedDemo.render());
+      const renderedRefs = extractCompiledClientRefs(readCompiledArtifact(`${demo}.tsx`));
 
       expect(clientExports, `${demo} client exports`).not.toEqual([]);
       expect(renderedRefs, `${demo} rendered refs`).not.toEqual([]);

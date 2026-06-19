@@ -19,8 +19,8 @@ export async function renderInteractiveGalleryRoute(): Promise<string> {
     <main data-gallery-route="/gallery/interactive">
       <h1>Interactive Gallery</h1>
       <p data-demo-summary="compiled">
-        Stateful examples below are app-authored TSX compiled through Kovo into checked-in server
-        artifacts and generated client modules.
+        Stateful examples below are app-authored TSX compiled through Kovo into emitted server and
+        client modules.
       </p>
       <nav aria-label="Interactive demos">
         {interactiveGalleryDemos.map((demo) => (

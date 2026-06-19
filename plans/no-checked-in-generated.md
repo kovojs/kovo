@@ -281,26 +281,29 @@ build`.
 
 ## Phase 6 — Verification
 
-- [ ] Clean-worktree proof: `git clean -ndx` shows generated dirs would be created (not tracked);
+- [x] Clean-worktree proof: `git clean -ndx` shows generated dirs would be created (not tracked);
       `git ls-files | rg '/src/generated/'` returns nothing in scope.
-- [ ] Zero app dependency: `rg -n "generated" examples site --glob '!**/generated/**'` shows no
+  - Evidence: `git clean -ndx | rg 'src/generated|templates/graph\.json'` reports only ignored
+    `site/src/generated/`; the scoped `git ls-files` query over example/site generated roots and
+    `packages/create-kovo/templates/graph.json` prints nothing.
+- [x] Zero app dependency: `rg -n "generated" examples site --glob '!**/generated/**'` shows no
       import/`export … from` into a generated path (direct or via fixtures).
-- [ ] Gates: `pnpm run check` (incl. `check:imports`, new `check:no-committed-generated`,
+  - Evidence: the scoped generated-import scan over `examples` and `site`, excluding checked
+    generated/dist/node_modules dirs plus public `@kovojs/*/generated` package subpaths, prints
+    nothing.
+- [x] Gates: `pnpm run check` (incl. `check:imports`, new `check:no-committed-generated`,
       `typecheck-examples`), `vp test`, browser tests (`vp run browser`), `vp run kovo-check`,
       `git diff --check`.
-- [ ] Spot-check on-demand inspection: `kovo emit`/`kovo explain` reproduce the lowered IR for one
+  - Evidence: `pnpm run check`; `pnpm exec vp test` (420 files, 3102 passed, 1 skipped);
+    `pnpm exec vp run browser` (27 files, 144 passed); `pnpm exec vp run kovo-check`
+    (`kovo-check/v1 OK`); `git diff --check`.
+- [x] Spot-check on-demand inspection: `kovo emit`/`kovo explain` reproduce the lowered IR for one
       component per example, and the fixpoint gate passes on the freshly emitted output.
+  - Evidence: `emit-components -- --check` and `emit-graph -- --check` pass for
+    `@kovojs/example-commerce`, `@kovojs/example-crm`, and `@kovojs/example-stackoverflow`.
 
 ## Risks / Open Questions
 
-- **Registry facts at test time without committed graph.** The Vite plugin needs mutation-input
-  and component-prefix facts to lower correctly (commerce's emit script feeds `registry-facts`).
-  Phase 1 must establish how these are derived from authored declarations at test/dev time; this
-  is the highest-risk item.
-- **Browser-test serving.** Confirmed feasible because vitest browser mode is Vite-served, but
-  validate the plugin runs in that pipeline (handler client-module emission, asset URLs).
 - **Loss of review-time diffs.** Reviewers no longer see lowered-IR/graph changes as diffs.
-  Mitigation per Decisions: fixpoint + render-equivalence gates + on-demand `kovo explain`. Confirm
-  this satisfies `rules/data-layer-policy.md` and `rules/compiler-hard-rules.md` expectations.
-- **CI cache churn.** Tasks that listed generated files as cache `input` need new inputs (authored
-  source + compiler package) so caching stays correct after the files leave the tree.
+  Mitigation per Decisions: fixpoint + render-equivalence gates + on-demand emit/check/explain
+  commands are now wired into Phase 6 evidence.

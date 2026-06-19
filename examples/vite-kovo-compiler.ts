@@ -27,7 +27,7 @@ function requiredString(name: string) {
   };
 }
 
-const commerceRegistryFacts = {
+export const commerceRegistryFacts = {
   mutationInputs: {
     'cart/add': [
       requiredString('productId'),
