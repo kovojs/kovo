@@ -57,6 +57,14 @@ export type {
 } from './types.js';
 export type { LocalMutationInputFact } from './mutation-inputs.js';
 export { mutationInputFactsFromSource } from './mutation-inputs.js';
+export type {
+  InlineOptimisticPlanFact,
+  InlineOptimisticTransformFact,
+} from './optimistic-inline.js';
+export {
+  inlineOptimisticPlansFromSource,
+  serializeInlineOptimisticPlanIr,
+} from './optimistic-inline.js';
 export {
   createEmptyCompileResult,
   queryShapeFactDiagnostics,
