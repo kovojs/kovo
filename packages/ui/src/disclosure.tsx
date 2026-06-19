@@ -81,8 +81,23 @@ export const disclosureStyles = style.create(
       paddingInline: 12,
       transitionProperty: 'background-color',
       width: 'fit-content',
+      '::after': {
+        borderColor: uiTheme.color.foregroundMuted,
+        borderStyle: 'solid',
+        borderWidth: '0 2px 2px 0',
+        content: '""',
+        flexShrink: 0,
+        height: 8,
+        marginLeft: 8,
+        transform: 'rotate(45deg)',
+        transitionProperty: 'transform',
+        width: 8,
+      },
       '[data-state=open]': {
         backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      },
+      '[data-state=open]::after': {
+        transform: 'rotate(-135deg)',
       },
       ':disabled': {
         opacity: 0.5,

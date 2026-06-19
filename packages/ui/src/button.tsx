@@ -6,7 +6,7 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'outline';
 export type ButtonSize = 'sm' | 'md';
 
 export interface ButtonProps {
@@ -65,9 +65,34 @@ const sizes = style.create(
 
 const variants = style.create(
   {
+    destructive: {
+      backgroundColor: uiTheme.color.danger.border,
+      borderColor: uiTheme.color.danger.border,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: uiTheme.color.foregroundInverse,
+      ':focus-visible': {
+        outlineColor: uiTheme.color.danger.border,
+      },
+      ':hover': {
+        backgroundColor: uiTheme.color.danger.background,
+        borderColor: uiTheme.color.danger.background,
+        color: uiTheme.color.danger.foreground,
+      },
+    },
     ghost: {
       backgroundColor: 'transparent',
       borderColor: 'transparent',
+      color: uiTheme.color.foreground,
+      ':focus-visible': {
+        outlineColor: uiTheme.color.borderStrong,
+      },
+      ':hover': {
+        backgroundColor: uiTheme.color.backgroundSubtle,
+      },
+    },
+    outline: {
+      backgroundColor: 'transparent',
+      borderColor: uiTheme.color.border,
       color: uiTheme.color.foreground,
       ':focus-visible': {
         outlineColor: uiTheme.color.borderStrong,
@@ -115,6 +140,8 @@ export const buttonClasses = [
   style.attrs(sizes.sm).class ?? '',
   style.attrs(variants.secondary).class ?? '',
   style.attrs(variants.ghost).class ?? '',
+  style.attrs(variants.destructive).class ?? '',
+  style.attrs(variants.outline).class ?? '',
 ] as const;
 
 export const Button = component({

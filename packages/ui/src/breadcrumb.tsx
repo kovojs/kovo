@@ -67,7 +67,11 @@ export const breadcrumbStyles = style.create(
       fontSize: 14,
     },
     separator: {
+      alignItems: 'center',
       color: uiTheme.color.borderStrong,
+      display: 'inline-flex',
+      fontSize: 14,
+      userSelect: 'none',
     },
   },
   { namespace: 'breadcrumb', source: 'breadcrumb.tsx' },

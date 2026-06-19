@@ -3,10 +3,10 @@
 exports[`@kovojs/ui styled package foundation > wraps H3 menu primitives as styled menu surfaces 1`] = `
 {
   "dropdownMenuContentClasses": [
-    "kv-dropdown-menu-bg-clz9dn kv-dropdown-menu-bd-jllngq kv-dropdown-menu-bd-1k451q kv-dropdown-menu-bd-1t9yg7 kv-dropdown-menu-bd-1huuni kv-dropdown-menu-box-13xkzi kv-dropdown-menu-fg-16p8sm kv-dropdown-menu-font-1cumtw kv-dropdown-menu-min-vlkhou kv-dropdown-menu-outline-iqfugm kv-dropdown-menu-pad-1lv235 kv-dropdown-menu-d-1que9w",
+    "kv-dropdown-menu-bg-clz9dn kv-dropdown-menu-bd-jllngq kv-dropdown-menu-bd-1k451q kv-dropdown-menu-bd-1t9yg7 kv-dropdown-menu-bd-1huuni kv-dropdown-menu-box-ts27i0 kv-dropdown-menu-fg-16p8sm kv-dropdown-menu-font-1cumtw kv-dropdown-menu-m-l5vssy kv-dropdown-menu-min-1wyb72 kv-dropdown-menu-outline-iqfugm kv-dropdown-menu-pad-1lv235 kv-dropdown-menu-position-1ge2sp kv-dropdown-menu-z-1ag0ds kv-dropdown-menu-d-1que9w kv-dropdown-menu-d-1iqtij",
   ],
   "dropdownMenuItemClasses": [
-    "kv-dropdown-menu-align-1vxg5e kv-dropdown-menu-bd-7x8cfs kv-dropdown-menu-fg-1huzpd kv-dropdown-menu-d-10jo0b kv-dropdown-menu-font-1cumtw kv-dropdown-menu-outline-iqfugm kv-dropdown-menu-pad-q8c2g9 kv-dropdown-menu-pad-g20wnv kv-dropdown-menu-text-k66u5a kv-dropdown-menu-w-5r2qzg kv-dropdown-menu-opacity-1ctby9 kv-dropdown-menu-pointer-1bgayk kv-dropdown-menu-bg-42dmps kv-dropdown-menu-fg-1bqj3j",
+    "kv-dropdown-menu-align-1vxg5e kv-dropdown-menu-bd-7x8cfs kv-dropdown-menu-fg-1huzpd kv-dropdown-menu-column-1wng6t kv-dropdown-menu-cursor-1jaxik kv-dropdown-menu-d-10jo0b kv-dropdown-menu-font-1cumtw kv-dropdown-menu-outline-iqfugm kv-dropdown-menu-pad-q8c2g9 kv-dropdown-menu-pad-g20wnv kv-dropdown-menu-text-k66u5a kv-dropdown-menu-w-5r2qzg kv-dropdown-menu-opacity-1ctby9 kv-dropdown-menu-pointer-1bgayk kv-dropdown-menu-bg-1q3l4u kv-dropdown-menu-fg-1bqj3j kv-dropdown-menu-bg-zcg2at kv-dropdown-menu-fg-1ulx1s",
   ],
   "dropdownMenuTriggerClasses": [
     "kv-dropdown-menu-align-1vxg5e kv-dropdown-menu-bg-clz9dn kv-dropdown-menu-bd-w8fr6h kv-dropdown-menu-bd-1k451q kv-dropdown-menu-bd-1t9yg7 kv-dropdown-menu-bd-1huuni kv-dropdown-menu-box-kdtwje kv-dropdown-menu-fg-16p8sm kv-dropdown-menu-d-1fob82 kv-dropdown-menu-font-1cumtw kv-dropdown-menu-font-pbx8x4 kv-dropdown-menu-h-ln0fuf kv-dropdown-menu-justify-edikmg kv-dropdown-menu-pad-raz2zz kv-dropdown-menu-transition-1icttj kv-dropdown-menu-bg-1msney kv-dropdown-menu-cursor-1eaeoz kv-dropdown-menu-opacity-18t10p kv-dropdown-menu-outline-1l8onk kv-dropdown-menu-outline-1iz9f5 kv-dropdown-menu-outline-iee2jp kv-dropdown-menu-outline-1bfidg kv-dropdown-menu-bg-1ebzac",
@@ -17,10 +17,10 @@ exports[`@kovojs/ui styled package foundation > wraps H3 menu primitives as styl
 exports[`@kovojs/ui styled package foundation > wraps H3 menu primitives as styled menu surfaces 2`] = `
 {
   "contextMenuContentClasses": [
-    "kv-context-menu-bg-clz9dn kv-context-menu-bd-jllngq kv-context-menu-bd-1k451q kv-context-menu-bd-1t9yg7 kv-context-menu-bd-1huuni kv-context-menu-box-13xkzi kv-context-menu-fg-16p8sm kv-context-menu-font-1cumtw kv-context-menu-min-vlkhou kv-context-menu-outline-iqfugm kv-context-menu-pad-1lv235 kv-context-menu-d-1que9w",
+    "kv-context-menu-bg-clz9dn kv-context-menu-bd-jllngq kv-context-menu-bd-1k451q kv-context-menu-bd-1t9yg7 kv-context-menu-bd-1huuni kv-context-menu-box-ts27i0 kv-context-menu-fg-16p8sm kv-context-menu-font-1cumtw kv-context-menu-m-l5vssy kv-context-menu-min-1wyb72 kv-context-menu-outline-iqfugm kv-context-menu-pad-1lv235 kv-context-menu-position-1ge2sp kv-context-menu-z-1ag0ds kv-context-menu-d-1que9w kv-context-menu-d-1iqtij",
   ],
   "contextMenuItemClasses": [
-    "kv-context-menu-align-1vxg5e kv-context-menu-bd-7x8cfs kv-context-menu-fg-1huzpd kv-context-menu-d-10jo0b kv-context-menu-font-1cumtw kv-context-menu-outline-iqfugm kv-context-menu-pad-q8c2g9 kv-context-menu-pad-g20wnv kv-context-menu-text-k66u5a kv-context-menu-w-5r2qzg kv-context-menu-opacity-1ctby9 kv-context-menu-pointer-1bgayk kv-context-menu-bg-42dmps kv-context-menu-fg-1bqj3j",
+    "kv-context-menu-align-1vxg5e kv-context-menu-bd-7x8cfs kv-context-menu-fg-1huzpd kv-context-menu-column-1wng6t kv-context-menu-cursor-1jaxik kv-context-menu-d-10jo0b kv-context-menu-font-1cumtw kv-context-menu-outline-iqfugm kv-context-menu-pad-q8c2g9 kv-context-menu-pad-g20wnv kv-context-menu-text-k66u5a kv-context-menu-w-5r2qzg kv-context-menu-opacity-1ctby9 kv-context-menu-pointer-1bgayk kv-context-menu-bg-1q3l4u kv-context-menu-fg-1bqj3j kv-context-menu-bg-zcg2at kv-context-menu-fg-1ulx1s",
   ],
   "contextMenuTriggerClasses": [
     "kv-context-menu-bg-fzvzo3 kv-context-menu-bd-w8fr6h kv-context-menu-bd-1k451q kv-context-menu-bd-zqiq68 kv-context-menu-bd-1huuni kv-context-menu-fg-1huzpd kv-context-menu-font-1cumtw kv-context-menu-outline-iqfugm kv-context-menu-pad-8um3et kv-context-menu-pad-1abp1i kv-context-menu-opacity-1ctby9 kv-context-menu-pointer-1bgayk kv-context-menu-bd-1ch4ha kv-context-menu-outline-1l8onk kv-context-menu-outline-1iz9f5 kv-context-menu-outline-iee2jp kv-context-menu-outline-1bfidg",
@@ -37,10 +37,10 @@ exports[`@kovojs/ui styled package foundation > wraps command primitive as a sty
     "kv-command-bg-1noq3u kv-command-bd-10honp kv-command-bd-10gien kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-fg-1f1he7 kv-command-font-kvxk8f kv-command-h-1crj27 kv-command-outline-1ipo24 kv-command-pad-n6qglr kv-command-transition-cgdjqu kv-command-w-d0w75t kv-command-fg-1haook kv-command-bg-1e4j2n kv-command-fg-1m99ep kv-command-cursor-1guhaf kv-command-box-ny329w",
   ],
   "commandItemClasses": [
-    "kv-command-align-1iqt7n kv-command-bd-7x8cfs kv-command-fg-kkhxau kv-command-d-10jo0b kv-command-font-kvxk8f kv-command-outline-1ipo24 kv-command-pad-q8c2g9 kv-command-pad-ptlnb7 kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-42dmps kv-command-fg-1bqj3j kv-command-font-1yiuj1",
+    "kv-command-align-1iqt7n kv-command-bd-7x8cfs kv-command-fg-kkhxau kv-command-column-1wng6t kv-command-cursor-1jaxik kv-command-d-10jo0b kv-command-font-kvxk8f kv-command-outline-1ipo24 kv-command-pad-q8c2g9 kv-command-pad-ptlnb7 kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1q3l4u kv-command-fg-1bqj3j kv-command-font-1yiuj1 kv-command-bg-zcg2at kv-command-fg-1ulx1s",
   ],
   "commandListboxClasses": [
-    "kv-command-bg-1noq3u kv-command-bd-cccmhn kv-command-bd-10gien kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-m-1a8aat kv-command-max-1l3700 kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg",
+    "kv-command-bg-1noq3u kv-command-bd-cccmhn kv-command-bd-10gien kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-jdt9qr kv-command-m-1a8aat kv-command-max-1l3700 kv-command-min-qyj00s kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg kv-command-d-y6pz22",
   ],
   "commandTriggerClasses": [
     "kv-command-align-1iqt7n kv-command-bg-1noq3u kv-command-bd-10honp kv-command-bd-10gien kv-command-bd-1hi42t kv-command-bd-6qr8e1 kv-command-box-kdtwje kv-command-fg-1f1he7 kv-command-d-xsx1ae kv-command-font-kvxk8f kv-command-font-161lny kv-command-h-1crj27 kv-command-justify-fb6poo kv-command-pad-n6qglr kv-command-transition-14fi7d kv-command-bg-1msney kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-29hym4 kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-10n29n",
@@ -51,10 +51,10 @@ exports[`@kovojs/ui styled package foundation > wraps command primitive as a sty
 exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-menu primitives as styled roving navigation 1`] = `
 {
   "menubarItemClasses": [
-    "kv-menubar-align-1vxg5e kv-menubar-bd-7x8cfs kv-menubar-fg-1huzpd kv-menubar-d-1ks6ev kv-menubar-font-xjds0k kv-menubar-h-rrnk2m kv-menubar-outline-1qgzvg kv-menubar-pad-1xpfsp kv-menubar-opacity-1ctby9 kv-menubar-pointer-1bgayk kv-menubar-bg-42dmps kv-menubar-fg-1bqj3j kv-menubar-bg-l37sw5",
+    "kv-menubar-align-1vxg5e kv-menubar-bd-7x8cfs kv-menubar-fg-1huzpd kv-menubar-cursor-1jaxik kv-menubar-d-1ks6ev kv-menubar-font-xjds0k kv-menubar-h-rrnk2m kv-menubar-outline-1qgzvg kv-menubar-pad-1xpfsp kv-menubar-position-gf7e5z kv-menubar-opacity-1ctby9 kv-menubar-pointer-1bgayk kv-menubar-bg-1q3l4u kv-menubar-fg-1bqj3j kv-menubar-bg-15l8b1 kv-menubar-fg-1erm60 kv-menubar-bg-zcg2at kv-menubar-fg-1ulx1s",
   ],
   "menubarSubmenuClasses": [
-    "kv-menubar-bg-gz0aiu kv-menubar-bd-1gezg0 kv-menubar-bd-36tqtr kv-menubar-bd-17dppo kv-menubar-bd-5grtwb kv-menubar-box-drp7nh kv-menubar-fg-18y7qo kv-menubar-font-xjds0k kv-menubar-min-5pwg6u kv-menubar-outline-1qgzvg kv-menubar-pad-1ky1bx kv-menubar-d-u8xv8n",
+    "kv-menubar-bg-gz0aiu kv-menubar-bd-1gezg0 kv-menubar-bd-36tqtr kv-menubar-bd-17dppo kv-menubar-bd-5grtwb kv-menubar-box-i0mjts kv-menubar-fg-18y7qo kv-menubar-font-xjds0k kv-menubar-m-1opbve kv-menubar-min-oy4gns kv-menubar-outline-1qgzvg kv-menubar-pad-1ky1bx kv-menubar-position-107mah kv-menubar-z-140aue kv-menubar-d-u8xv8n kv-menubar-d-hnryx2",
   ],
 }
 `;
@@ -62,7 +62,7 @@ exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-men
 exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-menu primitives as styled roving navigation 2`] = `
 {
   "navigationMenuContentClasses": [
-    "kv-navigation-menu-bg-clz9dn kv-navigation-menu-bd-jllngq kv-navigation-menu-bd-1k451q kv-navigation-menu-bd-1t9yg7 kv-navigation-menu-bd-1huuni kv-navigation-menu-box-13xkzi kv-navigation-menu-fg-1lkmbc kv-navigation-menu-font-1cumtw kv-navigation-menu-m-146lrb kv-navigation-menu-outline-iqfugm kv-navigation-menu-pad-1aqrkh kv-navigation-menu-d-1que9w",
+    "kv-navigation-menu-bg-clz9dn kv-navigation-menu-bd-jllngq kv-navigation-menu-bd-1k451q kv-navigation-menu-bd-1t9yg7 kv-navigation-menu-bd-1huuni kv-navigation-menu-box-ts27i0 kv-navigation-menu-fg-1lkmbc kv-navigation-menu-font-1cumtw kv-navigation-menu-m-l5vssy kv-navigation-menu-min-1wyb72 kv-navigation-menu-outline-iqfugm kv-navigation-menu-pad-1aqrkh kv-navigation-menu-position-1ge2sp kv-navigation-menu-z-1ag0ds kv-navigation-menu-d-1que9w kv-navigation-menu-d-1iqtij",
   ],
   "navigationMenuLinkClasses": [
     "kv-navigation-menu-align-cfbawe kv-navigation-menu-bd-1fddsv kv-navigation-menu-fg-1lkmbc kv-navigation-menu-d-gt04nw kv-navigation-menu-font-1cumtw kv-navigation-menu-font-1w6lea kv-navigation-menu-h-q4iozl kv-navigation-menu-outline-iqfugm kv-navigation-menu-pad-5kfypd kv-navigation-menu-transition-8m2miz kv-navigation-menu-opacity-1icjyx kv-navigation-menu-pointer-bonmb9 kv-navigation-menu-bg-1nhq7r kv-navigation-menu-outline-1rcn2k kv-navigation-menu-outline-c2yl2s kv-navigation-menu-outline-e6up33 kv-navigation-menu-outline-1z0w18 kv-navigation-menu-bg-10veoc",
@@ -74,7 +74,7 @@ exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-men
     "kv-navigation-menu-align-cfbawe kv-navigation-menu-bd-1fddsv kv-navigation-menu-fg-1lkmbc kv-navigation-menu-d-gt04nw kv-navigation-menu-font-1cumtw kv-navigation-menu-font-1w6lea kv-navigation-menu-h-q4iozl kv-navigation-menu-outline-iqfugm kv-navigation-menu-pad-5kfypd kv-navigation-menu-transition-8m2miz kv-navigation-menu-opacity-1icjyx kv-navigation-menu-pointer-bonmb9 kv-navigation-menu-bg-1nhq7r kv-navigation-menu-bg-1msney kv-navigation-menu-outline-1rcn2k kv-navigation-menu-outline-c2yl2s kv-navigation-menu-outline-e6up33 kv-navigation-menu-outline-1z0w18 kv-navigation-menu-bg-10veoc",
   ],
   "navigationMenuViewportClasses": [
-    "kv-navigation-menu-bg-clz9dn kv-navigation-menu-bd-jllngq kv-navigation-menu-bd-1k451q kv-navigation-menu-bd-1t9yg7 kv-navigation-menu-bd-1huuni kv-navigation-menu-box-13xkzi kv-navigation-menu-m-146lrb kv-navigation-menu-d-1que9w",
+    "kv-navigation-menu-bg-clz9dn kv-navigation-menu-bd-jllngq kv-navigation-menu-bd-1k451q kv-navigation-menu-bd-1t9yg7 kv-navigation-menu-bd-1huuni kv-navigation-menu-box-ts27i0 kv-navigation-menu-m-l5vssy kv-navigation-menu-min-1wyb72 kv-navigation-menu-position-1ge2sp kv-navigation-menu-z-1ag0ds kv-navigation-menu-d-1que9w kv-navigation-menu-d-1iqtij",
   ],
 }
 `;
@@ -82,13 +82,13 @@ exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-men
 exports[`@kovojs/ui styled package foundation > wraps the headless dialog primitive for a bounded sheet component 1`] = `
 {
   "drawerContentClasses": [
-    "kv-drawer-bg-1noq3u kv-drawer-bd-jllngq kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-5bneq7 kv-drawer-fg-1f1he7 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y",
+    "kv-drawer-bg-1noq3u kv-drawer-bd-jllngq kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-yxqv5r kv-drawer-fg-1f1he7 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-max-1gar32 kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-d-1que9w kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y",
     "kv-drawer-side-bd-8y7uhv kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-5ahn0m kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
     "kv-drawer-side-bd-1tuf6s kv-drawer-side-bottom-jbyfoh kv-drawer-side-max-5ahn0m kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
     "kv-drawer-side-bd-r2so6s kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d",
   ],
   "sheetContentClasses": [
-    "kv-sheet-bg-1noq3u kv-sheet-bd-jllngq kv-sheet-bd-1hi42t kv-sheet-bd-b9bdux kv-sheet-box-5bneq7 kv-sheet-fg-1f1he7 kv-sheet-d-z1wnt7 kv-sheet-flex-ghzzqp kv-sheet-gap-53gj4t kv-sheet-pad-1kfxum kv-sheet-position-qymjrz kv-sheet-z-1ag0ds kv-sheet-side-bd-1tuf6s kv-sheet-side-bottom-jbyfoh kv-sheet-side-max-5ahn0m kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
+    "kv-sheet-bg-1noq3u kv-sheet-bd-jllngq kv-sheet-bd-1hi42t kv-sheet-bd-b9bdux kv-sheet-box-yxqv5r kv-sheet-fg-1f1he7 kv-sheet-d-z1wnt7 kv-sheet-flex-ghzzqp kv-sheet-gap-53gj4t kv-sheet-pad-1kfxum kv-sheet-position-qymjrz kv-sheet-z-1ag0ds kv-sheet-d-1que9w kv-sheet-side-bd-1tuf6s kv-sheet-side-bottom-jbyfoh kv-sheet-side-max-5ahn0m kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
     "kv-sheet-side-bd-m1idbw kv-sheet-side-bottom-jbyfoh kv-sheet-side-left-xnn69v kv-sheet-side-max-1ipckk kv-sheet-side-right-19ea6y",
     "kv-sheet-side-bd-8y7uhv kv-sheet-side-bottom-jbyfoh kv-sheet-side-left-xnn69v kv-sheet-side-max-5ahn0m kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
     "kv-sheet-side-bd-r2so6s kv-sheet-side-left-xnn69v kv-sheet-side-max-1ipckk kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d",

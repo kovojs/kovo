@@ -67,33 +67,48 @@ export interface SliderThumbProps extends SliderPartProps {
 
 export const sliderStyles = style.create(
   {
+    // Native range kept for keyboard/form/validation; visually hidden but
+    // stretched over the track so it stays the pointer/focus target.
     input: {
-      accentColor: uiTheme.color.accent,
-      height: 8,
+      cursor: 'pointer',
+      height: '100%',
+      left: 0,
+      margin: 0,
+      opacity: 0,
+      position: 'absolute',
+      top: 0,
       width: '100%',
-      '[data-orientation=vertical]': {
-        height: 160,
-        width: 8,
-      },
+      zIndex: 2,
       ':disabled': {
         cursor: 'not-allowed',
-        opacity: 0.5,
       },
     },
+    // Filled portion. Width/height set inline from the value ratio.
     range: {
       backgroundColor: uiTheme.color.accent,
       borderRadius: uiTheme.radius.full,
       display: 'block',
       height: '100%',
+      left: 0,
+      position: 'absolute',
+      top: 0,
       '[data-orientation=vertical]': {
+        bottom: 0,
+        height: 'auto',
+        top: 'auto',
         width: '100%',
       },
     },
+    // Anchor box: positions the track + overlaid input + thumb on one line.
     root: {
+      alignItems: 'center',
       color: uiTheme.color.foreground,
-      display: 'grid',
+      display: 'flex',
       fontSize: 14,
-      rowGap: 8,
+      minHeight: 20,
+      position: 'relative',
+      touchAction: 'none',
+      width: '100%',
       '[data-disabled]': {
         opacity: 0.5,
       },
@@ -101,38 +116,74 @@ export const sliderStyles = style.create(
         color: uiTheme.color.danger.foreground,
       },
       '[data-orientation=vertical]': {
-        display: 'inline-grid',
+        display: 'inline-flex',
+        height: 160,
+        minHeight: 0,
+        width: 20,
       },
     },
+    // Knob. left/top set inline from the value ratio.
     thumb: {
       backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
+      borderColor: uiTheme.color.accent,
       borderRadius: uiTheme.radius.full,
       borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      borderWidth: 2,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.2)',
+      boxSizing: 'border-box',
       display: 'block',
       height: 16,
+      marginLeft: -8,
+      pointerEvents: 'none',
+      position: 'absolute',
+      top: '50%',
+      transform: 'translateY(-50%)',
       width: 16,
+      zIndex: 3,
       '[data-disabled]': {
         opacity: 0.5,
+      },
+      '[data-orientation=vertical]': {
+        left: '50%',
+        marginLeft: 0,
+        marginTop: -8,
+        top: 'auto',
+        transform: 'translateX(-50%)',
       },
     },
     track: {
       backgroundColor: uiTheme.color.backgroundSubtleHigh,
       borderRadius: uiTheme.radius.full,
-      height: 8,
+      height: 6,
       overflow: 'hidden',
       position: 'relative',
       width: '100%',
       '[data-orientation=vertical]': {
-        height: 160,
-        width: 8,
+        height: '100%',
+        width: 6,
       },
     },
   },
   { namespace: 'slider', source: 'slider.tsx' },
 );
+
+function valuePercent(ratio: string | undefined): string {
+  const parsed = Number(ratio);
+  const clamped = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0;
+  return `${(clamped * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
+}
+
+// Inline fill size for the range (filled portion grows from the start edge).
+function rangeFillStyle(ratio: string | undefined, vertical: boolean): string {
+  const pct = valuePercent(ratio);
+  return vertical ? `height: ${pct}` : `width: ${pct}`;
+}
+
+// Inline thumb offset along the track (value-driven; updates on re-render).
+function thumbOffsetStyle(ratio: string | undefined, vertical: boolean): string {
+  const pct = valuePercent(ratio);
+  return vertical ? `bottom: ${pct}; top: auto` : `left: ${pct}`;
+}
 
 export const sliderClasses = [style.attrs(sliderStyles.root).class ?? ''] as const;
 export const sliderInputClasses = [style.attrs(sliderStyles.input).class ?? ''] as const;
@@ -282,11 +333,17 @@ export const SliderRange = component({
       ...(props.value === undefined ? {} : { value: props.value }),
     });
     const styleAttrs = style.attrs(sliderStyles.range, props.styles?.range);
+    const authorStyle = (props as { style?: string }).style;
+    const fill = rangeFillStyle(
+      attrs['data-value-ratio'],
+      attrs['data-orientation'] === 'vertical',
+    );
+    const inlineStyle = authorStyle ? `${fill}; ${authorStyle}` : fill;
 
     return (
       <span
         {...styleAttrs}
-        {...passThroughProps(props, { style: true })}
+        {...passThroughProps(props)}
         aria-hidden={attrs['aria-hidden']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -298,6 +355,7 @@ export const SliderRange = component({
         data-value={attrs['data-value']}
         data-value-ratio={attrs['data-value-ratio']}
         id={attrs.id}
+        style={inlineStyle}
       >
         {props.children}
       </span>
@@ -325,11 +383,17 @@ export const SliderThumb = component({
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
     const styleAttrs = style.attrs(sliderStyles.thumb, props.styles?.thumb);
+    const authorStyle = (props as { style?: string }).style;
+    const offset = thumbOffsetStyle(
+      attrs['data-value-ratio'],
+      attrs['data-orientation'] === 'vertical',
+    );
+    const inlineStyle = authorStyle ? `${offset}; ${authorStyle}` : offset;
 
     return (
       <span
         {...styleAttrs}
-        {...passThroughProps(props, { style: true })}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
@@ -351,6 +415,7 @@ export const SliderThumb = component({
         data-value-ratio={attrs['data-value-ratio']}
         id={attrs.id}
         role={attrs.role}
+        style={inlineStyle}
         tabIndex={attrs.tabIndex}
       />
     );

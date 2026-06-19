@@ -18,6 +18,7 @@ export interface RadioGroupStyleOverrides {
   item?: style.StyleInput;
   label?: style.StyleInput;
   radio?: style.StyleInput;
+  radioControl?: style.StyleInput;
   root?: style.StyleInput;
 }
 
@@ -85,19 +86,49 @@ export const radioGroupStyles = style.create(
         cursor: 'not-allowed',
       },
     },
+    // Native radio kept for a11y/form state; visually hidden, stretched over
+    // the custom circle so it stays the click/focus target.
     radio: {
-      accentColor: uiTheme.color.accent,
-      borderColor: uiTheme.color.border,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foreground,
-      height: 16,
-      width: 16,
+      cursor: 'pointer',
+      height: '100%',
+      left: 0,
+      margin: 0,
+      opacity: 0,
+      position: 'absolute',
+      top: 0,
+      width: '100%',
       ':disabled': {
         cursor: 'not-allowed',
-        opacity: 0.5,
       },
-      ':focus-visible': {
+    },
+    // Custom circle. Carries data-state to paint the selected center dot.
+    radioControl: {
+      alignItems: 'center',
+      backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.borderStrong,
+      borderRadius: uiTheme.radius.full,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxSizing: 'border-box',
+      display: 'inline-flex',
+      flexShrink: 0,
+      height: 18,
+      justifyContent: 'center',
+      position: 'relative',
+      transitionDuration: '0.15s',
+      transitionProperty: 'border-color, box-shadow',
+      width: 18,
+      '[data-state=checked]': {
+        borderColor: uiTheme.color.accent,
+      },
+      '[data-state=checked]::after': {
+        backgroundColor: uiTheme.color.accent,
+        borderRadius: uiTheme.radius.full,
+        content: '""',
+        height: 9,
+        width: 9,
+      },
+      ':focus-within': {
         outlineColor: uiTheme.color.borderStrong,
         outlineOffset: 2,
         outlineStyle: 'solid',
@@ -128,6 +159,9 @@ export const radioGroupStyles = style.create(
 export const radioGroupClasses = [style.attrs(radioGroupStyles.root).class ?? ''] as const;
 export const radioGroupItemClasses = [style.attrs(radioGroupStyles.item).class ?? ''] as const;
 export const radioGroupRadioClasses = [style.attrs(radioGroupStyles.radio).class ?? ''] as const;
+export const radioGroupRadioControlClasses = [
+  style.attrs(radioGroupStyles.radioControl).class ?? '',
+] as const;
 export const radioGroupLabelClasses = [style.attrs(radioGroupStyles.label).class ?? ''] as const;
 
 export const RadioGroup = component({
@@ -223,24 +257,30 @@ export const RadioGroupRadio = component({
       ...(props.controlId === undefined ? {} : { controlId: props.controlId }),
     });
     const styleAttrs = style.attrs(radioGroupStyles.radio, props.styles?.radio);
+    const controlStyleAttrs = style.attrs(
+      radioGroupStyles.radioControl,
+      props.styles?.radioControl,
+    );
 
     return (
-      <input
-        {...styleAttrs}
-        {...passThroughProps(props)}
-        aria-checked={attrs['aria-checked']}
-        checked={attrs.checked}
-        data-disabled={attrs['data-disabled']}
-        data-state={attrs['data-state']}
-        disabled={attrs.disabled}
-        form={attrs.form}
-        id={attrs.id}
-        name={attrs.name}
-        required={attrs.required}
-        tabIndex={attrs.tabIndex}
-        type={attrs.type}
-        value={attrs.value}
-      />
+      <span {...controlStyleAttrs} data-state={attrs['data-state']}>
+        <input
+          {...styleAttrs}
+          {...passThroughProps(props)}
+          aria-checked={attrs['aria-checked']}
+          checked={attrs.checked}
+          data-disabled={attrs['data-disabled']}
+          data-state={attrs['data-state']}
+          disabled={attrs.disabled}
+          form={attrs.form}
+          id={attrs.id}
+          name={attrs.name}
+          required={attrs.required}
+          tabIndex={attrs.tabIndex}
+          type={attrs.type}
+          value={attrs.value}
+        />
+      </span>
     );
   },
 });

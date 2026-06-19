@@ -83,14 +83,20 @@ export const contextMenuStyles = style.create(
       borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
-      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
       color: uiTheme.color.foreground,
       fontSize: 14,
-      minWidth: 160,
+      marginTop: 4,
+      minWidth: 180,
       outlineStyle: 'none',
       padding: 4,
+      position: 'absolute',
+      zIndex: 50,
       '[data-state=closed]': {
         display: 'none',
+      },
+      '[data-state=open]': {
+        display: 'block',
       },
     },
     group: {
@@ -106,6 +112,8 @@ export const contextMenuStyles = style.create(
       alignItems: 'center',
       borderRadius: uiTheme.radius.sm,
       color: uiTheme.color.foregroundMuted,
+      columnGap: 8,
+      cursor: 'default',
       display: 'flex',
       fontSize: 14,
       outlineStyle: 'none',
@@ -118,13 +126,18 @@ export const contextMenuStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foreground,
+      },
+      ':hover': {
+        backgroundColor: uiTheme.color.backgroundSubtle,
         color: uiTheme.color.foreground,
       },
     },
     root: {
       color: uiTheme.color.foreground,
       fontSize: 14,
+      position: 'relative',
       '[data-disabled]': {
         opacity: 0.5,
       },
