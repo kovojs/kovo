@@ -39,7 +39,7 @@ export interface ReadSummaryInput {
 
 /** @internal */
 export interface UnresolvedSummaryInput {
-  code?: 'KV404' | 'KV406';
+  code?: 'KV404' | 'KV406' | 'KV413';
   domain?: string;
   operation: string;
   site: string;
@@ -107,6 +107,7 @@ export function createTouchGraphEntry(input: {
 
 function unresolvedMessage(site: UnresolvedSummaryInput): string {
   if (site.code === 'KV404') return diagnosticDefinitions.KV404.message;
+  if (site.code === 'KV413') return diagnosticDefinitions.KV413.message;
 
   // SPEC §11.1: write read sources are separate visible surfaces from the write target. Keep
   // their KV406 diagnostics explicit when the source table cannot be proven.

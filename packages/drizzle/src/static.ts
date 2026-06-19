@@ -60,6 +60,7 @@ import {
   isDrizzleTableFactoryName,
   isKovoExtraConfigCallName,
   type KovoDomainTableAnnotation,
+  type KovoFanAnnotation,
   type KovoTableAnnotation,
 } from './drizzle-surface.js';
 /** @internal */
@@ -5422,6 +5423,7 @@ function directSummaryForFunction(
   const reads: ReadSummaryInput[] = [];
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
+  const triggerTables = triggerTableNamesFromSource(file.source);
 
   // SPEC §11.1: visible Drizzle read surfaces belong in the touch graph, not KV406.
   for (const call of fn.readCalls) {
@@ -5486,6 +5488,14 @@ function directSummaryForFunction(
           ...(writePredicate.key ? { writeKey: writePredicate.key } : {}),
         });
         appendForeignKeyCascadeWriteSummaries(writes, call, site, table.annotation, tables);
+        appendDeclaredFanOutWriteSummaries(writes, call, site, table.annotation);
+        appendMissingTriggerFanOutDiagnostics(
+          unresolved,
+          call,
+          site,
+          table.annotation,
+          triggerTables,
+        );
       }
       if (unresolvedIdentifiers.has(call.tableExpression)) {
         unresolved.push({
@@ -5612,6 +5622,66 @@ function foreignKeyTargetsTable(
   );
 }
 
+function appendDeclaredFanOutWriteSummaries(
+  writes: WriteSummaryInput[],
+  call: ExtractedWriteCall,
+  site: string,
+  table: ExtractedTableAnnotation,
+): void {
+  if (!isDomainExtractedTableAnnotation(table)) return;
+
+  for (const fan of fanAnnotationsForOperation(table, call.operation)) {
+    writes.push({
+      operation: `${call.operation}-fan`,
+      site,
+      table: {
+        domain: fan.domain,
+        name: fan.via,
+      },
+    });
+  }
+}
+
+function appendMissingTriggerFanOutDiagnostics(
+  unresolved: UnresolvedSummaryInput[],
+  call: ExtractedWriteCall,
+  site: string,
+  table: ExtractedTableAnnotation,
+  triggerTables: ReadonlySet<string>,
+): void {
+  if (!isDomainExtractedTableAnnotation(table)) return;
+  if (!triggerTables.has(table.name)) return;
+  if (fanAnnotationsForOperation(table, call.operation).length > 0) return;
+
+  unresolved.push({
+    code: 'KV413',
+    domain: table.domain,
+    operation: 'trigger-fan-out',
+    site,
+  });
+}
+
+function fanAnnotationsForOperation(
+  table: KovoDomainTableAnnotation & { name: string },
+  operation: string,
+): readonly KovoFanAnnotation[] {
+  if (operation !== 'delete' && operation !== 'insert' && operation !== 'update') return [];
+  return (table.fans ?? []).filter((fan) => fan.when === undefined || fan.when === operation);
+}
+
+function triggerTableNamesFromSource(source: string): ReadonlySet<string> {
+  const tables = new Set<string>();
+  const triggerPattern =
+    /CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER[\s\S]*?\bON\s+("?)([A-Za-z_][\w]*)\1/gi;
+
+  for (const match of source.matchAll(triggerPattern)) {
+    const table = match[2];
+    if (table) tables.add(table);
+  }
+
+  return tables;
+}
+
 function functionTouchSummariesForFile(
   file: SourceFileInput,
   functions: readonly ExtractedFunction[],
@@ -5726,7 +5796,13 @@ function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
   const key = stringPropertyFromObject(annotationObject, 'key');
-  return { domain, ...(key ? { key } : {}), name: tableName };
+  const fans = fanAnnotationsFromObject(annotationObject);
+  return {
+    domain,
+    ...(fans.length > 0 ? { fans } : {}),
+    ...(key ? { key } : {}),
+    name: tableName,
+  };
 }
 
 function defaultDomainForTableName(tableName: string): string {
@@ -5781,6 +5857,36 @@ function booleanPropertyFromObject(object: Node, name: string): boolean | undefi
   }
 
   return undefined;
+}
+
+function fanAnnotationsFromObject(object: Node): KovoFanAnnotation[] {
+  if (!Node.isObjectLiteralExpression(object)) return [];
+
+  const fansProperty = object
+    .getProperties()
+    .find(
+      (property): property is PropertyAssignment =>
+        Node.isPropertyAssignment(property) && propertyNameText(property.getNameNode()) === 'fans',
+    );
+  const initializer = fansProperty?.getInitializer();
+  if (!initializer || !Node.isArrayLiteralExpression(initializer)) return [];
+
+  return initializer.getElements().flatMap((element) => {
+    if (!Node.isObjectLiteralExpression(element)) return [];
+
+    const domain = stringPropertyFromObject(element, 'domain');
+    const via = stringPropertyFromObject(element, 'via');
+    if (!domain || !via) return [];
+
+    const when = stringPropertyFromObject(element, 'when');
+    return [
+      {
+        domain,
+        via,
+        ...(when === 'delete' || when === 'insert' || when === 'update' ? { when } : {}),
+      },
+    ];
+  });
 }
 
 interface SourceVariableDeclaration {

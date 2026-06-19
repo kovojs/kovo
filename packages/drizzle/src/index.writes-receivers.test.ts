@@ -393,6 +393,77 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('unions declared trigger fan-out domains into project-mode writes', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "product", key: "id", fans: [{ via: "price_rules", domain: "price", when: "update" }] }));',
+            '',
+            'export const renameProduct = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.update(products).set({ id: "p2" });',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      renameProduct: {
+        reads: [],
+        touches: [
+          { domain: 'price', keys: null, site: 'product.domain.ts:8', via: 'price_rules' },
+          { domain: 'product', keys: null, site: 'product.domain.ts:8', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('reports KV413 when a detected trigger lacks a declared fan-out', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['update(table: unknown): { set(value: unknown): Promise<void> };']),
+        {
+          fileName: 'product.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "product", key: "id" }));',
+            'const triggerDdl = sql`CREATE TRIGGER product_price_fanout AFTER UPDATE ON products FOR EACH ROW EXECUTE FUNCTION sync_price_rules()`;',
+            '',
+            'export const renameProduct = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.update(products).set({ id: "p2" });',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      renameProduct: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' }],
+        unresolved: [
+          {
+            code: 'KV413',
+            domain: 'product',
+            message: 'Database engine side-effect needs a declared fan-out.',
+            site: 'product.domain.ts:9',
+          },
+        ],
+      },
+    });
+  });
+
   it('recognizes project-mode pgTable initializers with kovo annotations as tables', () => {
     const graph = extractTouchGraphFromProject({
       files: [

@@ -25,7 +25,7 @@ export interface ReadSite {
 
 /** @internal */
 export interface UnresolvedWriteSite {
-  code: 'KV404' | 'KV406';
+  code: 'KV404' | 'KV406' | 'KV413';
   domain?: string;
   message: string;
   site: string;

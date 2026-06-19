@@ -174,7 +174,12 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   - [ ] **X3 declared seam:** `kovo({ fans:[{ via, domain, when }] })` for opaque
         PL/pgSQL triggers (**KV413** if a detected trigger source lacks it);
         `kovo({ view:{ of, refresh } })` for matviews — async-`REFRESH` matviews
-        force optimistic status `await-fragment`.
+        force optimistic status `await-fragment`. - [x] Trigger fan-out evidence 2026-06-19:
+        `pnpm --filter @kovojs/drizzle exec vitest --run src/index.writes-receivers.test.ts src/index.serialization.test.ts`
+        covers `kovo({ fans: [...] })` unioning declared trigger fan-out domains
+        into project-mode write touches and same-file `CREATE TRIGGER ... ON
+products` writes emitting KV413 when no matching fan is declared. - [ ] Matview `kovo({ view:{ of, refresh } })` declaration and async-refresh
+        `await-fragment` status remain open.
   - [x] **KV412** build error when a query's resolved `.from()`/join target is a
         view/matview with no derived or declared domain.
     - Evidence 2026-06-19: `packages/drizzle/src/static.ts` detects

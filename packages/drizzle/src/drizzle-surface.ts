@@ -9,10 +9,17 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
+export interface KovoFanAnnotation {
+  domain: string;
+  via: string;
+  when?: 'delete' | 'insert' | 'update';
+}
+
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
       domain: string;
+      fans?: readonly KovoFanAnnotation[];
       key?: string;
     }
   | {
@@ -22,6 +29,7 @@ export type KovoTableAnnotation =
 /** The domain-bearing form of a table annotation: its `domain` and optional `key` column. */
 export interface KovoDomainTableAnnotation {
   domain: string;
+  fans?: readonly KovoFanAnnotation[];
   key?: string;
 }
 
