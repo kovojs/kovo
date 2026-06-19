@@ -44,6 +44,18 @@ Make the AST-derived graph the **authoritative** invalidation source and promote
 existing coverage-dependent cross-check into a **static/CI gate**, so a forgotten
 dependency is a compile error — not a latent prod bug or a hand-maintained list.
 
+## Completed slices
+
+- [x] **Runtime prefers derived touch sites when present.** `inferredTouches` now
+      drive post-commit change records ahead of hand-declared `touches`; manual
+      `touches` remains the fallback for opaque/KV406 sites that have no derived
+      entry.
+  - Evidence: `pnpm exec vitest --run packages/server/src/change-record.test.ts
+    packages/server/src/mutation.test.ts` passed 25 tests; the regression test
+    `keeps inferred touch sites authoritative over declared fallback touches`
+    proves derived touch sites rerun the derived domain instead of the narrower
+    declared fallback.
+
 ## Open work
 
 - [ ] **Compiler injects `inferredTouches` into the mutation registry.** Wire
@@ -97,8 +109,16 @@ dependency is a compile error — not a latent prod bug or a hand-maintained lis
 
 ## Latest verification
 
-None yet — this ledger is the disambiguation + scoping pass. Proving commands to add
-per slice: `pnpm --filter @kovojs/drizzle test` (extraction), targeted
-`tests/integration/specs/query-readset-runtime-crosscheck.spec.ts` plus a new
-static-gate fixture, `kovo check` on the migrated examples, and `pnpm run acceptance`
-before flipping the roadmap checkbox.
+- [x] `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/mutation.test.ts`
+  - Evidence: passed 25 server invalidation tests for the runtime precedence slice.
+- [x] `pnpm exec vp check --fix`
+  - Evidence: formatting, lint, and typecheck passed after the runtime precedence
+    change.
+- [x] `pnpm exec vp run kovo-check`
+  - Evidence: passed 50/50 with `kovo-check/v1 OK` after the runtime precedence
+    change.
+- [ ] `pnpm --filter @kovojs/drizzle test` for extraction changes.
+- [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
+      plus a static-gate fixture for read/write coverage promotion.
+- [ ] `kovo check` on migrated examples.
+- [ ] `pnpm run acceptance` before flipping the roadmap checkbox.

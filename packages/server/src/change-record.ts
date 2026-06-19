@@ -60,15 +60,16 @@ export function mutationRegistryChangeRecords<Input>(
   registry: MutationChangeRecordRegistry | undefined,
   input: Input,
 ): ChangeRecord<string, Input>[] {
-  if (registry?.touches && registry.touches.length > 0) {
-    return changeRecordsFor(registry.touches, input);
+  const inferredTouches = dedupeTouchSites(registry?.inferredTouches ?? []);
+  if (inferredTouches.length > 0) {
+    return inferredTouches.map((touch) => ({
+      domain: touch.domain,
+      input,
+      ...touchKeyRecord(touch.keys, input),
+    }));
   }
 
-  return dedupeTouchSites(registry?.inferredTouches ?? []).map((touch) => ({
-    domain: touch.domain,
-    input,
-    ...touchKeyRecord(touch.keys, input),
-  }));
+  return changeRecordsFor(registry?.touches ?? [], input);
 }
 
 export function changeRecordTouchesQueryInstance(

@@ -532,7 +532,7 @@ describe('server mutation lifecycle', () => {
     });
   });
 
-  it('keeps declared touches authoritative over inferred touch sites', async () => {
+  it('keeps inferred touch sites authoritative over declared fallback touches', async () => {
     const cart = domain('cart');
     const product = domain('product');
     const cartQuery = query('cart', { reads: [cart] });
@@ -554,12 +554,12 @@ describe('server mutation lifecycle', () => {
     await expect(runMutation(addToCart, { productId: 'p1' }, {})).resolves.toEqual({
       changes: [
         {
-          domain: 'cart',
+          domain: 'product',
           input: { productId: 'p1' },
         },
       ],
       ok: true,
-      rerunQueries: ['cart'],
+      rerunQueries: ['product'],
       value: 'p1',
     });
   });
