@@ -30,8 +30,8 @@ test('exports L0/L1 documents and serves them without a second render path', asy
       '/search/index.html',
     ]);
     expect(result.clientModules.map((artifact) => artifact.path).sort()).toEqual([
-      '/c/static-export-analytics.client.js',
-      '/c/static-export-docs.client.js',
+      '/c/__v/static-export-analytics-1/static-export-analytics.client.js',
+      '/c/__v/static-export-docs-1/static-export-docs.client.js',
     ]);
     expect(counter.renders).toBe(3);
 
@@ -39,10 +39,22 @@ test('exports L0/L1 documents and serves them without a second render path', asy
       '<main data-page="home">',
     );
     await expect(
-      readFile(path.join(outDir, 'c', 'static-export-analytics.client.js'), 'utf8'),
+      readFile(
+        path.join(
+          outDir,
+          'c',
+          '__v',
+          'static-export-analytics-1',
+          'static-export-analytics.client.js',
+        ),
+        'utf8',
+      ),
     ).resolves.toBe('export const staticExportAnalytics = true;');
     await expect(
-      readFile(path.join(outDir, 'c', 'static-export-docs.client.js'), 'utf8'),
+      readFile(
+        path.join(outDir, 'c', '__v', 'static-export-docs-1', 'static-export-docs.client.js'),
+        'utf8',
+      ),
     ).resolves.toBe('export const staticExportDocs = true;');
 
     const server = await serveStaticDirectory(outDir);

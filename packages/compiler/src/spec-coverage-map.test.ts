@@ -213,7 +213,7 @@ describe('compiler SPEC coverage map', () => {
             },
           ],
           "referenceApp": [
-            "examples/commerce/src/source-truth.test.ts",
+            "examples/commerce/src/app.add-to-cart.test.ts",
           ],
         },
         {
@@ -341,7 +341,7 @@ describe('compiler SPEC coverage map', () => {
             },
           ],
           "referenceApp": [
-            "examples/commerce/src/source-truth.test.ts",
+            "examples/commerce/src/app.generated-artifacts.test.ts",
             "examples/reference/src/app.test.ts",
           ],
         },

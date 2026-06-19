@@ -649,7 +649,7 @@ describe('create-kovo starter', () => {
         expect(distIndex).toContain(`href="/assets/${cssFile}"`);
         expect(distIndex).toContain('<style data-kovo-critical-href="/assets/');
         expect(distIndex).toContain('--kovo-theme-sys-color-primary');
-        expect(distIndex).toContain('kv-starter-app-');
+        expect(distIndex).toContain('kv-style-');
         expect(distIndex).toContain(
           'on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"',
         );
@@ -689,7 +689,7 @@ describe('create-kovo starter', () => {
         expect(previewOutput()).toContain('starter-static-preview/v1');
         expect(previewDocument).toContain(`href="/assets/${cssFile}"`);
         expect(previewDocument).toContain('--kovo-theme-sys-color-primary');
-        expect(previewDocument).toContain('kv-starter-app-');
+        expect(previewDocument).toContain('kv-style-');
         expect(previewDocument).toContain(
           'on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"',
         );

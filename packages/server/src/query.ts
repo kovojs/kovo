@@ -1,4 +1,3 @@
-import type { QueryDeltaListMeta } from '@kovojs/core/internal/query-delta';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
 import {
@@ -20,6 +19,12 @@ import {
   type ValidationFailurePayload,
 } from './schema.js';
 import { renderQueryWireHtml } from './wire-html.js';
+
+interface QueryDeltaListMeta {
+  domain: string;
+  key: string;
+  path: string;
+}
 
 /** The context a query's `load` receives: the current request value. */
 export interface QueryLoadContext<Request = unknown> {

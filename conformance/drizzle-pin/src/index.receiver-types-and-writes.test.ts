@@ -4,9 +4,9 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 
 import {
   extractTouchGraphFromProject,
-  kovo,
   serializeTouchGraph,
 } from '../../../packages/drizzle/src/static.js';
+import { kovo } from '../../../packages/drizzle/src/drizzle-surface.js';
 
 import { drizzleSymbol, extractQueryFactsFromProject } from './test-helpers.js';
 

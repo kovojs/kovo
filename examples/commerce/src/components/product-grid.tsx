@@ -11,91 +11,89 @@ import { productGridQuery } from '../queries.js';
 
 const addToCartForm = form('cart/add');
 
-const productGridStyles = style.create(
-  {
-    errorText: {
-      color: tokens.sys.color.error,
-      fontSize: 14,
-    },
-    field: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outline,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      color: tokens.sys.color.onSurface,
-      paddingBlock: 6,
-      paddingInline: 10,
-    },
-    formLabel: {
-      color: tokens.sys.color.onSurfaceVariant,
-      display: 'grid',
-      fontSize: 12,
-      fontWeight: 500,
-      gap: 4,
-    },
-    link: {
-      color: tokens.sys.color.primary,
-      fontSize: 14,
-      fontWeight: 500,
-      textDecoration: 'none',
-    },
-    panelError: {
-      backgroundColor: tokens.sys.color.errorContainer,
-      borderColor: tokens.sys.color.error,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: tokens.sys.color.onErrorContainer,
-      fontSize: 14,
-      padding: 16,
-    },
-    productEmoji: {
-      backgroundColor: tokens.sys.color.surfaceContainer,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      display: 'grid',
-      fontSize: 24,
-      height: 48,
-      placeItems: 'center',
-      width: 48,
-    },
-    productForm: {
-      alignItems: 'end',
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    row: {
-      alignItems: 'center',
-      display: 'flex',
-      gap: 16,
-    },
-    rowBetween: {
-      alignItems: 'center',
-      display: 'flex',
-      justifyContent: 'space-between',
-    },
-    stack: {
-      display: 'grid',
-      gap: 16,
-    },
-    stackSm: {
-      display: 'grid',
-      gap: 4,
-    },
-    tabularStrong: {
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 600,
-    },
-    title: {
-      color: tokens.sys.color.onSurface,
-      fontWeight: 600,
-      letterSpacing: 0,
-      margin: 0,
-    },
-  }
-);
+const productGridStyles = style.create({
+  errorText: {
+    color: tokens.sys.color.error,
+    fontSize: 14,
+  },
+  field: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outline,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    color: tokens.sys.color.onSurface,
+    paddingBlock: 6,
+    paddingInline: 10,
+  },
+  formLabel: {
+    color: tokens.sys.color.onSurfaceVariant,
+    display: 'grid',
+    fontSize: 12,
+    fontWeight: 500,
+    gap: 4,
+  },
+  link: {
+    color: tokens.sys.color.primary,
+    fontSize: 14,
+    fontWeight: 500,
+    textDecoration: 'none',
+  },
+  panelError: {
+    backgroundColor: tokens.sys.color.errorContainer,
+    borderColor: tokens.sys.color.error,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: tokens.sys.color.onErrorContainer,
+    fontSize: 14,
+    padding: 16,
+  },
+  productEmoji: {
+    backgroundColor: tokens.sys.color.surfaceContainer,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    display: 'grid',
+    fontSize: 24,
+    height: 48,
+    placeItems: 'center',
+    width: 48,
+  },
+  productForm: {
+    alignItems: 'end',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  row: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 16,
+  },
+  rowBetween: {
+    alignItems: 'center',
+    display: 'flex',
+    justifyContent: 'space-between',
+  },
+  stack: {
+    display: 'grid',
+    gap: 16,
+  },
+  stackSm: {
+    display: 'grid',
+    gap: 4,
+  },
+  tabularStrong: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  },
+  title: {
+    color: tokens.sys.color.onSurface,
+    fontWeight: 600,
+    letterSpacing: 0,
+    margin: 0,
+  },
+});
 
 export const productGridStyleCss = style.emitAtomicCss(
   Object.values(productGridStyles).flatMap((entry) => entry.__rules ?? []),

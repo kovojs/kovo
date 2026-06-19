@@ -102,7 +102,7 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
 }
 
 function readVendoredSource(sourcePath: string): string {
-  const source = readFileSync(sourcePath, 'utf8');
+  const source = vendoredUiComponentSource(readFileSync(sourcePath, 'utf8'));
   if (source.includes('@kovojs/ui')) {
     throw new Error(`vendored @kovojs/ui source must not import @kovojs/ui: ${sourcePath}`);
   }
@@ -120,6 +120,203 @@ function readVendoredSource(sourcePath: string): string {
     throw new Error(`vendored @kovojs/ui source must be TSX, not lowered IR: ${sourcePath}`);
   }
   return source.endsWith('\n') ? source : `${source}\n`;
+}
+
+export function vendoredUiComponentSource(source: string): string {
+  let transformed = source
+    .replace(/\nimport \{ passThroughProps \} from '\.\/pass-through\.js';\n/g, '\n')
+    .replace(/\nimport \{ uiTheme \} from '\.\/theme\.js';\n/g, '\n');
+
+  if (source.includes("from './pass-through.js'")) {
+    transformed = insertAfterImports(transformed, `\n${vendoredPassThroughPropsSource()}\n`);
+  }
+
+  if (source.includes("from './theme.js'")) {
+    transformed = rewriteUiThemeReferences(transformed);
+  }
+
+  transformed = rewriteLocalPulseKeyframes(transformed);
+
+  return transformed;
+}
+
+function insertAfterImports(source: string, insertion: string): string {
+  const lines = source.split('\n');
+  let index = 0;
+
+  while (index < lines.length) {
+    const trimmed = lines[index]?.trim() ?? '';
+    if (trimmed === '' || trimmed.startsWith('/** @jsxImportSource')) {
+      index += 1;
+      continue;
+    }
+    if (!trimmed.startsWith('import ')) break;
+    do {
+      index += 1;
+    } while (index < lines.length && !(lines[index - 1]?.trim().endsWith(';') ?? false));
+  }
+
+  return `${lines.slice(0, index).join('\n')}${insertion}${lines.slice(index).join('\n')}`;
+}
+
+function rewriteUiThemeReferences(source: string): string {
+  let transformed = source;
+  const replacements: Readonly<Record<string, string>> = {
+    'uiTheme.color.accent': 'style.tokens.sys.color.primary',
+    'uiTheme.color.accentBorder': 'style.tokens.sys.color.primary',
+    'uiTheme.color.accentForeground': 'style.tokens.sys.color.onPrimary',
+    'uiTheme.color.accentHover': 'style.tokens.sys.color.primaryContainer',
+    'uiTheme.color.background': 'style.tokens.sys.color.surface',
+    'uiTheme.color.backgroundInverse': 'style.tokens.sys.color.inverseSurface',
+    'uiTheme.color.backgroundRaised': 'style.tokens.sys.color.surfaceContainerLow',
+    'uiTheme.color.backgroundSubtle': 'style.tokens.sys.color.surfaceContainer',
+    'uiTheme.color.backgroundSubtleHigh': 'style.tokens.sys.color.surfaceContainerHigh',
+    'uiTheme.color.border': 'style.tokens.sys.color.outlineVariant',
+    'uiTheme.color.borderStrong': 'style.tokens.sys.color.outline',
+    'uiTheme.color.danger.background': 'style.tokens.sys.color.errorContainer',
+    'uiTheme.color.danger.border': 'style.tokens.sys.color.error',
+    'uiTheme.color.danger.foreground': 'style.tokens.sys.color.onErrorContainer',
+    'uiTheme.color.foreground': 'style.tokens.sys.color.onSurface',
+    'uiTheme.color.foregroundInverse': 'style.tokens.sys.color.inverseOnSurface',
+    'uiTheme.color.foregroundMuted': 'style.tokens.sys.color.onSurfaceVariant',
+    'uiTheme.color.info.background': 'style.tokens.sys.color.primaryContainer',
+    'uiTheme.color.info.border': 'style.tokens.sys.color.primary',
+    'uiTheme.color.info.foreground': 'style.tokens.sys.color.onPrimaryContainer',
+    'uiTheme.color.success.background': 'style.tokens.sys.color.secondaryContainer',
+    'uiTheme.color.success.border': 'style.tokens.sys.color.secondary',
+    'uiTheme.color.success.foreground': 'style.tokens.sys.color.onSecondaryContainer',
+    'uiTheme.color.warning.background': 'style.tokens.sys.color.tertiaryContainer',
+    'uiTheme.color.warning.border': 'style.tokens.sys.color.tertiary',
+    'uiTheme.color.warning.foreground': 'style.tokens.sys.color.onTertiaryContainer',
+    'uiTheme.radius.full': 'style.tokens.sys.shape.cornerFull',
+    'uiTheme.radius.lg': 'style.tokens.sys.shape.cornerLarge',
+    'uiTheme.radius.md': 'style.tokens.sys.shape.cornerMedium',
+    'uiTheme.radius.sm': 'style.tokens.sys.shape.cornerSmall',
+    'uiTheme.shadow.focusRing': "'0 0 0 2px var(--kovo-theme-sys-color-outline)'",
+    'uiTheme.shadow.focusRingInset': "'inset 0 0 0 2px var(--kovo-theme-sys-color-outline)'",
+  };
+
+  for (const [from, to] of Object.entries(replacements).sort(
+    ([left], [right]) => right.length - left.length,
+  )) {
+    transformed = transformed.replaceAll(from, to);
+  }
+
+  return transformed;
+}
+
+function rewriteLocalPulseKeyframes(source: string): string {
+  let transformed = source;
+
+  if (source.includes("namespace: 'progressPulse'")) {
+    transformed = transformed
+      .replace(
+        /\nconst pulse = style\.keyframes\(\n[\s\S]*?\{ namespace: 'progressPulse' \},\n\);\n/,
+        '\n',
+      )
+      .replace('animationName: pulse,', "animationName: 'kv-progress-pulse-7z2qlm',");
+  }
+
+  if (source.includes("namespace: 'skeletonPulse'")) {
+    transformed = transformed
+      .replace(
+        /\nconst pulse = style\.keyframes\(\n[\s\S]*?\{ namespace: 'skeletonPulse', source: 'skeleton\.tsx' \},\n\);\n/,
+        '\n',
+      )
+      .replace('animationName: pulse,', "animationName: 'kv-skeleton-pulse-7z2qlm',");
+  }
+
+  return transformed;
+}
+
+function vendoredPassThroughPropsSource(): string {
+  return `const blockedProps = new Set([
+  'activeValue',
+  'actionValue',
+  'autoFocus',
+  'children',
+  'checked',
+  'collapsible',
+  'contentId',
+  'controlId',
+  'current',
+  'describedBy',
+  'descriptionId',
+  'disabled',
+  'dismissible',
+  'form',
+  'forceMount',
+  'highlighted',
+  'highlightedValue',
+  'href',
+  'id',
+  'invalid',
+  'items',
+  'itemDisabled',
+  'itemValue',
+  'label',
+  'labelledBy',
+  'level',
+  'max',
+  'min',
+  'name',
+  'open',
+  'orientation',
+  'placement',
+  'politeness',
+  'pressed',
+  'required',
+  'scrollbars',
+  'scrollX',
+  'scrollY',
+  'side',
+  'size',
+  'state',
+  'style',
+  'styles',
+  'titleId',
+  'triggerId',
+  'type',
+  'value',
+  'valueText',
+  'variant',
+]);
+
+interface PassThroughOptions {
+  events?: boolean;
+  style?: boolean;
+}
+
+function passThroughProps(
+  props: object,
+  options: PassThroughOptions = {},
+): Record<string, unknown> {
+  const includeEvents = options.events ?? true;
+  const includeStyle = options.style ?? false;
+
+  return Object.fromEntries(
+    Object.entries(props).filter(([name, value]) => {
+      const isEvent = name.startsWith('on:');
+      const isAllowedDomProp =
+        isEvent ||
+        name.startsWith('aria-') ||
+        (name.startsWith('data-') && name !== 'data-style-src') ||
+        name.startsWith('kovo-') ||
+        name === 'hidden' ||
+        name === 'tabIndex' ||
+        name === 'style';
+
+      return (
+        value !== undefined &&
+        value !== null &&
+        isAllowedDomProp &&
+        (includeEvents || !isEvent) &&
+        (includeStyle || name !== 'style') &&
+        !blockedProps.has(name)
+      );
+    }),
+  );
+}`;
 }
 
 function importsNonPublicKovoSubpath(source: string): boolean {

@@ -25,190 +25,188 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // answer composer — laid out like a Stack Overflow question page (vote gutter,
 // post body, tags, user card, then the answer list and "Your Answer" form).
 
-const detailStyles = style.create(
-  {
-    // ---- Question header -----------------------------------------------------
-    header: {
-      borderBottomColor: '#e3e6e8',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      paddingBlockEnd: 12,
-    },
-    titleRow: {
-      alignItems: 'flex-start',
-      display: 'flex',
-      gap: 16,
-      justifyContent: 'space-between',
-    },
-    detailTitle: {
-      color: '#0c0d0e',
-      fontSize: 27,
-      fontWeight: 400,
-      lineHeight: 1.3,
-      margin: 0,
-    },
-    askButton: {
-      backgroundColor: '#0a95ff',
+const detailStyles = style.create({
+  // ---- Question header -----------------------------------------------------
+  header: {
+    borderBottomColor: '#e3e6e8',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    paddingBlockEnd: 12,
+  },
+  titleRow: {
+    alignItems: 'flex-start',
+    display: 'flex',
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  detailTitle: {
+    color: '#0c0d0e',
+    fontSize: 27,
+    fontWeight: 400,
+    lineHeight: 1.3,
+    margin: 0,
+  },
+  askButton: {
+    backgroundColor: '#0a95ff',
+    borderColor: '#0a95ff',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#ffffff',
+    flexShrink: 0,
+    fontSize: 13,
+    paddingBlock: 10,
+    paddingInline: 11,
+    textDecoration: 'none',
+    ':hover': { backgroundColor: '#0074cc' },
+  },
+  metaRow: {
+    color: '#525960',
+    display: 'flex',
+    flexWrap: 'wrap',
+    fontSize: 13,
+    gap: 16,
+    marginBlockStart: 8,
+  },
+  metaLabel: { color: '#6a737c' },
+  metaValue: { color: '#232629' },
+  // ---- Post (question + answer) layout ------------------------------------
+  post: {
+    borderBottomColor: '#e3e6e8',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    display: 'flex',
+    gap: 16,
+    paddingBlock: 16,
+  },
+  gutter: {
+    alignItems: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    gap: 2,
+    width: 42,
+  },
+  acceptMark: {
+    color: '#3d8b5f',
+    fontSize: 28,
+    lineHeight: 1,
+    marginBlockStart: 4,
+  },
+  postMain: {
+    display: 'grid',
+    flex: '1 1 0%',
+    gap: 14,
+    minWidth: 0,
+  },
+  body: {
+    color: '#0c0d0e',
+    fontSize: 15,
+    lineHeight: 1.65,
+    margin: 0,
+    whiteSpace: 'pre-wrap',
+  },
+  postFooter: {
+    alignItems: 'flex-end',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  // ---- Answers -------------------------------------------------------------
+  answersHead: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 12,
+    justifyContent: 'space-between',
+    marginBlockStart: 24,
+  },
+  answersTitle: {
+    color: '#0c0d0e',
+    fontSize: 19,
+    fontWeight: 400,
+    margin: 0,
+  },
+  answerList: {
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
+  acceptedNote: {
+    alignItems: 'center',
+    color: '#3d8b5f',
+    display: 'inline-flex',
+    fontSize: 13,
+    fontWeight: 600,
+    gap: 4,
+  },
+  // ---- Answer composer -----------------------------------------------------
+  composer: {
+    display: 'grid',
+    gap: 12,
+    marginBlockStart: 28,
+  },
+  composerTitle: {
+    color: '#0c0d0e',
+    fontSize: 19,
+    fontWeight: 400,
+    margin: 0,
+  },
+  input: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d6d9dc',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    color: '#0c0d0e',
+    fontSize: 13,
+    paddingBlock: 9,
+    paddingInline: 11,
+    width: '100%',
+    ':focus': {
       borderColor: '#0a95ff',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#ffffff',
-      flexShrink: 0,
-      fontSize: 13,
-      paddingBlock: 10,
-      paddingInline: 11,
-      textDecoration: 'none',
-      ':hover': { backgroundColor: '#0074cc' },
+      boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
+      outline: 'none',
     },
-    metaRow: {
-      color: '#525960',
-      display: 'flex',
-      flexWrap: 'wrap',
-      fontSize: 13,
-      gap: 16,
-      marginBlockStart: 8,
-    },
-    metaLabel: { color: '#6a737c' },
-    metaValue: { color: '#232629' },
-    // ---- Post (question + answer) layout ------------------------------------
-    post: {
-      borderBottomColor: '#e3e6e8',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      display: 'flex',
-      gap: 16,
-      paddingBlock: 16,
-    },
-    gutter: {
-      alignItems: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-      gap: 2,
-      width: 42,
-    },
-    acceptMark: {
-      color: '#3d8b5f',
-      fontSize: 28,
-      lineHeight: 1,
-      marginBlockStart: 4,
-    },
-    postMain: {
-      display: 'grid',
-      flex: '1 1 0%',
-      gap: 14,
-      minWidth: 0,
-    },
-    body: {
-      color: '#0c0d0e',
-      fontSize: 15,
-      lineHeight: 1.65,
-      margin: 0,
-      whiteSpace: 'pre-wrap',
-    },
-    postFooter: {
-      alignItems: 'flex-end',
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 12,
-      justifyContent: 'space-between',
-    },
-    // ---- Answers -------------------------------------------------------------
-    answersHead: {
-      alignItems: 'center',
-      display: 'flex',
-      gap: 12,
-      justifyContent: 'space-between',
-      marginBlockStart: 24,
-    },
-    answersTitle: {
-      color: '#0c0d0e',
-      fontSize: 19,
-      fontWeight: 400,
-      margin: 0,
-    },
-    answerList: {
-      listStyle: 'none',
-      margin: 0,
-      padding: 0,
-    },
-    acceptedNote: {
-      alignItems: 'center',
-      color: '#3d8b5f',
-      display: 'inline-flex',
-      fontSize: 13,
-      fontWeight: 600,
-      gap: 4,
-    },
-    // ---- Answer composer -----------------------------------------------------
-    composer: {
-      display: 'grid',
-      gap: 12,
-      marginBlockStart: 28,
-    },
-    composerTitle: {
-      color: '#0c0d0e',
-      fontSize: 19,
-      fontWeight: 400,
-      margin: 0,
-    },
-    input: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d6d9dc',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      color: '#0c0d0e',
-      fontSize: 13,
-      paddingBlock: 9,
-      paddingInline: 11,
-      width: '100%',
-      ':focus': {
-        borderColor: '#0a95ff',
-        boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
-        outline: 'none',
-      },
-    },
-    textarea: {
-      lineHeight: 1.5,
-      resize: 'vertical',
-    },
-    composerActions: {
-      display: 'flex',
-      justifyContent: 'flex-start',
-    },
-    submitButton: {
-      backgroundColor: '#0a95ff',
-      borderColor: '#0a95ff',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#ffffff',
-      fontSize: 13,
-      paddingBlock: 10,
-      paddingInline: 11,
-      ':hover': { backgroundColor: '#0074cc' },
-    },
-    // ---- Not-found ----------------------------------------------------------
-    notFound: {
-      color: '#525960',
-      fontSize: 15,
-      paddingBlock: 24,
-    },
-    back: {
-      alignItems: 'center',
-      color: '#0074cc',
-      display: 'inline-flex',
-      fontSize: 13,
-      gap: 6,
-      marginBlockEnd: 12,
-      textDecoration: 'none',
-      ':hover': { color: '#0a95ff' },
-    },
-  }
-);
+  },
+  textarea: {
+    lineHeight: 1.5,
+    resize: 'vertical',
+  },
+  composerActions: {
+    display: 'flex',
+    justifyContent: 'flex-start',
+  },
+  submitButton: {
+    backgroundColor: '#0a95ff',
+    borderColor: '#0a95ff',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#ffffff',
+    fontSize: 13,
+    paddingBlock: 10,
+    paddingInline: 11,
+    ':hover': { backgroundColor: '#0074cc' },
+  },
+  // ---- Not-found ----------------------------------------------------------
+  notFound: {
+    color: '#525960',
+    fontSize: 15,
+    paddingBlock: 24,
+  },
+  back: {
+    alignItems: 'center',
+    color: '#0074cc',
+    display: 'inline-flex',
+    fontSize: 13,
+    gap: 6,
+    marginBlockEnd: 12,
+    textDecoration: 'none',
+    ':hover': { color: '#0a95ff' },
+  },
+});
 
 export const questionDetailStyleCss = style.emitAtomicCss(
   Object.values(detailStyles).flatMap((entry) => entry.__rules ?? []),
@@ -251,9 +249,7 @@ function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
         <p class="kv-detail-fg-nyp0a6 kv-detail-font-1pvhh9 kv-detail-line-1mgty7 kv-detail-m-y3y9fs kv-detail-white-pdgkgl" data-style-src="examples/stackoverflow/src/components/question-detail.tsx#body">{escapeText(answer.body)}</p>
         <div class="kv-detail-align-1d31i4 kv-detail-d-jy75d0 kv-detail-flex-105auz kv-detail-gap-1kzh7g kv-detail-justify-1itcj7" data-style-src="examples/stackoverflow/src/components/question-detail.tsx#postFooter">
           <span />
-          {answer.authorName
-            ? renderUserCard(answer.authorName, answer.createdAt, 'answered')
-            : ''}
+          {answer.authorName ? renderUserCard(answer.authorName, answer.createdAt, 'answered') : ''}
         </div>
       </div>
     </li>
@@ -278,7 +274,7 @@ export const QuestionDetailRegion = component({
       questionId: string;
     },
     _state,
-    slots: { request?: SoRequest | undefined } = {},
+    _slots: { request?: SoRequest | undefined } = {},
   ) => {
     if (!question) {
       return (
@@ -327,12 +323,7 @@ export const QuestionDetailRegion = component({
         <ul class="kv-detail-list-j3t69x kv-detail-m-y3y9fs kv-detail-pad-1ofj5a" data-style-src="examples/stackoverflow/src/components/question-detail.tsx#answerList">{answers.map(renderAnswerPost)}</ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
-        <form
-          enhance
-          method="post" action="/_m/postAnswer" data-mutation="postAnswer" kovo-fragment-target="post-answer-mutation"
-          id="your-answer"
-          class="kv-detail-d-1dxv0v kv-detail-gap-1kzh7g kv-detail-m-1qc9py" data-style-src="examples/stackoverflow/src/components/question-detail.tsx#composer"
-        >
+        <form enhance method="post" action="/_m/postAnswer" data-mutation="postAnswer" kovo-fragment-target="post-answer-mutation" id="your-answer" class="kv-detail-d-1dxv0v kv-detail-gap-1kzh7g kv-detail-m-1qc9py" data-style-src="examples/stackoverflow/src/components/question-detail.tsx#composer">
           <input type="hidden" name="id" value={freshId('a')} />
           <input type="hidden" name="questionId" value={questionId} />
           <input type="hidden" name="authorId" value="demo-viewer" />

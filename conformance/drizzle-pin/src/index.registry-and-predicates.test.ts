@@ -6,10 +6,10 @@ import {
   createTouchGraphEntry,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
-  kovo,
   serializeDomainRegistry,
   serializeTouchGraph,
 } from '../../../packages/drizzle/src/static.js';
+import { kovo } from '../../../packages/drizzle/src/drizzle-surface.js';
 
 import { annotatedTable } from './test-helpers.js';
 

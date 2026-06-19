@@ -20,21 +20,17 @@ import { getPriority } from './internal.js';
 
 describe('@kovojs/style phase 1 runtime fork', () => {
   it('merges atoms with property-level last-wins semantics', () => {
-    const base = create(
-      {
-        root: {
-          backgroundColor: 'black',
-          color: 'white',
-        },
-      }
-    );
-    const override = create(
-      {
-        root: {
-          backgroundColor: 'tomato',
-        },
-      }
-    );
+    const base = create({
+      root: {
+        backgroundColor: 'black',
+        color: 'white',
+      },
+    });
+    const override = create({
+      root: {
+        backgroundColor: 'tomato',
+      },
+    });
 
     const result = attrs(base.root, override.root);
 
@@ -43,12 +39,10 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   });
 
   it('flattens arrays and serializes the explicit raw inline escape hatch', () => {
-    const styles = create(
-      {
-        root: { display: 'inline-flex', opacity: 1 },
-        muted: { opacity: 0.7 },
-      }
-    );
+    const styles = create({
+      root: { display: 'inline-flex', opacity: 1 },
+      muted: { opacity: 0.7 },
+    });
 
     const result = attrs([styles.root, false, [styles.muted, raw({ '--progress': '60%' })]]);
 
@@ -57,17 +51,15 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   });
 
   it('emits readable provenance-prefixed atomic classes and priority layers', () => {
-    const compiled = createAtomicStyles(
-      {
-        root: {
-          padding: 8,
-          paddingInline: 12,
-          width: 44,
-          ':hover': { backgroundColor: 'black' },
-          '@media (min-width: 40rem)': { width: 52 },
-        },
-      }
-    );
+    const compiled = createAtomicStyles({
+      root: {
+        padding: 8,
+        paddingInline: 12,
+        width: 44,
+        ':hover': { backgroundColor: 'black' },
+        '@media (min-width: 40rem)': { width: 52 },
+      },
+    });
 
     expect(compiled.styles.root.__rules).toHaveLength(5);
     expect(compiled.css).toContain('@layer kovo-style-1000');
@@ -80,22 +72,20 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   });
 
   it('emits browser-valid lengths: bare-number lengths get px, unitless props and 0 do not', () => {
-    const compiled = createAtomicStyles(
-      {
-        root: {
-          maxWidth: 832,
-          gap: 8,
-          fontSize: 12,
-          margin: 0,
-          lineHeight: 1.5,
-          zIndex: 10,
-          opacity: 1,
-          flexShrink: 0,
-          height: '100vh',
-          flex: '1 1 0%',
-        },
-      }
-    );
+    const compiled = createAtomicStyles({
+      root: {
+        maxWidth: 832,
+        gap: 8,
+        fontSize: 12,
+        margin: 0,
+        lineHeight: 1.5,
+        zIndex: 10,
+        opacity: 1,
+        flexShrink: 0,
+        height: '100vh',
+        flex: '1 1 0%',
+      },
+    });
 
     // Bare-number lengths gain `px` so the served declaration is valid CSS.
     expect(compiled.css).toContain('max-width:832px');
@@ -116,16 +106,14 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   });
 
   it('emits data-attribute selector suffixes for headless component state', () => {
-    const compiled = createAtomicStyles(
-      {
-        root: {
-          color: 'gray',
-          '[data-state=active]': {
-            color: 'black',
-          },
+    const compiled = createAtomicStyles({
+      root: {
+        color: 'gray',
+        '[data-state=active]': {
+          color: 'black',
         },
-      }
-    );
+      },
+    });
 
     expect(compiled.styles.root.__rules).toHaveLength(2);
     expect(compiled.css).toContain('.kv-style-fg-');
@@ -159,16 +147,12 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   });
 
   it('defines typed token vars and theme override classes', () => {
-    const tokens = defineVars(
-      {
-        accent: '#2563eb',
-        onAccent: 'white',
-      }
-    );
+    const tokens = defineVars({
+      accent: '#2563eb',
+      onAccent: 'white',
+    });
     const theme = createTheme(tokens, { accent: '#16a34a' });
-    const styles = create(
-      { root: { backgroundColor: tokens.accent, color: tokens.onAccent } }
-    );
+    const styles = create({ root: { backgroundColor: tokens.accent, color: tokens.onAccent } });
 
     expect(tokens.accent).toBe('var(--kovo-tokens-accent)');
     expect(theme.className).toMatch(/^kv-theme-theme-[a-z0-9]+$/);
@@ -181,14 +165,12 @@ describe('@kovojs/style phase 1 runtime fork', () => {
       buttonHeight: 36,
       buttonPadding: '12px',
     });
-    const styles = create(
-      {
-        root: {
-          height: spacing.buttonHeight,
-          paddingInline: spacing.buttonPadding,
-        },
-      }
-    );
+    const styles = create({
+      root: {
+        height: spacing.buttonHeight,
+        paddingInline: spacing.buttonPadding,
+      },
+    });
 
     expect(spacing.buttonHeight).toBe(36);
     expect(Object.isFrozen(spacing)).toBe(true);
@@ -222,16 +204,14 @@ describe('@kovojs/style phase 1 runtime fork', () => {
   });
 
   it('exports typed var references for theme tokens used in style.create', () => {
-    const styles = create(
-      {
-        root: {
-          backgroundColor: tokens.sys.color.primary,
-          borderColor: tokens.sys.color.outlineVariant,
-          borderRadius: tokens.sys.shape.cornerMedium,
-          color: tokens.sys.color.onPrimary,
-        },
-      }
-    );
+    const styles = create({
+      root: {
+        backgroundColor: tokens.sys.color.primary,
+        borderColor: tokens.sys.color.outlineVariant,
+        borderRadius: tokens.sys.shape.cornerMedium,
+        color: tokens.sys.color.onPrimary,
+      },
+    });
 
     expect(tokens.sys.color.primary).toBe('var(--kovo-theme-sys-color-primary)');
     expect(tokens.ref.palette.primary[40]).toBe('var(--kovo-theme-ref-palette-primary-40)');

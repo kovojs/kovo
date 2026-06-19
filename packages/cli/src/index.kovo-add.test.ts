@@ -6,7 +6,11 @@ import { compileComponentModule } from '@kovojs/compiler';
 import { describe, expect, it, vi } from 'vitest';
 
 import { main } from './index.js';
-import { availableAddComponents, vendoredUiComponents } from './add-catalog.js';
+import {
+  availableAddComponents,
+  vendoredUiComponentSource,
+  vendoredUiComponents,
+} from './add-catalog.js';
 
 describe('kovo add', () => {
   it('keeps the vendored UI catalog synchronized with @kovojs/ui package source', () => {
@@ -35,12 +39,16 @@ describe('kovo add', () => {
     for (const [name, entry] of Object.entries(vendoredUiComponents)) {
       expect(entry.fileName).toBe(`${name}.tsx`);
       expect(entry.source).toBe(
-        readFileSync(new URL(`../../ui/src/${name}.tsx`, import.meta.url), 'utf8'),
+        vendoredUiComponentSource(
+          readFileSync(new URL(`../../ui/src/${name}.tsx`, import.meta.url), 'utf8'),
+        ),
       );
       expect(entry.source).toContain("import { component } from '@kovojs/core';");
       expect(entry.source).toContain('component({');
       expect(entry.source).not.toContain('@kovojs/ui');
       expect(entry.source).not.toContain('@kovojs/server/internal');
+      expect(entry.source).not.toContain("from './pass-through.js'");
+      expect(entry.source).not.toContain("from './theme.js'");
       expect(entry.source).not.toContain('kovo-c=');
       expect(entry.source).not.toContain('data-bind=');
     }

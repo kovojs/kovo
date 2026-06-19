@@ -54,7 +54,7 @@ describe('compiled interactive gallery demos', () => {
     };
     const accordionRoot = {
       querySelector: (selector: string) =>
-        selector === '[value="billing"]' ? billingTrigger : undefined,
+        selector === '#gallery-accordion-billing-trigger' ? billingTrigger : undefined,
     };
     const accordionKeyEvent = keyEvent('ArrowDown');
     Object.defineProperty(accordionKeyEvent, 'target', {

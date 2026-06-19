@@ -180,8 +180,13 @@ export interface MutationDefinition<
   ) => Promise<Result>;
 }
 
+export interface MutationFormDefinition<Key extends string = string, Request = unknown> {
+  csrf?: CsrfValidationOptions<Request> | false;
+  key: Key;
+}
+
 /** Attributes emitted for a SPEC §6.3 enhanced mutation form. */
-export interface MutationFormAttributes<Key extends string = string> {
+export interface MutationFormAttributes<Key extends string = string, Request = unknown> {
   /** No-JS mutation endpoint path derived from the typed mutation key. */
   action: `/_m/${Key}`;
   /** Stable mutation key metadata used by enhanced submit/runtime tooling. */
@@ -191,7 +196,7 @@ export interface MutationFormAttributes<Key extends string = string> {
   /** Mutation forms post by default. */
   method: 'post';
   /** Typed mutation value retained for server JSX runtime CSRF injection. */
-  mutation: Pick<MutationDefinition<Key>, 'csrf' | 'key'>;
+  mutation: MutationFormDefinition<Key, Request>;
 }
 
 export interface RunMutationOptions<
@@ -277,9 +282,9 @@ export function mutation<
  * lowered when submitted-form targets are needed; this helper keeps direct
  * server-rendered templates from hard-coding `/_m/*` URLs.
  */
-export function mutationFormAttributes<const Key extends string>(
-  definition: Pick<MutationDefinition<Key>, 'csrf' | 'key'>,
-): MutationFormAttributes<Key> {
+export function mutationFormAttributes<const Key extends string, Request = unknown>(
+  definition: MutationFormDefinition<Key, Request>,
+): MutationFormAttributes<Key, Request> {
   return {
     action: `/_m/${definition.key}`,
     'data-mutation': definition.key,

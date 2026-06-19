@@ -9,7 +9,7 @@ test('serves readable versioned client modules used by on:* refs', async ({
   page,
   request,
 }) => {
-  const moduleResponse = await request.get('/c/versioned.client.js?v=a1b2c3d4');
+  const moduleResponse = await request.get('/c/__v/a1b2c3d4/versioned.client.js');
   expect(moduleResponse.status()).toBe(200);
   expect(moduleResponse.headers()['cache-control']).toBe('public, max-age=31536000, immutable');
   expect(moduleResponse.headers()['content-type']).toBe('text/javascript; charset=utf-8');
@@ -17,7 +17,7 @@ test('serves readable versioned client modules used by on:* refs', async ({
 
   await page.goto('/');
   const button = page.getByRole('button', { name: 'Load versioned module' });
-  await expect(button).toHaveAttribute('on:click', '/c/versioned.client.js?v=a1b2c3d4#mark');
+  await expect(button).toHaveAttribute('on:click', '/c/__v/a1b2c3d4/versioned.client.js#mark');
 
   await button.click();
   await expect(page.locator('[data-client-version]')).toHaveText('loaded:a1b2c3d4');

@@ -1,5 +1,5 @@
 <main>
   <h1>
     "Idle trigger"
-  <output kovo-state="{}" on:idle="/client.ts#markIdle">
+  <output on:idle="/client.ts#markIdle">
     "idle-ran"

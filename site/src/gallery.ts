@@ -40,13 +40,13 @@ export interface GalleryRoutePageData {
 interface GalleryRoute {
   component: string;
   path: string;
-  render: () => string;
+  render: () => Promise<string> | string;
   title: string;
 }
 
 interface InteractiveDemo {
   name: string;
-  render: () => string;
+  render: () => Promise<string> | string;
   title: string;
 }
 
@@ -189,7 +189,7 @@ function rewriteGalleryClientImports(source: string, support: SupportRegistratio
     .replaceAll("from '@kovojs/runtime/generated';", `from '${support.runtimeHref}';`)
     .replaceAll("from '@kovojs/runtime';", `from '${support.runtimeHref}';`)
     .replace(
-      /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
+      /from (["'])@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)\1;/g,
       (_match, _quote: string, family: string) => {
         const href = support.headlessUiModuleHrefs.get(
           `/c/packages/headless-ui/src/primitives/${family}.js`,
@@ -341,7 +341,8 @@ export async function buildGalleryRoutePages({
   // pages with an interactive demo.
   for (const galleryRoute of galleryRoutes) {
     const interactive = interactiveByComponent.get(galleryRoute.component);
-    const staticHtml = galleryRoute.render();
+    const staticHtml = await galleryRoute.render();
+    const interactiveHtml = interactive ? await interactive.render() : '';
     // Wrap with the demo's id (as the standalone interactive page did) so any
     // in-demo self-anchor (e.g. hover-card → #hover-card-demo) still resolves.
     const demoSource = interactive
@@ -349,7 +350,7 @@ export async function buildGalleryRoutePages({
           interactive.name,
         )}" id="${escapeHtmlAttribute(
           interactive.name,
-        )}">${interactive.render()}${extractBehaviorContract(staticHtml)}</div>`
+        )}">${interactiveHtml}${extractBehaviorContract(staticHtml)}</div>`
       : staticHtml;
     const demoHtml = rewriteGalleryDemoHrefs(demoSource, galleryRoute);
     const url = galleryUrl(galleryRoute.path);

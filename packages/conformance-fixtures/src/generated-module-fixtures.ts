@@ -1624,6 +1624,9 @@ export async function executeInlineEnhancedFormLoaderFixture(
       },
       visibilityState: 'visible',
     },
+    location: {
+      href: 'http://localhost/cart',
+    },
     fetch: async (url: string, options: InlineEnhancedFormFetchOptions) => {
       fetchCalls.push({
         body: options.body,

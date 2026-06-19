@@ -1,8 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 // SPEC.md §4.5: fragment-target children lower to server-renderable slot functions.
 import { component } from '@kovojs/core';
-import { renderComponent } from '@kovojs/server/internal/html';
-import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { balanceQuery, readBalance, type BalanceResult } from './shared';
 
@@ -37,13 +35,9 @@ export function BalanceShell$slot_children(props: BalanceResult): string {
   ) as unknown as string;
 }
 
-export async function renderBalanceShell(db: KovoFixtureRequest['db']): Promise<string> {
+export async function renderBalanceShell(db: Parameters<typeof readBalance>[0]): Promise<string> {
   const slotBalance = await readBalance(db);
-  return renderComponent(
-    BalanceShell,
-    { slotBalance },
-    {
-      slots: { children: BalanceShell$slot_children(slotBalance) },
-    },
-  );
+  return BalanceShell.definition.render({ slotBalance }, undefined, {
+    children: BalanceShell$slot_children(slotBalance),
+  });
 }

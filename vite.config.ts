@@ -189,7 +189,22 @@ export default defineConfig({
     ],
   },
   pack: {
-    entry: ['packages/*/src/index.ts', 'packages/server/src/api/app-shell/*.ts'],
+    entry: [
+      'packages/*/src/index.ts',
+      'packages/compiler/src/internal.ts',
+      'packages/core/src/internal/diagnostics.ts',
+      'packages/core/src/internal/fragment-target.ts',
+      'packages/runtime/src/client.ts',
+      'packages/runtime/src/generated.ts',
+      'packages/runtime/src/internal/inline-loader.ts',
+      'packages/server/src/api/app-shell/*.ts',
+      'packages/server/src/internal/execution.ts',
+      'packages/server/src/internal/html.ts',
+      'packages/server/src/internal/route.ts',
+      'packages/server/src/internal/wire.ts',
+      'packages/test/src/harness.ts',
+      'packages/test/src/verifier.ts',
+    ],
     dts: true,
     deps: {
       neverBundle: ['typescript'],

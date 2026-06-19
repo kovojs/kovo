@@ -1,4 +1,4 @@
 <section>
   <replacement-abort-island kovo-c="replacement-abort-island">
-    <button kovo-state="{}" type="button">
+    <button type="button">
       "Touch replacement"

@@ -87,6 +87,7 @@ describe('server jsx runtime', () => {
         children: '',
       }),
     );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous JSX HTML');
 
     expect(html).toBe(
       `<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="csrf" value="${csrfToken(
@@ -94,7 +95,7 @@ describe('server jsx runtime', () => {
         csrf,
       )}"></form>`,
     );
-    expect(String(html).match(/name="csrf"/g)).toHaveLength(1);
+    expect(html.match(/name="csrf"/g)).toHaveLength(1);
   });
 
   it('does not render CSRF fields for csrf:false mutation forms', () => {
@@ -124,10 +125,11 @@ describe('server jsx runtime', () => {
         children: '',
       }),
     );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous JSX HTML');
 
     expect(html).toContain('action="/_m/cart/add"');
     expect(html).toContain(`name="csrf" value="${csrfToken(request, csrf)}"`);
-    expect(String(html).match(/name="csrf"/g)).toHaveLength(1);
+    expect(html.match(/name="csrf"/g)).toHaveLength(1);
   });
 
   it('escapes attribute values', () => {
@@ -147,17 +149,15 @@ describe('server jsx runtime', () => {
   });
 
   it('renders Kovo style records passed through style= in direct server JSX', () => {
-    const styles = style.create(
-      {
-        root: {
-          backgroundColor: 'black',
-          color: 'white',
-        },
-        inline: {
-          marginTop: 4,
-        },
-      }
-    );
+    const styles = style.create({
+      root: {
+        backgroundColor: 'black',
+        color: 'white',
+      },
+      inline: {
+        marginTop: 4,
+      },
+    });
 
     expect(jsx('button', { style: styles.root, children: 'Buy' })).toMatch(
       /^<button class="kv-style-bg-[^ ]+ kv-style-fg-[^"]+">Buy<\/button>$/,

@@ -214,8 +214,8 @@ export const compilerSpecCoverageMap = [
     ],
     referenceApp: [
       {
-        file: 'examples/commerce/src/source-truth.test.ts',
-        testName: 'keeps cart/add refresh behavior visible',
+        file: 'examples/commerce/src/app.add-to-cart.test.ts',
+        testName: 'renders SPEC 6.3 no-JS add-to-cart forms as the page output',
       },
     ],
   },
@@ -398,8 +398,8 @@ export const compilerSpecCoverageMap = [
     ],
     referenceApp: [
       {
-        file: 'examples/commerce/src/source-truth.test.ts',
-        testName: 'keeps cart/add refresh behavior visible',
+        file: 'examples/commerce/src/app.generated-artifacts.test.ts',
+        testName: 'stamps generated live-target hooks into the rendered cart document',
       },
       {
         file: 'examples/reference/src/app.test.ts',

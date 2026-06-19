@@ -15,12 +15,11 @@ import type {
 import type * as CompilerInternal from '@kovojs/compiler/internal';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import {
   diagnosticDefinitionText,
   diagnosticDefinitions,
   isDiagnosticCode,
-  type DiagnosticCode,
-  type DiagnosticSeverity,
 } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';

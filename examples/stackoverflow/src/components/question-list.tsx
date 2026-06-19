@@ -1,9 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
-import { Badge } from '@kovojs/ui/badge';
-import { Button } from '@kovojs/ui/button';
-import { Card } from '@kovojs/ui/card';
-import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
 import { postQuestionMutation } from '../mutations.js';
@@ -38,254 +34,252 @@ const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
   forms: { postQuestion: { failure: null } },
 };
 
-const listStyles = style.create(
-  {
-    // ---- Page header ---------------------------------------------------------
-    pageHead: {
-      alignItems: 'center',
-      display: 'flex',
-      gap: 16,
-      justifyContent: 'space-between',
-      marginBlockEnd: 12,
-    },
-    pageTitle: {
-      color: '#0c0d0e',
-      fontSize: 27,
-      fontWeight: 400,
-      margin: 0,
-    },
-    askButton: {
-      backgroundColor: '#0a95ff',
+const listStyles = style.create({
+  // ---- Page header ---------------------------------------------------------
+  pageHead: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 16,
+    justifyContent: 'space-between',
+    marginBlockEnd: 12,
+  },
+  pageTitle: {
+    color: '#0c0d0e',
+    fontSize: 27,
+    fontWeight: 400,
+    margin: 0,
+  },
+  askButton: {
+    backgroundColor: '#0a95ff',
+    borderColor: '#0a95ff',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#ffffff',
+    flexShrink: 0,
+    fontSize: 13,
+    paddingBlock: 10,
+    paddingInline: 11,
+    textDecoration: 'none',
+    ':hover': { backgroundColor: '#0074cc' },
+  },
+  subHead: {
+    alignItems: 'center',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+    marginBlockEnd: 16,
+  },
+  count: {
+    color: '#232629',
+    fontSize: 17,
+  },
+  // ---- Filter tabs ---------------------------------------------------------
+  tabs: {
+    borderColor: '#d6d9dc',
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'inline-flex',
+    overflow: 'hidden',
+  },
+  tab: {
+    borderInlineStartColor: '#d6d9dc',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartWidth: 1,
+    color: '#525960',
+    fontSize: 13,
+    paddingBlock: 8,
+    paddingInline: 11,
+    textDecoration: 'none',
+    ':hover': { backgroundColor: '#f8f9f9', color: '#232629' },
+  },
+  tabFirst: {
+    borderInlineStartWidth: 0,
+  },
+  tabActive: {
+    backgroundColor: '#f1f2f3',
+    color: '#232629',
+  },
+  // ---- Question rows -------------------------------------------------------
+  list: {
+    borderTopColor: '#e3e6e8',
+    borderTopStyle: 'solid',
+    borderTopWidth: 1,
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
+  row: {
+    borderBottomColor: '#e3e6e8',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    display: 'flex',
+    gap: 16,
+    paddingBlock: 16,
+  },
+  stats: {
+    color: '#525960',
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    fontSize: 13,
+    gap: 8,
+    paddingTop: 2,
+    width: 90,
+  },
+  statVotes: {
+    alignItems: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+  },
+  statVotesLabel: {
+    color: '#525960',
+    fontSize: 13,
+    lineHeight: 1,
+  },
+  statBox: {
+    alignItems: 'center',
+    borderColor: '#2f6f44',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#2f6f44',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    paddingBlock: 4,
+    paddingInline: 6,
+  },
+  statBoxNum: {
+    fontSize: 15,
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 400,
+    lineHeight: 1,
+  },
+  statBoxLabel: {
+    fontSize: 12,
+    lineHeight: 1,
+  },
+  statPlain: {
+    alignItems: 'center',
+    color: '#525960',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    paddingBlock: 4,
+  },
+  statViews: {
+    color: '#6a737c',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  rowMain: {
+    display: 'grid',
+    flex: '1 1 0%',
+    gap: 6,
+    minWidth: 0,
+  },
+  rowTitle: {
+    color: '#0074cc',
+    fontSize: 17,
+    fontWeight: 400,
+    lineHeight: 1.3,
+    textDecoration: 'none',
+    ':hover': { color: '#0a95ff' },
+  },
+  rowExcerpt: {
+    color: '#525960',
+    display: '-webkit-box',
+    fontSize: 13,
+    lineHeight: 1.5,
+    margin: 0,
+    overflow: 'hidden',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 2,
+  },
+  rowMeta: {
+    alignItems: 'flex-end',
+    columnGap: 12,
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBlockStart: 4,
+    rowGap: 8,
+  },
+  // ---- Ask composer --------------------------------------------------------
+  composer: {
+    backgroundColor: '#fdf7e3',
+    borderColor: '#f1e5bc',
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'grid',
+    gap: 10,
+    marginBlockStart: 28,
+    padding: 16,
+  },
+  composerTitle: {
+    color: '#0c0d0e',
+    fontSize: 15,
+    fontWeight: 600,
+    margin: 0,
+  },
+  composerHint: {
+    color: '#525960',
+    fontSize: 13,
+    marginBlock: 0,
+  },
+  label: {
+    color: '#0c0d0e',
+    fontSize: 14,
+    fontWeight: 600,
+  },
+  input: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d6d9dc',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    color: '#0c0d0e',
+    fontSize: 13,
+    paddingBlock: 9,
+    paddingInline: 11,
+    width: '100%',
+    ':focus': {
       borderColor: '#0a95ff',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#ffffff',
-      flexShrink: 0,
-      fontSize: 13,
-      paddingBlock: 10,
-      paddingInline: 11,
-      textDecoration: 'none',
-      ':hover': { backgroundColor: '#0074cc' },
+      boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
+      outline: 'none',
     },
-    subHead: {
-      alignItems: 'center',
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 12,
-      justifyContent: 'space-between',
-      marginBlockEnd: 16,
-    },
-    count: {
-      color: '#232629',
-      fontSize: 17,
-    },
-    // ---- Filter tabs ---------------------------------------------------------
-    tabs: {
-      borderColor: '#d6d9dc',
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'inline-flex',
-      overflow: 'hidden',
-    },
-    tab: {
-      borderInlineStartColor: '#d6d9dc',
-      borderInlineStartStyle: 'solid',
-      borderInlineStartWidth: 1,
-      color: '#525960',
-      fontSize: 13,
-      paddingBlock: 8,
-      paddingInline: 11,
-      textDecoration: 'none',
-      ':hover': { backgroundColor: '#f8f9f9', color: '#232629' },
-    },
-    tabFirst: {
-      borderInlineStartWidth: 0,
-    },
-    tabActive: {
-      backgroundColor: '#f1f2f3',
-      color: '#232629',
-    },
-    // ---- Question rows -------------------------------------------------------
-    list: {
-      borderTopColor: '#e3e6e8',
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      listStyle: 'none',
-      margin: 0,
-      padding: 0,
-    },
-    row: {
-      borderBottomColor: '#e3e6e8',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      display: 'flex',
-      gap: 16,
-      paddingBlock: 16,
-    },
-    stats: {
-      color: '#525960',
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-      fontSize: 13,
-      gap: 8,
-      paddingTop: 2,
-      width: 90,
-    },
-    statVotes: {
-      alignItems: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 3,
-    },
-    statVotesLabel: {
-      color: '#525960',
-      fontSize: 13,
-      lineHeight: 1,
-    },
-    statBox: {
-      alignItems: 'center',
-      borderColor: '#2f6f44',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#2f6f44',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 2,
-      paddingBlock: 4,
-      paddingInline: 6,
-    },
-    statBoxNum: {
-      fontSize: 15,
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 400,
-      lineHeight: 1,
-    },
-    statBoxLabel: {
-      fontSize: 12,
-      lineHeight: 1,
-    },
-    statPlain: {
-      alignItems: 'center',
-      color: '#525960',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 2,
-      paddingBlock: 4,
-    },
-    statViews: {
-      color: '#6a737c',
-      fontSize: 12,
-      textAlign: 'center',
-    },
-    rowMain: {
-      display: 'grid',
-      flex: '1 1 0%',
-      gap: 6,
-      minWidth: 0,
-    },
-    rowTitle: {
-      color: '#0074cc',
-      fontSize: 17,
-      fontWeight: 400,
-      lineHeight: 1.3,
-      textDecoration: 'none',
-      ':hover': { color: '#0a95ff' },
-    },
-    rowExcerpt: {
-      color: '#525960',
-      display: '-webkit-box',
-      fontSize: 13,
-      lineHeight: 1.5,
-      margin: 0,
-      overflow: 'hidden',
-      WebkitBoxOrient: 'vertical',
-      WebkitLineClamp: 2,
-    },
-    rowMeta: {
-      alignItems: 'flex-end',
-      columnGap: 12,
-      display: 'flex',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      marginBlockStart: 4,
-      rowGap: 8,
-    },
-    // ---- Ask composer --------------------------------------------------------
-    composer: {
-      backgroundColor: '#fdf7e3',
-      borderColor: '#f1e5bc',
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'grid',
-      gap: 10,
-      marginBlockStart: 28,
-      padding: 16,
-    },
-    composerTitle: {
-      color: '#0c0d0e',
-      fontSize: 15,
-      fontWeight: 600,
-      margin: 0,
-    },
-    composerHint: {
-      color: '#525960',
-      fontSize: 13,
-      marginBlock: 0,
-    },
-    label: {
-      color: '#0c0d0e',
-      fontSize: 14,
-      fontWeight: 600,
-    },
-    input: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d6d9dc',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      color: '#0c0d0e',
-      fontSize: 13,
-      paddingBlock: 9,
-      paddingInline: 11,
-      width: '100%',
-      ':focus': {
-        borderColor: '#0a95ff',
-        boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
-        outline: 'none',
-      },
-    },
-    textarea: {
-      lineHeight: 1.5,
-      resize: 'vertical',
-    },
-    composerActions: {
-      display: 'flex',
-      justifyContent: 'flex-start',
-    },
-    submitButton: {
-      backgroundColor: '#0a95ff',
-      borderColor: '#0a95ff',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#ffffff',
-      fontSize: 13,
-      paddingBlock: 10,
-      paddingInline: 11,
-      ':hover': { backgroundColor: '#0074cc' },
-    },
-    error: {
-      color: '#c22e32',
-      fontSize: 13,
-    },
-  }
-);
+  },
+  textarea: {
+    lineHeight: 1.5,
+    resize: 'vertical',
+  },
+  composerActions: {
+    display: 'flex',
+    justifyContent: 'flex-start',
+  },
+  submitButton: {
+    backgroundColor: '#0a95ff',
+    borderColor: '#0a95ff',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#ffffff',
+    fontSize: 13,
+    paddingBlock: 10,
+    paddingInline: 11,
+    ':hover': { backgroundColor: '#0074cc' },
+  },
+  error: {
+    color: '#c22e32',
+    fontSize: 13,
+  },
+});
 
 export const questionListStyleCss = style.emitAtomicCss(
   Object.values(listStyles).flatMap((entry) => entry.__rules ?? []),
@@ -348,7 +342,7 @@ export const QuestionListRegion = component({
       questionScore: QuestionScoreQueryResult;
     },
     _state,
-    slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
+    _slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
   ) => {
     const questions = questionList.items;
     const totalVotes = questionScore.score;
@@ -362,9 +356,7 @@ export const QuestionListRegion = component({
           </a>
         </div>
         <div style={listStyles.subHead}>
-          <span style={listStyles.count}>
-            {questions.length.toLocaleString('en-US')} questions
-          </span>
+          <span style={listStyles.count}>{questions.length.toLocaleString('en-US')} questions</span>
           <div style={listStyles.tabs}>
             <a href="/" style={[listStyles.tab, listStyles.tabFirst, listStyles.tabActive]}>
               Newest
@@ -381,17 +373,10 @@ export const QuestionListRegion = component({
           </div>
         </div>
 
-        <ul style={listStyles.list}>
-          {questions.map((question) => renderQuestionRow(question))}
-        </ul>
+        <ul style={listStyles.list}>{questions.map((question) => renderQuestionRow(question))}</ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
-        <form
-          enhance
-          mutation={postQuestionMutation}
-          id="ask-question"
-          style={listStyles.composer}
-        >
+        <form enhance mutation={postQuestionMutation} id="ask-question" style={listStyles.composer}>
           <input type="hidden" name="id" value={freshId('q')} />
           <input type="hidden" name="authorId" value="demo-viewer" />
           <p style={listStyles.composerTitle}>Ask a public question</p>

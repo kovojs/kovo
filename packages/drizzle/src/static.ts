@@ -63,8 +63,6 @@ import {
   type KovoTableAnnotation,
 } from './drizzle-surface.js';
 /** @internal */
-export { kovo } from './drizzle-surface.js';
-/** @internal */
 export type {
   InvalidationQueryInput,
   InvalidationRegistry,

@@ -23,6 +23,11 @@ const cartAddMutationInputs = [
   },
 ] as const;
 
+function requireLoweredSource(result: ReturnType<typeof compileComponentModule>): string {
+  if (result.loweredSource === null) throw new TypeError('expected lowered source');
+  return result.loweredSource;
+}
+
 describe('compiler stamps', () => {
   it('exposes server host stamps as parsed source patches', () => {
     const source = `
@@ -220,17 +225,16 @@ export const AddToCartForm = component({
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.loweredSource).toContain(
+    const loweredSource = requireLoweredSource(result);
+    expect(loweredSource).toContain(
       '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId} class="add"',
     );
-    expect(result.loweredSource).toContain(
+    expect(loweredSource).toContain(
       "import { renderMutationCsrfField as __kovoRenderMutationCsrfField } from '@kovojs/server/internal/csrf';",
     );
-    expect(result.loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(
-      1,
-    );
-    expect(result.loweredSource).not.toContain('mutation={addToCart}');
-    expect(result.loweredSource).not.toMatch(/\skey=\{slots\.productId\}/);
+    expect(loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(1);
+    expect(loweredSource).not.toContain('mutation={addToCart}');
+    expect(loweredSource).not.toMatch(/\skey=\{slots\.productId\}/);
     expect(result.outputContextFacts).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -280,12 +284,11 @@ export const ProductGrid = component({
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.loweredSource).toContain(
+    const loweredSource = requireLoweredSource(result);
+    expect(loweredSource).toContain(
       '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId}',
     );
-    expect(result.loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(
-      1,
-    );
+    expect(loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(1);
     expect(() => assertRenderEquivalence(result)).not.toThrow();
     expect(() => assertFixpoint(result)).not.toThrow();
   });

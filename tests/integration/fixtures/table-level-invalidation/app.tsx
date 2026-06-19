@@ -1,6 +1,4 @@
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import { renderQueryScript } from '@kovojs/server/internal/html';
-import { runQuery } from '@kovojs/server/internal/execution';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');
@@ -42,10 +40,14 @@ const productP2Query = query('product', {
 });
 
 function renderPanel(result: ProductPanelResult): string {
-  return `<section data-product-id="${result.id}" kovo-fragment-target="product-${result.id}" kovo-deps="product:${result.id}">
+  return `<section data-product-id="${result.id}" kovo-fragment-target="product-${result.id}" kovo-deps="product">
     <h2>${result.label}</h2>
     <output data-bind="product.stock">${result.stock}</output>
   </section>`;
+}
+
+function renderInitialQueryScript(name: string, key: string, value: unknown): string {
+  return `<script type="application/json" kovo-query="${name}" key="${key}">${JSON.stringify(value).replaceAll('<', '\\u003c')}</script>`;
 }
 
 const bulkRestock = mutation('table-level-invalidation/restock', {
@@ -68,15 +70,14 @@ const bulkRestock = mutation('table-level-invalidation/restock', {
 
 const home = route('/', {
   page: async (_context, request: KovoFixtureRequest) => {
-    const p1 = await runQuery(productP1Query, {}, request);
-    const p2 = await runQuery(productP2Query, {}, request);
-    if (!p1.ok || !p2.ok) return '<main>query error</main>';
+    const p1 = await readProductPanel(request.db, 'p1', 'Pen');
+    const p2 = await readProductPanel(request.db, 'p2', 'Notebook');
 
-    return `${renderQueryScript({ key: 'product:p1', name: 'product', value: p1.value })}
-    ${renderQueryScript({ key: 'product:p2', name: 'product', value: p2.value })}
+    return `${renderInitialQueryScript('product', 'product:p1', p1)}
+    ${renderInitialQueryScript('product', 'product:p2', p2)}
     <main>
-      <kovo-fragment target="product-p1">${renderPanel(p1.value)}</kovo-fragment>
-      <kovo-fragment target="product-p2">${renderPanel(p2.value)}</kovo-fragment>
+      <kovo-fragment target="product-p1">${renderPanel(p1)}</kovo-fragment>
+      <kovo-fragment target="product-p2">${renderPanel(p2)}</kovo-fragment>
       <form method="post" action="/_m/table-level-invalidation/restock" enhance data-mutation="table-level-invalidation/restock" kovo-deps="product">
         <input type="hidden" name="category" value="office">
         <input type="hidden" name="threshold" value="10">

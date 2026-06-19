@@ -24,81 +24,79 @@ function initials(name: string): string {
     .join('');
 }
 
-const contactStyles = style.create(
-  {
-    cardBody: {
-      flex: '1 1 0%',
-      minWidth: 0,
+const contactStyles = style.create({
+  cardBody: {
+    flex: '1 1 0%',
+    minWidth: 0,
+  },
+  cardBadge: {
+    flexShrink: 0,
+  },
+  formGrid: {
+    display: 'grid',
+    gap: 8,
+    '@media (min-width: 640px)': {
+      alignItems: 'start',
+      gridTemplateColumns: '1fr 1fr auto',
     },
-    cardBadge: {
-      flexShrink: 0,
+  },
+  formPanel: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outlineVariant,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    padding: 16,
+  },
+  heading: {
+    color: tokens.sys.color.onSurface,
+    fontSize: 24,
+    fontWeight: 700,
+    letterSpacing: 0,
+    lineHeight: 1.25,
+    margin: 0,
+  },
+  input: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outline,
+    borderRadius: tokens.sys.shape.cornerSmall,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    color: tokens.sys.color.onSurface,
+    fontSize: 14,
+    paddingBlock: 8,
+    paddingInline: 12,
+    width: '100%',
+  },
+  list: {
+    display: 'grid',
+    gap: 12,
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+    '@media (min-width: 640px)': {
+      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
     },
-    formGrid: {
-      display: 'grid',
-      gap: 8,
-      '@media (min-width: 640px)': {
-        alignItems: 'start',
-        gridTemplateColumns: '1fr 1fr auto',
-      },
-    },
-    formPanel: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outlineVariant,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      padding: 16,
-    },
-    heading: {
-      color: tokens.sys.color.onSurface,
-      fontSize: 24,
-      fontWeight: 700,
-      letterSpacing: 0,
-      lineHeight: 1.25,
-      margin: 0,
-    },
-    input: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outline,
-      borderRadius: tokens.sys.shape.cornerSmall,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      color: tokens.sys.color.onSurface,
-      fontSize: 14,
-      paddingBlock: 8,
-      paddingInline: 12,
-      width: '100%',
-    },
-    list: {
-      display: 'grid',
-      gap: 12,
-      listStyle: 'none',
-      margin: 0,
-      padding: 0,
-      '@media (min-width: 640px)': {
-        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-      },
-    },
-    muted: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 14,
-    },
-    row: {
-      alignItems: 'center',
-      display: 'flex',
-      gap: 12,
-    },
-    stack: {
-      display: 'grid',
-      gap: 24,
-    },
-    tabularStrong: {
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 600,
-    },
-  }
-);
+  },
+  muted: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 14,
+  },
+  row: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 12,
+  },
+  stack: {
+    display: 'grid',
+    gap: 24,
+  },
+  tabularStrong: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  },
+});
 
 export const contactStyleCss = style.emitAtomicCss(
   Object.values(contactStyles).flatMap((entry) => entry.__rules ?? []),
@@ -145,7 +143,7 @@ export const ContactsRegion = component({
   render: (
     { contactList }: { contactList: ContactListResult },
     _state,
-    slots: ContactsRenderSlots = defaultContactsRenderSlots,
+    _slots: ContactsRenderSlots = defaultContactsRenderSlots,
   ) => {
     const contacts = contactList.items;
 

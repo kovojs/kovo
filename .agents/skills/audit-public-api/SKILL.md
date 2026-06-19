@@ -153,7 +153,7 @@ Use this structure:
 ## Coverage Ledger
 
 | Package | Public subpath | Exports reviewed | Primary evidence | Coverage notes |
-| --- | --- | ---: | --- | --- |
+| ------- | -------------- | ---------------: | ---------------- | -------------- |
 
 ## Definitely Remove
 

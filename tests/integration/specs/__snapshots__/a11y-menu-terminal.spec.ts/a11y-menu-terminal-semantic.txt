@@ -1,7 +1,7 @@
 <main>
   <h1>
     "Menu terminal state"
-  <button aria-controls="account-menu" aria-expanded="true" aria-haspopup="menu" id="menu-trigger" kovo-state="{}" type="button">
+  <button aria-controls="account-menu" aria-expanded="true" aria-haspopup="menu" id="menu-trigger" type="button">
     "Account actions"
   <div aria-labelledby="menu-trigger" id="account-menu" role="menu">
     <button data-state="active" role="menuitem" type="button">

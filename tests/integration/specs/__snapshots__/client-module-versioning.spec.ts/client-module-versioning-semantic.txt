@@ -1,7 +1,7 @@
 <main>
   <h1>
     "Client Module Versioning"
-  <button kovo-state="{}" on:click="/c/versioned.client.js?v=*#mark" type="button">
+  <button on:click="/c/__v/*/versioned.client.js#mark" type="button">
     "Load versioned module"
   <output>
     "loaded:a1b2c3d4"

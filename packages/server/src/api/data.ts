@@ -13,6 +13,7 @@ export type {
   MutationContext,
   MutationDefinition,
   MutationFail,
+  MutationFormDefinition,
   MutationRegistry,
   MutationResult,
   MutationSuccess,

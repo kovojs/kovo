@@ -295,10 +295,86 @@ export function evaluateClientModule(
 }
 
 export function clientHandler(exports: ClientExports, name: string): ClientExports[string] {
-  const fn = exports[name];
+  const resolvedName = resolveGeneratedBindingName(exports, name);
+  const fn = exports[resolvedName];
   if (fn === undefined) throw new Error(`Missing generated handler export: ${name}`);
 
   return fn;
+}
+
+export function resolveGeneratedBindingName(
+  exports: Record<string, unknown>,
+  name: string,
+): string {
+  if (exports[name] !== undefined) return name;
+  const aliasedName = legacyGeneratedBindingAliases[name];
+  if (aliasedName !== undefined && exports[aliasedName] !== undefined) return aliasedName;
+
+  const legacy = name.match(/^(Gallery[A-Za-z0-9]+Demo)\$[A-Za-z0-9]+_(.+?)(?:_([0-9]+))?$/);
+  if (!legacy) return name;
+
+  const [, componentName, bindingSuffix, ordinalText] = legacy;
+  if (componentName === undefined || bindingSuffix === undefined) return name;
+  const handlerPattern = new RegExp(
+    `^${escapeRegExp(componentName)}\\$[A-Za-z0-9]+_${escapeRegExp(bindingSuffix)}(?:_[0-9]+)?$`,
+  );
+  const candidates = Object.keys(exports).filter((candidate) => handlerPattern.test(candidate));
+  const ordinal = ordinalText === undefined ? 1 : Number(ordinalText);
+
+  return candidates[ordinal - 1] ?? name;
+}
+
+const legacyGeneratedBindingAliases: Record<string, string> = {
+  GalleryContextMenuDemo$button_click_2: 'GalleryContextMenuDemo$ContextMenuItem_click_2',
+  GalleryContextMenuDemo$button_keydown: 'GalleryContextMenuDemo$ContextMenuItem_keydown',
+  GalleryContextMenuDemo$button_keydown_2: 'GalleryContextMenuDemo$ContextMenuItem_keydown_2',
+  GalleryContextMenuDemo$div_keydown: 'GalleryContextMenuDemo$ContextMenuTrigger_keydown',
+  GalleryDropdownMenuDemo$button_click_3: 'GalleryDropdownMenuDemo$DropdownMenuItem_click_2',
+  GalleryDropdownMenuDemo$button_keydown: 'GalleryDropdownMenuDemo$DropdownMenuTrigger_keydown',
+  GalleryDropdownMenuDemo$button_keydown_2: 'GalleryDropdownMenuDemo$DropdownMenuItem_keydown',
+  GalleryDropdownMenuDemo$button_keydown_3: 'GalleryDropdownMenuDemo$DropdownMenuItem_keydown_2',
+  GalleryHoverCardDemo$a_focus: 'GalleryHoverCardDemo$HoverCardTrigger_focus',
+  GalleryHoverCardDemo$a_keydown: 'GalleryHoverCardDemo$HoverCardTrigger_keydown',
+  GalleryHoverCardDemo$a_pointerenter: 'GalleryHoverCardDemo$HoverCardTrigger_pointerenter',
+  GalleryHoverCardDemo$a_pointerleave: 'GalleryHoverCardDemo$HoverCardTrigger_pointerleave',
+  GalleryHoverCardDemo$aside_pointerenter: 'GalleryHoverCardDemo$HoverCardContent_pointerenter',
+  GalleryHoverCardDemo$aside_pointerleave: 'GalleryHoverCardDemo$HoverCardContent_pointerleave',
+  GalleryMenubarDemo$button_click: 'GalleryMenubarDemo$MenubarItem_click',
+  GalleryMenubarDemo$button_click_2: 'GalleryMenubarDemo$MenubarItem_click_2',
+  GalleryMenubarDemo$button_click_3: 'GalleryMenubarDemo$MenubarItem_click_3',
+  GalleryMenubarDemo$button_keydown: 'GalleryMenubarDemo$MenubarItem_keydown',
+  GalleryMenubarDemo$button_keydown_2: 'GalleryMenubarDemo$MenubarItem_keydown_2',
+  GalleryNavigationMenuDemo$a_click: 'GalleryNavigationMenuDemo$NavigationMenuLink_click',
+  GalleryNavigationMenuDemo$a_tabIndex_derive:
+    'GalleryNavigationMenuDemo$NavigationMenuLink_tabIndex_derive',
+  GalleryNavigationMenuDemo$button_click: 'GalleryNavigationMenuDemo$NavigationMenuTrigger_click',
+  GalleryNavigationMenuDemo$button_pointerenter:
+    'GalleryNavigationMenuDemo$NavigationMenuTrigger_pointerenter',
+  GalleryNavigationMenuDemo$button_tabIndex_derive:
+    'GalleryNavigationMenuDemo$NavigationMenuTrigger_tabIndex_derive',
+  GalleryNavigationMenuDemo$section_keydown: 'GalleryNavigationMenuDemo$NavigationMenu_keydown',
+  GalleryScrollAreaDemo$div_pointerdown: 'GalleryScrollAreaDemo$ScrollAreaScrollbar_pointerdown',
+  GalleryScrollAreaDemo$div_scroll: 'GalleryScrollAreaDemo$ScrollAreaViewport_scroll',
+  GalleryScrollAreaDemo$span_pointerdown: 'GalleryScrollAreaDemo$ScrollAreaThumb_pointerdown',
+  GalleryScrollAreaDemo$span_pointermove: 'GalleryScrollAreaDemo$ScrollAreaThumb_pointermove',
+  GalleryScrollAreaDemo$span_pointerup: 'GalleryScrollAreaDemo$ScrollAreaThumb_pointerup',
+  GallerySelectDemo$button_click: 'GallerySelectDemo$SelectTrigger_click',
+  GallerySelectDemo$button_keydown: 'GallerySelectDemo$SelectTrigger_keydown',
+  GallerySelectDemo$div_click: 'GallerySelectDemo$SelectItem_click',
+  GallerySelectDemo$div_click_2: 'GallerySelectDemo$SelectItem_click_2',
+  GallerySelectDemo$div_click_3: 'GallerySelectDemo$SelectItem_click_3',
+  GallerySliderDemo$div_pointerdown: 'GallerySliderDemo$SliderTrack_pointerdown',
+  GallerySliderDemo$span_keydown: 'GallerySliderDemo$SliderThumb_keydown',
+  GallerySliderDemo$span_pointerdown: 'GallerySliderDemo$SliderThumb_pointerdown',
+  GallerySliderDemo$span_pointermove: 'GallerySliderDemo$SliderThumb_pointermove',
+  GallerySliderDemo$span_pointerup: 'GallerySliderDemo$SliderThumb_pointerup',
+  GalleryToastDemo$div_data_state_derive_2: 'GalleryToastDemo$Toast_data_state_derive_2',
+  GalleryToastDemo$div_hidden_derive_2: 'GalleryToastDemo$Toast_hidden_derive_2',
+  GalleryToastDemo$section_keydown: 'GalleryToastDemo$ToastViewport_keydown',
+};
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 export function asyncClientHandler(

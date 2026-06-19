@@ -23,7 +23,10 @@ function parseArgs(argv) {
 function findRepoRoot(start) {
   let dir = path.resolve(start);
   while (true) {
-    if (existsSync(path.join(dir, 'SPEC.md')) && existsSync(path.join(dir, 'public-packages.json'))) {
+    if (
+      existsSync(path.join(dir, 'SPEC.md')) &&
+      existsSync(path.join(dir, 'public-packages.json'))
+    ) {
       return dir;
     }
     const parent = path.dirname(dir);
@@ -81,7 +84,7 @@ function docState(symbol, checker) {
   return {
     documented: summaries.length > 0,
     summary: summaries[0] ?? '',
-    tags: [...tags].sort(),
+    tags: [...tags].sort((left, right) => left.localeCompare(right)),
   };
 }
 
@@ -121,7 +124,11 @@ function collectSourceFiles(repoRoot) {
   const stack = roots.map((root) => path.join(repoRoot, root)).filter((root) => existsSync(root));
   while (stack.length > 0) {
     const current = stack.pop();
-    const entries = ts.sys.readDirectory(current, undefined, ['node_modules', 'dist', 'site-export']);
+    const entries = ts.sys.readDirectory(current, undefined, [
+      'node_modules',
+      'dist',
+      'site-export',
+    ]);
     for (const entry of entries) {
       if (/\.[cm]?[tj]sx?$/.test(entry)) result.push(entry);
     }
@@ -149,7 +156,11 @@ function collectImports(repoRoot, files) {
       if (!ts.isImportDeclaration(statement)) continue;
       if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
       const specifier = statement.moduleSpecifier.text;
-      if (!specifier.startsWith('@kovojs/') && specifier !== 'kovo' && specifier !== 'create-kovo') {
+      if (
+        !specifier.startsWith('@kovojs/') &&
+        specifier !== 'kovo' &&
+        specifier !== 'create-kovo'
+      ) {
         continue;
       }
       const clause = statement.importClause;
@@ -322,7 +333,9 @@ function renderMarkdown(payload) {
     const totalImports = items.reduce((sum, item) => sum + item.namedImports.total, 0);
     const exampleImports = items.reduce((sum, item) => sum + item.namedImports.examples, 0);
     const apiRef = items.find((item) => item.apiRef)?.apiRef ?? '';
-    lines.push(`| \`${entry}\` | ${items.length} | ${totalImports} | ${exampleImports} | \`${apiRef}\` |`);
+    lines.push(
+      `| \`${entry}\` | ${items.length} | ${totalImports} | ${exampleImports} | \`${apiRef}\` |`,
+    );
   }
   lines.push('', '## Exports', '');
   for (const item of payload.exports) {

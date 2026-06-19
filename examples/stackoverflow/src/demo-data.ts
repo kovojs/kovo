@@ -235,7 +235,12 @@ export async function seedSoDemo(db: SoDb): Promise<void> {
   for (const overlay of DEMO_BASE_OVERLAY) {
     await db
       .update(questions)
-      .set({ authorName: overlay.authorName, tags: overlay.tags, createdAt: overlay.createdAt, body: overlay.body })
+      .set({
+        authorName: overlay.authorName,
+        tags: overlay.tags,
+        createdAt: overlay.createdAt,
+        body: overlay.body,
+      })
       .where(eq(questions.id, overlay.id));
   }
   for (const overlay of DEMO_ANSWER_OVERLAY) {

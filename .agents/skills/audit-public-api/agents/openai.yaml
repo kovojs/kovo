@@ -1,4 +1,4 @@
 interface:
-  display_name: "Audit Public API"
-  short_description: "Scrutinize Kovo public API exposure"
+  display_name: 'Audit Public API'
+  short_description: 'Scrutinize Kovo public API exposure'
   default_prompt: "Use $audit-public-api to audit Kovo's public API and write a dated report under plans/."

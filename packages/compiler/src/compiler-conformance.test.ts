@@ -131,13 +131,141 @@ describe('compiler conformance corpus', () => {
               "queries": [
                 "cart",
               ],
+              "styleRules": [
+                {
+                  "className": "kv-cart-badge-align-1n0np7",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-bg-z64ku4",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-bd-5rajyo",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-bd-zehgw2",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-bd-169px8",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-bd-19c8ne",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-fg-ulvh0s",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-d-rjc9a1",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-font-wfjt8u",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-font-69d2ez",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-gap-th4gxo",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-pad-82ra0h",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-pad-1xb6c1",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.badge",
+                },
+                {
+                  "className": "kv-cart-badge-align-1n0np7",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-bg-73eir6",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-bd-1ans0m",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-fg-1d7izn",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-d-rjc9a1",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#badge",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-font-hgn7l4",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-font-8pgwt0",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-font-o2m1ue",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-h-1wd2oy",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-justify-olqh3l",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-min-6nuqyp",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+                {
+                  "className": "kv-cart-badge-pad-88ob6b",
+                  "source": "examples/commerce/src/components/cart-badge.tsx#count",
+                  "styleRef": "cartBadgeStyles.count",
+                },
+              ],
             },
           ],
-          "cssAssetCount": 0,
+          "cssAssetCount": 1,
           "diagnostics": [],
           "fileKinds": [
             "server",
             "client",
+            "css",
             "registry",
           ],
           "fixpoint": true,
@@ -176,13 +304,141 @@ describe('compiler conformance corpus', () => {
               "queries": [
                 "orderHistory",
               ],
+              "styleRules": [
+                {
+                  "className": "kv-order-history-align-1vxg5e",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-bg-18m7ru",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-bd-op7bl2",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-bd-iktxcg",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-bd-4bkxwb",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-bd-3lxn3i",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-d-10jo0b",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-justify-15wv6m",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-pad-1b45q7",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-pad-92euu",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.item",
+                },
+                {
+                  "className": "kv-order-history-fg-2xog1x",
+                  "source": "examples/commerce/src/components/order-history.tsx#mutedText",
+                  "styleRef": "orderHistoryStyles.mutedText",
+                },
+                {
+                  "className": "kv-order-history-font-1pgyx3",
+                  "source": "examples/commerce/src/components/order-history.tsx#mutedText",
+                  "styleRef": "orderHistoryStyles.mutedText",
+                },
+                {
+                  "className": "kv-order-history-align-1vxg5e",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.row",
+                },
+                {
+                  "className": "kv-order-history-d-10jo0b",
+                  "source": "examples/commerce/src/components/order-history.tsx#item",
+                  "styleRef": "orderHistoryStyles.row",
+                },
+                {
+                  "className": "kv-order-history-gap-vivniy",
+                  "source": "examples/commerce/src/components/order-history.tsx#row",
+                  "styleRef": "orderHistoryStyles.row",
+                },
+                {
+                  "className": "kv-order-history-d-1x60gr",
+                  "source": "examples/commerce/src/components/order-history.tsx#stack",
+                  "styleRef": "orderHistoryStyles.stack",
+                },
+                {
+                  "className": "kv-order-history-gap-vivniy",
+                  "source": "examples/commerce/src/components/order-history.tsx#row",
+                  "styleRef": "orderHistoryStyles.stack",
+                },
+                {
+                  "className": "kv-order-history-d-1x60gr",
+                  "source": "examples/commerce/src/components/order-history.tsx#stack",
+                  "styleRef": "orderHistoryStyles.stackSm",
+                },
+                {
+                  "className": "kv-order-history-gap-1s2lxs",
+                  "source": "examples/commerce/src/components/order-history.tsx#stackSm",
+                  "styleRef": "orderHistoryStyles.stackSm",
+                },
+                {
+                  "className": "kv-order-history-font-4v1il5",
+                  "source": "examples/commerce/src/components/order-history.tsx#tabularStrong",
+                  "styleRef": "orderHistoryStyles.tabularStrong",
+                },
+                {
+                  "className": "kv-order-history-font-1bl9ee",
+                  "source": "examples/commerce/src/components/order-history.tsx#tabularStrong",
+                  "styleRef": "orderHistoryStyles.tabularStrong",
+                },
+                {
+                  "className": "kv-order-history-fg-1h3b6s",
+                  "source": "examples/commerce/src/components/order-history.tsx#title",
+                  "styleRef": "orderHistoryStyles.title",
+                },
+                {
+                  "className": "kv-order-history-font-1bl9ee",
+                  "source": "examples/commerce/src/components/order-history.tsx#tabularStrong",
+                  "styleRef": "orderHistoryStyles.title",
+                },
+                {
+                  "className": "kv-order-history-letter-1yuj1e",
+                  "source": "examples/commerce/src/components/order-history.tsx#title",
+                  "styleRef": "orderHistoryStyles.title",
+                },
+                {
+                  "className": "kv-order-history-m-1m87zi",
+                  "source": "examples/commerce/src/components/order-history.tsx#title",
+                  "styleRef": "orderHistoryStyles.title",
+                },
+              ],
             },
           ],
-          "cssAssetCount": 0,
+          "cssAssetCount": 1,
           "diagnostics": [],
           "fileKinds": [
             "server",
             "client",
+            "css",
             "registry",
           ],
           "fixpoint": true,
@@ -242,13 +498,291 @@ describe('compiler conformance corpus', () => {
               "queries": [
                 "productGrid",
               ],
+              "styleRules": [
+                {
+                  "className": "kv-product-grid-fg-1a8f0w",
+                  "source": "examples/commerce/src/components/product-grid.tsx#errorText",
+                  "styleRef": "productGridStyles.errorText",
+                },
+                {
+                  "className": "kv-product-grid-font-1dmql4",
+                  "source": "examples/commerce/src/components/product-grid.tsx#errorText",
+                  "styleRef": "productGridStyles.errorText",
+                },
+                {
+                  "className": "kv-product-grid-bg-fqfzhr",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-bd-17yl2y",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-bd-cxmz9t",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-bd-20shz8",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-bd-ycquvh",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-box-1e75m0",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-fg-gtinz5",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-pad-583j80",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-pad-66mtq9",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.field",
+                },
+                {
+                  "className": "kv-product-grid-fg-emqj71",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.formLabel",
+                },
+                {
+                  "className": "kv-product-grid-d-zbwzwb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.formLabel",
+                },
+                {
+                  "className": "kv-product-grid-font-1b3epb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.formLabel",
+                },
+                {
+                  "className": "kv-product-grid-font-1riwsq",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.formLabel",
+                },
+                {
+                  "className": "kv-product-grid-gap-18yvcf",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.formLabel",
+                },
+                {
+                  "className": "kv-product-grid-fg-p4cbfq",
+                  "source": "examples/commerce/src/components/product-grid.tsx#link",
+                  "styleRef": "productGridStyles.link",
+                },
+                {
+                  "className": "kv-product-grid-font-1dmql4",
+                  "source": "examples/commerce/src/components/product-grid.tsx#errorText",
+                  "styleRef": "productGridStyles.link",
+                },
+                {
+                  "className": "kv-product-grid-font-1riwsq",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.link",
+                },
+                {
+                  "className": "kv-product-grid-text-5zwurx",
+                  "source": "examples/commerce/src/components/product-grid.tsx#link",
+                  "styleRef": "productGridStyles.link",
+                },
+                {
+                  "className": "kv-product-grid-bg-1ovdb1",
+                  "source": "examples/commerce/src/components/product-grid.tsx#panelError",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-bd-7kjy5v",
+                  "source": "examples/commerce/src/components/product-grid.tsx#panelError",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-bd-cxmz9t",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-bd-20shz8",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-bd-ycquvh",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-fg-1jhvxd",
+                  "source": "examples/commerce/src/components/product-grid.tsx#panelError",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-font-1dmql4",
+                  "source": "examples/commerce/src/components/product-grid.tsx#errorText",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-pad-zcqjwv",
+                  "source": "examples/commerce/src/components/product-grid.tsx#panelError",
+                  "styleRef": "productGridStyles.panelError",
+                },
+                {
+                  "className": "kv-product-grid-bg-msu64p",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productEmoji",
+                  "styleRef": "productGridStyles.productEmoji",
+                },
+                {
+                  "className": "kv-product-grid-bd-cxmz9t",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.productEmoji",
+                },
+                {
+                  "className": "kv-product-grid-d-zbwzwb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.productEmoji",
+                },
+                {
+                  "className": "kv-product-grid-font-14cref",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productEmoji",
+                  "styleRef": "productGridStyles.productEmoji",
+                },
+                {
+                  "className": "kv-product-grid-h-1emdn3",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productEmoji",
+                  "styleRef": "productGridStyles.productEmoji",
+                },
+                {
+                  "className": "kv-product-grid-place-1lop9p",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productEmoji",
+                  "styleRef": "productGridStyles.productEmoji",
+                },
+                {
+                  "className": "kv-product-grid-w-bygggi",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productEmoji",
+                  "styleRef": "productGridStyles.productEmoji",
+                },
+                {
+                  "className": "kv-product-grid-align-1gebhx",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productForm",
+                  "styleRef": "productGridStyles.productForm",
+                },
+                {
+                  "className": "kv-product-grid-d-1upqo3",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productForm",
+                  "styleRef": "productGridStyles.productForm",
+                },
+                {
+                  "className": "kv-product-grid-flex-1yw3ta",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productForm",
+                  "styleRef": "productGridStyles.productForm",
+                },
+                {
+                  "className": "kv-product-grid-gap-1og9b5",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productForm",
+                  "styleRef": "productGridStyles.productForm",
+                },
+                {
+                  "className": "kv-product-grid-align-kr7kq4",
+                  "source": "examples/commerce/src/components/product-grid.tsx#row",
+                  "styleRef": "productGridStyles.row",
+                },
+                {
+                  "className": "kv-product-grid-d-1upqo3",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productForm",
+                  "styleRef": "productGridStyles.row",
+                },
+                {
+                  "className": "kv-product-grid-gap-vivniy",
+                  "source": "examples/commerce/src/components/product-grid.tsx#row",
+                  "styleRef": "productGridStyles.row",
+                },
+                {
+                  "className": "kv-product-grid-align-kr7kq4",
+                  "source": "examples/commerce/src/components/product-grid.tsx#row",
+                  "styleRef": "productGridStyles.rowBetween",
+                },
+                {
+                  "className": "kv-product-grid-d-1upqo3",
+                  "source": "examples/commerce/src/components/product-grid.tsx#productForm",
+                  "styleRef": "productGridStyles.rowBetween",
+                },
+                {
+                  "className": "kv-product-grid-justify-m1htsu",
+                  "source": "examples/commerce/src/components/product-grid.tsx#rowBetween",
+                  "styleRef": "productGridStyles.rowBetween",
+                },
+                {
+                  "className": "kv-product-grid-d-zbwzwb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.stack",
+                },
+                {
+                  "className": "kv-product-grid-gap-vivniy",
+                  "source": "examples/commerce/src/components/product-grid.tsx#row",
+                  "styleRef": "productGridStyles.stack",
+                },
+                {
+                  "className": "kv-product-grid-d-zbwzwb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.stackSm",
+                },
+                {
+                  "className": "kv-product-grid-gap-18yvcf",
+                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "styleRef": "productGridStyles.stackSm",
+                },
+                {
+                  "className": "kv-product-grid-font-4v1il5",
+                  "source": "examples/commerce/src/components/product-grid.tsx#tabularStrong",
+                  "styleRef": "productGridStyles.tabularStrong",
+                },
+                {
+                  "className": "kv-product-grid-font-1bl9ee",
+                  "source": "examples/commerce/src/components/product-grid.tsx#tabularStrong",
+                  "styleRef": "productGridStyles.tabularStrong",
+                },
+                {
+                  "className": "kv-product-grid-fg-gtinz5",
+                  "source": "examples/commerce/src/components/product-grid.tsx#field",
+                  "styleRef": "productGridStyles.title",
+                },
+                {
+                  "className": "kv-product-grid-font-1bl9ee",
+                  "source": "examples/commerce/src/components/product-grid.tsx#tabularStrong",
+                  "styleRef": "productGridStyles.title",
+                },
+                {
+                  "className": "kv-product-grid-letter-1yuj1e",
+                  "source": "examples/commerce/src/components/product-grid.tsx#title",
+                  "styleRef": "productGridStyles.title",
+                },
+                {
+                  "className": "kv-product-grid-m-1m87zi",
+                  "source": "examples/commerce/src/components/product-grid.tsx#title",
+                  "styleRef": "productGridStyles.title",
+                },
+              ],
             },
           ],
-          "cssAssetCount": 0,
+          "cssAssetCount": 1,
           "diagnostics": [],
           "fileKinds": [
             "server",
             "client",
+            "css",
             "registry",
           ],
           "fixpoint": true,

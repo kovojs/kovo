@@ -14,6 +14,7 @@ render correctly (were near-unstyled); `crm` is fully functional. Remaining: aes
 `commerce`/`devtool`/`gallery`/`reference`, and one framework gap (lowered forms + CSRF, below).
 
 **Proving commands (this session):**
+
 - `npx vitest run packages` → 2856 passed; the 13 failures are **pre-existing** (verified by
   reverting the 3 engine files to base — identical failure set). Engine change adds zero regressions.
 - `npx vitest run examples/stackoverflow/src/interactive-app.test.ts` → 6/6 pass (incl. the
@@ -101,8 +102,7 @@ Matching that is a design pass on top of the mechanical fixes.
 
 ### Phase 1 — Fix the CSS pipeline so authored styles actually render (unblocks everything)
 
-- [x] **A1. Close the unitless-length gap at the engine level.** Added shared `UNITLESS_CSS_PROPERTIES`
-      + `cssLengthValue()` to `packages/style/src/internal.ts`; `atomicRule` now appends `px` to
+- [x] **A1. Close the unitless-length gap at the engine level.** Added shared `UNITLESS_CSS_PROPERTIES` + `cssLengthValue()` to `packages/style/src/internal.ts`; `atomicRule` now appends `px` to
       bare-number lengths (class-name hash still uses the raw value, so `style.attrs` stays in
       lockstep). `packages/compiler/src/package-styles.ts` imports the shared set; its
       `normalizeNumericLengths` is now idempotent defense-in-depth. Evidence: new test in

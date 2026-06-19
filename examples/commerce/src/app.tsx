@@ -49,24 +49,22 @@ export interface CommerceApp {
   requestHandler: RequestHandler;
 }
 
-const commerceAppStyles = style.create(
-  {
-    appRoot: {
-      backgroundColor: tokens.sys.color.surface,
-      color: tokens.sys.color.onSurface,
-      minHeight: '100dvh',
-    },
-    cartShell: {
-      marginInline: 'auto',
-      maxWidth: 896,
-    },
-    loginMain: {
-      marginInline: 'auto',
-      maxWidth: 448,
-      padding: 24,
-    },
-  }
-);
+const commerceAppStyles = style.create({
+  appRoot: {
+    backgroundColor: tokens.sys.color.surface,
+    color: tokens.sys.color.onSurface,
+    minHeight: '100dvh',
+  },
+  cartShell: {
+    marginInline: 'auto',
+    maxWidth: 896,
+  },
+  loginMain: {
+    marginInline: 'auto',
+    maxWidth: 448,
+    padding: 24,
+  },
+});
 
 export const commerceAppStyleCss = style.emitAtomicCss(
   Object.values(commerceAppStyles).flatMap((entry) => entry.__rules ?? []),

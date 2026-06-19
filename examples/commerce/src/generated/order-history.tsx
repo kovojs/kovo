@@ -12,49 +12,47 @@ import { priceLabel } from './product-grid.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
-const orderHistoryStyles = style.create(
-  {
-    item: {
-      alignItems: 'center',
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outlineVariant,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'flex',
-      justifyContent: 'space-between',
-      paddingBlock: 12,
-      paddingInline: 16,
-    },
-    mutedText: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 12,
-    },
-    row: {
-      alignItems: 'center',
-      display: 'flex',
-      gap: 16,
-    },
-    stack: {
-      display: 'grid',
-      gap: 16,
-    },
-    stackSm: {
-      display: 'grid',
-      gap: 4,
-    },
-    tabularStrong: {
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 600,
-    },
-    title: {
-      color: tokens.sys.color.onSurface,
-      fontWeight: 600,
-      letterSpacing: 0,
-      margin: 0,
-    },
-  }
-);
+const orderHistoryStyles = style.create({
+  item: {
+    alignItems: 'center',
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outlineVariant,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'flex',
+    justifyContent: 'space-between',
+    paddingBlock: 12,
+    paddingInline: 16,
+  },
+  mutedText: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 12,
+  },
+  row: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 16,
+  },
+  stack: {
+    display: 'grid',
+    gap: 16,
+  },
+  stackSm: {
+    display: 'grid',
+    gap: 4,
+  },
+  tabularStrong: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  },
+  title: {
+    color: tokens.sys.color.onSurface,
+    fontWeight: 600,
+    letterSpacing: 0,
+    margin: 0,
+  },
+});
 
 export const orderHistoryStyleCss = style.emitAtomicCss(
   Object.values(orderHistoryStyles).flatMap((entry) => entry.__rules ?? []),

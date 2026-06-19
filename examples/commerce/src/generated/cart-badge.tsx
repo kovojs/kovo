@@ -10,39 +10,37 @@ import { cartQuery } from '../queries.js';
 import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
-const cartBadgeStyles = style.create(
-  {
-    badge: {
-      alignItems: 'center',
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outlineVariant,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: tokens.sys.color.onSurface,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      gap: 8,
-      paddingBlock: 8,
-      paddingInline: 12,
-    },
-    count: {
-      alignItems: 'center',
-      backgroundColor: tokens.sys.color.primary,
-      borderRadius: tokens.sys.shape.cornerFull,
-      color: tokens.sys.color.onPrimary,
-      display: 'inline-flex',
-      fontSize: 12,
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 600,
-      height: 20,
-      justifyContent: 'center',
-      minWidth: 20,
-      paddingInline: 6,
-    },
-  }
-);
+const cartBadgeStyles = style.create({
+  badge: {
+    alignItems: 'center',
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outlineVariant,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: tokens.sys.color.onSurface,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    gap: 8,
+    paddingBlock: 8,
+    paddingInline: 12,
+  },
+  count: {
+    alignItems: 'center',
+    backgroundColor: tokens.sys.color.primary,
+    borderRadius: tokens.sys.shape.cornerFull,
+    color: tokens.sys.color.onPrimary,
+    display: 'inline-flex',
+    fontSize: 12,
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+    height: 20,
+    justifyContent: 'center',
+    minWidth: 20,
+    paddingInline: 6,
+  },
+});
 
 export const cartBadgeStyleCss = style.emitAtomicCss(
   Object.values(cartBadgeStyles).flatMap((entry) => entry.__rules ?? []),

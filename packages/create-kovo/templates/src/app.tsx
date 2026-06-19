@@ -3,63 +3,61 @@ import { component } from '@kovojs/core';
 import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
-const appStyles = style.create(
-  {
-    action: {
-      backgroundColor: tokens.customColor('success').colorContainer,
-      borderColor: tokens.customColor('success').color,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: tokens.customColor('success').onColorContainer,
-      fontWeight: 500,
-      paddingBlock: 8,
-      paddingInline: 16,
-    },
-    body: {
-      fontSize: 16,
-      lineHeight: 1.75,
-      maxWidth: 576,
-    },
-    eyebrow: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 14,
-      fontWeight: 500,
-      textTransform: 'uppercase',
-    },
-    heading: {
-      color: tokens.sys.color.primary,
-      fontSize: 30,
-      fontWeight: 600,
-      letterSpacing: 0,
-      lineHeight: 1.2,
-      margin: 0,
-    },
-    root: {
-      color: tokens.sys.color.onSurface,
-      display: 'grid',
-      marginInline: 'auto',
-      maxWidth: 768,
-      minHeight: '100dvh',
-      paddingInline: 24,
-      placeItems: 'center',
-    },
-    section: {
-      display: 'grid',
-      rowGap: 20,
-    },
-    status: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 14,
-    },
-    toolbar: {
-      alignItems: 'center',
-      columnGap: 12,
-      display: 'flex',
-      flexWrap: 'wrap',
-    },
-  }
-);
+const appStyles = style.create({
+  action: {
+    backgroundColor: tokens.customColor('success').colorContainer,
+    borderColor: tokens.customColor('success').color,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: tokens.customColor('success').onColorContainer,
+    fontWeight: 500,
+    paddingBlock: 8,
+    paddingInline: 16,
+  },
+  body: {
+    fontSize: 16,
+    lineHeight: 1.75,
+    maxWidth: 576,
+  },
+  eyebrow: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 14,
+    fontWeight: 500,
+    textTransform: 'uppercase',
+  },
+  heading: {
+    color: tokens.sys.color.primary,
+    fontSize: 30,
+    fontWeight: 600,
+    letterSpacing: 0,
+    lineHeight: 1.2,
+    margin: 0,
+  },
+  root: {
+    color: tokens.sys.color.onSurface,
+    display: 'grid',
+    marginInline: 'auto',
+    maxWidth: 768,
+    minHeight: '100dvh',
+    paddingInline: 24,
+    placeItems: 'center',
+  },
+  section: {
+    display: 'grid',
+    rowGap: 20,
+  },
+  status: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 14,
+  },
+  toolbar: {
+    alignItems: 'center',
+    columnGap: 12,
+    display: 'flex',
+    flexWrap: 'wrap',
+  },
+});
 
 export const starterAppStyleCss = style.emitAtomicCss(
   Object.values(appStyles).flatMap((entry) => entry.__rules ?? []),

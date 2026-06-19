@@ -69,6 +69,7 @@ export function passThroughProps(
         isEvent ||
         name.startsWith('aria-') ||
         (name.startsWith('data-') && name !== 'data-style-src') ||
+        name.startsWith('kovo-') ||
         name === 'hidden' ||
         name === 'tabIndex' ||
         name === 'style';

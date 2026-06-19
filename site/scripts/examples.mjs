@@ -95,7 +95,7 @@ export const EXAMPLES = [
  * embed/service fields the human route needs. `gallery` is intentionally omitted
  * (it has its own pipeline).
  *
- * @type {Array<{ name: string, title: string, blurb: string, dir: string, sources: string[] }>}
+ * @type {Array<{ name: string, title: string, blurb: string, dir: string, sources: Array<string | { name?: string, path: string }> }>}
  */
 export const LLMS_ONLY_EXAMPLES = [
   {
@@ -106,10 +106,10 @@ export const LLMS_ONLY_EXAMPLES = [
     dir: 'examples/devtool',
     sources: [
       'src/app-shell.ts',
-      'src/graph-model.mjs',
-      'src/cards.mjs',
-      'src/render.ts',
-      'src/client.ts',
+      { path: 'packages/devtool/src/graph-model.mjs' },
+      { path: 'packages/devtool/src/cards.mjs' },
+      { path: 'packages/devtool/src/render.mjs' },
+      { path: 'packages/devtool/src/client/devtool-pz.client.js' },
     ],
   },
   {
@@ -146,7 +146,7 @@ export async function buildExamplesLlmsSection({ repoRootPath }) {
     const sources = await loadExampleSources(manifest, { repoRootPath });
     const blocks = sources.map((file) => {
       const lang = file.name.endsWith('.tsx') ? 'tsx' : file.name.endsWith('.mjs') ? 'js' : 'ts';
-      return `\`\`\`${lang} title="${manifest.dir}/${file.name}"\n${file.code.trimEnd()}\n\`\`\``;
+      return `\`\`\`${lang} title="${file.repoPath}"\n${file.code.trimEnd()}\n\`\`\``;
     });
     const body = [
       manifest.blurb,
@@ -257,9 +257,18 @@ export async function buildExampleEmbed(manifest, { outDir, repoRootPath }) {
 export async function loadExampleSources(manifest, { repoRootPath }) {
   const exampleRoot = path.join(repoRootPath, manifest.dir);
   const files = [];
-  for (const relative of manifest.sources) {
-    const absolute = path.join(exampleRoot, relative);
-    files.push({ code: await readFile(absolute, 'utf8'), name: relative });
+  for (const source of manifest.sources) {
+    const relative = typeof source === 'string' ? source : source.path;
+    const absolute =
+      typeof source === 'string'
+        ? path.join(exampleRoot, relative)
+        : path.join(repoRootPath, relative);
+    const repoPath = path.relative(repoRootPath, absolute);
+    files.push({
+      code: await readFile(absolute, 'utf8'),
+      name: typeof source === 'string' ? relative : (source.name ?? repoPath),
+      repoPath,
+    });
   }
   return files;
 }

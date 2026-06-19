@@ -38,6 +38,7 @@ import {
 const execFileAsync = promisify(execFile);
 
 export interface KovoGraphComponentFact {
+  exportName?: string;
   fragments?: readonly string[];
   name: string;
   queries?: readonly string[];
@@ -321,7 +322,7 @@ export function graphQueryConsumers(graph: KovoGraphFixture): GraphQueryConsumer
     const consumers = [
       ...(graph.components ?? [])
         .filter((component) => component.queries?.includes(query.query))
-        .map((component) => `component:${component.name}`),
+        .map((component) => `component:${component.exportName ?? component.name}`),
       ...(graph.pages ?? [])
         .filter((page) => page.queries?.includes(query.query))
         .map((page) => `page:${page.route}`),

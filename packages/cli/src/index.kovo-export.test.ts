@@ -29,6 +29,7 @@ function appModuleSource(options: {
     '  mutationResponses: {},',
     '  queries: [],',
     `  routes: [${options.route}],`,
+    '  stylesheets: [],',
     '};',
     '',
   ].join('\n');

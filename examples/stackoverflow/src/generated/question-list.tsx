@@ -39,254 +39,252 @@ const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
   forms: { postQuestion: { failure: null } },
 };
 
-const listStyles = style.create(
-  {
-    // ---- Page header ---------------------------------------------------------
-    pageHead: {
-      alignItems: 'center',
-      display: 'flex',
-      gap: 16,
-      justifyContent: 'space-between',
-      marginBlockEnd: 12,
-    },
-    pageTitle: {
-      color: '#0c0d0e',
-      fontSize: 27,
-      fontWeight: 400,
-      margin: 0,
-    },
-    askButton: {
-      backgroundColor: '#0a95ff',
+const listStyles = style.create({
+  // ---- Page header ---------------------------------------------------------
+  pageHead: {
+    alignItems: 'center',
+    display: 'flex',
+    gap: 16,
+    justifyContent: 'space-between',
+    marginBlockEnd: 12,
+  },
+  pageTitle: {
+    color: '#0c0d0e',
+    fontSize: 27,
+    fontWeight: 400,
+    margin: 0,
+  },
+  askButton: {
+    backgroundColor: '#0a95ff',
+    borderColor: '#0a95ff',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#ffffff',
+    flexShrink: 0,
+    fontSize: 13,
+    paddingBlock: 10,
+    paddingInline: 11,
+    textDecoration: 'none',
+    ':hover': { backgroundColor: '#0074cc' },
+  },
+  subHead: {
+    alignItems: 'center',
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+    marginBlockEnd: 16,
+  },
+  count: {
+    color: '#232629',
+    fontSize: 17,
+  },
+  // ---- Filter tabs ---------------------------------------------------------
+  tabs: {
+    borderColor: '#d6d9dc',
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'inline-flex',
+    overflow: 'hidden',
+  },
+  tab: {
+    borderInlineStartColor: '#d6d9dc',
+    borderInlineStartStyle: 'solid',
+    borderInlineStartWidth: 1,
+    color: '#525960',
+    fontSize: 13,
+    paddingBlock: 8,
+    paddingInline: 11,
+    textDecoration: 'none',
+    ':hover': { backgroundColor: '#f8f9f9', color: '#232629' },
+  },
+  tabFirst: {
+    borderInlineStartWidth: 0,
+  },
+  tabActive: {
+    backgroundColor: '#f1f2f3',
+    color: '#232629',
+  },
+  // ---- Question rows -------------------------------------------------------
+  list: {
+    borderTopColor: '#e3e6e8',
+    borderTopStyle: 'solid',
+    borderTopWidth: 1,
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
+  row: {
+    borderBottomColor: '#e3e6e8',
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    display: 'flex',
+    gap: 16,
+    paddingBlock: 16,
+  },
+  stats: {
+    color: '#525960',
+    display: 'flex',
+    flexDirection: 'column',
+    flexShrink: 0,
+    fontSize: 13,
+    gap: 8,
+    paddingTop: 2,
+    width: 90,
+  },
+  statVotes: {
+    alignItems: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+  },
+  statVotesLabel: {
+    color: '#525960',
+    fontSize: 13,
+    lineHeight: 1,
+  },
+  statBox: {
+    alignItems: 'center',
+    borderColor: '#2f6f44',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#2f6f44',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    paddingBlock: 4,
+    paddingInline: 6,
+  },
+  statBoxNum: {
+    fontSize: 15,
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 400,
+    lineHeight: 1,
+  },
+  statBoxLabel: {
+    fontSize: 12,
+    lineHeight: 1,
+  },
+  statPlain: {
+    alignItems: 'center',
+    color: '#525960',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    paddingBlock: 4,
+  },
+  statViews: {
+    color: '#6a737c',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  rowMain: {
+    display: 'grid',
+    flex: '1 1 0%',
+    gap: 6,
+    minWidth: 0,
+  },
+  rowTitle: {
+    color: '#0074cc',
+    fontSize: 17,
+    fontWeight: 400,
+    lineHeight: 1.3,
+    textDecoration: 'none',
+    ':hover': { color: '#0a95ff' },
+  },
+  rowExcerpt: {
+    color: '#525960',
+    display: '-webkit-box',
+    fontSize: 13,
+    lineHeight: 1.5,
+    margin: 0,
+    overflow: 'hidden',
+    WebkitBoxOrient: 'vertical',
+    WebkitLineClamp: 2,
+  },
+  rowMeta: {
+    alignItems: 'flex-end',
+    columnGap: 12,
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBlockStart: 4,
+    rowGap: 8,
+  },
+  // ---- Ask composer --------------------------------------------------------
+  composer: {
+    backgroundColor: '#fdf7e3',
+    borderColor: '#f1e5bc',
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'grid',
+    gap: 10,
+    marginBlockStart: 28,
+    padding: 16,
+  },
+  composerTitle: {
+    color: '#0c0d0e',
+    fontSize: 15,
+    fontWeight: 600,
+    margin: 0,
+  },
+  composerHint: {
+    color: '#525960',
+    fontSize: 13,
+    marginBlock: 0,
+  },
+  label: {
+    color: '#0c0d0e',
+    fontSize: 14,
+    fontWeight: 600,
+  },
+  input: {
+    backgroundColor: '#ffffff',
+    borderColor: '#d6d9dc',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    color: '#0c0d0e',
+    fontSize: 13,
+    paddingBlock: 9,
+    paddingInline: 11,
+    width: '100%',
+    ':focus': {
       borderColor: '#0a95ff',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#ffffff',
-      flexShrink: 0,
-      fontSize: 13,
-      paddingBlock: 10,
-      paddingInline: 11,
-      textDecoration: 'none',
-      ':hover': { backgroundColor: '#0074cc' },
+      boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
+      outline: 'none',
     },
-    subHead: {
-      alignItems: 'center',
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 12,
-      justifyContent: 'space-between',
-      marginBlockEnd: 16,
-    },
-    count: {
-      color: '#232629',
-      fontSize: 17,
-    },
-    // ---- Filter tabs ---------------------------------------------------------
-    tabs: {
-      borderColor: '#d6d9dc',
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'inline-flex',
-      overflow: 'hidden',
-    },
-    tab: {
-      borderInlineStartColor: '#d6d9dc',
-      borderInlineStartStyle: 'solid',
-      borderInlineStartWidth: 1,
-      color: '#525960',
-      fontSize: 13,
-      paddingBlock: 8,
-      paddingInline: 11,
-      textDecoration: 'none',
-      ':hover': { backgroundColor: '#f8f9f9', color: '#232629' },
-    },
-    tabFirst: {
-      borderInlineStartWidth: 0,
-    },
-    tabActive: {
-      backgroundColor: '#f1f2f3',
-      color: '#232629',
-    },
-    // ---- Question rows -------------------------------------------------------
-    list: {
-      borderTopColor: '#e3e6e8',
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      listStyle: 'none',
-      margin: 0,
-      padding: 0,
-    },
-    row: {
-      borderBottomColor: '#e3e6e8',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      display: 'flex',
-      gap: 16,
-      paddingBlock: 16,
-    },
-    stats: {
-      color: '#525960',
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-      fontSize: 13,
-      gap: 8,
-      paddingTop: 2,
-      width: 90,
-    },
-    statVotes: {
-      alignItems: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 3,
-    },
-    statVotesLabel: {
-      color: '#525960',
-      fontSize: 13,
-      lineHeight: 1,
-    },
-    statBox: {
-      alignItems: 'center',
-      borderColor: '#2f6f44',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#2f6f44',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 2,
-      paddingBlock: 4,
-      paddingInline: 6,
-    },
-    statBoxNum: {
-      fontSize: 15,
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 400,
-      lineHeight: 1,
-    },
-    statBoxLabel: {
-      fontSize: 12,
-      lineHeight: 1,
-    },
-    statPlain: {
-      alignItems: 'center',
-      color: '#525960',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 2,
-      paddingBlock: 4,
-    },
-    statViews: {
-      color: '#6a737c',
-      fontSize: 12,
-      textAlign: 'center',
-    },
-    rowMain: {
-      display: 'grid',
-      flex: '1 1 0%',
-      gap: 6,
-      minWidth: 0,
-    },
-    rowTitle: {
-      color: '#0074cc',
-      fontSize: 17,
-      fontWeight: 400,
-      lineHeight: 1.3,
-      textDecoration: 'none',
-      ':hover': { color: '#0a95ff' },
-    },
-    rowExcerpt: {
-      color: '#525960',
-      display: '-webkit-box',
-      fontSize: 13,
-      lineHeight: 1.5,
-      margin: 0,
-      overflow: 'hidden',
-      WebkitBoxOrient: 'vertical',
-      WebkitLineClamp: 2,
-    },
-    rowMeta: {
-      alignItems: 'flex-end',
-      columnGap: 12,
-      display: 'flex',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      marginBlockStart: 4,
-      rowGap: 8,
-    },
-    // ---- Ask composer --------------------------------------------------------
-    composer: {
-      backgroundColor: '#fdf7e3',
-      borderColor: '#f1e5bc',
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'grid',
-      gap: 10,
-      marginBlockStart: 28,
-      padding: 16,
-    },
-    composerTitle: {
-      color: '#0c0d0e',
-      fontSize: 15,
-      fontWeight: 600,
-      margin: 0,
-    },
-    composerHint: {
-      color: '#525960',
-      fontSize: 13,
-      marginBlock: 0,
-    },
-    label: {
-      color: '#0c0d0e',
-      fontSize: 14,
-      fontWeight: 600,
-    },
-    input: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d6d9dc',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      color: '#0c0d0e',
-      fontSize: 13,
-      paddingBlock: 9,
-      paddingInline: 11,
-      width: '100%',
-      ':focus': {
-        borderColor: '#0a95ff',
-        boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
-        outline: 'none',
-      },
-    },
-    textarea: {
-      lineHeight: 1.5,
-      resize: 'vertical',
-    },
-    composerActions: {
-      display: 'flex',
-      justifyContent: 'flex-start',
-    },
-    submitButton: {
-      backgroundColor: '#0a95ff',
-      borderColor: '#0a95ff',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#ffffff',
-      fontSize: 13,
-      paddingBlock: 10,
-      paddingInline: 11,
-      ':hover': { backgroundColor: '#0074cc' },
-    },
-    error: {
-      color: '#c22e32',
-      fontSize: 13,
-    },
-  }
-);
+  },
+  textarea: {
+    lineHeight: 1.5,
+    resize: 'vertical',
+  },
+  composerActions: {
+    display: 'flex',
+    justifyContent: 'flex-start',
+  },
+  submitButton: {
+    backgroundColor: '#0a95ff',
+    borderColor: '#0a95ff',
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: '#ffffff',
+    fontSize: 13,
+    paddingBlock: 10,
+    paddingInline: 11,
+    ':hover': { backgroundColor: '#0074cc' },
+  },
+  error: {
+    color: '#c22e32',
+    fontSize: 13,
+  },
+});
 
 export const questionListStyleCss = style.emitAtomicCss(
   Object.values(listStyles).flatMap((entry) => entry.__rules ?? []),
@@ -349,7 +347,7 @@ export const QuestionListRegion = component({
       questionScore: QuestionScoreQueryResult;
     },
     _state,
-    slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
+    _slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
   ) => {
     const questions = questionList.items;
     const totalVotes = questionScore.score;
@@ -363,9 +361,7 @@ export const QuestionListRegion = component({
           </a>
         </div>
         <div class="kv-list-align-dow0hd kv-list-d-suujph kv-list-flex-1scymt kv-list-gap-1i7puk kv-list-justify-fgu9ef kv-list-m-1v15fb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#subHead">
-          <span class="kv-list-fg-1ecxq4 kv-list-font-xv03xf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#count">
-            {questions.length.toLocaleString('en-US')} questions
-          </span>
+          <span class="kv-list-fg-1ecxq4 kv-list-font-xv03xf" data-style-src="examples/stackoverflow/src/components/question-list.tsx#count">{questions.length.toLocaleString('en-US')} questions</span>
           <div class="kv-list-bd-1fs11q kv-list-bd-1hxazk kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-d-o3p01s kv-list-overflow-1f3mmb" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tabs">
             <a href="/" class="kv-list-bd-65jqli kv-list-bd-atzfi6 kv-list-font-1r07r6 kv-list-pad-nsmmd9 kv-list-pad-qqgusf kv-list-text-1tmi32 kv-list-bg-1hqvrl kv-list-fg-1szrun kv-list-bd-ew53ga kv-list-bg-t92jsj kv-list-fg-1ecxq4" data-style-src="examples/stackoverflow/src/components/question-list.tsx#tab; examples/stackoverflow/src/components/question-list.tsx#tabFirst; examples/stackoverflow/src/components/question-list.tsx#tabActive">
               Newest
@@ -382,17 +378,10 @@ export const QuestionListRegion = component({
           </div>
         </div>
 
-        <ul class="kv-list-bd-93yw0a kv-list-bd-5emlhs kv-list-bd-1g9l04 kv-list-list-13bp8i kv-list-m-113xoj kv-list-pad-18rrwl" data-style-src="examples/stackoverflow/src/components/question-list.tsx#list">
-          {questions.map((question) => renderQuestionRow(question))}
-        </ul>
+        <ul class="kv-list-bd-93yw0a kv-list-bd-5emlhs kv-list-bd-1g9l04 kv-list-list-13bp8i kv-list-m-113xoj kv-list-pad-18rrwl" data-style-src="examples/stackoverflow/src/components/question-list.tsx#list">{questions.map((question) => renderQuestionRow(question))}</ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
-        <form
-          enhance
-          method="post" action="/_m/postQuestion" data-mutation="postQuestion" kovo-fragment-target="post-question-mutation"
-          id="ask-question"
-          class="kv-list-bg-13mapp kv-list-bd-g86ugw kv-list-bd-1hxazk kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-d-7k5ll4 kv-list-gap-y2fx34 kv-list-m-1qc9py kv-list-pad-1j0dfe" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composer"
-        >
+        <form enhance method="post" action="/_m/postQuestion" data-mutation="postQuestion" kovo-fragment-target="post-question-mutation" id="ask-question" class="kv-list-bg-13mapp kv-list-bd-g86ugw kv-list-bd-1hxazk kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-d-7k5ll4 kv-list-gap-y2fx34 kv-list-m-1qc9py kv-list-pad-1j0dfe" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composer">
           <input type="hidden" name="id" value={freshId('q')} />
           <input type="hidden" name="authorId" value="demo-viewer" />
           <p class="kv-list-fg-xnwxoc kv-list-font-9vsq2l kv-list-font-1chcq6 kv-list-m-113xoj" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerTitle">Ask a public question</p>
@@ -421,7 +410,7 @@ export const QuestionListRegion = component({
             placeholder="Include all the information someone would need to answer your question…"
             class="kv-list-bg-1r5soy kv-list-bd-1fs11q kv-list-bd-sdq6l5 kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-box-1gvzd3 kv-list-fg-xnwxoc kv-list-font-1r07r6 kv-list-pad-i3n451 kv-list-pad-qqgusf kv-list-w-lhhf6b kv-list-bd-m5fnx7 kv-list-box-1g9a2w kv-list-outline-405iyf kv-list-line-274ua4 kv-list-resize-bvf20l" data-style-src="examples/stackoverflow/src/components/question-list.tsx#input; examples/stackoverflow/src/components/question-list.tsx#textarea"
           />
-          {FormError({ "failure": slots.forms.postQuestion.failure, "code": "DUPLICATE_TITLE", "class": "kv-list-fg-11kzz2 kv-list-font-1r07r6", "data-style-src": "examples/stackoverflow/src/components/question-list.tsx#error", "message": (failure: DuplicateTitleFailure) =>
+          {FormError({ "failure": _slots.forms.postQuestion.failure, "code": "DUPLICATE_TITLE", "class": "kv-list-fg-11kzz2 kv-list-font-1r07r6", "data-style-src": "examples/stackoverflow/src/components/question-list.tsx#error", "message": (failure: DuplicateTitleFailure) =>
               `A question titled "${failure.payload.title}" already exists.` })}
           <div class="kv-list-d-suujph kv-list-justify-12aoua" data-style-src="examples/stackoverflow/src/components/question-list.tsx#composerActions">
             <button type="submit" class="kv-list-bg-nl1060 kv-list-bd-12ru5p kv-list-bd-sdq6l5 kv-list-bd-1xrysw kv-list-bd-17zwtb kv-list-fg-1g4csz kv-list-font-1r07r6 kv-list-pad-1tf3mn kv-list-pad-qqgusf kv-list-bg-wz972k" data-style-src="examples/stackoverflow/src/components/question-list.tsx#submitButton">

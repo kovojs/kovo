@@ -1,9 +1,9 @@
 <main>
   <h1>
     "Module scope shared"
-  <button data-p-item-id="alpha" kovo-state="{}" on:click="/client.ts#record" type="button">
+  <button data-p-item-id="alpha" on:click="/client.ts#record" type="button">
     "Record alpha"
-  <button data-p-item-id="beta" kovo-state="{}" on:click="/client.ts#record" type="button">
+  <button data-p-item-id="beta" on:click="/client.ts#record" type="button">
     "Record beta"
   <output>
     "{"callCount":3,"itemId":"alpha","seen":["alpha","beta"]}"

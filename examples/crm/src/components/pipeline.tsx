@@ -34,99 +34,97 @@ import { freshId, money, stageBadge } from '../components/chrome.js';
 // A new deal starts in one of these stages; closing moves it to `won`.
 const NEW_DEAL_STAGES = ['lead', 'qualified', 'open', 'proposal'] as const;
 
-const pipelineStyles = style.create(
-  {
-    backLink: {
-      alignItems: 'center',
-      color: tokens.sys.color.onSurfaceVariant,
-      display: 'inline-flex',
-      fontSize: 14,
-      gap: 4,
-      textDecoration: 'none',
-      ':hover': {
-        color: tokens.sys.color.onSurface,
-      },
-    },
-    formGrid: {
-      display: 'grid',
-      gap: 8,
-      '@media (min-width: 640px)': {
-        alignItems: 'start',
-        gridTemplateColumns: '1fr auto 1fr auto',
-      },
-    },
-    formPanel: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outlineVariant,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      padding: 16,
-    },
-    heading: {
+const pipelineStyles = style.create({
+  backLink: {
+    alignItems: 'center',
+    color: tokens.sys.color.onSurfaceVariant,
+    display: 'inline-flex',
+    fontSize: 14,
+    gap: 4,
+    textDecoration: 'none',
+    ':hover': {
       color: tokens.sys.color.onSurface,
-      fontSize: 24,
-      fontWeight: 700,
-      letterSpacing: 0,
-      lineHeight: 1.25,
-      margin: 0,
     },
-    input: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outline,
-      borderRadius: tokens.sys.shape.cornerSmall,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      color: tokens.sys.color.onSurface,
-      fontSize: 14,
-      paddingBlock: 8,
-      paddingInline: 12,
-      width: '100%',
+  },
+  formGrid: {
+    display: 'grid',
+    gap: 8,
+    '@media (min-width: 640px)': {
+      alignItems: 'start',
+      gridTemplateColumns: '1fr auto 1fr auto',
     },
-    muted: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 14,
+  },
+  formPanel: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outlineVariant,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    padding: 16,
+  },
+  heading: {
+    color: tokens.sys.color.onSurface,
+    fontSize: 24,
+    fontWeight: 700,
+    letterSpacing: 0,
+    lineHeight: 1.25,
+    margin: 0,
+  },
+  input: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outline,
+    borderRadius: tokens.sys.shape.cornerSmall,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    color: tokens.sys.color.onSurface,
+    fontSize: 14,
+    paddingBlock: 8,
+    paddingInline: 12,
+    width: '100%',
+  },
+  muted: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 14,
+  },
+  sectionLabel: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: '0.025em',
+    marginBlockEnd: 12,
+    textTransform: 'uppercase',
+  },
+  stackLg: {
+    display: 'grid',
+    gap: 32,
+  },
+  stackSm: {
+    display: 'grid',
+    gap: 4,
+  },
+  stageGrid: {
+    display: 'grid',
+    gap: 12,
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+    '@media (min-width: 640px)': {
+      gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
     },
-    sectionLabel: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 12,
-      fontWeight: 600,
-      letterSpacing: '0.025em',
-      marginBlockEnd: 12,
-      textTransform: 'uppercase',
+    '@media (min-width: 1024px)': {
+      gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
     },
-    stackLg: {
-      display: 'grid',
-      gap: 32,
-    },
-    stackSm: {
-      display: 'grid',
-      gap: 4,
-    },
-    stageGrid: {
-      display: 'grid',
-      gap: 12,
-      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-      '@media (min-width: 640px)': {
-        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-      },
-      '@media (min-width: 1024px)': {
-        gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
-      },
-    },
-    stageText: {
-      textTransform: 'capitalize',
-    },
-    tabular: {
-      fontVariantNumeric: 'tabular-nums',
-    },
-    tabularStrong: {
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 600,
-    },
-  }
-);
+  },
+  stageText: {
+    textTransform: 'capitalize',
+  },
+  tabular: {
+    fontVariantNumeric: 'tabular-nums',
+  },
+  tabularStrong: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  },
+});
 
 export const pipelineStyleCss = style.emitAtomicCss(
   Object.values(pipelineStyles).flatMap((entry) => entry.__rules ?? []),
@@ -201,7 +199,7 @@ export const PipelineRegion = component({
       pipelineByStage: PipelineByStageResult;
     },
     _state,
-    slots: PipelineRenderSlots = {},
+    _slots: PipelineRenderSlots = {},
   ) => {
     const contacts = contactList.items;
     const buckets = pipelineByStage.buckets;

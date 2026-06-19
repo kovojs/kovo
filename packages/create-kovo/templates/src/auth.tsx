@@ -175,53 +175,51 @@ export interface LoginFormOptions {
   request?: StarterAuthRequest;
 }
 
-const authStyles = style.create(
-  {
-    error: {
-      color: '#b91c1c',
-      fontSize: 14,
-    },
-    field: {
-      display: 'grid',
-      fontSize: 14,
-      fontWeight: 500,
-      color: '#334155',
-      rowGap: 4,
-    },
-    form: {
-      backgroundColor: '#ffffff',
-      borderColor: '#e2e8f0',
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'grid',
-      padding: 24,
-      rowGap: 16,
-    },
-    input: {
-      borderColor: '#cbd5e1',
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      paddingBlock: 8,
-      paddingInline: 12,
-    },
-    primaryAction: {
-      backgroundColor: '#0f8b8d',
-      borderRadius: 6,
-      color: '#ffffff',
-      fontSize: 14,
-      fontWeight: 500,
-      paddingBlock: 8,
-      paddingInline: 16,
-    },
-    secondaryAction: {
-      color: '#0f8b8d',
-      fontSize: 14,
-      fontWeight: 500,
-    },
-  }
-);
+const authStyles = style.create({
+  error: {
+    color: '#b91c1c',
+    fontSize: 14,
+  },
+  field: {
+    display: 'grid',
+    fontSize: 14,
+    fontWeight: 500,
+    color: '#334155',
+    rowGap: 4,
+  },
+  form: {
+    backgroundColor: '#ffffff',
+    borderColor: '#e2e8f0',
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'grid',
+    padding: 24,
+    rowGap: 16,
+  },
+  input: {
+    borderColor: '#cbd5e1',
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    paddingBlock: 8,
+    paddingInline: 12,
+  },
+  primaryAction: {
+    backgroundColor: '#0f8b8d',
+    borderRadius: 6,
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 500,
+    paddingBlock: 8,
+    paddingInline: 16,
+  },
+  secondaryAction: {
+    color: '#0f8b8d',
+    fontSize: 14,
+    fontWeight: 500,
+  },
+});
 
 export const starterAuthStyleCss = style.emitAtomicCss(
   Object.values(authStyles).flatMap((entry) => entry.__rules ?? []),

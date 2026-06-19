@@ -7,12 +7,13 @@ import { galleryRoot, readCompiledDemo, readGenerated } from './interactive-gall
 describe('compiled interactive gallery demos', () => {
   it('keeps app-authored interactive demos on the styled UI surface', () => {
     const interactiveRoot = resolve(galleryRoot, 'src/interactive');
-    const sources = readdirSync(interactiveRoot)
+    const sources: Array<[string, string]> = readdirSync(interactiveRoot)
       .filter((fileName) => fileName.endsWith('.tsx'))
       .map((fileName) => [fileName, readFileSync(resolve(interactiveRoot, fileName), 'utf8')]);
 
     for (const [fileName, source] of sources) {
-      expect(source, `${fileName} imports styled @kovojs/ui modules`).not.toContain(
+      const valueImportsOnly = source.replace(/^import type [\s\S]*?;\n/gm, '');
+      expect(valueImportsOnly, `${fileName} imports styled @kovojs/ui values`).not.toContain(
         '@kovojs/headless-ui',
       );
     }

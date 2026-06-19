@@ -5,63 +5,61 @@ import * as style from '@kovojs/style';
 
 import { commerceSignIn, commerceSignOut } from '../domain.js';
 
-const authFormStyles = style.create(
-  {
-    errorText: {
-      color: tokens.sys.color.error,
-      fontSize: 14,
-    },
-    field: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outline,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      color: tokens.sys.color.onSurface,
-      paddingBlock: 6,
-      paddingInline: 10,
-    },
-    formInline: {
-      display: 'inline',
-    },
-    formLabel: {
-      color: tokens.sys.color.onSurfaceVariant,
-      display: 'grid',
-      fontSize: 12,
-      fontWeight: 500,
-      gap: 4,
-    },
-    loginForm: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outlineVariant,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'grid',
-      gap: 16,
-      padding: 24,
-    },
-    primaryButton: {
-      backgroundColor: tokens.sys.color.primary,
-      borderColor: tokens.sys.color.primary,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: tokens.sys.color.onPrimary,
-      fontSize: 14,
-      fontWeight: 500,
-      paddingBlock: 8,
-      paddingInline: 16,
-    },
-    textButton: {
-      color: tokens.sys.color.primary,
-      fontSize: 14,
-      fontWeight: 500,
-      textDecoration: 'none',
-    },
-  }
-);
+const authFormStyles = style.create({
+  errorText: {
+    color: tokens.sys.color.error,
+    fontSize: 14,
+  },
+  field: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outline,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    color: tokens.sys.color.onSurface,
+    paddingBlock: 6,
+    paddingInline: 10,
+  },
+  formInline: {
+    display: 'inline',
+  },
+  formLabel: {
+    color: tokens.sys.color.onSurfaceVariant,
+    display: 'grid',
+    fontSize: 12,
+    fontWeight: 500,
+    gap: 4,
+  },
+  loginForm: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outlineVariant,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'grid',
+    gap: 16,
+    padding: 24,
+  },
+  primaryButton: {
+    backgroundColor: tokens.sys.color.primary,
+    borderColor: tokens.sys.color.primary,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: tokens.sys.color.onPrimary,
+    fontSize: 14,
+    fontWeight: 500,
+    paddingBlock: 8,
+    paddingInline: 16,
+  },
+  textButton: {
+    color: tokens.sys.color.primary,
+    fontSize: 14,
+    fontWeight: 500,
+    textDecoration: 'none',
+  },
+});
 
 export const authFormStyleCss = style.emitAtomicCss(
   Object.values(authFormStyles).flatMap((entry) => entry.__rules ?? []),

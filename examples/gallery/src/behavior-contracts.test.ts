@@ -513,10 +513,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'id="gallery-sheet" open>',
     'command="request-close" commandfor="gallery-sheet"',
   ],
-  '/components/skeleton': [
-    'aria-hidden="true"',
-    'data-style-src="skeleton.tsx#root; demo-fixtures.tsx#line"',
-  ],
+  '/components/skeleton': ['aria-hidden="true"', 'data-style-src="skeleton.tsx#root"'],
   '/components/slider': [
     'type="range"',
     'name="gallery-coverage"',

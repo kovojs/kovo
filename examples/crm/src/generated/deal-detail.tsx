@@ -25,112 +25,110 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // `won` is reached through the close action because it applies commission.
 const MOVE_STAGES = ['lead', 'qualified', 'open', 'proposal', 'lost'] as const;
 
-const dealDetailStyles = style.create(
-  {
-    activityList: {
-      display: 'grid',
-      gap: 8,
-      listStyle: 'none',
-      margin: 0,
-      padding: 0,
-    },
-    backLink: {
-      alignItems: 'center',
-      color: tokens.sys.color.onSurfaceVariant,
-      display: 'inline-flex',
-      fontSize: 14,
-      gap: 4,
-      textDecoration: 'none',
-      ':hover': {
-        color: tokens.sys.color.onSurface,
-      },
-    },
-    card: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderColor: tokens.sys.color.outlineVariant,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      padding: 24,
-    },
-    dividerTop: {
-      borderColor: tokens.sys.color.outlineVariant,
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      paddingTop: 16,
-    },
-    heading: {
+const dealDetailStyles = style.create({
+  activityList: {
+    display: 'grid',
+    gap: 8,
+    listStyle: 'none',
+    margin: 0,
+    padding: 0,
+  },
+  backLink: {
+    alignItems: 'center',
+    color: tokens.sys.color.onSurfaceVariant,
+    display: 'inline-flex',
+    fontSize: 14,
+    gap: 4,
+    textDecoration: 'none',
+    ':hover': {
       color: tokens.sys.color.onSurface,
-      fontSize: 24,
-      fontWeight: 700,
-      letterSpacing: 0,
-      lineHeight: 1.25,
-      margin: 0,
     },
-    muted: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 14,
+  },
+  card: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderColor: tokens.sys.color.outlineVariant,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    padding: 24,
+  },
+  dividerTop: {
+    borderColor: tokens.sys.color.outlineVariant,
+    borderTopStyle: 'solid',
+    borderTopWidth: 1,
+    paddingTop: 16,
+  },
+  heading: {
+    color: tokens.sys.color.onSurface,
+    fontSize: 24,
+    fontWeight: 700,
+    letterSpacing: 0,
+    lineHeight: 1.25,
+    margin: 0,
+  },
+  muted: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 14,
+  },
+  rowBetween: {
+    alignItems: 'flex-start',
+    display: 'flex',
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  sectionLabel: {
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 12,
+    fontWeight: 600,
+    letterSpacing: '0.025em',
+    marginBlockEnd: 12,
+    textTransform: 'uppercase',
+  },
+  stack: {
+    display: 'grid',
+    gap: 24,
+  },
+  stageMeta: {
+    marginTop: 4,
+  },
+  stageSummary: {
+    textAlign: 'right',
+  },
+  stageWrap: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  stageButton: {
+    borderColor: tokens.sys.color.outline,
+    borderRadius: tokens.sys.shape.cornerSmall,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: tokens.sys.color.onSurfaceVariant,
+    fontSize: 14,
+    fontWeight: 500,
+    paddingBlock: 6,
+    paddingInline: 12,
+    textTransform: 'capitalize',
+    ':hover': {
+      backgroundColor: tokens.sys.color.surfaceContainer,
     },
-    rowBetween: {
-      alignItems: 'flex-start',
-      display: 'flex',
-      gap: 16,
-      justifyContent: 'space-between',
+    ':disabled': {
+      cursor: 'not-allowed',
+      opacity: 0.4,
     },
-    sectionLabel: {
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 12,
-      fontWeight: 600,
-      letterSpacing: '0.025em',
-      marginBlockEnd: 12,
-      textTransform: 'uppercase',
-    },
-    stack: {
-      display: 'grid',
-      gap: 24,
-    },
-    stageMeta: {
-      marginTop: 4,
-    },
-    stageSummary: {
-      textAlign: 'right',
-    },
-    stageWrap: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 8,
-    },
-    stageButton: {
-      borderColor: tokens.sys.color.outline,
-      borderRadius: tokens.sys.shape.cornerSmall,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: tokens.sys.color.onSurfaceVariant,
-      fontSize: 14,
-      fontWeight: 500,
-      paddingBlock: 6,
-      paddingInline: 12,
-      textTransform: 'capitalize',
-      ':hover': {
-        backgroundColor: tokens.sys.color.surfaceContainer,
-      },
-      ':disabled': {
-        cursor: 'not-allowed',
-        opacity: 0.4,
-      },
-    },
-    stageButtonActive: {
-      backgroundColor: tokens.sys.color.primary,
-      borderColor: tokens.sys.color.primary,
-      color: tokens.sys.color.onPrimary,
-      cursor: 'default',
-    },
-    tabularStrong: {
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 600,
-    },
-  }
-);
+  },
+  stageButtonActive: {
+    backgroundColor: tokens.sys.color.primary,
+    borderColor: tokens.sys.color.primary,
+    color: tokens.sys.color.onPrimary,
+    cursor: 'default',
+  },
+  tabularStrong: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  },
+});
 
 export const dealDetailStyleCss = style.emitAtomicCss(
   Object.values(dealDetailStyles).flatMap((entry) => entry.__rules ?? []),
@@ -161,7 +159,7 @@ export const DealDetailRegion = component({
       dealList: DealListResult;
     },
     _state,
-    slots: DealDetailRenderSlots = {},
+    _slots: DealDetailRenderSlots = {},
   ) => {
     const deal = dealList.items.find((item) => item.id === dealId);
     const contact = contactList.items.find((item) => item.id === deal?.contactId);

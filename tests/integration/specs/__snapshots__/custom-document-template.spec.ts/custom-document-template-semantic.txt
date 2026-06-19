@@ -12,7 +12,7 @@
       <main>
         <h1>
           "Custom Document Template"
-        <button kovo-state="{}" on:click="/client.ts#mark" type="button">
+        <button on:click="/client.ts#mark" type="button">
           "Run client handler"
         <output>
           "handler ran"

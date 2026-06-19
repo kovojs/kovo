@@ -102,12 +102,13 @@ function setSelectedIndex(nextIndex) {
   selectedIndex = (nextIndex + items.length) % items.length;
   for (const [index, item] of items.entries()) {
     const active = index === selectedIndex;
-    item.toggleAttribute('data-active', active);
     const link = item.querySelector('a');
     if (active) {
+      item.setAttribute('data-active', 'true');
       link?.setAttribute('aria-current', 'true');
       item.scrollIntoView({ block: 'nearest' });
     } else {
+      item.removeAttribute('data-active');
       link?.removeAttribute('aria-current');
     }
   }

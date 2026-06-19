@@ -34,7 +34,7 @@ import {
   collectMinifierReservedNames,
   queryShapesFromFacts,
 } from '../dist/compiler/src/internal.mjs';
-import { diagnosticDefinitions } from '../dist/core/src/index.mjs';
+import { diagnosticDefinitions } from '../dist/core/src/internal/diagnostics.mjs';
 import {
   applyCompiledQueryUpdatePlan,
   applyDeferredStreamResponseToRuntime,
@@ -53,7 +53,8 @@ import {
 import { derive } from '../dist/runtime/src/index.mjs';
 import { kovoEscapeHtml } from '../dist/runtime/src/generated.mjs';
 import { kovoLoaderSource } from '../dist/runtime/src/internal/inline-loader.mjs';
-import { createDbVerifier, createKovoTestHarness } from '../dist/test/src/index.mjs';
+import { createKovoTestHarness } from '../dist/test/src/harness.mjs';
+import { createDbVerifier } from '../dist/test/src/verifier.mjs';
 import {
   browserSuiteAcceptanceProjectFact,
   commandOutputLines,
@@ -170,8 +171,8 @@ import {
   verificationLayerBehaviorFact,
   verificationLayerKovoCheckDiagnosticsFact,
 } from '../packages/conformance-fixtures/src/verification-fixtures.ts';
-import { createApp } from '../dist/server/src/api/app-shell/core.mjs';
 import {
+  createApp,
   csrfField,
   csrfToken,
   domain,
@@ -767,7 +768,7 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
   );
 
   const fact = await executeInlineEnhancedFormLoaderFixture(kovoLoaderSource);
-  assert.deepEqual(fact.listenerEvents, delegatedLifecycleEvents);
+  assert.deepEqual(fact.listenerEvents, [...delegatedLifecycleEvents, 'popstate']);
   assert.equal(fact.listenerOptions.click?.capture, true);
   assert.equal(fact.fetchCalls.length, 1);
   assert.deepEqual(fact.fetchCalls[0], {
@@ -777,6 +778,7 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
       'Kovo-Form-Target': '',
       'Kovo-Fragment': 'true',
       'Kovo-Idem': 'idem-inline',
+      'Kovo-Live-Targets': 'cart-badge#cart-badge:{}; inventory#inventory:{}',
       'Kovo-Targets': 'cart-badge=cart; inventory=inventory stock',
     },
     keepalive: true,
@@ -1630,9 +1632,21 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
   assert.deepEqual(fact, {
     graph: {
       componentTargets: [
-        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
-        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
-        { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+        {
+          fragments: ['components/cart-badge/cart-badge'],
+          name: 'components/cart-badge/cart-badge',
+          queries: ['cart'],
+        },
+        {
+          fragments: ['components/order-history/order-history'],
+          name: 'components/order-history/order-history',
+          queries: ['orderHistory'],
+        },
+        {
+          fragments: ['components/product-grid/product-grid'],
+          name: 'components/product-grid/product-grid',
+          queries: ['productGrid'],
+        },
       ],
       optimistic: [
         { mutation: 'cart/add', query: 'cart', status: 'derived' },
@@ -1689,6 +1703,7 @@ void test('P6 navigation bfcache optimism cleanup acceptance is represented', as
           Accept: 'text/vnd.kovo.fragment+html',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'idem_bfcache',
+          'Kovo-Live-Targets': '',
           'Kovo-Targets': '',
         },
         keepalive: true,
@@ -1812,9 +1827,18 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     },
     modulepreloads: [],
     prefetch: false,
-    queries: ['cart', 'productGrid', 'orderHistory'],
     route: '/cart',
     stylesheets: ['/assets/styles.css'],
+    layouts: [{ name: 'CommerceCartLayout', queries: [] }],
+    navigationSegments: [
+      { id: 'layout:CommerceCartLayout', kind: 'layout', name: 'CommerceCartLayout' },
+      {
+        components: ['CommerceCartPage'],
+        id: 'page:/cart',
+        kind: 'page',
+        name: 'page',
+      },
+    ],
   });
   assert.deepEqual(fact.graph.receiptMutation, {});
   assert.deepEqual(fact.pageHints, {
@@ -1913,7 +1937,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     version: 'kovo-check/v1',
   });
   assert.deepEqual(fact.cartQueryExplain, {
-    consumers: ['component:CartBadge', 'page:/cart'],
+    consumers: ['component:CartBadge'],
     domainWrites: ['cart.addItem'],
     exitCode: 0,
     invalidatedBy: ['cart/add'],
@@ -1943,9 +1967,9 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     session: 'commerceSession',
     subject: 'MUTATION cart/add',
     updateConsumers: [
-      { consumers: ['component:CartBadge', 'page:/cart'], query: 'cart' },
-      { consumers: ['component:OrderHistory', 'page:/cart'], query: 'orderHistory' },
-      { consumers: ['component:ProductGrid', 'page:/cart'], query: 'productGrid' },
+      { consumers: ['component:CartBadge'], query: 'cart' },
+      { consumers: ['component:OrderHistory'], query: 'orderHistory' },
+      { consumers: ['component:ProductGrid'], query: 'productGrid' },
     ],
     version: 'kovo-explain/v1',
     writes: ['cart', 'product', 'order'],
@@ -1997,9 +2021,21 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   ]);
   assert.deepEqual(fact.staticBehavior, {
     components: [
-      { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
-      { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
-      { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+      {
+        fragments: ['components/cart-badge/cart-badge'],
+        name: 'components/cart-badge/cart-badge',
+        queries: ['cart'],
+      },
+      {
+        fragments: ['components/order-history/order-history'],
+        name: 'components/order-history/order-history',
+        queries: ['orderHistory'],
+      },
+      {
+        fragments: ['components/product-grid/product-grid'],
+        name: 'components/product-grid/product-grid',
+        queries: ['productGrid'],
+      },
     ],
     domains: ['auth', 'cart', 'order', 'product'],
     invalidations: {
@@ -2011,12 +2047,13 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
       { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
     ],
-    routes: ['/cart'],
+    routes: ['/', '/cart', '/login'],
     touchGraphKeys: ['cart.addItem'],
   });
   assert.deepEqual(fact.componentGraphFacts, [
     {
       domName: 'cart-badge',
+      exportName: 'CartBadge',
       fragments: ['cart-badge/cart-badge'],
       name: 'cart-badge/cart-badge',
       queries: ['cart'],
@@ -2081,12 +2118,10 @@ void test('P10 starter wires graph assertions into CI', async () => {
       'vite-plus',
       'vitest',
     ],
-    missing: [],
+    missing: ['@kovojs/compiler', 'kovo'],
     present: [
-      '@kovojs/compiler',
       '@types/node',
       '@typescript/native-preview',
-      'kovo',
       'typescript',
       'vite',
       'vite-plus',
@@ -2474,6 +2509,7 @@ void test('P9 verification layer evidence remains represented', async () => {
           Accept: 'text/vnd.kovo.fragment+html',
           'Kovo-Fragment': 'true',
           'Kovo-Idem': 'idem_change_record',
+          'Kovo-Live-Targets': '',
           'Kovo-Targets': '',
         },
         resultChanges: [{ domain: 'cart', keys: ['c1'] }],
@@ -2983,8 +3019,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
   };
 
   const exportBehavior = await kovoExportStaticBehaviorFact({
-    appCoreModuleUrl: pathToFileURL(join(projectRoot, 'dist/server/src/api/app-shell/core.mjs'))
-      .href,
+    appCoreModuleUrl: pathToFileURL(join(projectRoot, 'dist/server/src/index.mjs')).href,
     createApp,
     errorDiagnostic,
     expectedStaticExportCliError,
@@ -3022,6 +3057,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
         html: [{ bytesArePositive: true, path: '/index.html', status: 200 }],
         outputStream: 'stdout',
         summary: {
+          assets: '0',
           clientModules: '0',
           diagnostics: '0',
           html: '1',
@@ -3321,6 +3357,7 @@ export const CartRow = component({
   assert.deepEqual(result.componentGraphFacts, [
     {
       domName: 'cart-row',
+      exportName: 'CartRow',
       fragments: ['cart-row/cart-row'],
       name: 'cart-row/cart-row',
       queries: ['cart'],
@@ -3399,9 +3436,21 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
     invalidationKeys: ['cart/add'],
     staticBehavior: {
       components: [
-        { fragments: ['cart-badge'], name: 'CartBadge', queries: ['cart'] },
-        { fragments: ['product-grid'], name: 'ProductGrid', queries: ['productGrid'] },
-        { fragments: ['order-history'], name: 'OrderHistory', queries: ['orderHistory'] },
+        {
+          fragments: ['components/cart-badge/cart-badge'],
+          name: 'components/cart-badge/cart-badge',
+          queries: ['cart'],
+        },
+        {
+          fragments: ['components/order-history/order-history'],
+          name: 'components/order-history/order-history',
+          queries: ['orderHistory'],
+        },
+        {
+          fragments: ['components/product-grid/product-grid'],
+          name: 'components/product-grid/product-grid',
+          queries: ['productGrid'],
+        },
       ],
       domains: ['auth', 'cart', 'order', 'product'],
       invalidations: {
@@ -3413,13 +3462,13 @@ void test('P4 commerce touch graph is a committed generated artifact', async () 
         { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
         { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
       ],
-      routes: ['/cart'],
+      routes: ['/', '/cart', '/login'],
       touchGraphKeys: ['cart.addItem'],
     },
     touchGraph: {
       entryKeys: ['cart.addItem'],
       sourceLineMismatchCount: 0,
-      sourceSitePaths: ['examples/commerce/src/app.ts'],
+      sourceSitePaths: ['examples/commerce/src/domain.ts'],
       sourceSitesHavePositiveLines: true,
       touchCountsByMutation: {
         'cart.addItem': 3,

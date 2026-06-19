@@ -73,6 +73,13 @@ function renderLoweredComponent(loweredSource: string): string {
           },
         };
       }
+      if (specifier === '@kovojs/runtime/generated') {
+        return {
+          derive(_inputs: unknown, compute: (state: unknown) => unknown) {
+            return compute;
+          },
+        };
+      }
       if (specifier === '@kovojs/server/jsx-runtime') {
         return {
           Fragment(props: { children?: unknown }) {

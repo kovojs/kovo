@@ -1,9 +1,9 @@
 import {
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
-  type kovo,
   type SourceFileInput,
   type TouchGraphProjectOptions,
 } from '../../../packages/drizzle/src/static.js';
+import type { kovo } from '../../../packages/drizzle/src/drizzle-surface.js';
 
 export function pgDatabaseTypes(methods: readonly string[] = []): SourceFileInput {
   return {

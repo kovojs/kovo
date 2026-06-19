@@ -2,6 +2,8 @@ import ts from 'typescript';
 
 import type { LiveTargetFact } from '../types.js';
 
+const liveTargetWireModule = '@kovojs/server/internal/wire';
+
 export interface EmitLiveTargetRendererExportsOptions {
   componentExpression: string;
   liveTargetFacts: readonly LiveTargetFact[];
@@ -22,8 +24,6 @@ export function appendLiveTargetRendererExports(
 }
 
 function insertLiveTargetRendererImport(source: string): string {
-  if (source.includes(`from '@kovojs/server/internal/wire'`)) return source;
-
   const sourceFile = ts.createSourceFile(
     'lowered.tsx',
     source,
@@ -31,9 +31,17 @@ function insertLiveTargetRendererImport(source: string): string {
     true,
     ts.ScriptKind.TSX,
   );
+  const hasWireImport = sourceFile.statements.some(
+    (statement) =>
+      ts.isImportDeclaration(statement) &&
+      ts.isStringLiteral(statement.moduleSpecifier) &&
+      statement.moduleSpecifier.text === liveTargetWireModule,
+  );
+  if (hasWireImport) return source;
+
   const importDeclarationEnd =
     sourceFile.statements.findLast((statement) => ts.isImportDeclaration(statement))?.end ?? 0;
-  const importLine = `import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';\n`;
+  const importLine = `import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '${liveTargetWireModule}';\n`;
 
   if (importDeclarationEnd > 0) {
     const prefix = source.slice(0, importDeclarationEnd);

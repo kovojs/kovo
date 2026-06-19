@@ -65,8 +65,7 @@ async function main() {
     await page.fill('input[name="password"]', DEMO_PASSWORD);
     await Promise.all([
       page.waitForResponse(
-        (response) =>
-          response.url().endsWith('/_m/auth/sign-in') && response.status() < 400,
+        (response) => response.url().endsWith('/_m/auth/sign-in') && response.status() < 400,
         { timeout: 15_000 },
       ),
       page.click('button[type="submit"]'),
@@ -114,9 +113,7 @@ async function main() {
     // 4. Prove the product-grid fragment actually morphed (still present + live).
     //    The product-grid host resolves via its compiler-derived `kovo-c`
     //    identity stamp; its per-product add-to-cart forms must survive the morph.
-    const gridForms = await page.$$(
-      '[kovo-c="product-grid"] form[action="/_m/cart/add"]',
-    );
+    const gridForms = await page.$$('[kovo-c="product-grid"] form[action="/_m/cart/add"]');
     if (gridForms.length === 0) {
       fail('product-grid region lost its add-to-cart forms after the morph');
       return;

@@ -33,7 +33,10 @@ async function startServer() {
   });
   const origin = await new Promise((resolve, reject) => {
     let buffer = '';
-    const timer = setTimeout(() => reject(new Error('serve.mjs did not announce an origin')), 30_000);
+    const timer = setTimeout(
+      () => reject(new Error('serve.mjs did not announce an origin')),
+      30_000,
+    );
     child.stdout.on('data', (chunk) => {
       buffer += chunk.toString();
       const match = buffer.match(/crm-serve\/v1\n(http:\/\/[^\n]+)\n/);
@@ -68,10 +71,9 @@ async function main() {
     await page.fill('input[name="name"]', 'Edsger Dijkstra');
     await page.fill('input[name="email"]', 'edsger@demo.example.com');
     await page.click('button:has-text("Add contact")');
-    await page.waitForFunction(
-      () => document.body.innerText.includes('Edsger Dijkstra'),
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction(() => document.body.innerText.includes('Edsger Dijkstra'), {
+      timeout: 10_000,
+    });
     const contactsAfter = await page.locator('ul.grid > li').count();
     console.log(`contacts after: ${contactsAfter}`);
     if (contactsAfter !== contactsBefore + 1) {
@@ -80,7 +82,8 @@ async function main() {
       console.log('PASS: add-contact morphed the contact list with the new person');
     }
     // It was a fragment morph, not a navigation: still on /contacts.
-    if (new URL(page.url()).pathname !== '/contacts') fail('add-contact navigated away (not a morph)');
+    if (new URL(page.url()).pathname !== '/contacts')
+      fail('add-contact navigated away (not a morph)');
 
     // ── 2. create-deal (on /) ───────────────────────────────────────────────────
     await page.goto(`${origin}/`, { waitUntil: 'networkidle' });
@@ -96,7 +99,8 @@ async function main() {
     );
     const openAfter = await page.locator('table tbody tr').count();
     console.log(`open deals after: ${openAfter}`);
-    if (openAfter !== openBefore + 1) fail(`create-deal did not morph the pipeline (${openBefore} -> ${openAfter})`);
+    if (openAfter !== openBefore + 1)
+      fail(`create-deal did not morph the pipeline (${openBefore} -> ${openAfter})`);
     else console.log('PASS: create-deal morphed the pipeline with the new open deal');
 
     // ── 3. move-deal stage (on /deals/:id) ──────────────────────────────────────
@@ -119,19 +123,23 @@ async function main() {
     );
     const stageAfter = (await headerBadge.innerText()).trim();
     console.log(`deal d1 stage after move: ${stageAfter}`);
-    if (stageAfter.toLowerCase() !== 'proposal') fail(`move-deal did not morph the stage badge (got "${stageAfter}")`);
+    if (stageAfter.toLowerCase() !== 'proposal')
+      fail(`move-deal did not morph the stage badge (got "${stageAfter}")`);
     else console.log('PASS: move-deal morphed the deal-detail region to proposal');
 
     // ── 4. close-deal won (on /deals/:id) ───────────────────────────────────────
     await page.click('form[action="/_m/closeDeal"] button:has-text("Close won")');
-    await page.waitForFunction(
-      () => document.body.innerText.includes('Commission is final'),
-      { timeout: 10_000 },
-    );
+    await page.waitForFunction(() => document.body.innerText.includes('Commission is final'), {
+      timeout: 10_000,
+    });
     const stageClosed = (await headerBadge.innerText()).trim();
     console.log(`deal d1 stage after close: ${stageClosed}`);
-    if (stageClosed.toLowerCase() !== 'won') fail(`close-deal did not morph the stage to won (got "${stageClosed}")`);
-    else console.log('PASS: close-deal morphed the deal-detail region to won (server commission applied)');
+    if (stageClosed.toLowerCase() !== 'won')
+      fail(`close-deal did not morph the stage to won (got "${stageClosed}")`);
+    else
+      console.log(
+        'PASS: close-deal morphed the deal-detail region to won (server commission applied)',
+      );
 
     if (consoleErrors.length > 0) {
       fail(`browser console errors:\n${consoleErrors.join('\n')}`);

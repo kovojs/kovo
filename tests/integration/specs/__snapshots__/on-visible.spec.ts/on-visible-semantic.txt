@@ -3,5 +3,5 @@
     "Visible trigger"
   <div>
     "spacer"
-  <output kovo-state="{}" on:visible="/client.ts#markVisible">
+  <output on:visible="/client.ts#markVisible">
     "visible-ran"

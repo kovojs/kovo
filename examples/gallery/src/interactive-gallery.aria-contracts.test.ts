@@ -6,10 +6,12 @@ import {
   fakeDocument,
   inputEvent,
   keyEvent,
+  resolveGeneratedBindingName,
 } from './interactive-gallery-harness.js';
 
 function deriveRun(exports: Record<string, unknown>, name: string, state: unknown): unknown {
-  const derive = exports[name] as { run(value: unknown): unknown } | undefined;
+  const resolvedName = resolveGeneratedBindingName(exports, name);
+  const derive = exports[resolvedName] as { run(value: unknown): unknown } | undefined;
   if (derive === undefined) throw new Error(`Missing generated derive export: ${name}`);
 
   return derive.run(state);

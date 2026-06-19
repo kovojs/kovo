@@ -12,84 +12,82 @@ const NAV: { href: string; label: string; section: CrmSection }[] = [
   { href: '/contacts', label: 'Contacts', section: 'contacts' },
 ];
 
-const chromeStyles = style.create(
-  {
-    appRoot: {
-      backgroundColor: tokens.sys.color.surface,
+const chromeStyles = style.create({
+  appRoot: {
+    backgroundColor: tokens.sys.color.surface,
+    color: tokens.sys.color.onSurface,
+    minHeight: '100vh',
+  },
+  brand: {
+    alignItems: 'center',
+    color: tokens.sys.color.onSurface,
+    display: 'flex',
+    fontSize: 14,
+    fontWeight: 600,
+    gap: 8,
+    letterSpacing: 0,
+    textDecoration: 'none',
+  },
+  brandMark: {
+    backgroundColor: tokens.sys.color.primary,
+    borderRadius: tokens.sys.shape.cornerMedium,
+    color: tokens.sys.color.onPrimary,
+    display: 'grid',
+    fontSize: 12,
+    fontWeight: 700,
+    height: 28,
+    placeItems: 'center',
+    width: 28,
+  },
+  header: {
+    backgroundColor: tokens.sys.color.surfaceContainerLowest,
+    borderBottomColor: tokens.sys.color.outlineVariant,
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+  },
+  headerInner: {
+    alignItems: 'center',
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginInline: 'auto',
+    maxWidth: 1024,
+    paddingBlock: 16,
+    paddingInline: 24,
+  },
+  main: {
+    marginInline: 'auto',
+    maxWidth: 1024,
+    paddingBlock: 32,
+    paddingInline: 24,
+  },
+  nav: {
+    alignItems: 'center',
+    display: 'flex',
+    fontSize: 14,
+    gap: 4,
+  },
+  navLink: {
+    borderRadius: tokens.sys.shape.cornerMedium,
+    fontWeight: 500,
+    paddingBlock: 6,
+    paddingInline: 12,
+    textDecoration: 'none',
+  },
+  navLinkActive: {
+    backgroundColor: tokens.sys.color.primary,
+    color: tokens.sys.color.onPrimary,
+  },
+  navLinkInactive: {
+    color: tokens.sys.color.onSurfaceVariant,
+    ':hover': {
+      backgroundColor: tokens.sys.color.surfaceContainer,
       color: tokens.sys.color.onSurface,
-      minHeight: '100vh',
     },
-    brand: {
-      alignItems: 'center',
-      color: tokens.sys.color.onSurface,
-      display: 'flex',
-      fontSize: 14,
-      fontWeight: 600,
-      gap: 8,
-      letterSpacing: 0,
-      textDecoration: 'none',
-    },
-    brandMark: {
-      backgroundColor: tokens.sys.color.primary,
-      borderRadius: tokens.sys.shape.cornerMedium,
-      color: tokens.sys.color.onPrimary,
-      display: 'grid',
-      fontSize: 12,
-      fontWeight: 700,
-      height: 28,
-      placeItems: 'center',
-      width: 28,
-    },
-    header: {
-      backgroundColor: tokens.sys.color.surfaceContainerLowest,
-      borderBottomColor: tokens.sys.color.outlineVariant,
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-    },
-    headerInner: {
-      alignItems: 'center',
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginInline: 'auto',
-      maxWidth: 1024,
-      paddingBlock: 16,
-      paddingInline: 24,
-    },
-    main: {
-      marginInline: 'auto',
-      maxWidth: 1024,
-      paddingBlock: 32,
-      paddingInline: 24,
-    },
-    nav: {
-      alignItems: 'center',
-      display: 'flex',
-      fontSize: 14,
-      gap: 4,
-    },
-    navLink: {
-      borderRadius: tokens.sys.shape.cornerMedium,
-      fontWeight: 500,
-      paddingBlock: 6,
-      paddingInline: 12,
-      textDecoration: 'none',
-    },
-    navLinkActive: {
-      backgroundColor: tokens.sys.color.primary,
-      color: tokens.sys.color.onPrimary,
-    },
-    navLinkInactive: {
-      color: tokens.sys.color.onSurfaceVariant,
-      ':hover': {
-        backgroundColor: tokens.sys.color.surfaceContainer,
-        color: tokens.sys.color.onSurface,
-      },
-    },
-    stageText: {
-      textTransform: 'capitalize',
-    },
-  }
-);
+  },
+  stageText: {
+    textTransform: 'capitalize',
+  },
+});
 
 export const crmChromeStyleCss = style.emitAtomicCss(
   Object.values(chromeStyles).flatMap((entry) => entry.__rules ?? []),

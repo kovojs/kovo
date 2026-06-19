@@ -1601,13 +1601,11 @@ export function HoverCardDemo(): string {
 }
 
 export function KbdDemo(): string {
-  const kbdDemoStyles = style.create(
-    {
-      uppercase: {
-        textTransform: 'uppercase',
-      },
-    }
-  );
+  const kbdDemoStyles = style.create({
+    uppercase: {
+      textTransform: 'uppercase',
+    },
+  });
 
   return (
     <section data-gallery-demo="kbd">
@@ -2316,13 +2314,11 @@ export function SelectDemo(): string {
 }
 
 export function SeparatorDemo(): string {
-  const separatorDemoStyles = style.create(
-    {
-      short: {
-        width: 256,
-      },
-    }
-  );
+  const separatorDemoStyles = style.create({
+    short: {
+      width: 256,
+    },
+  });
 
   return (
     <section data-gallery-demo="separator">
@@ -2400,18 +2396,16 @@ export function DrawerDemo(): string {
 }
 
 export function SkeletonDemo(): string {
-  const skeletonDemoStyles = style.create(
-    {
-      line: {
-        height: 16,
-        width: 160,
-      },
-      panel: {
-        height: 80,
-        width: '100%',
-      },
-    }
-  );
+  const skeletonDemoStyles = style.create({
+    line: {
+      height: 16,
+      width: 160,
+    },
+    panel: {
+      height: 80,
+      width: '100%',
+    },
+  });
 
   return (
     <section data-gallery-demo="skeleton">
