@@ -2,6 +2,7 @@ export type {
   AttributeMergeExplain,
   CaptureChannel,
   ComponentExplain,
+  DerivedMutationDomainSet,
   DeriveExplain,
   EndpointExplain,
   EventPayloadFact,

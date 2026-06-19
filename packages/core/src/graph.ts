@@ -43,6 +43,8 @@ export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
 /** @internal */
 export interface KovoCheckInput {
+  derivedMutations?: readonly DerivedMutationDomainSet[];
+  derivedQueries?: readonly QueryReadSet[];
   diagnostics?: readonly StaticDiagnosticFact[];
   endpoints?: readonly EndpointExplain[];
   eventPayloads?: readonly EventPayloadFact[];
@@ -189,6 +191,13 @@ export interface MutationExplain {
   manualInvalidates?: readonly string[];
   session?: string;
   writes?: readonly string[];
+}
+
+/** @internal */
+export interface DerivedMutationDomainSet {
+  domains: readonly string[];
+  mutation: string;
+  site?: string;
 }
 
 /** @internal */
@@ -359,6 +368,8 @@ export interface GraphInputValidationError {
 
 const arrayFields = [
   'components',
+  'derivedMutations',
+  'derivedQueries',
   'diagnostics',
   'endpoints',
   'eventPayloads',

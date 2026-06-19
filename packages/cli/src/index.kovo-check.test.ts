@@ -610,6 +610,44 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails when declared query reads are narrower than derived query reads', () => {
+    expect(
+      kovoCheck({
+        derivedQueries: [{ domains: ['contact', 'deal'], query: 'contactList' }],
+        queries: [{ domains: ['contact'], query: 'contactList' }],
+        touchGraph: {
+          'contact.update': {
+            touches: [{ domain: 'contact', keys: null, site: 'contacts.ts:1', via: 'contacts' }],
+            unresolved: [],
+          },
+          'deal.create': {
+            touches: [{ domain: 'deal', keys: null, site: 'deals.ts:1', via: 'deals' }],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR KV407 contactList reads deal. Query read from undeclared domain. Derived read set is not covered by declared query domains.\n',
+    });
+  });
+
+  it('fails when declared mutation domains are narrower than derived touch domains', () => {
+    expect(
+      kovoCheck({
+        derivedMutations: [
+          { domains: ['contact', 'deal'], mutation: 'createDeal', site: 'deals.ts:9' },
+        ],
+        mutations: [{ guards: ['authed'], invalidates: ['deal'], key: 'createDeal' }],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR KV402 deals.ts:9 createDeal touches contact. Write touched an undeclared domain. Derived touch set is not covered by declared mutation domains.\n',
+    });
+  });
+
   it('accepts query read domains covered by the touch graph', () => {
     expect(
       kovoCheck({

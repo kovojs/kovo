@@ -3576,6 +3576,10 @@ export function kovoCheck(
       pushFinding(renderEquivalenceFailureLine(failure), true);
     }
 
+    for (const missed of staticSupersetFailures(graph)) {
+      pushFinding(staticSupersetFailureLine(missed), true);
+    }
+
     for (const missed of missedQueryInvalidations(
       graph.queries ?? [],
       graph.touchGraph ?? {},
@@ -4376,6 +4380,81 @@ function missedQueryInvalidations(
       .filter((domain) => !touchedDomains.has(domain) && !mutationDomains.has(domain))
       .map((domain) => ({ domain, query: query.query })),
   );
+}
+
+type StaticSupersetFailure =
+  | { code: 'KV402'; domain: string; mutation: string; site?: string }
+  | { code: 'KV407'; domain: string; query: string };
+
+function staticSupersetFailures(input: CoreGraph.KovoCheckInput): StaticSupersetFailure[] {
+  return [
+    ...staticQueryReadSupersetFailures(input.queries ?? [], input.derivedQueries ?? []),
+    ...staticMutationTouchSupersetFailures(input.mutations ?? [], input.derivedMutations ?? []),
+  ].sort((left, right) => {
+    const leftKey = 'query' in left ? left.query : left.mutation;
+    const rightKey = 'query' in right ? right.query : right.mutation;
+    return (
+      left.code.localeCompare(right.code) ||
+      leftKey.localeCompare(rightKey) ||
+      left.domain.localeCompare(right.domain)
+    );
+  });
+}
+
+function staticQueryReadSupersetFailures(
+  declaredQueries: readonly CoreGraph.QueryReadSet[],
+  derivedQueries: readonly CoreGraph.QueryReadSet[],
+): StaticSupersetFailure[] {
+  const declaredByQuery = new Map(
+    declaredQueries.map((query) => [query.query, new Set(query.domains)]),
+  );
+  const failures: StaticSupersetFailure[] = [];
+
+  for (const derived of derivedQueries) {
+    const declaredDomains = declaredByQuery.get(derived.query) ?? new Set<string>();
+    for (const domain of derived.domains) {
+      if (!declaredDomains.has(domain)) {
+        failures.push({ code: 'KV407', domain, query: derived.query });
+      }
+    }
+  }
+
+  return failures;
+}
+
+function staticMutationTouchSupersetFailures(
+  declaredMutations: readonly CoreGraph.MutationExplain[],
+  derivedMutations: readonly CoreGraph.DerivedMutationDomainSet[],
+): StaticSupersetFailure[] {
+  const declaredByMutation = new Map(
+    declaredMutations.map((mutation) => [mutation.key, mutationAffectedDomains(mutation)]),
+  );
+  const failures: StaticSupersetFailure[] = [];
+
+  for (const derived of derivedMutations) {
+    const declaredDomains = declaredByMutation.get(derived.mutation) ?? new Set<string>();
+    for (const domain of derived.domains) {
+      if (!declaredDomains.has(domain)) {
+        failures.push({
+          code: 'KV402',
+          domain,
+          mutation: derived.mutation,
+          ...(derived.site === undefined ? {} : { site: derived.site }),
+        });
+      }
+    }
+  }
+
+  return failures;
+}
+
+function staticSupersetFailureLine(failure: StaticSupersetFailure): string {
+  if (failure.code === 'KV407') {
+    return `ERROR KV407 ${failure.query} reads ${failure.domain}. ${diagnosticDefinitions.KV407.message} Derived read set is not covered by declared query domains.`;
+  }
+
+  const site = failure.site ? `${failure.site} ` : '';
+  return `ERROR KV402 ${site}${failure.mutation} touches ${failure.domain}. ${diagnosticDefinitions.KV402.message} Derived touch set is not covered by declared mutation domains.`;
 }
 
 function eventPayloadQueryLints(

@@ -88,6 +88,15 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
     passed 57 tests; `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
     passed 27 tests, including generated Commerce
     `registerGeneratedQueryReadRegistry(commerceQueryDomains)` source.
+- [x] **Static superset gate compares declared and derived domains.** `kovo check`
+      now accepts optional `derivedQueries` / `derivedMutations` graph facts and
+      fails when declared query reads or mutation domains are narrower than the
+      derived domains, using KV407 for read-set misses and KV402 for touch-set
+      misses.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/graph.test.ts`
+    passed 53 tests, including fixtures where declared `contactList` reads omit a
+    derived `deal` read and declared `createDeal` domains omit a derived `contact`
+    touch.
 
 ## Open work
 
@@ -105,12 +114,6 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
       Hand-declared `reads` becomes a checked override, not the default. Evidence
       target: a query with a multi-domain JOIN and no authored `reads` invalidates
       from every joined domain's mutation in an integration test.
-- [ ] **Static superset gate: declared ⊇ derived.** New compile/CI diagnostic (reuse
-      KV407/KV408 semantics statically; add a write-side analogue) firing when a
-      hand-declared `reads`/`touches` override is **narrower** than the AST-derived
-      set — the staleness direction. Excess (over-invalidation) stays a warning.
-      Evidence target: a fixture declaring `reads: [contact]` over a `load` that joins
-      `deals` fails `kovo check` statically (not only at runtime).
 - [ ] **Promote the read/write cross-check off the test-only path.** Surface
       `assertObservedReadsCovered` / `assertObservedWritesCovered` as a CI gate in
       `kovo check` (the v1.5 "verification layer" roadmap item) so coverage of the
@@ -167,6 +170,9 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
 - [x] `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
   - Evidence: passed 27 compiler/CLI/Drizzle tests after generated graph modules
     started emitting `registerGeneratedQueryReadRegistry(...)` source.
+- [x] `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/graph.test.ts`
+  - Evidence: passed 53 CLI/core graph tests after adding
+    `derivedQueries`/`derivedMutations` static superset failures.
 - [ ] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
       currently has no package `test` script, so use explicit Vitest file globs.
 - [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
