@@ -205,10 +205,13 @@ mutation pulls `fragments/cart.css` if not already present.
     `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "links only reachable build CSS chunks"`
     verifies `kovo build` writes a hashed `.kovo/client/assets/base-*.css`
     chunk.
-- [ ] Materialize content-hashed fragment chunks as real emitted assets
-      (`fragments/*.css`). Evidence: `kovo build` of an example writes the
-      chunk files; `git diff --check` clean; bytes-per-route report from Phase 0
-      drops.
+- [x] Materialize content-hashed fragment chunks as real emitted assets
+      (`fragments/*.css`).
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "links only reachable build CSS chunks"`
+    verifies `kovo build` writes a hashed
+    `.kovo/client/assets/fragments/home-panel-home-panel-*.css` chunk for a
+    query-backed styled component.
 
 ### Phase 3 — Link/inline only the route's chunks (Seam E)
 

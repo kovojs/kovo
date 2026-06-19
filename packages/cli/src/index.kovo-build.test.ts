@@ -214,9 +214,13 @@ describe('kovo build', () => {
       const loginCss = neutralClientAsset(outDir, (href) =>
         /^\/assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href),
       );
+      const homeFragmentCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/fragments\/home-panel-home-panel-[a-f0-9]{8}\.css$/.test(href),
+      );
       expect(readFileSync(baseCss.filePath, 'utf8')).toContain('shared-card');
       expect(readFileSync(homeCss.filePath, 'utf8')).toContain('home-panel');
       expect(readFileSync(loginCss.filePath, 'utf8')).toContain('login-panel');
+      expect(readFileSync(homeFragmentCss.filePath, 'utf8')).toContain('home-panel');
       const homeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
       expect(homeDocument).toContain(baseCss.href);
       expect(homeDocument).toContain(homeCss.href);
@@ -907,7 +911,7 @@ function writeSplitStyledComponentClientEntry(root: string): void {
   );
   writeFileSync(
     join(root, 'src/home-panel.tsx'),
-    styledHostComponentSource('HomePanel', 'home-panel', 'crimson'),
+    styledHostComponentSource('HomePanel', 'home-panel', 'crimson', { queryName: 'home' }),
     'utf8',
   );
   writeFileSync(
@@ -922,11 +926,18 @@ function writeSplitStyledComponentClientEntry(root: string): void {
   );
 }
 
-function styledHostComponentSource(name: string, host: string, color: string): string {
+function styledHostComponentSource(
+  name: string,
+  host: string,
+  color: string,
+  options: { queryName?: string } = {},
+): string {
   return `
 import { component } from '@kovojs/core';
 
+${options.queryName ? `const ${options.queryName}Query = {};\n` : ''}
 export const ${name} = component({
+  ${options.queryName ? `queries: { ${options.queryName}: ${options.queryName}Query },` : ''}
   css: \`
     ${host} { color: ${color}; }
   \`,
