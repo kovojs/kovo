@@ -3,6 +3,7 @@ import { handleAppRequest } from './app-request.js';
 import { routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
+import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
@@ -167,8 +168,9 @@ function appQueryRegistry<Request>(
 
   for (const group of groups) {
     for (const queryDefinition of group) {
-      if (!queries.has(queryDefinition.key)) {
-        queries.set(queryDefinition.key, queryDefinition);
+      const generatedQueryDefinition = queryWithGeneratedReads(queryDefinition);
+      if (!queries.has(generatedQueryDefinition.key)) {
+        queries.set(generatedQueryDefinition.key, generatedQueryDefinition);
       }
     }
   }

@@ -5,6 +5,7 @@ import { versionedClientModuleHref } from './client-modules.js';
 import { domain } from './domain.js';
 import { endpoint } from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
+import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { guards } from './guards.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
@@ -121,6 +122,28 @@ describe('server createApp request shell', () => {
       inferredTouches: [{ domain: 'generated-product', keys: 'arg:productId' }],
       touches: [cart],
     });
+  });
+
+  it('injects compiler-registered query reads into app queries', () => {
+    const catalogQuery = query('generatedCatalog', {
+      load: () => ({ items: [] as string[] }),
+    });
+
+    registerGeneratedQueryReadRegistry([
+      { domains: ['generated-catalog'], query: 'generatedCatalog' },
+    ]);
+
+    const app = createApp({ queries: [catalogQuery] });
+
+    expect(app.queries[0]?.reads).toEqual([{ key: 'generated-catalog' }]);
+  });
+
+  it('rejects malformed compiler-registered query reads', () => {
+    expect(() =>
+      registerGeneratedQueryReadRegistry([
+        { domains: ['cart', 1], query: 'generatedBadQuery' },
+      ] as unknown as [{ domains: string[]; query: string }]),
+    ).toThrow('Generated query read registry received an invalid registry.');
   });
 
   it('rejects malformed compiler-registered mutation touch sites', () => {

@@ -1222,6 +1222,9 @@ describe('compiler conformance corpus', () => {
       expect(generatedSource).toContain(
         'interface InvalidationSets extends CommerceInvalidationSets',
       );
+      expect(generatedSource).toContain(
+        'registerGeneratedQueryReadRegistry(commerceQueryDomains);',
+      );
       expect(generatedSource).toContain('export const mutationInferredTouches = {');
       expect(generatedSource).toContain(
         'registerGeneratedMutationTouchRegistry(mutationInferredTouches);',

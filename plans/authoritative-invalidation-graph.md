@@ -80,6 +80,14 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
     passed 54 tests; `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
     passed 27 tests, including generated Commerce `mutationInferredTouches` and
     registration source.
+- [x] **Generated query read registries are runtime-consumed.** Compiler-owned
+      graph modules now register extracted `queryDomains`; `createApp()` and direct
+      mutation endpoint rendering merge registered reads into query definitions, so
+      omitted `reads` can be populated from Drizzle query facts.
+  - Evidence: `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/change-record.test.ts`
+    passed 57 tests; `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
+    passed 27 tests, including generated Commerce
+    `registerGeneratedQueryReadRegistry(commerceQueryDomains)` source.
 
 ## Open work
 
@@ -91,12 +99,12 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
       source no longer hand-lists touches for analyzable writes, generated graph
       artifacts still carry touch sites from `site:`-provenanced touch graph facts,
       and app mutation integration tests pass through `change-record.ts`.
-- [ ] **Compiler derives query `reads` from the `load` AST.** Extract the read-set
-      (FROM/JOIN domains) from each `query()` `load` body via the same `static.ts`
-      machinery and populate omitted `reads` from compiler facts. Hand-declared
-      `reads` becomes a checked override, not the default. Evidence target: a query
-      with a multi-domain JOIN and no authored `reads` invalidates from every joined
-      domain's mutation in an integration test.
+- [ ] **Migrate query definitions to generated reads.** Remove hand-authored
+      `reads` from statically-analyzable commerce/crm/stackoverflow queries once
+      their generated graph modules are loaded in the same app/runtime path.
+      Hand-declared `reads` becomes a checked override, not the default. Evidence
+      target: a query with a multi-domain JOIN and no authored `reads` invalidates
+      from every joined domain's mutation in an integration test.
 - [ ] **Static superset gate: declared ⊇ derived.** New compile/CI diagnostic (reuse
       KV407/KV408 semantics statically; add a write-side analogue) firing when a
       hand-declared `reads`/`touches` override is **narrower** than the AST-derived
@@ -153,6 +161,12 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
 - [x] `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
   - Evidence: passed 27 compiler/CLI/Drizzle tests after generated graph modules
     started emitting `mutationInferredTouches` registration source.
+- [x] `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/change-record.test.ts`
+  - Evidence: passed 57 server tests after generated query-read registration was
+    merged into app and direct endpoint query definitions.
+- [x] `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
+  - Evidence: passed 27 compiler/CLI/Drizzle tests after generated graph modules
+    started emitting `registerGeneratedQueryReadRegistry(...)` source.
 - [ ] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
       currently has no package `test` script, so use explicit Vitest file globs.
 - [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`

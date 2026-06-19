@@ -5,6 +5,7 @@ import {
   registeredGeneratedMutationTouches,
   registerGeneratedMutationTouchRegistry,
 } from './generated-mutation-registry.js';
+import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { renderMutationEndpointResponse } from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
@@ -173,6 +174,46 @@ describe('server mutation endpoint routing', () => {
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
         'Kovo-Changes': '[{"domain":"generated-direct-product","keys":["p1"]}]',
       },
+      status: 200,
+    });
+  });
+
+  it('uses compiler-registered query reads for direct enhanced responses', async () => {
+    const cart = domain('generated-query-read-cart-fallback');
+    const catalogQuery = query('generatedCatalogRead', {
+      load: () => ({ items: ['p1'] }),
+    });
+    const refreshCatalog = mutation('generated/catalog/refresh', {
+      input: s.object({}),
+      registry: {
+        queries: [catalogQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    registerGeneratedQueryReadRegistry([
+      { domains: ['generated-catalog-read'], query: 'generatedCatalogRead' },
+    ]);
+    registerGeneratedMutationTouchRegistry({
+      'generated/catalog/refresh': [{ domain: 'generated-catalog-read', keys: null }],
+    });
+
+    await expect(
+      renderMutationEndpointResponse(refreshCatalog, {
+        fragmentRenderers: [],
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'catalog-region=generatedCatalogRead',
+        },
+        rawInput: {},
+        redirectTo: '/catalog',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '<kovo-query name="generatedCatalogRead">{"items":["p1"]}</kovo-query>',
       status: 200,
     });
   });

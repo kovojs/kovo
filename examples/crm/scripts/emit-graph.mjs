@@ -259,7 +259,7 @@ const crmInvalidationSource = staticGraphArtifacts.invalidationRegistrySource;
 const crmMutationTouchRegistrySource = staticGraphArtifacts.mutationTouchRegistrySource;
 
 const touchGraphSource = formatSource(
-  `import { registerGeneratedMutationTouchRegistry } from '@kovojs/server/internal/execution';
+  `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';
 import type {
   ContactDealCountResult,
   ContactListResult,
@@ -271,6 +271,7 @@ import type {
 export const crmTouchGraph = ${formatJson(crmTouchGraph)} as const;
 
 export const crmQueryDomains = ${formatJson(crmQueryDomains)} as const;
+registerGeneratedQueryReadRegistry(crmQueryDomains);
 
 ${crmInvalidationSource}
 ${crmMutationTouchRegistrySource}

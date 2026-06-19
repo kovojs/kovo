@@ -20,6 +20,7 @@ import {
   type RequestLifecycleOptions,
 } from './guards.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
+import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 import {
@@ -772,11 +773,13 @@ function mergeMutationRegistryFacts(
   const queriesByKey = new Map<string, RegisteredQueryDefinition>();
 
   for (const queryDefinition of registry?.queries ?? []) {
-    queriesByKey.set(queryDefinition.key, queryDefinition);
+    const generatedQueryDefinition = queryWithGeneratedReads(queryDefinition);
+    queriesByKey.set(generatedQueryDefinition.key, generatedQueryDefinition);
   }
   for (const queryDefinition of facts.queries) {
-    if (!queriesByKey.has(queryDefinition.key)) {
-      queriesByKey.set(queryDefinition.key, queryDefinition);
+    const generatedQueryDefinition = queryWithGeneratedReads(queryDefinition);
+    if (!queriesByKey.has(generatedQueryDefinition.key)) {
+      queriesByKey.set(generatedQueryDefinition.key, generatedQueryDefinition);
     }
   }
 
