@@ -12,7 +12,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-jllngq kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-yxqv5r kv-alert-dialog-fg-1xoz2m kv-alert-dialog-left-1dkzcg kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-position-qymjrz kv-alert-dialog-top-145aer kv-alert-dialog-transform-1c0eiv kv-alert-dialog-w-l5ey9h kv-alert-dialog-z-1ag0ds kv-alert-dialog-d-1que9w kv-alert-dialog-bg-hvkiv5",
   ],
   "autocompleteClasses": [
-    "kv-autocomplete-fg-ndg53x kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-row-1m16zq kv-autocomplete-opacity-1wmp2v kv-autocomplete-fg-1j04p9",
+    "kv-autocomplete-fg-ndg53x kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-position-ojetho kv-autocomplete-row-1m16zq kv-autocomplete-opacity-uz1kyp kv-autocomplete-fg-1j04p9",
   ],
   "autocompleteInputClasses": [
     "kv-autocomplete-bg-1e8vv7 kv-autocomplete-bd-xuygo5 kv-autocomplete-bd-1oyuq7 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-ndg53x kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-1haook kv-autocomplete-bd-1l3qua kv-autocomplete-bg-19mu96 kv-autocomplete-fg-1m99ep kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-10m2j4 kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn",
@@ -21,19 +21,19 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-checkbox-group-fg-tkbfam kv-checkbox-group-d-1mghfj kv-checkbox-group-font-ms8kpd kv-checkbox-group-row-1m16zq kv-checkbox-group-opacity-1icjyx kv-checkbox-group-fg-1j04p9 kv-checkbox-group-align-1p65i1 kv-checkbox-group-d-1b87tr kv-checkbox-group-flex-1m4ool",
   ],
   "comboboxClasses": [
-    "kv-combobox-fg-ndg53x kv-combobox-d-1mghfj kv-combobox-font-1rygq8 kv-combobox-row-1m16zq kv-combobox-opacity-uz1kyp kv-combobox-fg-1j04p9",
+    "kv-combobox-fg-ndg53x kv-combobox-d-1mghfj kv-combobox-font-1rygq8 kv-combobox-position-ojetho kv-combobox-row-1m16zq kv-combobox-opacity-uz1kyp kv-combobox-fg-1j04p9",
   ],
   "comboboxInputClasses": [
     "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-fg-ndg53x kv-combobox-font-1rygq8 kv-combobox-h-1crj27 kv-combobox-outline-1ipo24 kv-combobox-pad-13ileu kv-combobox-transition-1nf16q kv-combobox-w-lhhf6b kv-combobox-fg-1haook kv-combobox-bd-1l3qua kv-combobox-bg-19mu96 kv-combobox-fg-1m99ep kv-combobox-cursor-1puzf0 kv-combobox-outline-10m2j4 kv-combobox-outline-1ag1xs kv-combobox-outline-piwjfh kv-combobox-outline-1y03xn",
   ],
   "comboboxListboxClasses": [
-    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-max-1ajqiv kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-d-dphzaj",
+    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-rsn8w4 kv-combobox-m-nikuj2 kv-combobox-max-1ajqiv kv-combobox-min-qyj00s kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-position-1ncx2x kv-combobox-w-lhhf6b kv-combobox-z-13q0r7 kv-combobox-d-dphzaj kv-combobox-d-y6pz22",
   ],
   "commandClasses": [
     "kv-command-fg-1f1he7 kv-command-d-1mghfj kv-command-font-kvxk8f kv-command-row-1m16zq kv-command-opacity-1icjyx",
   ],
   "contextMenuClasses": [
-    "kv-context-menu-fg-16p8sm kv-context-menu-font-1cumtw kv-context-menu-opacity-1ctby9",
+    "kv-context-menu-fg-16p8sm kv-context-menu-font-1cumtw kv-context-menu-position-ojetho kv-context-menu-opacity-1ctby9",
   ],
   "dialogClasses": [
     "kv-dialog-fg-1f1he7 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v",
@@ -60,10 +60,10 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-otp-field-fg-ndg53x kv-otp-field-d-1mghfj kv-otp-field-font-ms8kpd kv-otp-field-row-1m16zq kv-otp-field-opacity-1wmp2v kv-otp-field-fg-1j04p9",
   ],
   "selectClasses": [
-    "kv-select-fg-16p8sm kv-select-d-1mghfj kv-select-font-1cumtw kv-select-row-1m16zq kv-select-opacity-1wmp2v kv-select-fg-1j04p9",
+    "kv-select-fg-16p8sm kv-select-d-1mghfj kv-select-font-1cumtw kv-select-position-gf7e5z kv-select-row-1m16zq kv-select-opacity-1icjyx kv-select-fg-1j04p9",
   ],
   "selectTriggerClasses": [
-    "kv-select-bg-clz9dn kv-select-bd-4k01u5 kv-select-bd-1u9xv6 kv-select-bd-1vad9u kv-select-bd-115o9z kv-select-box-kdtwje kv-select-fg-16p8sm kv-select-font-1cumtw kv-select-h-ln0fuf kv-select-outline-19nyy6 kv-select-pad-raz2zz kv-select-transition-1icn30 kv-select-w-1ca06y kv-select-fg-j0urq1 kv-select-bd-5mwy53 kv-select-bg-174e8a kv-select-fg-1xegkn kv-select-cursor-1eaeoz kv-select-outline-1l8onk kv-select-outline-1iz9f5 kv-select-outline-iee2jp kv-select-outline-1bfidg",
+    "kv-select-bg-clz9dn kv-select-bd-jllngq kv-select-bd-1k451q kv-select-bd-1t9yg7 kv-select-bd-1huuni kv-select-box-kdtwje kv-select-fg-16p8sm kv-select-font-1cumtw kv-select-h-ln0fuf kv-select-outline-iqfugm kv-select-pad-raz2zz kv-select-transition-1icn30 kv-select-w-1kcmn8 kv-select-fg-j0urq1 kv-select-bd-5mwy53 kv-select-bg-174e8a kv-select-fg-1xegkn kv-select-cursor-1eaeoz kv-select-outline-1l8onk kv-select-outline-1iz9f5 kv-select-outline-iee2jp kv-select-outline-1bfidg",
   ],
   "sliderClasses": [
     "kv-slider-align-pcwyi kv-slider-fg-18y7qo kv-slider-d-13iw1g kv-slider-font-ms8kpd kv-slider-min-13c0yn kv-slider-position-ojetho kv-slider-touch-ru7ktn kv-slider-w-lhhf6b kv-slider-opacity-1wmp2v kv-slider-fg-1j04p9 kv-slider-d-1pvggd kv-slider-h-1051un kv-slider-min-1rr5f8 kv-slider-w-25wd9l",
