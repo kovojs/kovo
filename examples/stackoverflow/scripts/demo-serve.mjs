@@ -13,13 +13,11 @@ export function createSoDemoServer(options = {}) {
     root: soRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     async loadInstanceFactory(vite) {
-      const { buildSoInteractiveApp } = await vite.ssrLoadModule(
-        '/src/generated/interactive-app.kovo-route.tsx',
-      );
+      const { buildSoInteractiveApp } = await vite.ssrLoadModule('/src/interactive-app.tsx');
       const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof buildSoInteractiveApp !== 'function') {
         throw new Error(
-          'stackoverflow /src/generated/interactive-app.kovo-route.tsx must export buildSoInteractiveApp.',
+          'stackoverflow /src/interactive-app.tsx must export buildSoInteractiveApp.',
         );
       }
       // buildSoInteractiveApp() with no db mints a fresh seeded PGlite; the

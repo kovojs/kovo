@@ -165,6 +165,10 @@ authored components/routes, and convert or relocate artifact tests.
 - [ ] **CRM** — same; reconcile `mutations.ts`/`optimistic-merge.ts` with non-committed optimistic
       plans (authored mutation exports own the runtime plan; generated optimistic is emit-only).
 - [ ] **StackOverflow** — same as Commerce.
+  - Progress evidence: `interactive-app.generated-fixtures.ts` and the generated artifact test were
+    removed, `scripts/demo-serve.mjs` now SSR-loads `/src/interactive-app.tsx`, and
+    `pnpm --filter @kovojs/example-stackoverflow test` passes. Gap:
+    `src/kovo-graph.test.ts` still imports `src/generated/touch-graph.ts`.
 - [ ] **Gallery** — `interactive-docs.tsx` and browser fixtures import authored
       `src/interactive/*.tsx`; lower via the test plugin (Phase 1). Retire
       `interactive-docs.generated-fixtures.tsx` and `*.generated-browser-fixtures.ts`.
