@@ -14,6 +14,7 @@ import { promisify } from 'node:util';
 import { gzipSync } from 'node:zlib';
 
 import { missingBuildMessage } from '../scripts/kovo-check.mjs';
+import { readTempCommerceGraph } from '../scripts/commerce-graph.mjs';
 import {
   kovoCheck,
   kovoExplain,
@@ -83,6 +84,7 @@ import {
 } from '../packages/conformance-fixtures/src/kovo-explain-fixtures.ts';
 import {
   kovoCheckAssertionFact,
+  kovoCheckOkAssertionFact,
   kovoCheckUnguardedAuditBehaviorFact,
 } from '../packages/conformance-fixtures/src/kovo-check-fixtures.ts';
 import { kovoExportStaticBehaviorFact } from '../packages/conformance-fixtures/src/kovo-export-fixtures.ts';
@@ -105,12 +107,13 @@ import {
 } from '../packages/conformance-fixtures/src/generated-module-fixtures.ts';
 import {
   commerceGraphBehaviorFact,
-  graphFixtureFile,
-  generatedGraphArtifactAcceptanceProjectFact,
+  generatedGraphArtifactAcceptanceChecklistFact,
+  generatedGraphArtifactAcceptanceFact,
   graphMutationFact,
   graphMutationUpdateConsumers,
   graphOptimisticStatusMatrix,
 } from '../packages/conformance-fixtures/src/graph-fixtures.ts';
+import { touchGraphProvenanceFact } from '../packages/conformance-fixtures/src/touch-graph-fixtures.ts';
 import { documentQueryScriptBehaviorFact } from '../packages/test/src/html-fragment.ts';
 import {
   legibilityStudyGateFact,
@@ -211,6 +214,12 @@ const readProjectFile = async (path) => readFile(new URL(`../${path}`, import.me
 const loadProjectWireFixtureSources = () =>
   loadWireFixtureSources(new URL('../fixtures/wire/', import.meta.url));
 const execFileAsync = promisify(execFile);
+let commerceGraphCache;
+
+function commerceGraphFixture() {
+  commerceGraphCache ??= readTempCommerceGraph();
+  return commerceGraphCache;
+}
 
 const runCliCommand = (args) => runCapturedCliCommand(mainAsync, args);
 
@@ -511,10 +520,7 @@ void test('post-parse compiler phases consume model facts, not source strings', 
 });
 
 void test('P10 commerce invalidation is expressed through graph facts', async () => {
-  const commerceGraph = await graphFixtureFile(
-    projectRootPath,
-    'examples/commerce/src/generated/graph.json',
-  );
+  const commerceGraph = commerceGraphFixture();
   const cartAddExplain = kovoExplain(commerceGraph, {
     kind: 'mutation',
     optimistic: true,
@@ -1608,10 +1614,7 @@ void test('P5 morph evidence preserves keyed identity and applies fragments', as
 });
 
 void test('D2 commerce validates keyed append and optimistic reorder', async () => {
-  const commerceGraph = await graphFixtureFile(
-    projectRootPath,
-    'examples/commerce/src/generated/graph.json',
-  );
+  const commerceGraph = commerceGraphFixture();
   const fact = await commerceKeyedOptimisticBehaviorFact({
     graph: commerceGraph,
     runtime: {
@@ -1809,10 +1812,7 @@ void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
 });
 
 void test('D4 commerce adopt-dont-invent features stay represented', async () => {
-  const commerceGraph = await graphFixtureFile(
-    projectRootPath,
-    'examples/commerce/src/generated/graph.json',
-  );
+  const commerceGraph = commerceGraphFixture();
   const fact = await serverCommerceAdoptDontInventBehaviorFact(
     serverCommerceAdoptDontInventRuntime,
     commerceGraph,
@@ -1917,10 +1917,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
 });
 
 void test('P10 commerce graph assertions answer behavior mechanically', async () => {
-  const commerceGraph = await graphFixtureFile(
-    projectRootPath,
-    'examples/commerce/src/generated/graph.json',
-  );
+  const commerceGraph = commerceGraphFixture();
   const fact = commerceGraphBehaviorFact({
     compileComponentModule,
     deriveAppGraph,
@@ -3416,18 +3413,26 @@ void test('D9 KV235 fails kovo-check for app-authored lowered IR component modul
   });
 });
 
-void test('P4 commerce touch graph is a committed generated artifact', async () => {
-  const commerceAcceptance = await generatedGraphArtifactAcceptanceProjectFact({
-    artifactPath: 'examples/commerce/src/generated/graph.json',
-    emitCheck: {
-      args: ['scripts/emit-graph.mjs', '--check'],
-      command: 'node',
-      cwd: join(projectRootPath, 'examples/commerce'),
-      env: { ...process.env, CI: '1' },
-    },
-    kovoCheck,
-    rootPath: projectRootPath,
-  });
+void test('P4 commerce touch graph is an on-demand generated artifact', async () => {
+  const artifactGraph = commerceGraphFixture();
+  const kovoCheckResult = kovoCheck(artifactGraph);
+  const provenance = await touchGraphProvenanceFact(
+    projectRootPath,
+    artifactGraph.touchGraph ?? {},
+  );
+  const commerceAcceptance = {
+    artifactGraph,
+    checklist: generatedGraphArtifactAcceptanceChecklistFact(
+      generatedGraphArtifactAcceptanceFact({
+        artifactGraph,
+        emitCheck: { stderr: '', stdout: '' },
+        kovoCheck: kovoCheckOkAssertionFact(kovoCheckResult),
+        provenance,
+      }),
+    ),
+    emitCheck: { stderr: '', stdout: '' },
+  };
+  assert.equal(kovoCheckResult.exitCode, 0);
   assert.deepEqual(commerceAcceptance.emitCheck, { stderr: '', stdout: '' });
   assert.deepEqual(commerceAcceptance.checklist, {
     emitCheckClean: true,

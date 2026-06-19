@@ -116,11 +116,10 @@ export async function captureWireTrace(repoRoot) {
 }
 
 /** kovo explain against the commerce app graph — the queryable behavior surface. */
-export async function captureKovoExplain(repoRoot) {
+export async function captureKovoExplain(_repoRoot) {
   const { kovoExplain } = await import('@kovojs/cli');
-  const graph = JSON.parse(
-    await readFile(new URL('examples/commerce/src/generated/graph.json', repoRoot), 'utf8'),
-  );
+  const { readTempCommerceGraph } = await import('../../scripts/commerce-graph.mjs');
+  const graph = readTempCommerceGraph();
 
   const result = kovoExplain(graph, { kind: 'mutation', optimistic: true, target: 'cart/add' });
   if (result.exitCode !== 0) {

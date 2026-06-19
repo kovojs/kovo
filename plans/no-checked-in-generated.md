@@ -231,8 +231,10 @@ authored components/routes, and convert or relocate artifact tests.
 - [ ] Rework `examples/*/scripts/emit-components.mjs` and `emit-graph.mjs` `--check`: compile to a
       temp dir and assert the **fixpoint** (recompiling the output is a no-op) and
       render-equivalence, instead of diffing against a committed file.
-- [ ] `scripts/kovo-check.mjs`: emit the commerce graph to a temp path, then run `kovo check
+- [x] `scripts/kovo-check.mjs`: emit the commerce graph to a temp path, then run `kovo check
 <temp>` (no committed `graph.json` dependency).
+  - Evidence: `node scripts/kovo-check.mjs` passed after `scripts/commerce-graph.mjs` was wired to
+    emit the commerce graph into a temp dir before invoking `kovo check`.
 - [ ] `.github/workflows/pages.yml`: keep `emit:interactive-gallery` as a build step that writes
       into the gitignored generated dir before the pages build (it is not `--check`).
 - [ ] Confirm `scripts/prod-emit-check.mjs` already compiles in-memory (no committed input) and

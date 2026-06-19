@@ -92,7 +92,7 @@ is the testing SPAs need to compensate for unverifiable wiring.
 ### Assert parity with the reference app
 
 The last verification step pins this app to the reference: `examples/commerce` is the acceptance
-target, and this step asserts behavior parity with its committed graph artifact — same mutation key
+target, and this step asserts behavior parity with its on-demand graph artifact — same mutation key
 and named POST, same input fields and write set, same optimistic statuses per pair, same fragment
 wire and failure code:
 

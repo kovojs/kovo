@@ -2,6 +2,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
+import { emitCommerceGraphArtifactsToTemp } from './commerce-graph.mjs';
+
 export const cliEntry = 'dist/cli/src/index.mjs';
 
 export function missingBuildMessage(entry = cliEntry) {
@@ -14,16 +16,19 @@ export function runKovoCheck({ entry = cliEntry } = {}) {
     return 1;
   }
 
-  const commands = [
-    ['node', ['--test', 'tests/kovo-check.node.mjs']],
-    ['node', [entry, 'check', 'examples/commerce/src/generated/graph.json']],
-  ];
+  const graphArtifacts = emitCommerceGraphArtifactsToTemp();
+  const commands = [['node', ['--test', 'tests/kovo-check.node.mjs']]];
 
-  for (const [command, args] of commands) {
-    const result = spawnSync(command, args, { stdio: 'inherit' });
-    if (result.status !== 0) {
-      return result.status ?? 1;
+  try {
+    commands.push(['node', [entry, 'check', graphArtifacts.graphPath]]);
+    for (const [command, args] of commands) {
+      const result = spawnSync(command, args, { stdio: 'inherit' });
+      if (result.status !== 0) {
+        return result.status ?? 1;
+      }
     }
+  } finally {
+    graphArtifacts.cleanup();
   }
 
   return 0;

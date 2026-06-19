@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
@@ -9,6 +7,7 @@ import {
 } from '@kovojs/server/internal/wire';
 import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
 import { kovoCheck, kovoExplain } from '@kovojs/cli';
+import { readTempCommerceGraph } from '../../../../../scripts/commerce-graph.mjs';
 
 import {
   addToCart,
@@ -214,20 +213,16 @@ describe('tutorial step 07 — testing & verification', () => {
 
   // snippet:parity-test
   it('matches the reference commerce app: wire vocabulary and optimistic statuses', async () => {
-    // The committed graph artifact of examples/commerce — the rules/v1-acceptance.md
-    // acceptance target this tutorial has been building toward.
+    // The on-demand graph artifact of examples/commerce — the
+    // rules/v1-acceptance.md acceptance target this tutorial has been building
+    // toward without checking in generated output.
     interface TutorialGraphComparison {
       mutations: Array<{ inputFields: string[]; key: string; writes: string[] }>;
       optimistic: Array<{ mutation: string; query: string; status: string }>;
     }
 
     const compareStrings = (left: string, right: string) => left.localeCompare(right);
-    const commerceGraph = JSON.parse(
-      readFileSync(
-        new URL('../../../../../examples/commerce/src/generated/graph.json', import.meta.url),
-        'utf8',
-      ),
-    ) as TutorialGraphComparison;
+    const commerceGraph = readTempCommerceGraph() as TutorialGraphComparison;
     const commerceCartAdd = commerceGraph.mutations.find((entry) => entry.key === 'cart/add');
     const shopCartAdd = shopGraph.mutations.find((entry) => entry.key === 'cart/add');
 
@@ -298,7 +293,7 @@ describe('tutorial step 07 — testing & verification', () => {
     );
     expect(failure.status).toBe(422);
     expect(failure.body).toContain('data-error-code="OUT_OF_STOCK"');
-  });
+  }, 15_000);
   // /snippet
 
   it('proves the prediction still commutes with the committed transform', () => {

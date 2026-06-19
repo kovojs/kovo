@@ -26,9 +26,17 @@ const commerceRoot = resolve(scriptDir, '..');
 const repoRoot = resolve(commerceRoot, '../..');
 const localCliPath = resolve(repoRoot, 'packages/cli/src/bin.ts');
 const sourcePath = resolve(commerceRoot, 'src/domain.ts');
-const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
-const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
-const optimisticPath = resolve(commerceRoot, 'src/generated/optimistic/cart-add.ts');
+const outDirArgIndex = process.argv.indexOf('--out-dir');
+const outputRoot =
+  outDirArgIndex === -1
+    ? resolve(commerceRoot, 'src/generated')
+    : resolve(process.argv[outDirArgIndex + 1] ?? '');
+if (outDirArgIndex !== -1 && !process.argv[outDirArgIndex + 1]) {
+  throw new Error('emit-graph: --out-dir requires a directory path');
+}
+const graphPath = resolve(outputRoot, 'graph.json');
+const touchGraphPath = resolve(outputRoot, 'touch-graph.ts');
+const optimisticPath = resolve(outputRoot, 'optimistic/cart-add.ts');
 const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-commerce-graph-'));
 let drizzleStaticCounter = 0;
 const source = readFileSync(sourcePath, 'utf8');
@@ -363,9 +371,10 @@ if (process.argv.includes('--check')) {
     'generated optimistic/cart-add.ts is stale',
   );
 } else {
+  mkdirSync(outputRoot, { recursive: true });
   writeFileSync(graphPath, graphJson);
   writeFileSync(touchGraphPath, touchGraphSource);
-  mkdirSync(resolve(commerceRoot, 'src/generated/optimistic'), { recursive: true });
+  mkdirSync(resolve(outputRoot, 'optimistic'), { recursive: true });
   writeFileSync(optimisticPath, optimisticSource);
 }
 
