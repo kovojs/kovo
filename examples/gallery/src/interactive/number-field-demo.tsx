@@ -12,7 +12,7 @@ import {
   numberFieldKeyDown as _numberFieldKeyDown,
 } from '@kovojs/ui/number-field';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
+const LABEL_STYLE = 'font-size:0.875rem;font-weight:500;line-height:1;color:#171717';
 
 export interface GalleryNumberFieldDemoState {
   value: number;
@@ -37,7 +37,7 @@ export const GalleryNumberFieldDemo = component({
 
     return (
       <NumberField {...fieldState} data-gallery-interactive="number-field" id={formId}>
-        <label for={inputId} class={LABEL_CLASS}>
+        <label for={inputId} style={LABEL_STYLE}>
           Seats
         </label>
         <NumberFieldControl {...fieldState}>
@@ -111,7 +111,10 @@ export const GalleryNumberFieldDemo = component({
             +
           </NumberFieldIncrement>
         </NumberFieldControl>
-        <output data-demo-state="value" class="text-xs text-neutral-500">
+        <output
+          data-demo-state="value"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+        >
           {String(state.value)}
         </output>
       </NumberField>

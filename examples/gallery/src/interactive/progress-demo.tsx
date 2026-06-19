@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
 import { Progress } from '@kovojs/ui/progress';
 
-const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
+const ROOT_STYLE = 'display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a';
 
 export interface GalleryProgressDemoState {
   value: number | null;
@@ -17,7 +17,7 @@ export const GalleryProgressDemo = component({
     const valueText = state.value === null ? 'Upload pending' : `${state.value} percent uploaded`;
 
     return (
-      <section class={ROOT_CLASS} data-gallery-interactive="progress">
+      <section style={ROOT_STYLE} data-gallery-interactive="progress">
         <label for="gallery-progress-value">Upload progress</label>
         <Progress
           aria-valuetext={
@@ -30,7 +30,7 @@ export const GalleryProgressDemo = component({
         >
           Upload progress
         </Progress>
-        <div class="inline-flex gap-2">
+        <div style="display:inline-flex;gap:0.5rem">
           <Button
             type="button"
             variant="secondary"
@@ -50,7 +50,10 @@ export const GalleryProgressDemo = component({
             Mark pending
           </Button>
         </div>
-        <output data-demo-state="progress-value">
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="progress-value"
+        >
           {state.value === null ? 'pending' : `${state.value}%`}
         </output>
       </section>

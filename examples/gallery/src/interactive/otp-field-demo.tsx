@@ -10,9 +10,9 @@ import {
   otpFieldPaste as _otpFieldPaste,
 } from '@kovojs/ui/otp-field';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
-const DESCRIPTION_CLASS = 'text-sm text-neutral-500';
-const OUTPUT_CLASS = 'text-xs text-neutral-500';
+const LABEL_STYLE = 'font-size:0.875rem;font-weight:500;line-height:1;color:#171717';
+const DESCRIPTION_STYLE = 'font-size:0.875rem;color:#6b7280';
+const OUTPUT_STYLE = 'font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block';
 
 export interface GalleryOtpFieldDemoState {
   activeSlot: number;
@@ -47,7 +47,7 @@ export const GalleryOtpFieldDemo = component({
         <label
           id="gallery-interactive-otp-label"
           for="gallery-interactive-otp-hidden"
-          class={LABEL_CLASS}
+          style={LABEL_STYLE}
         >
           Verification code
         </label>
@@ -219,10 +219,10 @@ export const GalleryOtpFieldDemo = component({
             }}
           />
         </OtpFieldGroup>
-        <p id="gallery-interactive-otp-description" class={DESCRIPTION_CLASS}>
+        <p id="gallery-interactive-otp-description" style={DESCRIPTION_STYLE}>
           Enter the four digit code.
         </p>
-        <output data-demo-state="otp-value" class={OUTPUT_CLASS}>
+        <output data-demo-state="otp-value" style={OUTPUT_STYLE}>
           {state.value}
         </output>
       </OtpField>

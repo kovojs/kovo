@@ -30,8 +30,11 @@ export const GallerySwitchDemo = component({
       }}
       value="enabled"
     >
-      <span class="select-none leading-none">Notifications</span>
-      <output class="text-xs text-neutral-500" data-demo-state="checked">
+      <span style="user-select:none;line-height:1">Notifications</span>
+      <output
+        style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+        data-demo-state="checked"
+      >
         {state.checked ? 'on' : 'off'}
       </output>
     </Switch>

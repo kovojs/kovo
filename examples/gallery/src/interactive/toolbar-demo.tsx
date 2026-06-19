@@ -33,7 +33,7 @@ export const GalleryToolbarDemo = component({
     const linkState = { ...rootState, itemValue: 'link' };
 
     return (
-      <div class="grid gap-2" data-gallery-interactive="toolbar">
+      <div style="display:grid;gap:0.5rem" data-gallery-interactive="toolbar">
         <Toolbar
           {...rootState}
           onKeyDown={() => {

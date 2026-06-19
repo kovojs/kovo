@@ -15,10 +15,10 @@ import {
 
 // The viewport keeps its inline max-height/overflow style so the demo stays short
 // enough to scroll; that inline style wins over the @kovojs/ui max-h-56 utility.
-// The jump-to-end control keeps local demo button classes because it is not part
-// of the scroll-area component surface.
-const TOGGLE_CLASS =
-  'inline-flex h-9 w-fit items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-400 disabled:pointer-events-none disabled:opacity-50';
+// The jump-to-end control is not part of the scroll-area component surface, so it
+// carries demo-local inline styling (the gallery has no Tailwind/utility CSS).
+const TOGGLE_STYLE =
+  'display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;gap:0.5rem;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)';
 
 export interface GalleryScrollAreaDemoState {
   dragging: boolean;
@@ -264,7 +264,7 @@ export const GalleryScrollAreaDemo = component({
         <button
           aria-controls={viewportId}
           aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
-          class={TOGGLE_CLASS}
+          style={TOGGLE_STYLE}
           id="gallery-scroll-area-toggle"
           onClick={() => {
             const nextAtEnd = state.scrollY !== 'end';
@@ -276,7 +276,12 @@ export const GalleryScrollAreaDemo = component({
         >
           <span>{state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}</span>
         </button>
-        <output data-demo-state="scroll-area-position">{state.scrollY}</output>
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="scroll-area-position"
+        >
+          {state.scrollY}
+        </output>
       </ScrollArea>
     );
   },

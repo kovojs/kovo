@@ -12,8 +12,8 @@ import {
   alertDialogTriggerClick as _alertDialogTriggerClick,
 } from '@kovojs/ui/alert-dialog';
 
-const TITLE_CLASS = 'text-base font-semibold';
-const DESCRIPTION_CLASS = 'text-sm text-neutral-600';
+const TITLE_STYLE = 'font-size:1rem;font-weight:600';
+const DESCRIPTION_STYLE = 'font-size:0.875rem;color:#525252';
 
 export interface GalleryAlertDialogDemoState {
   open: boolean;
@@ -30,7 +30,7 @@ export const GalleryAlertDialogDemo = component({
 
     return (
       <AlertDialog
-        class="grid gap-2"
+        style="display:grid;gap:0.5rem"
         data-gallery-interactive="alert-dialog"
         data-state={state.open ? 'open' : 'closed'}
         open={state.open}
@@ -60,10 +60,10 @@ export const GalleryAlertDialogDemo = component({
           }}
           titleId={titleId}
         >
-          <h2 class={TITLE_CLASS} id={titleId}>
+          <h2 style={TITLE_STYLE} id={titleId}>
             Delete workspace?
           </h2>
-          <p class={DESCRIPTION_CLASS} id={descriptionId}>
+          <p style={DESCRIPTION_STYLE} id={descriptionId}>
             This removes the shared gallery workspace for every member.
           </p>
           <AlertDialogCancel
@@ -93,7 +93,12 @@ export const GalleryAlertDialogDemo = component({
             Delete
           </AlertDialogAction>
         </AlertDialogContent>
-        <output data-demo-state="alert-dialog-open">{state.open ? 'open' : 'closed'}</output>
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="alert-dialog-open"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
       </AlertDialog>
     );
   },

@@ -2325,11 +2325,14 @@ export function SeparatorDemo(): string {
       <p data-demo-summary="no-js">
         Separator emits decorative and semantic separator variants with orientation data.
       </p>
-      <div class="grid gap-4" data-ui-demo="separator">
+      <div style="display:grid;gap:1rem" data-ui-demo="separator">
         <span data-fixture-state="decorative">
           {Separator.definition.render({ style: separatorDemoStyles.short })}
         </span>
-        <span class="flex h-16 items-stretch gap-4" data-fixture-state="semantic">
+        <span
+          style="display:flex;height:4rem;align-items:stretch;gap:1rem"
+          data-fixture-state="semantic"
+        >
           <span>Before</span>
           {Separator.definition.render({ decorative: false, orientation: 'vertical' })}
           <span>After</span>

@@ -15,8 +15,8 @@ import {
   toastViewportKeyDown as _toastViewportKeyDown,
 } from '@kovojs/ui/toast';
 
-const TRIGGER_CLASS =
-  'inline-flex h-9 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950';
+const TRIGGER_STYLE =
+  'display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)';
 
 export interface GalleryToastDemoState {
   activeCount: number;
@@ -75,7 +75,7 @@ export const GalleryToastDemo = component({
       >
         <style>{'@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}'}</style>
         <button
-          class={TRIGGER_CLASS}
+          style={TRIGGER_STYLE}
           data-toast-show=""
           type="button"
           onClick={() => {
@@ -197,10 +197,18 @@ export const GalleryToastDemo = component({
             Blocked
           </ToastAction>
         </Toast>
-        <output data-demo-state="toast-open">
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="toast-open"
+        >
           {state.activeOpen ? 'open' : state.previousOpen ? 'stacked' : 'empty'}
         </output>
-        <output data-demo-state="toast-count">{state.activeCount}</output>
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="toast-count"
+        >
+          {state.activeCount}
+        </output>
       </ToastViewport>
     );
   },

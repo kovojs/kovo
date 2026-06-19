@@ -13,7 +13,7 @@ import {
   type AutocompleteItem,
 } from '@kovojs/ui/autocomplete';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
+const LABEL_STYLE = 'font-size:0.875rem;font-weight:500;line-height:1;color:#171717';
 
 export interface GalleryAutocompleteDemoState {
   highlightedValue: string;
@@ -63,7 +63,7 @@ export const GalleryAutocompleteDemo = component({
         data-state={state.open ? 'open' : 'closed'}
         id="gallery-autocomplete-root"
       >
-        <label id="gallery-autocomplete-label" for="gallery-autocomplete-input" class={LABEL_CLASS}>
+        <label id="gallery-autocomplete-label" for="gallery-autocomplete-input" style={LABEL_STYLE}>
           Tag
         </label>
         <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />
