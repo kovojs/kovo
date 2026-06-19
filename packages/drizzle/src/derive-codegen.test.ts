@@ -45,8 +45,8 @@ describe('serializeDerivedOptimistic', () => {
     expect(source).toContain('export const cartAddDerivedOptimistic = {');
     expect(source).toContain("queue: 'cart',");
     expect(source).toContain('transforms: {');
-    expect(source).toContain('cart: (current, $input) => {');
-    expect(source).toContain('next.count = (next.count ?? 0) + $input.quantity;');
+    expect(source).toContain('cart: (draft, $input) => {');
+    expect(source).toContain('draft.count = (draft.count ?? 0) + $input.quantity;');
     expect(source).toContain('} satisfies OptimisticFor<typeof addToCartForm>;');
   });
 
@@ -59,7 +59,7 @@ describe('serializeDerivedOptimistic', () => {
     });
     expect(source).toContain("import { tempId, type OptimisticFor } from '@kovojs/browser';");
     expect(source).toContain(
-      'next.items.push({ id: tempId(), productId: $input.productId, total: 0 });',
+      'draft.items.push({ id: tempId(), productId: $input.productId, total: 0 });',
     );
     expect(source).not.toContain('now()');
   });
@@ -74,10 +74,10 @@ describe('serializeDerivedOptimistic', () => {
     });
 
     // Suppressed pairs are not emitted; the const is a partial the app merges.
-    expect(source).not.toContain('cart: (current');
-    expect(source).not.toContain('productGrid: (current');
+    expect(source).not.toContain('cart: (draft');
+    expect(source).not.toContain('productGrid: (draft');
     // The empty (no-op) program reads no input, so the param lowers to `_$input`.
-    expect(source).toContain('orderHistory: (current, _$input) =>');
+    expect(source).toContain('orderHistory: (draft, _$input) =>');
     expect(source).not.toContain('satisfies OptimisticFor');
     expect(source).toContain(
       'Overridden in the mutation module (derivation suppressed): cart, productGrid.',
@@ -120,13 +120,14 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
     const factory = new Function('tempId', 'now', `return ${lowerTransform(program)};`) as (
       t: () => string,
       n: () => number,
-    ) => (current: unknown, $input: unknown) => unknown;
+    ) => (draft: unknown, $input: unknown) => void;
     const transform = factory(
       () => '__tempId__',
       () => 0,
     );
 
-    const generated = transform(structuredClone(before), input);
+    const generated = structuredClone(before);
+    transform(generated, input);
     const interpreted = applyPatchProgram(before, input, program, {
       now: () => 0,
       tempId: () => '__tempId__',

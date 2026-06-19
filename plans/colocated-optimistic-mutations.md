@@ -113,6 +113,11 @@ export const addContact = mutation('addContact', {
     covers draft mutation during optimistic apply, restore, keyed query instances,
     rebase over server truth, and pagehide discard. Legacy returned values remain
     accepted during migration.
+  - [x] Generated derivation codegen emits draft-style transforms.
+    - Evidence 2026-06-19:
+      `npx vitest --run packages/drizzle/src/derive-codegen.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts`
+      covers generated `(draft, input) => void` transform source and interpreter parity;
+      `corepack pnpm exec tsc --noEmit --pretty false` passed.
 - [ ] **Lower the inline field to the optimistic transform IR.** The compiler extracts
       inline transforms into the same transform module the generated/hand-written path
       emits (now draft-style), so `kovo explain --optimistic` and the §5.2 fixpoint hold
@@ -159,9 +164,7 @@ export const addContact = mutation('addContact', {
 
 ## Latest verification
 
-None yet — design/scoping pass. Per-slice proving commands to add:
-`pnpm --filter @kovojs/server test` (inline-field typing + KV310 type error),
-`pnpm --filter @kovojs/browser test` (draft-style apply + wrong-prediction correction),
-`pnpm --filter @kovojs/compiler test` (lowering fixpoint fixture), then
-`kovo check optimistic` + the optimistic browser/integration tests on the migrated
-CRM/commerce examples, and `pnpm run acceptance` before updating the guides.
+2026-06-19 slice:
+`npx vitest --run packages/drizzle/src/derive-codegen.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts`;
+`corepack pnpm exec tsc --noEmit --pretty false`; `git diff --check`;
+`corepack pnpm exec vp check`.

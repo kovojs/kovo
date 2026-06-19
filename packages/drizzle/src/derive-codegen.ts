@@ -3,7 +3,7 @@ import type { PatchOp, PatchProgram, SymbolicValue } from '@kovojs/core/internal
 // SPEC.md §10.4/§10.5 Phase 3 — lower a Stage-3 PatchProgram into a committed,
 // reviewable, overridable transform module (`generated/optimistic/*.ts`). This is
 // the ONLY place that turns the IR into TypeScript source; the deriver core stays
-// source-free. Output is `(current, $input) => Value` transforms inside an
+// source-free. Output is draft-style `(draft, $input) => void` transforms inside an
 // `OptimisticFor`-shaped plan, with a DO-NOT-EDIT header (SPEC.md §10.4 example).
 
 /** @internal One derived (non-overridden) transform to emit into the generated plan. */
@@ -97,7 +97,7 @@ ${planBody}
 /**
  * @internal
  *
- * Lower one PatchProgram to a pure `(current, $input) => Value` transform arrow —
+ * Lower one PatchProgram to a pure draft-style `(draft, $input) => void` transform arrow —
  * the exact source committed into the generated plan, and the unit under the
  * codegen↔interpreter parity test (it must agree with `applyPatchProgram`).
  */
@@ -105,40 +105,38 @@ export function lowerTransform(program: PatchProgram): string {
   // Indent relative to the arrow's own start (body +2, close +0); the caller
   // re-indents the whole arrow to its nesting depth, keeping braces aligned.
   const statements = program.ops.flatMap((op) => lowerOp(op));
-  const body = ['const next = structuredClone(current);', ...statements, 'return next;']
-    .map((line) => indent(line, 2))
-    .join('\n');
+  const body = statements.map((line) => indent(line, 2)).join('\n');
   // Some sound transforms never read the mutation input (e.g. a +1 count inc or a
   // provably no-op program). `$input` is only ever lowered as `$input.<path>`, so
   // name the parameter `_$input` when the body never references it — keeping the
   // committed codegen lint-clean (no-unused-vars).
   const inputParam = body.includes('$input.') ? '$input' : '_$input';
-  return `(current, ${inputParam}) => {\n${body}\n}`;
+  return `(draft, ${inputParam}) => {\n${body}\n}`;
 }
 
 function lowerOp(op: PatchOp): string[] {
   switch (op.op) {
     case 'inc':
-      return [`next.${op.path} = (next.${op.path} ?? 0) + ${lowerValue(op.by)};`];
+      return [`draft.${op.path} = (draft.${op.path} ?? 0) + ${lowerValue(op.by)};`];
     case 'set-field':
-      return [`next.${op.path} = ${lowerValue(op.value)};`];
+      return [`draft.${op.path} = ${lowerValue(op.value)};`];
     case 'recount':
-      return [`next.${op.path} = next.${op.from}.length;`];
+      return [`draft.${op.path} = draft.${op.from}.length;`];
     case 'resum':
       return [
-        `next.${op.path} = next.${op.from}.reduce((sum, row) => sum + (row.${op.column} ?? 0), 0);`,
+        `draft.${op.path} = draft.${op.from}.reduce((sum, row) => sum + (row.${op.column} ?? 0), 0);`,
       ];
     case 'remove-row':
       return [
         `{`,
-        `  const index = next.${op.path}.findIndex((entry) => ${matchExpression(op.match)});`,
-        `  if (index >= 0) next.${op.path}.splice(index, 1);`,
+        `  const index = draft.${op.path}.findIndex((entry) => ${matchExpression(op.match)});`,
+        `  if (index >= 0) draft.${op.path}.splice(index, 1);`,
         `}`,
       ];
     case 'update-row':
       return [
         `{`,
-        `  const target = next.${op.path}.find((entry) => ${matchExpression(op.match)});`,
+        `  const target = draft.${op.path}.find((entry) => ${matchExpression(op.match)});`,
         `  if (target) {`,
         ...Object.entries(op.sets).map(
           ([column, value]) => `    target.${column} = ${lowerValue(value, 'target')};`,
@@ -155,8 +153,8 @@ function lowerPush(op: Extract<PatchOp, { op: 'push-row' }>): string[] {
   const rowLiteral = `{ ${Object.entries(op.row)
     .map(([column, value]) => `${propertyKey(column)}: ${lowerValue(value)}`)
     .join(', ')} }`;
-  if (op.position === 'start') return [`next.${op.path}.unshift(${rowLiteral});`];
-  if (op.position === 'end') return [`next.${op.path}.push(${rowLiteral});`];
+  if (op.position === 'start') return [`draft.${op.path}.unshift(${rowLiteral});`];
+  if (op.position === 'end') return [`draft.${op.path}.push(${rowLiteral});`];
   const comparison =
     op.position.direction === 'asc'
       ? `entry.${op.position.column} > row.${op.position.column}`
@@ -164,9 +162,9 @@ function lowerPush(op: Extract<PatchOp, { op: 'push-row' }>): string[] {
   return [
     `{`,
     `  const row = ${rowLiteral};`,
-    `  const index = next.${op.path}.findIndex((entry) => ${comparison});`,
-    `  if (index < 0) next.${op.path}.push(row);`,
-    `  else next.${op.path}.splice(index, 0, row);`,
+    `  const index = draft.${op.path}.findIndex((entry) => ${comparison});`,
+    `  if (index < 0) draft.${op.path}.push(row);`,
+    `  else draft.${op.path}.splice(index, 0, row);`,
     `}`,
   ];
 }
@@ -180,7 +178,7 @@ function lowerValue(value: SymbolicValue, rowVar?: string): string {
     case 'arith':
       return `(${lowerValue(value.left, rowVar)} ${value.op} ${lowerValue(value.right, rowVar)})`;
     case 'col':
-      return rowVar ? `${rowVar}.${value.column}` : `current.${value.column}`;
+      return rowVar ? `${rowVar}.${value.column}` : `draft.${value.column}`;
     case 'const':
       return JSON.stringify(value.value);
     case 'opaque':
