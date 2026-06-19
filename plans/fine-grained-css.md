@@ -169,11 +169,12 @@ mutation pulls `fragments/cart.css` if not already present.
     `npx vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/css.test.ts`
     proves `routePageFacts[].css.sourceFileNames` is derived from component
     imports and serialized into route IR.
-- [ ] Enrich route CSS facts with reachable fragment targets.
-  - Gap:
-    fragment targets are emitted on `ComponentGraphFact.fragments`; the join
-    from route component local names to component graph registry names is still
-    pending.
+- [x] Enrich route CSS facts with reachable fragment targets.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/package-styles.test.ts -t "extracts route CSS split targets"`
+    proves app route CSS target extraction joins route component CSS source
+    files to inferred fragment targets and surfaces them on `routePageFacts[].css`
+    and `CssRouteSplitTarget.fragmentTargets`.
 - [x] Map route CSS facts to `CssRouteSplitTarget` shape (`route`,
       `sourceFileNames`, `fragmentTargets`) — the exact input
       `selectRouteCssAssets` (`css.ts:301`) already consumes.

@@ -164,6 +164,7 @@ import * as style from '@kovojs/style';
 
 const styles = style.create({ root: { color: 'teal' } });
 export const CartBadge = component({
+  queries: { cart: cartQuery },
   render: () => <cart-badge {...style.attrs(styles.root)}>Cart</cart-badge>,
 });
 `,
@@ -178,10 +179,15 @@ export const CartBadge = component({
 
       expect(result.routeTargets).toEqual([
         {
+          fragmentTargets: ['components/cart-badge/cart-badge'],
           route: '/cart',
           sourceFileNames: ['components/cart-badge.css'],
         },
       ]);
+      expect(result.routePageFacts[0]?.css).toEqual({
+        fragmentTargets: ['components/cart-badge/cart-badge'],
+        sourceFileNames: ['components/cart-badge.css'],
+      });
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

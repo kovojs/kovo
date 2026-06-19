@@ -9,12 +9,14 @@ import {
   type ComponentCssAsset,
   type CssRouteSplitTarget,
 } from './css.js';
+import { deriveComponentNames } from './component-names.js';
+import { findFragmentTargetFacts } from './internal-graph.js';
 import { cssIrHeader } from './ir.js';
 import {
   resolvePackageManifestPath,
   type PackageComponentPrefixDiscoveryOptions,
 } from './package-prefixes.js';
-import { parseComponentModule } from './scan/parse.js';
+import { firstComponentModel, parseComponentModule } from './scan/parse.js';
 import { compileRouteModule } from './route-pages.js';
 import { extractKovoStyles } from './style.js';
 import type { RoutePageFact } from './types.js';
@@ -139,9 +141,14 @@ export function extractAppRouteCssTargets(
     );
   }
 
-  return {
+  const enrichedRoutePageFacts = routePageFactsWithFragmentTargets(
     routePageFacts,
-    routeTargets: cssRouteSplitTargetsFromRouteFacts(routePageFacts),
+    appFragmentTargetsByCssSourceFileName(sourceFiles, rootDir),
+  );
+
+  return {
+    routePageFacts: enrichedRoutePageFacts,
+    routeTargets: cssRouteSplitTargetsFromRouteFacts(enrichedRoutePageFacts),
     sourceFiles,
   };
 }
@@ -175,7 +182,14 @@ function extractComponentCssFromFiles(
     });
     if (extraction.css) {
       chunks.push(extraction.css);
-      cssAssets.push(componentCssAssetForSource(fileName, options.rootDir, extraction.css));
+      cssAssets.push(
+        componentCssAssetForSource(
+          fileName,
+          options.rootDir,
+          extraction.css,
+          fragmentTargetsForSource(relativeToRoot(options.rootDir, fileName), model),
+        ),
+      );
     } else {
       diagnostics.push({
         fileName: relativeToRoot(options.rootDir, fileName),
@@ -202,15 +216,81 @@ function componentCssAssetForSource(
   fileName: string,
   rootDir: string,
   css: string,
+  fragmentTargets: readonly string[] = [],
 ): ComponentCssAsset {
   const sourceFileName = replaceSourceExtension(relativeToRoot(rootDir, fileName), '.css');
   return {
     componentName: sourceFileName.replace(/\.css$/, ''),
     criticalCss: `${cssIrHeader}\n${normalizeServedCss(css)}`,
-    fragmentTargets: [],
+    fragmentTargets,
     href: `/assets/${sourceFileName}`,
     sourceFileName,
   };
+}
+
+function fragmentTargetsForSource(
+  fileName: string,
+  model: ReturnType<typeof parseComponentModule>,
+): string[] {
+  const { registryKey } = deriveComponentNames(fileName, firstComponentModel(model));
+  return findFragmentTargetFacts(registryKey, model).map((fact) => fact.target);
+}
+
+function routePageFactsWithFragmentTargets(
+  routePageFacts: readonly RoutePageFact[],
+  fragmentTargetsBySourceFileName: ReadonlyMap<string, readonly string[]>,
+): RoutePageFact[] {
+  return routePageFacts.map((fact) => {
+    const sourceFileNames = fact.css?.sourceFileNames ?? [];
+    const fragmentTargets = uniqueSorted([
+      ...(fact.css?.fragmentTargets ?? []),
+      ...sourceFileNames.flatMap(
+        (sourceFileName) => fragmentTargetsBySourceFileName.get(sourceFileName) ?? [],
+      ),
+    ]);
+    if (fragmentTargets.length === 0) return fact;
+
+    return {
+      ...fact,
+      css: {
+        ...(fact.css ?? {}),
+        fragmentTargets,
+      },
+    };
+  });
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function appFragmentTargetsByCssSourceFileName(
+  sourceFiles: readonly string[],
+  rootDir: string,
+): ReadonlyMap<string, readonly string[]> {
+  const fragmentTargetsBySourceFileName = new Map<string, readonly string[]>();
+
+  for (const fileName of sourceFiles) {
+    let source: string;
+    try {
+      source = readFileSync(fileName, 'utf8');
+    } catch {
+      continue;
+    }
+    if (!source.includes('component(')) continue;
+
+    const relativeFileName = relativeToRoot(rootDir, fileName);
+    const fragmentTargets = fragmentTargetsForSource(
+      relativeFileName,
+      parseComponentModule(fileName, source),
+    );
+    if (fragmentTargets.length === 0) continue;
+    fragmentTargetsBySourceFileName.set(replaceSourceExtension(relativeFileName, '.css'), [
+      ...fragmentTargets,
+    ]);
+  }
+
+  return fragmentTargetsBySourceFileName;
 }
 
 function resolveLocalStaticImport(
