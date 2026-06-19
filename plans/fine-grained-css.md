@@ -198,10 +198,14 @@ mutation pulls `fragments/cart.css` if not already present.
   - Evidence 2026-06-19:
     `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS"`
     verifies `kovo build` writes `.kovo/client/assets/routes/index.css`.
-- [ ] Materialize base and fragment chunks as real emitted assets
-      (`base.css`, `fragments/*.css`) and keep content-hashed hrefs for caching.
-      Evidence: `kovo build` of an example writes the chunk files; `git
-diff --check` clean; bytes-per-route report from Phase 0 drops.
+- [x] Materialize base chunks as real emitted assets.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "links only reachable build CSS chunks"`
+    verifies `kovo build` writes `.kovo/client/assets/base.css`.
+- [ ] Materialize fragment chunks as real emitted assets (`fragments/*.css`) and
+      keep content-hashed hrefs for caching. Evidence: `kovo build` of an
+      example writes the chunk files; `git diff --check` clean;
+      bytes-per-route report from Phase 0 drops.
 
 ### Phase 3 — Link/inline only the route's chunks (Seam E)
 
@@ -212,18 +216,23 @@ diff --check` clean; bytes-per-route report from Phase 0 drops.
     verifies `.kovo/static/index.html` contains
     `data-kovo-critical-href="/assets/routes/index.css"` and links
     `/assets/routes/index.css`.
-- [ ] Rewrite each route's resolved `stylesheets` to `[base.css,
+- [x] Rewrite each route's resolved `stylesheets` to `[base.css,
 routes/<route>.css]` (theme stays on `base`/app), using
       `createCssAssetResolver` (`css.ts:202`) at the document boundary
       (`app-document.ts:136`) so the linked set is route-reachable only. App-wide
-      `stylesheets` shrinks to the global/base entry. - Evidence: rendering test — `/` links `base.css` + `routes/index.css` and
-      **not** `routes/login.css`; the 103 Early-Hints `Link` header lists only
-      those (`hints.ts:163`).
-- [ ] Inline only the active route's chunks' critical CSS via the existing
+      `stylesheets` shrinks to the global/base entry.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "links only reachable build CSS chunks"`
+    verifies `/` links `base.css` + `routes/index.css` and not
+    `routes/login.css`, while `/login` links `base.css` + `routes/login.css`
+    and not `routes/index.css`.
+- [x] Inline only the active route's chunks' critical CSS via the existing
       `renderPageStylesheetHint` path (`hints.ts:202`); drop the hand-authored
-      `criticalCss: [...]` lists. - Evidence: site `/` no longer inlines `gallery`/`docs-layout` critical CSS
-      (direct fix of `route-kit.ts:16-29`); two routes with disjoint components
-      inline disjoint critical CSS.
+      `criticalCss: [...]` lists.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "links only reachable build CSS chunks"`
+    verifies the built `/` and `/login` documents contain only their reachable
+    `data-kovo-critical-href` entries.
 
 ### Phase 4 — Fragments, islands, and mutation responses
 

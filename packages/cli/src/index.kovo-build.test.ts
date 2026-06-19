@@ -182,6 +182,57 @@ describe('kovo build', () => {
     }
   });
 
+  it('links only reachable build CSS chunks for each static route', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-route-css-'));
+    const appPath = join(root, 'app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
+      writeReactJsxRuntimeStub(root);
+      writeFileSync(appPath, splitStylesheetRouteAppModuleSource(), 'utf8');
+      writeSplitStyledComponentClientEntry(root);
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      expect(readFileSync(join(outDir, '.kovo/client/assets/base.css'), 'utf8')).toContain(
+        'shared-card',
+      );
+      expect(readFileSync(join(outDir, '.kovo/client/assets/routes/index.css'), 'utf8')).toContain(
+        'home-panel',
+      );
+      expect(readFileSync(join(outDir, '.kovo/client/assets/routes/login.css'), 'utf8')).toContain(
+        'login-panel',
+      );
+      const homeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
+      expect(homeDocument).toContain('/assets/base.css');
+      expect(homeDocument).toContain('/assets/routes/index.css');
+      expect(homeDocument).not.toContain('/assets/routes/login.css');
+      expect(homeDocument).toContain('data-kovo-critical-href="/assets/base.css"');
+      expect(homeDocument).toContain('data-kovo-critical-href="/assets/routes/index.css"');
+      expect(homeDocument).not.toContain('data-kovo-critical-href="/assets/routes/login.css"');
+      const loginDocument = readFileSync(join(outDir, '.kovo/static/login/index.html'), 'utf8');
+      expect(loginDocument).toContain('/assets/base.css');
+      expect(loginDocument).toContain('/assets/routes/login.css');
+      expect(loginDocument).not.toContain('/assets/routes/index.css');
+      expect(loginDocument).toContain('data-kovo-critical-href="/assets/base.css"');
+      expect(loginDocument).toContain('data-kovo-critical-href="/assets/routes/login.css"');
+      expect(loginDocument).not.toContain('data-kovo-critical-href="/assets/routes/index.css"');
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('boots emitted node preset output from production dependencies with dev-package guards', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-prod-deps-'));
     const appPath = join(root, 'app.mjs');
@@ -743,6 +794,28 @@ export default createApp({
 `;
 }
 
+function splitStylesheetRouteAppModuleSource(): string {
+  return `
+/** @jsxImportSource @kovojs/server */
+import { createApp, route, stylesheet } from '@kovojs/server';
+import { HomePanel } from './src/home-panel.js';
+import { LoginPanel } from './src/login-panel.js';
+import { SharedCard } from './src/shared-card.js';
+
+export default createApp({
+  routes: [
+    route('/', {
+      page: () => <><SharedCard /><HomePanel /></>,
+    }),
+    route('/login', {
+      page: () => <><SharedCard /><LoginPanel /></>,
+    }),
+  ],
+  stylesheets: [stylesheet('./styles.css')],
+});
+`;
+}
+
 function databaseEnvAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
@@ -811,6 +884,50 @@ export const AutoCssCard = component({
 `,
     'utf8',
   );
+}
+
+function writeSplitStyledComponentClientEntry(root: string): void {
+  writeClientEntry(root);
+  writeFileSync(
+    join(root, 'src/client.ts'),
+    [
+      "import './style.css';",
+      "import './home-panel.tsx';",
+      "import './login-panel.tsx';",
+      "import './shared-card.tsx';",
+      'export const client = true;',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/home-panel.tsx'),
+    styledHostComponentSource('HomePanel', 'home-panel', 'crimson'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/login-panel.tsx'),
+    styledHostComponentSource('LoginPanel', 'login-panel', 'goldenrod'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/shared-card.tsx'),
+    styledHostComponentSource('SharedCard', 'shared-card', 'teal'),
+    'utf8',
+  );
+}
+
+function styledHostComponentSource(name: string, host: string, color: string): string {
+  return `
+import { component } from '@kovojs/core';
+
+export const ${name} = component({
+  css: \`
+    ${host} { color: ${color}; }
+  \`,
+  render: () => <${host}>${name}</${host}>,
+});
+`;
 }
 
 function writeReactJsxRuntimeStub(root: string): void {
