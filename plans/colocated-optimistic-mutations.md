@@ -78,7 +78,7 @@ export const addContact = mutation('addContact', {
 
 ## Open work
 
-- [ ] **Add `optimistic` (+ `queue`) to `MutationDefinition` with inferred typing.** The
+- [x] **Add `optimistic` (+ `queue`) to `MutationDefinition` with inferred typing.** The
       value type computed from the mutation's own type params, roughly
       `{ [Q in InvalidationSets[Key]]?: ((draft: QueryRegistry[Q], input: InferSchema<InputSchema>) => void) | 'await-fragment' }`,
       plus a sibling `queue?: string`. The load-bearing risk: today
@@ -94,7 +94,11 @@ export const addContact = mutation('addContact', {
       `draft`/`input` typing from `InvalidationSets`, `QueryRegistry`, and the
       sibling input schema; `corepack pnpm exec tsc --noEmit --pretty false`
       passed.
-  - [ ] KV310-backed missing non-derivable key type/error coverage remains open.
+  - [x] KV310-backed missing non-derivable key type/error coverage.
+    - Evidence 2026-06-19:
+      `npx vitest --run packages/server/src/mutation.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts`
+      covers `OptimisticDerivationSets`, required non-derivable inline keys,
+      omitted derivable keys, registry emission, and CLI KV310 warnings.
 - [x] **Draft-style apply in the optimism runtime.** Adjust the optimistic apply/rebase
       loop (`packages/browser/src/optimism.ts`) to hand each transform the
       already-cloned query value as a mutable draft and read the mutated draft back, rather
@@ -124,10 +128,15 @@ export const addContact = mutation('addContact', {
       the mutation module no longer hand-merges. Evidence target: a partially-derived
       mutation (some keys derived, one overridden inline) passes `kovo check optimistic`
       with the override taking effect and no helper type.
-- [ ] **Keep KV310 exhaustiveness at both altitudes.** Inline missing-key type error AND
+- [x] **Keep KV310 exhaustiveness at both altitudes.** Inline missing-key type error AND
       `kovo check optimistic` (the CI/agent surface, SPEC §10.6) must both still fire off
       the same `InvalidationSets`-derived set. Evidence target: a mutation that omits a
       punted query fails `kovo check` and shows the editor error.
+  - Evidence 2026-06-19:
+    `packages/server/src/mutation.test.ts` proves the editor/type altitude for missing
+    non-derivable keys via `InvalidationSets` + `OptimisticDerivationSets`;
+    `packages/cli/src/index.kovo-check.test.ts` proves the CI altitude emits KV310
+    for uncovered invalidated query edges.
 - [x] **Migrate examples; delete the boilerplate.** Move CRM + commerce optimistic consts
       inline; remove `examples/crm/src/optimistic-merge.ts` (`CrmDerivedSubset`) and the
       hand-written `generated/optimistic/*` override files those pairs produced. Keep
@@ -169,16 +178,21 @@ export const addContact = mutation('addContact', {
 ## Latest verification
 
 2026-06-19 latest slice:
-`npx vitest --run site/tutorial/steps/05-optimistic/src/app.test.ts`;
+`npx vitest --run packages/server/src/mutation.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
 `git diff --check`.
 
 2026-06-19 previous slice:
-`npx vitest --run examples/crm/src/optimistic.test.ts examples/crm/src/graph.test.ts packages/server/src/mutation.test.ts`;
+`npx vitest --run site/tutorial/steps/05-optimistic/src/app.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
 `git diff --check`.
 
 2026-06-19 earlier slice:
+`npx vitest --run examples/crm/src/optimistic.test.ts examples/crm/src/graph.test.ts packages/server/src/mutation.test.ts`;
+`corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
+`git diff --check`.
+
+2026-06-19 initial draft-style slice:
 `npx vitest --run packages/drizzle/src/derive-codegen.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `git diff --check`;
 `corepack pnpm exec vp check`.

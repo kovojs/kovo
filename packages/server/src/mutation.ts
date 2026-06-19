@@ -1,4 +1,9 @@
-import type { InvalidationSets, JsonValue, QueryRegistry } from '@kovojs/core';
+import type {
+  InvalidationSets,
+  JsonValue,
+  OptimisticDerivationSets,
+  QueryRegistry,
+} from '@kovojs/core';
 import { buildQueryDelta, queryDeltaIsSmaller } from '@kovojs/core/internal/query-delta';
 import { serializeCookie, validateRawSetCookie, type CookieOptions } from './cookies.js';
 import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
@@ -159,6 +164,16 @@ type MutationInvalidatedQueryNames<Key extends string> = Key extends keyof Inval
   ? Extract<InvalidationSets[Key], Extract<keyof QueryRegistry, string>>
   : never;
 
+type MutationDerivableOptimisticQueryNames<Key extends string> =
+  Key extends keyof OptimisticDerivationSets
+    ? Extract<OptimisticDerivationSets[Key], MutationInvalidatedQueryNames<Key>>
+    : never;
+
+type MutationRequiredOptimisticQueryNames<Key extends string> = Exclude<
+  MutationInvalidatedQueryNames<Key>,
+  MutationDerivableOptimisticQueryNames<Key>
+>;
+
 type MutableDraft<Value> = Value extends (...args: any[]) => unknown
   ? Value
   : Value extends readonly (infer Item)[]
@@ -176,12 +191,23 @@ export type MutationOptimisticEntry<Input = unknown, Value = unknown> =
   | MutationOptimisticTransform<Input, Value>
   | 'await-fragment';
 
-export type MutationOptimisticMap<Key extends string, InputSchema extends Schema<unknown>> = {
-  [QueryName in MutationInvalidatedQueryNames<Key>]?: MutationOptimisticEntry<
+type KnownMutationOptimisticMap<Key extends string, InputSchema extends Schema<unknown>> = {
+  [QueryName in MutationRequiredOptimisticQueryNames<Key>]-?: MutationOptimisticEntry<
+    InferSchema<InputSchema>,
+    QueryRegistry[QueryName]
+  >;
+} & {
+  [QueryName in MutationDerivableOptimisticQueryNames<Key>]?: MutationOptimisticEntry<
     InferSchema<InputSchema>,
     QueryRegistry[QueryName]
   >;
 };
+
+export type MutationOptimisticMap<Key extends string, InputSchema extends Schema<unknown>> = [
+  MutationInvalidatedQueryNames<Key>,
+] extends [never]
+  ? Record<string, MutationOptimisticEntry<InferSchema<InputSchema>, any>>
+  : KnownMutationOptimisticMap<Key, InputSchema>;
 
 export interface MutationDefinition<
   Key extends string = string,

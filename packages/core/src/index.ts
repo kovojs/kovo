@@ -245,6 +245,9 @@ export interface RouteRegistry {}
 /** Augmentable registry mapping mutation keys to the query names they invalidate (drives `OptimisticFor`). */
 export interface InvalidationSets {}
 
+/** Augmentable registry mapping mutation keys to invalidated query names covered by generated optimism. */
+export interface OptimisticDerivationSets {}
+
 type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;

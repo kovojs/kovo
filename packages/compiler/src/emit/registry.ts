@@ -117,6 +117,10 @@ export interface InvalidationSets {
 ${invalidationSetLines}
 }
 
+export interface OptimisticDerivationSets {
+
+}
+
 declare module '@kovojs/core/generated' {
   interface ComponentRegistry {
 ${componentRegistryLines}
@@ -146,6 +150,10 @@ ${routeRegistryLines}
 
   interface InvalidationSets {
 ${invalidationSetLines}
+  }
+
+  interface OptimisticDerivationSets {
+
   }
 }
 

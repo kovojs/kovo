@@ -16,10 +16,17 @@ import { testMutation as mutation } from './test-fixtures.js';
 
 declare module '@kovojs/core' {
   interface InvalidationSets {
-    'contacts/add': 'contactList';
+    'contacts/add': 'activityList' | 'contactList';
+  }
+
+  interface OptimisticDerivationSets {
+    'contacts/add': 'activityList';
   }
 
   interface QueryRegistry {
+    activityList: {
+      items: Array<{ id: string; message: string }>;
+    };
     contactList: {
       items: Array<{ id: string; name: string }>;
     };
@@ -54,10 +61,23 @@ describe('server mutation lifecycle', () => {
         },
       });
     };
+    const assertMissingNonDerivableKeyRejected = () => {
+      mutation('contacts/add', {
+        input: s.object({ id: s.string(), name: s.string() }),
+        // @ts-expect-error contactList is not compiler-derivable and needs a transform or await-fragment.
+        optimistic: {
+          activityList(_draft, _input) {},
+        },
+        handler() {
+          return 'ok';
+        },
+      });
+    };
 
     expect(addContact.queue).toBe('crm');
     expect(Object.keys(addContact.optimistic ?? {})).toEqual(['contactList']);
     expect(assertUnknownOptimisticKeyRejected).toBeTypeOf('function');
+    expect(assertMissingNonDerivableKeyRejected).toBeTypeOf('function');
   });
 
   it('derives direct-render form attributes from typed mutation values', () => {
