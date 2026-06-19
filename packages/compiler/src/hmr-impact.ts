@@ -2,7 +2,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import type { ComponentCssAsset } from './css.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
-import { clientModuleVersion } from './lower/handlers.js';
+import { factHash } from './fact-hash.js';
 import type {
   ComponentGraphFact,
   HmrImpactClassification,
@@ -160,25 +160,8 @@ function diagnosticSeverity(diagnostic: CompilerDiagnostic): CompilerDiagnostic[
   return diagnosticDefinitions[diagnostic.code]?.severity ?? diagnostic.severity;
 }
 
-function factHash(value: unknown): string {
-  return clientModuleVersion(canonicalJson(value));
-}
-
 function normalizeCompilerClientVersions(value: string): string {
   return value
     .replace(/\/c\/__v\/[0-9a-f]{8}\/([^"'#?\s]+\.client\.js)/g, '/c/$1')
     .replace(/\/c\/([^"'#?\s]+\.client\.js)\?v=[0-9a-f]{8}/g, '/c/$1');
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
-      .join(',')}}`;
-  }
-
-  return JSON.stringify(value);
 }

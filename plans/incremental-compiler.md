@@ -275,9 +275,13 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
     proves `registryFactChanges()` turns a changed `registryFacts.mutationInputs["cart/add"]` into
     the cache fact-change vocabulary and `CompileCache.invalidateFacts()` recompiles only the entry
     whose footprint read that mutation input, while an unrelated product entry remains a hit.
-- [ ] Reuse / unify with the existing `factHash` HMR machinery (`vite.ts:123-125`) where it already
+- [x] Reuse / unify with the existing `factHash` HMR machinery (`vite.ts:123-125`) where it already
       computes a structural fact hash, so HMR impact classification and cache invalidation share one
       fingerprint source of truth rather than two drifting hashes.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts -t "multiset of contributing fact hashes|registry fact diffs|invalidates only|caches repeated transforms"`
+    proves app graph contribution hashing, registry-fact diffing, inverse-index invalidation, and
+    Vite transform caching all use the shared dependency-light `factHash` helper.
 
 ## Phase 5 — CLI incremental build + CI cache integration
 

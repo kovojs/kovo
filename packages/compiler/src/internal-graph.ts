@@ -5,6 +5,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
+import { factHash } from './fact-hash.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
@@ -88,14 +89,14 @@ export class IncrementalAppGraphCache {
 export function appGraphContributionHash(options: CompileAppGraphOptions): string {
   const componentHashes = (options.components ?? [])
     .flatMap((component) => component.componentGraphFacts)
-    .map((fact) => stableHash(fact))
+    .map((fact) => factHash(fact))
     .sort();
   const routeHashes = (options.routePages ?? [])
     .flatMap((routePage) => routePage.routePageFacts)
-    .map((fact) => stableHash(fact))
+    .map((fact) => factHash(fact))
     .sort();
 
-  return stableHash({
+  return factHash({
     components: componentHashes,
     graph: options.graph ?? null,
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
@@ -596,27 +597,4 @@ function deriveInvalidationFactsFromGraph(
   }
 
   return invalidations;
-}
-
-function stableHash(value: unknown): string {
-  let hash = 0x811c9dc5;
-  const source = canonicalJson(value);
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-  return hash.toString(16).padStart(8, '0');
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .filter(([, nested]) => nested !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${canonicalJson(nested)}`)
-      .join(',')}}`;
-  }
-
-  return JSON.stringify(value);
 }

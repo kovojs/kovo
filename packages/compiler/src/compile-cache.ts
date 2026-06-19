@@ -1,4 +1,5 @@
 import { compilerBuildId } from './cache-identity.js';
+import { factHash } from './fact-hash.js';
 import type { CompileComponentOptions, CompileDependencyFootprint, RegistryFacts } from './types.js';
 
 /** @internal Per-module compiler cache key input. */
@@ -52,7 +53,7 @@ export function registryFactChanges(
     'queries',
     'routes',
   ] as const) {
-    if (stableJson(previous?.[field] ?? null) !== stableJson(next?.[field] ?? null)) {
+    if (factHash(previous?.[field] ?? null) !== factHash(next?.[field] ?? null)) {
       changes.push({ field, kind: 'registryFacts' });
     }
   }
@@ -436,7 +437,7 @@ function changedRecordKeys(
 ): string[] {
   const keys = new Set([...Object.keys(previous ?? {}), ...Object.keys(next ?? {})]);
   return [...keys]
-    .filter((key) => stableJson(previous?.[key] ?? null) !== stableJson(next?.[key] ?? null))
+    .filter((key) => factHash(previous?.[key] ?? null) !== factHash(next?.[key] ?? null))
     .sort();
 }
 
