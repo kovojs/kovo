@@ -100,18 +100,18 @@ state as the final UI.
     `stream.text(...)`, `stream.query(...)`, and `stream.done(...)`. These emit
     the same legible wire chunks the runtime consumes.
   - Evidence: pending public API baseline diff and server unit tests.
-- [ ] **Form opt-in syntax.**
+- [x] **Form opt-in syntax.**
   - Define author TSX syntax, tentatively `<form enhance stream
 mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     submit path. The absence of `stream` uses today's buffered enhanced mutation
     apply.
-  - Evidence: pending compiler fixture and runtime submit test.
-- [ ] **Target declaration for stream text sources.**
+  - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose` passed on 2026-06-19; `packages/compiler/src/stamps.test.ts` proves `<form enhance stream mutation={sendMessage}>` lowers to `data-mutation-stream="true"` while non-stream forms omit it.
+- [x] **Target declaration for stream text sources.**
   - Define how a rendered component exposes a stream source target. Candidate
     spelling: `data-stream-text="message-markdown:a1"` on an element whose text
     source is appendable by `<kovo-text>`. App code must not rely on arbitrary
     CSS selectors.
-  - Evidence: pending compiler fixture and DOM target validation tests.
+  - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose` passed on 2026-06-19; `packages/compiler/src/stamps.test.ts` proves `streamText="message:a1"` lowers to `data-stream-text="message:a1"` and KV243 rejects selector/unscoped literal targets.
 - [ ] **Optional stream sink renderer contract.**
   - Define how a component can declare an app/client-module renderer for the
     accumulated stream source, tentatively
@@ -270,7 +270,8 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
 - [ ] runtime streaming submit: pending targeted `packages/browser` test file
 - [ ] server text coalescing: pending targeted `packages/server` test file
 - [ ] server streaming mutation path: pending targeted `packages/server` test file
-- [ ] compiler lowering/fixpoint: pending targeted `packages/compiler` test file
+- [x] compiler lowering/fixpoint: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose`
+  - Evidence: 2026-06-19 same-session run passed 3 files / 43 tests, proving streaming mutation form lowering, non-stream parity, stream text target lowering/fixpoint, and KV243 target diagnostics.
 - [ ] chat browser fixture: pending `tests/integration/specs/streaming-chat.spec.ts`
 - [ ] root import/build gates after implementation: `pnpm run check && pnpm run test`
 

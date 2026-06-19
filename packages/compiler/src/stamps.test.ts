@@ -263,6 +263,129 @@ export const AddToCartForm = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers streaming enhanced mutation forms without changing non-stream forms', () => {
+    const streaming = compileComponentModule({
+      fileName: 'streaming-chat-form.tsx',
+      source: `
+export const sendMessage = mutation('chat/send', {
+  handler() {
+    return null;
+  },
+});
+
+export const ChatComposer = component({
+  render: (_queries, _state, slots) => (
+    <form enhance stream mutation={sendMessage} key={slots.threadId} class="composer">
+      <input name="message" />
+    </form>
+  ),
+});
+`,
+    });
+    const buffered = compileComponentModule({
+      fileName: 'buffered-chat-form.tsx',
+      source: `
+export const sendMessage = mutation('chat/send', {
+  handler() {
+    return null;
+  },
+});
+
+export const ChatComposer = component({
+  render: (_queries, _state, slots) => (
+    <form enhance mutation={sendMessage} key={slots.threadId} class="composer">
+      <input name="message" />
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(streaming.diagnostics).toEqual([]);
+    expect(buffered.diagnostics).toEqual([]);
+    const streamingSource = requireLoweredSource(streaming);
+    const bufferedSource = requireLoweredSource(buffered);
+    expect(streamingSource).toContain(
+      '<form enhance method="post" action="/_m/chat/send" data-mutation="chat/send" data-mutation-stream="true" kovo-fragment-target={`send-message:${slots.threadId}`} kovo-key={slots.threadId} class="composer"',
+    );
+    expect(streamingSource).not.toMatch(/\sstream(?:\s|>)/);
+    expect(bufferedSource).toContain(
+      '<form enhance method="post" action="/_m/chat/send" data-mutation="chat/send" kovo-fragment-target={`send-message:${slots.threadId}`} kovo-key={slots.threadId} class="composer"',
+    );
+    expect(bufferedSource).not.toContain('data-mutation-stream');
+    expect(streaming.outputContextFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expression: 'true',
+          sink: 'data-mutation-stream',
+          writer: 'streaming mutation form lowering',
+        }),
+      ]),
+    );
+    expect(() => assertRenderEquivalence(streaming)).not.toThrow();
+    expect(() => assertFixpoint(streaming)).not.toThrow();
+    expect(() => assertRenderEquivalence(buffered)).not.toThrow();
+    expect(() => assertFixpoint(buffered)).not.toThrow();
+  });
+
+  it('lowers stream text source targets to runtime-visible data attributes', () => {
+    const result = compileComponentModule({
+      fileName: 'streaming-message.tsx',
+      source: `
+export const StreamingMessage = component({
+  render: () => (
+    <article>
+      <p streamText="message:a1" aria-live="polite"></p>
+    </article>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    const loweredSource = requireLoweredSource(result);
+    expect(loweredSource).toContain('<p data-stream-text="message:a1" aria-live="polite">');
+    expect(loweredSource).not.toContain('streamText=');
+    expect(result.outputContextFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          expression: 'message:a1',
+          sink: 'data-stream-text',
+          writer: 'stream text target lowering',
+        }),
+      ]),
+    );
+    expect(() => assertRenderEquivalence(result)).not.toThrow();
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('reports KV243 for ambiguous stream text source targets', () => {
+    const result = compileComponentModule({
+      fileName: 'bad-streaming-message.tsx',
+      source: `
+export const StreamingMessage = component({
+  render: () => (
+    <article>
+      <p streamText="#assistant"></p>
+      <p data-stream-text="assistant"></p>
+    </article>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV243')).toEqual([
+      expect.objectContaining({
+        message:
+          'Invalid stream text target. "#assistant" is not a stream source id; expected "source:id", not a selector or unscoped id.',
+      }),
+      expect.objectContaining({
+        message:
+          'Invalid stream text target. "assistant" is not a stream source id; expected "source:id", not a selector or unscoped id.',
+      }),
+    ]);
+  });
+
   it('lowers imported typed enhanced mutation forms from registry facts', () => {
     const result = compileComponentModule({
       fileName: 'product-grid.tsx',

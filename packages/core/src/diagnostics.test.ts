@@ -35,6 +35,7 @@ describe('diagnostic registry', () => {
       'KV240',
       'KV241',
       'KV242',
+      'KV243',
       'KV301',
       'KV302',
       'KV303',
@@ -301,6 +302,15 @@ describe('diagnostic registry', () => {
       Fixes: rename the control, add the missing required control, or change the mutation input schema so the field set matches the form.
       SPEC §6.2 and §6.3 require form control names to be statically checked against the bound mutation input schema.",
           "message": "Enhanced mutation form fields do not match mutation input schema.",
+          "severity": "error",
+        },
+        "KV243": {
+          "code": "KV243",
+          "help": "Would lower to: data-stream-text="source:id" on a declared text source element and kovo-text target="source:id" chunks.
+      Blocked reason: streaming text targets are framework-owned source IDs, not arbitrary selectors or ambiguous DOM queries.
+      Fixes: use streamText="source:id" with a literal namespace and stable id, or remove the streaming text target.
+      SPEC §9.1 scopes <kovo-text> to compiler/runtime-declared data-stream-text targets and forbids arbitrary selector targeting.",
+          "message": "Invalid stream text target.",
           "severity": "error",
         },
         "KV301": {

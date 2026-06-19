@@ -652,6 +652,28 @@ export const AddToCartForm = component({
       }).diagnostics,
   },
   {
+    code: 'KV243',
+    spec: 'SPEC.md §9.1',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'stream-target-ok.tsx',
+        source: `
+export const StreamTargetOk = component({
+  render: () => <p streamText="message:a1"></p>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'stream-target-bad.tsx',
+        source: `
+export const StreamTargetBad = component({
+  render: () => <p streamText="#message"></p>,
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV239',
     spec: 'SPEC.md §8',
     positive: () =>
@@ -1163,6 +1185,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "spec": "SPEC.md §6.2/§6.3",
         },
         {
+          "code": "KV243",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §9.1",
+        },
+        {
           "code": "KV239",
           "negativeCount": 1,
           "positiveCount": 0,
@@ -1600,6 +1628,21 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 14,
             "line": 12,
+          },
+        },
+        {
+          "code": "KV243",
+          "fileName": "stream-target-bad.tsx",
+          "help": "Would lower to: data-stream-text="source:id" on a declared text source element and kovo-text target="source:id" chunks.
+      Blocked reason: streaming text targets are framework-owned source IDs, not arbitrary selectors or ambiguous DOM queries.
+      Fixes: use streamText="source:id" with a literal namespace and stable id, or remove the streaming text target.
+      SPEC §9.1 scopes <kovo-text> to compiler/runtime-declared data-stream-text targets and forbids arbitrary selector targeting.",
+          "length": 21,
+          "message": "Invalid stream text target. "#message" is not a stream source id; expected "source:id", not a selector or unscoped id.",
+          "severity": "error",
+          "start": {
+            "column": 20,
+            "line": 3,
           },
         },
         {

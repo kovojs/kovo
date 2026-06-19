@@ -281,7 +281,9 @@ function renderSemanticAttributes(
     const rendered =
       attribute.name === 'style' && viewTransitionStyle
         ? renderSemanticStyleAttribute(attribute, viewTransitionStyle)
-        : renderSemanticAttribute(attribute);
+        : attribute.name === 'streamText'
+          ? renderSemanticAttributeWithName('data-stream-text', attribute)
+          : renderSemanticAttribute(attribute);
     if (rendered) semanticAttributes.push(rendered);
   }
   return semanticAttributes
@@ -448,22 +450,29 @@ function renderSemanticStyleAttribute(
 }
 
 function renderSemanticAttribute(attribute: JsxAttributeModel): string | null {
+  return renderSemanticAttributeWithName(attribute.name, attribute);
+}
+
+function renderSemanticAttributeWithName(
+  name: string,
+  attribute: JsxAttributeModel,
+): string | null {
   if (isGeneratedOnlyRenderAttribute(attribute.name)) return null;
   if (attribute.domEventName || /^on[A-Z][\w-]*$/.test(attribute.name)) return null;
 
   if (attribute.value !== undefined) {
-    return ` ${attribute.name}="${escapeAttribute(attribute.value)}"`;
+    return ` ${name}="${escapeAttribute(attribute.value)}"`;
   }
 
   if (attribute.expressionStaticValue !== undefined) {
-    return renderStaticAttributeValue(attribute.name, attribute.expressionStaticValue);
+    return renderStaticAttributeValue(name, attribute.expressionStaticValue);
   }
 
   if (attribute.expression !== undefined) {
-    return ` ${attribute.name}="${escapeAttribute(`{${attribute.expression}}`)}"`;
+    return ` ${name}="${escapeAttribute(`{${attribute.expression}}`)}"`;
   }
 
-  return ` ${attribute.name}`;
+  return ` ${name}`;
 }
 
 function renderStaticAttributeValue(
@@ -616,6 +625,10 @@ function serverRenderPatches(
   diagnostics.push(...formLowering.diagnostics);
   patches.push(...formLowering.replacements);
   outputContexts.push(...formLowering.outputContexts);
+  const streamTextLowering = streamTextTargetRenderLowering(model, options);
+  diagnostics.push(...streamTextLowering.diagnostics);
+  patches.push(...streamTextLowering.replacements);
+  outputContexts.push(...streamTextLowering.outputContexts);
   const formErrorLowering = mutationFormErrorRenderLowering(model, options);
   diagnostics.push(...formErrorLowering.diagnostics);
   patches.push(...formErrorLowering.replacements);
@@ -1085,6 +1098,82 @@ function enhancedMutationFormRenderLowering(
   return { diagnostics, outputContexts, replacements };
 }
 
+function streamTextTargetRenderLowering(
+  model: ComponentModuleModel,
+  options?: { fileName: string; registryFacts?: RegistryFacts; source: string },
+): {
+  diagnostics: readonly CompilerDiagnostic[];
+  outputContexts: readonly GeneratedOutputWriteFact[];
+  replacements: readonly SourceReplacement[];
+} {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const outputContexts: GeneratedOutputWriteFact[] = [];
+  const replacements: SourceReplacement[] = [];
+
+  for (const element of model.jsxElements) {
+    const streamText = element.attributes.find((attribute) => attribute.name === 'streamText');
+    const residual = element.attributes.find((attribute) => attribute.name === 'data-stream-text');
+
+    if (streamText && residual && options) {
+      diagnostics.push(
+        writerConflictDiagnostic(
+          options,
+          residual,
+          'data-stream-text',
+          'author JSX',
+          'stream text target lowering',
+        ),
+      );
+    }
+
+    const targetAttribute = streamText ?? residual;
+    if (!targetAttribute) continue;
+
+    const literalTarget = staticStringAttributeValue(targetAttribute);
+    if (options && literalTarget !== null && !isValidStreamTextTarget(literalTarget)) {
+      diagnostics.push(streamTextTargetDiagnostic(options, targetAttribute, literalTarget));
+    }
+
+    if (streamText) {
+      replacements.push({
+        end: streamText.end,
+        replacement: renderAttributeWithName('data-stream-text', streamText),
+        start: streamText.start,
+      });
+      outputContexts.push(
+        formLoweringOutputContext(
+          'data-stream-text',
+          attributeValueExpression(streamText),
+          'stream text target lowering',
+        ),
+      );
+    }
+  }
+
+  return { diagnostics, outputContexts, replacements };
+}
+
+function isValidStreamTextTarget(target: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9-]*:[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(target);
+}
+
+function streamTextTargetDiagnostic(
+  options: { fileName: string; source: string },
+  attribute: JsxAttributeModel,
+  target: string,
+): CompilerDiagnostic {
+  return {
+    ...diagnosticFor(
+      options.fileName,
+      'KV243',
+      options.source,
+      attribute.start,
+      attribute.end - attribute.start,
+    ),
+    message: `${diagnosticDefinitions.KV243.message} "${target}" is not a stream source id; expected "source:id", not a selector or unscoped id.`,
+  };
+}
+
 interface EnhancedMutationFormConflict {
   attribute: JsxAttributeModel;
 }
@@ -1131,6 +1220,8 @@ function enhancedMutationFormLowering(
 
   const methodAttribute = element.attributes.find((attribute) => attribute.name === 'method');
   const keyAttribute = element.attributes.find((attribute) => attribute.name === 'key');
+  const streamAttribute = element.attributes.find((attribute) => attribute.name === 'stream');
+  const streaming = streamAttribute !== undefined;
   if (!keyAttribute && element.repeatable) return null;
   const preserveRuntimeMutation = !componentRenderSlotsParam(model);
   const targetBase = kebabCase(mutationAttribute.expressionBareIdentifierName);
@@ -1141,6 +1232,7 @@ function enhancedMutationFormLowering(
     ...(methodAttribute ? [] : ['method="post"']),
     `action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
     `data-mutation="${escapeAttribute(mutationKey)}"`,
+    ...(streaming ? ['data-mutation-stream="true"'] : []),
     submittedFormTargetAttribute(targetBase, keyAttribute),
   ];
   const replacements = [
@@ -1149,6 +1241,15 @@ function enhancedMutationFormLowering(
       replacement: generatedInMutationSlot.join(' '),
       start: mutationAttribute.start,
     },
+    ...(streamAttribute
+      ? [
+          {
+            end: streamAttribute.end,
+            replacement: '',
+            start: streamAttribute.leadingStart,
+          },
+        ]
+      : []),
     ...(keyAttribute ? [submittedFormKeyReplacement(keyAttribute)] : []),
     ...(preserveRuntimeMutation
       ? []
@@ -1158,14 +1259,17 @@ function enhancedMutationFormLowering(
     ...(methodAttribute ? [] : [' method="post"']),
     ` action="${escapeAttribute(`/_m/${mutationKey}`)}"`,
     ` data-mutation="${escapeAttribute(mutationKey)}"`,
+    ...(streaming ? [' data-mutation-stream="true"'] : []),
   ];
   const generatedAttributeNames = new Set([
     'action',
     'data-mutation',
+    'data-mutation-stream',
     'key',
     'kovo-fragment-target',
     'kovo-key',
     'mutation',
+    'stream',
     ...(methodAttribute ? [] : ['method']),
   ]);
 
@@ -1179,6 +1283,15 @@ function enhancedMutationFormLowering(
         : [formLoweringOutputContext('method', 'post', 'typed mutation form lowering')]),
       formLoweringOutputContext('action', `/_m/${mutationKey}`, 'typed mutation form lowering'),
       formLoweringOutputContext('data-mutation', mutationKey, 'typed mutation form lowering'),
+      ...(streaming
+        ? [
+            formLoweringOutputContext(
+              'data-mutation-stream',
+              'true',
+              'streaming mutation form lowering',
+            ),
+          ]
+        : []),
       formLoweringOutputContext(
         'kovo-fragment-target',
         submittedFormTargetExpression(targetBase, keyAttribute),
@@ -1241,7 +1354,13 @@ function repeatableMutationFormDiagnostic(
 function enhancedMutationFormConflicts(element: JsxElementModel): EnhancedMutationFormConflict[] {
   return element.attributes
     .filter((attribute) =>
-      ['action', 'data-mutation', 'kovo-fragment-target', 'kovo-key'].includes(attribute.name),
+      [
+        'action',
+        'data-mutation',
+        'data-mutation-stream',
+        'kovo-fragment-target',
+        'kovo-key',
+      ].includes(attribute.name),
     )
     .map((attribute) => ({ attribute }));
 }
