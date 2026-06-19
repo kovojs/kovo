@@ -267,9 +267,14 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
     proves `IncrementalAppGraphCache` keys app graph derivation by a stable multiset hash of
     component/route contributions: reordered unchanged contributions return the cached merged
     graph/facts object, while a changed contribution misses and derives a new result.
-- [ ] Diff registry facts across rebuilds and feed the diff into Phase 2's inverse index so a graph
+- [x] Diff registry facts across rebuilds and feed the diff into Phase 2's inverse index so a graph
       change recompiles exactly the dependent modules (closing the loop: per-module edit → fact
       change → graph re-merge → targeted dependent recompile).
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts -t "registry fact diffs|invalidates only|CompileCache"`
+    proves `registryFactChanges()` turns a changed `registryFacts.mutationInputs["cart/add"]` into
+    the cache fact-change vocabulary and `CompileCache.invalidateFacts()` recompiles only the entry
+    whose footprint read that mutation input, while an unrelated product entry remains a hit.
 - [ ] Reuse / unify with the existing `factHash` HMR machinery (`vite.ts:123-125`) where it already
       computes a structural fact hash, so HMR impact classification and cache invalidation share one
       fingerprint source of truth rather than two drifting hashes.

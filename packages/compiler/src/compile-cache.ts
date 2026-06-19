@@ -27,6 +27,39 @@ export type CompileDependencyFactChange =
   | { field: keyof RegistryFacts; kind: 'registryFacts' }
   | { kind: 'viewTransition'; name: string };
 
+/** @internal Diff registry facts into cache invalidation fact changes. */
+export function registryFactChanges(
+  previous: RegistryFacts | null | undefined,
+  next: RegistryFacts | null | undefined,
+): CompileDependencyFactChange[] {
+  const changes: CompileDependencyFactChange[] = [];
+  for (const key of changedRecordKeys(previous?.mutationInputs, next?.mutationInputs)) {
+    changes.push({ key, kind: 'mutationInput' });
+  }
+  for (const target of changedArrayValues(previous?.fragmentTargets, next?.fragmentTargets)) {
+    changes.push({ kind: 'fragmentTarget', target });
+  }
+  for (const name of changedArrayValues(previous?.viewTransitions, next?.viewTransitions)) {
+    changes.push({ kind: 'viewTransition', name });
+  }
+
+  for (const field of [
+    'components',
+    'domainKeys',
+    'invalidations',
+    'liveTargets',
+    'mutations',
+    'queries',
+    'routes',
+  ] as const) {
+    if (stableJson(previous?.[field] ?? null) !== stableJson(next?.[field] ?? null)) {
+      changes.push({ field, kind: 'registryFacts' });
+    }
+  }
+
+  return changes;
+}
+
 interface CompileCacheEntry<Result> {
   active: boolean;
   input: CompileCacheKeyInput;
@@ -395,4 +428,24 @@ function stableJson(value: unknown): string {
   }
 
   return JSON.stringify(value);
+}
+
+function changedRecordKeys(
+  previous: Readonly<Record<string, unknown>> | undefined,
+  next: Readonly<Record<string, unknown>> | undefined,
+): string[] {
+  const keys = new Set([...Object.keys(previous ?? {}), ...Object.keys(next ?? {})]);
+  return [...keys]
+    .filter((key) => stableJson(previous?.[key] ?? null) !== stableJson(next?.[key] ?? null))
+    .sort();
+}
+
+function changedArrayValues(
+  previous: readonly string[] | undefined,
+  next: readonly string[] | undefined,
+): string[] {
+  const values = new Set([...(previous ?? []), ...(next ?? [])]);
+  return [...values]
+    .filter((value) => (previous ?? []).includes(value) !== (next ?? []).includes(value))
+    .sort();
 }
