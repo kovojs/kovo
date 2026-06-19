@@ -142,6 +142,7 @@ export const ProductPage = component({
         "href-attributes",
         "view-transition-name",
         "inline-attribute-derives",
+        "primitive-reactive-attributes",
         "inline-text-bindings",
         "static-text-escaping",
         "helper-import-insertion",

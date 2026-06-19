@@ -38,6 +38,7 @@
   },
   "scripts": {
     "build:dist": "vp pack src/graph.ts src/index.ts src/internal.ts src/internal/graph.ts src/package-styles.ts --dts",
+    "gen:reactive-attrs": "node scripts/gen-primitive-reactive-attrs.mjs",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
