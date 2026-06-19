@@ -10,43 +10,43 @@
       "fileCount": 1,
       "minLoc": 600,
       "coldMaxMs": 700,
-      "warmMaxMs": 650
+      "warmMaxMs": 100
     },
     "many-small-components": {
       "fileCount": 48,
       "minLoc": 620,
       "coldMaxMs": 600,
-      "warmMaxMs": 600
+      "warmMaxMs": 100
     },
     "many-routes-registries": {
       "fileCount": 32,
       "minLoc": 380,
       "coldMaxMs": 350,
-      "warmMaxMs": 350
+      "warmMaxMs": 100
     },
     "css-heavy-components": {
       "fileCount": 16,
       "minLoc": 1660,
       "coldMaxMs": 300,
-      "warmMaxMs": 300
+      "warmMaxMs": 100
     },
     "heavy-primitive-composition": {
       "fileCount": 20,
       "minLoc": 1390,
       "coldMaxMs": 500,
-      "warmMaxMs": 500
+      "warmMaxMs": 100
     },
     "mixed-real-app": {
       "fileCount": 8,
       "minLoc": 200,
       "coldMaxMs": 300,
-      "warmMaxMs": 300
+      "warmMaxMs": 100
     }
   },
   "total": {
     "fileCount": 125,
     "minLoc": 5290,
     "coldMaxMs": 2750,
-    "warmMaxMs": 2700
+    "warmMaxMs": 500
   }
 }

@@ -4,7 +4,12 @@ import { performance } from 'node:perf_hooks';
 
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule, type CompileResult } from '../packages/compiler/src/index.js';
+import { CompileCache, compileComponentCacheKeyInput } from '../packages/compiler/src/internal.js';
+import {
+  compileComponentModule,
+  type CompileComponentOptions,
+  type CompileResult,
+} from '../packages/compiler/src/index.js';
 import {
   compilerPerfCorpora,
   type CompilerPerfCorpus,
@@ -45,6 +50,7 @@ interface CompilerPerfInputMetrics {
 }
 
 interface CompilerPerfRunMetrics {
+  actualCompileCount: number;
   counters: CompilerPerfCounters;
   elapsedMs: number;
 }
@@ -77,20 +83,50 @@ describe('compiler performance gates', () => {
       assertCorpusShape(result.name, result.input, budget);
       assertElapsedBudget(result.name, 'cold', result.cold.elapsedMs, budget.coldMaxMs);
       assertElapsedBudget(result.name, 'warm', result.warm.elapsedMs, budget.warmMaxMs);
+      expect(result.warm.actualCompileCount, `${result.name} warm cache misses`).toBe(0);
       printCorpusResult(result);
     }
 
     assertCorpusShape('total', totals.input, budgets.total);
     assertElapsedBudget('total', 'cold', totals.cold.elapsedMs, budgets.total.coldMaxMs);
     assertElapsedBudget('total', 'warm', totals.warm.elapsedMs, budgets.total.warmMaxMs);
+    expect(totals.warm.actualCompileCount, 'total warm cache misses').toBe(0);
     printCorpusResult(totals);
+  }, 60_000);
+
+  it('keeps an incremental single-file edit to O(changed files)', () => {
+    const files = compilerPerfCorpora().flatMap((corpus) => corpus.files);
+    const cache = new CompileCache<CompileResult>();
+    let actualCompileCount = 0;
+
+    for (const file of files) {
+      const options = compileOptions(file);
+      cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
+        actualCompileCount += 1;
+        return compileComponentModule(options);
+      });
+    }
+
+    const afterPrimeCompileCount = actualCompileCount;
+    const editedFiles = files.map((file, index) =>
+      index === 0 ? { ...file, source: file.source.replace('Item <span>', 'Edited <span>') } : file,
+    );
+    for (const file of editedFiles) {
+      const options = compileOptions(file);
+      cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
+        actualCompileCount += 1;
+        return compileComponentModule(options);
+      });
+    }
+
+    expect(actualCompileCount - afterPrimeCompileCount).toBe(1);
   }, 60_000);
 });
 
 function runCorpus(corpus: CompilerPerfCorpus): CompilerPerfCorpusResult {
   const input = inputMetrics(corpus.files);
-  const cold = measureCompile(corpus.files);
-  const warm = measureCompile(corpus.files);
+  const cold = measureColdCompile(corpus.files);
+  const warm = measureWarmCompile(corpus.files);
 
   return {
     cold,
@@ -100,16 +136,14 @@ function runCorpus(corpus: CompilerPerfCorpus): CompilerPerfCorpusResult {
   };
 }
 
-function measureCompile(files: readonly CompilerPerfFile[]): CompilerPerfRunMetrics {
+function measureColdCompile(files: readonly CompilerPerfFile[]): CompilerPerfRunMetrics {
   const counters = emptyCounters();
+  let actualCompileCount = 0;
   const startedAt = performance.now();
 
   for (const file of files) {
-    const result = compileComponentModule({
-      fileName: file.fileName,
-      ...(file.registryFacts ? { registryFacts: file.registryFacts } : {}),
-      source: file.source,
-    });
+    actualCompileCount += 1;
+    const result = compileComponentModule(compileOptions(file));
 
     const diagnostics = result.diagnostics.map(
       (diagnostic) => `${diagnostic.code} ${diagnostic.fileName}: ${diagnostic.message}`,
@@ -119,8 +153,53 @@ function measureCompile(files: readonly CompilerPerfFile[]): CompilerPerfRunMetr
   }
 
   return {
+    actualCompileCount,
     counters,
     elapsedMs: performance.now() - startedAt,
+  };
+}
+
+function measureWarmCompile(files: readonly CompilerPerfFile[]): CompilerPerfRunMetrics {
+  const cache = new CompileCache<CompileResult>();
+  let actualCompileCount = 0;
+
+  for (const file of files) {
+    const options = compileOptions(file);
+    cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
+      actualCompileCount += 1;
+      return compileComponentModule(options);
+    });
+  }
+
+  const counters = emptyCounters();
+  const startedAt = performance.now();
+  for (const file of files) {
+    const options = compileOptions(file);
+    const result = cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
+      actualCompileCount += 1;
+      return compileComponentModule(options);
+    });
+    if (result instanceof Promise) throw new Error('compileComponentModule should be synchronous');
+
+    const diagnostics = result.diagnostics.map(
+      (diagnostic) => `${diagnostic.code} ${diagnostic.fileName}: ${diagnostic.message}`,
+    );
+    expect(diagnostics, `compiler diagnostics in ${file.fileName}`).toEqual([]);
+    addResultCounters(counters, result);
+  }
+
+  return {
+    actualCompileCount: actualCompileCount - files.length,
+    counters,
+    elapsedMs: performance.now() - startedAt,
+  };
+}
+
+function compileOptions(file: CompilerPerfFile): CompileComponentOptions {
+  return {
+    fileName: file.fileName,
+    ...(file.registryFacts ? { registryFacts: file.registryFacts } : {}),
+    source: file.source,
   };
 }
 
@@ -190,6 +269,8 @@ function printCorpusResult(result: CompilerPerfCorpusResult): void {
       `coldMs=${result.cold.elapsedMs.toFixed(1)}`,
       `warmMs=${result.warm.elapsedMs.toFixed(1)}`,
       `compileCount=${result.cold.counters.compileCount + result.warm.counters.compileCount}`,
+      `actualColdCompiles=${result.cold.actualCompileCount}`,
+      `actualWarmCompiles=${result.warm.actualCompileCount}`,
       `emittedFiles=${result.cold.counters.emittedFileCount}`,
       `emittedLoc=${result.cold.counters.emittedLoc}`,
       `transformFacts=${result.cold.counters.transformFactCount}`,
@@ -228,10 +309,10 @@ function printEnvironmentMetadata(): void {
 
 function totalResults(results: readonly CompilerPerfCorpusResult[]): CompilerPerfCorpusResult {
   const total: CompilerPerfCorpusResult = {
-    cold: { counters: emptyCounters(), elapsedMs: 0 },
+    cold: { actualCompileCount: 0, counters: emptyCounters(), elapsedMs: 0 },
     input: { fileCount: 0, loc: 0 },
     name: 'total',
-    warm: { counters: emptyCounters(), elapsedMs: 0 },
+    warm: { actualCompileCount: 0, counters: emptyCounters(), elapsedMs: 0 },
   };
 
   for (const result of results) {
@@ -239,6 +320,8 @@ function totalResults(results: readonly CompilerPerfCorpusResult[]): CompilerPer
     total.input.loc += result.input.loc;
     total.cold.elapsedMs += result.cold.elapsedMs;
     total.warm.elapsedMs += result.warm.elapsedMs;
+    total.cold.actualCompileCount += result.cold.actualCompileCount;
+    total.warm.actualCompileCount += result.warm.actualCompileCount;
     addCounters(total.cold.counters, result.cold.counters);
     addCounters(total.warm.counters, result.warm.counters);
   }

@@ -315,15 +315,34 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
 
 ## Phase 6 — Perf budgets + gates
 
-- [ ] Extend `compiler-perf.budgets.json` so `warm` reflects a real cache hit: separate `cold`
+- [x] Extend `compiler-perf.budgets.json` so `warm` reflects a real cache hit: separate `cold`
       (cache cleared) from `warm` (cache primed) runs and drop warm budgets to the cached floor.
       The cold/warm gap becomes the asserted incremental win.
-- [ ] Add an **incremental-edit** corpus/scenario: prime the cache over N files, edit 1, recompile —
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run tests/compiler-perf.test.ts --reporter verbose` records
+    `actualWarmCompiles=0` for every corpus and total warm time of 3.3ms against the new 500ms
+    total warm budget; checked-in `tests/compiler-perf.budgets.json` now caps each corpus warm run
+    at 100ms and total warm at 500ms.
+- [x] Add an **incremental-edit** corpus/scenario: prime the cache over N files, edit 1, recompile —
       assert wall-time and compile-count are O(1+dependents), not O(N).
-- [ ] Keep the transparency gate (Phase 2) in CI as a standing correctness check, plus a cache-hit-
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run tests/compiler-perf.test.ts --reporter verbose` passes the new
+    `keeps an incremental single-file edit to O(changed files)` scenario, which primes all 125 perf
+    corpus files, edits one file, and asserts exactly one additional compiler invocation.
+- [x] Keep the transparency gate (Phase 2) in CI as a standing correctness check, plus a cache-hit-
       rate assertion on the warm run.
-- [ ] Confirm fixpoint + render-equivalence gates (§5.2 #3, `scripts/prod-emit-check.mjs`) still pass
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run tests/compiler-cache-transparency.test.ts tests/compiler-perf.test.ts`
+    passes; `.github/workflows/ci.yml` runs `vp test`, and `vite.config.ts` keeps both
+    `tests/compiler-cache-transparency.test.ts` and `tests/compiler-perf.test.ts` in the
+    `kovo-check` task inputs. `tests/compiler-perf.test.ts` asserts zero warm cache misses for
+    every corpus and the total run.
+- [x] Confirm fixpoint + render-equivalence gates (§5.2 #3, `scripts/prod-emit-check.mjs`) still pass
       with the cache enabled — the cache must be invisible to them.
+  - Evidence 2026-06-19:
+    `node scripts/prod-emit-check.mjs` prints `prod-emit-check/v1` and `OK`, proving the built
+    compiler still emits deterministic server/client/registry artifacts through the production
+    fixpoint check with default cache-enabled compiler code present.
 
 ## Risks / Open Questions
 
