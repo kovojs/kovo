@@ -342,8 +342,12 @@ routes/<route>.css]` (theme stays on `base`/app), using
     bytes; `/questions/q1` links `/assets/routes/questions-id-57301277.css`
     at 3,468 bytes and inlines 17,040 bytes.
   - Gap:
-    create-kovo starter and site still need comparable route-byte proof before
-    this checkbox can close.
+    create-kovo starter export coverage passes, but site remains a real
+    monolith: `node site/scripts/measure-route-style-size.mjs --json` reports
+    `/`, `/docs/quickstart`, and `/guides/styling` all link `/assets/site.css`
+    at 109,111 bytes with 10,986 inlined critical CSS bytes. Closing this item
+    requires migrating the site export to the `kovo build` split pipeline or
+    adding a site-specific route splitter for `@kovojs/ui` package atoms.
 
 ### Phase 7 — Overship regression gate
 
