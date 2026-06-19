@@ -29,11 +29,11 @@ import {
 } from './domain.js';
 import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
-import { LoginForm, authFormStyleCss } from './components/auth-forms.js';
-import { CartBadge, cartBadgeStyleCss } from './components/cart-badge.js';
-import { OrderHistory, orderHistoryStyleCss } from './components/order-history.js';
+import { LoginForm } from './components/auth-forms.js';
+import { CartBadge } from './components/cart-badge.js';
+import { OrderHistory } from './components/order-history.js';
 import { renderOrderHistory } from './components/order-history-view.js';
-import { ProductGrid, ProductGridError, productGridStyleCss } from './components/product-grid.js';
+import { ProductGrid, ProductGridError } from './components/product-grid.js';
 import { commerceTheme } from './theme.js';
 
 export type CommerceRouteRequest = Request & CommerceAuthRequest;
@@ -67,19 +67,8 @@ const commerceAppStyles = style.create({
   },
 });
 
-export const commerceAppStyleCss = style.emitAtomicCss(
-  Object.values(commerceAppStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export const commerceStylesheets = [
   stylesheet('./styles.css', {
-    criticalCss: [
-      commerceAppStyleCss,
-      authFormStyleCss,
-      cartBadgeStyleCss,
-      orderHistoryStyleCss,
-      productGridStyleCss,
-    ],
     theme: commerceTheme,
   }),
 ] as const;

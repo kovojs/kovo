@@ -203,10 +203,6 @@ const detailStyles = style.create({
   },
 });
 
-export const questionDetailStyleCss = style.emitAtomicCss(
-  Object.values(detailStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 function renderQuestionPost(question: QuestionDetailResult): string {
   const tags = parseTags(question.tags);
   return (

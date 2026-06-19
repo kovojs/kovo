@@ -11,9 +11,9 @@ import {
 } from '@kovojs/server';
 import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
 
-import { QuestionDetailRegion, questionDetailStyleCss } from './components/question-detail.js';
-import { QuestionListRegion, questionListStyleCss } from './components/question-list.js';
-import { SoShell, soChromeStyleCss } from './components/chrome.js';
+import { QuestionDetailRegion } from './components/question-detail.js';
+import { QuestionListRegion } from './components/question-list.js';
+import { SoShell } from './components/chrome.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
@@ -34,7 +34,6 @@ import { soTheme } from './theme.js';
 
 const soStylesheets = [
   stylesheet('./styles.css', {
-    criticalCss: [soChromeStyleCss, questionListStyleCss, questionDetailStyleCss],
     theme: soTheme,
   }),
 ] as const;

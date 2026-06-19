@@ -61,10 +61,6 @@ const authFormStyles = style.create({
   },
 });
 
-export const authFormStyleCss = style.emitAtomicCss(
-  Object.values(authFormStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export function LoginForm({ next = '/cart' }: { next?: string }): string {
   return (
     <form style={authFormStyles.loginForm} mutation={commerceSignIn}>

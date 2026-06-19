@@ -95,10 +95,6 @@ const productGridStyles = style.create({
   },
 });
 
-export const productGridStyleCss = style.emitAtomicCss(
-  Object.values(productGridStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export interface OutOfStockFailure {
   code: 'OUT_OF_STOCK';
   payload: { availableQuantity: number };

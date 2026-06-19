@@ -314,10 +314,6 @@ const chromeStyles = style.create({
   },
 });
 
-export const soChromeStyleCss = style.emitAtomicCss(
-  Object.values(chromeStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 // The demo uses text ids for posted questions and answers.
 export function freshId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;

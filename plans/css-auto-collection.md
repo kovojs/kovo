@@ -155,12 +155,18 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 
 ### Phase 3 — Migrate examples, starter, docs off the manual surface
 
+- [x] Remove `export const *StyleCss = style.emitAtomicCss(... __rules ...)` and
+      the `criticalCss: [...]` lists from `examples/{commerce,crm,stackoverflow}`;
+      routes keep only `stylesheet('./styles.css', { theme })`.
+  - Evidence 2026-06-19:
+    `rg -n "emitAtomicCss|__rules|StyleCss|criticalCss" examples/commerce/src examples/crm/src examples/stackoverflow/src -g'*.ts' -g'*.tsx'`
+    returns no hits; `npx vitest --run examples/commerce/src/app.rendering.test.ts examples/commerce/src/app.test.ts`
+    and `npx vitest --run examples/crm/src/interactive-app.test.ts examples/stackoverflow/src/interactive-app.test.ts`
+    pass.
 - [ ] Remove `export const *StyleCss = style.emitAtomicCss(... __rules ...)` and
-      the `criticalCss: [...]` lists from `examples/{commerce,crm,stackoverflow}`,
-      `site/tutorial/steps/*`, and `create-kovo` starter; routes keep only
-      `stylesheet('./styles.css', { theme })`. - Evidence: `grep -rn "emitAtomicCss\|__rules\|StyleCss" examples site packages/create-kovo`
-      returns no app-source hits; each example renders byte-identical styled
-      HTML before/after (golden/build test).
+      the `criticalCss: [...]` lists from `site/tutorial/steps/*` and the
+      `create-kovo` starter; routes keep only
+      `stylesheet('./styles.css', { theme })`.
 - [ ] Update styling docs (`docs/`, starter README, `kovo explain`) to teach the
       one-import + no-export surface.
 

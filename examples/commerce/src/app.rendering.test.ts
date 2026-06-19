@@ -49,7 +49,6 @@ describe('commerce example', () => {
     });
     expect(commercePageHints.html).toContain('data-kovo-critical-href="/assets/styles.css"');
     expect(commercePageHints.html).toContain('--kovo-theme-sys-color-primary');
-    expect(commercePageHints.html).toContain('.kv-style-');
     expect(pageHints.title).toBe('Kovo Commerce (0)');
     expect(pageHints.metas).toEqual(
       expect.arrayContaining([
@@ -106,7 +105,8 @@ describe('commerce example', () => {
     expect(css).toContain('var(--kovo-theme-sys-color-surface)');
     expect(css).toContain('var(--kovo-theme-sys-color-on-surface)');
     expect(css).toContain('--kovo-color-background:');
-    expect(css).toContain('.kv-style-');
+    expect(css).toContain('.kv-commerce-app-');
+    expect(css).toContain('.kv-product-grid-');
     expect(css).toContain('.kv-button-');
     expect(css).not.toContain('.bg-slate-50');
     expect(css).not.toContain('.text-red-700');

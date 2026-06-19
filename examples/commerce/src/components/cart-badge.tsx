@@ -39,10 +39,6 @@ const cartBadgeStyles = style.create({
   },
 });
 
-export const cartBadgeStyleCss = style.emitAtomicCss(
-  Object.values(cartBadgeStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export const CartBadge = component({
   queries: { cart: cartQuery },
   render: ({ cart }: { cart: CartQueryResult }) => (

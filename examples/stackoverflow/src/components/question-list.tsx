@@ -281,10 +281,6 @@ const listStyles = style.create({
   },
 });
 
-export const questionListStyleCss = style.emitAtomicCss(
-  Object.values(listStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 function renderAnswerStat(answerCount: number): string {
   if (answerCount > 0) {
     return (

@@ -126,10 +126,6 @@ const pipelineStyles = style.create({
   },
 });
 
-export const pipelineStyleCss = style.emitAtomicCss(
-  Object.values(pipelineStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 interface PipelineRenderSlots {
   request?: CrmRequest | undefined;
 }

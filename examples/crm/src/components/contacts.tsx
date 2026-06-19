@@ -98,10 +98,6 @@ const contactStyles = style.create({
   },
 });
 
-export const contactStyleCss = style.emitAtomicCss(
-  Object.values(contactStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 function renderContactCard(contact: ContactRow): string {
   return Card.definition.render({
     children: (

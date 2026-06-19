@@ -47,10 +47,6 @@ const orderHistoryStyles = style.create({
   },
 });
 
-export const orderHistoryStyleCss = style.emitAtomicCss(
-  Object.values(orderHistoryStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 interface OrderHistoryItem {
   id: string;
   productId: string;

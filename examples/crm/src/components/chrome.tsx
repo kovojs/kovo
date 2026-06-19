@@ -89,10 +89,6 @@ const chromeStyles = style.create({
   },
 });
 
-export const crmChromeStyleCss = style.emitAtomicCss(
-  Object.values(chromeStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 // Form fragments mint ids server-side so each rendered composer is ready to post.
 export function freshId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;

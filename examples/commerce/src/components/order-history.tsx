@@ -50,10 +50,6 @@ const orderHistoryStyles = style.create({
   },
 });
 
-export const orderHistoryStyleCss = style.emitAtomicCss(
-  Object.values(orderHistoryStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export const OrderHistory = component({
   queries: { orderHistory: orderHistoryQuery },
   render: ({ orderHistory }: { orderHistory: OrderHistoryResult }) =>

@@ -10,10 +10,10 @@ import {
   type RequestHandler,
 } from '@kovojs/server';
 
-import { ContactsRegion, contactStyleCss } from './components/contacts.js';
-import { DealDetailRegion, dealDetailStyleCss } from './components/deal-detail.js';
-import { PipelineRegion, pipelineStyleCss } from './components/pipeline.js';
-import { CrmShell, crmChromeStyleCss } from './components/chrome.js';
+import { ContactsRegion } from './components/contacts.js';
+import { DealDetailRegion } from './components/deal-detail.js';
+import { PipelineRegion } from './components/pipeline.js';
+import { CrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
@@ -32,7 +32,6 @@ import { crmTheme } from './theme.js';
 
 const crmStylesheets = [
   stylesheet('./styles.css', {
-    criticalCss: [crmChromeStyleCss, contactStyleCss, pipelineStyleCss, dealDetailStyleCss],
     theme: crmTheme,
   }),
 ] as const;

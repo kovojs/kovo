@@ -126,10 +126,6 @@ const dealDetailStyles = style.create({
   },
 });
 
-export const dealDetailStyleCss = style.emitAtomicCss(
-  Object.values(dealDetailStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 interface DealDetailRenderSlots {
   request?: CrmRequest | undefined;
 }
