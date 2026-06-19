@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { assertExtractedComponentCss, emitSiteUiCss } from './emit-ui-css.mjs';
-import { assertServedStylesheetContent } from './export-static.mjs';
+import {
+  assertServedStylesheetContent,
+  assertServedUiStylesheetContent,
+} from './export-static.mjs';
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -14,13 +17,13 @@ describe('site UI CSS generation', () => {
     emitSiteUiCss();
   });
 
-  it('keeps gallery @kovojs/ui atoms in the site stylesheet input', () => {
+  it('keeps gallery @kovojs/ui atoms in a route-scoped stylesheet input', () => {
     const siteCss = readFileSync(resolve(siteRoot, 'src/styles.css'), 'utf8');
     const uiCss = readFileSync(resolve(siteRoot, 'src/generated/kovo-ui.css'), 'utf8');
 
-    // SPEC §13.1: gallery routes render @kovojs/ui classes, so /assets/site.css
-    // must include the matching package StyleX atoms.
-    expect(siteCss).toContain(`@import './${'generated'}/kovo-ui.css';`);
+    // SPEC §13.1: gallery routes render @kovojs/ui classes, but docs and
+    // landing routes should not link the package-wide UI sheet.
+    expect(siteCss).not.toContain('generated/kovo-ui.css');
     expect(uiCss).toContain('--kovo-theme-sys-color-on-surface:');
     expect(uiCss).toContain('var(--kovo-theme-sys-color-on-surface)');
     expect(uiCss).toContain('.kv-switch-bd-');
@@ -68,11 +71,9 @@ describe('emit-ui-css component CSS guard', () => {
 });
 
 describe('export-static served stylesheet guard', () => {
-  // The served /assets/site.css must clear a size floor and carry component
-  // atoms; otherwise the gallery ships unstyled (SPEC §6.1.1, §13.1).
-  const goodCss = `.kv-button-a{}.kv-switch-b{}.kv-dialog-c{}`.padEnd(50_000, ' ');
+  const goodCss = ':root{--site-token:1}'.padEnd(12_000, ' ');
 
-  it('passes for a healthy stylesheet (size + atoms)', () => {
+  it('passes for a healthy global stylesheet', () => {
     expect(() => assertServedStylesheetContent(goodCss, '/dist-css/assets/site.css')).not.toThrow();
   });
 
@@ -87,31 +88,24 @@ describe('export-static served stylesheet guard', () => {
     expect(() => assertServedStylesheetContent(built, 'dist-css/assets/site.css')).not.toThrow();
   });
 
-  it('throws on a short stylesheet (the stale ~6.5KB regression)', () => {
-    const short = `.kv-button-a{}.kv-switch-b{}.kv-dialog-c{}`.padEnd(6_500, ' ');
+  it('throws on a short stylesheet', () => {
+    const short = ':root{--site-token:1}'.padEnd(3_000, ' ');
     expect(() => assertServedStylesheetContent(short, '/dist-css/assets/site.css')).toThrow(
       /only \d+ bytes/,
     );
   });
 
-  it('throws naming the missing component atoms', () => {
-    // Chrome-only sheet over the floor but with no @kovojs/ui component atoms.
-    const chromeOnly = `.kv-site-chrome-a{}`.padEnd(50_000, ' ');
-    expect(() => assertServedStylesheetContent(chromeOnly, '/dist-css/assets/site.css')).toThrow(
+  it('validates the route-scoped gallery UI stylesheet atoms', () => {
+    expect(() =>
+      assertServedUiStylesheetContent(
+        `.kv-button-a{}.kv-switch-b{}.kv-dialog-c{}`,
+        '/assets/kovo-ui.css',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertServedUiStylesheetContent('.kv-site-chrome-a{}', '/assets/kovo-ui.css'),
+    ).toThrow(
       /missing required component atoms \(kv-button-, kv-switch-, kv-dialog-\)/,
     );
-  });
-
-  it('reports both size and atom problems together', () => {
-    let thrown;
-    try {
-      assertServedStylesheetContent('.kv-site-chrome-a{}', '/dist-css/assets/site.css');
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBeInstanceOf(Error);
-    expect(thrown.message).toMatch(/only \d+ bytes/);
-    expect(thrown.message).toContain('missing required component atoms');
-    expect(thrown.message).toContain('pnpm install');
   });
 });

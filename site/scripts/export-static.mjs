@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { cp, rm } from 'node:fs/promises';
+import { cp, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,12 +18,10 @@ const cssDistDir = path.join(siteRoot, 'dist-css');
 const publicDir = path.join(siteRoot, 'public');
 const defaultDistDir = path.join(siteRoot, 'dist');
 
-// The served stylesheet must carry the gallery's @kovojs/ui component atoms; a
-// correct build is ~93KB. Guard against the broken-install case where a stale
-// short sheet (chrome atoms only, no component atoms) would ship the gallery
-// unstyled with no diagnostic (SPEC §6.1.1, §13.1). Floor is well under the real
-// size but well over a tokens-only sheet.
-const SITE_CSS_MIN_BYTES = 40_000;
+// The global served stylesheet carries site-global CSS and theme tokens. The
+// gallery's @kovojs/ui atoms are copied separately to /assets/kovo-ui.css so
+// docs/landing routes do not pay for package component CSS they never render.
+const SITE_CSS_MIN_BYTES = 5_000;
 const SITE_CSS_REQUIRED_ATOMS = ['kv-button-', 'kv-switch-', 'kv-dialog-'];
 
 // Pure content guard for the served stylesheet: throw a clear, actionable error
@@ -31,22 +29,26 @@ const SITE_CSS_REQUIRED_ATOMS = ['kv-button-', 'kv-switch-', 'kv-dialog-'];
 export function assertServedStylesheetContent(css, stylesheetPath) {
   const problems = [];
   if (css.length < SITE_CSS_MIN_BYTES) {
-    problems.push(
-      `is only ${css.length} bytes (expected > ${SITE_CSS_MIN_BYTES}; a correct build is ~93KB)`,
-    );
-  }
-  const missingAtoms = SITE_CSS_REQUIRED_ATOMS.filter((atom) => !css.includes(atom));
-  if (missingAtoms.length > 0) {
-    problems.push(`is missing required component atoms (${missingAtoms.join(', ')})`);
+    problems.push(`is only ${css.length} bytes (expected > ${SITE_CSS_MIN_BYTES})`);
   }
   if (problems.length > 0) {
     throw new Error(
       `site export: the served stylesheet ${stylesheetPath} ${problems.join(' and ')}. ` +
-        `The gallery would render unstyled. This usually means @kovojs/ui's component CSS was ` +
-        `not extracted — check that site/node_modules/@kovojs/{ui,headless-ui} are valid ` +
-        `workspace symlinks (run \`pnpm install\` at the repo root) and that emit-ui-css ran.`,
+        `The docs shell would render without its global CSS. Check that \`vp build\` ran.`,
     );
   }
+}
+
+export function assertServedUiStylesheetContent(css, stylesheetPath) {
+  const missingAtoms = SITE_CSS_REQUIRED_ATOMS.filter((atom) => !css.includes(atom));
+  if (missingAtoms.length === 0) return;
+
+  throw new Error(
+    `site export: the gallery stylesheet ${stylesheetPath} is missing required component atoms ` +
+      `(${missingAtoms.join(', ')}). The gallery would render unstyled. This usually means ` +
+      `@kovojs/ui's component CSS was not extracted — check that site/node_modules/@kovojs/{ui,headless-ui} ` +
+      `are valid workspace symlinks (run \`pnpm install\` at the repo root) and that emit-ui-css ran.`,
+  );
 }
 
 // Resolve the bundled stylesheet from the Vite manifest, then assert it exceeds
@@ -83,6 +85,10 @@ function assertServedStylesheet() {
   }
 
   assertServedStylesheetContent(css, stylesheetPath);
+  assertServedUiStylesheetContent(
+    readFileSync(path.join(siteRoot, 'src/generated/kovo-ui.css'), 'utf8'),
+    path.join(siteRoot, 'src/generated/kovo-ui.css'),
+  );
 }
 
 export async function exportSiteStaticApp({
@@ -145,6 +151,8 @@ export async function exportSiteStaticApp({
   // public/ (fonts + the gallery runtime shim) is verbatim static hosting,
   // outside the manifest; copy it alongside the replayed documents.
   await cp(publicDir, outDir, { recursive: true });
+  await mkdir(path.join(outDir, 'assets'), { recursive: true });
+  await cp(path.join(siteRoot, 'src/generated/kovo-ui.css'), path.join(outDir, 'assets/kovo-ui.css'));
 
   // Agent/static-host surface (search index, llms.txt, raw .md mirrors, 404)
   // and the embedded example apps the iframes point at.

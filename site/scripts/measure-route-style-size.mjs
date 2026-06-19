@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -26,7 +26,13 @@ execFileSync('corepack', ['pnpm', '--dir', siteRoot, 'run', 'build:css'], {
 });
 const buildMs = Math.round(performance.now() - buildStart);
 
-const cssFiles = [path.join(distCssRoot, 'assets/site.css')];
+mkdirSync(path.join(distCssRoot, 'assets'), { recursive: true });
+copyFileSync(path.join(siteRoot, 'src/generated/kovo-ui.css'), path.join(distCssRoot, 'assets/kovo-ui.css'));
+
+const cssFiles = [
+  path.join(distCssRoot, 'assets/site.css'),
+  path.join(distCssRoot, 'assets/kovo-ui.css'),
+];
 const cssBytes = sumBytes(cssFiles);
 const viteServer = await createServer({
   appType: 'custom',

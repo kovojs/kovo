@@ -12,6 +12,18 @@ export const siteStylesheets = [
   }),
 ] as const;
 
+export const siteUiStylesheets = [
+  stylesheet('./generated/kovo-ui.css', {
+    href: '/assets/kovo-ui.css',
+  }),
+] as const;
+
+export function siteStylesheetsForRoute(path: string): readonly (typeof siteStylesheets)[number][] {
+  return path === '/gallery' || path.startsWith('/gallery/')
+    ? [...siteStylesheets, ...siteUiStylesheets]
+    : siteStylesheets;
+}
+
 /** Route paths drop the trailing slash (normalizePathname is canonical, SPEC
  * §6.3); content URLs keep it and static export writes `<path>/index.html`. */
 export function routePath(url: string): string {

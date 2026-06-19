@@ -313,11 +313,11 @@ routes/<route>.css]` (theme stays on `base`/app), using
     shows no generated-rule exports or component critical lists in those apps;
     remaining matches are authored stylesheet declarations and route-kit theme
     critical CSS.
-- [ ] Prove each example renders styled HTML with strictly smaller per-route CSS
+- [x] Prove each example renders styled HTML with strictly smaller per-route CSS
       than the Phase 0 baseline; update `graph.json`,
       `app.rendering.test.ts` (`examples/commerce/src/app.rendering.test.ts`),
       and `route-kit.test.ts` expectations with byte evidence.
-  - Progress 2026-06-19:
+  - Evidence 2026-06-19:
     `corepack pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS|links only reachable build CSS chunks"`
     proves split app CSS is no longer duplicated into the declared
     `/assets/styles.css` sink for build fixtures.
@@ -341,13 +341,16 @@ routes/<route>.css]` (theme stays on `base`/app), using
     `/assets/routes/index-317cb718.css` at 4,336 bytes and inlines 14,908
     bytes; `/questions/q1` links `/assets/routes/questions-id-57301277.css`
     at 3,468 bytes and inlines 17,040 bytes.
-  - Gap:
-    create-kovo starter export coverage passes, but site remains a real
-    monolith: `node site/scripts/measure-route-style-size.mjs --json` reports
-    `/`, `/docs/quickstart`, and `/guides/styling` all link `/assets/site.css`
-    at 109,111 bytes with 10,986 inlined critical CSS bytes. Closing this item
-    requires migrating the site export to the `kovo build` split pipeline or
-    adding a site-specific route splitter for `@kovojs/ui` package atoms.
+    `node site/scripts/measure-route-style-size.mjs --json` records site
+    sampled non-gallery routes (`/`, `/docs/quickstart`, `/guides/styling`)
+    linking only `/assets/site.css` at 6,569 bytes, down from the Phase 0
+    109,111-byte site monolith.
+    `corepack pnpm --dir site exec node scripts/export-static.mjs --skip-pipeline --out ../.tmp-site-export`
+    plus direct exported-HTML inspection proves landing/docs pages link only
+    `/assets/site.css`, while gallery routes link `/assets/site.css` and the
+    route-scoped `/assets/kovo-ui.css`.
+    `corepack pnpm exec vitest --run site/scripts/emit-ui-css.test.mjs site/src/route-kit.test.ts`
+    verifies the site route kit and export stylesheet guards for the split.
 
 ### Phase 7 — Overship regression gate
 

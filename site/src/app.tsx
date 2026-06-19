@@ -13,7 +13,7 @@ import { clientHrefs, siteClientModules } from './client/modules.js';
 import { DocsRoutePage } from './components/docs-layout.js';
 import { LandingRoutePage } from './components/landing.js';
 import { siteDocumentTemplate } from './document-template.js';
-import { siteStylesheets } from './route-kit.js';
+import { siteStylesheetsForRoute } from './route-kit.js';
 
 type SiteRoute = RouteDeclaration<string, undefined, undefined, unknown, unknown, unknown>;
 
@@ -33,7 +33,7 @@ const routes: SiteRoute[] = [
   route('/', {
     layout: SiteRouteLayout,
     meta: siteRouteData.landing.meta,
-    stylesheets: siteStylesheets,
+    stylesheets: siteStylesheetsForRoute('/'),
     page() {
       return (
         <LandingRoutePage
@@ -61,7 +61,7 @@ function docsRoute(page: SiteRoutePage): SiteRoute {
     layout: SiteRouteLayout,
     meta: page.meta,
     ...(page.modulepreloads ? { modulepreloads: page.modulepreloads } : {}),
-    stylesheets: siteStylesheets,
+    stylesheets: siteStylesheetsForRoute(page.routePath),
     page() {
       return <DocsRoutePage clients={clientHrefs} page={page.body} />;
     },
