@@ -27,7 +27,6 @@ export const skeletonStyles = style.create(
       borderRadius: uiTheme.radius.md,
     },
   },
-  { namespace: 'skeleton', source: 'skeleton.tsx' },
 );
 
 export const skeletonClasses = [style.attrs(skeletonStyles.root).class ?? ''] as const;

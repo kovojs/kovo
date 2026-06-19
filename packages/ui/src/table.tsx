@@ -97,7 +97,6 @@ export const tableStyles = style.create(
       width: '100%',
     },
   },
-  { namespace: 'table', source: 'table.tsx' },
 );
 
 export const tableWrapperClasses = [style.attrs(tableStyles.wrapper).class ?? ''] as const;

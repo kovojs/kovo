@@ -104,7 +104,6 @@ export const popoverStyles = style.create(
       },
     },
   },
-  { namespace: 'popover', source: 'popover.tsx' },
 );
 
 export const popoverClasses = [style.attrs(popoverStyles.root).class ?? ''] as const;

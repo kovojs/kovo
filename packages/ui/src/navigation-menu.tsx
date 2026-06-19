@@ -236,7 +236,6 @@ export const navigationMenuStyles = style.create(
       },
     },
   },
-  { namespace: 'navigationMenu', source: 'navigation-menu.tsx' },
 );
 
 export const navigationMenuClasses = [style.attrs(navigationMenuStyles.root).class ?? ''] as const;

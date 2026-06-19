@@ -32,7 +32,6 @@ export const kbdStyles = style.create(
       paddingInline: 4,
     },
   },
-  { namespace: 'kbd', source: 'kbd.tsx' },
 );
 
 export const kbdClasses = [style.attrs(kbdStyles.root).class ?? ''] as const;

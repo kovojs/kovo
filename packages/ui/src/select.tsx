@@ -200,7 +200,6 @@ export const selectStyles = style.create(
       },
     },
   },
-  { namespace: 'select', source: 'select.tsx' },
 );
 
 export const selectClasses = [style.attrs(selectStyles.root).class ?? ''] as const;

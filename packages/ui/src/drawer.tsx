@@ -175,7 +175,6 @@ export const drawerStyles = style.create(
       },
     },
   },
-  { namespace: 'drawer', source: 'drawer.tsx' },
 );
 
 export const drawerSideStyles = style.create(
@@ -211,7 +210,6 @@ export const drawerSideStyles = style.create(
       top: 0,
     },
   },
-  { namespace: 'drawerSide', source: 'drawer.tsx' },
 );
 
 export const drawerClasses = [style.attrs(drawerStyles.root).class ?? ''] as const;

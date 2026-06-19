@@ -190,7 +190,6 @@ export const autocompleteStyles = style.create(
       },
     },
   },
-  { namespace: 'autocomplete', source: 'autocomplete.tsx' },
 );
 
 export const autocompleteClasses = [style.attrs(autocompleteStyles.root).class ?? ''] as const;

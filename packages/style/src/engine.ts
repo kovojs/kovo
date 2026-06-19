@@ -77,6 +77,10 @@ interface StyleIdentityOptions {
   readonly source?: string;
 }
 
+interface StyleCallSite {
+  readonly fileName: string;
+}
+
 /**
  * @internal Structured result for compiler callers that need both style records
  * and extracted CSS. The compiler ABI consumes this through `@kovojs/style/internal`.
@@ -151,7 +155,8 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
   styles: Styles,
   identity: StyleIdentityOptions,
 ): AtomicCssResult<Styles> {
-  const namespace = slug(identity.namespace ?? identity.source ?? 'style');
+  const resolvedIdentity = resolveStyleIdentity(styles, identity);
+  const namespace = slug(resolvedIdentity.namespace ?? resolvedIdentity.source ?? 'style');
   const rulesByKey = new Map<string, AtomicRule>();
   const compiled: Record<string, CompiledStyle> = {};
 
@@ -163,10 +168,10 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
       ruleEntries,
       rulesByKey,
       selectorSuffix: '',
-      source: `${identity.source ?? namespace}#${styleKey}`,
+      source: `${resolvedIdentity.source ?? namespace}#${styleKey}`,
       styleKey,
     });
-    compiled[styleKey] = styleRecord(styleKey, styleRules, ruleEntries, identity.source);
+    compiled[styleKey] = styleRecord(styleKey, styleRules, ruleEntries, resolvedIdentity.source);
   }
 
   const rules = [...rulesByKey.values()].sort(compareRules);
@@ -175,6 +180,104 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
     rules,
     css: emitAtomicCss(rules),
   };
+}
+
+function resolveStyleIdentity(
+  styles: Record<string, StyleObject>,
+  identity: StyleIdentityOptions,
+): StyleIdentityOptions {
+  if (identity.namespace && identity.source) return identity;
+  const callSite = inferStyleCallSite();
+  if (!callSite) return identity;
+
+  return {
+    namespace: identity.namespace ?? derivedRuntimeStyleNamespace(callSite.fileName, styles),
+    source: identity.source ?? callSite.fileName,
+  };
+}
+
+function inferStyleCallSite(): StyleCallSite | null {
+  const site = styleStackCallSite();
+  if (!site) return null;
+  if (!slashPath(site.filePath).includes('/packages/ui/src/')) return null;
+
+  return {
+    fileName: styleSourceFileName(site.filePath),
+  };
+}
+
+function styleStackCallSite(): { column: number; filePath: string; line: number } | null {
+  const stack = new Error().stack ?? '';
+  for (const line of stack.split('\n')) {
+    const rawFrame = line.trim().replace(/^at\s+/, '');
+    const frame = rawFrame.includes('(')
+      ? (rawFrame.slice(rawFrame.lastIndexOf('(') + 1, rawFrame.endsWith(')') ? -1 : undefined))
+      : rawFrame;
+    const match =
+      /\(?((?:file:\/\/)?\/[^():]+):(\d+):(\d+)\)?$/.exec(frame) ??
+      /\(?([A-Za-z]:\\[^():]+):(\d+):(\d+)\)?$/.exec(frame);
+    if (!match) continue;
+    const rawFilePath = match[1] ?? '';
+    if (rawFilePath.endsWith('/packages/style/src/engine.ts')) continue;
+    const filePath = rawFilePath.startsWith('file://')
+      ? new URL(rawFilePath).pathname
+      : rawFilePath;
+    return {
+      column: Number(match[3]),
+      filePath,
+      line: Number(match[2]),
+    };
+  }
+  return null;
+}
+
+function styleSourceFileName(filePath: string): string {
+  const fileName = filePath.split(/[\\/]/).filter(Boolean).at(-1) ?? 'style.tsx';
+  if (/\.[cm]?jsx?$/.test(fileName)) return fileName.replace(/\.[cm]?jsx?$/, '.tsx');
+  return fileName;
+}
+
+function slashPath(value: string): string {
+  return value.replaceAll('\\', '/');
+}
+
+function derivedRuntimeStyleNamespace(
+  fileName: string,
+  styles: Record<string, StyleObject>,
+): string {
+  const fileBase = fileName
+    .split(/[\\/]/)
+    .filter(Boolean)
+    .at(-1)
+    ?.replace(/\.[cm]?[tj]sx?$/, '');
+  const fileNamespace = fileBase && fileBase.length > 0 ? fileBase : 'style';
+  const styleKeys = Object.keys(styles);
+
+  if (isSubset(styleKeys, ['bottom', 'left', 'right', 'top'])) return `${fileNamespace}-side`;
+  if (isSubset(styleKeys, ['horizontal', 'vertical'])) return `${fileNamespace}-orientation`;
+  if (isSubset(styleKeys, ['lg', 'md', 'sm', 'xl', 'xs'])) return `${fileNamespace}-size`;
+  if (
+    isSubset(styleKeys, [
+      'danger',
+      'destructive',
+      'ghost',
+      'info',
+      'neutral',
+      'outline',
+      'primary',
+      'secondary',
+      'subtle',
+      'success',
+      'warning',
+    ])
+  ) {
+    return `${fileNamespace}-variant`;
+  }
+  return fileNamespace;
+}
+
+function isSubset(values: readonly string[], allowed: readonly string[]): boolean {
+  return values.length > 0 && values.every((value) => allowed.includes(value));
 }
 
 /**

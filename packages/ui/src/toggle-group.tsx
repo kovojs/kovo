@@ -116,7 +116,6 @@ export const toggleGroupStyles = style.create(
       },
     },
   },
-  { namespace: 'toggleGroup', source: 'toggle-group.tsx' },
 );
 
 export const toggleGroupClasses = [style.attrs(toggleGroupStyles.root).class ?? ''] as const;

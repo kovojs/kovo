@@ -289,7 +289,6 @@ export const commandStyles = style.create(
       fontSize: 14,
     },
   },
-  { namespace: 'command', source: 'command.tsx' },
 );
 
 export const commandClasses = [style.attrs(commandStyles.root).class ?? ''] as const;

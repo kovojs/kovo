@@ -99,7 +99,6 @@ export const tooltipStyles = style.create(
       },
     },
   },
-  { namespace: 'tooltip', source: 'tooltip.tsx' },
 );
 
 export const tooltipClasses = [style.attrs(tooltipStyles.root).class ?? ''] as const;

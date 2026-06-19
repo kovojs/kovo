@@ -75,7 +75,6 @@ export const progressStyles = style.create(
       width: '100%',
     },
   },
-  { namespace: 'progress', source: 'progress.tsx' },
 );
 
 export const progressClasses = [style.attrs(progressStyles.root).class ?? ''] as const;

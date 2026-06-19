@@ -22,7 +22,6 @@ export const cardStyles = style.create(
       padding: 16,
     },
   },
-  { namespace: 'card', source: 'card.tsx' },
 );
 
 export const cardClasses = [style.attrs(cardStyles.root).class ?? ''] as const;

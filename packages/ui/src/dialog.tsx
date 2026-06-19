@@ -146,7 +146,6 @@ export const dialogStyles = style.create(
       },
     },
   },
-  { namespace: 'dialog', source: 'dialog.tsx' },
 );
 
 export const dialogClasses = [style.attrs(dialogStyles.root).class ?? ''] as const;

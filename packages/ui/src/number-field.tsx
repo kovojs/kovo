@@ -150,7 +150,6 @@ export const numberFieldStyles = style.create(
       },
     },
   },
-  { namespace: 'numberField', source: 'number-field.tsx' },
 );
 
 export const numberFieldClasses = [style.attrs(numberFieldStyles.root).class ?? ''] as const;

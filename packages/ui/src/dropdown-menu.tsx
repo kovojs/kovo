@@ -180,7 +180,6 @@ export const dropdownMenuStyles = style.create(
       },
     },
   },
-  { namespace: 'dropdownMenu', source: 'dropdown-menu.tsx' },
 );
 
 export const dropdownMenuClasses = [style.attrs(dropdownMenuStyles.root).class ?? ''] as const;

@@ -239,7 +239,6 @@ export const fieldStyles = style.create(
       paddingInline: 12,
     },
   },
-  { namespace: 'field', source: 'field.tsx' },
 );
 
 export const fieldClasses = [style.attrs(fieldStyles.root).class ?? ''] as const;

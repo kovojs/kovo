@@ -109,7 +109,6 @@ export const collapsibleStyles = style.create(
       },
     },
   },
-  { namespace: 'collapsible', source: 'collapsible.tsx' },
 );
 
 export const collapsibleClasses = [style.attrs(collapsibleStyles.root).class ?? ''] as const;

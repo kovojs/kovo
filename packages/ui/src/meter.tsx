@@ -67,7 +67,6 @@ export const meterStyles = style.create(
       width: '100%',
     },
   },
-  { namespace: 'meter', source: 'meter.tsx' },
 );
 
 export const meterClasses = [style.attrs(meterStyles.root).class ?? ''] as const;

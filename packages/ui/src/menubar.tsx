@@ -162,7 +162,6 @@ export const menubarStyles = style.create(
       },
     },
   },
-  { namespace: 'menubar', source: 'menubar.tsx' },
 );
 
 export const menubarClasses = [style.attrs(menubarStyles.root).class ?? ''] as const;

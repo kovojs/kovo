@@ -153,7 +153,6 @@ export const radioGroupStyles = style.create(
       },
     },
   },
-  { namespace: 'radioGroup', source: 'radio-group.tsx' },
 );
 
 export const radioGroupClasses = [style.attrs(radioGroupStyles.root).class ?? ''] as const;

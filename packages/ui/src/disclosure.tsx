@@ -114,7 +114,6 @@ export const disclosureStyles = style.create(
       },
     },
   },
-  { namespace: 'disclosure', source: 'disclosure.tsx' },
 );
 
 export const disclosureClasses = [style.attrs(disclosureStyles.root).class ?? ''] as const;

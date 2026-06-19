@@ -185,7 +185,6 @@ export const comboboxStyles = style.create(
       },
     },
   },
-  { namespace: 'combobox', source: 'combobox.tsx' },
 );
 
 export const comboboxClasses = [style.attrs(comboboxStyles.root).class ?? ''] as const;

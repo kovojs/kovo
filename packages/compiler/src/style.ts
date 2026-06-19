@@ -414,15 +414,10 @@ function derivedStyleNamespace(fileName: string, bindingName: string): string {
   const fileNamespace = fileBase && fileBase.length > 0 ? fileBase : binding;
 
   if (binding === 'style' || binding === 'styles' || binding === 'base') return fileNamespace;
-  if (
-    binding === 'motion' ||
-    binding === 'orientations' ||
-    binding === 'overrides' ||
-    binding === 'sizes' ||
-    binding === 'variants'
-  ) {
-    return `${fileNamespace}-${binding}`;
-  }
+  if (binding === 'motion' || binding === 'overrides') return `${fileNamespace}-${binding}`;
+  if (binding === 'orientations') return `${fileNamespace}-orientation`;
+  if (binding === 'sizes') return `${fileNamespace}-size`;
+  if (binding === 'variants') return `${fileNamespace}-variant`;
 
   return binding;
 }

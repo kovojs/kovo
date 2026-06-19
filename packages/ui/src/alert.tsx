@@ -34,7 +34,6 @@ const base = style.create(
       lineHeight: 1.3,
     },
   },
-  { namespace: 'alert', source: 'alert.tsx' },
 );
 
 const variants = style.create(
@@ -60,7 +59,6 @@ const variants = style.create(
       color: uiTheme.color.warning.foreground,
     },
   },
-  { namespace: 'alertVariant', source: 'alert.tsx' },
 );
 
 export const alertStyles = {

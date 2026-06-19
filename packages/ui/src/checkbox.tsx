@@ -112,7 +112,6 @@ export const checkboxStyles = style.create(
       },
     },
   },
-  { namespace: 'checkbox', source: 'checkbox.tsx' },
 );
 
 export const checkboxClasses = [style.attrs(checkboxStyles.root).class ?? ''] as const;

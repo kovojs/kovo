@@ -173,7 +173,6 @@ export const contextMenuStyles = style.create(
       },
     },
   },
-  { namespace: 'contextMenu', source: 'context-menu.tsx' },
 );
 
 export const contextMenuClasses = [style.attrs(contextMenuStyles.root).class ?? ''] as const;

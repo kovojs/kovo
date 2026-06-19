@@ -167,7 +167,6 @@ export const sheetStyles = style.create(
       },
     },
   },
-  { namespace: 'sheet', source: 'sheet.tsx' },
 );
 
 export const sheetSideStyles = style.create(
@@ -203,7 +202,6 @@ export const sheetSideStyles = style.create(
       top: 0,
     },
   },
-  { namespace: 'sheetSide', source: 'sheet.tsx' },
 );
 
 export const sheetClasses = [style.attrs(sheetStyles.root).class ?? ''] as const;

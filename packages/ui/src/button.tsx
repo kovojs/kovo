@@ -44,7 +44,6 @@ const base = style.create(
       },
     },
   },
-  { namespace: 'button', source: 'button.tsx' },
 );
 
 const sizes = style.create(
@@ -60,7 +59,6 @@ const sizes = style.create(
       paddingInline: 12,
     },
   },
-  { namespace: 'buttonSize', source: 'button.tsx' },
 );
 
 const variants = style.create(
@@ -126,7 +124,6 @@ const variants = style.create(
       },
     },
   },
-  { namespace: 'buttonVariant', source: 'button.tsx' },
 );
 
 export const buttonStyles = {

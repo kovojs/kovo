@@ -95,7 +95,6 @@ export const hoverCardStyles = style.create(
       },
     },
   },
-  { namespace: 'hoverCard', source: 'hover-card.tsx' },
 );
 
 export const hoverCardClasses = [style.attrs(hoverCardStyles.root).class ?? ''] as const;

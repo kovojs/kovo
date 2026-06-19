@@ -333,7 +333,7 @@ export const Button = component({
           backgroundColor: 'black',
           color: 'white',
         },
-      });
+      }, { namespace: "button", source: "components/button.tsx" });
 
       export const Button = component({
         render: () => <button class="manual kv-button-bg-e38gwa kv-button-fg-c5dqff" data-style-src="components/button.tsx#root">Buy</button>,

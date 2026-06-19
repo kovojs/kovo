@@ -124,7 +124,6 @@ export const checkboxGroupStyles = style.create(
       },
     },
   },
-  { namespace: 'checkboxGroup', source: 'checkbox-group.tsx' },
 );
 
 export const checkboxGroupClasses = [style.attrs(checkboxGroupStyles.root).class ?? ''] as const;

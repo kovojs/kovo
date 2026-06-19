@@ -146,7 +146,6 @@ export const scrollAreaStyles = style.create(
       },
     },
   },
-  { namespace: 'scrollArea', source: 'scroll-area.tsx' },
 );
 
 export const scrollAreaClasses = [style.attrs(scrollAreaStyles.root).class ?? ''] as const;

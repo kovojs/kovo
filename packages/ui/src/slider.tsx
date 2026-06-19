@@ -164,7 +164,6 @@ export const sliderStyles = style.create(
       },
     },
   },
-  { namespace: 'slider', source: 'slider.tsx' },
 );
 
 function valuePercent(ratio: string | undefined): string {

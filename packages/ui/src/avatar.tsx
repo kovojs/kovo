@@ -83,7 +83,6 @@ export const avatarStyles = style.create(
       width: 40,
     },
   },
-  { namespace: 'avatar', source: 'avatar.tsx' },
 );
 
 export const avatarClasses = [style.attrs(avatarStyles.root).class ?? ''] as const;

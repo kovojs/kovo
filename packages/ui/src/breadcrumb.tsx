@@ -74,7 +74,6 @@ export const breadcrumbStyles = style.create(
       userSelect: 'none',
     },
   },
-  { namespace: 'breadcrumb', source: 'breadcrumb.tsx' },
 );
 
 export const breadcrumbClasses = [

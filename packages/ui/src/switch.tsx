@@ -103,7 +103,6 @@ export const switchStyles = style.create(
       },
     },
   },
-  { namespace: 'switch', source: 'switch.tsx' },
 );
 
 export const switchClasses = [style.attrs(switchStyles.root).class ?? ''] as const;

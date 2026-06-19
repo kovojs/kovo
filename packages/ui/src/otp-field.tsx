@@ -119,7 +119,6 @@ export const otpFieldStyles = style.create(
       },
     },
   },
-  { namespace: 'otpField', source: 'otp-field.tsx' },
 );
 
 export const otpFieldClasses = [style.attrs(otpFieldStyles.root).class ?? ''] as const;

@@ -219,20 +219,21 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
     has no app/doc source hits after moving those call sites to `style.tokens`;
     `npx vitest --run packages/create-kovo/src/index.test.ts examples/commerce/src/app.rendering.test.ts examples/crm/src/interactive-app.test.ts site/src/route-kit.test.ts`
     passes.
-- [ ] Inject `style.create` provenance (`namespace`/`source`) from the compiler
+- [x] Inject `style.create` provenance (`namespace`/`source`) from the compiler
       call site so authors stop hand-typing
       `{ namespace: 'button', source: 'button.tsx' }` (`packages/ui/src/*.tsx`).
-  - Progress 2026-06-19:
-    `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts packages/compiler/src/package-styles.test.ts -t "lowers static style.create references|extractPackageComponentCss over @kovojs/ui|extractAppComponentCss"`
-    proves static extracted `style.create(...)` calls without an explicit
-    identity are rewritten with the compiler-derived `{ namespace, source }`
-    and remain fixpoint-stable.
-  - Gap:
-    `packages/ui` components currently need the runtime `style.attrs` class names
-    to match package CSS extracted outside a component transform. Removing the
-    hand-authored identities from raw package source still requires a package
-    execution/transform decision because current `packages/ui` Vitest coverage
-    imports and renders those modules directly.
+  - Evidence 2026-06-19:
+    `rg -n "namespace: '.*source|source: '.*\\.tsx'" packages/ui/src -g'*.tsx' -g'!*.test.tsx' -g'!*.stylex.test.tsx'`
+    reports only the `style.keyframes(...)` identity in `skeleton.tsx`; all
+    production `style.create(...)` identity objects are gone from `@kovojs/ui`.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/ui/src/*.stylex.test.tsx packages/ui/src/index.markup.test.tsx`
+    proves direct `@kovojs/ui` source execution still emits the same stable
+    class/source provenance without hand-authored `style.create` identities.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/package-styles.test.ts packages/compiler/src/style.test.ts`
+    proves compiler extraction injects missing provenance and package CSS
+    extraction over `@kovojs/ui` keeps the expected `kv-*` namespaces.
 
 ## Out of scope
 
@@ -247,3 +248,5 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 - 2026-06-19 CSS build slice:
   `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
   `git diff --check`.
+- 2026-06-19 style provenance slice:
+  `corepack pnpm exec tsc --noEmit --pretty false`; `git diff --check`.

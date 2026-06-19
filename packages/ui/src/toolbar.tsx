@@ -113,7 +113,6 @@ export const toolbarStyles = style.create(
       },
     },
   },
-  { namespace: 'toolbar', source: 'toolbar.tsx' },
 );
 
 export const toolbarClasses = [style.attrs(toolbarStyles.root).class ?? ''] as const;

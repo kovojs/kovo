@@ -196,7 +196,6 @@ export const alertDialogStyles = style.create(
       },
     },
   },
-  { namespace: 'alertDialog', source: 'alert-dialog.tsx' },
 );
 
 export const alertDialogClasses = [style.attrs(alertDialogStyles.root).class ?? ''] as const;

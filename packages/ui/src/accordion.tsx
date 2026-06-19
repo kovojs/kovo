@@ -144,7 +144,6 @@ export const accordionStyles = style.create(
       },
     },
   },
-  { namespace: 'accordion', source: 'accordion.tsx' },
 );
 
 export const accordionClasses = [style.attrs(accordionStyles.root).class ?? ''] as const;

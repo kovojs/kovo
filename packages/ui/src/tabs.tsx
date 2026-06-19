@@ -149,7 +149,6 @@ export const tabsStyles = style.create(
       },
     },
   },
-  { namespace: 'tabs', source: 'tabs.tsx' },
 );
 
 export const tabsClasses = [style.attrs(tabsStyles.root).class ?? ''] as const;

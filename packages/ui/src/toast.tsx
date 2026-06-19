@@ -201,7 +201,6 @@ export const toastStyles = style.create(
       },
     },
   },
-  { namespace: 'toast', source: 'toast.tsx' },
 );
 
 export const toastViewportClasses = [style.attrs(toastStyles.viewport).class ?? ''] as const;

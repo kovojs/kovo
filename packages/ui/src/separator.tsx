@@ -20,7 +20,6 @@ const base = style.create(
       flexShrink: 0,
     },
   },
-  { namespace: 'separator', source: 'separator.tsx' },
 );
 
 const orientations = style.create(
@@ -34,7 +33,6 @@ const orientations = style.create(
       width: 1,
     },
   },
-  { namespace: 'separatorOrientation', source: 'separator.tsx' },
 );
 
 export const separatorStyles = {

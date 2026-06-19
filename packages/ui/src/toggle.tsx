@@ -46,7 +46,6 @@ const base = style.create(
       },
     },
   },
-  { namespace: 'toggle', source: 'toggle.tsx' },
 );
 
 const variants = style.create(
@@ -75,7 +74,6 @@ const variants = style.create(
       },
     },
   },
-  { namespace: 'toggleVariant', source: 'toggle.tsx' },
 );
 
 export const toggleStyles = {

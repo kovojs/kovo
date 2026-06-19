@@ -26,7 +26,6 @@ const base = style.create(
       paddingInline: 8,
     },
   },
-  { namespace: 'badge', source: 'badge.tsx' },
 );
 
 const variants = style.create(
@@ -57,7 +56,6 @@ const variants = style.create(
       color: uiTheme.color.warning.foreground,
     },
   },
-  { namespace: 'badgeVariant', source: 'badge.tsx' },
 );
 
 export const badgeStyles = {
