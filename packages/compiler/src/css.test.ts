@@ -354,8 +354,8 @@ export const Recommendations = component({
         {
           "componentName": "css-base",
           "fragmentTargets": [],
-          "href": "/_kovo/base.css",
-          "sourceFileName": "base.css",
+          "href": "/_kovo/base-3b6d05fa.css",
+          "sourceFileName": "base-3b6d05fa.css",
           "styleRules": [
             {
               "source": "components/app/shell.tsx#root",
@@ -376,75 +376,75 @@ export const Recommendations = component({
     `);
     expect(cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/cart' })))
       .toMatchInlineSnapshot(`
-      [
-        {
-          "componentName": "css-base",
-          "fragmentTargets": [],
-          "href": "/_kovo/base.css",
-          "sourceFileName": "base.css",
-          "styleRules": [
-            {
-              "source": "components/app/shell.tsx#root",
-              "styleRef": "styles.root",
+        [
+          {
+            "componentName": "css-base",
+            "fragmentTargets": [],
+            "href": "/_kovo/base-3b6d05fa.css",
+            "sourceFileName": "base-3b6d05fa.css",
+            "styleRules": [
+              {
+                "source": "components/app/shell.tsx#root",
+                "styleRef": "styles.root",
+              },
+              {
+                "source": "components/cart/cart-badge.tsx#root",
+                "styleRef": "styles.root",
+              },
+            ],
+            "styles": {
+              "cart": true,
+              "recommendations": false,
+              "shell": true,
             },
-            {
-              "source": "components/cart/cart-badge.tsx#root",
-              "styleRef": "styles.root",
-            },
-          ],
-          "styles": {
-            "cart": true,
-            "recommendations": false,
-            "shell": true,
           },
-        },
-      ]
-    `);
+        ]
+      `);
     expect(cssAssetSnapshot(resolveCssAssets({ kind: 'page', route: '/products/:id' })))
       .toMatchInlineSnapshot(`
-      [
-        {
-          "componentName": "css-base",
-          "fragmentTargets": [],
-          "href": "/_kovo/base.css",
-          "sourceFileName": "base.css",
-          "styleRules": [
-            {
-              "source": "components/app/shell.tsx#root",
-              "styleRef": "styles.root",
+        [
+          {
+            "componentName": "css-base",
+            "fragmentTargets": [],
+            "href": "/_kovo/base-3b6d05fa.css",
+            "sourceFileName": "base-3b6d05fa.css",
+            "styleRules": [
+              {
+                "source": "components/app/shell.tsx#root",
+                "styleRef": "styles.root",
+              },
+              {
+                "source": "components/cart/cart-badge.tsx#root",
+                "styleRef": "styles.root",
+              },
+            ],
+            "styles": {
+              "cart": true,
+              "recommendations": false,
+              "shell": true,
             },
-            {
-              "source": "components/cart/cart-badge.tsx#root",
-              "styleRef": "styles.root",
-            },
-          ],
-          "styles": {
-            "cart": true,
-            "recommendations": false,
-            "shell": true,
           },
-        },
-        {
-          "componentName": "route:/products/:id",
-          "fragmentTargets": [
-            "components/product/recommendations/recommendations",
-          ],
-          "href": "/_kovo/routes/products-id.css",
-          "sourceFileName": "routes/products-id.css",
-          "styleRules": [
-            {
-              "source": "components/product/recommendations.tsx#root",
-              "styleRef": "styles.root",
+          {
+            "componentName": "route:/products/:id",
+            "fragmentTargets": [
+              "components/product/recommendations/recommendations",
+            ],
+            "href": "/_kovo/routes/products-id-355be470.css",
+            "sourceFileName": "routes/products-id-355be470.css",
+            "styleRules": [
+              {
+                "source": "components/product/recommendations.tsx#root",
+                "styleRef": "styles.root",
+              },
+            ],
+            "styles": {
+              "cart": false,
+              "recommendations": true,
+              "shell": false,
             },
-          ],
-          "styles": {
-            "cart": false,
-            "recommendations": true,
-            "shell": false,
           },
-        },
-      ]
-    `);
+        ]
+      `);
     expect(
       cssAssetSnapshot(
         resolveCssAssets({
@@ -457,8 +457,8 @@ export const Recommendations = component({
         {
           "componentName": "css-base",
           "fragmentTargets": [],
-          "href": "/_kovo/base.css",
-          "sourceFileName": "base.css",
+          "href": "/_kovo/base-3b6d05fa.css",
+          "sourceFileName": "base-3b6d05fa.css",
           "styleRules": [
             {
               "source": "components/app/shell.tsx#root",
@@ -480,8 +480,8 @@ export const Recommendations = component({
           "fragmentTargets": [
             "components/product/recommendations/recommendations",
           ],
-          "href": "/_kovo/fragments/components-product-recommendations-recommendations.css",
-          "sourceFileName": "fragments/components-product-recommendations-recommendations.css",
+          "href": "/_kovo/fragments/components-product-recommendations-recommendations-355be470.css",
+          "sourceFileName": "fragments/components-product-recommendations-recommendations-355be470.css",
           "styleRules": [
             {
               "source": "components/product/recommendations.tsx#root",

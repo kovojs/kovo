@@ -193,19 +193,21 @@ mutation pulls `fragments/cart.css` if not already present.
     proves route facts map into splitter targets, Vite-collected CSS uses
     app-relative source names, and `kovo build` emits
     `.kovo/client/assets/routes/index.css` for a route-owned component.
-- [x] Materialize route chunks as real emitted assets through the neutral build
-      stylesheet writer.
+- [x] Materialize content-hashed route chunks as real emitted assets through the
+      neutral build stylesheet writer.
   - Evidence 2026-06-19:
     `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS"`
-    verifies `kovo build` writes `.kovo/client/assets/routes/index.css`.
-- [x] Materialize base chunks as real emitted assets.
+    verifies `kovo build` writes a hashed
+    `.kovo/client/assets/routes/index-*.css` chunk.
+- [x] Materialize content-hashed base chunks as real emitted assets.
   - Evidence 2026-06-19:
     `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "links only reachable build CSS chunks"`
-    verifies `kovo build` writes `.kovo/client/assets/base.css`.
-- [ ] Materialize fragment chunks as real emitted assets (`fragments/*.css`) and
-      keep content-hashed hrefs for caching. Evidence: `kovo build` of an
-      example writes the chunk files; `git diff --check` clean;
-      bytes-per-route report from Phase 0 drops.
+    verifies `kovo build` writes a hashed `.kovo/client/assets/base-*.css`
+    chunk.
+- [ ] Materialize content-hashed fragment chunks as real emitted assets
+      (`fragments/*.css`). Evidence: `kovo build` of an example writes the
+      chunk files; `git diff --check` clean; bytes-per-route report from Phase 0
+      drops.
 
 ### Phase 3 — Link/inline only the route's chunks (Seam E)
 

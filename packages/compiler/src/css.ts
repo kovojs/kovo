@@ -386,7 +386,7 @@ function chunkAsset(
     assets.flatMap((asset) => [...(asset.styleRuleUsages ?? [])]),
   );
   const chunk = componentCssAssetForFile(
-    fileName,
+    hashedChunkFileName(fileName, criticalCss),
     componentName,
     fragmentTargets,
     options,
@@ -394,6 +394,13 @@ function chunkAsset(
   );
   if (styleRuleUsages.length > 0) chunk.styleRuleUsages = styleRuleUsages;
   return chunk;
+}
+
+function hashedChunkFileName(fileName: string, css: string): string {
+  const hash = createHash('sha256').update(css).digest('hex').slice(0, 8);
+  const extensionIndex = fileName.lastIndexOf('.');
+  if (extensionIndex <= 0) return `${fileName}-${hash}`;
+  return `${fileName.slice(0, extensionIndex)}-${hash}${fileName.slice(extensionIndex)}`;
 }
 
 function allManifestAssets(manifest: CssAssetManifest): ComponentCssAsset[] {

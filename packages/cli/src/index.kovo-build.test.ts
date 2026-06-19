@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -165,12 +166,13 @@ describe('kovo build', () => {
       const stylesheet = readFileSync(join(outDir, '.kovo/client/assets/styles.css'), 'utf8');
       expect(stylesheet).toContain('auto-css-card');
       expect(stylesheet).toContain('color: teal');
-      expect(readFileSync(join(outDir, '.kovo/client/assets/routes/index.css'), 'utf8')).toContain(
-        'auto-css-card',
+      const routeCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/routes\/index-[a-f0-9]{8}\.css$/.test(href),
       );
+      expect(readFileSync(routeCss.filePath, 'utf8')).toContain('auto-css-card');
       const routeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
-      expect(routeDocument).toContain('data-kovo-critical-href="/assets/routes/index.css"');
-      expect(routeDocument).toContain('<link rel="stylesheet" href="/assets/routes/index.css">');
+      expect(routeDocument).toContain(`data-kovo-critical-href="${routeCss.href}"`);
+      expect(routeDocument).toContain(`<link rel="stylesheet" href="${routeCss.href}">`);
       const viteStylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
         'main{color:#639}',
@@ -203,29 +205,32 @@ describe('kovo build', () => {
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
 
-      expect(readFileSync(join(outDir, '.kovo/client/assets/base.css'), 'utf8')).toContain(
-        'shared-card',
+      const baseCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/base-[a-f0-9]{8}\.css$/.test(href),
       );
-      expect(readFileSync(join(outDir, '.kovo/client/assets/routes/index.css'), 'utf8')).toContain(
-        'home-panel',
+      const homeCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/routes\/index-[a-f0-9]{8}\.css$/.test(href),
       );
-      expect(readFileSync(join(outDir, '.kovo/client/assets/routes/login.css'), 'utf8')).toContain(
-        'login-panel',
+      const loginCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href),
       );
+      expect(readFileSync(baseCss.filePath, 'utf8')).toContain('shared-card');
+      expect(readFileSync(homeCss.filePath, 'utf8')).toContain('home-panel');
+      expect(readFileSync(loginCss.filePath, 'utf8')).toContain('login-panel');
       const homeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
-      expect(homeDocument).toContain('/assets/base.css');
-      expect(homeDocument).toContain('/assets/routes/index.css');
-      expect(homeDocument).not.toContain('/assets/routes/login.css');
-      expect(homeDocument).toContain('data-kovo-critical-href="/assets/base.css"');
-      expect(homeDocument).toContain('data-kovo-critical-href="/assets/routes/index.css"');
-      expect(homeDocument).not.toContain('data-kovo-critical-href="/assets/routes/login.css"');
+      expect(homeDocument).toContain(baseCss.href);
+      expect(homeDocument).toContain(homeCss.href);
+      expect(homeDocument).not.toContain(loginCss.href);
+      expect(homeDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
+      expect(homeDocument).toContain(`data-kovo-critical-href="${homeCss.href}"`);
+      expect(homeDocument).not.toContain(`data-kovo-critical-href="${loginCss.href}"`);
       const loginDocument = readFileSync(join(outDir, '.kovo/static/login/index.html'), 'utf8');
-      expect(loginDocument).toContain('/assets/base.css');
-      expect(loginDocument).toContain('/assets/routes/login.css');
-      expect(loginDocument).not.toContain('/assets/routes/index.css');
-      expect(loginDocument).toContain('data-kovo-critical-href="/assets/base.css"');
-      expect(loginDocument).toContain('data-kovo-critical-href="/assets/routes/login.css"');
-      expect(loginDocument).not.toContain('data-kovo-critical-href="/assets/routes/index.css"');
+      expect(loginDocument).toContain(baseCss.href);
+      expect(loginDocument).toContain(loginCss.href);
+      expect(loginDocument).not.toContain(homeCss.href);
+      expect(loginDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
+      expect(loginDocument).toContain(`data-kovo-critical-href="${loginCss.href}"`);
+      expect(loginDocument).not.toContain(`data-kovo-critical-href="${homeCss.href}"`);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -963,6 +968,32 @@ function builtAssetPath(outDir: string, predicate: (path: string) => boolean): s
   const asset = manifest.assets?.find((entry) => predicate(entry.path));
   if (!asset) throw new Error(`Expected built asset in ${outDir}`);
   return asset.path;
+}
+
+function neutralClientAsset(
+  outDir: string,
+  predicate: (href: string) => boolean,
+): { filePath: string; href: string } {
+  const clientDir = join(outDir, '.kovo/client');
+  const stack = ['assets'];
+
+  for (let index = 0; index < stack.length; index += 1) {
+    const relativeDir = stack[index];
+    if (!relativeDir) continue;
+    for (const entry of readdirSync(join(clientDir, relativeDir), { withFileTypes: true })) {
+      const relativePath = `${relativeDir}/${entry.name}`;
+      if (entry.isDirectory()) {
+        stack.push(relativePath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+
+      const href = `/${relativePath}`;
+      if (predicate(href)) return { filePath: join(clientDir, relativePath), href };
+    }
+  }
+
+  throw new Error(`Expected neutral client asset in ${outDir}`);
 }
 
 function readBuildJson(filePath: string): unknown {
