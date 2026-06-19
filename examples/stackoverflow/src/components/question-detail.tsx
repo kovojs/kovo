@@ -1,9 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { csrfField } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
-import { postAnswerMutation, soCsrf } from '../mutations.js';
+import { postAnswerMutation } from '../mutations.js';
 import { questionAnswers, questionDetail } from '../queries.js';
 import type { QuestionAnswersResult, QuestionDetailResult, SoRequest } from '../model.js';
 import {
@@ -251,9 +250,7 @@ function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
         <p style={detailStyles.body}>{answer.body}</p>
         <div style={detailStyles.postFooter}>
           <span />
-          {answer.authorName
-            ? renderUserCard(answer.authorName, answer.createdAt, 'answered')
-            : ''}
+          {answer.authorName ? renderUserCard(answer.authorName, answer.createdAt, 'answered') : ''}
         </div>
       </div>
     </li>
@@ -278,7 +275,7 @@ export const QuestionDetailRegion = component({
       questionId: string;
     },
     _state,
-    slots: { request?: SoRequest | undefined } = {},
+    _slots: { request?: SoRequest | undefined } = {},
   ) => {
     if (!question) {
       return (
@@ -327,15 +324,7 @@ export const QuestionDetailRegion = component({
         <ul style={detailStyles.answerList}>{answers.map(renderAnswerPost)}</ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
-        <form
-          enhance
-          mutation={postAnswerMutation}
-          id="your-answer"
-          style={detailStyles.composer}
-        >
-          {/* Compiler-lowered form: add the CSRF field explicitly (see the note on
-              the question-list composer). */}
-          {slots.request ? csrfField(slots.request, soCsrf) : ''}
+        <form enhance mutation={postAnswerMutation} id="your-answer" style={detailStyles.composer}>
           <input type="hidden" name="id" value={freshId('a')} />
           <input type="hidden" name="questionId" value={questionId} />
           <input type="hidden" name="authorId" value="demo-viewer" />

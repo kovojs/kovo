@@ -93,6 +93,52 @@ describe('route JSX pages', () => {
     });
   });
 
+  it('stamps named query-backed component roots for source-served morph targets', async () => {
+    const product = domain('product');
+    const inventory = domain('inventory');
+    const productQuery = query('product', {
+      args: s.object({ id: s.string() }),
+      load(input: { id: string }) {
+        return { id: input.id, label: `Product ${input.id}` };
+      },
+      reads: [product],
+    });
+    const inventoryQuery = query('inventory', {
+      load: () => ({ available: true }),
+      reads: [inventory],
+    });
+    const ProductDetail = component({
+      props: { productId: String },
+      queries: {
+        inventory: inventoryQuery,
+        product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
+      },
+      render: ({
+        inventory,
+        product,
+      }: {
+        inventory: { available: boolean };
+        product: { id: string; label: string };
+      }) => (
+        <section data-available={inventory.available ? 'yes' : 'no'} data-product={product.id}>
+          {product.label}
+        </section>
+      ),
+    });
+    ProductDetail.name = 'components/products/product-detail/product-detail';
+    const productRoute = route('/products/:id', {
+      params: s.object({ id: s.string() }),
+      page: ({ params }) => <ProductDetail productId={params.id} />,
+    });
+
+    await expect(
+      renderRoutePageResponse(productRoute, { params: { id: 'p1' } }, {}),
+    ).resolves.toMatchObject({
+      body: '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventory product" kovo-fragment-target="product-detail" kovo-live-component="components/products/product-detail/product-detail" kovo-props="{&quot;productId&quot;:&quot;p1&quot;}">Product p1</section>',
+      status: 200,
+    });
+  });
+
   it('forwards JSX component props into render slots', async () => {
     const products = domain('product');
     const productsQuery = query('products', {

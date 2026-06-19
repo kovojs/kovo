@@ -38,7 +38,7 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).not.toContain("readAttribute(query.attrs,'name')");
     expect(inlineKovoLoaderInstallerSource).not.toContain('queryBody');
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "el.getAttribute('kovo-fragment-target')??el.id??el.getAttribute('kovo-c')",
+      "el.getAttribute('kovo-fragment-target')??el.getAttribute('id')??el.getAttribute('kovo-c')",
     );
     // Security finding M10: the fragment-target lookup guards its querySelector
     // calls so a malformed wire target degrades to "no target found" instead of

@@ -66,8 +66,20 @@ describe('stackoverflow interactive app', () => {
 
   it('serves every authored route as no-JS full HTML documents', async () => {
     const { handler } = await buildSoInteractiveApp();
+    const routes = [
+      {
+        deps: 'questionList questionScore',
+        route: '/',
+        target: questionListTarget,
+      },
+      {
+        deps: 'answers question',
+        route: '/questions/q1',
+        target: questionDetailTarget,
+      },
+    ];
 
-    for (const route of ['/', '/questions/q1']) {
+    for (const { deps, route, target } of routes) {
       const response = await handler(
         new Request(`http://example.test${route}`, {
           headers: { Accept: 'text/html' },
@@ -79,6 +91,8 @@ describe('stackoverflow interactive app', () => {
       expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
       expect(html).toContain('<!doctype html>');
       expect(html).toContain('<main');
+      expect(html).toContain(`kovo-fragment-target="${target}"`);
+      expect(html).toContain(`kovo-deps="${deps}"`);
       expect(html).not.toContain('<kovo-fragment');
     }
   });
@@ -196,6 +210,6 @@ describe('stackoverflow interactive app', () => {
     expect(status).toBe(422);
     expect(html).toContain(`target="${questionListTarget}"`);
     expect(html).toContain('data-error-code="DUPLICATE_TITLE"');
-    expect(html).toContain(`"title":"${question.title}"`);
+    expect(html).toContain(`A question titled "${question.title}" already exists.`);
   });
 });

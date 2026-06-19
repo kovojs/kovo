@@ -18,6 +18,7 @@ const explicitlyAllowedInternalImports = new Set([
   'examples/commerce/src/app.ts -> @kovojs/server/internal/html',
   'examples/commerce/src/app.ts -> @kovojs/server/internal/wire',
   'examples/commerce/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
+  'examples/stackoverflow/src/interactive-app.tsx -> @kovojs/server/internal/wire',
   'examples/commerce/src/graph.ts -> @kovojs/core/internal/graph',
   'examples/crm/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
   'examples/crm/scripts/emit-graph.mjs -> @kovojs/core/internal/derivation',

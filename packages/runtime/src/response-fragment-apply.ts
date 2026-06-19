@@ -73,7 +73,7 @@ export function p(
 function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
   const t = document.createElement('template');
   t.innerHTML = h;
-  const n = t.content.children[0];
+  const n = firstMorphElement(t.content);
   const s = e.contains(document.activeElement) ? document.activeElement : null;
   const q: HTMLElement[] = [];
   for (const x of e.querySelectorAll<HTMLElement>('[kovo-key]'))
@@ -89,6 +89,23 @@ function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
   }
   (s as HTMLElement | null)?.focus();
   for (const x of q) if (x.isConnected) x.scrollTop = (x as HTMLElement & { s: number }).s;
+}
+
+function firstMorphElement(content: DocumentFragment): Element | undefined {
+  for (const child of content.children) {
+    if (isFragmentResourceHint(child)) continue;
+    return child;
+  }
+  return undefined;
+}
+
+function isFragmentResourceHint(element: Element): boolean {
+  return (
+    element.tagName === 'LINK' &&
+    (element.getAttribute('rel') ?? '')
+      .split(/\s+/)
+      .some((token) => token.toLowerCase() === 'stylesheet')
+  );
 }
 
 function k(e: Element): string | null {

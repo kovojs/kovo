@@ -164,9 +164,10 @@ describe('inline loader enhanced submit source', () => {
       const form = {
         action: '/_m/cart/add',
         getAttribute(name: string) {
-          if (name === 'kovo-fragment-target') return 'product-form:p1';
+          if (name === 'id') return 'your-answer';
           return name === 'enhance' ? '' : null;
         },
+        id: { toString: () => '[object HTMLInputElement]' },
         method: 'post',
       };
       const targetDeps = [
@@ -255,6 +256,7 @@ describe('inline loader enhanced submit source', () => {
                 if (name === 'kovo-live-component') return dep.component ?? null;
                 if (name === 'kovo-props') return dep.props ?? null;
                 if (name === 'kovo-c') return null;
+                if (name === 'id') return dep.id ?? null;
                 return null;
               },
               id: dep.id,
@@ -291,7 +293,7 @@ describe('inline loader enhanced submit source', () => {
         expect(inlineRequest?.[1].headers['Kovo-Live-Targets']).toBe(
           'cart-badge#cart-badge:{}; inventory#components/inventory/inventory:{"warehouseId":"w1"}; standalone-target#standalone-target:{}; cart-summary#cart-summary:{}',
         );
-        expect(inlineRequest?.[1].headers['Kovo-Form-Target']).toBe('product-form:p1');
+        expect(inlineRequest?.[1].headers['Kovo-Form-Target']).toBe('your-answer');
       } finally {
         Object.assign(globalRecord, {
           DOMParser: originals.DOMParser,

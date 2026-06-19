@@ -1,9 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
-import { csrfField } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
-import { postQuestionMutation, soCsrf } from '../mutations.js';
+import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
 import {
@@ -282,7 +281,10 @@ const listStyles = style.create(
       fontSize: 13,
     },
   },
-  { namespace: 'so-question-list', source: 'examples/stackoverflow/src/components/question-list.tsx' },
+  {
+    namespace: 'so-question-list',
+    source: 'examples/stackoverflow/src/components/question-list.tsx',
+  },
 );
 
 export const questionListStyleCss = style.emitAtomicCss(
@@ -346,7 +348,7 @@ export const QuestionListRegion = component({
       questionScore: QuestionScoreQueryResult;
     },
     _state,
-    slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
+    _slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
   ) => {
     const questions = questionList.items;
     const totalVotes = questionScore.score;
@@ -360,9 +362,7 @@ export const QuestionListRegion = component({
           </a>
         </div>
         <div style={listStyles.subHead}>
-          <span style={listStyles.count}>
-            {questions.length.toLocaleString('en-US')} questions
-          </span>
+          <span style={listStyles.count}>{questions.length.toLocaleString('en-US')} questions</span>
           <div style={listStyles.tabs}>
             <a href="/" style={[listStyles.tab, listStyles.tabFirst, listStyles.tabActive]}>
               Newest
@@ -379,21 +379,10 @@ export const QuestionListRegion = component({
           </div>
         </div>
 
-        <ul style={listStyles.list}>
-          {questions.map((question) => renderQuestionRow(question))}
-        </ul>
+        <ul style={listStyles.list}>{questions.map((question) => renderQuestionRow(question))}</ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
-        <form
-          enhance
-          mutation={postQuestionMutation}
-          id="ask-question"
-          style={listStyles.composer}
-        >
-          {/* This form is compiler-lowered, so the `mutation` prop is replaced by
-              concrete attributes and the JSX runtime's automatic CSRF field is not
-              emitted — unlike the runtime-rendered voteButton. Add it explicitly. */}
-          {slots.request ? csrfField(slots.request, soCsrf) : ''}
+        <form enhance mutation={postQuestionMutation} id="ask-question" style={listStyles.composer}>
           <input type="hidden" name="id" value={freshId('q')} />
           <input type="hidden" name="authorId" value="demo-viewer" />
           <p style={listStyles.composerTitle}>Ask a public question</p>

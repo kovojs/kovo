@@ -246,7 +246,10 @@ function installInlineKovoLoader(im) {
       .map((dep) => dep.trim())
       .filter(Boolean);
   const targetIdentity = (el) =>
-    el.getAttribute('kovo-fragment-target') ?? el.id ?? el.getAttribute('kovo-c') ?? '';
+    el.getAttribute('kovo-fragment-target') ??
+    el.getAttribute('id') ??
+    el.getAttribute('kovo-c') ??
+    '';
   const liveTargetIdentity = (el) =>
     el.getAttribute('kovo-live-component') ?? el.getAttribute('kovo-c') ?? targetIdentity(el);
   const liveProps = (el) => {
@@ -316,7 +319,7 @@ function installInlineKovoLoader(im) {
   const di = (root) => {
     const ids = new Set();
     const add = (el) => {
-      const id = el.id || el.getAttribute?.('id');
+      const id = el.getAttribute?.('id') || el.id;
       if (id) ids.add(id);
     };
     add(root);
