@@ -11,11 +11,19 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import type { Server } from 'node:http';
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
+
+import { createApp, route } from '@kovojs/server';
+import { kovo } from '@kovojs/server/vite';
 
 import { mainAsync } from './index.js';
 
@@ -254,6 +262,66 @@ describe('kovo build', () => {
       expect(loginDocument).toContain(`data-kovo-critical-href="${loginCss.href}"`);
       expect(loginDocument).not.toContain(`data-kovo-critical-href="${homeCss.href}"`);
       expect(inlinedCriticalCssBytes(loginDocument)).toBe(loginRouteCriticalCssBytes);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('serves byte-identical route CSS hints in dev, built node, and static export', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-css-parity-'));
+    const appPath = join(root, 'src/app-shell.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
+      writeReactJsxRuntimeStub(root);
+      writeSplitStyleCreateComponentClientEntry(root);
+      writeFileSync(appPath, splitSrcStylesheetRouteAppModuleSource(), 'utf8');
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const staticDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const builtServer = serverModule.createKovoNodeServer();
+      const builtOrigin = await listen(builtServer);
+
+      let builtDocument: string;
+      try {
+        const builtResponse = await fetch(`${builtOrigin}/`);
+        builtDocument = await builtResponse.text();
+        expect(builtResponse.status, builtDocument).toBe(200);
+      } finally {
+        await close(builtServer);
+      }
+
+      const devDocument = await devRouteDocument(root, appPath);
+      const staticSignature = routeCssSignature(staticDocument);
+
+      expect(routeCssSignature(builtDocument)).toEqual(staticSignature);
+      expect(routeCssSignature(devDocument)).toEqual(staticSignature);
+      expect(staticSignature.links).toEqual(
+        expect.arrayContaining([
+          expect.stringMatching(/^\/assets\/base-[a-f0-9]{8}\.css$/),
+          expect.stringMatching(/^\/assets\/routes\/index-[a-f0-9]{8}\.css$/),
+        ]),
+      );
+      expect(staticSignature.links).not.toEqual(
+        expect.arrayContaining([expect.stringMatching(/\/assets\/routes\/login-/)]),
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -932,6 +1000,28 @@ export default createApp({
 `;
 }
 
+function splitSrcStylesheetRouteAppModuleSource(): string {
+  return `
+/** @jsxImportSource @kovojs/server */
+import { createApp, route, stylesheet } from '@kovojs/server';
+import { HomePanel } from './home-panel.js';
+import { LoginPanel } from './login-panel.js';
+import { SharedCard } from './shared-card.js';
+
+export default createApp({
+  routes: [
+    route('/', {
+      page: () => <><SharedCard /><HomePanel /></>,
+    }),
+    route('/login', {
+      page: () => <><SharedCard /><LoginPanel /></>,
+    }),
+  ],
+  stylesheets: [stylesheet('./styles.css')],
+});
+`;
+}
+
 function mutationFragmentStylesheetAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
@@ -1081,6 +1171,37 @@ function writeSplitStyledComponentClientEntry(root: string): void {
   );
 }
 
+function writeSplitStyleCreateComponentClientEntry(root: string): void {
+  writeClientEntry(root);
+  writeFileSync(
+    join(root, 'src/client.ts'),
+    [
+      "import './style.css';",
+      "import './home-panel.tsx';",
+      "import './login-panel.tsx';",
+      "import './shared-card.tsx';",
+      'export const client = true;',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/home-panel.tsx'),
+    styleCreateHostComponentSource('HomePanel', 'home-panel', 'crimson'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/login-panel.tsx'),
+    styleCreateHostComponentSource('LoginPanel', 'login-panel', 'goldenrod'),
+    'utf8',
+  );
+  writeFileSync(
+    join(root, 'src/shared-card.tsx'),
+    styleCreateHostComponentSource('SharedCard', 'shared-card', 'teal'),
+    'utf8',
+  );
+}
+
 function styledHostComponentSource(
   name: string,
   host: string,
@@ -1097,6 +1218,23 @@ export const ${name} = component({
     ${host} { color: ${color}; }
   \`,
   render: () => <${host}>${name}</${host}>,
+});
+`;
+}
+
+function styleCreateHostComponentSource(name: string, host: string, color: string): string {
+  return `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const styles = style.create({
+  root: {
+    color: '${color}',
+  },
+});
+
+export const ${name} = component({
+  render: () => <${host} {...style.attrs(styles.root)}>${name}</${host}>,
 });
 `;
 }
@@ -1134,6 +1272,113 @@ function builtAssetPath(outDir: string, predicate: (path: string) => boolean): s
   const asset = manifest.assets?.find((entry) => predicate(entry.path));
   if (!asset) throw new Error(`Expected built asset in ${outDir}`);
   return asset.path;
+}
+
+type DevMiddleware = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  next: (error?: unknown) => void,
+) => void;
+
+interface DevPluginHarness extends ReturnType<typeof kovo> {
+  configureServer?(server: {
+    config: { root: string };
+    middlewares: { use(handler: DevMiddleware): void };
+    ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+  }): void | Promise<void>;
+}
+
+async function devRouteDocument(root: string, appPath: string): Promise<string> {
+  const plugin = kovo({
+    app: `/${appPath.slice(root.length + 1).replaceAll('\\', '/')}`,
+  }) as DevPluginHarness;
+  const middlewares: DevMiddleware[] = [];
+  await plugin.configResolved?.({ root });
+
+  for (const fileName of ['src/home-panel.tsx', 'src/login-panel.tsx', 'src/shared-card.tsx']) {
+    const absoluteFileName = join(root, fileName);
+    await plugin.transform?.(readFileSync(absoluteFileName, 'utf8'), absoluteFileName);
+  }
+
+  await plugin.configureServer?.({
+    config: { root },
+    middlewares: {
+      use(handler) {
+        middlewares.push(handler as DevMiddleware);
+      },
+    },
+    async ssrLoadModule(id) {
+      if (id === '@kovojs/server/internal/app-shell-vite') {
+        return (await import('@kovojs/server/internal/app-shell-vite')) as Record<string, unknown>;
+      }
+      expect(id).toBe(`/${appPath.slice(root.length + 1).replaceAll('\\', '/')}`);
+      return {
+        default: createApp({
+          routes: [
+            route('/', {
+              page: () => '<main>Home</main>',
+            }),
+            route('/login', {
+              page: () => '<main>Login</main>',
+            }),
+          ],
+        }),
+      };
+    },
+  });
+
+  const server = createHttpServer((request, response) => {
+    runDevMiddlewareChain(middlewares, request, response, (error) => {
+      response.writeHead(error ? 500 : 404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end(error instanceof Error ? error.message : 'vite fallback');
+    });
+  });
+  const origin = await listen(server);
+
+  try {
+    const response = await fetch(`${origin}/`);
+    const body = await response.text();
+    expect(response.status, body).toBe(200);
+    return body;
+  } finally {
+    await close(server);
+  }
+}
+
+function runDevMiddlewareChain(
+  middlewares: readonly DevMiddleware[],
+  request: IncomingMessage,
+  response: ServerResponse,
+  done: (error?: unknown) => void,
+): void {
+  let index = 0;
+  const next = (error?: unknown) => {
+    if (error || index >= middlewares.length) {
+      done(error);
+      return;
+    }
+
+    middlewares[index++]?.(request, response, next);
+  };
+  next();
+}
+
+function routeCssSignature(document: string): {
+  critical: readonly { css: string; href: string }[];
+  links: readonly string[];
+} {
+  const isSplitChunk = (href: string) =>
+    /^\/assets\/(?:base-|routes\/|fragments\/)/.test(href);
+  return {
+    critical: [
+      ...document.matchAll(/<style data-kovo-critical-href="([^"]+)"[^>]*>([\s\S]*?)<\/style>/g),
+    ]
+      .map((match) => ({ css: match[2] ?? '', href: match[1] ?? '' }))
+      .filter((entry) => isSplitChunk(entry.href)),
+    links: [...document.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)]
+      .map((match) => match[1] ?? '')
+      .filter(isSplitChunk),
+  };
 }
 
 function neutralClientAsset(

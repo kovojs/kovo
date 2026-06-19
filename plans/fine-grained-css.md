@@ -283,7 +283,7 @@ routes/<route>.css]` (theme stays on `base`/app), using
 
 ### Phase 5 — Dev/prod/static-export parity
 
-- [ ] Make the Vite dev plugin (`vite.ts:153`), `kovo build`, and static export
+- [x] Make the Vite dev plugin (`vite.ts:153`), `kovo build`, and static export
       (`static-export-*`) emit identical chunking, so dev critical CSS and linked
       chunks match production byte-for-byte. - Evidence: a parity test comparing dev-served vs. built `<link>`/critical
       sets for one route.
@@ -296,9 +296,11 @@ routes/<route>.css]` (theme stays on `base`/app), using
     proves the public `@kovojs/server/vite` adapter now runs the compiler Vite
     hooks, passes the split compiler CSS manifest into app-shell dev, and serves
     the active route's hashed CSS chunk while excluding the unrelated route.
-  - Gap 2026-06-19:
-    A dev-served vs. built/static-export comparison test still needs to compare
-    the resulting `<link>`/critical sets for the same route byte-for-byte.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "serves byte-identical route CSS hints"`
+    proves the same split-route fixture serves byte-identical build-owned
+    stylesheet links and `data-kovo-critical-href` CSS for `/` through public
+    Vite dev, emitted node-server output, and static export output.
 
 ### Phase 6 — Migrate examples + site off the monolith
 
@@ -382,7 +384,6 @@ routes/<route>.css]` (theme stays on `base`/app), using
 
 ## Latest verification
 
-- _(none yet — plan created 2026-06-18)._ Per-checkbox proving commands are noted
-  inline; run the narrowest first (a split-chunk unit test for Phase 2, a
-  rendering test for Phase 3), broaden to root `tsc` + the CSS/assets conformance
-  suite + `git diff --check` before each checkpoint commit.
+- 2026-06-19 parity slice:
+  `corepack pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS|links only reachable build CSS chunks|serves byte-identical route CSS hints|references build fragment CSS chunks"`;
+  `corepack pnpm exec tsc --noEmit --pretty false`; `git diff --check`.
