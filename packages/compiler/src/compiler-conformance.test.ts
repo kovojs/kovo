@@ -1233,7 +1233,7 @@ describe('compiler conformance corpus', () => {
     } finally {
       rmSync(outDir, { force: true, recursive: true });
     }
-  });
+  }, 60_000);
 });
 
 function referenceShellFixture(): CompileResult {

@@ -23,9 +23,9 @@ export async function assertTypeScriptProgramHasNoDiagnostics(
     moduleResolution: ts.ModuleResolutionKind.NodeNext,
     noEmit: true,
     paths: {
-      '@kovojs/core': ['dist/core/src/index.d.mts'],
-      '@kovojs/core/generated': ['dist/core/src/generated.d.mts'],
-      '@kovojs/core/internal/fragment-target': ['dist/core/src/internal/fragment-target.d.mts'],
+      '@kovojs/core': ['packages/core/src/index.ts'],
+      '@kovojs/core/generated': ['packages/core/src/generated.ts'],
+      '@kovojs/core/internal/fragment-target': ['packages/core/src/internal/fragment-target.ts'],
     },
     skipLibCheck: true,
     strict: true,

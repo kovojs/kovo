@@ -32,5 +32,6 @@ jobs:
       - run: vp run integration
       - run: vp run build
       - run: vp run p10-perf
+      - run: vp run compiler-perf
       - run: vp run conformance
       - run: vp run kovo-check

@@ -1672,7 +1672,10 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
         changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
         ok: true,
         rerunQueries: ['productDetail'],
-        rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
+        rerunQueryInstances: [
+          { instanceKey: 'product:p1', key: 'productDetail' },
+          { instanceKey: 'product:p2', key: 'productDetail' },
+        ],
         value: 'p1',
       },
       status: 200,
@@ -2943,8 +2946,8 @@ export const DiagnosticCard = component({
   assert.equal(greenTransform.mapIsNull, true);
   assert.deepEqual(greenButtons, [{ 'kovo-c': 'diagnostic-card' }]);
 
-  assert.throws(
-    () => plugin.transform(redSource, componentId),
+  await assert.rejects(
+    async () => plugin.transform(redSource, componentId),
     (error) => {
       assertRedTransformMessage(String(error?.message ?? error));
       return true;

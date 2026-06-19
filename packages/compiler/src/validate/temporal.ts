@@ -4,6 +4,7 @@ import {
   callExpressions,
   componentOptionObjectEntries,
   componentOptionObjectKeys,
+  componentOptionStaticValue,
   jsxElements,
   jsxExpressions,
   type ComponentModuleModel,
@@ -47,9 +48,8 @@ export function validateDeclaredClockReadsInRender(
   fileName: string,
   options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> = {},
 ): CompilerDiagnostic[] {
-  const declaredClockEntries = componentOptionObjectEntries(model, 'clocks');
   const declaredClocks = new Set(componentOptionObjectKeys(model, 'clocks'));
-  const clockSpecs = new Map(declaredClockEntries.map((entry) => [entry.key, entry.value ?? '']));
+  const clockSpecs = componentOptionStaticValue(model, 'clocks');
   const renderOnceSpans = callExpressions(model)
     .filter((call) => call.name === 'renderOnce')
     .map((call) => ({ end: call.end, start: call.start }));
@@ -58,7 +58,7 @@ export function validateDeclaredClockReadsInRender(
   for (const read of renderedClockReads(model)) {
     if (renderOnceSpans.some((span) => read.start >= span.start && read.end <= span.end)) continue;
     if (declaredClocks.has(read.clock)) {
-      if (clockSpecIsTickDriven(clockSpecs.get(read.clock) ?? '')) continue;
+      if (clockSpecIsTickDriven(clockSpecs, read.clock)) continue;
 
       diagnostics.push({
         ...diagnosticFor(fileName, 'KV312', source, read.start, read.end - read.start),
@@ -87,8 +87,12 @@ export function validateDeclaredClockReadsInRender(
   return diagnostics;
 }
 
-function clockSpecIsTickDriven(source: string): boolean {
-  return /\bevery\s*:/.test(source) || /\brenderOnce\s*:\s*true\b/.test(source);
+function clockSpecIsTickDriven(clockSpecs: unknown, clockName: string): boolean {
+  if (!clockSpecs || typeof clockSpecs !== 'object' || Array.isArray(clockSpecs)) return false;
+  const spec = (clockSpecs as Record<string, unknown>)[clockName];
+  if (!spec || typeof spec !== 'object' || Array.isArray(spec)) return false;
+  const fields = spec as Record<string, unknown>;
+  return typeof fields.every === 'string' || fields.renderOnce === true;
 }
 
 function renderedClockReads(model: ComponentModuleModel): ClockRead[] {
