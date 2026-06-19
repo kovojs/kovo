@@ -1,3 +1,5 @@
+import '../../../tests/example-generated-graphs.setup.js';
+
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 

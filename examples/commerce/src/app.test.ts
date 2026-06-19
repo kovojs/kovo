@@ -1,3 +1,5 @@
+import '../../../tests/example-generated-graphs.setup.js';
+
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 

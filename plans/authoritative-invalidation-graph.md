@@ -22,7 +22,7 @@ Traced against implementation, not SPEC claims.
 | Is the generated touch-graph wired into the runtime?    | **No**                                               | The generated `touch-graph.ts` feeds `kovo explain`/devtools/conformance only; example `graph.ts` imports the `TouchGraph` _type_, not the runtime invalidation path.                                                                                                                                                                                                 |
 | Is there a mismatch cross-check?                        | **Yes, but test-instrumentation only**               | `packages/test/src/verifier.ts` `assertObservedReadsCovered` (KV407 "Query read from undeclared domain") / `assertObservedWritesCovered` (KV404/KV406/KV408). Proven by `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts` — `/_q/readset-bad` → HTTP 500 + KV407. The verifier lives in `@kovojs/test`; `@kovojs/server` (prod) does **not** run it. |
 | Static / compile-time enforcement of read-set coverage? | **No**                                               | No KV407/readset check in `packages/compiler/src`. KV411 (`Query read set includes an exempt table`) checks declared `reads` against _exempt_ tables only (`packages/drizzle/src/static.ts:86`), not against the `load` AST.                                                                                                                                          |
-| Roadmap status                                          | v1.5 cross-check **open**                            | `plans/data-layer-roadmap.md`: v1 floor + blessed adapter `[x]`; "v1.5 verification layer. Runtime instrumentation as CI cross-check for KV402-KV409" `[ ]`.                                                                                                                                                                                                          |
+| Roadmap status                                          | v1.5 cross-check **closed**                          | `plans/data-layer-roadmap.md`: "v1.5 verification layer. Runtime instrumentation as CI cross-check for KV402-KV409" is checked after `corepack pnpm run acceptance`.                                                                                                                                                                                                  |
 
 **Bottom line:** Not a fully silent prod staleness hole — derivation + a runtime
 verifier both exist, and test coverage catches most drift. But the guarantee is weaker
@@ -140,9 +140,13 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
   - Evidence: the generated-domain scan above prints no example source matches,
     `site/content/guides/queries.md` now teaches Drizzle-derived query reads and
     on-demand graph inspection, and `corepack pnpm exec vp check --fix` passes.
-- [ ] **Update SPEC cross-references + roadmap.** Reconcile §10.2/§10.3 wording with
+- [x] **Update SPEC cross-references + roadmap.** Reconcile §10.2/§10.3 wording with
       the override-and-gate model (derived authoritative; manual = checked escape
       hatch); flip `plans/data-layer-roadmap.md` v1.5 once the CI gate lands.
+  - Evidence: `SPEC.md` §11.1 now states emitted graph facts are the runtime
+    authority for derived query reads and mutation touches, KV402/KV407 describe
+    derived-or-declared coverage, `plans/data-layer-roadmap.md` marks v1.5
+    complete, and `corepack pnpm run acceptance` passes.
 
 ## Risks / open questions
 
@@ -205,4 +209,7 @@ kovo-check` passes 50/50 with `kovo-check/v1 OK`.
     `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
     `corepack pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
     and `corepack pnpm exec vp run kovo-check` pass.
-- [ ] `pnpm run acceptance` before flipping the roadmap checkbox.
+- [x] `pnpm run acceptance` before flipping the roadmap checkbox.
+  - Evidence: `corepack pnpm run acceptance` passed, including root check,
+    API-surface gate, root Vitest, browser tests, Playwright integration,
+    build/publish checks, P10/compiler perf, conformance, and `kovo-check/v1 OK`.

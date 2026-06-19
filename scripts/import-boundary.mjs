@@ -18,14 +18,17 @@ const explicitlyAllowedInternalImports = new Set([
   'examples/commerce/src/app.ts -> @kovojs/server/internal/html',
   'examples/commerce/src/app.ts -> @kovojs/server/internal/wire',
   'examples/commerce/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
+  'examples/commerce/scripts/emit-graph.mjs -> @kovojs/server/internal/execution',
   'examples/commerce/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
   'examples/stackoverflow/src/interactive-app.tsx -> @kovojs/server/internal/wire',
   'examples/commerce/src/graph.ts -> @kovojs/core/internal/graph',
   'examples/crm/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
+  'examples/crm/scripts/emit-graph.mjs -> @kovojs/server/internal/execution',
   'examples/crm/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
   'examples/crm/scripts/emit-graph.mjs -> @kovojs/core/internal/derivation',
   'examples/crm/src/graph.ts -> @kovojs/core/internal/graph',
   'examples/stackoverflow/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
+  'examples/stackoverflow/scripts/emit-graph.mjs -> @kovojs/server/internal/execution',
   'examples/stackoverflow/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
   'examples/reference/src/app.ts -> @kovojs/core/internal/graph',
   'examples/stackoverflow/src/graph.ts -> @kovojs/core/internal/graph',
@@ -51,9 +54,6 @@ const explicitlyAllowedInternalImports = new Set([
 // `./client` facade-shrink; SPEC §§4.4, 9.1).
 const explicitlyAllowedGeneratedImports = new Set([
   'packages/create-kovo/templates/src/client.ts -> @kovojs/browser/generated',
-  'examples/commerce/scripts/emit-graph.mjs -> @kovojs/server/generated',
-  'examples/crm/scripts/emit-graph.mjs -> @kovojs/server/generated',
-  'examples/stackoverflow/scripts/emit-graph.mjs -> @kovojs/server/generated',
   'site/content/guides/streaming.md -> @kovojs/browser/generated',
 ]);
 

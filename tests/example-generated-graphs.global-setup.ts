@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,6 +12,16 @@ export default function setupExampleGeneratedGraphs() {
     execFileSync(process.execPath, [resolve(root, 'scripts/emit-graph.mjs')], {
       cwd: root,
       stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
+  return cleanupExampleGeneratedGraphs;
+}
+
+function cleanupExampleGeneratedGraphs() {
+  for (const example of examples) {
+    rmSync(resolve(repoRoot, 'examples', example, 'src/generated'), {
+      force: true,
+      recursive: true,
     });
   }
 }

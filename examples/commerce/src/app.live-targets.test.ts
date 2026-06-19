@@ -1,3 +1,5 @@
+import '../../../tests/example-generated-graphs.setup.js';
+
 import { describe, expect, it } from 'vitest';
 
 import {

@@ -1,3 +1,5 @@
+import '../../../tests/example-generated-graphs.setup.js';
+
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';

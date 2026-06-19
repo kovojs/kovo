@@ -1,3 +1,5 @@
+import '../../../tests/example-generated-graphs.setup.js';
+
 import { readFileSync } from 'node:fs';
 
 import { asc, eq } from 'drizzle-orm';

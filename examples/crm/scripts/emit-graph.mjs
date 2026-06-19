@@ -33,6 +33,8 @@ const { createCrmGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const crmRoot = resolve(scriptDir, '..');
+const repoRoot = resolve(crmRoot, '../..');
+const localCliPath = resolve(repoRoot, 'packages/cli/src/bin.ts');
 const outDirArgIndex = process.argv.indexOf('--out-dir');
 const outputRoot =
   outDirArgIndex === -1
@@ -259,7 +261,7 @@ const crmInvalidationSource = staticGraphArtifacts.invalidationRegistrySource;
 const crmMutationTouchRegistrySource = staticGraphArtifacts.mutationTouchRegistrySource;
 
 const touchGraphSource = formatSource(
-  `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/generated';
+  `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';
 import type {
   ContactDealCountResult,
   ContactListResult,
@@ -312,10 +314,7 @@ if (process.argv.includes('--print-graph-json')) {
 } else if (process.argv.includes('--check')) {
   const checkGraphPath = resolve(tempRoot, 'graph.check.json');
   writeFileSync(checkGraphPath, graphJson);
-  execFileSync('kovo', ['check', checkGraphPath], {
-    cwd: crmRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  runKovo(['check', checkGraphPath]);
   // Surface the named punts for the operator (parity with `kovo explain --optimistic`).
   for (const entry of optimisticEntries) {
     if (entry.derivation?.status === 'PUNTED') {
@@ -366,10 +365,7 @@ function deriveGraphViaCli(input) {
   const inputPath = resolve(tempRoot, 'graph-input.json');
   const outPath = resolve(tempRoot, 'graph-output.json');
   writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
-  execFileSync('kovo', ['compile', 'graph', inputPath, '--out', outPath], {
-    cwd: crmRoot,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  runKovo(['compile', 'graph', inputPath, '--out', outPath]);
   return JSON.parse(readFileSync(outPath, 'utf8'));
 }
 
@@ -391,22 +387,15 @@ function compileDrizzleOptimistic(input) {
       2,
     )}\n`,
   );
-  execFileSync(
-    'kovo',
-    [
-      'compile',
-      'drizzle-optimistic',
-      inputPath,
-      '--out',
-      input.outPath,
-      '--facts-out',
-      input.factsPath,
-    ],
-    {
-      cwd: crmRoot,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  );
+  runKovo([
+    'compile',
+    'drizzle-optimistic',
+    inputPath,
+    '--out',
+    input.outPath,
+    '--facts-out',
+    input.factsPath,
+  ]);
 }
 
 function compileDrizzleStatic(input) {
@@ -414,11 +403,19 @@ function compileDrizzleStatic(input) {
   const inputPath = resolve(tempRoot, `drizzle-static-${id}.json`);
   const outPath = resolve(tempRoot, `drizzle-static-${id}.facts.json`);
   writeFileSync(inputPath, `${JSON.stringify(input, null, 2)}\n`);
-  execFileSync('kovo', ['compile', 'drizzle-static', inputPath, '--out', outPath], {
+  runKovo(['compile', 'drizzle-static', inputPath, '--out', outPath]);
+  return readJson(outPath);
+}
+
+function runKovo(args) {
+  const command = existsSync(localCliPath) ? process.execPath : 'kovo';
+  const commandArgs = existsSync(localCliPath)
+    ? ['--experimental-strip-types', localCliPath, ...args]
+    : args;
+  execFileSync(command, commandArgs, {
     cwd: crmRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  return readJson(outPath);
 }
 
 function readJson(path) {

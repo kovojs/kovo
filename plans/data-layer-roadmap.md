@@ -12,9 +12,13 @@ This ledger tracks staged data-layer work.
 - [x] **v1 blessed adapter.** `@kovojs/drizzle`: touches inferred from ASTs,
       schema-as-registry, query shapes/keys derived, and optimism hand-written
       against the transform IR. Evidence: `rules/data-layer-policy.md`.
-- [ ] **v1.5 verification layer.** Runtime instrumentation as CI cross-check
+- [x] **v1.5 verification layer.** Runtime instrumentation as CI cross-check
       for KV402-KV409; unified typed change record `{ domain, keys, input }`
       feeding optimism now and the v2 live bus later. Mechanism: pglite harness.
+      Evidence: `corepack pnpm run acceptance` passed after the authoritative
+      invalidation migration, including `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`,
+      `tests/integration/specs/touch-graph-runtime-crosscheck.spec.ts`, conformance,
+      and `kovo-check/v1 OK`.
 - [ ] **v2 derived optimism and live queries.** Compiler-generated transforms via
       the `SPEC.md` §10.5 algebra, property-tested soundness, named punts, and
       `<kovo-live>` over SSE with guard-recheck-per-push and in-process/Redis

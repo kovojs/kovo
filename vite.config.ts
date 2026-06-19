@@ -6,9 +6,6 @@ const repoRoot = workspaceRootFromCwd();
 const exampleGeneratedGraphsGlobalSetup = repoRoot
   ? `${repoRoot}/tests/example-generated-graphs.global-setup.ts`
   : 'tests/example-generated-graphs.global-setup.ts';
-const exampleGeneratedGraphsSetup = repoRoot
-  ? `${repoRoot}/tests/example-generated-graphs.setup.ts`
-  : 'tests/example-generated-graphs.setup.ts';
 
 function workspaceRootFromCwd(): string {
   if (typeof process === 'undefined') return '';
@@ -190,7 +187,6 @@ export default defineConfig({
     hookTimeout: 30_000,
     testTimeout: 30_000,
     globalSetup: [exampleGeneratedGraphsGlobalSetup],
-    setupFiles: [exampleGeneratedGraphsSetup],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -226,7 +222,6 @@ export default defineConfig({
       'packages/browser/src/internal/inline-loader.ts',
       'packages/browser/src/internal/morph.ts',
       'packages/browser/src/internal/mutation.ts',
-      'packages/server/src/generated.ts',
       'packages/server/src/api/app-shell/*.ts',
       'packages/server/src/internal/execution.ts',
       'packages/server/src/internal/html.ts',

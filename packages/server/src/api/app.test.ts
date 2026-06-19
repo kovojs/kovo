@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import * as packageRootApi from '@kovojs/server';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
-import * as packageGeneratedApi from '@kovojs/server/generated';
 import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import * as packageInternalCsrfApi from '@kovojs/server/internal/csrf';
@@ -23,7 +22,6 @@ import * as internalCsrfApi from '../internal/csrf.js';
 import * as internalExecutionApi from '../internal/execution.js';
 import * as internalHtmlApi from '../internal/html.js';
 import * as internalRouteApi from '../internal/route.js';
-import * as generatedApi from '../generated.js';
 import * as mutationApi from '../mutation.js';
 import * as nodeSourceApi from '../node.js';
 import * as queryApi from '../query.js';
@@ -533,11 +531,6 @@ describe('server app-shell public API barrels', () => {
       'runRoutePage',
     ]);
     expect(packageInternalExecutionApi).toEqual(internalExecutionApi);
-    expect(moduleValueKeys(packageGeneratedApi)).toEqual([
-      'registerGeneratedMutationTouchRegistry',
-      'registerGeneratedQueryReadRegistry',
-    ]);
-    expect(packageGeneratedApi).toEqual(generatedApi);
     expect(moduleValueKeys(packageStaticExportApi)).toEqual([]);
     expect(moduleValueKeys(packageViteApi)).toEqual(['kovo']);
     expect(packageViteApi.kovo).toBe(viteApi.kovo);
@@ -616,7 +609,6 @@ describe('server app-shell public API barrels', () => {
       './app-shell/static-export': './src/api/app-shell/static-export.ts',
     });
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
-      './generated': './src/generated.ts',
       './internal/client-modules': './src/internal/client-modules.ts',
       './internal/csrf': './src/internal/csrf.ts',
       './internal/execution': './src/internal/execution.ts',

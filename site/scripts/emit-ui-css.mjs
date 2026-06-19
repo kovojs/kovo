@@ -23,6 +23,8 @@ registerHooks({
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const siteRoot = resolve(scriptDir, '..');
+const repoRoot = resolve(siteRoot, '..');
+const localCliPath = resolve(repoRoot, 'packages/cli/src/bin.ts');
 const outPath = resolve(siteRoot, 'src/generated/kovo-ui.css');
 
 // The gallery's component atoms come from @kovojs/{headless-ui,ui}, resolved via
@@ -82,8 +84,7 @@ export function emitSiteUiCss() {
   try {
     let output;
     try {
-      output = execFileSync(
-        'kovo',
+      output = runKovo(
         [
           'compile',
           'package-css',
@@ -93,7 +94,7 @@ export function emitSiteUiCss() {
           '--out',
           componentCssPath,
         ],
-        { cwd: siteRoot, encoding: 'utf8' },
+        { encoding: 'utf8' },
       );
     } catch (error) {
       throw new Error(
@@ -129,6 +130,17 @@ export function emitSiteUiCss() {
   } finally {
     rmSync(tempRoot, { force: true, recursive: true });
   }
+}
+
+function runKovo(args, options = {}) {
+  const command = existsSync(localCliPath) ? process.execPath : 'kovo';
+  const commandArgs = existsSync(localCliPath)
+    ? ['--experimental-strip-types', localCliPath, ...args]
+    : args;
+  return execFileSync(command, commandArgs, {
+    cwd: siteRoot,
+    ...options,
+  });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
