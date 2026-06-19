@@ -82,6 +82,55 @@ export const CartBadge = component({
     }
   });
 
+  it('bypasses the persistent compiler cache with --no-cache', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-no-cache-'));
+    const sourcePath = join(root, 'cart-badge.tsx');
+    const outPath = join(root, 'generated/cart-badge.tsx');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
+
+    try {
+      process.chdir(root);
+      writeFileSync(
+        sourcePath,
+        `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component({
+  render: () => <span>Cart</span>,
+});
+`,
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'component',
+          sourcePath,
+          '--out',
+          outPath,
+          '--file-name',
+          'src/components/cart-badge.tsx',
+          '--no-cache',
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(outPath, 'utf8')).toContain('export const CartBadge = component({');
+      await expect(readPersistentCompileCacheManifest(persistentCompileCacheDir(root))).resolves.toEqual({
+        entries: {},
+        version: 'kovo-compile-cache/v1',
+      });
+    } finally {
+      process.chdir(previousCwd);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes component client files and graph facts through the CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-component-facts-'));
     const sourcePath = join(root, 'counter.tsx');

@@ -285,9 +285,16 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
 
 ## Phase 5 — CLI incremental build + CI cache integration
 
-- [ ] `kovo build`/`compile`/`emit` (`packages/cli/src/index.ts:101,145`) use the persistent cache so
+- [x] `kovo build`/`compile`/`emit` (`packages/cli/src/index.ts:101,145`) use the persistent cache so
       repeated builds are incremental; a `--no-cache` / clean flag forces a cold build for the
       transparency gate and debugging.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/vite.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts -t "caches repeated transforms|bypasses compiler caches|writes and checks component artifacts|bypasses the persistent compiler cache|usage"`
+    proves `createKovoVitePlugin` persists compile results across plugin instances, `cache: false`
+    forces repeated cold transforms, `kovo compile component --no-cache` writes no persistent
+    manifest, and the CLI usage manifest exposes the new flag. `packages/cli/src/index.ts` threads
+    `kovo build --no-cache` into `kovoVitePlugin({ cache: options.cache })`, so build-time Vite
+    emits use the same persistent-cache/cold-cache switch.
 - [ ] Coordinate with the `vp` task cache (`vite.config.ts:31`): the fine-grained module cache lives
       _beneath_ the coarse task cache. Ensure task `input` lists for compile-driven tasks
       (`build`, `compiler-perf`, example builds) stay correct now that lowering reads `.kovo/cache`

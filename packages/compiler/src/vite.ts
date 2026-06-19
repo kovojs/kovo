@@ -84,6 +84,8 @@ export type KovoViteRegistryFactsSource =
  * surface (SPEC.md §5.2).
  */
 export interface KovoVitePluginOptions {
+  /** Disable in-memory and persistent compiler caches for cold correctness/perf probes. */
+  cache?: boolean;
   exclude?: readonly KovoViteModuleFilter[];
   include?: readonly KovoViteModuleFilter[];
   onDiagnostic?: KovoViteDiagnosticReporter;
@@ -396,7 +398,7 @@ function matchesViteFilter(
   return fileName === normalized || fileName.startsWith(`${normalized}/`);
 }
 
-function compileCachedViteComponentModule(
+async function compileCachedViteComponentModule(
   compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
   cache: CompileCache<ViteCompileResult>,
   options: KovoVitePluginOptions,
@@ -414,6 +416,16 @@ function compileCachedViteComponentModule(
     ...(registryFacts === undefined ? {} : { registryFacts }),
     source,
   };
+  if (options.cache === false) {
+    return await compileViteComponentModule(
+      compileComponentModule,
+      options,
+      root,
+      fileName,
+      source,
+      registryFacts,
+    );
+  }
   const cacheInput = compileComponentCacheKeyInput(compileOptions);
   const cacheKey = compileCacheKey(cacheInput);
   const cacheDir = persistentCompileCacheDir(root);

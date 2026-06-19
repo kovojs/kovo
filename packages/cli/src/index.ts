@@ -306,8 +306,11 @@ export async function compileComponentV1(
 
 async function compileCachedComponentModule(
   options: CompileComponentOptions,
+  cache = true,
 ): Promise<CompileResult> {
   const { compileComponentModule } = await import('@kovojs/compiler');
+  if (!cache) return compileComponentModule(options);
+
   const cacheInput = compileComponentCacheKeyInput(options);
   const cacheKey = compileCacheKey(cacheInput);
   const cacheDir = persistentCompileCacheDir(options.packagePrefixDiscoveryRoot ?? process.cwd());
@@ -780,6 +783,7 @@ type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
 
 interface KovoBuildOptions {
   appModulePath: string;
+  cache: boolean;
   outDir: string;
   preset?: KovoBuildPresetName;
 }
@@ -822,6 +826,7 @@ interface CompileBaseOptions {
 
 interface CompileComponentCommandOptions extends CompileBaseOptions {
   allowedDiagnosticCodes: readonly DiagnosticCode[];
+  cache: boolean;
   emitClientFiles: boolean;
   factsOutPath?: string;
   fixpoint: boolean;
@@ -1005,6 +1010,7 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
   let queryShapeFactsPath: string | undefined;
   let registryFactsPath: string | undefined;
   let check = false;
+  let cache = true;
   let emitClientFiles = false;
   let fixpoint = false;
   let renderEquivalence = false;
@@ -1016,6 +1022,10 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     if (arg === '--help' || arg === '-h') return { message: compileUsage(), ok: false };
     if (arg === '--check') {
       check = true;
+      continue;
+    }
+    if (arg === '--no-cache') {
+      cache = false;
       continue;
     }
     if (arg === '--fixpoint') {
@@ -1177,6 +1187,7 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
     ok: true,
     options: {
       allowedDiagnosticCodes,
+      cache,
       check,
       emitClientFiles,
       ...(factsOutPath === undefined ? {} : { factsOutPath }),
@@ -1747,7 +1758,7 @@ async function runCompileComponentCommand(
       CompileComponentOptions['queryShapeFacts']
     >;
   }
-  const result = await compileCachedComponentModule(compileOptions);
+  const result = await compileCachedComponentModule(compileOptions, options.cache);
   const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);
   const warnings = result.diagnostics.filter((diagnostic) =>
     allowedDiagnosticCodes.has(diagnostic.code),
@@ -2234,6 +2245,7 @@ function siteLineNumber(site: string): number {
 
 function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   let appModulePath: string | undefined;
+  let cache = true;
   let outDir = 'dist';
   let preset: KovoBuildPresetName | undefined;
 
@@ -2243,6 +2255,10 @@ function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
 
     if (arg === '--help' || arg === '-h') {
       return { message: buildUsage(), ok: false };
+    }
+    if (arg === '--no-cache') {
+      cache = false;
+      continue;
     }
 
     if (arg === '--out') {
@@ -2303,6 +2319,7 @@ function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
     ok: true,
     options: {
       appModulePath,
+      cache,
       outDir,
       ...(preset === undefined ? {} : { preset }),
     },
@@ -2504,6 +2521,7 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       join(outDir, '.kovo-client'),
       kovoClientBuildRoot(resolvedAppModulePath),
       resolvedAppModulePath,
+      { cache: options.cache },
     );
     const buildCssAssets = mergeKovoBuildStylesheetAssets([
       buildStylesheetCss.assets,
@@ -2820,6 +2838,7 @@ async function buildKovoClientManifest(
   outDir: string,
   root: string,
   appModulePath: string,
+  options: { cache: boolean },
 ): Promise<KovoClientManifestBuild> {
   const [
     { kovoVitePlugin },
@@ -2832,7 +2851,7 @@ async function buildKovoClientManifest(
     import('@kovojs/compiler/package-styles'),
     import('vite-plus'),
   ]);
-  const kovoPlugin = kovoVitePlugin();
+  const kovoPlugin = kovoVitePlugin({ cache: options.cache });
   const routeTargets = extractAppRouteCssTargets({
     fileName: appModulePath,
     packagePrefixDiscoveryRoot: dirname(appModulePath),

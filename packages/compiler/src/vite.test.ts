@@ -500,6 +500,28 @@ export const CartBadge = component({
     }
   });
 
+  it('bypasses compiler caches when cache is false', async () => {
+    const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
+      dependencyFootprint: {},
+      files: [{ kind: 'server', source: `export const sourceLength = ${source.length};` }],
+    }));
+    const plugin = createKovoVitePlugin(compileComponentModule, { cache: false });
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-no-cache-'));
+    plugin.configResolved?.({ root } as never);
+
+    try {
+      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        'export const sourceLength = 10;',
+      );
+      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        'export const sourceLength = 10;',
+      );
+      expect(compileComponentModule).toHaveBeenCalledTimes(2);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('sends a Kovo component-render HMR event for classified component refreshes', async () => {
     const ws = { send: vi.fn() };
     const previous = hmrMetadata({
