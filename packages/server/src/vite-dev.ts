@@ -1179,10 +1179,8 @@ function appWithDevStylesheetAssets(
       const stylesheets = routeAssets[route.path] ?? [];
       if (stylesheets.length === 0) return route;
 
-      return {
-        ...route,
-        stylesheets: mergeDevStylesheetAssets([...(route.stylesheets ?? []), ...stylesheets]),
-      };
+      route.stylesheets = mergeDevStylesheetAssets([...(route.stylesheets ?? []), ...stylesheets]);
+      return route;
     }),
     stylesheets: mergeDevStylesheetAssets([...app.stylesheets, ...appAssets]),
   };

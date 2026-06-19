@@ -326,8 +326,15 @@ routes/<route>.css]` (theme stays on `base`/app), using
     `node examples/commerce/scripts/measure-style-size.mjs --json` records built
     commerce route totals: `/` 111,988 linked + 11,001 inline, `/cart` 111,988
     linked + 11,001 inline, `/login` 113,560 linked + 12,572 inline.
+    `node --input-type=module` probe over `examples/crm/scripts/serve.mjs`
+    records CRM dev route totals after public Vite CSS handoff: `/` links
+    `/assets/styles.css` + `/assets/routes/index-9232ec27.css` at 2,484 bytes
+    and inlines 13,313 bytes; `/contacts` links
+    `/assets/routes/contacts-de2015d1.css` at 2,062 bytes and inlines 16,705
+    bytes; `/deals/d1` links `/assets/routes/deals-id-2de2f59d.css` at 3,089
+    bytes and inlines 25,654 bytes.
   - Gap:
-    CRM, Stack Overflow, create-kovo starter, and site still need comparable
+    Stack Overflow, create-kovo starter, and site still need comparable
     route-byte proof before this checkbox can close.
 
 ### Phase 7 — Overship regression gate

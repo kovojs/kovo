@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
-import { route } from './route.js';
+import { layout, route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
   createKovoAppShellViteDevIntegration,
@@ -377,9 +377,15 @@ describe('server app shell Vite dev seam', () => {
   });
 
   it('serves build-owned stylesheet chunks through the default dev handler', async () => {
+    const ShellLayout = layout({
+      render(_queries, _state, { children }) {
+        return `<section data-shell="true">${children}</section>`;
+      },
+    });
     const app = createApp({
       routes: [
         route('/', {
+          layout: ShellLayout,
           page() {
             return '<main>styled dev app shell</main>';
           },

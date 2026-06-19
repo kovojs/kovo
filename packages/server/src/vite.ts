@@ -177,6 +177,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
 
       const integration = createDevIntegration({
+        earlyHints: false,
         moduleId: app,
         stylesheetAssets: () =>
           stylesheetAssetsFromCssSplitChunks(

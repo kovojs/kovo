@@ -2938,10 +2938,8 @@ function appWithBuildStylesheetAssets(app: KovoApp, assets: KovoBuildStylesheetA
       const routeAssets = assets.routes[route.path] ?? [];
       if (routeAssets.length === 0) return route;
 
-      return {
-        ...route,
-        stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]),
-      };
+      route.stylesheets = mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]);
+      return route;
     }),
   };
 }
@@ -3030,7 +3028,8 @@ function kovoServerHandlerEntrySource(
     '    routes: app.routes.map((route) => {',
     '      const routeAssets = assets.routes[route.path] ?? [];',
     '      if (routeAssets.length === 0) return route;',
-    '      return { ...route, stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]) };',
+    '      route.stylesheets = mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]);',
+    '      return route;',
     '    }),',
     '  };',
     '}',
