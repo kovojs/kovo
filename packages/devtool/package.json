@@ -1,0 +1,35 @@
+{
+  "name": "@kovojs/devtool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable dataflow devtool for Kovo apps — visual graph + MCP agent surface over a host app's graph.",
+  "bin": {
+    "kovo-devtool": "./bin/kovo-devtool.mjs"
+  },
+  "type": "module",
+  "main": "./src/index.mjs",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.mjs"
+    },
+    "./app": {
+      "types": "./src/app.d.ts",
+      "default": "./src/mount.mjs"
+    },
+    "./vite": {
+      "types": "./src/vite.d.ts",
+      "default": "./src/vite.mjs"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "devDependencies": {
+    "@kovojs/server": "workspace:*"
+  },
+  "peerDependencies": {
+    "@kovojs/server": "workspace:*"
+  }
+}

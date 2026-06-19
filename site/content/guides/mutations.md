@@ -205,9 +205,9 @@ The app declares the page, mutation, input schema, and affected queries. Kovo's 
 the endpoint response: PRG for no-JS success, typed 422 pages for failures, and fragment/query
 chunks for enhanced submissions.
 
-`registry.queries` isn't a refresh-target list — that contradiction is only apparent. *Which*
+`registry.queries` isn't a refresh-target list — that contradiction is only apparent. _Which_
 queries go stale is still derived from the touch graph (SPEC §10.3); `registry.queries` just hands
-the runtime the query *definitions* it needs to actually re-run after commit. In a fully compiled
+the runtime the query _definitions_ it needs to actually re-run after commit. In a fully compiled
 app the build wires this for you (it merges the derived query set into `registry`), so you only spell
 it out in hand-authored or partially-wired modules where the analyzer can't reach the definitions.
 You never enumerate components or DOM targets here — those stay derived from the live `kovo-deps`

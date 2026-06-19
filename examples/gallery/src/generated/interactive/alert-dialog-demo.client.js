@@ -6,49 +6,66 @@ import {
   alertDialogCancel as _alertDialogCancel,
   alertDialogCancelClick as _alertDialogCancelClick,
   alertDialogTriggerClick as _alertDialogTriggerClick,
-} from '@kovojs/headless-ui/alert-dialog';
+} from '@kovojs/ui/alert-dialog';
 
-export const GalleryAlertDialogDemo$button_click = handler((event, ctx) => {
+export const GalleryAlertDialogDemo$AlertDialogTrigger_click = handler((event, ctx) => {
   const result = _alertDialogTriggerClick(Object(event), { open: ctx.state.open });
   if (!result?.changed) return;
   ctx.state.open = result.open;
 });
-export const GalleryAlertDialogDemo$dialog_cancel = handler((event, ctx) => {
+export const GalleryAlertDialogDemo$AlertDialogContent_cancel = handler((event, ctx) => {
   const result = _alertDialogCancel(Object(event), { open: ctx.state.open });
   if (!result?.changed) return;
   ctx.state.open = result.open;
 });
-export const GalleryAlertDialogDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryAlertDialogDemo$AlertDialogCancel_click = handler((event, ctx) => {
   const result = _alertDialogCancelClick(Object(event), { open: ctx.state.open });
   if (!result?.changed) return;
   ctx.state.open = result.open;
 });
-export const GalleryAlertDialogDemo$button_click_3 = handler((event, ctx) => {
+export const GalleryAlertDialogDemo$AlertDialogAction_click = handler((event, ctx) => {
   const result = _alertDialogActionClick(Object(event), { open: ctx.state.open });
   if (!result?.changed) return;
   ctx.state.open = result.open;
 });
 
-export const GalleryAlertDialogDemo$section_data_state_derive = derive(['state'], (state) =>
+export const GalleryAlertDialogDemo$AlertDialog_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryAlertDialogDemo$button_aria_expanded_derive = derive(['state'], (state) =>
-  state.open ? 'true' : 'false',
-);
-export const GalleryAlertDialogDemo$button_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryAlertDialogDemo$dialog_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryAlertDialogDemo$dialog_open_derive = derive(['state'], (state) =>
+export const GalleryAlertDialogDemo$AlertDialog_open_derive = derive(['state'], (state) =>
   state.open ? '' : null,
 );
-export const GalleryAlertDialogDemo$button_data_state_derive_2 = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryAlertDialogDemo$AlertDialogTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'true' : 'false'),
 );
-export const GalleryAlertDialogDemo$button_data_state_derive_3 = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryAlertDialogDemo$AlertDialogTrigger_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
+);
+export const GalleryAlertDialogDemo$AlertDialogTrigger_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
+);
+export const GalleryAlertDialogDemo$AlertDialogContent_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
+);
+export const GalleryAlertDialogDemo$AlertDialogContent_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
+);
+export const GalleryAlertDialogDemo$AlertDialogCancel_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
+);
+export const GalleryAlertDialogDemo$AlertDialogCancel_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
+);
+export const GalleryAlertDialogDemo$AlertDialogAction_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
+);
+export const GalleryAlertDialogDemo$AlertDialogAction_open_derive = derive(['state'], (state) =>
+  state.open ? '' : null,
 );
 export const GalleryAlertDialogDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',

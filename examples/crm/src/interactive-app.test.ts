@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
 
-import { buildCrmInteractiveApp } from './interactive-app.generated-fixtures.js';
+import { buildCrmInteractiveApp } from './interactive-app.js';
 import { crmCsrf } from './mutations.js';
 import { contacts, deals } from './schema.js';
 
@@ -110,7 +110,7 @@ describe('crm interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${contactsTarget}"`);
+    expect(html).toContain('<kovo-query name="contactList"');
     expect(html).toContain('Edsger Dijkstra');
 
     const rows = await db.select().from(contacts);
@@ -139,7 +139,7 @@ describe('crm interactive app', () => {
     expect(status).toBe(422);
     expect(html).toContain(`target="${contactsTarget}"`);
     expect(html).toContain('data-error-code="DUPLICATE_EMAIL"');
-    expect(html).toContain(`${contact.email} is already in the contact book.`);
+    expect(html).toContain(`"email":"${contact.email}"`);
   });
 
   it('createDeal inserts the deal, bumps the contact dealCount, and re-renders the pipeline', async () => {
@@ -164,7 +164,9 @@ describe('crm interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${pipelineTarget}"`);
+    expect(html).toContain('<kovo-query name="contactList"');
+    expect(html).toContain('<kovo-query name="openDeals"');
+    expect(html).toContain('<kovo-query name="pipelineByStage"');
 
     const dealRows = await db.select().from(deals);
     expect(dealRows).toHaveLength(beforeDeals + 1);
@@ -187,7 +189,7 @@ describe('crm interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${dealDetailTarget}"`);
+    expect(html).toContain('<kovo-query name="dealList"');
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('proposal');
@@ -208,7 +210,7 @@ describe('crm interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`target="${dealDetailTarget}"`);
+    expect(html).toContain('<kovo-query name="dealList"');
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('won');

@@ -1,39 +1,22 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { CommandItem as GalleryCommandItem } from '@kovojs/headless-ui/command';
 import {
-  commandCloseAttributes,
+  Command,
+  CommandClose,
   commandCloseClick as _commandCloseClick,
-  commandDialogAttributes,
-  commandEmptyAttributes,
+  CommandDialog,
+  CommandEmpty,
   commandFilteredItems as _commandFilteredItems,
   commandInput as _commandInput,
-  commandInputAttributes,
-  commandItemAttributes,
+  CommandInput,
+  CommandItem,
   commandItemClick as _commandItemClick,
   commandKeyDown as _commandKeyDown,
-  commandListboxAttributes,
-  commandRootAttributes,
-  commandTriggerAttributes,
+  CommandListbox,
+  CommandTrigger,
   commandTriggerClick as _commandTriggerClick,
-  type CommandItem,
-} from '@kovojs/headless-ui/command';
-import {
-  commandClasses,
-  commandTriggerClasses,
-  commandDialogClasses,
-  commandInputClasses,
-  commandListboxClasses,
-  commandItemClasses,
-  commandCloseClasses,
 } from '@kovojs/ui/command';
-
-const ROOT_CLASS = commandClasses.join(' ');
-const TRIGGER_CLASS = commandTriggerClasses.join(' ');
-const DIALOG_CLASS = commandDialogClasses.join(' ');
-const INPUT_CLASS = commandInputClasses.join(' ');
-const LISTBOX_CLASS = commandListboxClasses.join(' ');
-const ITEM_CLASS = commandItemClasses.join(' ');
-const CLOSE_CLASS = commandCloseClasses.join(' ');
 
 export interface GalleryCommandDemoState {
   highlightedValue: string;
@@ -43,7 +26,7 @@ export interface GalleryCommandDemoState {
   value: string;
 }
 
-const commandItems: readonly CommandItem[] = Object.freeze([
+const commandItems: readonly GalleryCommandItem[] = Object.freeze([
   { id: 'gallery-command-listbox-item-0', label: 'Open dashboard', value: 'dashboard' },
   { id: 'gallery-command-listbox-item-1', label: 'Invite teammate', value: 'invite' },
   {
@@ -81,18 +64,17 @@ export const GalleryCommandDemo = component({
     };
 
     return (
-      <section
-        {...commandRootAttributes(commandState)}
-        class={ROOT_CLASS}
+      <Command
+        {...commandState}
         data-gallery-interactive="command"
         data-placeholder={state.inputValue === '' ? '' : null}
         data-state={state.open ? 'open' : 'closed'}
       >
         <form id="gallery-command-form" data-gallery-form="command"></form>
-        <button
-          {...commandTriggerAttributes({ ...commandState, contentId })}
+        <CommandTrigger
+          {...commandState}
           aria-expanded={state.open ? 'true' : 'false'}
-          class={TRIGGER_CLASS}
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
           id="gallery-command-trigger"
           onClick={() => {
@@ -101,27 +83,21 @@ export const GalleryCommandDemo = component({
           }}
         >
           Open command
-        </button>
-        <dialog
-          {...commandDialogAttributes({
-            ...commandState,
-            contentId,
-            descriptionId: 'gallery-command-description',
-            titleId: 'gallery-command-title',
-          })}
-          class={DIALOG_CLASS}
+        </CommandTrigger>
+        <CommandDialog
+          {...commandState}
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
+          descriptionId="gallery-command-description"
           open={state.open}
+          titleId="gallery-command-title"
         >
           <h2 id="gallery-command-title">Command menu</h2>
           <p id="gallery-command-description">Search project actions.</p>
-          <input
-            {...commandInputAttributes({
-              ...commandState,
-              id: 'gallery-command-input',
-              labelledBy: 'gallery-command-title',
-            })}
-            class={INPUT_CLASS}
+          <CommandInput
+            {...commandState}
+            id="gallery-command-input"
+            labelledBy="gallery-command-title"
             onInput={() => {
               const result = _commandInput(Object(event), { inputValue: state.inputValue });
               if (!result) return;
@@ -208,21 +184,15 @@ export const GalleryCommandDemo = component({
             data-state={state.open ? 'open' : 'closed'}
             value={state.inputValue}
           />
-          <div
-            {...commandListboxAttributes({ ...commandState, id: listboxId })}
-            class={LISTBOX_CLASS}
+          <CommandListbox
+            {...commandState}
             data-state={state.open ? 'open' : 'closed'}
             hidden={!state.open}
+            id={listboxId}
           >
-            <button
-              {...commandItemAttributes({
-                ...commandState,
-                id: 'gallery-command-listbox-item-0',
-                itemLabel: 'Open dashboard',
-                itemValue: 'dashboard',
-              })}
+            <CommandItem
+              {...commandState}
               aria-selected={state.highlightedValue === 'dashboard' ? 'true' : 'false'}
-              class={ITEM_CLASS}
               data-highlighted={state.highlightedValue === 'dashboard' ? '' : null}
               data-selected={state.value === 'dashboard' ? '' : null}
               data-state={state.highlightedValue === 'dashboard' ? 'active' : 'inactive'}
@@ -230,6 +200,9 @@ export const GalleryCommandDemo = component({
                 state.inputValue !== '' &&
                 !'open dashboard dashboard'.includes(state.inputValue.toLocaleLowerCase())
               }
+              id="gallery-command-listbox-item-0"
+              itemLabel="Open dashboard"
+              itemValue="dashboard"
               onClick={() => {
                 const result = _commandItemClick(Object(event), {
                   highlightedValue: state.highlightedValue,
@@ -266,16 +239,10 @@ export const GalleryCommandDemo = component({
               tabIndex={state.highlightedValue === 'dashboard' ? 0 : -1}
             >
               Open dashboard
-            </button>
-            <button
-              {...commandItemAttributes({
-                ...commandState,
-                id: 'gallery-command-listbox-item-1',
-                itemLabel: 'Invite teammate',
-                itemValue: 'invite',
-              })}
+            </CommandItem>
+            <CommandItem
+              {...commandState}
               aria-selected={state.highlightedValue === 'invite' ? 'true' : 'false'}
-              class={ITEM_CLASS}
               data-highlighted={state.highlightedValue === 'invite' ? '' : null}
               data-selected={state.value === 'invite' ? '' : null}
               data-state={state.highlightedValue === 'invite' ? 'active' : 'inactive'}
@@ -283,6 +250,9 @@ export const GalleryCommandDemo = component({
                 state.inputValue !== '' &&
                 !'invite teammate invite'.includes(state.inputValue.toLocaleLowerCase())
               }
+              id="gallery-command-listbox-item-1"
+              itemLabel="Invite teammate"
+              itemValue="invite"
               onClick={() => {
                 const result = _commandItemClick(Object(event), {
                   highlightedValue: state.highlightedValue,
@@ -319,17 +289,10 @@ export const GalleryCommandDemo = component({
               tabIndex={state.highlightedValue === 'invite' ? 0 : -1}
             >
               Invite teammate
-            </button>
-            <button
-              {...commandItemAttributes({
-                ...commandState,
-                id: 'gallery-command-listbox-item-2',
-                itemDisabled: true,
-                itemLabel: 'Delete project',
-                itemValue: 'delete',
-              })}
+            </CommandItem>
+            <CommandItem
+              {...commandState}
               aria-selected={state.highlightedValue === 'delete' ? 'true' : 'false'}
-              class={ITEM_CLASS}
               data-highlighted={state.highlightedValue === 'delete' ? '' : null}
               data-selected={state.value === 'delete' ? '' : null}
               data-state={state.highlightedValue === 'delete' ? 'active' : 'inactive'}
@@ -337,12 +300,16 @@ export const GalleryCommandDemo = component({
                 state.inputValue !== '' &&
                 !'delete project delete'.includes(state.inputValue.toLocaleLowerCase())
               }
+              id="gallery-command-listbox-item-2"
+              itemDisabled={true}
+              itemLabel="Delete project"
+              itemValue="delete"
               tabIndex={-1}
             >
               Delete project
-            </button>
-            <p
-              {...commandEmptyAttributes(commandState)}
+            </CommandItem>
+            <CommandEmpty
+              {...commandState}
               hidden={
                 state.inputValue === '' ||
                 'open dashboard dashboard invite teammate invite delete project delete'.includes(
@@ -351,11 +318,11 @@ export const GalleryCommandDemo = component({
               }
             >
               No commands found.
-            </p>
-          </div>
-          <button
-            {...commandCloseAttributes({ ...commandState, contentId })}
-            class={CLOSE_CLASS}
+            </CommandEmpty>
+          </CommandListbox>
+          <CommandClose
+            {...commandState}
+            contentId={contentId}
             data-state={state.open ? 'open' : 'closed'}
             onClick={() => {
               const result = _commandCloseClick(Object(event), { open: state.open });
@@ -363,14 +330,14 @@ export const GalleryCommandDemo = component({
             }}
           >
             Close
-          </button>
-        </dialog>
+          </CommandClose>
+        </CommandDialog>
         <output data-demo-state="command-input">{state.inputValue || 'empty'}</output>
         <output data-demo-state="command-key-canceled">{state.lastKeyAction}</output>
         <output data-demo-state="command-value">
           {state.value === 'invite' ? 'Invite teammate' : 'Open dashboard'}
         </output>
-      </section>
+      </Command>
     );
   },
 });

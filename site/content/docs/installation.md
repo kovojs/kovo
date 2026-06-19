@@ -46,13 +46,13 @@ than repeating it.
 | `vp check`                | Typecheck + lint — this is where Kovo's static errors surface |
 | `vp test`                 | Vitest suites                                                 |
 | `vp run build`            | Production build                                              |
-| `vp run kovo-check`       | npm script that runs `kovo check` — framework graph checks     |
+| `vp run kovo-check`       | npm script that runs `kovo check` — framework graph checks    |
 | `vp run graph-assertions` | Your app's own behavior assertions, as graph queries          |
 
 ### Two CLIs, two jobs
 
 > Kovo ships **two distinct binaries**. `vp` is the project/toolchain runner — Vite+ drives `vp
-> dev`, `vp build`, `vp test`, and `vp check` (typecheck + lint). `kovo` is the framework CLI — it
+dev`, `vp build`, `vp test`, and `vp check` (typecheck + lint). `kovo` is the framework CLI — it
 > owns the graph-level work: `kovo check` (the framework graph check), `kovo explain`, and
 > scaffolding via `kovo add`. The `vp run kovo-check` script above is just an npm script that
 > shells out to `kovo check`; `vp check` itself only runs typecheck + lint, not the framework graph
@@ -70,10 +70,10 @@ instead, with a teaching message that cites the spec section it enforces.
 
 Newcomers trip on import paths before anything else. The split is small and stable:
 
-| Primitive | Package | What it is |
-| --- | --- | --- |
+| Primitive                                                        | Package          | What it is                                                                        |
+| ---------------------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------- |
 | `route`, `query`, `mutation`, `s`, `domain`, `guards`, `session` | `@kovojs/server` | server-side facts: routes, typed reads/writes, schemas, domains, guards, sessions |
-| `component`, `form` | `@kovojs/core` | the component model and form helpers used in TSX |
+| `component`, `form`                                              | `@kovojs/core`   | the component model and form helpers used in TSX                                  |
 
 The [mental model](/docs/mental-model/) and [Queries chapter](/tutorial/03-queries/) repeat this
 inline where the primitives first appear.

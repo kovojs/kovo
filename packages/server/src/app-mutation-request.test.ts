@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
+import { domain } from './domain.js';
 import { guards } from './guards.js';
+import { stylesheet } from './hints.js';
 import { mutation } from './mutation.js';
+import { query } from './query.js';
+import { route } from './route.js';
 import { s } from './schema.js';
 
 describe('server app mutation request boundary', () => {
@@ -89,6 +93,105 @@ describe('server app mutation request boundary', () => {
 
     expect(response.status).toBe(303);
     expect(response.headers.get('location')).toBe('/account');
+  });
+
+  it('inherits app and source-route stylesheets into enhanced live-target fragments', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      reads: [cart],
+      load: () => ({ count: 1 }),
+    });
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const cartRoute = route('/cart', {
+      page: () => '<main>Cart</main>',
+      stylesheets: [stylesheet('./cart.css')],
+    });
+    const app = createApp({
+      liveTargetRenderers: [
+        {
+          component: 'components/cart/badge',
+          queries: ['cart'],
+          render: () => '<cart-badge>1</cart-badge>',
+          stylesheets: [stylesheet('./badge.css')],
+        },
+      ],
+      mutations: [addToCart],
+      routes: [cartRoute],
+      stylesheets: [stylesheet('./app.css')],
+    });
+    const form = new FormData();
+    form.set('productId', 'p1');
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: form,
+      headers: {
+        Referer: 'https://shop.example.test/cart',
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': 'cart-badge#components/cart/badge:{}',
+        'Kovo-Targets': 'cart-badge=cart',
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+    const body = await response.text();
+
+    expect(response.status, body).toBe(200);
+    expect(body).toContain(
+      '<kovo-fragment target="cart-badge"><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/cart.css"><link rel="stylesheet" href="/assets/badge.css"><cart-badge>1</cart-badge></kovo-fragment>',
+    );
+  });
+
+  it('inherits app and source-route stylesheets into enhanced failure fragments', async () => {
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ quantity: s.number().int().min(1) }),
+      handler(input) {
+        return input;
+      },
+    });
+    const cartRoute = route('/cart', {
+      page: () => '<main>Cart</main>',
+      stylesheets: [stylesheet('./cart.css')],
+    });
+    const app = createApp({
+      mutationResponses: {
+        'cart/add': {
+          failureStylesheets: [stylesheet('./form.css')],
+          failureTarget: 'cart-form',
+        },
+      },
+      mutations: [addToCart],
+      routes: [cartRoute],
+      stylesheets: [stylesheet('./app.css')],
+    });
+    const form = new FormData();
+    form.set('quantity', '0');
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: form,
+      headers: {
+        Referer: 'https://shop.example.test/cart',
+        'Kovo-Fragment': 'true',
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+    const body = await response.text();
+
+    expect(response.status, body).toBe(422);
+    expect(body).toBe(
+      '<kovo-fragment target="cart-form"><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/cart.css"><link rel="stylesheet" href="/assets/form.css"><output role="alert" data-error-path="quantity">Expected number &gt;= 1</output></kovo-fragment>',
+    );
   });
 
   it('resolves the app session once before mutation response options and guarded handlers', async () => {

@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
+
+import { passThroughProps } from './pass-through.js';
 import { progressRootAttributes } from '@kovojs/headless-ui/progress';
 
 import { uiTheme } from './theme.js';
@@ -58,6 +60,7 @@ export const Progress = component({
     return (
       <progress
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-valuetext={attrs['aria-valuetext']}
         data-max={attrs['data-max']}
         data-state={attrs['data-state']}
@@ -70,3 +73,5 @@ export const Progress = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/progress';

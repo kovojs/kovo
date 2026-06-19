@@ -5,6 +5,7 @@ import {
   type MutationFail,
   type MutationRegistry,
 } from './mutation.js';
+import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
@@ -54,6 +55,11 @@ export async function handleAppMutationRequest(
     request: mutationRequest,
     url: new URL(url),
   });
+  const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
+  const failureStylesheets = mergedStylesheets(
+    inheritedStylesheets,
+    mutationResponseOptions?.failureStylesheets,
+  );
   const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
     app,
     mutationRequest,
@@ -83,14 +89,20 @@ export async function handleAppMutationRequest(
     ...(mutationResponseOptions?.failureTarget === undefined
       ? {}
       : { failureTarget: mutationResponseOptions.failureTarget }),
-    ...(mutationResponseOptions?.failureStylesheets === undefined
-      ? {}
-      : { failureStylesheets: mutationResponseOptions.failureStylesheets }),
+    ...(failureStylesheets === undefined ? {} : { failureStylesheets }),
     ...(mutationResponseOptions?.fragmentRenderers === undefined
       ? {}
-      : { fragmentRenderers: mutationResponseOptions.fragmentRenderers }),
+      : {
+          fragmentRenderers: inheritFragmentRendererStylesheets(
+            mutationResponseOptions.fragmentRenderers,
+            inheritedStylesheets,
+          ),
+        }),
     headers: request.headers,
-    liveTargetRenderers: app.liveTargetRenderers,
+    liveTargetRenderers: inheritLiveTargetRendererStylesheets(
+      app.liveTargetRenderers,
+      inheritedStylesheets,
+    ),
     rawInput,
     redirectTo:
       mutationResponseOptions?.redirectTo ??
@@ -109,6 +121,59 @@ export async function handleAppMutationRequest(
   });
 
   return serverResponseToWebResponse(endpointResponse, mutationRequest);
+}
+
+function sourceRouteStylesheets(
+  app: KovoApp,
+  sourceUrl: URL,
+): readonly KovoApp['stylesheets'][number][] {
+  const match = matchShellDispatch({
+    endpoints: app.endpoints,
+    method: 'GET',
+    pathname: sourceUrl.pathname,
+    routes: app.routes,
+  });
+  const routeStylesheets =
+    match.kind === 'route' && match.methodAllowed ? (match.route.stylesheets ?? []) : [];
+  return [...app.stylesheets, ...routeStylesheets];
+}
+
+function inheritFragmentRendererStylesheets(
+  renderers: readonly FragmentRenderer[],
+  inheritedStylesheets: readonly KovoApp['stylesheets'][number][],
+): readonly FragmentRenderer[] {
+  if (inheritedStylesheets.length === 0) return renderers;
+
+  return renderers.map((renderer) => {
+    const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
+    return {
+      ...renderer,
+      ...(stylesheets === undefined ? {} : { stylesheets }),
+    };
+  });
+}
+
+function inheritLiveTargetRendererStylesheets<Request>(
+  renderers: readonly LiveTargetRenderer<Request>[],
+  inheritedStylesheets: readonly KovoApp['stylesheets'][number][],
+): readonly LiveTargetRenderer<Request>[] {
+  if (inheritedStylesheets.length === 0) return renderers;
+
+  return renderers.map((renderer) => {
+    const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
+    return {
+      ...renderer,
+      ...(stylesheets === undefined ? {} : { stylesheets }),
+    };
+  });
+}
+
+function mergedStylesheets<Stylesheet extends KovoApp['stylesheets'][number]>(
+  inheritedStylesheets: readonly Stylesheet[],
+  ownStylesheets: readonly Stylesheet[] | undefined,
+): readonly Stylesheet[] | undefined {
+  const merged = [...inheritedStylesheets, ...(ownStylesheets ?? [])];
+  return merged.length === 0 ? undefined : merged;
 }
 
 async function resolveAppMutationResponsePolicy(

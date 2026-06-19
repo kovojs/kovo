@@ -136,7 +136,7 @@ expect(addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quan
 );
 ```
 
-Beyond a point check, you can property-test that the prediction is *contained in eventual truth* over
+Beyond a point check, you can property-test that the prediction is _contained in eventual truth_ over
 generated states — the commuting diagram `patch(shape(s), input) ≡ shape(apply(effect, s, input))`.
 That's `propertyTest`, and it lives in the
 [testing guide](/guides/testing/#property-test-optimistic-transforms) along with the harness it runs in.

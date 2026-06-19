@@ -144,7 +144,9 @@ export function CrmShell({ active, children }: { active: CrmSection; children?: 
                 href={item.href}
                 style={[
                   chromeStyles.navLink,
-                  item.section === active ? chromeStyles.navLinkActive : chromeStyles.navLinkInactive,
+                  item.section === active
+                    ? chromeStyles.navLinkActive
+                    : chromeStyles.navLinkInactive,
                 ]}
               >
                 {item.label}

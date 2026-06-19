@@ -134,8 +134,7 @@ Then scope every read and write of that table to the session, not to client inpu
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
 export const orderHistoryQuery = query('orderHistory', {
   guard: authed,
-  load: (db, _args, req) =>
-    db.select().from(orders).where(eq(orders.userId, req.session.user.id)),
+  load: (db, _args, req) => db.select().from(orders).where(eq(orders.userId, req.session.user.id)),
   reads: [order],
 });
 ```

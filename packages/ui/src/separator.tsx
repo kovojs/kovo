@@ -1,6 +1,8 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
+
+import { passThroughProps } from './pass-through.js';
 import { separatorRootAttributes, type SeparatorOrientation } from '@kovojs/headless-ui/separator';
 
 import { uiTheme } from './theme.js';
@@ -57,6 +59,7 @@ export const Separator = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-orientation={attrs['aria-orientation']}
         data-orientation={attrs['data-orientation']}
         role={attrs.role}

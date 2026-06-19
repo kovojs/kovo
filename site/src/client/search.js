@@ -61,14 +61,12 @@ function score(entry, terms) {
  * path. API-symbol rows deep-link straight to the symbol anchor. */
 function resultRow(entry, active = false) {
   const badge = entry.kind ? entry.kind : 'page';
-  return `<li${active ? ' class="active"' : ''}><a href="${escapeHtml(entry.url)}"${active ? ' aria-current="true"' : ''}><span class="result-kind" data-kind="${escapeHtml(badge)}">${escapeHtml(badge)}</span><span class="result-body"><span class="result-title">${escapeHtml(entry.title)}</span><span class="result-section">${escapeHtml(entry.section)}</span></span></a></li>`;
+  return `<li${active ? ' data-active="true"' : ''}><a href="${escapeHtml(entry.url)}" data-search-result-link${active ? ' aria-current="true"' : ''}><span data-result-kind="${escapeHtml(badge)}">${escapeHtml(badge)}</span><span data-result-body><span data-result-title>${escapeHtml(entry.title)}</span><span data-result-section>${escapeHtml(entry.section)}</span></span></a></li>`;
 }
 
 function renderResults(element, entries, options = {}) {
   selectedIndex = entries.length > 0 ? 0 : -1;
-  const label = options.label
-    ? `<li class="search-results-label">${escapeHtml(options.label)}</li>`
-    : '';
+  const label = options.label ? `<li data-search-label>${escapeHtml(options.label)}</li>` : '';
   element.innerHTML = `${label}${entries
     .map((entry, index) => resultRow(entry, index === selectedIndex))
     .join('')}`;
@@ -80,8 +78,8 @@ function renderDefaultResults(element) {
 
 function renderNoResults(element) {
   element.innerHTML = [
-    '<li class="search-results-empty">No matching docs found.</li>',
-    '<li class="search-results-label">Suggested</li>',
+    '<li data-search-empty>No matching docs found.</li>',
+    '<li data-search-label>Suggested</li>',
     ...DEFAULT_ENTRIES.map((entry) => resultRow(entry)),
   ].join('');
   selectedIndex = 0;
@@ -104,7 +102,7 @@ function setSelectedIndex(nextIndex) {
   selectedIndex = (nextIndex + items.length) % items.length;
   for (const [index, item] of items.entries()) {
     const active = index === selectedIndex;
-    item.classList.toggle('active', active);
+    item.toggleAttribute('data-active', active);
     const link = item.querySelector('a');
     if (active) {
       link?.setAttribute('aria-current', 'true');

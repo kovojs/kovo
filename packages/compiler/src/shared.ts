@@ -149,7 +149,8 @@ export function composeSourceOffsetMaps(
       segments.push({
         generatedStart: generatedSegment.generatedStart + overlapStart - intermediateStart,
         length: overlapEnd - overlapStart,
-        originalStart: originalSegment.originalStart + overlapStart - originalSegment.generatedStart,
+        originalStart:
+          originalSegment.originalStart + overlapStart - originalSegment.generatedStart,
       });
     }
   }
@@ -165,7 +166,9 @@ function mergeAdjacentOffsetSegments(
   segments: readonly SourceOffsetSegment[],
 ): SourceOffsetSegment[] {
   const merged: SourceOffsetSegment[] = [];
-  for (const segment of [...segments].sort((left, right) => left.generatedStart - right.generatedStart)) {
+  for (const segment of [...segments].sort(
+    (left, right) => left.generatedStart - right.generatedStart,
+  )) {
     const previous = merged[merged.length - 1];
     if (
       previous &&

@@ -1,5 +1,6 @@
 import { escapeAttribute } from '@kovojs/server/internal/html';
 import type { DocumentTemplate } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 import { clientHrefs } from './client/modules.js';
 
@@ -20,6 +21,133 @@ const FONT_PRELOADS = [
   '<link rel="preload" href="/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>',
 ].join('');
 
+const searchStyles = style.create(
+  {
+    dialog: {
+      background: 'var(--bg)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 24px 60px -12px rgb(0 0 0 / 0.5)',
+      color: 'var(--ink)',
+      margin: '10vh auto 0',
+      maxHeight: '70vh',
+      padding: 0,
+      width: 'min(40rem, 92vw)',
+      '::backdrop': {
+        backdropFilter: 'blur(3px)',
+        background: 'rgb(0 0 0 / 0.55)',
+      },
+    },
+    input: {
+      background: 'transparent',
+      border: 'none',
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.95rem',
+      outline: 'none',
+      padding: '1rem 1.25rem',
+      width: '100%',
+      '::placeholder': {
+        color: 'var(--faint)',
+      },
+    },
+    results: {
+      listStyle: 'none',
+      margin: 0,
+      maxHeight: '50vh',
+      overflowY: 'auto',
+      padding: '0.5rem',
+      '[data-search-label], [data-search-empty]': {
+        color: 'var(--faint)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.64rem',
+        letterSpacing: '0.12em',
+        padding: '0.55rem 0.75rem 0.35rem',
+        textTransform: 'uppercase',
+      },
+      '[data-search-empty]': {
+        borderBottomColor: 'var(--edge-soft)',
+        borderBottomStyle: 'solid',
+        borderBottomWidth: 1,
+        color: 'var(--dim)',
+        marginBottom: '0.25rem',
+        paddingBottom: '0.65rem',
+        textTransform: 'none',
+      },
+      '[data-search-result-link]': {
+        alignItems: 'center',
+        color: 'var(--ink)',
+        display: 'flex',
+        gap: '0.7rem',
+        padding: '0.55rem 0.75rem',
+        textDecoration: 'none',
+      },
+      '[data-search-result-link]:hover': {
+        background: 'var(--panel)',
+      },
+      '[data-active="true"] [data-search-result-link]': {
+        background: 'var(--panel)',
+      },
+      '[data-result-kind]': {
+        background: 'var(--panel)',
+        borderColor: 'var(--edge)',
+        borderStyle: 'solid',
+        borderWidth: 1,
+        color: 'var(--faint)',
+        flexShrink: 0,
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.56rem',
+        letterSpacing: '0.08em',
+        padding: '0.12rem 0.4rem',
+        textAlign: 'center',
+        textTransform: 'uppercase',
+        width: '3.4rem',
+      },
+      '[data-result-kind="function"]': {
+        color: 'var(--teal)',
+      },
+      '[data-result-kind="api"], [data-result-kind="spec"]': {
+        color: 'var(--purple)',
+      },
+      '[data-result-kind="app"], [data-result-kind="guide"], [data-result-kind="start"]': {
+        color: 'var(--sky)',
+      },
+      '[data-result-body]': {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.1rem',
+        minWidth: 0,
+      },
+      '[data-result-title]': {
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.84rem',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      },
+      '[data-result-section]': {
+        color: 'var(--faint)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.62rem',
+        letterSpacing: '0.1em',
+      },
+    },
+  },
+  { namespace: 'site-search-dialog', source: 'site/src/document-template.ts' },
+);
+
+export const searchDialogStyleCss = style.emitAtomicCss(
+  Object.values(searchStyles).flatMap((entry) => entry.__rules ?? []),
+);
+
+const searchDialogClass = style.attrs(searchStyles.dialog).class ?? '';
+const searchInputClass = style.attrs(searchStyles.input).class ?? '';
+const searchResultsClass = style.attrs(searchStyles.results).class ?? '';
+
 const SEARCH_DEFAULT_RESULTS = [
   ['start', 'Quickstart', 'Getting Started', '/docs/quickstart/'],
   ['guide', 'Tutorial', 'Build the app', '/tutorial/'],
@@ -29,11 +157,11 @@ const SEARCH_DEFAULT_RESULTS = [
 ]
   .map(
     ([kind, title, section, url], index) =>
-      `<li${index === 0 ? ' class="active"' : ''}><a href="${url}"${index === 0 ? ' aria-current="true"' : ''}><span class="result-kind" data-kind="${kind}">${kind}</span><span class="result-body"><span class="result-title">${title}</span><span class="result-section">${section}</span></span></a></li>`,
+      `<li${index === 0 ? ' data-active="true"' : ''}><a href="${url}" data-search-result-link${index === 0 ? ' aria-current="true"' : ''}><span data-result-kind="${kind}">${kind}</span><span data-result-body><span data-result-title>${title}</span><span data-result-section>${section}</span></span></a></li>`,
   )
   .join('');
 
-const SEARCH_DIALOG = `<dialog id="site-search" class="search-dialog" aria-label="Search documentation"><input type="search" class="search-input" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" on:keydown="${clientHrefs.search}#navigate" kovo-state="{}"><ul class="search-results" id="site-search-results"><li class="search-results-label">Suggested</li>${SEARCH_DEFAULT_RESULTS}</ul></dialog>`;
+const SEARCH_DIALOG = `<dialog id="site-search" class="${searchDialogClass}" aria-label="Search documentation"><input type="search" class="${searchInputClass}" placeholder="Search docs&hellip;" on:input="${clientHrefs.search}#query" on:keydown="${clientHrefs.search}#navigate" kovo-state="{}"><ul class="${searchResultsClass}" id="site-search-results"><li data-search-label>Suggested</li>${SEARCH_DEFAULT_RESULTS}</ul></dialog>`;
 
 // ⌘K / Ctrl-K opens the search dialog. This must be an always-present inline
 // listener, not part of the lazy search island: the island only loads on first
@@ -46,7 +174,7 @@ const SEARCH_HOTKEY = `(()=>{addEventListener('keydown',e=>{if((e.metaKey||e.ctr
 // The API symbol rail is page content, but its behavior must survive enhanced
 // navigation (SPEC §8) because scripts inserted by DOM morphing do not execute.
 // Install one document-level observer and re-bind it after Kovo swaps pages.
-const API_NAV_SCRIPT = `(()=>{let observer,setActive;const all=(selector,root=document)=>Array.from(root.querySelectorAll(selector));const decode=(value)=>{try{return decodeURIComponent(value)}catch{return value}};const targetFor=(hash)=>{const raw=hash.slice(1);const decoded=decode(raw);return document.getElementById(decoded)||document.getElementById(raw)||document.getElementsByName(decoded)[0]||document.getElementsByName(raw)[0]};const stickyOffset=()=>document.querySelector('.site-bar')?.getBoundingClientRect().bottom||0;const scrollHash=(hash)=>{const target=targetFor(hash);if(!target)return false;const rect=target.getBoundingClientRect();scrollTo(scrollX,scrollY+rect.top-stickyOffset());return true};function init(){observer?.disconnect();observer=undefined;const nav=document.querySelector('.api-nav');if(!nav){setActive=undefined;return}const links={};all('a[href^="#"]',nav).forEach((link)=>{const raw=link.getAttribute('href').slice(1);links[raw]=link;links[decode(raw)]=link});let current;function set(id){if(!id||id===current)return;links[current]?.classList.remove('active');const link=links[id]||links[decode(id)];if(link){link.classList.add('active');for(let parent=link.parentElement;parent&&parent!==nav.parentElement;parent=parent.parentElement){if(parent.tagName==='DETAILS')parent.open=true}link.scrollIntoView({block:'nearest'})}current=id}setActive=set;function syncHash(){if(!location.hash)return false;const raw=location.hash.slice(1);const id=decode(raw);if(links[id]||links[raw]){set(id);return true}return false}const headings=all('.prose h2[id],.prose h3[id],.prose h4[id]');if(!syncHash()&&headings[0])set(headings[0].id);if(!headings.length||!('IntersectionObserver'in window))return;observer=new IntersectionObserver((entries)=>{entries.forEach((entry)=>{if(entry.isIntersecting)set(entry.target.id)})},{rootMargin:'-72px 0px -75% 0px'});headings.forEach((heading)=>observer.observe(heading))}addEventListener('click',(event)=>{if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;const link=event.target?.closest?.('.api-nav a[href^="#"]');if(!link)return;const hash=link.getAttribute('href');if(!hash||!scrollHash(hash))return;event.preventDefault();history.pushState(null,'',hash);setActive?.(decode(hash.slice(1)))},{capture:true});addEventListener('kovo:navigate',()=>setTimeout(init));addEventListener('hashchange',()=>setTimeout(()=>{scrollHash(location.hash);init()}));if(document.readyState==='loading')addEventListener('DOMContentLoaded',init,{once:true});else init()})()`;
+const API_NAV_SCRIPT = `(()=>{let observer,setActive;const all=(selector,root=document)=>Array.from(root.querySelectorAll(selector));const decode=(value)=>{try{return decodeURIComponent(value)}catch{return value}};const targetFor=(hash)=>{const raw=hash.slice(1);const decoded=decode(raw);return document.getElementById(decoded)||document.getElementById(raw)||document.getElementsByName(decoded)[0]||document.getElementsByName(raw)[0]};const stickyOffset=()=>document.querySelector('[data-site-bar]')?.getBoundingClientRect().bottom||0;const scrollHash=(hash)=>{const target=targetFor(hash);if(!target)return false;const rect=target.getBoundingClientRect();scrollTo(scrollX,scrollY+rect.top-stickyOffset());return true};function init(){observer?.disconnect();observer=undefined;const nav=document.querySelector('[data-api-nav]');if(!nav){setActive=undefined;return}const links={};all('a[href^="#"]',nav).forEach((link)=>{const raw=link.getAttribute('href').slice(1);links[raw]=link;links[decode(raw)]=link});let current;function set(id){if(!id||id===current)return;links[current]?.removeAttribute('data-active');const link=links[id]||links[decode(id)];if(link){link.setAttribute('data-active','true');for(let parent=link.parentElement;parent&&parent!==nav.parentElement;parent=parent.parentElement){if(parent.tagName==='DETAILS')parent.open=true}link.scrollIntoView({block:'nearest'})}current=id}setActive=set;function syncHash(){if(!location.hash)return false;const raw=location.hash.slice(1);const id=decode(raw);if(links[id]||links[raw]){set(id);return true}return false}const headings=all('[data-prose] h2[id],[data-prose] h3[id],[data-prose] h4[id]');if(!syncHash()&&headings[0])set(headings[0].id);if(!headings.length||!('IntersectionObserver'in window))return;observer=new IntersectionObserver((entries)=>{entries.forEach((entry)=>{if(entry.isIntersecting)set(entry.target.id)})},{rootMargin:'-72px 0px -75% 0px'});headings.forEach((heading)=>observer.observe(heading))}addEventListener('click',(event)=>{if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;const link=event.target?.closest?.('[data-api-nav] a[href^="#"]');if(!link)return;const hash=link.getAttribute('href');if(!hash||!scrollHash(hash))return;event.preventDefault();history.pushState(null,'',hash);setActive?.(decode(hash.slice(1)))},{capture:true});addEventListener('kovo:navigate',()=>setTimeout(init));addEventListener('hashchange',()=>setTimeout(()=>{scrollHash(location.hash);init()}));if(document.readyState==='loading')addEventListener('DOMContentLoaded',init,{once:true});else init()})()`;
 
 export const siteDocumentTemplate: DocumentTemplate = ({ parts }) =>
   [

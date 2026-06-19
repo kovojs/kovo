@@ -6,9 +6,9 @@ import {
   autocompleteKeyDown as _autocompleteKeyDown,
   autocompleteOptionClick as _autocompleteOptionClick,
   autocompleteSuggestions as _autocompleteSuggestions,
-} from '@kovojs/headless-ui/autocomplete';
+} from '@kovojs/ui/autocomplete';
 
-export const GalleryAutocompleteDemo$input_input = handler((event, ctx) => {
+export const GalleryAutocompleteDemo$AutocompleteInput_input = handler((event, ctx) => {
   const result = _autocompleteInput(Object(event), {
     inputValue: ctx.state.inputValue,
     value: ctx.state.value,
@@ -39,7 +39,7 @@ export const GalleryAutocompleteDemo$input_input = handler((event, ctx) => {
       ],
     })[0]?.value ?? '';
 });
-export const GalleryAutocompleteDemo$input_keydown = handler((event, ctx) => {
+export const GalleryAutocompleteDemo$AutocompleteInput_keydown = handler((event, ctx) => {
   const result = _autocompleteKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     inputValue: ctx.state.inputValue,
@@ -83,7 +83,7 @@ export const GalleryAutocompleteDemo$input_keydown = handler((event, ctx) => {
     }
   }
 });
-export const GalleryAutocompleteDemo$button_click = handler((event, ctx) => {
+export const GalleryAutocompleteDemo$AutocompleteOption_click = handler((event, ctx) => {
   const result = _autocompleteOptionClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     inputValue: ctx.state.inputValue,
@@ -117,7 +117,7 @@ export const GalleryAutocompleteDemo$button_click = handler((event, ctx) => {
     ctx.state.highlightedValue = ctx.state.value;
   }
 });
-export const GalleryAutocompleteDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryAutocompleteDemo$AutocompleteOption_click_2 = handler((event, ctx) => {
   const result = _autocompleteOptionClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     inputValue: ctx.state.inputValue,
@@ -152,10 +152,10 @@ export const GalleryAutocompleteDemo$button_click_2 = handler((event, ctx) => {
   }
 });
 
-export const GalleryAutocompleteDemo$section_data_state_derive = derive(['state'], (state) =>
+export const GalleryAutocompleteDemo$Autocomplete_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryAutocompleteDemo$input_aria_activedescendant_derive = derive(
+export const GalleryAutocompleteDemo$AutocompleteInput_aria_activedescendant_derive = derive(
   ['state'],
   (state) =>
     state.highlightedValue === 'development'
@@ -166,57 +166,68 @@ export const GalleryAutocompleteDemo$input_aria_activedescendant_derive = derive
           ? 'gallery-autocomplete-list-option-0'
           : null,
 );
-export const GalleryAutocompleteDemo$input_aria_expanded_derive = derive(['state'], (state) =>
-  state.open ? 'true' : 'false',
+export const GalleryAutocompleteDemo$AutocompleteInput_aria_expanded_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'true' : 'false'),
 );
-export const GalleryAutocompleteDemo$input_data_placeholder_derive = derive(['state'], (state) =>
-  state.inputValue === '' ? '' : null,
+export const GalleryAutocompleteDemo$AutocompleteInput_data_placeholder_derive = derive(
+  ['state'],
+  (state) => (state.inputValue === '' ? '' : null),
 );
-export const GalleryAutocompleteDemo$input_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryAutocompleteDemo$AutocompleteInput_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryAutocompleteDemo$input_value_derive = derive(
+export const GalleryAutocompleteDemo$AutocompleteInput_value_derive = derive(
   ['state'],
   (state) => state.inputValue,
 );
-export const GalleryAutocompleteDemo$div_data_state_derive = derive(['state'], (state) =>
-  state.open ? 'open' : 'closed',
+export const GalleryAutocompleteDemo$AutocompleteList_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryAutocompleteDemo$div_hidden_derive = derive(['state'], (state) =>
+export const GalleryAutocompleteDemo$AutocompleteList_hidden_derive = derive(['state'], (state) =>
   !state.open ? '' : null,
 );
-export const GalleryAutocompleteDemo$button_aria_selected_derive = derive(['state'], (state) =>
-  state.value === 'design' ? 'true' : 'false',
+export const GalleryAutocompleteDemo$AutocompleteOption_aria_selected_derive = derive(
+  ['state'],
+  (state) => (state.value === 'design' ? 'true' : 'false'),
 );
-export const GalleryAutocompleteDemo$button_data_highlighted_derive = derive(['state'], (state) =>
-  state.highlightedValue === 'design' ? '' : null,
+export const GalleryAutocompleteDemo$AutocompleteOption_data_highlighted_derive = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'design' ? '' : null),
 );
-export const GalleryAutocompleteDemo$button_data_state_derive = derive(['state'], (state) =>
-  state.value === 'design' ? 'checked' : 'unchecked',
+export const GalleryAutocompleteDemo$AutocompleteOption_data_state_derive = derive(
+  ['state'],
+  (state) => (state.value === 'design' ? 'checked' : 'unchecked'),
 );
-export const GalleryAutocompleteDemo$button_hidden_derive = derive(['state'], (state) =>
+export const GalleryAutocompleteDemo$AutocompleteOption_hidden_derive = derive(['state'], (state) =>
   state.inputValue !== '' && !'design'.startsWith(state.inputValue.toLocaleLowerCase()) ? '' : null,
 );
-export const GalleryAutocompleteDemo$button_tabIndex_derive = derive(['state'], (state) =>
-  state.highlightedValue === 'design' ? 0 : -1,
+export const GalleryAutocompleteDemo$AutocompleteOption_tabIndex_derive = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'design' ? 0 : -1),
 );
-export const GalleryAutocompleteDemo$button_aria_selected_derive_2 = derive(['state'], (state) =>
-  state.value === 'development' ? 'true' : 'false',
+export const GalleryAutocompleteDemo$AutocompleteOption_aria_selected_derive_2 = derive(
+  ['state'],
+  (state) => (state.value === 'development' ? 'true' : 'false'),
 );
-export const GalleryAutocompleteDemo$button_data_highlighted_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'development' ? '' : null,
+export const GalleryAutocompleteDemo$AutocompleteOption_data_highlighted_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'development' ? '' : null),
 );
-export const GalleryAutocompleteDemo$button_data_state_derive_2 = derive(['state'], (state) =>
-  state.value === 'development' ? 'checked' : 'unchecked',
+export const GalleryAutocompleteDemo$AutocompleteOption_data_state_derive_2 = derive(
+  ['state'],
+  (state) => (state.value === 'development' ? 'checked' : 'unchecked'),
 );
-export const GalleryAutocompleteDemo$button_hidden_derive_2 = derive(['state'], (state) =>
-  state.inputValue !== '' && !'development'.startsWith(state.inputValue.toLocaleLowerCase())
-    ? ''
-    : null,
+export const GalleryAutocompleteDemo$AutocompleteOption_hidden_derive_2 = derive(
+  ['state'],
+  (state) =>
+    state.inputValue !== '' && !'development'.startsWith(state.inputValue.toLocaleLowerCase())
+      ? ''
+      : null,
 );
-export const GalleryAutocompleteDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'development' ? 0 : -1,
-);
-export const GalleryAutocompleteDemo$output_text_derive = derive(['state'], (state) =>
-  state.value === 'development' ? 'Development' : 'Design',
+export const GalleryAutocompleteDemo$AutocompleteOption_tabIndex_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'development' ? 0 : -1),
 );

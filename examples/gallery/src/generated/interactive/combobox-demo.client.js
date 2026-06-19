@@ -6,9 +6,9 @@ import {
   comboboxInput as _comboboxInput,
   comboboxKeyDown as _comboboxKeyDown,
   comboboxOptionClick as _comboboxOptionClick,
-} from '@kovojs/headless-ui/combobox';
+} from '@kovojs/ui/combobox';
 
-export const GalleryComboboxDemo$input_input = handler((event, ctx) => {
+export const GalleryComboboxDemo$ComboboxInput_input = handler((event, ctx) => {
   const result = _comboboxInput(Object(event), { value: ctx.state.inputValue });
   if (!result) return;
   ctx.state.inputValue = result.value ?? '';
@@ -37,7 +37,7 @@ export const GalleryComboboxDemo$input_input = handler((event, ctx) => {
   ctx.state.highlightedValue =
     filteredItems[0]?.disabled === true ? '' : (filteredItems[0]?.value ?? '');
 });
-export const GalleryComboboxDemo$input_keydown = handler((event, ctx) => {
+export const GalleryComboboxDemo$ComboboxInput_keydown = handler((event, ctx) => {
   const result = _comboboxKeyDown(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: _comboboxFilteredItems({
@@ -83,7 +83,7 @@ export const GalleryComboboxDemo$input_keydown = handler((event, ctx) => {
     }
   }
 });
-export const GalleryComboboxDemo$button_click = handler((event, ctx) => {
+export const GalleryComboboxDemo$ComboboxOption_click = handler((event, ctx) => {
   const result = _comboboxOptionClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -116,7 +116,7 @@ export const GalleryComboboxDemo$button_click = handler((event, ctx) => {
     ctx.state.highlightedValue = ctx.state.value;
   }
 });
-export const GalleryComboboxDemo$button_click_2 = handler((event, ctx) => {
+export const GalleryComboboxDemo$ComboboxOption_click_2 = handler((event, ctx) => {
   const result = _comboboxOptionClick(Object(event), {
     highlightedValue: ctx.state.highlightedValue,
     items: [
@@ -150,85 +150,90 @@ export const GalleryComboboxDemo$button_click_2 = handler((event, ctx) => {
   }
 });
 
-export const GalleryComboboxDemo$section_data_state_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$Combobox_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryComboboxDemo$input_aria_activedescendant_derive = derive(['state'], (state) =>
-  state.highlightedValue === 'chicago'
-    ? 'gallery-combobox-listbox-option-2'
-    : state.highlightedValue === 'boston'
-      ? 'gallery-combobox-listbox-option-1'
-      : state.highlightedValue === 'austin'
-        ? 'gallery-combobox-listbox-option-0'
-        : null,
+export const GalleryComboboxDemo$ComboboxInput_aria_activedescendant_derive = derive(
+  ['state'],
+  (state) =>
+    state.highlightedValue === 'chicago'
+      ? 'gallery-combobox-listbox-option-2'
+      : state.highlightedValue === 'boston'
+        ? 'gallery-combobox-listbox-option-1'
+        : state.highlightedValue === 'austin'
+          ? 'gallery-combobox-listbox-option-0'
+          : null,
 );
-export const GalleryComboboxDemo$input_aria_expanded_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxInput_aria_expanded_derive = derive(['state'], (state) =>
   state.open ? 'true' : 'false',
 );
-export const GalleryComboboxDemo$input_data_placeholder_derive = derive(['state'], (state) =>
-  state.inputValue === '' ? '' : null,
+export const GalleryComboboxDemo$ComboboxInput_data_placeholder_derive = derive(
+  ['state'],
+  (state) => (state.inputValue === '' ? '' : null),
 );
-export const GalleryComboboxDemo$input_data_state_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxInput_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryComboboxDemo$input_value_derive = derive(
+export const GalleryComboboxDemo$ComboboxInput_value_derive = derive(
   ['state'],
   (state) => state.inputValue,
 );
-export const GalleryComboboxDemo$div_data_state_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxListbox_data_state_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryComboboxDemo$div_hidden_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxListbox_hidden_derive = derive(['state'], (state) =>
   !state.open ? '' : null,
 );
-export const GalleryComboboxDemo$button_aria_selected_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_aria_selected_derive = derive(['state'], (state) =>
   state.value === 'austin' ? 'true' : 'false',
 );
-export const GalleryComboboxDemo$button_data_highlighted_derive = derive(['state'], (state) =>
-  state.highlightedValue === 'austin' ? '' : null,
+export const GalleryComboboxDemo$ComboboxOption_data_highlighted_derive = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'austin' ? '' : null),
 );
-export const GalleryComboboxDemo$button_data_state_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_data_state_derive = derive(['state'], (state) =>
   state.value === 'austin' ? 'checked' : 'unchecked',
 );
-export const GalleryComboboxDemo$button_hidden_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_hidden_derive = derive(['state'], (state) =>
   state.inputValue !== '' && !'austin austin'.includes(state.inputValue.toLocaleLowerCase())
     ? ''
     : null,
 );
-export const GalleryComboboxDemo$button_tabIndex_derive = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_tabIndex_derive = derive(['state'], (state) =>
   state.highlightedValue === 'austin' ? 0 : -1,
 );
-export const GalleryComboboxDemo$button_aria_selected_derive_2 = derive(['state'], (state) =>
-  state.value === 'boston' ? 'true' : 'false',
+export const GalleryComboboxDemo$ComboboxOption_aria_selected_derive_2 = derive(
+  ['state'],
+  (state) => (state.value === 'boston' ? 'true' : 'false'),
 );
-export const GalleryComboboxDemo$button_data_highlighted_derive_2 = derive(['state'], (state) =>
-  state.highlightedValue === 'boston' ? '' : null,
+export const GalleryComboboxDemo$ComboboxOption_data_highlighted_derive_2 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'boston' ? '' : null),
 );
-export const GalleryComboboxDemo$button_data_state_derive_2 = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_data_state_derive_2 = derive(['state'], (state) =>
   state.value === 'boston' ? 'checked' : 'unchecked',
 );
-export const GalleryComboboxDemo$button_hidden_derive_2 = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_hidden_derive_2 = derive(['state'], (state) =>
   state.inputValue !== '' && !'boston boston'.includes(state.inputValue.toLocaleLowerCase())
     ? ''
     : null,
 );
-export const GalleryComboboxDemo$button_aria_selected_derive_3 = derive(['state'], (state) =>
-  state.value === 'chicago' ? 'true' : 'false',
+export const GalleryComboboxDemo$ComboboxOption_aria_selected_derive_3 = derive(
+  ['state'],
+  (state) => (state.value === 'chicago' ? 'true' : 'false'),
 );
-export const GalleryComboboxDemo$button_data_highlighted_derive_3 = derive(['state'], (state) =>
-  state.highlightedValue === 'chicago' ? '' : null,
+export const GalleryComboboxDemo$ComboboxOption_data_highlighted_derive_3 = derive(
+  ['state'],
+  (state) => (state.highlightedValue === 'chicago' ? '' : null),
 );
-export const GalleryComboboxDemo$button_data_state_derive_3 = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_data_state_derive_3 = derive(['state'], (state) =>
   state.value === 'chicago' ? 'checked' : 'unchecked',
 );
-export const GalleryComboboxDemo$button_hidden_derive_3 = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_hidden_derive_3 = derive(['state'], (state) =>
   state.inputValue !== '' && !'chicago city chicago'.includes(state.inputValue.toLocaleLowerCase())
     ? ''
     : null,
 );
-export const GalleryComboboxDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
+export const GalleryComboboxDemo$ComboboxOption_tabIndex_derive_2 = derive(['state'], (state) =>
   state.highlightedValue === 'chicago' ? 0 : -1,
-);
-export const GalleryComboboxDemo$output_text_derive = derive(['state'], (state) =>
-  state.value === 'chicago' ? 'Chicago city' : 'Austin',
 );

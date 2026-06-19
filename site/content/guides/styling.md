@@ -64,7 +64,7 @@ export const theme = defineTheme({
 ## Component styles
 
 Import the style package as `style`, define style groups near the component, and compose them through
-`style.attrs(...)` or the compiler-lowered `style={[...]}` JSX prop:
+the `style={...}` JSX prop:
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
@@ -90,10 +90,7 @@ const cardStyles = style.create({
 export const ProductCard = component({
   render({ item }: { item: { id: string; stock: number } }) {
     return (
-      <article
-        kovo-key={item.id}
-        {...style.attrs(cardStyles.root, item.stock < 3 && cardStyles.lowStock)}
-      >
+      <article kovo-key={item.id} style={[cardStyles.root, item.stock < 3 && cardStyles.lowStock]}>
         <h2>{item.id}</h2>
         <p>{item.stock} in stock</p>
       </article>
@@ -102,9 +99,9 @@ export const ProductCard = component({
 });
 ```
 
-Two token families appear here. `tokens.sys.*` are the Material *system roles* every theme defines —
+Two token families appear here. `tokens.sys.*` are the Material _system roles_ every theme defines —
 `surface`, `onSurface`, `outlineVariant`, `primary`, and so on — derived from the seed so a theme
-change re-skins them everywhere. `tokens.customColor('warning')` reads one of the *named extra colors*
+change re-skins them everywhere. `tokens.customColor('warning')` reads one of the _named extra colors_
 you declared under `defineTheme({ colors: { warning } })`; it returns a group (`.color`, `.onColor`,
 `.colorContainer`, …) for palette entries that aren't part of the system role set. Reach for `sys.*` for
 ordinary surfaces and text, and `customColor(name)` for app-specific accents like a low-stock warning.

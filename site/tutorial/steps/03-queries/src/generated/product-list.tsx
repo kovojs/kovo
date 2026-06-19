@@ -2,6 +2,7 @@
 /** @jsxImportSource @kovojs/server */
 import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
 
 import { formatPrice } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
@@ -14,11 +15,22 @@ import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from
 // section 4.2); kovo-key is the single keyed-identity contract shared by
 // stamps, morph, and optimistic reordering (section 4.8).
 
+const productListStyles = style.create(
+  {
+    list: {
+      display: 'grid',
+      gap: 8,
+      paddingInlineStart: 20,
+    },
+  },
+  { namespace: 'tutorial-product-list', source: 'site/tutorial/steps/03-queries/src/components/product-list.tsx' },
+);
+
 // snippet:product-list
 export const ProductList = component({
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }) => (
-    <ul class="products" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list" kovo-live-component="components/product-list/product-list">
+    <ul class="kv-tutorial-product-list-d-bqcudx kv-tutorial-product-list-gap-1uub0u kv-tutorial-product-list-pad-q603nn" data-style-src="site/tutorial/steps/03-queries/src/components/product-list.tsx#list" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list" kovo-live-component="components/product-list/product-list">
       {products.items.map((item) => (
         <li kovo-key={item.id}>
           {escapeText(item.name)} — {formatPrice(item.unitPrice)} ({escapeText(item.stock)} in stock)

@@ -10,6 +10,7 @@ import type { GalleryPageInput } from './components/gallery.js';
 
 export type DocsRouteContent =
   | { html: string; kind: 'html'; prose?: boolean }
+  | { html: string; kind: 'spec' }
   | { kind: 'section-index'; section: SectionIndexInput }
   | { example: ExampleSplitInput; kind: 'example' }
   | { gallery: GalleryPageInput; kind: 'gallery' };

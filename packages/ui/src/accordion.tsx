@@ -12,6 +12,8 @@ import {
 import type { CollectionOrientation } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface AccordionStyleOverrides {
@@ -162,6 +164,7 @@ export const Accordion = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
         id={props.id}
@@ -180,6 +183,7 @@ export const AccordionItem = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         open={attrs.open}
@@ -201,6 +205,7 @@ export const AccordionHeader = component({
     return (
       <h3
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-level={attrs['aria-level']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
@@ -224,6 +229,7 @@ export const AccordionTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         data-disabled={attrs['data-disabled']}
@@ -250,6 +256,7 @@ export const AccordionContent = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-labelledby={attrs['aria-labelledby']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
@@ -262,3 +269,5 @@ export const AccordionContent = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/accordion';

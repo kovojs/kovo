@@ -657,7 +657,10 @@ describe('compiler conformance corpus', () => {
         { localName: 'ProductGrid', specifier: './product-grid.js' },
       ],
       fileName: 'examples/commerce/src/app.tsx',
-      source: readFileSync(new URL('../../../examples/commerce/src/app.tsx', import.meta.url), 'utf8'),
+      source: readFileSync(
+        new URL('../../../examples/commerce/src/app.tsx', import.meta.url),
+        'utf8',
+      ),
     });
     const generatedSource = readFileSync(
       new URL('../../../examples/commerce/src/generated/app.kovo-route.tsx', import.meta.url),

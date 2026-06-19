@@ -8,6 +8,8 @@ import {
 import { safeUrl } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface HoverCardStyleOverrides {
@@ -113,6 +115,7 @@ export const HoverCard = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -134,6 +137,7 @@ export const HoverCardTrigger = component({
     return (
       <a
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-disabled={props.disabled === true ? 'true' : undefined}
         aria-expanded={attrs['aria-expanded']}
@@ -163,6 +167,7 @@ export const HoverCardContent = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
         id={attrs.id}
@@ -173,3 +178,5 @@ export const HoverCardContent = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/hover-card';

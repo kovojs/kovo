@@ -70,7 +70,7 @@ describe('server app document boundary', () => {
     expect(response.body).toContain('<link rel="stylesheet" href="/assets/styles.css">');
     expect(response.body).toContain('<link rel="stylesheet" href="/assets/product.css">');
     expect(
-      response.body.match(/<link rel="stylesheet" href="\/assets\/styles\.css">/g),
+      (response.body as string).match(/<link rel="stylesheet" href="\/assets\/styles\.css">/g),
     ).toHaveLength(1);
     expect(response.headers.Link).toBe(
       '</assets/styles.css>; rel=preload; as=style, </assets/product.css>; rel=preload; as=style',

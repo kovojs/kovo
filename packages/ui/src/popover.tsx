@@ -7,6 +7,8 @@ import {
 } from '@kovojs/headless-ui/popover';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface PopoverStyleOverrides {
@@ -122,6 +124,7 @@ export const Popover = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -143,6 +146,7 @@ export const PopoverTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         data-disabled={attrs['data-disabled']}
@@ -168,9 +172,17 @@ export const PopoverContent = component({
     const styleAttrs = style.attrs(popoverStyles.content, props.styles?.content);
 
     return (
-      <div {...styleAttrs} data-state={attrs['data-state']} id={attrs.id} popover={attrs.popover}>
+      <div
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-state={attrs['data-state']}
+        id={attrs.id}
+        popover={attrs.popover}
+      >
         {props.children}
       </div>
     );
   },
 });
+
+export * from '@kovojs/headless-ui/popover';

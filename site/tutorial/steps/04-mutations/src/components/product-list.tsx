@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
@@ -17,10 +18,24 @@ export interface ProductListRenderContext {
   request?: ShopRequest | undefined;
 }
 
+const productListStyles = style.create(
+  {
+    list: {
+      display: 'grid',
+      gap: 8,
+      paddingInlineStart: 20,
+    },
+  },
+  {
+    namespace: 'tutorial-product-list',
+    source: 'site/tutorial/steps/04-mutations/src/components/product-list.tsx',
+  },
+);
+
 export const ProductList = component({
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
-    <ul class="products">
+    <ul style={productListStyles.list}>
       {products.items.map((item) => (
         <li kovo-key={item.id}>
           {item.name} — {formatPrice(item.unitPrice)} ({item.stock} in stock)

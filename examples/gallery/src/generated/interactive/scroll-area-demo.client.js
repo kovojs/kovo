@@ -7,16 +7,16 @@ import {
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
   scrollAreaTrackPointerDown as _scrollAreaTrackPointerDown,
   scrollAreaViewportScroll as _scrollAreaViewportScroll,
-} from '@kovojs/headless-ui/scroll-area';
+} from '@kovojs/ui/scroll-area';
 
-export const GalleryScrollAreaDemo$section_pointerenter = handler((_event, ctx) => {
+export const GalleryScrollAreaDemo$ScrollArea_pointerenter = handler((_event, ctx) => {
   ctx.state.hovering = true;
 });
-export const GalleryScrollAreaDemo$section_pointerleave = handler((_event, ctx) => {
+export const GalleryScrollAreaDemo$ScrollArea_pointerleave = handler((_event, ctx) => {
   ctx.state.hovering = false;
   ctx.state.dragging = false;
 });
-export const GalleryScrollAreaDemo$div_scroll = handler((event, ctx) => {
+export const GalleryScrollAreaDemo$ScrollAreaViewport_scroll = handler((event, ctx) => {
   const result = _scrollAreaViewportScroll(Object(event), { scrollbars: 'vertical' });
   if (!result) return;
 
@@ -32,7 +32,7 @@ export const GalleryScrollAreaDemo$div_scroll = handler((event, ctx) => {
   ctx.state.scrolling = true;
   ctx.state.verticalVisible = geometry.visible;
 });
-export const GalleryScrollAreaDemo$div_pointerdown = handler((event, ctx) => {
+export const GalleryScrollAreaDemo$ScrollAreaScrollbar_pointerdown = handler((event, ctx) => {
   const result = _scrollAreaTrackPointerDown(
     Object(event),
     {
@@ -72,7 +72,7 @@ export const GalleryScrollAreaDemo$div_pointerdown = handler((event, ctx) => {
   ctx.state.scrolling = true;
   ctx.state.verticalVisible = geometry.visible;
 });
-export const GalleryScrollAreaDemo$span_pointerdown = handler((event, ctx) => {
+export const GalleryScrollAreaDemo$ScrollAreaThumb_pointerdown = handler((event, ctx) => {
   const result = _scrollAreaThumbDragStart(
     Object(event),
     {
@@ -97,7 +97,7 @@ export const GalleryScrollAreaDemo$span_pointerdown = handler((event, ctx) => {
   ctx.state.dragTrackSize = result.trackSize;
   ctx.state.scrolling = true;
 });
-export const GalleryScrollAreaDemo$span_pointermove = handler((event, ctx) => {
+export const GalleryScrollAreaDemo$ScrollAreaThumb_pointermove = handler((event, ctx) => {
   if (!ctx.state.dragging) return;
   const result = _scrollAreaThumbDrag(
     Object(event),
@@ -142,7 +142,7 @@ export const GalleryScrollAreaDemo$span_pointermove = handler((event, ctx) => {
   ctx.state.scrolling = true;
   ctx.state.verticalVisible = geometry.visible;
 });
-export const GalleryScrollAreaDemo$span_pointerup = handler((_event, ctx) => {
+export const GalleryScrollAreaDemo$ScrollAreaThumb_pointerup = handler((_event, ctx) => {
   ctx.state.dragging = false;
   ctx.state.scrolling = false;
 });
@@ -154,80 +154,108 @@ export const GalleryScrollAreaDemo$button_click = handler((_event, ctx) => {
   ctx.state.scrolling = true;
 });
 
-export const GalleryScrollAreaDemo$section_data_dragging_derive = derive(['state'], (state) =>
+export const GalleryScrollAreaDemo$ScrollArea_data_dragging_derive = derive(['state'], (state) =>
   state.dragging ? '' : null,
 );
-export const GalleryScrollAreaDemo$section_data_has_overflow_y_derive = derive(['state'], (state) =>
-  state.hasOverflowY ? '' : null,
+export const GalleryScrollAreaDemo$ScrollArea_data_has_overflow_y_derive = derive(
+  ['state'],
+  (state) => (state.hasOverflowY ? '' : null),
 );
-export const GalleryScrollAreaDemo$section_data_hovering_derive = derive(['state'], (state) =>
+export const GalleryScrollAreaDemo$ScrollArea_data_hovering_derive = derive(['state'], (state) =>
   state.hovering ? '' : null,
 );
-export const GalleryScrollAreaDemo$section_data_scrolling_derive = derive(['state'], (state) =>
+export const GalleryScrollAreaDemo$ScrollArea_data_scrolling_derive = derive(['state'], (state) =>
   state.scrolling ? '' : null,
 );
-export const GalleryScrollAreaDemo$div_data_has_overflow_y_derive = derive(['state'], (state) =>
-  state.hasOverflowY ? '' : null,
+export const GalleryScrollAreaDemo$ScrollAreaViewport_data_has_overflow_y_derive = derive(
+  ['state'],
+  (state) => (state.hasOverflowY ? '' : null),
 );
-export const GalleryScrollAreaDemo$div_data_scrolling_derive = derive(['state'], (state) =>
-  state.scrolling ? '' : null,
+export const GalleryScrollAreaDemo$ScrollAreaViewport_data_scrolling_derive = derive(
+  ['state'],
+  (state) => (state.scrolling ? '' : null),
 );
-export const GalleryScrollAreaDemo$div_data_scroll_y_derive = derive(
+export const GalleryScrollAreaDemo$ScrollAreaViewport_data_scroll_y_derive = derive(
   ['state'],
   (state) => state.scrollY,
 );
-export const GalleryScrollAreaDemo$div_scrollTop_derive = derive(
+export const GalleryScrollAreaDemo$ScrollAreaViewport_scrollTop_derive = derive(
   ['state'],
   (state) => state.scrollTop,
 );
-export const GalleryScrollAreaDemo$div_data_has_overflow_y_derive_2 = derive(['state'], (state) =>
-  state.hasOverflowY ? '' : null,
-);
-export const GalleryScrollAreaDemo$div_data_hovering_derive = derive(['state'], (state) =>
-  state.hovering ? '' : null,
-);
-export const GalleryScrollAreaDemo$div_data_scrolling_derive_2 = derive(['state'], (state) =>
-  state.scrolling ? '' : null,
-);
-export const GalleryScrollAreaDemo$div_data_state_derive = derive(['state'], (state) =>
-  state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
-    ? 'visible'
-    : 'hidden',
-);
-export const GalleryScrollAreaDemo$div_hidden_derive = derive(['state'], (state) =>
-  !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging)) ? '' : null,
-);
-export const GalleryScrollAreaDemo$span_data_dragging_derive = derive(['state'], (state) =>
-  state.dragging ? '' : null,
-);
-export const GalleryScrollAreaDemo$span_data_has_overflow_y_derive = derive(['state'], (state) =>
-  state.hasOverflowY ? '' : null,
-);
-export const GalleryScrollAreaDemo$span_data_hovering_derive = derive(['state'], (state) =>
-  state.hovering ? '' : null,
-);
-export const GalleryScrollAreaDemo$span_data_scrolling_derive = derive(['state'], (state) =>
-  state.scrolling ? '' : null,
-);
-export const GalleryScrollAreaDemo$span_data_scroll_position_derive = derive(
+export const GalleryScrollAreaDemo$ScrollAreaViewport_scrollY_derive = derive(
   ['state'],
   (state) => state.scrollY,
 );
-export const GalleryScrollAreaDemo$span_data_state_derive = derive(['state'], (state) =>
+export const GalleryScrollAreaDemo$ScrollAreaScrollbar_data_has_overflow_y_derive = derive(
+  ['state'],
+  (state) => (state.hasOverflowY ? '' : null),
+);
+export const GalleryScrollAreaDemo$ScrollAreaScrollbar_data_hovering_derive = derive(
+  ['state'],
+  (state) => (state.hovering ? '' : null),
+);
+export const GalleryScrollAreaDemo$ScrollAreaScrollbar_data_scrolling_derive = derive(
+  ['state'],
+  (state) => (state.scrolling ? '' : null),
+);
+export const GalleryScrollAreaDemo$ScrollAreaScrollbar_data_state_derive = derive(
+  ['state'],
+  (state) =>
+    state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+      ? 'visible'
+      : 'hidden',
+);
+export const GalleryScrollAreaDemo$ScrollAreaScrollbar_hidden_derive = derive(['state'], (state) =>
+  !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging)) ? '' : null,
+);
+export const GalleryScrollAreaDemo$ScrollAreaScrollbar_visible_derive = derive(
+  ['state'],
+  (state) => state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_data_dragging_derive = derive(
+  ['state'],
+  (state) => (state.dragging ? '' : null),
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_data_has_overflow_y_derive = derive(
+  ['state'],
+  (state) => (state.hasOverflowY ? '' : null),
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_data_hovering_derive = derive(
+  ['state'],
+  (state) => (state.hovering ? '' : null),
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_data_scrolling_derive = derive(
+  ['state'],
+  (state) => (state.scrolling ? '' : null),
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_data_scroll_position_derive = derive(
+  ['state'],
+  (state) => state.scrollY,
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_data_state_derive = derive(['state'], (state) =>
   state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
     ? 'visible'
     : 'hidden',
 );
-export const GalleryScrollAreaDemo$span_hidden_derive = derive(['state'], (state) =>
+export const GalleryScrollAreaDemo$ScrollAreaThumb_hidden_derive = derive(['state'], (state) =>
   !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging)) ? '' : null,
 );
-export const GalleryScrollAreaDemo$span_style_derive = derive(['state'], (state) =>
+export const GalleryScrollAreaDemo$ScrollAreaThumb_style_derive = derive(['state'], (state) =>
   [
     kovoStyleProperty('height', `${state.thumbSize}%`),
     kovoStyleProperty('top', `${state.thumbOffset}%`),
   ]
     .filter(Boolean)
     .join('; '),
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_scrollPosition_derive = derive(
+  ['state'],
+  (state) => state.scrollY,
+);
+export const GalleryScrollAreaDemo$ScrollAreaThumb_visible_derive = derive(
+  ['state'],
+  (state) => state.verticalVisible && (state.hovering || state.scrolling || state.dragging),
 );
 export const GalleryScrollAreaDemo$button_aria_pressed_derive = derive(['state'], (state) =>
   state.scrollY === 'end' ? 'true' : 'false',

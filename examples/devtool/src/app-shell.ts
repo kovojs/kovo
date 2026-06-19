@@ -1,78 +1,41 @@
-import { readFileSync } from 'node:fs';
+// Thin consumer of @kovojs/devtool. It wires three sibling example apps' own
+// committed graphs into the reusable devtool; all the logic (graph derivation,
+// rendering, MCP, mount) lives in the package. This is what any host does to
+// inspect its own app — read its graph.json, hand it to createDevtoolApp.
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { createApp, createMemoryVersionedClientModuleRegistry, createRequestHandler, route, toNodeHandler } from '@kovojs/server';
-
-import { renderPage } from './render.js';
+import { buildBundle } from '@kovojs/devtool';
+import { createDevtoolApp } from '@kovojs/devtool/app';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const DATA = join(HERE, '..', 'data');
+const EXAMPLES = join(HERE, '..', '..');
 
-// Mount prefix. Empty = served at '/' (own dev server). Set KOVO_DEVTOOL_BASE
-// (e.g. '/__kovo') to mount under a prefix on a host app's dev server: all emitted
-// absolute URLs are prefixed, and the host middleware strips the prefix before
-// dispatching here (the route itself stays '/'). Selection links are query-only,
-// so they ride any base unchanged.
-const BASE = process.env.KOVO_DEVTOOL_BASE ?? '';
+const APPS = [
+  { app: 'commerce', label: 'Commerce', blurb: 'cart · products · orders' },
+  { app: 'crm', label: 'CRM', blurb: 'contacts · deals · pipeline' },
+  { app: 'stackoverflow', label: 'Stack Overflow', blurb: 'questions · answers · votes' },
+];
 
-// Pan/zoom/hover enhancement island, registered as a versioned /c/ client module.
-const clientModules = createMemoryVersionedClientModuleRegistry();
-const pzHref = clientModules.put({
-  path: '/c/devtool-pz.client.js',
-  source: readFileSync(join(HERE, 'devtool-pz.client.js'), 'utf8'),
-  version: 'pz-r1',
+const bundles = APPS.flatMap((a) => {
+  const graphPath = join(EXAMPLES, a.app, 'src', 'generated', 'graph.json');
+  if (!existsSync(graphPath)) return [];
+  const graph = JSON.parse(readFileSync(graphPath, 'utf8'));
+  return [
+    buildBundle({
+      app: a.app,
+      label: a.label,
+      blurb: a.blurb,
+      graph,
+      srcRoot: join(EXAMPLES, a.app, 'src'),
+    }),
+  ];
 });
 
-const manifest: { id: string; label: string; blurb: string }[] = JSON.parse(
-  readFileSync(join(DATA, 'manifest.json'), 'utf8'),
-);
-const criticalCss = readFileSync(join(HERE, 'styles.css'), 'utf8');
+const devtool = createDevtoolApp({ bundles });
 
-const bundleCache = new Map<string, any>();
-function loadBundle(appId: string): any {
-  if (!bundleCache.has(appId)) {
-    bundleCache.set(appId, JSON.parse(readFileSync(join(DATA, `${appId}.json`), 'utf8')));
-  }
-  return bundleCache.get(appId);
-}
-
-const str = (v: unknown): string | undefined => {
-  if (typeof v === 'string' && v.length) return v;
-  if (Array.isArray(v) && typeof v[0] === 'string') return v[0];
-  return undefined;
-};
-
-export interface DevtoolRequest {
-  db: Record<string, never>;
-}
-
-export const homeRoute = route('/', {
-  meta: {
-    description: 'Trace dataflow across a Kovo app — queries in, mutations out — with source previews.',
-    title: 'Kovo Dataflow Devtools',
-  },
-  page(context: { search: Record<string, unknown> }) {
-    const known = new Set(manifest.map((m) => m.id));
-    const app = str(context.search.app) && known.has(str(context.search.app)!)
-      ? str(context.search.app)!
-      : manifest[0]?.id ?? 'commerce';
-    const bundle = loadBundle(app);
-    return renderPage({ manifest, bundle, app, sel: str(context.search.sel), q: str(context.search.q), pzHref: BASE + pzHref });
-  },
-  // Preload only in standalone mode: the registry knows the unprefixed href; under
-  // a mount base the island still loads via the prefixed on:visible ref (perf hint only).
-  modulepreloads: BASE ? [] : [pzHref],
-  stylesheets: [{ href: `${BASE}/src/styles.css`, criticalCss }],
-});
-
-export const app = createApp({
-  clientModules,
-  db: () => ({}),
-  document: { lang: 'en' },
-  routes: [homeRoute],
-});
-
-export const requestHandler = createRequestHandler(app);
-export const nodeHandler = toNodeHandler(requestHandler);
+export const app = devtool.app;
+export const requestHandler = devtool.requestHandler;
+export const nodeHandler = devtool.nodeHandler;
 export default app;

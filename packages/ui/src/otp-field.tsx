@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/otp-field';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface OtpFieldStyleOverrides {
@@ -148,6 +150,7 @@ export const OtpField = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-invalid={attrs['aria-invalid']}
@@ -192,6 +195,7 @@ export const OtpFieldHiddenInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-hidden={attrs['aria-hidden']}
         autoComplete={attrs.autoComplete}
         data-complete={attrs['data-complete']}
@@ -237,6 +241,7 @@ export const OtpFieldInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-invalid={attrs['aria-invalid']}
         aria-label={attrs['aria-label']}
         aria-labelledby={attrs['aria-labelledby']}
@@ -259,3 +264,5 @@ export const OtpFieldInput = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/otp-field';

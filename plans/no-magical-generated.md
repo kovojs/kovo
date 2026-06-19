@@ -41,7 +41,7 @@ internals, emit/check scripts, and narrowly named artifact tests.
     default-export a `KovoApp`. Do not add `exportName`, `moduleId`, or
     `nodeHandlerExportName` to the app-facing API.
   - Evidence: `packages/server/src/vite.ts` exports `kovo({ app })`; `pnpm
-    --filter @kovojs/server exec vitest --run src/vite.test.ts src/api/app.test.ts`
+--filter @kovojs/server exec vitest --run src/vite.test.ts src/api/app.test.ts`
     passed and covers generated-entry rejection plus `@kovojs/server/vite`.
 - [x] Add an app/route-level stylesheet declaration API so styles are render
       metadata, not Vite config.
@@ -53,8 +53,8 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: `packages/server/src/hints.ts` provides `stylesheet(...)`, route
     definitions already accept `stylesheets`, and `createApp({ stylesheets })`
     now stores app-wide styles inherited by route documents; `pnpm --filter
-    @kovojs/server exec vitest --run src/app.test.ts src/app-document.test.ts
-    src/static-export-assets.test.ts src/api/app.test.ts` passed.
+@kovojs/server exec vitest --run src/app.test.ts src/app-document.test.ts
+src/static-export-assets.test.ts src/api/app.test.ts` passed.
 - [x] Add a no-generated-import guard for app-authored source.
   - Scope: fail on `from './generated/*'`, `from '../generated/*'`, or dynamic
     generated imports outside `src/generated/**`, `scripts/**`, compiler-owned
@@ -69,25 +69,39 @@ internals, emit/check scripts, and narrowly named artifact tests.
     inside `examples/gallery/src/interactive-docs.generated-fixtures.tsx`; the
     authored route shell imports the fixture instead of `src/generated/*`.
     `pnpm --filter @kovojs/example-gallery exec vitest --run
-    src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts`
+src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts`
     passed.
-- [ ] Keep generated artifacts committed and inspectable without making ordinary
+- [x] Keep generated artifacts committed and inspectable without making ordinary
       scenario tests import them.
   - Acceptance: `emit-components -- --check`, `emit-graph -- --check`, compiler
     conformance tests, and package-level generated-artifact tests own freshness.
+  - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components --
+--check`, `pnpm --filter @kovojs/example-commerce run emit-graph --
+--check`, `pnpm --filter @kovojs/example-crm run emit-components --
+--check`, `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+    `pnpm --filter @kovojs/example-stackoverflow run emit-components --
+--check`, `pnpm --filter @kovojs/example-stackoverflow run emit-graph
+-- --check`, and `pnpm --filter @kovojs/example-gallery run
+emit:interactive-gallery -- --check` passed after refreshing route
+    artifacts. Generated-artifact tests also passed for Commerce, CRM, and
+    StackOverflow, and `node scripts/import-boundary.mjs` passed.
 
 ## Commerce
 
-- [ ] Change Commerce scenario tests and helpers to import the authored app entry
+- [x] Change Commerce scenario tests and helpers to import the authored app entry
       (`./app.js`) instead of `./generated/app.kovo-route.js`.
-  - Current generated imports are in `examples/commerce/src/app-test-helpers.ts`,
+  - Evidence: `examples/commerce/src/app-test-helpers.ts`,
     `examples/commerce/src/app.test.ts`, and
-    `examples/commerce/src/enhanced-navigation.test.ts`.
-  - Current progress: those scenario files no longer import
-    `./generated/app.kovo-route.js` directly; they use
-    `examples/commerce/src/app.generated-fixtures.ts` while the public authored
-    loader gap is closed. `pnpm --filter @kovojs/example-commerce exec vitest
-    --run src/app.test.ts src/enhanced-navigation.test.ts` passed.
+    `examples/commerce/src/enhanced-navigation.test.ts` import `./app.js`.
+    Generated live-target coverage moved to the explicit
+    `examples/commerce/src/app.generated-artifacts.test.ts`, which imports
+    `examples/commerce/src/app.generated-fixtures.ts`. `pnpm --filter
+@kovojs/example-commerce exec vitest --run src/app.test.ts
+src/app.add-to-cart.test.ts src/app.generated-artifacts.test.ts
+src/enhanced-navigation.test.ts src/app.rendering.test.ts`, `pnpm --filter
+@kovojs/server exec vitest --run src/route-jsx.test.tsx`, `pnpm exec vitest
+--run scripts/import-boundary.test.mjs`, `node scripts/import-boundary.mjs`,
+    and `git diff --check` passed.
 - [x] Delete `examples/commerce/src/source-truth.test.ts`.
   - Rationale: reading `src/generated/graph.json` from an example test is not a
     useful app-author DevX signal. Graph correctness should live in compiler/CLI
@@ -106,33 +120,39 @@ internals, emit/check scripts, and narrowly named artifact tests.
     in `examples/commerce/vite.config.ts`.
   - Evidence: `examples/commerce/vite.config.ts` uses
     `kovo({ app: '/src/app.tsx' })`; `pnpm --filter @kovojs/example-commerce exec
-    vitest --run src/app.test.ts src/enhanced-navigation.test.ts` passed.
+vitest --run src/app.test.ts src/enhanced-navigation.test.ts` passed.
 - [x] Remove authored CSS imports of app-local generated CSS.
   - Target authoring shape: no `@import './generated/kovo-ui.css'` in
     `examples/commerce/src/styles.css`; the build/dev pipeline injects or
     expands framework/UI CSS from public stylesheet/theme declarations.
   - Evidence: `examples/commerce/src/styles.css` no longer imports
     `./generated/kovo-ui.css`; `pnpm --filter @kovojs/example-commerce exec
-    vitest --run src/app.rendering.test.ts` passed and asserts authored CSS does
+vitest --run src/app.rendering.test.ts` passed and asserts authored CSS does
     not contain `./generated/`.
 
 ## CRM And StackOverflow
 
-- [ ] Apply the same test/helper boundary to CRM and StackOverflow.
+- [x] Apply the same test/helper boundary to CRM and StackOverflow.
   - Scenario tests import authored entries or public helper factories, not
     `src/generated/*`.
-  - Current progress: `examples/crm/src/app-shell.ts`,
+  - Evidence: `examples/crm/src/app-shell.ts`,
     `examples/crm/src/interactive-app.test.ts`,
     `examples/stackoverflow/src/app-shell.ts`, and
-    `examples/stackoverflow/src/interactive-app.test.ts` no longer import
-    generated route modules directly; they use explicitly named generated
-    fixtures until authored app loading preserves compiled route metadata.
-    Focused CRM and StackOverflow interactive tests passed.
+    `examples/stackoverflow/src/interactive-app.test.ts` import authored app
+    factories. Generated live-target coverage moved to explicit
+    `interactive-app.generated-artifacts.test.ts` files in both examples, which
+    import the generated fixture wrappers. `pnpm --filter @kovojs/example-crm
+exec vitest --run src/interactive-app.test.ts
+src/interactive-app.generated-artifacts.test.ts`, `pnpm --filter
+@kovojs/example-stackoverflow exec vitest --run src/interactive-app.test.ts
+src/interactive-app.generated-artifacts.test.ts`, `pnpm exec vitest --run
+scripts/import-boundary.test.mjs`, `node scripts/import-boundary.mjs`, and
+    `git diff --check` passed.
   - Current progress: `examples/crm/src/mutations.ts` no longer imports
     `src/generated/optimistic/*`; CRM keeps generated optimistic artifacts as
     review/check outputs while authored mutation exports own the runtime
     optimistic plans. `pnpm --filter @kovojs/example-crm exec vitest --run
-    src/optimistic.test.ts src/interactive-app.test.ts src/graph.test.ts` and
+src/optimistic.test.ts src/interactive-app.test.ts src/graph.test.ts` and
     `pnpm --filter @kovojs/example-crm run emit-graph -- --check` passed.
 - [x] Update CRM and StackOverflow Vite configs to reference authored app entries
       only.
@@ -144,8 +164,8 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: `examples/crm/src/styles.css` and
     `examples/stackoverflow/src/styles.css` no longer import
     `./generated/kovo-ui.css`; `pnpm --filter @kovojs/example-crm exec vitest
-    --run src/interactive-app.test.ts` and `pnpm --filter
-    @kovojs/example-stackoverflow exec vitest --run src/interactive-app.test.ts`
+--run src/interactive-app.test.ts` and `pnpm --filter
+@kovojs/example-stackoverflow exec vitest --run src/interactive-app.test.ts`
     passed and assert authored CSS does not contain `./generated/`.
 - [x] Audit public demo modules that export generated graph/optimistic artifacts.
   - Decision needed: either keep them behind explicitly named artifact exports or
@@ -154,7 +174,7 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: `examples/crm/src/index.ts` and
     `examples/stackoverflow/src/app.ts` no longer import or re-export generated
     graph/optimistic artifacts; `rg "generated/" examples/crm/src/index.ts
-    examples/stackoverflow/src/app.ts -n` returned no matches, and focused CRM
+examples/stackoverflow/src/app.ts -n` returned no matches, and focused CRM
     graph/optimistic plus StackOverflow interactive tests passed.
 
 ## Vite Config Simplification
@@ -194,10 +214,16 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - Evidence: the repeated local dev-server interfaces and loader wrappers were
     removed from the three example Vite configs in favor of
     `@kovojs/server/vite`.
-- [ ] Preserve `vite-plus` task inputs without hand-maintaining broad boilerplate
+- [x] Preserve `vite-plus` task inputs without hand-maintaining broad boilerplate
       in every example config.
   - Do not overload `kovo()` with `serve`/task options unless a separate
     vite-plus-specific helper is introduced.
+  - Evidence: `examples/vite-plus-tasks.js` owns the shared `serve` task input
+    list, including the helper itself as an input, while Commerce, CRM, and
+    StackOverflow configs call `kovoExampleServeTask()` and keep `kovo({ app })`
+    focused on app loading. Config-load checks for all three packages printed
+    the shared task shape, `pnpm --filter @kovojs/example-commerce exec vitest
+--run src/app.rendering.test.ts` passed, and `git diff --check` passed.
 
 ## Stylesheet API
 
@@ -214,73 +240,92 @@ internals, emit/check scripts, and narrowly named artifact tests.
   - `stylesheet('./styles.css')` should emit/link `/assets/styles.css` unless
     overridden with `href`.
   - Evidence: `pnpm --filter @kovojs/server exec vitest --run src/hints.test.ts
-    src/api/app.test.ts`.
-- [ ] Make emitted stylesheet assets aggregate compiler-owned CSS.
+src/api/app.test.ts`.
+- [x] Make emitted stylesheet assets aggregate compiler-owned CSS.
   - The emitted asset should contain declared theme CSS, authored global CSS when
     present, generated `@kovojs/ui` CSS used by the app graph, and generated
     `@kovojs/style` atomic CSS used by authored style objects.
-  - Current gap: authored example CSS no longer imports `src/generated/kovo-ui.css`,
-    but the framework-owned Vite/build aggregation hook still needs to materialize
-    package UI CSS into the emitted `/assets/styles.css` asset.
-- [ ] Allow app-wide and route-level stylesheet declarations.
+  - Evidence: `packages/server/src/build.ts` materializes declared critical CSS
+    and build-owned CSS into neutral client/static stylesheet assets, while
+    `packages/cli/src/index.ts` feeds `@kovojs/ui` token and component CSS into
+    `kovo build`; `pnpm --filter @kovojs/server exec vitest --run
+src/build.test.ts`, `pnpm --filter @kovojs/cli exec vitest --run
+src/index.kovo-build.test.ts`, `pnpm --filter @kovojs/example-commerce exec
+vitest --run src/app.rendering.test.ts`, and `git diff --check` passed.
+- [x] Allow app-wide and route-level stylesheet declarations.
   - App-level stylesheets are inherited by routes; route-level stylesheets can
     add page-specific CSS while remaining visible to page hints, fragments,
     static export, and `kovo explain page`.
-  - Current progress: app-wide stylesheets are stored on `KovoApp`, merged into
-    route documents before route-level stylesheets, applied to framework-owned
-    error documents, and replayed through static export. Keep open until
-    fragment/explain visibility is verified or implemented.
+  - Evidence: app-wide stylesheets are stored on `KovoApp`, merged into route
+    documents before route-level stylesheets, applied to framework-owned error
+    documents, replayed through static export, inherited into enhanced mutation
+    success/failure fragments from the source route, and printed by `kovo
+explain page`. `pnpm --filter @kovojs/server exec vitest --run
+src/app-mutation-request.test.ts src/app-document.test.ts
+src/static-export-assets.test.ts src/wire-html.test.ts`, `pnpm --filter
+@kovojs/cli exec vitest --run src/index.kovo-explain.test.ts`, and `git
+diff --check` passed.
 
 ## Docs Site
 
-- [ ] Migrate the docs site to the same authored styling format as the examples.
+- [x] Migrate the docs site to the same authored styling format as the examples.
   - Component-specific styles should live next to the component that owns them,
     authored JSX should use `style={styles.foo}` / `style={[...]}`, and
     `style.attrs(...)` should remain a low-level runtime or package-internal
     escape hatch rather than the app-author-facing pattern.
-  - Current progress: `site/src/components/docs-layout.tsx`,
-    `site/src/components/example-split.tsx`, and
-    `site/src/components/gallery.tsx` now co-locate authored style objects and
-    feed their emitted CSS through `siteStylesheets`; `pnpm --filter
-    @kovojs/site test`, `pnpm --filter @kovojs/site run build:css`, `pnpm
-    --filter @kovojs/site exec node scripts/export-static.mjs`, and `rg -n
-    "style\\.attrs" site/src --glob '!generated/**' -S` passed. Keep open for
-    remaining class-based docs components and prose examples.
-  - Current progress: docs site and tutorial generated artifact imports now sit
-    behind explicit generated fixtures, and the islands guide imports
-    `handler` from the public `@kovojs/runtime` root in its snippet. `pnpm
-    --filter @kovojs/site test`, `pnpm --filter @kovojs/site exec node
-    scripts/export-static.mjs`, and `node scripts/import-boundary.mjs` passed.
+  - Evidence: `site/src/components/chrome.tsx`,
+    `site/src/components/docs-layout.tsx`,
+    `site/src/components/example-split.tsx`, `site/src/components/gallery.tsx`,
+    and `site/src/components/landing.tsx` now co-locate component-owned
+    `@kovojs/style` objects and use `style={...}` / `style={[...]}` in authored
+    JSX. `site/src/route-kit.ts` feeds the emitted component CSS through
+    `siteStylesheets`; `site/src/styles.css` is limited to base document,
+    generated markdown/code-artifact styling, and other content-pipeline
+    selectors. `site/src/document-template.ts` keeps the only remaining
+    `style.attrs(...)` use as a raw-string search-dialog bridge, not as an
+    authored TSX pattern.
+  - Evidence: `rg -n "class=|className=|style\\.attrs|\\.prose|eyebrow|gallery-demo|note-banner"
+site/src site/content site/tutorial --glob '!**/generated/**' -S` shows only
+    prose/code examples, route-data field names, and the raw search-dialog
+    bridge; `pnpm --filter @kovojs/site test`, `pnpm --filter @kovojs/site run
+build:css`, `node scripts/import-boundary.mjs`, and `git diff --check`
+    passed. `pnpm --filter @kovojs/site exec node scripts/export-static.mjs`
+    remains blocked by missing `examples/devtool/src/graph-model.mjs`, outside
+    the docs-style slice.
 
 ## Verification
 
 - [x] Add/extend a guard command that proves authored example source has no
       generated imports.
   - Evidence: `node scripts/import-boundary.mjs` passed. `pnpm exec vitest --run
-    scripts/import-boundary.test.mjs` passed and covers static imports,
+scripts/import-boundary.test.mjs` passed and covers static imports,
     re-exports, dynamic imports, explicit artifact tests, explicit generated
     fixtures, and ordinary-test rejection.
-- [ ] Run focused Commerce tests after removing generated imports and deleting
+- [x] Run focused Commerce tests after removing generated imports and deleting
       `source-truth.test.ts`.
-  - Current progress: `pnpm --filter @kovojs/example-commerce exec vitest --run
-    src/app.test.ts src/enhanced-navigation.test.ts` passed after route-module
-    imports moved behind generated fixtures and generated route artifacts were
-    refreshed for `stylesheet(...)` declarations.
-- [ ] Run focused CRM and StackOverflow tests after applying the same boundary.
-  - Current progress: `pnpm --filter @kovojs/example-crm exec vitest --run
-    src/optimistic.test.ts src/interactive-app.test.ts src/graph.test.ts` and
-    `pnpm --filter @kovojs/example-stackoverflow exec vitest --run
-    src/interactive-app.test.ts` passed after direct generated route imports
-    moved behind generated fixtures.
+  - Evidence: `pnpm --filter @kovojs/example-commerce exec vitest --run
+src/app.test.ts src/app.add-to-cart.test.ts src/app.generated-artifacts.test.ts
+src/enhanced-navigation.test.ts src/app.rendering.test.ts` passed after
+    ordinary Commerce helpers/tests switched to `./app.js` and generated
+    live-target assertions moved to an explicit generated-artifacts test.
+- [x] Run focused CRM and StackOverflow tests after applying the same boundary.
+  - Evidence: `pnpm --filter @kovojs/example-crm exec vitest --run
+src/interactive-app.test.ts src/interactive-app.generated-artifacts.test.ts`
+    and `pnpm --filter @kovojs/example-stackoverflow exec vitest --run
+src/interactive-app.test.ts src/interactive-app.generated-artifacts.test.ts`
+    passed after ordinary tests/app shells switched to authored app factories.
 - [x] Run `emit-components -- --check` and `emit-graph -- --check` for each
       migrated example.
   - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components --
-    --check`, `pnpm --filter @kovojs/example-commerce run emit-graph --
-    --check`, `pnpm --filter @kovojs/example-crm run emit-components --
-    --check`, `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+--check`, `pnpm --filter @kovojs/example-commerce run emit-graph --
+--check`, `pnpm --filter @kovojs/example-crm run emit-components --
+--check`, `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
     `pnpm --filter @kovojs/example-stackoverflow run emit-components --
-    --check`, and `pnpm --filter @kovojs/example-stackoverflow run emit-graph
-    -- --check` passed after refreshing generated route artifacts. Gallery's
+--check`, and `pnpm --filter @kovojs/example-stackoverflow run emit-graph
+-- --check` passed after refreshing generated route artifacts. Gallery's
     equivalent `pnpm --filter @kovojs/example-gallery run
-    emit:interactive-gallery -- --check` also passed.
-- [ ] Run `pnpm run check` and `git diff --check` before closing the plan.
+emit:interactive-gallery -- --check` also passed.
+- [x] Run `pnpm run check` and `git diff --check` before closing the plan.
+  - Evidence: `pnpm run check` passed, including `check:inline-loader`,
+    `check:imports`, `vp check`, and `vp run typecheck-examples`; `git diff
+--check` passed.

@@ -13,6 +13,8 @@ import {
 } from '@kovojs/headless-ui/toast';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface ToastStyleOverrides {
@@ -222,6 +224,7 @@ export const ToastViewport = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props, { style: true })}
         aria-label={attrs['aria-label']}
         data-disabled={attrs['data-disabled']}
         data-placement={attrs['data-placement']}
@@ -251,6 +254,7 @@ export const Toast = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-atomic={attrs['aria-atomic']}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
@@ -309,6 +313,7 @@ export const ToastAction = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-action={attrs['data-action']}
         data-dismiss-on-action={attrs['data-dismiss-on-action']}
         data-disabled={attrs['data-disabled']}
@@ -337,6 +342,7 @@ export const ToastClose = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-dismiss={attrs['data-dismiss']}
         data-state={attrs['data-state']}
@@ -349,3 +355,5 @@ export const ToastClose = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/toast';

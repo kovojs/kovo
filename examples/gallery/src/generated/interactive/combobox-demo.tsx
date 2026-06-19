@@ -2,10 +2,10 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GalleryComboboxDemo$section_data_state_derive = derive(['state'], (state: any) =>
+export const GalleryComboboxDemo$Combobox_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryComboboxDemo$input_aria_activedescendant_derive = derive(
+export const GalleryComboboxDemo$ComboboxInput_aria_activedescendant_derive = derive(
   ['state'],
   (state: any) =>
     state.highlightedValue === 'chicago'
@@ -16,101 +16,97 @@ export const GalleryComboboxDemo$input_aria_activedescendant_derive = derive(
           ? 'gallery-combobox-listbox-option-0'
           : null,
 );
-export const GalleryComboboxDemo$input_aria_expanded_derive = derive(['state'], (state: any) =>
-  state.open ? 'true' : 'false',
+export const GalleryComboboxDemo$ComboboxInput_aria_expanded_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'true' : 'false'),
 );
-export const GalleryComboboxDemo$input_data_placeholder_derive = derive(['state'], (state: any) =>
-  state.inputValue === '' ? '' : null,
+export const GalleryComboboxDemo$ComboboxInput_data_placeholder_derive = derive(
+  ['state'],
+  (state: any) => (state.inputValue === '' ? '' : null),
 );
-export const GalleryComboboxDemo$input_data_state_derive = derive(['state'], (state: any) =>
+export const GalleryComboboxDemo$ComboboxInput_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
-export const GalleryComboboxDemo$input_value_derive = derive(
+export const GalleryComboboxDemo$ComboboxInput_value_derive = derive(
   ['state'],
   (state: any) => state.inputValue,
 );
-export const GalleryComboboxDemo$div_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
+export const GalleryComboboxDemo$ComboboxListbox_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryComboboxDemo$div_hidden_derive = derive(['state'], (state: any) =>
+export const GalleryComboboxDemo$ComboboxListbox_hidden_derive = derive(['state'], (state: any) =>
   !state.open ? '' : null,
 );
-export const GalleryComboboxDemo$button_aria_selected_derive = derive(['state'], (state: any) =>
-  state.value === 'austin' ? 'true' : 'false',
+export const GalleryComboboxDemo$ComboboxOption_aria_selected_derive = derive(
+  ['state'],
+  (state: any) => (state.value === 'austin' ? 'true' : 'false'),
 );
-export const GalleryComboboxDemo$button_data_highlighted_derive = derive(['state'], (state: any) =>
-  state.highlightedValue === 'austin' ? '' : null,
+export const GalleryComboboxDemo$ComboboxOption_data_highlighted_derive = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'austin' ? '' : null),
 );
-export const GalleryComboboxDemo$button_data_state_derive = derive(['state'], (state: any) =>
-  state.value === 'austin' ? 'checked' : 'unchecked',
+export const GalleryComboboxDemo$ComboboxOption_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.value === 'austin' ? 'checked' : 'unchecked'),
 );
-export const GalleryComboboxDemo$button_hidden_derive = derive(['state'], (state: any) =>
+export const GalleryComboboxDemo$ComboboxOption_hidden_derive = derive(['state'], (state: any) =>
   state.inputValue !== '' && !'austin austin'.includes(state.inputValue.toLocaleLowerCase())
     ? ''
     : null,
 );
-export const GalleryComboboxDemo$button_tabIndex_derive = derive(['state'], (state: any) =>
+export const GalleryComboboxDemo$ComboboxOption_tabIndex_derive = derive(['state'], (state: any) =>
   state.highlightedValue === 'austin' ? 0 : -1,
 );
-export const GalleryComboboxDemo$button_aria_selected_derive_2 = derive(['state'], (state: any) =>
-  state.value === 'boston' ? 'true' : 'false',
+export const GalleryComboboxDemo$ComboboxOption_aria_selected_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.value === 'boston' ? 'true' : 'false'),
 );
-export const GalleryComboboxDemo$button_data_highlighted_derive_2 = derive(
+export const GalleryComboboxDemo$ComboboxOption_data_highlighted_derive_2 = derive(
   ['state'],
   (state: any) => (state.highlightedValue === 'boston' ? '' : null),
 );
-export const GalleryComboboxDemo$button_data_state_derive_2 = derive(['state'], (state: any) =>
-  state.value === 'boston' ? 'checked' : 'unchecked',
+export const GalleryComboboxDemo$ComboboxOption_data_state_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.value === 'boston' ? 'checked' : 'unchecked'),
 );
-export const GalleryComboboxDemo$button_hidden_derive_2 = derive(['state'], (state: any) =>
+export const GalleryComboboxDemo$ComboboxOption_hidden_derive_2 = derive(['state'], (state: any) =>
   state.inputValue !== '' && !'boston boston'.includes(state.inputValue.toLocaleLowerCase())
     ? ''
     : null,
 );
-export const GalleryComboboxDemo$button_aria_selected_derive_3 = derive(['state'], (state: any) =>
-  state.value === 'chicago' ? 'true' : 'false',
+export const GalleryComboboxDemo$ComboboxOption_aria_selected_derive_3 = derive(
+  ['state'],
+  (state: any) => (state.value === 'chicago' ? 'true' : 'false'),
 );
-export const GalleryComboboxDemo$button_data_highlighted_derive_3 = derive(
+export const GalleryComboboxDemo$ComboboxOption_data_highlighted_derive_3 = derive(
   ['state'],
   (state: any) => (state.highlightedValue === 'chicago' ? '' : null),
 );
-export const GalleryComboboxDemo$button_data_state_derive_3 = derive(['state'], (state: any) =>
-  state.value === 'chicago' ? 'checked' : 'unchecked',
+export const GalleryComboboxDemo$ComboboxOption_data_state_derive_3 = derive(
+  ['state'],
+  (state: any) => (state.value === 'chicago' ? 'checked' : 'unchecked'),
 );
-export const GalleryComboboxDemo$button_hidden_derive_3 = derive(['state'], (state: any) =>
+export const GalleryComboboxDemo$ComboboxOption_hidden_derive_3 = derive(['state'], (state: any) =>
   state.inputValue !== '' && !'chicago city chicago'.includes(state.inputValue.toLocaleLowerCase())
     ? ''
     : null,
 );
-export const GalleryComboboxDemo$button_tabIndex_derive_2 = derive(['state'], (state: any) =>
-  state.highlightedValue === 'chicago' ? 0 : -1,
-);
-export const GalleryComboboxDemo$output_text_derive = derive(['state'], (state: any) =>
-  state.value === 'chicago' ? 'Chicago city' : 'Austin',
+export const GalleryComboboxDemo$ComboboxOption_tabIndex_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'chicago' ? 0 : -1),
 );
 
 import { component } from '@kovojs/core';
 import {
-  comboboxInputAttributes,
-  comboboxListboxAttributes,
-  comboboxOptionAttributes,
-  comboboxRootAttributes,
-  comboboxValueAttributes,
+  Combobox,
+  ComboboxInput,
+  ComboboxListbox,
+  ComboboxOption,
+  ComboboxValue,
   type ComboboxItem,
-} from '@kovojs/headless-ui/combobox';
-import {
-  comboboxClasses,
-  comboboxInputClasses,
-  comboboxListboxClasses,
-  comboboxOptionClasses,
-  comboboxValueClasses,
 } from '@kovojs/ui/combobox';
 
-const ROOT_CLASS = comboboxClasses.join(' ');
-const INPUT_CLASS = comboboxInputClasses.join(' ');
-const LISTBOX_CLASS = comboboxListboxClasses.join(' ');
-const OPTION_CLASS = comboboxOptionClasses.join(' ');
-const VALUE_CLASS = comboboxValueClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GalleryComboboxDemoState {
@@ -149,29 +145,24 @@ export const GalleryComboboxDemo = component({
     };
 
     return (
-      <section
-        class={ROOT_CLASS}
+      <Combobox
         data-gallery-interactive="combobox"
-        {...comboboxRootAttributes({ ...inputState, id: 'gallery-combobox-root' })}
+        id="gallery-combobox-root"
+        {...inputState}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$section_data_state_derive"
-        kovo-c="gallery-combobox-demo"
+        data-bind:data-state="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$Combobox_data_state_derive"
         kovo-state='{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}'
       >
         <label id="gallery-combobox-label" for="gallery-combobox-input" class={LABEL_CLASS}>
           City
         </label>
         <form id="gallery-combobox-form" data-gallery-form="combobox" />
-        <input
+        <ComboboxInput
           id="gallery-combobox-input"
-          class={INPUT_CLASS}
-          on:input="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$input_input"
-          on:keydown="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$input_keydown"
-          {...comboboxInputAttributes({
-            ...inputState,
-            id: 'gallery-combobox-input',
-            labelledBy: 'gallery-combobox-label',
-          })}
+          labelledBy="gallery-combobox-label"
+          on:input="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxInput_input"
+          on:keydown="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxInput_keydown"
+          {...inputState}
           aria-activedescendant={
             state.highlightedValue === 'chicago'
               ? 'gallery-combobox-listbox-option-2'
@@ -181,111 +172,92 @@ export const GalleryComboboxDemo = component({
                   ? 'gallery-combobox-listbox-option-0'
                   : null
           }
-          data-bind:aria-activedescendant="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$input_aria_activedescendant_derive"
+          data-bind:aria-activedescendant="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxInput_aria_activedescendant_derive"
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$input_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxInput_aria_expanded_derive"
           data-placeholder={state.inputValue === '' ? '' : null}
-          data-bind:data-placeholder="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$input_data_placeholder_derive"
+          data-bind:data-placeholder="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxInput_data_placeholder_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$input_data_state_derive"
+          data-bind:data-state="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxInput_data_state_derive"
           value={state.inputValue}
-          data-bind:value="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$input_value_derive"
+          data-bind:value="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxInput_value_derive"
         />
-        <div
-          class={LISTBOX_CLASS}
-          {...comboboxListboxAttributes({
-            ...inputState,
-            id: listboxId,
-            labelledBy: 'gallery-combobox-label',
-          })}
+        <ComboboxListbox
+          id={listboxId}
+          labelledBy="gallery-combobox-label"
+          {...inputState}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$div_data_state_derive"
+          data-bind:data-state="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxListbox_data_state_derive"
           hidden={!state.open}
-          data-bind:hidden="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$div_hidden_derive"
+          data-bind:hidden="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxListbox_hidden_derive"
         >
-          <button
-            class={OPTION_CLASS}
-            on:click="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_click"
-            {...comboboxOptionAttributes({
-              ...selectedState,
-              id: 'gallery-combobox-listbox-option-0',
-              itemLabel: 'Austin',
-              itemValue: 'austin',
-            })}
+          <ComboboxOption
+            id="gallery-combobox-listbox-option-0"
+            itemLabel="Austin"
+            itemValue="austin"
+            on:click="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_click"
+            {...selectedState}
             aria-selected={state.value === 'austin' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_aria_selected_derive"
+            data-bind:aria-selected="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_aria_selected_derive"
             data-highlighted={state.highlightedValue === 'austin' ? '' : null}
-            data-bind:data-highlighted="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_data_highlighted_derive"
+            data-bind:data-highlighted="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_data_highlighted_derive"
             data-state={state.value === 'austin' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_data_state_derive"
+            data-bind:data-state="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_data_state_derive"
             hidden={
               state.inputValue !== '' &&
               !'austin austin'.includes(state.inputValue.toLocaleLowerCase())
             }
-            data-bind:hidden="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_hidden_derive"
+            data-bind:hidden="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_hidden_derive"
             tabIndex={state.highlightedValue === 'austin' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_tabIndex_derive"
+            data-bind:tabIndex="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_tabIndex_derive"
           >
             Austin
-          </button>
-          <button
-            class={OPTION_CLASS}
+          </ComboboxOption>
+          <ComboboxOption
+            id="gallery-combobox-listbox-option-1"
+            itemDisabled={true}
+            itemLabel="Boston"
+            itemValue="boston"
             tabIndex={-1}
-            {...comboboxOptionAttributes({
-              ...selectedState,
-              id: 'gallery-combobox-listbox-option-1',
-              itemDisabled: true,
-              itemLabel: 'Boston',
-              itemValue: 'boston',
-            })}
+            {...selectedState}
             aria-selected={state.value === 'boston' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_aria_selected_derive_2"
+            data-bind:aria-selected="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_aria_selected_derive_2"
             data-highlighted={state.highlightedValue === 'boston' ? '' : null}
-            data-bind:data-highlighted="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_data_highlighted_derive_2"
+            data-bind:data-highlighted="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_data_highlighted_derive_2"
             data-state={state.value === 'boston' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_data_state_derive_2"
+            data-bind:data-state="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_data_state_derive_2"
             hidden={
               state.inputValue !== '' &&
               !'boston boston'.includes(state.inputValue.toLocaleLowerCase())
             }
-            data-bind:hidden="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_hidden_derive_2"
+            data-bind:hidden="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_hidden_derive_2"
           >
             Boston
-          </button>
-          <button
-            class={OPTION_CLASS}
-            on:click="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_click_2"
-            {...comboboxOptionAttributes({
-              ...selectedState,
-              id: 'gallery-combobox-listbox-option-2',
-              itemValue: 'chicago',
-            })}
+          </ComboboxOption>
+          <ComboboxOption
+            id="gallery-combobox-listbox-option-2"
+            itemValue="chicago"
+            on:click="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_click_2"
+            {...selectedState}
             aria-selected={state.value === 'chicago' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_aria_selected_derive_3"
+            data-bind:aria-selected="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_aria_selected_derive_3"
             data-highlighted={state.highlightedValue === 'chicago' ? '' : null}
-            data-bind:data-highlighted="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_data_highlighted_derive_3"
+            data-bind:data-highlighted="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_data_highlighted_derive_3"
             data-state={state.value === 'chicago' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_data_state_derive_3"
+            data-bind:data-state="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_data_state_derive_3"
             hidden={
               state.inputValue !== '' &&
               !'chicago city chicago'.includes(state.inputValue.toLocaleLowerCase())
             }
-            data-bind:hidden="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_hidden_derive_3"
+            data-bind:hidden="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_hidden_derive_3"
             tabIndex={state.highlightedValue === 'chicago' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$button_tabIndex_derive_2"
+            data-bind:tabIndex="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$ComboboxOption_tabIndex_derive_2"
           >
             Chicago city
-          </button>
-        </div>
-        <output
-          class={VALUE_CLASS}
-          data-demo-state="combobox-value"
-          {...comboboxValueAttributes(selectedState)}
-          data-bind="/c/__v/7a7c3fa1/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$output_text_derive"
-        >
-          {state.value === 'chicago' ? 'Chicago city' : 'Austin'}
-        </output>
-      </section>
+          </ComboboxOption>
+        </ComboboxListbox>
+        <ComboboxValue data-demo-state="combobox-value" {...selectedState} />
+      </Combobox>
     );
   },
 });

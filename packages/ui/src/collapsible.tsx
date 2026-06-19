@@ -7,6 +7,8 @@ import {
 } from '@kovojs/headless-ui/collapsible';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface CollapsibleStateProps {
@@ -110,6 +112,7 @@ export const Collapsible = component({
     return (
       <details
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -134,6 +137,7 @@ export const CollapsibleTrigger = component({
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -159,3 +163,5 @@ export const CollapsibleContent = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/collapsible';

@@ -206,6 +206,32 @@ describe('route JSX pages', () => {
     });
   });
 
+  it('stamps authored fallback page and layout navigation segments', async () => {
+    const sharedLayout = layout({
+      render: (_queries, _state, { children }) => <main>{children}</main>,
+    });
+    const homeRoute = route('/', {
+      layout: sharedLayout,
+      page: () => <section>Home</section>,
+    });
+    const cartRoute = route('/cart', {
+      layout: sharedLayout,
+      page: () => <section>Cart</section>,
+    });
+
+    const home = await renderRoutePageResponse(homeRoute, {}, {});
+    const cart = await renderRoutePageResponse(cartRoute, {}, {});
+    const homeBody = home.body as string;
+    const cartBody = cart.body as string;
+    const homeLayoutSegment = /kovo-nav-segment="(layout:[^"]+)"/.exec(homeBody)?.[1];
+    const cartLayoutSegment = /kovo-nav-segment="(layout:[^"]+)"/.exec(cartBody)?.[1];
+
+    expect(homeLayoutSegment).toBeTruthy();
+    expect(cartLayoutSegment).toBe(homeLayoutSegment);
+    expect(homeBody).toContain('kovo-nav-segment="page:/"');
+    expect(cartBody).toContain('kovo-nav-segment="page:/cart"');
+  });
+
   it('stamps compiler-derived navigation metadata from page functions when route WeakMap metadata is absent', async () => {
     const productRoute = {
       page: defineCompiledRoutePage(
@@ -267,7 +293,8 @@ describe('route JSX pages', () => {
     expect(response.body).toContain('data-viewer="u1"');
     expect(response.body).toContain('kovo-deps="viewer"');
     expect(response.body).toContain('kovo-fragment-target="kovo-layout-');
-    expect(response.body).toContain('<section data-admin><h1>Admin</h1></section>');
+    expect(response.body).toContain('<section data-admin');
+    expect(response.body).toContain('<h1 kovo-nav-segment="page:/admin"');
   });
 
   it('stamps compiler-derived layout navigation segment metadata on nested layout roots', async () => {

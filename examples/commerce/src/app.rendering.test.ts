@@ -106,6 +106,9 @@ describe('commerce example', () => {
 
     expect(css).toContain('var(--kovo-theme-sys-color-surface)');
     expect(css).toContain('var(--kovo-theme-sys-color-on-surface)');
+    expect(css).toContain('--kovo-color-background:');
+    expect(css).toContain('.kv-commerce-');
+    expect(css).toContain('.kv-button-');
     expect(css).not.toContain('.bg-slate-50');
     expect(css).not.toContain('.text-red-700');
   });

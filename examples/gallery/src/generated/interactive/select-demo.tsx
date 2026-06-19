@@ -2,76 +2,68 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GallerySelectDemo$input_value_derive = derive(['state'], (state: any) => state.value);
-export const GallerySelectDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
-  String(state.open),
+export const GallerySelectDemo$SelectHiddenInput_value_derive = derive(
+  ['state'],
+  (state: any) => state.value,
 );
-export const GallerySelectDemo$button_data_state_derive = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state: any) => String(state.open),
+);
+export const GallerySelectDemo$SelectTrigger_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
-export const GallerySelectDemo$div_data_state_derive = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectContent_data_state_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
-export const GallerySelectDemo$div_hidden_derive = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectContent_hidden_derive = derive(['state'], (state: any) =>
   !state.open ? '' : null,
 );
-export const GallerySelectDemo$div_aria_selected_derive = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectItem_aria_selected_derive = derive(['state'], (state: any) =>
   state.value === 'standard' ? 'true' : 'false',
 );
-export const GallerySelectDemo$div_data_highlighted_derive = derive(['state'], (state: any) =>
-  state.highlightedValue === 'standard' ? '' : null,
+export const GallerySelectDemo$SelectItem_data_highlighted_derive = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'standard' ? '' : null),
 );
-export const GallerySelectDemo$div_data_state_derive_2 = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectItem_data_state_derive = derive(['state'], (state: any) =>
   state.value === 'standard' ? 'checked' : 'unchecked',
 );
-export const GallerySelectDemo$div_aria_selected_derive_2 = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectItem_aria_selected_derive_2 = derive(['state'], (state: any) =>
   state.value === 'express' ? 'true' : 'false',
 );
-export const GallerySelectDemo$div_data_highlighted_derive_2 = derive(['state'], (state: any) =>
-  state.highlightedValue === 'express' ? '' : null,
+export const GallerySelectDemo$SelectItem_data_highlighted_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'express' ? '' : null),
 );
-export const GallerySelectDemo$div_data_state_derive_3 = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectItem_data_state_derive_2 = derive(['state'], (state: any) =>
   state.value === 'express' ? 'checked' : 'unchecked',
 );
-export const GallerySelectDemo$div_aria_selected_derive_3 = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectItem_aria_selected_derive_3 = derive(['state'], (state: any) =>
   state.value === 'drone' ? 'true' : 'false',
 );
-export const GallerySelectDemo$div_data_highlighted_derive_3 = derive(['state'], (state: any) =>
-  state.highlightedValue === 'drone' ? '' : null,
+export const GallerySelectDemo$SelectItem_data_highlighted_derive_3 = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'drone' ? '' : null),
 );
-export const GallerySelectDemo$div_data_state_derive_4 = derive(['state'], (state: any) =>
+export const GallerySelectDemo$SelectItem_data_state_derive_3 = derive(['state'], (state: any) =>
   state.value === 'drone' ? 'checked' : 'unchecked',
 );
 export const GallerySelectDemo$span_text_derive = derive(['state'], (state: any) =>
   state.value === 'express' ? 'Express' : 'Standard',
 );
-export const GallerySelectDemo$output_text_derive = derive(['state'], (state: any) =>
-  state.value === 'express' ? 'Express' : 'Standard',
-);
 
 import { component } from '@kovojs/core';
+import type { SelectItem as GallerySelectItem } from '@kovojs/headless-ui/select';
 import {
-  selectContentAttributes,
-  selectHiddenInputAttributes,
-  selectItemAttributes,
-  selectRootAttributes,
-  selectTriggerAttributes,
-  selectValueAttributes,
-  type SelectItem,
-} from '@kovojs/headless-ui/select';
-import {
-  selectClasses,
-  selectTriggerClasses,
-  selectContentClasses,
-  selectItemClasses,
-  selectValueClasses,
+  Select,
+  SelectContent,
+  SelectHiddenInput,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@kovojs/ui/select';
 
-const ROOT_CLASS = selectClasses.join(' ');
-const TRIGGER_CLASS = selectTriggerClasses.join(' ');
-const CONTENT_CLASS = selectContentClasses.join(' ');
-const ITEM_CLASS = selectItemClasses.join(' ');
-const VALUE_CLASS = selectValueClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GallerySelectDemoState {
@@ -80,7 +72,7 @@ export interface GallerySelectDemoState {
   value: string;
 }
 
-const shippingOptions: readonly SelectItem[] = Object.freeze([
+const shippingOptions: readonly GallerySelectItem[] = Object.freeze([
   { id: 'gallery-select-option-standard', label: 'Standard', value: 'standard' },
   { id: 'gallery-select-option-express', label: 'Express', value: 'express' },
   { disabled: true, id: 'gallery-select-option-drone', label: 'Drone', value: 'drone' },
@@ -103,120 +95,96 @@ export const GallerySelectDemo = component({
     };
 
     return (
-      <section
-        {...selectRootAttributes({ ...selectState, id: 'gallery-select-root' })}
-        class={ROOT_CLASS}
+      <Select
+        {...selectState}
         data-gallery-interactive="select"
-        kovo-c="gallery-select-demo"
+        id="gallery-select-root"
         kovo-state='{"highlightedValue":"standard","open":false,"value":"standard"}'
       >
         <form id="gallery-select-form" data-gallery-form="select" />
         <label id="gallery-select-label" for="gallery-select-trigger" class={LABEL_CLASS}>
           Shipping speed
         </label>
-        <input
+        <SelectHiddenInput
           id="gallery-select-control"
-          {...selectHiddenInputAttributes(selectState)}
+          {...selectState}
           value={state.value}
-          data-bind:value="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$input_value_derive"
+          data-bind:value="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectHiddenInput_value_derive"
         />
-        <button
+        <SelectTrigger
           id="gallery-select-trigger"
-          class={TRIGGER_CLASS}
-          on:click="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$button_click"
-          on:keydown="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$button_keydown"
-          {...selectTriggerAttributes({
-            ...selectState,
-            id: 'gallery-select-trigger',
-            labelledBy: 'gallery-select-label',
-          })}
+          labelledBy="gallery-select-label"
+          on:click="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectTrigger_click"
+          on:keydown="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectTrigger_keydown"
+          {...selectState}
           aria-expanded={String(state.open)}
-          data-bind:aria-expanded="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$button_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectTrigger_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$button_data_state_derive"
+          data-bind:data-state="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectTrigger_data_state_derive"
         >
-          <span data-bind="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$span_text_derive">
+          <span data-bind="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$span_text_derive">
             {state.value === 'express' ? 'Express' : 'Standard'}
           </span>
-        </button>
-        <div
-          class={CONTENT_CLASS}
-          on:keydown="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_keydown"
-          {...selectContentAttributes({
-            ...selectState,
-            id: 'gallery-select-listbox',
-            labelledBy: 'gallery-select-label',
-          })}
+        </SelectTrigger>
+        <SelectContent
+          id="gallery-select-listbox"
+          labelledBy="gallery-select-label"
+          on:keydown="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectContent_keydown"
+          {...selectState}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_data_state_derive"
+          data-bind:data-state="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectContent_data_state_derive"
           hidden={!state.open}
-          data-bind:hidden="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_hidden_derive"
+          data-bind:hidden="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectContent_hidden_derive"
         >
-          <div
-            class={ITEM_CLASS}
-            on:click="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_click"
-            {...selectItemAttributes({
-              ...selectState,
-              id: 'gallery-select-option-standard',
-              itemLabel: 'Standard',
-              itemValue: 'standard',
-            })}
+          <SelectItem
+            id="gallery-select-option-standard"
+            itemLabel="Standard"
+            itemValue="standard"
+            on:click="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_click"
+            {...selectState}
             aria-selected={state.value === 'standard' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_aria_selected_derive"
+            data-bind:aria-selected="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_aria_selected_derive"
             data-highlighted={state.highlightedValue === 'standard' ? '' : null}
-            data-bind:data-highlighted="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_data_highlighted_derive"
+            data-bind:data-highlighted="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_data_highlighted_derive"
             data-state={state.value === 'standard' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_data_state_derive_2"
+            data-bind:data-state="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_data_state_derive"
           >
             Standard
-          </div>
-          <div
-            class={ITEM_CLASS}
-            on:click="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_click_2"
-            {...selectItemAttributes({
-              ...selectState,
-              id: 'gallery-select-option-express',
-              itemLabel: 'Express',
-              itemValue: 'express',
-            })}
+          </SelectItem>
+          <SelectItem
+            id="gallery-select-option-express"
+            itemLabel="Express"
+            itemValue="express"
+            on:click="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_click_2"
+            {...selectState}
             aria-selected={state.value === 'express' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_aria_selected_derive_2"
+            data-bind:aria-selected="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_aria_selected_derive_2"
             data-highlighted={state.highlightedValue === 'express' ? '' : null}
-            data-bind:data-highlighted="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_data_highlighted_derive_2"
+            data-bind:data-highlighted="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_data_highlighted_derive_2"
             data-state={state.value === 'express' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_data_state_derive_3"
+            data-bind:data-state="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_data_state_derive_2"
           >
             Express
-          </div>
-          <div
-            class={ITEM_CLASS}
-            on:click="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_click_3"
-            {...selectItemAttributes({
-              ...selectState,
-              id: 'gallery-select-option-drone',
-              itemDisabled: true,
-              itemLabel: 'Drone',
-              itemValue: 'drone',
-            })}
+          </SelectItem>
+          <SelectItem
+            id="gallery-select-option-drone"
+            itemDisabled={true}
+            itemLabel="Drone"
+            itemValue="drone"
+            on:click="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_click_3"
+            {...selectState}
             aria-selected={state.value === 'drone' ? 'true' : 'false'}
-            data-bind:aria-selected="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_aria_selected_derive_3"
+            data-bind:aria-selected="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_aria_selected_derive_3"
             data-highlighted={state.highlightedValue === 'drone' ? '' : null}
-            data-bind:data-highlighted="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_data_highlighted_derive_3"
+            data-bind:data-highlighted="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_data_highlighted_derive_3"
             data-state={state.value === 'drone' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$div_data_state_derive_4"
+            data-bind:data-state="/c/__v/1fc3c803/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$SelectItem_data_state_derive_3"
           >
             Drone
-          </div>
-        </div>
-        <output
-          class={VALUE_CLASS}
-          data-demo-state="select-value"
-          {...selectValueAttributes(selectState)}
-          data-bind="/c/__v/38dd1b90/examples/gallery/src/generated/interactive/select-demo.client.js#GallerySelectDemo$output_text_derive"
-        >
-          {state.value === 'express' ? 'Express' : 'Standard'}
-        </output>
-      </section>
+          </SelectItem>
+        </SelectContent>
+        <SelectValue {...selectState} data-demo-state="select-value" />
+      </Select>
     );
   },
 });

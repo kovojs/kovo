@@ -9,7 +9,7 @@ import {
   menubarMove as _menubarMove,
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
-} from '@kovojs/headless-ui/menubar';
+} from '@kovojs/ui/menubar';
 
 export const GalleryMenubarDemo$section_keydown = handler((event, ctx) => {
   const keyResult = _menubarKeyDown(Object(event), {
@@ -84,7 +84,7 @@ export const GalleryMenubarDemo$section_keydown = handler((event, ctx) => {
     ctx.state.activeValue === 'edit' ? 'gallery-menubar-edit' : 'gallery-menubar-file',
   );
 });
-export const GalleryMenubarDemo$button_click = handler((event, ctx) => {
+export const GalleryMenubarDemo$MenubarItem_click = handler((event, ctx) => {
   const result = _menubarSubmenuTriggerClick(Object(event), {
     activeValue: ctx.state.activeValue,
     contentId: 'gallery-menubar-file-menu',
@@ -103,7 +103,7 @@ export const GalleryMenubarDemo$button_click = handler((event, ctx) => {
   if (result.openValue === 'file')
     _menubarFocusElement(Object(event), 'gallery-menubar-new', { defer: true });
 });
-export const GalleryMenubarDemo$button_keydown = handler((event, ctx) => {
+export const GalleryMenubarDemo$MenubarItem_keydown = handler((event, ctx) => {
   if (
     Object(event).key !== 'Enter' &&
     Object(event).key !== ' ' &&
@@ -130,11 +130,11 @@ export const GalleryMenubarDemo$button_keydown = handler((event, ctx) => {
   if (result.openValue === 'file')
     _menubarFocusElement(Object(event), 'gallery-menubar-new', { defer: true });
 });
-export const GalleryMenubarDemo$button_click_2 = handler((_event, ctx) => {
+export const GalleryMenubarDemo$MenubarItem_click_2 = handler((_event, ctx) => {
   ctx.state.activeValue = 'edit';
   ctx.state.openValue = '';
 });
-export const GalleryMenubarDemo$button_keydown_2 = handler((event, ctx) => {
+export const GalleryMenubarDemo$MenubarItem_keydown_2 = handler((event, ctx) => {
   const result = _menubarItemKeyDown(Object(event), {
     activeValue: ctx.state.activeValue,
     itemParentValue: 'file',
@@ -212,7 +212,7 @@ export const GalleryMenubarDemo$button_keydown_2 = handler((event, ctx) => {
   ctx.state.activeValue = typeahead.activeValue ?? ctx.state.activeValue;
   _menubarFocusElement(Object(event), 'gallery-menubar-new');
 });
-export const GalleryMenubarDemo$button_click_3 = handler((event, ctx) => {
+export const GalleryMenubarDemo$MenubarItem_click_3 = handler((event, ctx) => {
   const result = _menubarItemClick(Object(event), {
     activeValue: ctx.state.activeValue,
     itemParentValue: 'file',
@@ -236,40 +236,40 @@ export const GalleryMenubarDemo$section_data_open_derive = derive(
   ['state'],
   (state) => state.openValue || 'none',
 );
-export const GalleryMenubarDemo$button_aria_expanded_derive = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_aria_expanded_derive = derive(['state'], (state) =>
   state.openValue === 'file' ? 'true' : 'false',
 );
-export const GalleryMenubarDemo$button_data_highlighted_derive = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_data_highlighted_derive = derive(['state'], (state) =>
   state.activeValue === 'file' ? '' : null,
 );
-export const GalleryMenubarDemo$button_data_state_derive = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_data_state_derive = derive(['state'], (state) =>
   state.activeValue === 'file' ? 'active' : 'inactive',
 );
-export const GalleryMenubarDemo$button_tabIndex_derive = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_tabIndex_derive = derive(['state'], (state) =>
   state.activeValue === 'file' ? 0 : -1,
 );
-export const GalleryMenubarDemo$button_data_highlighted_derive_2 = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_data_highlighted_derive_2 = derive(['state'], (state) =>
   state.activeValue === 'edit' ? '' : null,
 );
-export const GalleryMenubarDemo$button_data_state_derive_2 = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_data_state_derive_2 = derive(['state'], (state) =>
   state.activeValue === 'edit' ? 'active' : 'inactive',
 );
-export const GalleryMenubarDemo$button_tabIndex_derive_2 = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_tabIndex_derive_2 = derive(['state'], (state) =>
   state.activeValue === 'edit' ? 0 : -1,
 );
-export const GalleryMenubarDemo$div_data_state_derive = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarSubmenu_data_state_derive = derive(['state'], (state) =>
   state.openValue === 'file' ? 'open' : 'closed',
 );
-export const GalleryMenubarDemo$div_hidden_derive = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarSubmenu_hidden_derive = derive(['state'], (state) =>
   state.openValue !== 'file' ? '' : null,
 );
-export const GalleryMenubarDemo$button_data_highlighted_derive_3 = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_data_highlighted_derive_3 = derive(['state'], (state) =>
   state.activeValue === 'new' ? '' : null,
 );
-export const GalleryMenubarDemo$button_data_state_derive_3 = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_data_state_derive_3 = derive(['state'], (state) =>
   state.activeValue === 'new' ? 'active' : 'inactive',
 );
-export const GalleryMenubarDemo$button_tabIndex_derive_3 = derive(['state'], (state) =>
+export const GalleryMenubarDemo$MenubarItem_tabIndex_derive_3 = derive(['state'], (state) =>
   state.activeValue === 'new' ? 0 : -1,
 );
 export const GalleryMenubarDemo$output_text_derive = derive(

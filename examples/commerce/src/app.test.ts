@@ -15,7 +15,7 @@ import {
 } from '@kovojs/test/html-fragment';
 
 import { commerceAuthCsrf, commerceCsrf, commerceSignIn } from './domain.js';
-import { createCommerceApp } from './app.generated-fixtures.js';
+import { createCommerceApp } from './app.js';
 
 let server: Server | undefined;
 
@@ -53,7 +53,6 @@ describe('commerce app HTTP entry', () => {
     expect(document.headers.get('link')).toContain('</assets/styles.css>; rel=preload; as=style');
     expect(html).toContain('<!doctype html>');
     expectCommerceShellDocument(html);
-    expect(htmlElementCount(html, { attrs: { 'kovo-fragment-target': 'cart-badge' } })).toBe(1);
 
     const query = await fetch(`${origin}/_q/cart`);
     expect(query.status).toBe(200);

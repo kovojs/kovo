@@ -8,6 +8,8 @@ import {
 } from '@kovojs/headless-ui/dialog';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface DialogStyleOverrides {
@@ -166,6 +168,7 @@ export const Dialog = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -187,6 +190,7 @@ export const DialogTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         aria-haspopup={attrs['aria-haspopup']}
@@ -218,6 +222,7 @@ export const DialogContent = component({
     return (
       <dialog
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         closedby={attrs.closedby}
@@ -242,6 +247,7 @@ export const DialogClose = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -255,3 +261,5 @@ export const DialogClose = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/dialog';

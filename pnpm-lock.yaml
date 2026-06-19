@@ -202,25 +202,19 @@ importers:
 
   examples/devtool:
     dependencies:
-      '@kovojs/core':
+      '@kovojs/devtool':
         specifier: workspace:*
-        version: link:../../packages/core
+        version: link:../../packages/devtool
       '@kovojs/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
-      '@kovojs/style':
-        specifier: workspace:*
-        version: link:../../packages/style
+    devDependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0
         version: 1.29.0(zod@4.4.3)
-    devDependencies:
-      '@kovojs/cli':
-        specifier: workspace:*
-        version: link:../../packages/cli
       '@types/node':
         specifier: ^25.0.0
         version: 25.9.2
@@ -366,6 +360,9 @@ importers:
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../drizzle
+      '@kovojs/headless-ui':
+        specifier: workspace:*
+        version: link:../headless-ui
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
@@ -468,6 +465,16 @@ importers:
       vitest:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
+
+  packages/devtool:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.29.0
+        version: 1.29.0(zod@4.4.3)
+    devDependencies:
+      '@kovojs/server':
+        specifier: workspace:*
+        version: link:../server
 
   packages/drizzle:
     dependencies:

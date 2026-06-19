@@ -74,7 +74,7 @@ supply exactly those params:
 // authoring sugar — params demanded by the route's literal type
 <Link to="/deals/:id" params={{ id: deal.id }}>
   View deal
-</Link>;
+</Link>
 ```
 
 Missing or extra params are a compile error. Form values and URL segments arrive as strings, so the
@@ -205,8 +205,18 @@ The reference app guards routes with the same combinators it uses on mutations �
 "signed in" and `role<Req>('admin')` for authorization:
 
 ```tsx
-export const accountRoute = route('/account', { guard: authed<ReferenceRequest>(), page(_in, req) { /* req.session.user typed */ } });
-export const adminRoute = route('/admin', { guard: role<ReferenceRequest>('admin'), page(_in, req) { /* … */ } });
+export const accountRoute = route('/account', {
+  guard: authed<ReferenceRequest>(),
+  page(_in, req) {
+    /* req.session.user typed */
+  },
+});
+export const adminRoute = route('/admin', {
+  guard: role<ReferenceRequest>('admin'),
+  page(_in, req) {
+    /* … */
+  },
+});
 ```
 
 Guarded pages enroll in the **`kovo explain --unguarded` audit** — the report of everything reachable

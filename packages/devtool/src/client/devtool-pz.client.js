@@ -19,11 +19,16 @@ export function Devtool$init(_event, ctx) {
   const cssEsc = (s) => String(s).replace(/["\\]/g, '\\$&');
 
   // ---- transform state ----
-  let scale = 1, tx = 0, ty = 0;
-  const MIN = 0.35, MAX = 2.6;
+  let scale = 1,
+    tx = 0,
+    ty = 0;
+  const MIN = 0.35,
+    MAX = 2.6;
   pz.style.transformOrigin = '0 0';
   pz.style.willChange = 'transform';
-  const apply = () => { pz.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`; };
+  const apply = () => {
+    pz.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+  };
 
   // take layout over from the JS-off CSS centering
   wrap.style.overflow = 'hidden';
@@ -35,8 +40,10 @@ export function Devtool$init(_event, ctx) {
   const graphH = () => pz.scrollHeight || root.offsetHeight || 1;
 
   const fit = () => {
-    const w = wrap.clientWidth, h = wrap.clientHeight;
-    const gW = graphW(), gH = graphH();
+    const w = wrap.clientWidth,
+      h = wrap.clientHeight;
+    const gW = graphW(),
+      gH = graphH();
     let s = Math.min(1, (w - 56) / gW, (h - 56) / gH);
     if (!isFinite(s) || s <= 0) s = 1;
     scale = s;
@@ -55,29 +62,46 @@ export function Devtool$init(_event, ctx) {
   };
 
   // ---- wheel zoom toward cursor ----
-  on(wrap, 'wheel', (e) => {
-    e.preventDefault();
-    const r = wrap.getBoundingClientRect();
-    zoomAround(e.clientX - r.left, e.clientY - r.top, scale * Math.exp(-e.deltaY * 0.0015));
-  }, { passive: false });
+  on(
+    wrap,
+    'wheel',
+    (e) => {
+      e.preventDefault();
+      const r = wrap.getBoundingClientRect();
+      zoomAround(e.clientX - r.left, e.clientY - r.top, scale * Math.exp(-e.deltaY * 0.0015));
+    },
+    { passive: false },
+  );
 
   // ---- drag to pan (background only; node links keep working) ----
-  let dragging = false, sx = 0, sy = 0, stx = 0, sty = 0, moved = false;
+  let dragging = false,
+    sx = 0,
+    sy = 0,
+    stx = 0,
+    sty = 0;
   on(wrap, 'pointerdown', (e) => {
     if (e.button !== 0) return;
     if (e.target.closest('.node, .zoom, button, a')) return;
-    dragging = true; moved = false;
-    sx = e.clientX; sy = e.clientY; stx = tx; sty = ty;
+    dragging = true;
+    sx = e.clientX;
+    sy = e.clientY;
+    stx = tx;
+    sty = ty;
     wrap.style.cursor = 'grabbing';
-    try { wrap.setPointerCapture(e.pointerId); } catch {}
+    try {
+      wrap.setPointerCapture(e.pointerId);
+    } catch {}
   });
   on(wrap, 'pointermove', (e) => {
     if (!dragging) return;
-    tx = stx + (e.clientX - sx); ty = sty + (e.clientY - sy);
-    if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 3) moved = true;
+    tx = stx + (e.clientX - sx);
+    ty = sty + (e.clientY - sy);
     apply();
   });
-  const endDrag = () => { dragging = false; wrap.style.cursor = 'grab'; };
+  const endDrag = () => {
+    dragging = false;
+    wrap.style.cursor = 'grab';
+  };
   on(wrap, 'pointerup', endDrag);
   on(wrap, 'pointercancel', endDrag);
 
@@ -95,12 +119,17 @@ export function Devtool$init(_event, ctx) {
     root.classList.add('hovering');
     node.classList.add('hov');
     const id = node.getAttribute('data-node-id');
-    pz.querySelectorAll(`path[data-from="${cssEsc(id)}"], path[data-to="${cssEsc(id)}"]`).forEach((p) => {
-      p.classList.add('hov');
-      const other = p.getAttribute('data-from') === id ? p.getAttribute('data-to') : p.getAttribute('data-from');
-      const n2 = pz.querySelector(`.node[data-node-id="${cssEsc(other)}"]`);
-      if (n2) n2.classList.add('hov');
-    });
+    pz.querySelectorAll(`path[data-from="${cssEsc(id)}"], path[data-to="${cssEsc(id)}"]`).forEach(
+      (p) => {
+        p.classList.add('hov');
+        const other =
+          p.getAttribute('data-from') === id
+            ? p.getAttribute('data-to')
+            : p.getAttribute('data-from');
+        const n2 = pz.querySelector(`.node[data-node-id="${cssEsc(other)}"]`);
+        if (n2) n2.classList.add('hov');
+      },
+    );
   };
   on(wrap, 'pointerover', (e) => {
     if (dragging) return;
@@ -122,16 +151,27 @@ export function Devtool$init(_event, ctx) {
       zoomAround(r.width / 2, r.height / 2, scale * (kind === 'in' ? 1.25 : 1 / 1.25));
     });
   });
-  on(wrap, 'dblclick', (e) => { if (!e.target.closest('.node, .zoom')) fit(); });
+  on(wrap, 'dblclick', (e) => {
+    if (!e.target.closest('.node, .zoom')) fit();
+  });
 
   // ---- keyboard a11y: arrows pan, +/- zoom, 0 fits ----
   on(wrap, 'keydown', (e) => {
     const step = 60;
-    if (e.key === 'ArrowLeft') { tx += step; apply(); }
-    else if (e.key === 'ArrowRight') { tx -= step; apply(); }
-    else if (e.key === 'ArrowUp') { ty += step; apply(); }
-    else if (e.key === 'ArrowDown') { ty -= step; apply(); }
-    else if (e.key === '+' || e.key === '=') zoomAround(wrap.clientWidth / 2, wrap.clientHeight / 2, scale * 1.25);
+    if (e.key === 'ArrowLeft') {
+      tx += step;
+      apply();
+    } else if (e.key === 'ArrowRight') {
+      tx -= step;
+      apply();
+    } else if (e.key === 'ArrowUp') {
+      ty += step;
+      apply();
+    } else if (e.key === 'ArrowDown') {
+      ty -= step;
+      apply();
+    } else if (e.key === '+' || e.key === '=')
+      zoomAround(wrap.clientWidth / 2, wrap.clientHeight / 2, scale * 1.25);
     else if (e.key === '-') zoomAround(wrap.clientWidth / 2, wrap.clientHeight / 2, scale / 1.25);
     else if (e.key === '0') fit();
     else return;

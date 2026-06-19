@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
 
 // Tutorial step 02 (chapter 2): the interaction ladder in one component
 // (SPEC.md section 7). The size-guide button is L0 — the compiler proves the
@@ -16,6 +17,18 @@ export type ProductActionsState = {
   saved: number;
 };
 
+const productActionStyles = style.create(
+  {
+    saveButton: {
+      marginInlineStart: 8,
+    },
+  },
+  {
+    namespace: 'tutorial-product-actions',
+    source: 'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
+  },
+);
+
 // snippet:product-actions
 export const ProductActions = component({
   state: (): ProductActionsState => ({ saved: 0 }),
@@ -29,7 +42,7 @@ export const ProductActions = component({
       </div>
       <button
         type="button"
-        class="save"
+        style={productActionStyles.saveButton}
         onClick={() => {
           state.saved += 1;
         }}

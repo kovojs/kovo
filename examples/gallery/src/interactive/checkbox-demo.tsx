@@ -1,16 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  Checkbox,
   checkboxTriggerClick as _checkboxTriggerClick,
   type CheckboxCheckedState,
-} from '@kovojs/headless-ui/checkbox';
-import {
-  checkboxClasses,
-  checkboxInputClasses,
 } from '@kovojs/ui/checkbox';
-
-const ROOT_CLASS = checkboxClasses.join(' ');
-const INPUT_CLASS = checkboxInputClasses.join(' ');
 
 export interface GalleryCheckboxDemoState {
   checked: CheckboxCheckedState;
@@ -21,32 +15,21 @@ export interface GalleryCheckboxDemoState {
 export const GalleryCheckboxDemo = component({
   state: () => ({ checked: 'indeterminate' }),
   render: (_queries: Record<string, never>, state: GalleryCheckboxDemoState) => (
-    <label class={ROOT_CLASS} data-gallery-interactive="checkbox">
-      <input
-        aria-checked={state.checked === 'indeterminate' ? 'mixed' : String(state.checked)}
-        checked={state.checked === true}
-        class={INPUT_CLASS}
-        data-state={
-          state.checked === 'indeterminate'
-            ? 'indeterminate'
-            : state.checked
-              ? 'checked'
-              : 'unchecked'
-        }
-        indeterminate={state.checked === 'indeterminate'}
-        name="gallery-email-summary"
-        onClick={() => {
-          const result = _checkboxTriggerClick(Object(event), { checked: state.checked });
-          if (!result) return;
-          state.checked = result.checked;
-        }}
-        type="checkbox"
-        value="enabled"
-      />
+    <Checkbox
+      checked={state.checked}
+      data-gallery-interactive="checkbox"
+      name="gallery-email-summary"
+      onClick={() => {
+        const result = _checkboxTriggerClick(Object(event), { checked: state.checked });
+        if (!result) return;
+        state.checked = result.checked;
+      }}
+      value="enabled"
+    >
       <span class="select-none leading-none">Email summary</span>
       <output class="text-xs text-neutral-500" data-demo-state="checked">
         {String(state.checked)}
       </output>
-    </label>
+    </Checkbox>
   ),
 });

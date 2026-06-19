@@ -1,5 +1,10 @@
 import { toNodeHandler } from '@kovojs/server';
 
+// Serve the COMPILER-LOWERED route (generated/interactive-app.kovo-route): the
+// lowered components carry the static `kovo-fragment-target` region wrappers the
+// inline loader morphs against. The source `./interactive-app.js` route renders
+// the same UI but the runtime `component()` wrapper does not emit those region
+// attributes into the full GET document, so enhance morphs would have no target.
 import { buildSoInteractiveApp } from './interactive-app.generated-fixtures.js';
 
 // SPEC.md §9.1/§9.5: the Stack Overflow example app shell. It builds the FULLY

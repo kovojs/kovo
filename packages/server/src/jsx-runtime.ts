@@ -203,11 +203,13 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       value === true ? ` ${name}` : ` ${name}="${escapeAttribute(attributeText(name, value))}"`;
   }
 
-  if (styleAttrs?.class && !renderedClass) rendered += ` class="${escapeAttribute(styleAttrs.class)}"`;
+  if (styleAttrs?.class && !renderedClass)
+    rendered += ` class="${escapeAttribute(styleAttrs.class)}"`;
   if (styleAttrs?.['data-style-src'] && !renderedStyleSource) {
     rendered += ` data-style-src="${escapeAttribute(styleAttrs['data-style-src'])}"`;
   }
-  if (styleAttrs?.style && !renderedStyle) rendered += ` style="${escapeAttribute(styleAttrs.style)}"`;
+  if (styleAttrs?.style && !renderedStyle)
+    rendered += ` style="${escapeAttribute(styleAttrs.style)}"`;
 
   return rendered;
 }

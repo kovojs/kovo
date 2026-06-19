@@ -10,6 +10,7 @@ import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import { cloudflare, node, vercel, writeKovoNeutralBuild } from './build.js';
+import { stylesheet } from './hints.js';
 
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
@@ -154,6 +155,69 @@ describe('server build-time deployment API', () => {
         staticOnly: true,
         version: 'kovo-neutral-build/v1',
       });
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('materializes declared and build-owned CSS into neutral stylesheet assets', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-'));
+
+    try {
+      const distDir = join(root, 'dist');
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/styles.css'), 'main { color: rebeccapurple; }\n');
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/app.ts': {
+            css: ['assets/styles.css'],
+            file: 'assets/app.js',
+          },
+        }),
+      );
+      await writeFile(join(distDir, 'assets/app.js'), 'export const app = true;');
+
+      const appStylesheet = stylesheet('./styles.css', {
+        criticalCss: ':root{--brand:teal}',
+      });
+      const routeStylesheet = stylesheet('./route.css', {
+        criticalCss: '.route-shell{display:grid}',
+      });
+      const outDir = join(root, 'dist', '.kovo');
+      await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                return '<main class="route-shell">Home</main>';
+              },
+              stylesheets: [routeStylesheet],
+            }),
+          ],
+          stylesheets: [appStylesheet],
+        }),
+        buildStylesheetCss: [
+          { css: '.kovo-ui-button{display:inline-flex}', href: '/assets/styles.css' },
+        ],
+        manifestFile: join(distDir, '.vite/manifest.json'),
+        outDir,
+      });
+
+      const builtStyles = await readFile(join(outDir, 'client/assets/styles.css'), 'utf8');
+      expect(builtStyles).toContain(':root{--brand:teal}');
+      expect(builtStyles).toContain('.kovo-ui-button{display:inline-flex}');
+      expect(builtStyles).toContain('main { color: rebeccapurple; }');
+      await expect(readFile(join(outDir, 'client/assets/route.css'), 'utf8')).resolves.toBe(
+        '.route-shell{display:grid}\n',
+      );
+
+      const staticStyles = await readFile(join(outDir, 'static/assets/styles.css'), 'utf8');
+      expect(staticStyles).toBe(builtStyles);
+      await expect(readFile(join(outDir, 'static/assets/route.css'), 'utf8')).resolves.toBe(
+        '.route-shell{display:grid}\n',
+      );
     } finally {
       await rm(root, { force: true, recursive: true });
     }

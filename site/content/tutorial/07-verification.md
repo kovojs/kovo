@@ -14,7 +14,7 @@ observed writes against declared touches. Step state:
 
 This chapter has two halves. **Guards** (sessions, the guard chain, the new domain) lock down who
 can do what. **Verification** (the app graph, `kovo check`, `kovo explain`, write verification)
-proves the whole behavior surface mechanically. The *mechanics* of how this tutorial keeps itself
+proves the whole behavior surface mechanically. The _mechanics_ of how this tutorial keeps itself
 honest against the reference app — run-steps gating and parity — live in the
 [wrap-up](/tutorial/08-wrap-up/); this chapter shows the assertion and moves on.
 
@@ -98,7 +98,7 @@ wire and failure code:
 
 {{snippet:07-verification/src/app.test.ts#parity-test}}
 
-*How* this parity (and every code block in the tutorial) stays true in CI — the `run-steps` gate
+_How_ this parity (and every code block in the tutorial) stays true in CI — the `run-steps` gate
 and what it enforces — is explained in the [wrap-up](/tutorial/08-wrap-up/#how-this-tutorial-stays-true).
 The [testing guide](/guides/testing/) covers pglite-backed harnesses and HTTP-level assertions; the
 [kovo explain guide](/guides/kovo-explain/) tours the full command surface.

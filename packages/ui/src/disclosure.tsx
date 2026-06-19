@@ -7,6 +7,8 @@ import {
 } from '@kovojs/headless-ui/disclosure';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface DisclosureStateProps {
@@ -123,6 +125,7 @@ export const Disclosure = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -146,6 +149,7 @@ export const DisclosureTrigger = component({
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
@@ -173,3 +177,5 @@ export const DisclosureContent = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/disclosure';

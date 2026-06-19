@@ -202,8 +202,7 @@ export const DealDetailRegion = component({
           </div>
           {contact ? (
             <p style={[dealDetailStyles.dividerTop, dealDetailStyles.muted]}>
-              <span style={dealDetailStyles.tabularStrong}>{contact.name}</span> ·{' '}
-              {contact.email}
+              <span style={dealDetailStyles.tabularStrong}>{contact.name}</span> · {contact.email}
             </p>
           ) : (
             ''
@@ -258,16 +257,12 @@ export const DealDetailRegion = component({
         <section>
           <h2 style={dealDetailStyles.sectionLabel}>Activity</h2>
           {activities.length === 0 ? (
-            <p style={[dealDetailStyles.card, dealDetailStyles.muted]}>
-              No activity logged yet.
-            </p>
+            <p style={[dealDetailStyles.card, dealDetailStyles.muted]}>No activity logged yet.</p>
           ) : (
             <ol style={dealDetailStyles.activityList}>
               {activities.map((activity) => (
                 <li style={dealDetailStyles.card}>
-                  <p style={dealDetailStyles.sectionLabel}>
-                    {activity.kind}
-                  </p>
+                  <p style={dealDetailStyles.sectionLabel}>{activity.kind}</p>
                   <p style={dealDetailStyles.muted}>{activity.note}</p>
                 </li>
               ))}

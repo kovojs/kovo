@@ -15,7 +15,7 @@ import type { PageHintOptions } from './hints.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { MutationFail } from './mutation.js';
-import { runQuery, type QueryDefinition } from './query.js';
+import { runQuery, type QueryDefinition, type RegisteredQueryDefinition } from './query.js';
 import {
   htmlServerErrorResponse,
   retryAfterHeaders,
@@ -59,8 +59,10 @@ interface LayoutLiveTargetMetadata {
 }
 
 const layoutLiveTargetMetadata = new WeakMap<object, LayoutLiveTargetMetadata>();
+const layoutNavigationSegmentIds = new WeakMap<object, string>();
 const routePageMetadata = new WeakMap<object, CompiledRoutePageMetadata>();
 let nextLayoutLiveTargetId = 0;
+let nextLayoutNavigationSegmentId = 0;
 
 /** Resolved layout query values passed to a `layout().render` function (SPEC §4.5/§9.5). */
 export type LayoutQueryResults<Queries> = {
@@ -252,9 +254,53 @@ export function route<
   definition: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> = {},
 ): RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
   const declaration = { ...definition, path };
-  const metadata = (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage;
+  const metadata =
+    (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
+    fallbackRoutePageMetadata(path, definition);
   if (metadata) routePageMetadata.set(declaration, metadata);
   return declaration;
+}
+
+function fallbackRoutePageMetadata<Path extends string>(
+  path: Path,
+  definition: RouteDefinition<Path, any, any, any, any, any>,
+): CompiledRoutePageMetadata | undefined {
+  if (!definition.page || !definition.layout) return undefined;
+  const layouts = routeLayoutChain(definition.layout);
+  return {
+    components: [],
+    fileName: '',
+    navigationSegments: [
+      ...layouts.map((layoutDeclaration) => {
+        const id = layoutNavigationSegmentId(layoutDeclaration);
+        return {
+          id,
+          kind: 'layout' as const,
+          localName: id,
+          queries: (
+            Object.values(layoutDeclaration.queries ?? {}) as RegisteredQueryDefinition[]
+          ).map((queryDefinition) => queryDefinition.key),
+        };
+      }),
+      {
+        components: [],
+        id: `page:${path}`,
+        kind: 'page',
+        localName: 'page',
+      },
+    ],
+    route: path,
+  };
+}
+
+function layoutNavigationSegmentId(layoutDeclaration: LayoutDeclaration<any, any, any>): string {
+  const existing = layoutNavigationSegmentIds.get(layoutDeclaration);
+  if (existing) return existing;
+
+  nextLayoutNavigationSegmentId += 1;
+  const id = `layout:${nextLayoutNavigationSegmentId}`;
+  layoutNavigationSegmentIds.set(layoutDeclaration, id);
+  return id;
 }
 
 export function parseRouteRequest<

@@ -1,30 +1,18 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  Autocomplete,
   autocompleteInput as _autocompleteInput,
-  autocompleteInputAttributes,
+  AutocompleteInput,
   autocompleteKeyDown as _autocompleteKeyDown,
-  autocompleteListAttributes,
-  autocompleteOptionAttributes,
+  AutocompleteList,
+  AutocompleteOption,
   autocompleteOptionClick as _autocompleteOptionClick,
-  autocompleteRootAttributes,
   autocompleteSuggestions as _autocompleteSuggestions,
-  autocompleteValueAttributes,
+  AutocompleteValue,
   type AutocompleteItem,
-} from '@kovojs/headless-ui/autocomplete';
-import {
-  autocompleteClasses,
-  autocompleteInputClasses,
-  autocompleteListClasses,
-  autocompleteOptionClasses,
-  autocompleteValueClasses,
 } from '@kovojs/ui/autocomplete';
 
-const ROOT_CLASS = autocompleteClasses.join(' ');
-const INPUT_CLASS = autocompleteInputClasses.join(' ');
-const LIST_CLASS = autocompleteListClasses.join(' ');
-const OPTION_CLASS = autocompleteOptionClasses.join(' ');
-const VALUE_CLASS = autocompleteValueClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GalleryAutocompleteDemoState {
@@ -69,26 +57,18 @@ export const GalleryAutocompleteDemo = component({
     };
 
     return (
-      <section
-        {...autocompleteRootAttributes({
-          ...autocompleteState,
-          id: 'gallery-autocomplete-root',
-        })}
-        class={ROOT_CLASS}
+      <Autocomplete
+        {...autocompleteState}
         data-gallery-interactive="autocomplete"
         data-state={state.open ? 'open' : 'closed'}
+        id="gallery-autocomplete-root"
       >
         <label id="gallery-autocomplete-label" for="gallery-autocomplete-input" class={LABEL_CLASS}>
           Tag
         </label>
         <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />
-        <input
-          {...autocompleteInputAttributes({
-            ...autocompleteState,
-            id: 'gallery-autocomplete-input',
-            labelledBy: 'gallery-autocomplete-label',
-          })}
-          id="gallery-autocomplete-input"
+        <AutocompleteInput
+          {...autocompleteState}
           aria-activedescendant={
             state.highlightedValue === 'development'
               ? 'gallery-autocomplete-list-option-2'
@@ -99,10 +79,10 @@ export const GalleryAutocompleteDemo = component({
                   : null
           }
           aria-expanded={state.open ? 'true' : 'false'}
-          class={INPUT_CLASS}
           data-placeholder={state.inputValue === '' ? '' : null}
           data-state={state.open ? 'open' : 'closed'}
-          value={state.inputValue}
+          id="gallery-autocomplete-input"
+          labelledBy="gallery-autocomplete-label"
           onInput={() => {
             const result = _autocompleteInput(Object(event), {
               inputValue: state.inputValue,
@@ -178,31 +158,26 @@ export const GalleryAutocompleteDemo = component({
               }
             }
           }}
+          value={state.inputValue}
         />
-        <div
-          {...autocompleteListAttributes({
-            ...autocompleteState,
-            id: listId,
-            labelledBy: 'gallery-autocomplete-label',
-          })}
-          class={LIST_CLASS}
+        <AutocompleteList
+          {...autocompleteState}
           data-state={state.open ? 'open' : 'closed'}
           hidden={!state.open}
+          id={listId}
+          labelledBy="gallery-autocomplete-label"
         >
-          <button
-            {...autocompleteOptionAttributes({
-              ...autocompleteState,
-              id: 'gallery-autocomplete-list-option-0',
-              itemLabel: 'Design',
-              itemValue: 'design',
-            })}
+          <AutocompleteOption
+            {...autocompleteState}
             aria-selected={state.value === 'design' ? 'true' : 'false'}
-            class={OPTION_CLASS}
             data-highlighted={state.highlightedValue === 'design' ? '' : null}
             data-state={state.value === 'design' ? 'checked' : 'unchecked'}
             hidden={
               state.inputValue !== '' && !'design'.startsWith(state.inputValue.toLocaleLowerCase())
             }
+            id="gallery-autocomplete-list-option-0"
+            itemLabel="Design"
+            itemValue="design"
             onClick={() => {
               const result = _autocompleteOptionClick(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -240,21 +215,18 @@ export const GalleryAutocompleteDemo = component({
             tabIndex={state.highlightedValue === 'design' ? 0 : -1}
           >
             Design
-          </button>
-          <button
-            {...autocompleteOptionAttributes({
-              ...autocompleteState,
-              id: 'gallery-autocomplete-list-option-2',
-              itemValue: 'development',
-            })}
+          </AutocompleteOption>
+          <AutocompleteOption
+            {...autocompleteState}
             aria-selected={state.value === 'development' ? 'true' : 'false'}
-            class={OPTION_CLASS}
             data-highlighted={state.highlightedValue === 'development' ? '' : null}
             data-state={state.value === 'development' ? 'checked' : 'unchecked'}
             hidden={
               state.inputValue !== '' &&
               !'development'.startsWith(state.inputValue.toLocaleLowerCase())
             }
+            id="gallery-autocomplete-list-option-2"
+            itemValue="development"
             onClick={() => {
               const result = _autocompleteOptionClick(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -292,16 +264,10 @@ export const GalleryAutocompleteDemo = component({
             tabIndex={state.highlightedValue === 'development' ? 0 : -1}
           >
             Development
-          </button>
-        </div>
-        <output
-          {...autocompleteValueAttributes(autocompleteState)}
-          class={VALUE_CLASS}
-          data-demo-state="autocomplete-value"
-        >
-          {state.value === 'development' ? 'Development' : 'Design'}
-        </output>
-      </section>
+          </AutocompleteOption>
+        </AutocompleteList>
+        <AutocompleteValue {...autocompleteState} data-demo-state="autocomplete-value" />
+      </Autocomplete>
     );
   },
 });

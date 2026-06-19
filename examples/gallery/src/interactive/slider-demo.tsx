@@ -1,27 +1,17 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  sliderHiddenInputAttributes,
+  Slider,
+  SliderInput,
   sliderKeyDown as _sliderKeyDown,
-  sliderRangeAttributes,
-  sliderRootAttributes,
+  SliderRange,
   sliderThumbDrag as _sliderThumbDrag,
   sliderThumbDragStart as _sliderThumbDragStart,
-  sliderThumbAttributes,
+  SliderThumb,
   sliderTrackPointerDown as _sliderTrackPointerDown,
-  sliderTrackAttributes,
-} from '@kovojs/headless-ui/slider';
-import {
-  sliderClasses,
-  sliderTrackClasses,
-  sliderRangeClasses,
-  sliderThumbClasses,
+  SliderTrack,
 } from '@kovojs/ui/slider';
 
-const ROOT_CLASS = sliderClasses.join(' ');
-const TRACK_CLASS = sliderTrackClasses.join(' ');
-const RANGE_CLASS = sliderRangeClasses.join(' ');
-const THUMB_CLASS = sliderThumbClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 const OUTPUT_CLASS = 'text-xs text-neutral-500';
 
@@ -54,24 +44,14 @@ export const GallerySliderDemo = component({
     };
 
     return (
-      <section
-        {...sliderRootAttributes(sliderState)}
-        class={ROOT_CLASS}
-        data-gallery-interactive="slider"
-        data-value={String(state.value)}
-      >
+      <Slider {...sliderState} data-gallery-interactive="slider" data-value={String(state.value)}>
         <form id="gallery-slider-form" data-gallery-form="slider" />
         <label id="gallery-slider-label" class={LABEL_CLASS}>
           Completion
         </label>
-        <input
-          {...sliderHiddenInputAttributes(sliderState)}
-          id="gallery-slider-input"
-          value={state.value}
-        />
-        <div
-          {...sliderTrackAttributes(sliderState)}
-          class={TRACK_CLASS}
+        <SliderInput {...sliderState} id="gallery-slider-input" value={state.value} />
+        <SliderTrack
+          {...sliderState}
           data-value={String(state.value)}
           data-value-ratio={String(state.value / 100)}
           onPointerDown={() => {
@@ -85,16 +65,14 @@ export const GallerySliderDemo = component({
             state.value = result.value;
           }}
         >
-          <span
-            {...sliderRangeAttributes(sliderState)}
-            class={RANGE_CLASS}
+          <SliderRange
+            {...sliderState}
             data-value={String(state.value)}
             data-value-ratio={String(state.value / 100)}
             style={{ width: `${state.value}%` }}
           />
-          <span
-            {...sliderThumbAttributes(sliderState)}
-            class={THUMB_CLASS}
+          <SliderThumb
+            {...sliderState}
             aria-valuenow={state.value}
             aria-valuetext={`${state.value} percent`}
             data-dragging={state.dragging ? '' : null}
@@ -149,11 +127,11 @@ export const GallerySliderDemo = component({
               state.dragging = false;
             }}
           />
-        </div>
+        </SliderTrack>
         <output data-demo-state="slider-value" class={OUTPUT_CLASS}>
           {String(state.value)}
         </output>
-      </section>
+      </Slider>
     );
   },
 });

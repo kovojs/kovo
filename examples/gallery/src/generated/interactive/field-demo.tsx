@@ -2,35 +2,48 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GalleryFieldDemo$div_data_invalid_derive = derive(['state'], (state: any) =>
+export const GalleryFieldDemo$Field_data_invalid_derive = derive(['state'], (state: any) =>
   state.invalid ? '' : null,
 );
-export const GalleryFieldDemo$input_aria_describedby_derive = derive(['state'], (state: any) =>
-  state.invalid
-    ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
-    : 'gallery-interactive-field-email-description',
+export const GalleryFieldDemo$FieldControl_aria_describedby_derive = derive(
+  ['state'],
+  (state: any) =>
+    state.invalid
+      ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
+      : 'gallery-interactive-field-email-description',
 );
-export const GalleryFieldDemo$input_aria_invalid_derive = derive(['state'], (state: any) =>
+export const GalleryFieldDemo$FieldControl_aria_invalid_derive = derive(['state'], (state: any) =>
   state.invalid ? 'true' : null,
 );
-export const GalleryFieldDemo$input_data_invalid_derive = derive(['state'], (state: any) =>
+export const GalleryFieldDemo$FieldControl_data_invalid_derive = derive(['state'], (state: any) =>
   state.invalid ? '' : null,
 );
-export const GalleryFieldDemo$input_value_derive = derive(['state'], (state: any) => state.email);
-export const GalleryFieldDemo$p_hidden_derive = derive(['state'], (state: any) =>
+export const GalleryFieldDemo$FieldControl_value_derive = derive(
+  ['state'],
+  (state: any) => state.email,
+);
+export const GalleryFieldDemo$UiFieldError_hidden_derive = derive(['state'], (state: any) =>
   !state.invalid ? '' : null,
 );
-export const GalleryFieldDemo$select_value_derive = derive(['state'], (state: any) => state.plan);
-export const GalleryFieldDemo$option_selected_derive = derive(['state'], (state: any) =>
+export const GalleryFieldDemo$UiFieldError_visible_derive = derive(
+  ['state'],
+  (state: any) => state.invalid,
+);
+export const GalleryFieldDemo$FieldSelect_value_derive = derive(
+  ['state'],
+  (state: any) => state.plan,
+);
+export const GalleryFieldDemo$FieldSelectOption_selected_derive = derive(['state'], (state: any) =>
   state.plan === 'team' ? '' : null,
 );
-export const GalleryFieldDemo$option_selected_derive_2 = derive(['state'], (state: any) =>
-  state.plan === 'enterprise' ? '' : null,
+export const GalleryFieldDemo$FieldSelectOption_selected_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.plan === 'enterprise' ? '' : null),
 );
-export const GalleryFieldDemo$fieldset_data_disabled_derive = derive(['state'], (state: any) =>
+export const GalleryFieldDemo$Fieldset_data_disabled_derive = derive(['state'], (state: any) =>
   state.shippingDisabled ? '' : null,
 );
-export const GalleryFieldDemo$fieldset_disabled_derive = derive(['state'], (state: any) =>
+export const GalleryFieldDemo$Fieldset_disabled_derive = derive(['state'], (state: any) =>
   state.shippingDisabled ? '' : null,
 );
 export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state: any) =>
@@ -39,37 +52,18 @@ export const GalleryFieldDemo$input_checked_derive = derive(['state'], (state: a
 
 import { component } from '@kovojs/core';
 import {
-  fieldControlAttributes,
-  fieldDescriptionAttributes,
-  fieldErrorAttributes,
-  fieldLabelAttributes,
-  fieldRootAttributes,
-  fieldsetLegendAttributes,
-  fieldsetRootAttributes,
-} from '@kovojs/headless-ui/field';
-import {
-  fieldClasses,
-  fieldLabelClasses,
-  fieldControlClasses,
-  fieldTextareaClasses,
-  fieldSelectClasses,
-  fieldSelectOptionClasses,
-  fieldDescriptionClasses,
-  fieldErrorClasses,
-  fieldsetClasses,
-  fieldsetLegendClasses,
+  Field,
+  FieldControl,
+  FieldDescription,
+  FieldError as UiFieldError,
+  FieldLabel,
+  FieldSelect,
+  FieldSelectOption,
+  Fieldset,
+  FieldsetLegend,
+  FieldTextarea,
 } from '@kovojs/ui/field';
 
-const FIELD_CLASS = fieldClasses.join(' ');
-const LABEL_CLASS = fieldLabelClasses.join(' ');
-const CONTROL_CLASS = fieldControlClasses.join(' ');
-const TEXTAREA_CLASS = fieldTextareaClasses.join(' ');
-const SELECT_CLASS = fieldSelectClasses.join(' ');
-const SELECT_OPTION_CLASS = fieldSelectOptionClasses.join(' ');
-const DESCRIPTION_CLASS = fieldDescriptionClasses.join(' ');
-const ERROR_CLASS = fieldErrorClasses.join(' ');
-const FIELDSET_CLASS = fieldsetClasses.join(' ');
-const LEGEND_CLASS = fieldsetLegendClasses.join(' ');
 const OUTPUT_CLASS = 'text-xs text-neutral-500';
 
 export interface GalleryFieldDemoState {
@@ -106,207 +100,157 @@ export const GalleryFieldDemo = component({
         kovo-c="gallery-field-demo"
         kovo-state='{"email":"ada@example","invalid":true,"plan":"team","shippingDisabled":false}'
       >
-        <div
-          class={FIELD_CLASS}
-          {...fieldRootAttributes({ ...emailFieldState, id: 'gallery-interactive-field-email' })}
+        <Field
+          id="gallery-interactive-field-email"
+          {...emailFieldState}
           data-invalid={state.invalid ? '' : null}
-          data-bind:data-invalid="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$div_data_invalid_derive"
+          data-bind:data-invalid="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$Field_data_invalid_derive"
         >
-          <label
-            class={LABEL_CLASS}
-            {...fieldLabelAttributes({
-              ...emailFieldState,
-              controlId: 'gallery-interactive-field-email-input',
-              id: 'gallery-interactive-field-email-label',
-            })}
+          <FieldLabel
+            controlId="gallery-interactive-field-email-input"
+            id="gallery-interactive-field-email-label"
+            {...emailFieldState}
           >
             Email
-          </label>
-          <input
+          </FieldLabel>
+          <FieldControl
+            descriptionId="gallery-interactive-field-email-description"
+            errorId="gallery-interactive-field-email-error"
+            form="gallery-interactive-field-form"
+            id="gallery-interactive-field-email-input"
+            name="gallery-email"
+            on:input="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldControl_input"
+            pattern=".+@kovo\\.sh"
             type="email"
-            class={CONTROL_CLASS}
-            on:input="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_input"
-            {...fieldControlAttributes({
-              ...emailFieldState,
-              descriptionId: 'gallery-interactive-field-email-description',
-              errorId: 'gallery-interactive-field-email-error',
-              form: 'gallery-interactive-field-form',
-              id: 'gallery-interactive-field-email-input',
-              name: 'gallery-email',
-              pattern: '.+@kovo\\.sh',
-            })}
+            {...emailFieldState}
             aria-describedby={
               state.invalid
                 ? 'gallery-interactive-field-email-description gallery-interactive-field-email-error'
                 : 'gallery-interactive-field-email-description'
             }
-            data-bind:aria-describedby="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_aria_describedby_derive"
+            data-bind:aria-describedby="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldControl_aria_describedby_derive"
             aria-invalid={state.invalid ? 'true' : null}
-            data-bind:aria-invalid="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_aria_invalid_derive"
+            data-bind:aria-invalid="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldControl_aria_invalid_derive"
             data-invalid={state.invalid ? '' : null}
-            data-bind:data-invalid="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_data_invalid_derive"
+            data-bind:data-invalid="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldControl_data_invalid_derive"
             value={state.email}
-            data-bind:value="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_value_derive"
+            data-bind:value="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldControl_value_derive"
           />
-          <p
-            class={DESCRIPTION_CLASS}
-            {...fieldDescriptionAttributes({
-              id: 'gallery-interactive-field-email-description',
-              required: true,
-            })}
-          >
+          <FieldDescription id="gallery-interactive-field-email-description" required={true}>
             Use a reachable address for receipts.
-          </p>
-          <p
-            class={ERROR_CLASS}
-            {...fieldErrorAttributes({
-              id: 'gallery-interactive-field-email-error',
-              visible: state.invalid,
-            })}
+          </FieldDescription>
+          <UiFieldError
+            id="gallery-interactive-field-email-error"
             hidden={!state.invalid}
-            data-bind:hidden="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$p_hidden_derive"
+            data-bind:hidden="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$UiFieldError_hidden_derive"
+            visible={state.invalid}
+            data-bind:visible="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$UiFieldError_visible_derive"
           >
             Enter a complete email address.
-          </p>
+          </UiFieldError>
           <output data-demo-state="field-email" class={OUTPUT_CLASS} data-bind="state.email">
             {state.email}
           </output>
-        </div>
+        </Field>
 
-        <div
-          {...fieldRootAttributes({ id: 'gallery-interactive-field-profile' })}
-          class={FIELD_CLASS}
-        >
-          <label
-            {...fieldLabelAttributes({
-              controlId: 'gallery-interactive-field-bio',
-              id: 'gallery-interactive-field-bio-label',
-            })}
-            class={LABEL_CLASS}
+        <Field id="gallery-interactive-field-profile">
+          <FieldLabel
+            controlId="gallery-interactive-field-bio"
+            id="gallery-interactive-field-bio-label"
           >
             Bio
-          </label>
-          <textarea
-            {...fieldControlAttributes({
-              descriptionId: 'gallery-interactive-field-bio-description',
-              form: 'gallery-interactive-field-form',
-              id: 'gallery-interactive-field-bio',
-              name: 'gallery-bio',
-            })}
-            class={TEXTAREA_CLASS}
+          </FieldLabel>
+          <FieldTextarea
+            descriptionId="gallery-interactive-field-bio-description"
+            form="gallery-interactive-field-form"
+            id="gallery-interactive-field-bio"
+            name="gallery-bio"
             rows={2}
           >
             Frontend systems lead.
-          </textarea>
-          <p
-            {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-bio-description' })}
-            class={DESCRIPTION_CLASS}
-          >
+          </FieldTextarea>
+          <FieldDescription id="gallery-interactive-field-bio-description">
             Short public profile summary.
-          </p>
-        </div>
+          </FieldDescription>
+        </Field>
 
-        <div {...fieldRootAttributes({ id: 'gallery-interactive-field-plan' })} class={FIELD_CLASS}>
-          <label
-            {...fieldLabelAttributes({
-              controlId: 'gallery-interactive-field-plan-select',
-              id: 'gallery-interactive-field-plan-label',
-            })}
-            class={LABEL_CLASS}
+        <Field id="gallery-interactive-field-plan">
+          <FieldLabel
+            controlId="gallery-interactive-field-plan-select"
+            id="gallery-interactive-field-plan-label"
           >
             Plan
-          </label>
-          <select
-            class={SELECT_CLASS}
-            on:change="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$select_change"
-            {...fieldControlAttributes({
-              descriptionId: 'gallery-interactive-field-plan-description',
-              form: 'gallery-interactive-field-form',
-              id: 'gallery-interactive-field-plan-select',
-              name: 'gallery-plan',
-              required: true,
-            })}
+          </FieldLabel>
+          <FieldSelect
+            descriptionId="gallery-interactive-field-plan-description"
+            form="gallery-interactive-field-form"
+            id="gallery-interactive-field-plan-select"
+            name="gallery-plan"
+            on:change="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldSelect_change"
+            required={true}
             value={state.plan}
-            data-bind:value="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$select_value_derive"
+            data-bind:value="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldSelect_value_derive"
           >
-            <option
+            <FieldSelectOption
               value="team"
-              class={SELECT_OPTION_CLASS}
               selected={state.plan === 'team'}
-              data-bind:selected="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$option_selected_derive"
+              data-bind:selected="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldSelectOption_selected_derive"
             >
               Team
-            </option>
-            <option
+            </FieldSelectOption>
+            <FieldSelectOption
               value="enterprise"
-              class={SELECT_OPTION_CLASS}
               selected={state.plan === 'enterprise'}
-              data-bind:selected="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$option_selected_derive_2"
+              data-bind:selected="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$FieldSelectOption_selected_derive_2"
             >
               Enterprise
-            </option>
-          </select>
-          <p
-            {...fieldDescriptionAttributes({ id: 'gallery-interactive-field-plan-description' })}
-            class={DESCRIPTION_CLASS}
-          >
+            </FieldSelectOption>
+          </FieldSelect>
+          <FieldDescription id="gallery-interactive-field-plan-description">
             Native select remains the submitted control.
-          </p>
+          </FieldDescription>
           <output data-demo-state="field-plan" class={OUTPUT_CLASS} data-bind="state.plan">
             {state.plan}
           </output>
-        </div>
+        </Field>
 
-        <fieldset
-          class={FIELDSET_CLASS}
-          {...fieldsetRootAttributes({
-            ...fieldsetState,
-            descriptionId: 'gallery-interactive-fieldset-description',
-            form: 'gallery-interactive-field-form',
-            id: 'gallery-interactive-fieldset',
-            name: 'gallery-shipping',
-          })}
+        <Fieldset
+          descriptionId="gallery-interactive-fieldset-description"
+          form="gallery-interactive-field-form"
+          id="gallery-interactive-fieldset"
+          name="gallery-shipping"
+          {...fieldsetState}
           data-disabled={state.shippingDisabled ? '' : null}
-          data-bind:data-disabled="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$fieldset_data_disabled_derive"
+          data-bind:data-disabled="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$Fieldset_data_disabled_derive"
           disabled={state.shippingDisabled}
-          data-bind:disabled="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$fieldset_disabled_derive"
+          data-bind:disabled="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$Fieldset_disabled_derive"
         >
-          <legend
-            class={LEGEND_CLASS}
-            {...fieldsetLegendAttributes({
-              id: 'gallery-interactive-fieldset-legend',
-              required: true,
-            })}
-          >
+          <FieldsetLegend id="gallery-interactive-fieldset-legend" required={true}>
             Shipping options
             <label class="ml-2 inline-flex items-center gap-1 text-sm font-normal text-neutral-700">
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
-                on:click="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_click"
+                on:click="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_click"
                 checked={state.shippingDisabled}
-                data-bind:checked="/c/__v/af463500/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_checked_derive"
+                data-bind:checked="/c/__v/9bd73f9b/examples/gallery/src/generated/interactive/field-demo.client.js#GalleryFieldDemo$input_checked_derive"
               />
               Disable shipping group
             </label>
-          </legend>
-          <p
-            class={DESCRIPTION_CLASS}
-            {...fieldDescriptionAttributes({ id: 'gallery-interactive-fieldset-description' })}
-          >
+          </FieldsetLegend>
+          <FieldDescription id="gallery-interactive-fieldset-description">
             Grouped controls inherit native fieldset disabled behavior.
-          </p>
+          </FieldDescription>
           <label class="grid gap-2 text-sm font-medium leading-none text-neutral-900">
-            <input
+            <FieldControl
               form="gallery-interactive-field-form"
               name="gallery-seat"
               type="text"
               value="window"
-              class={CONTROL_CLASS}
             />
             Seat preference
           </label>
-        </fieldset>
+        </Fieldset>
       </form>
     );
   },

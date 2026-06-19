@@ -13,20 +13,20 @@ author an inline closure that flips a state field; the compiler lowers it to a n
 loads on first touch and updates the DOM by walking self-describing attributes. No re-render, no
 virtual DOM, no eager JavaScript.
 
-This guide is about *authoring* that interactivity. (For copy-in primitive components — the headless
+This guide is about _authoring_ that interactivity. (For copy-in primitive components — the headless
 UI library — see [components](/guides/components/).)
 
 ## The Interaction Ladder
 
 Reach for the lowest layer that does the job:
 
-| Layer  | Mechanism                                                       | Example                | JS shipped                  |
-| ------ | -------------------------------------------------------------- | ---------------------- | --------------------------- |
-| **L0** | Platform behavior: invoker commands, `<details>`, `<dialog>`, `:has()` | Open a drawer          | 0                           |
-| **L1** | Pure client island: local state + update plan (this guide)     | Tabs, toggle, filter   | handler module on first touch |
-| **L2** | Mutation: real form + enhanced fetch → fragment/query patch    | Add to cart            | loader + form module        |
-| **L3** | Optimistic: transform over query values                        | Instant badge tick     | transform module            |
-| **L4** | Live: SSE pushing the same fragment/query chunks               | Order status, presence | `<kovo-live>` subscriber     |
+| Layer  | Mechanism                                                              | Example                | JS shipped                    |
+| ------ | ---------------------------------------------------------------------- | ---------------------- | ----------------------------- |
+| **L0** | Platform behavior: invoker commands, `<details>`, `<dialog>`, `:has()` | Open a drawer          | 0                             |
+| **L1** | Pure client island: local state + update plan (this guide)             | Tabs, toggle, filter   | handler module on first touch |
+| **L2** | Mutation: real form + enhanced fetch → fragment/query patch            | Add to cart            | loader + form module          |
+| **L3** | Optimistic: transform over query values                                | Instant badge tick     | transform module              |
+| **L4** | Live: SSE pushing the same fragment/query chunks                       | Order status, presence | `<kovo-live>` subscriber      |
 
 If a `<details>` element or `commandfor`/`command` does it, write that and ship zero JS — the
 compiler enforces L0 substitutions. L1 is for state the platform can't express on its own: a pressed
@@ -101,7 +101,7 @@ lifecycle, no mount/unmount callbacks. Handlers unit-test as plain `(event, ctx)
 
 A closure may only capture three channels: component/query state (via `ctx`), element params
 (`data-p-*`, typed — non-string params declare coercion once, schema-style), and module scope.
-Anything else is compile error **KV201**, whose message shows what the closure *would have* compiled
+Anything else is compile error **KV201**, whose message shows what the closure _would have_ compiled
 to and the three fixes.
 
 ## The update plan: bindings, derives, stamps
@@ -180,8 +180,13 @@ export function Devtool$init(_event, ctx) {
 ```
 
 ```html
-<div class="canvas" data-pz-root kovo-c="dataflow-canvas" kovo-state="{}"
-     on:visible="/c/devtool-pz.client.js#Devtool$init"></div>
+<div
+  class="canvas"
+  data-pz-root
+  kovo-c="dataflow-canvas"
+  kovo-state="{}"
+  on:visible="/c/devtool-pz.client.js#Devtool$init"
+></div>
 ```
 
 The trigger set is closed (`on:media` is CSS's job; timers belong inside handlers). Islands patched

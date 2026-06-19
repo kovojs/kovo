@@ -1,6 +1,8 @@
 import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 
+import { kovoExampleServeTask } from '../vite-plus-tasks.js';
+
 export const soViteConfig = defineConfig({
   build: {
     manifest: true,
@@ -24,15 +26,7 @@ export const soViteConfig = defineConfig({
   },
   run: {
     tasks: {
-      serve: {
-        command: 'node scripts/serve.mjs',
-        input: [
-          { pattern: 'package.json', base: 'workspace' },
-          { pattern: 'scripts/serve.mjs', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-          { pattern: 'vite.config.ts', base: 'workspace' },
-        ],
-      },
+      serve: kovoExampleServeTask(),
     },
   },
 });

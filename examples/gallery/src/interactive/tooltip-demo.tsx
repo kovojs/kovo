@@ -1,24 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  tooltipContentAttributes,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   tooltipEscapeKeyDown as _tooltipEscapeKeyDown,
-  tooltipRootAttributes,
-  tooltipTriggerAttributes,
   tooltipTriggerBlur as _tooltipTriggerBlur,
   tooltipTriggerFocus as _tooltipTriggerFocus,
   tooltipTriggerPointerEnter as _tooltipTriggerPointerEnter,
   tooltipTriggerPointerLeave as _tooltipTriggerPointerLeave,
-} from '@kovojs/headless-ui/tooltip';
-import {
-  tooltipClasses,
-  tooltipTriggerClasses,
-  tooltipContentClasses,
 } from '@kovojs/ui/tooltip';
-
-const ROOT_CLASS = tooltipClasses.join(' ');
-const TRIGGER_CLASS = tooltipTriggerClasses.join(' ');
-const CONTENT_CLASS = tooltipContentClasses.join(' ');
 
 export interface GalleryTooltipDemoState {
   open: boolean;
@@ -32,16 +23,10 @@ export const GalleryTooltipDemo = component({
     const contentId = 'gallery-tooltip-content';
 
     return (
-      <section
-        {...tooltipRootAttributes({ open: state.open })}
-        class={ROOT_CLASS}
-        data-gallery-interactive="tooltip"
-      >
-        <button
-          {...tooltipTriggerAttributes({ contentId, open: state.open })}
-          class={TRIGGER_CLASS}
+      <Tooltip data-gallery-interactive="tooltip" open={state.open}>
+        <TooltipTrigger
           aria-describedby={state.open ? 'gallery-tooltip-content' : null}
-          data-state={state.open ? 'open' : 'closed'}
+          contentId={contentId}
           onBlur={() => {
             const result = _tooltipTriggerBlur(Object(event), { open: state.open });
             if (!result) return;
@@ -67,19 +52,15 @@ export const GalleryTooltipDemo = component({
             if (!result) return;
             state.open = result.open;
           }}
+          open={state.open}
         >
           Shipping code
-        </button>
-        <span
-          {...tooltipContentAttributes({ contentId, open: state.open })}
-          class={CONTENT_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
-          hidden={!state.open}
-        >
+        </TooltipTrigger>
+        <TooltipContent contentId={contentId} open={state.open}>
           Use the code printed on the packing slip.
-        </span>
+        </TooltipContent>
         <output data-demo-state="tooltip-open">{state.open ? 'open' : 'closed'}</output>
-      </section>
+      </Tooltip>
     );
   },
 });

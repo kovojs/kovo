@@ -1936,6 +1936,7 @@ async function runCompileDrizzleOptimisticCommand(
   const { serializeDerivedOptimistic } = await import('@kovojs/drizzle/internal/derive-codegen');
   const input = readJsonFile(options.inputPath) as DrizzleOptimisticCommandInput;
   const derivedEntries: Parameters<typeof serializeDerivedOptimistic>[0]['entries'][number][] = [];
+  const awaitFragmentQueries: string[] = [];
   const facts: {
     derivation?: { reason?: unknown; status: 'PUNTED' | 'derived' };
     query: string;
@@ -1944,6 +1945,15 @@ async function runCompileDrizzleOptimisticCommand(
 
   for (const entry of input.entries) {
     const status = entry.status ?? 'derived';
+    if (status === 'await-fragment') {
+      awaitFragmentQueries.push(entry.query);
+      facts.push({
+        query: entry.query,
+        status,
+      });
+      continue;
+    }
+
     const result = deriveOptimistic(
       input.effects as Parameters<typeof deriveOptimistic>[0],
       entry.shape as Parameters<typeof deriveOptimistic>[1],
@@ -1972,9 +1982,13 @@ async function runCompileDrizzleOptimisticCommand(
   const overrideQueries =
     input.overrides ??
     input.entries
-      .filter((entry) => (entry.status ?? 'derived') !== 'derived')
+      .filter((entry) => {
+        const status = entry.status ?? 'derived';
+        return status !== 'derived' && status !== 'await-fragment';
+      })
       .map((entry) => entry.query);
   const source = serializeDerivedOptimistic({
+    ...(awaitFragmentQueries.length === 0 ? {} : { awaitFragments: awaitFragmentQueries }),
     complete: input.complete ?? overrideQueries.length === 0,
     constName: input.constName,
     entries: derivedEntries,
@@ -2375,10 +2389,12 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     const loadedConfig = await loadKovoBuildConfig(process.cwd());
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     const resolvedAppModulePath = resolve(options.appModulePath);
-    const [{ cloudflare, node, vercel, writeKovoNeutralBuild }, appModule] = await Promise.all([
-      import('@kovojs/server/build'),
-      loadBuildAppModule(resolvedAppModulePath, process.cwd()),
-    ]);
+    const [{ cloudflare, node, vercel, writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
+      await Promise.all([
+        import('@kovojs/server/build'),
+        loadBuildAppModule(resolvedAppModulePath, process.cwd()),
+        kovoBuildStylesheetCss(resolvedAppModulePath),
+      ]);
     const app = appFromModule(appModule, options.appModulePath);
     const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath);
     const outDir = resolve(options.outDir);
@@ -2388,6 +2404,7 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     );
     const neutralBuild = await writeKovoNeutralBuild({
       app,
+      buildStylesheetCss,
       manifestFile: clientManifestFile,
       outDir: join(outDir, '.kovo'),
       serverHandlerSource,
@@ -2462,6 +2479,24 @@ function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string 
   if (preset === 'cloudflare') return join(outDir, 'cloudflare');
   if (preset === 'vercel') return join(outDir, '.vercel/output');
   return join(outDir, 'server');
+}
+
+async function kovoBuildStylesheetCss(
+  appModulePath: string,
+): Promise<readonly { css: string; href: string }[]> {
+  const [{ extractPackageComponentCss }, { kovoUiTokenSheetCss }] = await Promise.all([
+    import('@kovojs/compiler/package-styles'),
+    import('@kovojs/headless-ui'),
+  ]);
+  const result = extractPackageComponentCss('@kovojs/ui', {
+    fileName: appModulePath,
+    packagePrefixDiscoveryRoot: dirname(appModulePath),
+    source: existsSync(appModulePath) ? readFileSync(appModulePath, 'utf8') : '',
+  });
+
+  if (!result.css) return [];
+  const tokenCss = kovoUiTokenSheetCss.replace(/@theme[^{]*\{[\s\S]*?\n\}/, '').trim();
+  return [{ css: `${tokenCss}\n${result.css}`, href: '/assets/styles.css' }];
 }
 
 function selectedKovoBuildPreset(

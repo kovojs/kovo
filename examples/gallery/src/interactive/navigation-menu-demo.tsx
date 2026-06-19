@@ -1,38 +1,23 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { NavigationMenuItem as GalleryNavigationMenuItem } from '@kovojs/headless-ui/navigation-menu';
 import {
-  navigationMenuContentAttributes,
+  NavigationMenu,
+  NavigationMenuContent,
   navigationMenuFocusElement as _navigationMenuFocusElement,
-  navigationMenuItemAttributes,
+  NavigationMenuItem,
   navigationMenuKeyDown as _navigationMenuKeyDown,
-  navigationMenuLinkAttributes,
+  NavigationMenuLink,
   navigationMenuLinkClick as _navigationMenuLinkClick,
-  navigationMenuListAttributes,
+  NavigationMenuList,
   navigationMenuMove as _navigationMenuMove,
-  navigationMenuRootAttributes,
-  navigationMenuTriggerAttributes,
+  NavigationMenuTrigger,
   navigationMenuTriggerClick as _navigationMenuTriggerClick,
   navigationMenuTriggerFocus as _navigationMenuTriggerFocus,
   navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
   navigationMenuTypeahead as _navigationMenuTypeahead,
-  navigationMenuViewportAttributes,
-  type NavigationMenuItem,
-} from '@kovojs/headless-ui/navigation-menu';
-import {
-  navigationMenuListClasses,
-  navigationMenuItemClasses,
-  navigationMenuTriggerClasses,
-  navigationMenuLinkClasses,
-  navigationMenuContentClasses,
-  navigationMenuViewportClasses,
+  NavigationMenuViewport,
 } from '@kovojs/ui/navigation-menu';
-
-const LIST_CLASS = navigationMenuListClasses.join(' ');
-const ITEM_CLASS = navigationMenuItemClasses.join(' ');
-const TRIGGER_CLASS = navigationMenuTriggerClasses.join(' ');
-const LINK_CLASS = navigationMenuLinkClasses.join(' ');
-const CONTENT_CLASS = navigationMenuContentClasses.join(' ');
-const VIEWPORT_CLASS = navigationMenuViewportClasses.join(' ');
 
 export interface GalleryNavigationMenuDemoState {
   activeValue: string;
@@ -40,7 +25,7 @@ export interface GalleryNavigationMenuDemoState {
   value: string;
 }
 
-const navigationItems: readonly NavigationMenuItem[] = Object.freeze([
+const navigationItems: readonly GalleryNavigationMenuItem[] = Object.freeze([
   { hasContent: true, label: 'Products', value: 'products' },
   { label: 'Docs', value: 'docs' },
 ]);
@@ -58,9 +43,8 @@ export const GalleryNavigationMenuDemo = component({
     };
 
     return (
-      <section
-        {...navigationMenuRootAttributes(rootState)}
-        class="grid gap-2"
+      <NavigationMenu
+        {...rootState}
         data-gallery-interactive="navigation-menu"
         data-open={state.openValue || 'none'}
         onKeyDown={() => {
@@ -139,26 +123,22 @@ export const GalleryNavigationMenuDemo = component({
           );
         }}
       >
-        <div {...navigationMenuListAttributes(rootState)} class={LIST_CLASS}>
-          <div
-            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'products' })}
-            class={ITEM_CLASS}
+        <NavigationMenuList {...rootState}>
+          <NavigationMenuItem
+            {...rootState}
             data-highlighted={state.activeValue === 'products' ? '' : null}
             data-state={state.activeValue === 'products' ? 'active' : 'inactive'}
+            itemValue="products"
           >
-            <button
-              {...navigationMenuTriggerAttributes({
-                ...rootState,
-                contentId: 'gallery-navigation-products-content',
-                id: 'gallery-navigation-products-trigger',
-                itemLabel: 'Products',
-                itemValue: 'products',
-              })}
+            <NavigationMenuTrigger
+              {...rootState}
               aria-expanded={state.openValue === 'products' ? 'true' : 'false'}
-              class={TRIGGER_CLASS}
+              contentId="gallery-navigation-products-content"
               data-highlighted={state.activeValue === 'products' ? '' : null}
               data-state={state.openValue === 'products' ? 'open' : 'closed'}
-              tabIndex={state.activeValue === 'products' ? 0 : -1}
+              id="gallery-navigation-products-trigger"
+              itemLabel="Products"
+              itemValue="products"
               onClick={() => {
                 const result = _navigationMenuTriggerClick(Object(event), {
                   activeValue: state.activeValue,
@@ -202,28 +182,25 @@ export const GalleryNavigationMenuDemo = component({
                 state.activeValue = 'products';
                 if (result?.changed) state.openValue = result.openValue ?? '';
               }}
+              tabIndex={state.activeValue === 'products' ? 0 : -1}
             >
               Products
-            </button>
-          </div>
-          <div
-            {...navigationMenuItemAttributes({ ...rootState, itemValue: 'docs' })}
-            class={ITEM_CLASS}
+            </NavigationMenuTrigger>
+          </NavigationMenuItem>
+          <NavigationMenuItem
+            {...rootState}
             data-highlighted={state.activeValue === 'docs' ? '' : null}
             data-state={state.activeValue === 'docs' ? 'active' : 'inactive'}
+            itemValue="docs"
           >
-            <a
-              {...navigationMenuLinkAttributes({
-                ...rootState,
-                href: '/docs',
-                id: 'gallery-navigation-docs-link',
-                itemLabel: 'Docs',
-                itemValue: 'docs',
-              })}
-              class={LINK_CLASS}
+            <NavigationMenuLink
+              {...rootState}
               data-highlighted={state.activeValue === 'docs' ? '' : null}
               data-state={state.activeValue === 'docs' ? 'active' : 'inactive'}
-              tabIndex={state.activeValue === 'docs' ? 0 : -1}
+              href="/docs"
+              id="gallery-navigation-docs-link"
+              itemLabel="Docs"
+              itemValue="docs"
               onClick={() => {
                 const result = _navigationMenuLinkClick(Object(event), {
                   activeValue: state.activeValue,
@@ -245,33 +222,31 @@ export const GalleryNavigationMenuDemo = component({
                 state.activeValue = 'docs';
                 state.openValue = '';
               }}
+              tabIndex={state.activeValue === 'docs' ? 0 : -1}
             >
               Docs
-            </a>
-          </div>
-        </div>
-        <div
-          {...navigationMenuContentAttributes({
-            ...rootState,
-            id: 'gallery-navigation-products-content',
-            labelledBy: 'gallery-navigation-products-trigger',
-            value: 'products',
-          })}
-          class={CONTENT_CLASS}
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        </NavigationMenuList>
+        <NavigationMenuContent
+          {...rootState}
           data-state={state.openValue === 'products' ? 'open' : 'closed'}
           hidden={state.openValue !== 'products'}
+          id="gallery-navigation-products-content"
+          labelledBy="gallery-navigation-products-trigger"
+          value="products"
         >
           Platform primitives and gallery fixtures
-        </div>
-        <div
-          {...navigationMenuViewportAttributes({ ...rootState, id: 'gallery-navigation-viewport' })}
-          class={VIEWPORT_CLASS}
+        </NavigationMenuContent>
+        <NavigationMenuViewport
+          {...rootState}
           data-state={state.openValue === 'products' ? 'open' : 'closed'}
           hidden={state.openValue === ''}
+          id="gallery-navigation-viewport"
         />
         <output data-demo-state="navigation-open">{state.openValue || 'none'}</output>
         <output data-demo-state="navigation-value">{state.value}</output>
-      </section>
+      </NavigationMenu>
     );
   },
 });

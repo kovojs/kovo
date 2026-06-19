@@ -1,9 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { toggleTriggerClick as _toggleTriggerClick } from '@kovojs/headless-ui/toggle';
-import { toggleClasses } from '@kovojs/ui/toggle';
-
-const BUTTON_CLASS = toggleClasses[0];
+import { Toggle, toggleTriggerClick as _toggleTriggerClick } from '@kovojs/ui/toggle';
 
 export interface GalleryToggleDemoState {
   pressed: boolean;
@@ -15,20 +12,17 @@ export const GalleryToggleDemo = component({
   state: () => ({ pressed: false }),
   render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => (
     <section class="grid gap-2 text-sm text-neutral-950" data-gallery-interactive="toggle">
-      <button
+      <Toggle
         aria-label="Toggle gallery density"
-        aria-pressed={String(state.pressed)}
-        class={BUTTON_CLASS}
-        data-state={state.pressed ? 'pressed' : 'off'}
         onClick={() => {
           const result = _toggleTriggerClick(Object(event), { pressed: state.pressed });
           if (!result) return;
           state.pressed = result.pressed;
         }}
-        type="button"
+        pressed={state.pressed}
       >
         Dense rows
-      </button>
+      </Toggle>
       <output class="text-xs text-neutral-500" data-demo-state="pressed">
         {state.pressed ? 'pressed' : 'off'}
       </output>

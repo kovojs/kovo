@@ -41,8 +41,7 @@ describe('public Kovo Vite plugin', () => {
                         .then(async (webResponse) => {
                           response.writeHead(webResponse.status, {
                             'Content-Type':
-                              webResponse.headers.get('content-type') ??
-                              'text/html; charset=utf-8',
+                              webResponse.headers.get('content-type') ?? 'text/html; charset=utf-8',
                           });
                           response.end(await webResponse.text());
                         })

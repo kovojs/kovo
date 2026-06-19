@@ -2,37 +2,20 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GalleryCollapsibleDemo$details_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryCollapsibleDemo$details_open_derive = derive(['state'], (state: any) =>
+export const GalleryCollapsibleDemo$Collapsible_open_derive = derive(['state'], (state: any) =>
   state.open ? '' : null,
 );
-export const GalleryCollapsibleDemo$summary_aria_expanded_derive = derive(['state'], (state: any) =>
-  String(state.open),
+export const GalleryCollapsibleDemo$CollapsibleTrigger_open_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? '' : null),
 );
-export const GalleryCollapsibleDemo$summary_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
-);
-export const GalleryCollapsibleDemo$div_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
+export const GalleryCollapsibleDemo$CollapsibleContent_open_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? '' : null),
 );
 
 import { component } from '@kovojs/core';
-import {
-  collapsibleContentAttributes,
-  collapsibleRootAttributes,
-  collapsibleTriggerAttributes,
-} from '@kovojs/headless-ui/collapsible';
-import {
-  collapsibleClasses,
-  collapsibleTriggerClasses,
-  collapsibleContentClasses,
-} from '@kovojs/ui/collapsible';
-
-const ROOT_CLASS = collapsibleClasses.join(' ');
-const TRIGGER_CLASS = collapsibleTriggerClasses.join(' ');
-const CONTENT_CLASS = collapsibleContentClasses.join(' ');
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@kovojs/ui/collapsible';
 
 export interface GalleryCollapsibleDemoState {
   open: boolean;
@@ -46,37 +29,28 @@ export const GalleryCollapsibleDemo = component({
     const contentId = 'gallery-collapsible-content';
 
     return (
-      <details
-        class={ROOT_CLASS}
+      <Collapsible
         data-gallery-interactive="collapsible"
-        {...collapsibleRootAttributes({ open: state.open })}
-        data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/7cca2e26/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$details_data_state_derive"
         open={state.open}
-        data-bind:open="/c/__v/7cca2e26/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$details_open_derive"
-        kovo-c="gallery-collapsible-demo"
+        data-bind:open="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$Collapsible_open_derive"
         kovo-state='{"open":false}'
       >
-        <summary
-          class={TRIGGER_CLASS}
-          on:click="/c/__v/7cca2e26/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$summary_click"
-          {...collapsibleTriggerAttributes({ contentId, open: state.open })}
-          aria-expanded={String(state.open)}
-          data-bind:aria-expanded="/c/__v/7cca2e26/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$summary_aria_expanded_derive"
-          data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/7cca2e26/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$summary_data_state_derive"
+        <CollapsibleTrigger
+          contentId={contentId}
+          on:click="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_click"
+          open={state.open}
+          data-bind:open="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_open_derive"
         >
           Release notes
-        </summary>
-        <div
-          class={CONTENT_CLASS}
-          {...collapsibleContentAttributes({ contentId, open: state.open })}
-          data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/7cca2e26/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$div_data_state_derive"
+        </CollapsibleTrigger>
+        <CollapsibleContent
+          contentId={contentId}
+          open={state.open}
+          data-bind:open="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleContent_open_derive"
         >
           Added browser-backed compiled coverage.
-        </div>
-      </details>
+        </CollapsibleContent>
+      </Collapsible>
     );
   },
 });

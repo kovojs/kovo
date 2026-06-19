@@ -1,10 +1,13 @@
 import { kovoCheck } from '@kovojs/cli';
 import { describe, expect, it } from 'vitest';
 
-import { soGraph } from './app.js';
+import { createSoGraph } from './graph.js';
+import { soQueryDomains, soTouchGraph } from './generated/touch-graph.js';
 
 describe('stackoverflow graph', () => {
   it('connects the demo mutations to the queries they refresh', () => {
+    const soGraph = createSoGraph(soTouchGraph, soQueryDomains);
+
     expect(soGraph.mutations.map((mutation) => mutation.key)).toEqual([
       'postQuestion',
       'postAnswer',

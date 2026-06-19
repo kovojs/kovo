@@ -7,6 +7,8 @@ import {
 } from '@kovojs/headless-ui/tooltip';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface TooltipStyleOverrides {
@@ -117,6 +119,7 @@ export const Tooltip = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
         id={props.id}
@@ -138,6 +141,7 @@ export const TooltipTrigger = component({
     return (
       <button
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
@@ -163,6 +167,7 @@ export const TooltipContent = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-state={attrs['data-state']}
         hidden={attrs.hidden}
         id={attrs.id}
@@ -174,3 +179,5 @@ export const TooltipContent = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/tooltip';

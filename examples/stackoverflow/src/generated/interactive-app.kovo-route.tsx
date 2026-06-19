@@ -18,6 +18,13 @@ import { SoShell, soChromeStyleCss } from "../components/chrome.js";
 import { createSoDb, type SoDb } from "../db.js";
 import { seedSoDemo } from "../demo-data.js";
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from "../mutations.js";
+import {
+  answerList,
+  questionAnswers,
+  questionDetail,
+  questionList,
+  questionScore,
+} from "../queries.js";
 import { soTheme } from "../theme.js";
 
 // SPEC.md §9.1: the Stack Overflow example as a fully interactive Kovo app. It
@@ -93,6 +100,7 @@ export async function buildSoInteractiveApp(
     db: () => database,
     document: { lang: 'en-US' },
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
+    queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],
     routes: [
       route('/', {
         meta: {

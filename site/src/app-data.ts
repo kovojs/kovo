@@ -84,16 +84,14 @@ export async function buildSiteRouteData({
     );
   }
 
-  const specBanner = `<p class="note-banner">This is the normative specification, rendered verbatim from <a href="https://github.com/kovojs/kovo/blob/main/SPEC.md" rel="external">SPEC.md</a> at build time. The docs explain; the spec decides.</p>`;
   pages.push(
     docsPage(
       '/spec/',
       {
         activePath: '/spec/',
         content: {
-          html: `${specBanner}<article class="prose">${spec.html}</article>`,
-          kind: 'html',
-          prose: false,
+          html: spec.html,
+          kind: 'spec',
         },
         groups,
       },

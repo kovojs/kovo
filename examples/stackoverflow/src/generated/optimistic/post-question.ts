@@ -18,5 +18,6 @@ export const postQuestionDerivedOptimistic = {
       }
       return next;
     },
+    questionDetail: 'await-fragment',
   },
 } satisfies OptimisticFor<typeof postQuestionForm>;

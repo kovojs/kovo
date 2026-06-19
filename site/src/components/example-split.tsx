@@ -51,6 +51,14 @@ const exampleSplitStyles = style.create(
     head: {
       marginBottom: '1.6rem',
     },
+    headEyebrow: {
+      color: 'var(--teal)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.68rem',
+      letterSpacing: '0.22em',
+      marginBottom: '0.9rem',
+      textTransform: 'uppercase',
+    },
     headBlurb: {
       color: 'var(--dim)',
       lineHeight: 1.65,
@@ -80,6 +88,10 @@ const exampleSplitStyles = style.create(
       display: 'none',
       maxHeight: '34rem',
       overflow: 'auto',
+      '[data-example-panel] .code-window': {
+        border: 0,
+        margin: 0,
+      },
     },
     shell: {
       borderColor: 'var(--edge)',
@@ -160,14 +172,16 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
     .map((_, index) => `#${idBase}-${index}:checked~[data-example-panels]>[data-index="${index}"]`)
     .join(',');
   const labelRules = files
-    .map((_, index) => `#${idBase}-${index}:checked~[data-example-tablist]>[for="${idBase}-${index}"]`)
+    .map(
+      (_, index) => `#${idBase}-${index}:checked~[data-example-tablist]>[for="${idBase}-${index}"]`,
+    )
     .join(',');
   const tabStyle = `${tabRules}{display:block}${labelRules}{color:var(--ink);border-bottom-color:var(--teal)}`;
 
   return (
     <div style={exampleSplitStyles.page}>
       <header style={exampleSplitStyles.head}>
-        <p class="eyebrow">Examples</p>
+        <p style={exampleSplitStyles.headEyebrow}>Examples</p>
         <h1 style={exampleSplitStyles.headTitle}>{escapeHtml(title)}</h1>
         <p style={exampleSplitStyles.headBlurb}>{escapeHtml(blurb)}</p>
       </header>

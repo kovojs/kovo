@@ -17,9 +17,56 @@ const galleryStyles = style.create(
       borderStyle: 'solid',
       borderWidth: 1,
       padding: '1.25rem',
+      '[data-gallery-demo-shell] [data-gallery-demo]': {
+        display: 'grid',
+        gap: '1rem',
+      },
+      '[data-gallery-demo-shell] [data-demo-summary]': {
+        color: 'var(--dim)',
+        margin: 0,
+      },
+      '[data-gallery-demo-shell] [data-ui-demo]': {
+        alignItems: 'center',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '0.75rem',
+      },
+      '[data-gallery-demo-shell] [data-gallery-contract]': {
+        borderCollapse: 'collapse',
+        display: 'block',
+        fontSize: '0.82rem',
+        overflowX: 'auto',
+        width: '100%',
+      },
+      '[data-gallery-demo-shell] [data-gallery-contract] th': {
+        color: 'var(--faint)',
+        fontFamily: 'var(--font-mono)',
+        fontSize: '0.64rem',
+        fontWeight: 600,
+        letterSpacing: '0.14em',
+        padding: '0.45rem 1rem 0.45rem 0',
+        textAlign: 'left',
+        textTransform: 'uppercase',
+        whiteSpace: 'nowrap',
+      },
+      '[data-gallery-demo-shell] [data-gallery-contract] td': {
+        borderTopColor: 'var(--edge-soft)',
+        borderTopStyle: 'solid',
+        borderTopWidth: 1,
+        color: 'var(--dim)',
+        padding: '0.45rem 0',
+      },
     },
     head: {
       marginBottom: '1.6rem',
+    },
+    headEyebrow: {
+      color: 'var(--teal)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.68rem',
+      letterSpacing: '0.22em',
+      marginBottom: '0.9rem',
+      textTransform: 'uppercase',
     },
     headBlurb: {
       color: 'var(--dim)',
@@ -101,7 +148,7 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
   return (
     <div style={galleryStyles.page}>
       <header style={galleryStyles.head}>
-        <p class="eyebrow">Gallery</p>
+        <p style={galleryStyles.headEyebrow}>Gallery</p>
         <h1 style={galleryStyles.headTitle}>{escapeHtml(route.title)}</h1>
         <p style={galleryStyles.headBlurb}>{blurb}</p>
       </header>
@@ -119,7 +166,7 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
           </a>
         ))}
       </nav>
-      <div class="gallery-demo" style={galleryStyles.demo}>
+      <div style={galleryStyles.demo} data-gallery-demo-shell>
         {demoHtml}
       </div>
     </div>

@@ -1,20 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  collapsibleContentAttributes,
-  collapsibleRootAttributes,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   collapsibleTriggerClick as _collapsibleTriggerClick,
-  collapsibleTriggerAttributes,
-} from '@kovojs/headless-ui/collapsible';
-import {
-  collapsibleClasses,
-  collapsibleTriggerClasses,
-  collapsibleContentClasses,
 } from '@kovojs/ui/collapsible';
-
-const ROOT_CLASS = collapsibleClasses.join(' ');
-const TRIGGER_CLASS = collapsibleTriggerClasses.join(' ');
-const CONTENT_CLASS = collapsibleContentClasses.join(' ');
 
 export interface GalleryCollapsibleDemoState {
   open: boolean;
@@ -28,35 +19,23 @@ export const GalleryCollapsibleDemo = component({
     const contentId = 'gallery-collapsible-content';
 
     return (
-      <details
-        {...collapsibleRootAttributes({ open: state.open })}
-        class={ROOT_CLASS}
-        data-gallery-interactive="collapsible"
-        data-state={state.open ? 'open' : 'closed'}
-        open={state.open}
-      >
-        <summary
-          {...collapsibleTriggerAttributes({ contentId, open: state.open })}
-          aria-expanded={String(state.open)}
-          class={TRIGGER_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
+      <Collapsible data-gallery-interactive="collapsible" open={state.open}>
+        <CollapsibleTrigger
+          contentId={contentId}
           onClick={() => {
             const result = _collapsibleTriggerClick(Object(event), { open: state.open });
             if (!result) return;
             Object(event)['preventDefault']?.call(event);
             state.open = result.open;
           }}
+          open={state.open}
         >
           Release notes
-        </summary>
-        <div
-          {...collapsibleContentAttributes({ contentId, open: state.open })}
-          class={CONTENT_CLASS}
-          data-state={state.open ? 'open' : 'closed'}
-        >
+        </CollapsibleTrigger>
+        <CollapsibleContent contentId={contentId} open={state.open}>
           Added browser-backed compiled coverage.
-        </div>
-      </details>
+        </CollapsibleContent>
+      </Collapsible>
     );
   },
 });

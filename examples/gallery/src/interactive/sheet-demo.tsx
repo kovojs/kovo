@@ -2,29 +2,18 @@
 import { component } from '@kovojs/core';
 import {
   dialogCancel as _dialogCancel,
-  dialogCloseAttributes,
   dialogCloseClick as _dialogCloseClick,
-  dialogContentAttributes,
-  dialogRootAttributes,
   dialogTriggerClick as _dialogTriggerClick,
-  dialogTriggerAttributes,
-} from '@kovojs/headless-ui/dialog';
+} from '@kovojs/ui/dialog';
 import {
-  sheetTriggerClasses,
-  sheetContentClasses,
-  sheetHeaderClasses,
-  sheetTitleClasses,
-  sheetDescriptionClasses,
-  sheetCloseClasses,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetRoot,
+  SheetTitle,
+  SheetTrigger,
 } from '@kovojs/ui/sheet';
-
-// CONTENT_CLASS is sheetContentClassNames base + the `right` side variant.
-const TRIGGER_CLASS = sheetTriggerClasses.join(' ');
-const CONTENT_CLASS = sheetContentClasses.join(' ');
-const HEADER_CLASS = sheetHeaderClasses.join(' ');
-const TITLE_CLASS = sheetTitleClasses.join(' ');
-const DESCRIPTION_CLASS = sheetDescriptionClasses.join(' ');
-const CLOSE_CLASS = sheetCloseClasses.join(' ');
 
 export interface GallerySheetDemoState {
   open: boolean;
@@ -40,18 +29,17 @@ export const GallerySheetDemo = component({
     const descriptionId = 'gallery-interactive-sheet-description';
 
     return (
-      <section
-        {...dialogRootAttributes({ open: state.open })}
-        class="grid gap-2"
+      <SheetRoot
         data-gallery-interactive="sheet"
         data-side="right"
         data-state={state.open ? 'open' : 'closed'}
+        open={state.open}
       >
-        <button
-          {...dialogTriggerAttributes({ contentId, open: state.open })}
-          class={TRIGGER_CLASS}
+        <SheetTrigger
           aria-expanded={state.open ? 'true' : 'false'}
+          contentId={contentId}
           data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
           onClick={() => {
             const result = _dialogTriggerClick(Object(event), { open: state.open });
             if (!result?.changed) return;
@@ -59,31 +47,31 @@ export const GallerySheetDemo = component({
           }}
         >
           Open sheet
-        </button>
-        <dialog
-          {...dialogContentAttributes({ contentId, descriptionId, open: state.open, titleId })}
-          class={CONTENT_CLASS}
+        </SheetTrigger>
+        <SheetContent
+          contentId={contentId}
           data-side="right"
           data-state={state.open ? 'open' : 'closed'}
+          descriptionId={descriptionId}
           open={state.open}
           onCancel={() => {
             const result = _dialogCancel(Object(event), { open: state.open });
             if (!result?.changed) return;
             state.open = result.open;
           }}
+          side="right"
+          titleId={titleId}
         >
-          <header class={HEADER_CLASS}>
-            <h2 class={TITLE_CLASS} id={titleId}>
-              Account settings
-            </h2>
-            <p class={DESCRIPTION_CLASS} id={descriptionId}>
+          <SheetHeader>
+            <SheetTitle id={titleId}>Account settings</SheetTitle>
+            <SheetDescription id={descriptionId}>
               Review the account panel side sheet.
-            </p>
-          </header>
-          <button
-            {...dialogCloseAttributes({ contentId, open: state.open })}
-            class={CLOSE_CLASS}
+            </SheetDescription>
+          </SheetHeader>
+          <SheetClose
+            contentId={contentId}
             data-state={state.open ? 'open' : 'closed'}
+            open={state.open}
             onClick={() => {
               const result = _dialogCloseClick(Object(event), { open: state.open });
               if (!result?.changed) return;
@@ -91,10 +79,10 @@ export const GallerySheetDemo = component({
             }}
           >
             Close sheet
-          </button>
-        </dialog>
+          </SheetClose>
+        </SheetContent>
         <output data-demo-state="sheet-open">{state.open ? 'open' : 'closed'}</output>
-      </section>
+      </SheetRoot>
     );
   },
 });

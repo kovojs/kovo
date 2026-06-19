@@ -1,31 +1,19 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { SelectItem as GallerySelectItem } from '@kovojs/headless-ui/select';
 import {
-  selectContentAttributes,
-  selectHiddenInputAttributes,
+  Select,
+  SelectContent,
+  SelectHiddenInput,
   selectItemClick as _selectItemClick,
-  selectItemAttributes,
+  SelectItem,
   selectKeyDown as _selectKeyDown,
   selectMove as _selectMove,
-  selectRootAttributes,
+  SelectTrigger,
   selectTriggerClick as _selectTriggerClick,
-  selectTriggerAttributes,
-  selectValueAttributes,
-  type SelectItem,
-} from '@kovojs/headless-ui/select';
-import {
-  selectClasses,
-  selectTriggerClasses,
-  selectContentClasses,
-  selectItemClasses,
-  selectValueClasses,
+  SelectValue,
 } from '@kovojs/ui/select';
 
-const ROOT_CLASS = selectClasses.join(' ');
-const TRIGGER_CLASS = selectTriggerClasses.join(' ');
-const CONTENT_CLASS = selectContentClasses.join(' ');
-const ITEM_CLASS = selectItemClasses.join(' ');
-const VALUE_CLASS = selectValueClasses.join(' ');
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
 
 export interface GallerySelectDemoState {
@@ -34,7 +22,7 @@ export interface GallerySelectDemoState {
   value: string;
 }
 
-const shippingOptions: readonly SelectItem[] = Object.freeze([
+const shippingOptions: readonly GallerySelectItem[] = Object.freeze([
   { id: 'gallery-select-option-standard', label: 'Standard', value: 'standard' },
   { id: 'gallery-select-option-express', label: 'Express', value: 'express' },
   { disabled: true, id: 'gallery-select-option-drone', label: 'Drone', value: 'drone' },
@@ -57,30 +45,18 @@ export const GallerySelectDemo = component({
     };
 
     return (
-      <section
-        {...selectRootAttributes({ ...selectState, id: 'gallery-select-root' })}
-        class={ROOT_CLASS}
-        data-gallery-interactive="select"
-      >
+      <Select {...selectState} data-gallery-interactive="select" id="gallery-select-root">
         <form id="gallery-select-form" data-gallery-form="select" />
         <label id="gallery-select-label" for="gallery-select-trigger" class={LABEL_CLASS}>
           Shipping speed
         </label>
-        <input
-          {...selectHiddenInputAttributes(selectState)}
-          id="gallery-select-control"
-          value={state.value}
-        />
-        <button
-          {...selectTriggerAttributes({
-            ...selectState,
-            id: 'gallery-select-trigger',
-            labelledBy: 'gallery-select-label',
-          })}
-          id="gallery-select-trigger"
-          class={TRIGGER_CLASS}
+        <SelectHiddenInput {...selectState} id="gallery-select-control" value={state.value} />
+        <SelectTrigger
+          {...selectState}
           aria-expanded={String(state.open)}
           data-state={state.open ? 'open' : 'closed'}
+          id="gallery-select-trigger"
+          labelledBy="gallery-select-label"
           onClick={() => {
             const result = _selectTriggerClick(Object(event), {
               highlightedValue: state.highlightedValue,
@@ -130,16 +106,13 @@ export const GallerySelectDemo = component({
           }}
         >
           <span>{state.value === 'express' ? 'Express' : 'Standard'}</span>
-        </button>
-        <div
-          {...selectContentAttributes({
-            ...selectState,
-            id: 'gallery-select-listbox',
-            labelledBy: 'gallery-select-label',
-          })}
-          class={CONTENT_CLASS}
+        </SelectTrigger>
+        <SelectContent
+          {...selectState}
           data-state={state.open ? 'open' : 'closed'}
           hidden={!state.open}
+          id="gallery-select-listbox"
+          labelledBy="gallery-select-label"
           onKeyDown={() => {
             const move = _selectMove(
               {
@@ -159,17 +132,14 @@ export const GallerySelectDemo = component({
             state.highlightedValue = move.highlightedValue ?? state.highlightedValue;
           }}
         >
-          <div
-            {...selectItemAttributes({
-              ...selectState,
-              id: 'gallery-select-option-standard',
-              itemLabel: 'Standard',
-              itemValue: 'standard',
-            })}
-            class={ITEM_CLASS}
+          <SelectItem
+            {...selectState}
             aria-selected={state.value === 'standard' ? 'true' : 'false'}
             data-highlighted={state.highlightedValue === 'standard' ? '' : null}
             data-state={state.value === 'standard' ? 'checked' : 'unchecked'}
+            id="gallery-select-option-standard"
+            itemLabel="Standard"
+            itemValue="standard"
             onClick={() => {
               const result = _selectItemClick(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -189,18 +159,15 @@ export const GallerySelectDemo = component({
             }}
           >
             Standard
-          </div>
-          <div
-            {...selectItemAttributes({
-              ...selectState,
-              id: 'gallery-select-option-express',
-              itemLabel: 'Express',
-              itemValue: 'express',
-            })}
-            class={ITEM_CLASS}
+          </SelectItem>
+          <SelectItem
+            {...selectState}
             aria-selected={state.value === 'express' ? 'true' : 'false'}
             data-highlighted={state.highlightedValue === 'express' ? '' : null}
             data-state={state.value === 'express' ? 'checked' : 'unchecked'}
+            id="gallery-select-option-express"
+            itemLabel="Express"
+            itemValue="express"
             onClick={() => {
               const result = _selectItemClick(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -220,19 +187,16 @@ export const GallerySelectDemo = component({
             }}
           >
             Express
-          </div>
-          <div
-            {...selectItemAttributes({
-              ...selectState,
-              id: 'gallery-select-option-drone',
-              itemDisabled: true,
-              itemLabel: 'Drone',
-              itemValue: 'drone',
-            })}
-            class={ITEM_CLASS}
+          </SelectItem>
+          <SelectItem
+            {...selectState}
             aria-selected={state.value === 'drone' ? 'true' : 'false'}
             data-highlighted={state.highlightedValue === 'drone' ? '' : null}
             data-state={state.value === 'drone' ? 'checked' : 'unchecked'}
+            id="gallery-select-option-drone"
+            itemDisabled={true}
+            itemLabel="Drone"
+            itemValue="drone"
             onClick={() => {
               const result = _selectItemClick(Object(event), {
                 highlightedValue: state.highlightedValue,
@@ -253,16 +217,10 @@ export const GallerySelectDemo = component({
             }}
           >
             Drone
-          </div>
-        </div>
-        <output
-          {...selectValueAttributes(selectState)}
-          class={VALUE_CLASS}
-          data-demo-state="select-value"
-        >
-          {state.value === 'express' ? 'Express' : 'Standard'}
-        </output>
-      </section>
+          </SelectItem>
+        </SelectContent>
+        <SelectValue {...selectState} data-demo-state="select-value" />
+      </Select>
     );
   },
 });

@@ -13,6 +13,8 @@ import {
 import type { TextDirection } from '@kovojs/headless-ui';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface ScrollAreaStyleOverrides {
@@ -170,6 +172,7 @@ export const ScrollArea = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props, { style: true })}
         data-disabled={attrs['data-disabled']}
         data-scrollbars={attrs['data-scrollbars']}
         dir={attrs.dir}
@@ -199,6 +202,7 @@ export const ScrollAreaViewport = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-label={attrs['aria-label']}
@@ -234,6 +238,7 @@ export const ScrollAreaScrollbar = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-hidden={attrs['aria-hidden']}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
@@ -266,6 +271,7 @@ export const ScrollAreaThumb = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-hidden={attrs['aria-hidden']}
         data-disabled={attrs['data-disabled']}
         data-orientation={attrs['data-orientation']}
@@ -294,6 +300,7 @@ export const ScrollAreaCorner = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-hidden={attrs['aria-hidden']}
         data-disabled={attrs['data-disabled']}
         data-scrollbars={attrs['data-scrollbars']}
@@ -304,3 +311,5 @@ export const ScrollAreaCorner = component({
     );
   },
 });
+
+export * from '@kovojs/headless-ui/scroll-area';

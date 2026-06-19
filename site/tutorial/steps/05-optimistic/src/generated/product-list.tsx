@@ -3,6 +3,7 @@
 import { escapeText } from '@kovojs/server/internal/html';
 import { component } from '@kovojs/core';
 import { csrfField } from '@kovojs/server';
+import * as style from '@kovojs/style';
 
 import { formatPrice, type ShopProduct, type ShopRequest } from '../db.js';
 import { productsQuery, type ProductsResult } from '../queries.js';
@@ -22,10 +23,21 @@ export interface ProductListRenderContext {
   request?: ShopRequest | undefined;
 }
 
+const productListStyles = style.create(
+  {
+    list: {
+      display: 'grid',
+      gap: 8,
+      paddingInlineStart: 20,
+    },
+  },
+  { namespace: 'tutorial-product-list', source: 'site/tutorial/steps/05-optimistic/src/components/product-list.tsx' },
+);
+
 export const ProductList = component({
   queries: { products: productsQuery },
   render: ({ products }: { products: ProductsResult }, context: ProductListRenderContext = {}) => (
-    <ul class="products" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list" kovo-live-component="components/product-list/product-list">
+    <ul class="kv-tutorial-product-list-d-bqcudx kv-tutorial-product-list-gap-1uub0u kv-tutorial-product-list-pad-q603nn" data-style-src="site/tutorial/steps/05-optimistic/src/components/product-list.tsx#list" kovo-c="product-list" kovo-deps="products" kovo-fragment-target="product-list" kovo-live-component="components/product-list/product-list">
       {products.items.map((item) => (
         <li kovo-key={item.id}>
           {escapeText(item.name)} — {formatPrice(item.unitPrice)} ({escapeText(item.stock)} in stock)

@@ -11,6 +11,8 @@ import {
 } from '@kovojs/headless-ui/autocomplete';
 import * as style from '@kovojs/style';
 
+import { passThroughProps } from './pass-through.js';
+
 import { uiTheme } from './theme.js';
 
 export interface AutocompleteStyleOverrides {
@@ -192,6 +194,7 @@ export const Autocomplete = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
         data-placeholder={attrs['data-placeholder']}
@@ -231,6 +234,7 @@ export const AutocompleteInput = component({
     return (
       <input
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-activedescendant={attrs['aria-activedescendant']}
         aria-autocomplete={attrs['aria-autocomplete']}
         aria-controls={attrs['aria-controls']}
@@ -282,6 +286,7 @@ export const AutocompleteList = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-labelledby={attrs['aria-labelledby']}
         data-disabled={attrs['data-disabled']}
         data-invalid={attrs['data-invalid']}
@@ -323,6 +328,7 @@ export const AutocompleteOption = component({
     return (
       <div
         {...styleAttrs}
+        {...passThroughProps(props)}
         aria-disabled={attrs['aria-disabled']}
         aria-selected={attrs['aria-selected']}
         data-disabled={attrs['data-disabled']}
@@ -359,9 +365,16 @@ export const AutocompleteValue = component({
     const styleAttrs = style.attrs(autocompleteStyles.value, props.styles?.value);
 
     return (
-      <span {...styleAttrs} data-placeholder={attrs['data-placeholder']} id={attrs.id}>
+      <span
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-placeholder={attrs['data-placeholder']}
+        id={attrs.id}
+      >
         {escapeHtml(autocompleteValueText(props))}
       </span>
     );
   },
 });
+
+export * from '@kovojs/headless-ui/autocomplete';

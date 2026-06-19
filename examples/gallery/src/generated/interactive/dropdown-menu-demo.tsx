@@ -2,62 +2,62 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GalleryDropdownMenuDemo$section_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
+export const GalleryDropdownMenuDemo$DropdownMenu_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryDropdownMenuDemo$button_aria_expanded_derive = derive(['state'], (state: any) =>
-  state.open ? 'true' : 'false',
+export const GalleryDropdownMenuDemo$DropdownMenuTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'true' : 'false'),
 );
-export const GalleryDropdownMenuDemo$button_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
+export const GalleryDropdownMenuDemo$DropdownMenuTrigger_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryDropdownMenuDemo$div_data_state_derive = derive(['state'], (state: any) =>
-  state.open ? 'open' : 'closed',
+export const GalleryDropdownMenuDemo$DropdownMenuContent_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'open' : 'closed'),
 );
-export const GalleryDropdownMenuDemo$div_hidden_derive = derive(['state'], (state: any) =>
-  !state.open ? '' : null,
+export const GalleryDropdownMenuDemo$DropdownMenuContent_hidden_derive = derive(
+  ['state'],
+  (state: any) => (!state.open ? '' : null),
 );
-export const GalleryDropdownMenuDemo$button_data_highlighted_derive = derive(
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_highlighted_derive = derive(
   ['state'],
   (state: any) => (state.highlightedValue === 'duplicate' ? '' : null),
 );
-export const GalleryDropdownMenuDemo$button_data_state_derive_2 = derive(['state'], (state: any) =>
-  state.highlightedValue === 'duplicate' ? 'active' : 'inactive',
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'duplicate' ? 'active' : 'inactive'),
 );
-export const GalleryDropdownMenuDemo$button_tabIndex_derive = derive(['state'], (state: any) =>
-  state.highlightedValue === 'duplicate' ? 0 : -1,
+export const GalleryDropdownMenuDemo$DropdownMenuItem_tabIndex_derive = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'duplicate' ? 0 : -1),
 );
-export const GalleryDropdownMenuDemo$button_data_highlighted_derive_2 = derive(
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_highlighted_derive_2 = derive(
   ['state'],
   (state: any) => (state.highlightedValue === 'rename' ? '' : null),
 );
-export const GalleryDropdownMenuDemo$button_data_state_derive_3 = derive(['state'], (state: any) =>
-  state.highlightedValue === 'rename' ? 'active' : 'inactive',
+export const GalleryDropdownMenuDemo$DropdownMenuItem_data_state_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'rename' ? 'active' : 'inactive'),
 );
-export const GalleryDropdownMenuDemo$button_tabIndex_derive_2 = derive(['state'], (state: any) =>
-  state.highlightedValue === 'rename' ? 0 : -1,
+export const GalleryDropdownMenuDemo$DropdownMenuItem_tabIndex_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.highlightedValue === 'rename' ? 0 : -1),
 );
 export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
 
 import { component } from '@kovojs/core';
+import type { DropdownMenuItem as GalleryDropdownMenuItem } from '@kovojs/headless-ui/dropdown-menu';
 import {
-  dropdownMenuContentAttributes,
-  dropdownMenuItemAttributes,
-  dropdownMenuRootAttributes,
-  dropdownMenuTriggerAttributes,
-  type DropdownMenuItem,
-} from '@kovojs/headless-ui/dropdown-menu';
-import {
-  dropdownMenuTriggerClasses,
-  dropdownMenuContentClasses,
-  dropdownMenuItemClasses,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@kovojs/ui/dropdown-menu';
-
-const TRIGGER_CLASS = dropdownMenuTriggerClasses.join(' ');
-const CONTENT_CLASS = dropdownMenuContentClasses.join(' ');
-const ITEM_CLASS = dropdownMenuItemClasses.join(' ');
 
 export interface GalleryDropdownMenuDemoState {
   highlightedValue: string;
@@ -65,7 +65,7 @@ export interface GalleryDropdownMenuDemoState {
   value: string;
 }
 
-const dropdownItems: readonly DropdownMenuItem[] = Object.freeze([
+const dropdownItems: readonly GalleryDropdownMenuItem[] = Object.freeze([
   { label: 'Duplicate', value: 'duplicate' },
   { disabled: true, label: 'Archive', value: 'archive' },
   { label: 'Rename', value: 'rename' },
@@ -84,97 +84,86 @@ export const GalleryDropdownMenuDemo = component({
     };
 
     return (
-      <section
-        class="grid gap-2"
+      <DropdownMenu
         data-gallery-interactive="dropdown-menu"
-        {...dropdownMenuRootAttributes(menuState)}
+        {...menuState}
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$section_data_state_derive"
-        kovo-c="gallery-dropdown-menu-demo"
+        data-bind:data-state="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenu_data_state_derive"
         kovo-state='{"highlightedValue":"duplicate","open":false,"value":"duplicate"}'
       >
-        <button
-          class={TRIGGER_CLASS}
+        <DropdownMenuTrigger
+          contentId={contentId}
           id="gallery-dropdown-menu-trigger"
-          on:click="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_click"
-          on:keydown="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_keydown"
-          {...dropdownMenuTriggerAttributes({ ...menuState, contentId })}
+          on:click="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuTrigger_click"
+          on:keydown="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuTrigger_keydown"
+          {...menuState}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuTrigger_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_data_state_derive"
+          data-bind:data-state="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuTrigger_data_state_derive"
         >
           Actions
-        </button>
-        <div
-          class={CONTENT_CLASS}
-          {...dropdownMenuContentAttributes({ ...menuState, id: contentId })}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          id={contentId}
+          {...menuState}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$div_data_state_derive"
+          data-bind:data-state="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuContent_data_state_derive"
           hidden={!state.open}
-          data-bind:hidden="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$div_hidden_derive"
+          data-bind:hidden="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuContent_hidden_derive"
         >
-          <button
-            class={ITEM_CLASS}
-            on:keydown="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_keydown_2"
-            on:click="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_click_2"
-            {...dropdownMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-dropdown-menu-duplicate',
-              itemLabel: 'Duplicate',
-              itemValue: 'duplicate',
-            })}
+          <DropdownMenuItem
+            id="gallery-dropdown-menu-duplicate"
+            itemLabel="Duplicate"
+            itemValue="duplicate"
+            on:keydown="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_keydown"
+            on:click="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_click"
+            {...menuState}
             data-highlighted={state.highlightedValue === 'duplicate' ? '' : null}
-            data-bind:data-highlighted="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_data_highlighted_derive"
+            data-bind:data-highlighted="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_data_highlighted_derive"
             data-state={state.highlightedValue === 'duplicate' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_data_state_derive_2"
+            data-bind:data-state="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_data_state_derive"
             tabIndex={state.highlightedValue === 'duplicate' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_tabIndex_derive"
+            data-bind:tabIndex="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_tabIndex_derive"
           >
             Duplicate
-          </button>
-          <button
-            class={ITEM_CLASS}
-            {...dropdownMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-dropdown-menu-archive',
-              itemDisabled: true,
-              itemLabel: 'Archive',
-              itemValue: 'archive',
-            })}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            id="gallery-dropdown-menu-archive"
+            itemDisabled={true}
+            itemLabel="Archive"
+            itemValue="archive"
+            {...menuState}
           >
             Archive
-          </button>
-          <button
-            class={ITEM_CLASS}
-            on:keydown="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_keydown_3"
-            on:click="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_click_3"
-            {...dropdownMenuItemAttributes({
-              ...menuState,
-              id: 'gallery-dropdown-menu-rename',
-              itemLabel: 'Rename',
-              itemValue: 'rename',
-            })}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            id="gallery-dropdown-menu-rename"
+            itemLabel="Rename"
+            itemValue="rename"
+            on:keydown="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_keydown_2"
+            on:click="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_click_2"
+            {...menuState}
             data-highlighted={state.highlightedValue === 'rename' ? '' : null}
-            data-bind:data-highlighted="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_data_highlighted_derive_2"
+            data-bind:data-highlighted="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_data_highlighted_derive_2"
             data-state={state.highlightedValue === 'rename' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_data_state_derive_3"
+            data-bind:data-state="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_data_state_derive_2"
             tabIndex={state.highlightedValue === 'rename' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$button_tabIndex_derive_2"
+            data-bind:tabIndex="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$DropdownMenuItem_tabIndex_derive_2"
           >
             Rename
-          </button>
-        </div>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
         <output
           data-demo-state="dropdown-open"
-          data-bind="/c/__v/c25707ab/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$output_text_derive"
+          data-bind="/c/__v/e1298890/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js#GalleryDropdownMenuDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>
         <output data-demo-state="dropdown-value" data-bind="state.value">
           {state.value}
         </output>
-      </section>
+      </DropdownMenu>
     );
   },
 });
