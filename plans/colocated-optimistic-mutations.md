@@ -23,8 +23,8 @@ no return value.
   `CrmDerivedSubset` helper and checked-in override files are gone. Commerce has no
   checked-in generated optimistic file; its script still derives the fully generated
   artifact on demand.
-- Remaining work is compiler lowering/merge semantics for inline-plus-derived plans,
-  KV310's missing non-derivable-key proof, and public docs.
+- Remaining work is source-level compiler lowering/fixpoint for inline optimistic
+  transforms.
 
 ## Target authoring shape
 
@@ -122,12 +122,17 @@ export const addContact = mutation('addContact', {
       (Constitution #3). Evidence target: compiler fixture showing inline `optimistic` and
       an equivalent standalone draft-style plan lower to byte-identical transform IR;
       recompiling the output is a no-op.
-- [ ] **Merge semantics: inline overrides derived, per key.** Define and test that
+- [x] **Merge semantics: inline overrides derived, per key.** Define and test that
       provided keys override derived transforms, omitted keys fall to derivation, and the
       union must cover the invalidated set. This collapses the `CrmDerivedSubset` helper —
       the mutation module no longer hand-merges. Evidence target: a partially-derived
       mutation (some keys derived, one overridden inline) passes `kovo check optimistic`
       with the override taking effect and no helper type.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-check.test.ts packages/server/src/mutation.test.ts`
+    covers a mixed Drizzle optimistic compile where `cart` is emitted as derived,
+    inline/hand-written `productGrid` suppresses generated output, and facts preserve
+    both statuses for `kovo check`.
 - [x] **Keep KV310 exhaustiveness at both altitudes.** Inline missing-key type error AND
       `kovo check optimistic` (the CI/agent surface, SPEC §10.6) must both still fire off
       the same `InvalidationSets`-derived set. Evidence target: a mutation that omits a
@@ -178,16 +183,21 @@ export const addContact = mutation('addContact', {
 ## Latest verification
 
 2026-06-19 latest slice:
-`npx vitest --run packages/server/src/mutation.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts`;
+`npx vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.kovo-check.test.ts packages/server/src/mutation.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
 `git diff --check`.
 
 2026-06-19 previous slice:
+`npx vitest --run packages/server/src/mutation.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-check.test.ts`;
+`corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
+`git diff --check`.
+
+2026-06-19 docs slice:
 `npx vitest --run site/tutorial/steps/05-optimistic/src/app.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
 `git diff --check`.
 
-2026-06-19 earlier slice:
+2026-06-19 example slice:
 `npx vitest --run examples/crm/src/optimistic.test.ts examples/crm/src/graph.test.ts packages/server/src/mutation.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
 `git diff --check`.
