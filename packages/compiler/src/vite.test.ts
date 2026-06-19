@@ -339,6 +339,68 @@ export const CartBadge = component({
     expect(res.end).not.toHaveBeenCalled();
   });
 
+  it('scopes transforms with include and exclude filters', () => {
+    const compileComponentModule = vi.fn(() => ({
+      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+    }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      exclude: ['src/components/private'],
+      include: ['src/components'],
+    });
+
+    expect(plugin.transform('component(', 'src/fixtures/fake.tsx')).toBeNull();
+    expect(plugin.transform('component(', 'src/components/private/secret.tsx')).toBeNull();
+    expect(plugin.transform('component(', 'src/components/cart-badge.tsx')).toEqual({
+      code: 'export function renderSource() {}',
+      map: null,
+    });
+    expect(compileComponentModule).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes registry facts to the compile step', () => {
+    const compileComponentModule = vi.fn(() => ({
+      files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+    }));
+    const registryFacts = {
+      mutationInputs: {
+        'cart/add': [
+          {
+            coercion: 'string' as const,
+            defaulted: false,
+            name: 'productId',
+            optional: false,
+            provenance: 'registry' as const,
+            required: true,
+          },
+        ],
+      },
+      mutations: { 'cart/add': 'typeof addToCart' },
+    };
+    const plugin = createKovoVitePlugin(compileComponentModule, { registryFacts });
+
+    plugin.transform('component(', 'src/cart-badge.tsx');
+
+    expect(compileComponentModule).toHaveBeenCalledWith(expect.objectContaining({ registryFacts }));
+  });
+
+  it('caches repeated transforms by source hash and compile context', () => {
+    const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
+      files: [{ kind: 'server', source: `export const sourceLength = ${source.length};` }],
+    }));
+    const plugin = createKovoVitePlugin(compileComponentModule);
+
+    expect(plugin.transform('component(', 'src/cart-badge.tsx')?.code).toBe(
+      'export const sourceLength = 10;',
+    );
+    expect(plugin.transform('component(', 'src/cart-badge.tsx')?.code).toBe(
+      'export const sourceLength = 10;',
+    );
+    expect(plugin.transform('component(1)', 'src/cart-badge.tsx')?.code).toBe(
+      'export const sourceLength = 12;',
+    );
+    expect(compileComponentModule).toHaveBeenCalledTimes(2);
+  });
+
   it('sends a Kovo component-render HMR event for classified component refreshes', async () => {
     const ws = { send: vi.fn() };
     const previous = hmrMetadata({
@@ -365,7 +427,7 @@ export const CartBadge = component({
     const modules = await plugin.handleHotUpdate?.({
       file: '/workspace/app/src/counter.tsx',
       modules: ['vite-module'],
-      read: async () => 'component(',
+      read: async () => 'component(updated)',
       server: {
         config: { root: '/workspace/app' },
         middlewares: { use() {} },
@@ -422,7 +484,7 @@ export const CartBadge = component({
     const modules = await plugin.handleHotUpdate?.({
       file: '/workspace/app/src/counter.tsx',
       modules: ['vite-module'],
-      read: async () => 'component(',
+      read: async () => 'component(broken)',
       server,
     });
 

@@ -14,8 +14,10 @@ export type {
   KovoHmrEventName,
   KovoHmrEventPayload,
   KovoViteHotUpdateContext,
+  KovoViteModuleFilter,
   KovoVitePlugin,
   KovoVitePluginOptions,
+  KovoViteRegistryFactsSource,
   KovoViteWebSocket,
   KovoViteWebSocketPayload,
 } from './vite.js';

@@ -72,6 +72,8 @@ export type {
   KovoViteMiddleware,
   KovoViteModuleDiagnosticReport,
   KovoViteModuleDiagnosticReporter,
+  KovoViteModuleFilter,
+  KovoViteRegistryFactsSource,
   KovoViteWebSocket,
   KovoViteWebSocketPayload,
 } from './vite.js';

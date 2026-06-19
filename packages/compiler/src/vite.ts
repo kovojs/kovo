@@ -9,6 +9,7 @@ import type {
   HmrImpactClassification,
   HmrImpactMetadata,
   PackageComponentPrefixFact,
+  RegistryFacts,
 } from './types.js';
 
 /**
@@ -46,15 +47,29 @@ export interface KovoViteModuleDiagnosticReport {
 /** @internal Callback the Vite plugin invokes with each module's diagnostic report. */
 export type KovoViteModuleDiagnosticReporter = (report: KovoViteModuleDiagnosticReport) => void;
 
+/** File-name/source predicate used to scope the Kovo Vite transform to authored app components. */
+export type KovoViteModuleFilter =
+  | RegExp
+  | string
+  | ((fileName: string, source: string) => boolean);
+
+/** Registry facts passed to the compiler globally or selected per transformed file. */
+export type KovoViteRegistryFactsSource =
+  | RegistryFacts
+  | ((fileName: string) => RegistryFacts | undefined);
+
 /**
  * Options for createKovoVitePlugin / the `kovoVitePlugin` helper: diagnostic callbacks and
  * the package component prefixes to thread into compilation. Public plugin configuration
  * surface (SPEC.md §5.2).
  */
 export interface KovoVitePluginOptions {
+  exclude?: readonly KovoViteModuleFilter[];
+  include?: readonly KovoViteModuleFilter[];
   onDiagnostic?: KovoViteDiagnosticReporter;
   onModuleDiagnostics?: KovoViteModuleDiagnosticReporter;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
+  registryFacts?: KovoViteRegistryFactsSource;
 }
 
 /**
@@ -131,6 +146,7 @@ interface ViteCompileOptions {
   fileName: string;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   packagePrefixDiscoveryRoot?: string;
+  registryFacts?: RegistryFacts;
   source: string;
 }
 
@@ -154,6 +170,7 @@ export function createKovoVitePlugin(
   compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
+  const compileCache = new Map<string, ViteCompileResult>();
   const clientModules = new Map<string, string>();
   const hmrImpacts = new Map<string, HmrImpactMetadata>();
   let root = process.cwd();
@@ -176,11 +193,12 @@ export function createKovoVitePlugin(
     },
     name: 'kovo',
     transform(source: string, id: string) {
-      if (!isViteComponentSource(id, source)) return null;
-
       const fileName = viteComponentFileName(id, root);
-      const result = compileViteComponentModule(
+      if (!shouldTransformViteComponentSource(fileName, source, options)) return null;
+
+      const result = compileCachedViteComponentModule(
         compileComponentModule,
+        compileCache,
         options,
         root,
         fileName,
@@ -198,12 +216,14 @@ export function createKovoVitePlugin(
     },
     async handleHotUpdate(context) {
       const source = await context.read();
-      if (!isViteComponentSource(context.file, source)) return context.modules ?? [];
-
       const fileName = viteComponentFileName(context.file, root);
+      if (!shouldTransformViteComponentSource(fileName, source, options))
+        return context.modules ?? [];
+
       const previous = hmrImpacts.get(fileName) ?? null;
-      const result = compileViteComponentModule(
+      const result = compileCachedViteComponentModule(
         compileComponentModule,
+        compileCache,
         options,
         root,
         fileName,
@@ -234,8 +254,60 @@ export function createKovoVitePlugin(
   };
 }
 
-function isViteComponentSource(id: string, source: string): boolean {
-  return /\.[cm]?tsx?$/.test(id) && source.includes('component(');
+function shouldTransformViteComponentSource(
+  fileName: string,
+  source: string,
+  options: KovoVitePluginOptions,
+): boolean {
+  if (!/\.[cm]?tsx?$/.test(fileName) || !source.includes('component(')) return false;
+  if (matchesAnyViteFilter(options.exclude, fileName, source)) return false;
+  if (options.include !== undefined && !matchesAnyViteFilter(options.include, fileName, source))
+    return false;
+
+  return true;
+}
+
+function matchesAnyViteFilter(
+  filters: readonly KovoViteModuleFilter[] | undefined,
+  fileName: string,
+  source: string,
+): boolean {
+  return filters?.some((filter) => matchesViteFilter(filter, fileName, source)) ?? false;
+}
+
+function matchesViteFilter(
+  filter: KovoViteModuleFilter,
+  fileName: string,
+  source: string,
+): boolean {
+  if (typeof filter === 'function') return filter(fileName, source);
+  if (typeof filter !== 'string') return filter.test(fileName);
+
+  const normalized = slashPath(filter).replace(/\/+$/, '');
+  return fileName === normalized || fileName.startsWith(`${normalized}/`);
+}
+
+function compileCachedViteComponentModule(
+  compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
+  cache: Map<string, ViteCompileResult>,
+  options: KovoVitePluginOptions,
+  root: string,
+  fileName: string,
+  source: string,
+): ViteCompileResult {
+  const cacheKey = viteCompileCacheKey(options, root, fileName, source);
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const result = compileViteComponentModule(
+    compileComponentModule,
+    options,
+    root,
+    fileName,
+    source,
+  );
+  cache.set(cacheKey, result);
+  return result;
 }
 
 function compileViteComponentModule(
@@ -245,14 +317,51 @@ function compileViteComponentModule(
   fileName: string,
   source: string,
 ): ViteCompileResult {
+  const registryFacts = resolveViteRegistryFacts(options, fileName);
   return compileComponentModule({
     fileName,
     ...(options.packageComponentPrefixes === undefined
       ? {}
       : { packageComponentPrefixes: options.packageComponentPrefixes }),
     packagePrefixDiscoveryRoot: root,
+    ...(registryFacts === undefined ? {} : { registryFacts }),
     source,
   });
+}
+
+function viteCompileCacheKey(
+  options: KovoVitePluginOptions,
+  root: string,
+  fileName: string,
+  source: string,
+): string {
+  return stableJson({
+    fileName,
+    packageComponentPrefixes: options.packageComponentPrefixes ?? null,
+    registryFacts: resolveViteRegistryFacts(options, fileName) ?? null,
+    root,
+    sourceHash: clientModuleVersion(source),
+  });
+}
+
+function resolveViteRegistryFacts(
+  options: KovoVitePluginOptions,
+  fileName: string,
+): RegistryFacts | undefined {
+  if (typeof options.registryFacts === 'function') return options.registryFacts(fileName);
+  return options.registryFacts;
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
+      .join(',')}}`;
+  }
+
+  return JSON.stringify(value);
 }
 
 function reportViteDiagnostics(

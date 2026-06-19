@@ -127,12 +127,19 @@ committed `graph.json`).
     `vitest.browser.config.ts`.
   - Verify a test importing an authored component sees lowered HTML (kovo stamps:
     `kovo-c`, `kovo-deps`, `data-bind`, `on:click`).
+- [ ] Expose a config-safe compiler plugin entry for Vite/Vitest config loading.
+  - Gap: static root/example config wiring through `@kovojs/compiler` or direct
+    `packages/compiler/src/index.ts` currently fails during Vite config startup because Node sees
+    unresolved source `.js` specifiers before Vitest's TS module runner is active.
 - [ ] Make registry/graph facts available to the plugin at test time **without** a committed
       `graph.json` (derive from authored route/mutation/query declarations, or emit to a temp
       cache during a pretest step). Document how `packageComponentPrefixes`/mutation-input facts
       are supplied.
-- [ ] Add module-compilation caching (keyed by source hash) so repeated imports in a test run do
+- [x] Add module-compilation caching (keyed by source hash) so repeated imports in a test run do
       not recompile.
+  - Evidence: `packages/compiler/src/vite.ts` caches transformed component compiles by source hash,
+    file, root, package-prefix facts, and registry facts; `pnpm --filter @kovojs/compiler exec
+    vitest run src/vite.test.ts` covers cache hits and source-hash invalidation.
 - [ ] Handle non-Vite consumers: a shared helper that emits required IR to an OS temp dir for
       `tests/kovo-check.node.mjs` and the CLI graph check (Phase 4 consumes this).
 
