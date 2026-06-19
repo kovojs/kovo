@@ -132,8 +132,9 @@ committed `graph.json`).
     pulling compiler internals into config startup and uses Vite `ssrLoadModule` for transforms;
     `pnpm --filter @kovojs/compiler exec vitest run src/vite.test.ts src/vite-config.test.ts`
     covers config-safe loading and scoped transforms.
-  - Gap: root/example config activation remains open because Commerce still imports authored
-    component internals that disappear after lowering (for example `OrderHistory.definition`).
+  - Gap: root/example config activation remains open because Vite SSR currently exposes
+    `typescript` as a frozen empty namespace when loading compiler internals through
+    `ssrLoadModule`; app migrations still need per-example activation checks.
 - [ ] Make registry/graph facts available to the plugin at test time **without** a committed
       `graph.json` (derive from authored route/mutation/query declarations, or emit to a temp
       cache during a pretest step). Document how `packageComponentPrefixes`/mutation-input facts
@@ -142,7 +143,7 @@ committed `graph.json`).
       not recompile.
   - Evidence: `packages/compiler/src/vite.ts` caches transformed component compiles by source hash,
     file, root, package-prefix facts, and registry facts; `pnpm --filter @kovojs/compiler exec
-    vitest run src/vite.test.ts` covers cache hits and source-hash invalidation.
+vitest run src/vite.test.ts` covers cache hits and source-hash invalidation.
 - [ ] Handle non-Vite consumers: a shared helper that emits required IR to an OS temp dir for
       `tests/kovo-check.node.mjs` and the CLI graph check (Phase 4 consumes this).
 
