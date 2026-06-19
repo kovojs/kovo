@@ -247,14 +247,14 @@ unchanged. The request shell resolves the `db` provider once per request before 
 The progression is additive — moving from a plain store to Drizzle changes only the data access, and
 in exchange the compiler takes over work you were doing by hand:
 
-| Concern              | Plain store                          | Drizzle path                                  |
-| -------------------- | ------------------------------------ | --------------------------------------------- |
-| Domains & writes     | `domain(...)` / `write(...)`         | identical                                     |
-| Handler access       | `db.<domain>.<write>` (KV330 ban)    | identical                                     |
-| Touch set            | hand-declared `touches` (KV406 sites)| extracted from SQL via `kovo({ domain, key })`|
-| Row-level keys       | not available                        | `key` annotation → `product:p1`               |
-| Runtime verification | `observed ⊆ static ∪ declared`       | same invariant, fewer manual declarations     |
-| Optimistic derivation| hand-written transforms only         | compiler can derive from the SQL shape        |
+| Concern               | Plain store                           | Drizzle path                                   |
+| --------------------- | ------------------------------------- | ---------------------------------------------- |
+| Domains & writes      | `domain(...)` / `write(...)`          | identical                                      |
+| Handler access        | `db.<domain>.<write>` (KV330 ban)     | identical                                      |
+| Touch set             | hand-declared `touches` (KV406 sites) | extracted from SQL via `kovo({ domain, key })` |
+| Row-level keys        | not available                         | `key` annotation → `product:p1`                |
+| Runtime verification  | `observed ⊆ static ∪ declared`        | same invariant, fewer manual declarations      |
+| Optimistic derivation | hand-written transforms only          | compiler can derive from the SQL shape         |
 
 The handler you wrote against the store keeps working; you delete `touches` lines as the analyzer
 takes over, and the verifier confirms nothing slipped.

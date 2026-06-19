@@ -328,24 +328,30 @@ const landingStyles = style.create(
         boxShadow: 'inset 0 -2px 0 var(--red)',
         color: 'var(--ink)',
       },
-      ':has(#brk-col:checked) [data-link="col"] [data-wire], :has(#brk-query:checked) [data-link="query"] [data-wire], :has(#brk-bind:checked) [data-link="bind"] [data-wire]': {
-        background: 'repeating-linear-gradient(90deg, var(--red) 0 6px, transparent 6px 12px)',
-      },
-      ':has(#brk-col:checked) [data-link="col"] [data-wire]::before, :has(#brk-col:checked) [data-link="col"] [data-wire]::after, :has(#brk-query:checked) [data-link="query"] [data-wire]::before, :has(#brk-query:checked) [data-link="query"] [data-wire]::after, :has(#brk-bind:checked) [data-link="bind"] [data-wire]::before, :has(#brk-bind:checked) [data-link="bind"] [data-wire]::after': {
-        background: 'var(--red)',
-      },
-      ':has(#brk-col:checked) [data-link="col"] [data-check="ok"], :has(#brk-query:checked) [data-link="query"] [data-check="ok"], :has(#brk-bind:checked) [data-link="bind"] [data-check="ok"]': {
-        display: 'none',
-      },
-      ':has(#brk-col:checked) [data-link="col"] [data-check="bad"], :has(#brk-query:checked) [data-link="query"] [data-check="bad"], :has(#brk-bind:checked) [data-link="bind"] [data-check="bad"]': {
-        display: 'block',
-      },
-      ':has(#brk-col:checked) [data-node="database"], :has(#brk-query:checked) [data-node="query"], :has(#brk-bind:checked) [data-node="ui"]': {
-        borderColor: 'rgb(255 107 107 / 0.5)',
-      },
-      ':has(#brk-col:checked) [data-case="col"], :has(#brk-query:checked) [data-case="query"], :has(#brk-bind:checked) [data-case="bind"]': {
-        display: 'block',
-      },
+      ':has(#brk-col:checked) [data-link="col"] [data-wire], :has(#brk-query:checked) [data-link="query"] [data-wire], :has(#brk-bind:checked) [data-link="bind"] [data-wire]':
+        {
+          background: 'repeating-linear-gradient(90deg, var(--red) 0 6px, transparent 6px 12px)',
+        },
+      ':has(#brk-col:checked) [data-link="col"] [data-wire]::before, :has(#brk-col:checked) [data-link="col"] [data-wire]::after, :has(#brk-query:checked) [data-link="query"] [data-wire]::before, :has(#brk-query:checked) [data-link="query"] [data-wire]::after, :has(#brk-bind:checked) [data-link="bind"] [data-wire]::before, :has(#brk-bind:checked) [data-link="bind"] [data-wire]::after':
+        {
+          background: 'var(--red)',
+        },
+      ':has(#brk-col:checked) [data-link="col"] [data-check="ok"], :has(#brk-query:checked) [data-link="query"] [data-check="ok"], :has(#brk-bind:checked) [data-link="bind"] [data-check="ok"]':
+        {
+          display: 'none',
+        },
+      ':has(#brk-col:checked) [data-link="col"] [data-check="bad"], :has(#brk-query:checked) [data-link="query"] [data-check="bad"], :has(#brk-bind:checked) [data-link="bind"] [data-check="bad"]':
+        {
+          display: 'block',
+        },
+      ':has(#brk-col:checked) [data-node="database"], :has(#brk-query:checked) [data-node="query"], :has(#brk-bind:checked) [data-node="ui"]':
+        {
+          borderColor: 'rgb(255 107 107 / 0.5)',
+        },
+      ':has(#brk-col:checked) [data-case="col"], :has(#brk-query:checked) [data-case="query"], :has(#brk-bind:checked) [data-case="bind"]':
+        {
+          display: 'block',
+        },
     },
     sectionLabel: {
       color: 'var(--faint)',
@@ -714,10 +720,18 @@ function LandingHeader({ clients }: { clients: ClientHrefs }): string {
           ))}
         </nav>
         <span style={landingStyles.right}>
-          <button type="button" style={landingStyles.headerButton} on:click={`${clients.search}#open`}>
+          <button
+            type="button"
+            style={landingStyles.headerButton}
+            on:click={`${clients.search}#open`}
+          >
             &#8984;K
           </button>
-          <a href="https://github.com/kovojs/kovo" rel="external" style={[landingStyles.link, landingStyles.navLink]}>
+          <a
+            href="https://github.com/kovojs/kovo"
+            rel="external"
+            style={[landingStyles.link, landingStyles.navLink]}
+          >
             GitHub
           </a>
         </span>
@@ -740,16 +754,22 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
         </p>
         <p style={landingStyles.sub}>
           {BRAND} is built from the ground up so AI coding agents get a precise error and know{' '}
-          <b style={landingStyles.strong}>exactly what to fix</b>. And it's delightful for your users:
-          pages are real HTML, <b style={landingStyles.strong}>interactive at first paint</b>.
+          <b style={landingStyles.strong}>exactly what to fix</b>. And it's delightful for your
+          users: pages are real HTML, <b style={landingStyles.strong}>interactive at first paint</b>
+          .
         </p>
         <span style={landingStyles.noJs}>&#10003; No JS required on load</span>
         <div style={landingStyles.try}>
           <div style={landingStyles.cmd}>
             <span>
-              <span style={landingStyles.dollar}>$</span> <code>pnpm create {BRAND_CLI} my-app</code>
+              <span style={landingStyles.dollar}>$</span>{' '}
+              <code>pnpm create {BRAND_CLI} my-app</code>
             </span>
-            <button type="button" style={landingStyles.copyButton} on:click={`${clients.code}#copy`}>
+            <button
+              type="button"
+              style={landingStyles.copyButton}
+              on:click={`${clients.code}#copy`}
+            >
               copy
             </button>
           </div>
@@ -777,14 +797,18 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
           <span style={[landingStyles.badge, landingStyles.badgeQuery]}>QUERY</span>
           {'\n  '}projection reads dropped column <b>price</b>
           {'\n  '}
-          <span style={landingStyles.textFix}>-&gt; select priceCents, or alias: price: products.priceCents</span>
+          <span style={landingStyles.textFix}>
+            -&gt; select priceCents, or alias: price: products.priceCents
+          </span>
           {'\n\n'}
           <span style={landingStyles.textErr}>&#10007;</span>{' '}
           <span style={landingStyles.textLoc}>src/product-card.tsx:13</span>{' '}
           <span style={[landingStyles.badge, landingStyles.badgeBind]}>BINDING</span>
           {'\n  '}data-bind <b>"product.price"</b> has no source in the query
           {'\n  '}
-          <span style={landingStyles.textFix}>-&gt; bind product.priceCents -- format in a derive</span>
+          <span style={landingStyles.textFix}>
+            -&gt; bind product.priceCents -- format in a derive
+          </span>
           {'\n\n'}
           <span style={landingStyles.textErr}>&#10007;</span>{' '}
           <span style={landingStyles.textLoc}>src/cart/checkout.tsx:31</span>{' '}
@@ -798,7 +822,8 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
           {'\n\n'}
           <div style={landingStyles.cascadeSum}>
             <span>
-              <b style={landingStyles.strong}>4 errors</b> &middot; 4 files &middot; each with its fix
+              <b style={landingStyles.strong}>4 errors</b> &middot; 4 files &middot; each with its
+              fix
             </span>
             <span style={landingStyles.textOk}>0 guesses</span>
           </div>
@@ -829,7 +854,11 @@ function BreakIt(): string {
         <label for="brk-query" data-choice="query" style={landingStyles.choiceLabel}>
           <b style={landingStyles.choiceNumber}>02</b> reshape the query
         </label>
-        <label for="brk-bind" data-choice="bind" style={[landingStyles.choiceLabel, landingStyles.choiceLabelLast]}>
+        <label
+          for="brk-bind"
+          data-choice="bind"
+          style={[landingStyles.choiceLabel, landingStyles.choiceLabelLast]}
+        >
           <b style={landingStyles.choiceNumber}>03</b> typo the binding
         </label>
       </div>
@@ -846,7 +875,9 @@ function BreakIt(): string {
           </pre>
         </div>
         <div style={landingStyles.pipeLink} data-link="col">
-          <span style={landingStyles.check} data-check="ok">&#10003; typed</span>
+          <span style={landingStyles.check} data-check="ok">
+            &#10003; typed
+          </span>
           <span style={[landingStyles.check, landingStyles.checkBad]} data-check="bad">
             &#10007; KV402
           </span>
@@ -855,7 +886,8 @@ function BreakIt(): string {
         <div style={landingStyles.node} data-node="query">
           <p style={landingStyles.nodeLabel}>Server query</p>
           <pre style={landingStyles.nodePre}>
-            <span style={landingStyles.textFn}>query</span>(<span style={landingStyles.textSt}>'product'</span>, {'{'}
+            <span style={landingStyles.textFn}>query</span>(
+            <span style={landingStyles.textSt}>'product'</span>, {'{'}
             {'\n  '}reads: [product],
             {'\n  '}load: ... <span style={landingStyles.textHl}>-&gt; shape</span>
             {'\n'}
@@ -863,7 +895,9 @@ function BreakIt(): string {
           </pre>
         </div>
         <div style={landingStyles.pipeLink} data-link="query">
-          <span style={landingStyles.check} data-check="ok">&#10003; typed</span>
+          <span style={landingStyles.check} data-check="ok">
+            &#10003; typed
+          </span>
           <span style={[landingStyles.check, landingStyles.checkBad]} data-check="bad">
             &#10007; KV223
           </span>
@@ -880,7 +914,9 @@ function BreakIt(): string {
           </pre>
         </div>
         <div style={landingStyles.pipeLink} data-link="bind">
-          <span style={landingStyles.check} data-check="ok">&#10003; typed</span>
+          <span style={landingStyles.check} data-check="ok">
+            &#10003; typed
+          </span>
           <span style={[landingStyles.check, landingStyles.checkBad]} data-check="bad">
             &#10007; KV227
           </span>
@@ -959,7 +995,10 @@ function CaughtCase({
   title: string;
 }): string {
   return (
-    <div style={[landingStyles.term, landingStyles.caughtTerm, landingStyles.casePanel]} data-case={kind}>
+    <div
+      style={[landingStyles.term, landingStyles.caughtTerm, landingStyles.casePanel]}
+      data-case={kind}
+    >
       <div style={landingStyles.termHead}>
         <span>{head}</span>
       </div>
@@ -986,15 +1025,16 @@ function Split(): string {
         <h3 style={landingStyles.halfTitle}>Errors worth reading</h3>
         <p style={landingStyles.lead}>
           Every diagnostic teaches: the line, the reason, the fixes -- so the loop is{' '}
-          <b style={landingStyles.strong}>edit -&gt; check -&gt; fixed</b>, not edit -&gt; deploy -&gt;
-          bug report. The behavior graph is queryable too:{' '}
+          <b style={landingStyles.strong}>edit -&gt; check -&gt; fixed</b>, not edit -&gt; deploy
+          -&gt; bug report. The behavior graph is queryable too:{' '}
           <code style={landingStyles.leadCode}>{BRAND_CLI} explain mutation cart/add</code> answers
           "what refreshes?" with diffable output for CI.
         </p>
         <div style={landingStyles.term}>
           <div style={landingStyles.termHead}>$ {BRAND_CLI} check</div>
           <pre style={landingStyles.termPre}>
-            <span style={landingStyles.textDim}>13 &#9474;</span> render: () =&gt; &lt;h2&gt;{'{'}product.
+            <span style={landingStyles.textDim}>13 &#9474;</span> render: () =&gt; &lt;h2&gt;{'{'}
+            product.
             <span style={landingStyles.squiggle}>details.name</span>
             {'}'}&lt;/h2&gt;
             {'\n\n'}
@@ -1004,7 +1044,8 @@ function Split(): string {
             <span style={landingStyles.textFix}>fix 1</span> {'{'}product.details
             <span style={landingStyles.textOk}>?.</span>name{'}'}
             {'\n  '}
-            <span style={landingStyles.textFix}>fix 2</span> make the projection non-null in the query
+            <span style={landingStyles.textFix}>fix 2</span> make the projection non-null in the
+            query
             {'\n\n'}
             <span style={landingStyles.textOk}>&#10003; caught in 0.4s -- before anything ran</span>
           </pre>
@@ -1100,7 +1141,11 @@ function LandingFooter(): string {
         <a href="/llms.txt" style={[landingStyles.link, landingStyles.navLink]}>
           llms.txt
         </a>
-        <a href="https://github.com/kovojs/kovo" rel="external" style={[landingStyles.link, landingStyles.navLink]}>
+        <a
+          href="https://github.com/kovojs/kovo"
+          rel="external"
+          style={[landingStyles.link, landingStyles.navLink]}
+        >
           GitHub
         </a>
       </span>

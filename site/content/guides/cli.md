@@ -11,11 +11,11 @@ Kovo projects use **two distinct binaries**, and keeping them straight saves con
 - **`vp`** is the **project / toolchain runner** — Vite+ (`vite-plus`). It is how you run the dev
   server, build, test, typecheck, and run named project tasks. Day-to-day, `vp` is the command you
   type most.
-- **`kovo`** is the **framework CLI**. It answers questions about your app's *graph* — coverage,
+- **`kovo`** is the **framework CLI**. It answers questions about your app's _graph_ — coverage,
   invalidation, guards, audits — and emits compiler-backed artifacts. It is the legibility surface:
   `kovo explain` prints the same stable, diffable text humans and agents both read.
 
-The two compose: `vp` orchestrates, and `kovo` is often invoked *through* a `vp` task. For example,
+The two compose: `vp` orchestrates, and `kovo` is often invoked _through_ a `vp` task. For example,
 `vp run kovo-check` is a project task that runs `kovo check` under the hood (the repo wires this as
 the `check:kovo` npm script).
 
@@ -23,14 +23,14 @@ the `check:kovo` npm script).
 
 `vp` is the Vite+ runner. Its everyday commands:
 
-| Command            | What it does                                                                       |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| `vp dev`           | Start the dev server. Regenerates Kovo registries before typechecking (so a stale registry is unrepresentable), serves pages, and reports compiler diagnostics through Vite's overlay and terminal. |
-| `vp build`         | Build the app and component packages for production.                               |
-| `vp test`          | Run the project's test suites.                                                     |
-| `vp check`         | Typecheck + lint. Regenerates registries first, then runs TypeScript static checking over all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, guards). |
-| `vp run <task>`    | Run a named task from the Vite+ config — the general escape hatch for project-defined scripts. |
-| `vp pack`          | Package the project / component library for publishing.                            |
+| Command         | What it does                                                                                                                                                                                        |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vp dev`        | Start the dev server. Regenerates Kovo registries before typechecking (so a stale registry is unrepresentable), serves pages, and reports compiler diagnostics through Vite's overlay and terminal. |
+| `vp build`      | Build the app and component packages for production.                                                                                                                                                |
+| `vp test`       | Run the project's test suites.                                                                                                                                                                      |
+| `vp check`      | Typecheck + lint. Regenerates registries first, then runs TypeScript static checking over all wiring (handlers, routes & links, forms, targets, bindings, IDREFs, guards).                          |
+| `vp run <task>` | Run a named task from the Vite+ config — the general escape hatch for project-defined scripts.                                                                                                      |
+| `vp pack`       | Package the project / component library for publishing.                                                                                                                                             |
 
 `vp check` is where the framework's type-level guarantees land: it regenerates the registry `.d.ts`
 files and runs `tsc`, so route renames, missing form fields, and dead links all surface as type
@@ -44,8 +44,8 @@ In practice, a repo wires these into npm scripts that combine `vp` with extra ga
     "check": "vp check && vp run typecheck-examples",
     "check:kovo": "vp run kovo-check", // a vp task that runs `kovo check`
     "test:integration": "vp run integration",
-    "test:browser": "vp run browser"
-  }
+    "test:browser": "vp run browser",
+  },
 }
 ```
 
@@ -209,7 +209,7 @@ npm run check:kovo   →  vp run kovo-check  →  kovo check   (graph consistenc
 npm run test:*       →  vp run <task>                   (project test suites)
 ```
 
-Use `vp` to *run things*; use `kovo` to *ask the graph questions* and emit artifacts. In CI a typical
+Use `vp` to _run things_; use `kovo` to _ask the graph questions_ and emit artifacts. In CI a typical
 gate is `vp check` (TypeScript proves all wiring) followed by `kovo check` (the framework proves
 touch-graph consistency, optimistic exhaustiveness, and update coverage) — together they make an app's
 wiring proof-carrying without executing a browser.

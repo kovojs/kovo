@@ -448,14 +448,21 @@ export const SiteHeader = component({
             const prefixes = item.match ?? [item.url.replace(/\/$/, '') || item.url];
             const active = prefixes.some((prefix) => activePath.startsWith(prefix));
             return (
-              <a href={item.url} style={[chromeStyles.navLink, active && chromeStyles.navLinkActive]}>
+              <a
+                href={item.url}
+                style={[chromeStyles.navLink, active && chromeStyles.navLinkActive]}
+              >
                 {escapeHtml(item.title)}
               </a>
             );
           })}
         </nav>
         <div style={chromeStyles.siteRight}>
-          <button type="button" style={chromeStyles.searchButton} on:click={`${clients.search}#open`}>
+          <button
+            type="button"
+            style={chromeStyles.searchButton}
+            on:click={`${clients.search}#open`}
+          >
             <span>Search</span>
             <kbd style={chromeStyles.searchKey}>&#8984;K</kbd>
           </button>
@@ -485,8 +492,12 @@ export const SiteFooter = component({
           &middot; legible at every layer &middot; statically verifiable
         </span>
         <span style={chromeStyles.footerLinks}>
-          <a href="/spec/" style={chromeStyles.footerLink}>Spec</a>
-          <a href="/llms.txt" style={chromeStyles.footerLink}>llms.txt</a>
+          <a href="/spec/" style={chromeStyles.footerLink}>
+            Spec
+          </a>
+          <a href="/llms.txt" style={chromeStyles.footerLink}>
+            llms.txt
+          </a>
           <a href="https://github.com/kovojs/kovo" rel="external" style={chromeStyles.footerLink}>
             GitHub
           </a>
@@ -538,10 +549,7 @@ function prevNextCard(page: NavLink | undefined, direction: 'prev' | 'next') {
   return (
     <a
       href={page.url}
-      style={[
-        chromeStyles.paginationCard,
-        direction === 'next' && chromeStyles.paginationNext,
-      ]}
+      style={[chromeStyles.paginationCard, direction === 'next' && chromeStyles.paginationNext]}
     >
       <span style={chromeStyles.paginationLabel}>{direction === 'next' ? 'Next' : 'Previous'}</span>
       <span style={chromeStyles.paginationTitle}>

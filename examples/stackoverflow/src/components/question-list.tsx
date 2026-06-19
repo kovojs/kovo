@@ -172,7 +172,10 @@ const listStyles = style.create(
       resize: 'vertical',
     },
   },
-  { namespace: 'so-question-list', source: 'examples/stackoverflow/src/components/question-list.tsx' },
+  {
+    namespace: 'so-question-list',
+    source: 'examples/stackoverflow/src/components/question-list.tsx',
+  },
 );
 
 export const questionListStyleCss = style.emitAtomicCss(
@@ -233,8 +236,8 @@ export const QuestionListRegion = component({
           <div>
             <h1 style={listStyles.pageTitle}>Top questions</h1>
             <p style={listStyles.pageSub}>
-              {questions.length} questions ·{' '}
-              <span style={listStyles.score}>{totalVotes}</span> votes cast
+              {questions.length} questions · <span style={listStyles.score}>{totalVotes}</span>{' '}
+              votes cast
             </p>
           </div>
           {Badge.definition.render({ children: 'Newest', variant: 'success' })}

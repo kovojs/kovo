@@ -114,10 +114,12 @@ const siteLineNumber = (site) => Number(String(site).split(':').pop() ?? 0);
 // loaders/handlers; nothing here is hand-authored. The deriver turns each
 // (mutation effects × query shape) pair into a committed optimistic transform
 // or a named §10.5 punt.
-const extractionFiles = ['domain.ts', 'queries.ts', 'graph.ts', 'schema.ts', 'db.ts'].map((rel) => ({
-  fileName: `examples/commerce/src/${rel}`,
-  source: readFileSync(resolve(commerceRoot, `src/${rel}`), 'utf8'),
-}));
+const extractionFiles = ['domain.ts', 'queries.ts', 'graph.ts', 'schema.ts', 'db.ts'].map(
+  (rel) => ({
+    fileName: `examples/commerce/src/${rel}`,
+    source: readFileSync(resolve(commerceRoot, `src/${rel}`), 'utf8'),
+  }),
+);
 
 const staticFacts = compileDrizzleStatic({
   files: extractionFiles,

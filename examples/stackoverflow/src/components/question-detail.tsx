@@ -214,11 +214,7 @@ function renderAnswerCard(answer: QuestionAnswersResult[number]): string {
     ...(answer.accepted ? { style: detailStyles.acceptedAnswer } : {}),
   });
   // Keep the stable key on the repeated child that the fragment morphs.
-  return (
-    <li kovo-key={answer.id}>
-      {surface}
-    </li>
-  );
+  return <li kovo-key={answer.id}>{surface}</li>;
 }
 
 // Interactive region rendered inside the full page and fragment responses.

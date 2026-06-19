@@ -164,10 +164,7 @@ function renderOpenDealsTable(openDeals: DealRow[], contactsById: Map<string, Co
         children:
           TableCell.definition.render({
             children: (
-              <a
-                style={pipelineStyles.backLink}
-                href={`/deals/${deal.id}`}
-              >
+              <a style={pipelineStyles.backLink} href={`/deals/${deal.id}`}>
                 {deal.id.toUpperCase()}
               </a>
             ),
@@ -232,27 +229,17 @@ export const PipelineRegion = component({
         {/* The refreshed fragment resets the form with a fresh deal id. */}
         <section>
           <h2 style={pipelineStyles.sectionLabel}>New deal</h2>
-          <form
-            {...mutationFormAttributes(createDeal)}
-            style={pipelineStyles.formPanel}
-          >
+          <form {...mutationFormAttributes(createDeal)} style={pipelineStyles.formPanel}>
             {slots.request ? csrfField(slots.request, crmCsrf) : ''}
             <input type="hidden" name="id" value={freshId('d')} />
             <input type="hidden" name="ownerId" value="u1" />
             <div style={pipelineStyles.formGrid}>
-              <select
-                name="contactId"
-                required
-                style={pipelineStyles.input}
-              >
+              <select name="contactId" required style={pipelineStyles.input}>
                 {contacts.map((contact) => (
                   <option value={contact.id}>{contact.name}</option>
                 ))}
               </select>
-              <select
-                name="stage"
-                style={[pipelineStyles.input, pipelineStyles.stageText]}
-              >
+              <select name="stage" style={[pipelineStyles.input, pipelineStyles.stageText]}>
                 {NEW_DEAL_STAGES.map((stage) => (
                   <option value={stage}>{stage}</option>
                 ))}

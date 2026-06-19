@@ -181,9 +181,7 @@ const cartPageLiveTargets = [
   { component: 'components/order-history/order-history', target: 'order-history' },
 ];
 
-export function createCommerceScenarioClient(
-  shell = createCommerceApp(),
-): CommerceScenarioClient {
+export function createCommerceScenarioClient(shell = createCommerceApp()): CommerceScenarioClient {
   const cookies = new Map<string, string>();
 
   async function dispatch(

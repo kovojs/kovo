@@ -84,13 +84,11 @@ Matching that is a design pass on top of the mechanical fixes.
       of `packages/compiler/src/package-styles.ts` into `@kovojs/style` and apply it inside the emit
       so bare-number lengths get `px` (keeping the class-name hash on the raw value, per the existing
       comment's lockstep note). Update `packages/compiler` to consume the shared normalizer instead of
-      its private copy. SPEC §6.1.1.
-      - Risk: this will churn `@kovojs/style` and example/UI CSS snapshots — budget for snapshot
-        regen and an api-surface check. Verify the class-name hash is unchanged (so `style.attrs`
-        output and the stylesheet stay in lockstep).
-      - Evidence to capture: a `@kovojs/style` unit test asserting `style.emitAtomicCss` produces
-        `max-width:832px` / `gap:8px` (not `:832`/`:8`), and that `opacity`/`z-index`/`line-height`
-        stay unitless.
+      its private copy. SPEC §6.1.1. - Risk: this will churn `@kovojs/style` and example/UI CSS snapshots — budget for snapshot
+      regen and an api-surface check. Verify the class-name hash is unchanged (so `style.attrs`
+      output and the stylesheet stay in lockstep). - Evidence to capture: a `@kovojs/style` unit test asserting `style.emitAtomicCss` produces
+      `max-width:832px` / `gap:8px` (not `:832`/`:8`), and that `opacity`/`z-index`/`line-height`
+      stay unitless.
 - [ ] **A2. If A1 is deferred,** apply the normalizer to the examples' critical-CSS strings at the
       call site (wrap `soChromeStyleCss` etc.) as a stopgap. Prefer A1; record here only if A1 is
       blocked and why.
@@ -162,5 +160,5 @@ with 0 `kv-` classes. These are the baselines Phase 1 must eliminate.
   (or build in CI) so a stale artifact can't silently break the served styles again.
 - The `@kovojs/style` snapshot churn from A1 is expected and acceptable; treat snapshot regen as part
   of the slice, not a surprise.
-</content>
-</invoke>
+  </content>
+  </invoke>

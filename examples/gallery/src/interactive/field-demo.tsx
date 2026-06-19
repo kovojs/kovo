@@ -83,10 +83,7 @@ export const GalleryFieldDemo = component({
             type="email"
             value={state.email}
           />
-          <FieldDescription
-            id="gallery-interactive-field-email-description"
-            required={true}
-          >
+          <FieldDescription id="gallery-interactive-field-email-description" required={true}>
             Use a reachable address for receipts.
           </FieldDescription>
           <UiFieldError
@@ -143,10 +140,7 @@ export const GalleryFieldDemo = component({
             <FieldSelectOption value="team" selected={state.plan === 'team'}>
               Team
             </FieldSelectOption>
-            <FieldSelectOption
-              value="enterprise"
-              selected={state.plan === 'enterprise'}
-            >
+            <FieldSelectOption value="enterprise" selected={state.plan === 'enterprise'}>
               Enterprise
             </FieldSelectOption>
           </FieldSelect>
@@ -167,10 +161,7 @@ export const GalleryFieldDemo = component({
           id="gallery-interactive-fieldset"
           name="gallery-shipping"
         >
-          <FieldsetLegend
-            id="gallery-interactive-fieldset-legend"
-            required={true}
-          >
+          <FieldsetLegend id="gallery-interactive-fieldset-legend" required={true}>
             Shipping options
             <label class="ml-2 inline-flex items-center gap-1 text-sm font-normal text-neutral-700">
               <input

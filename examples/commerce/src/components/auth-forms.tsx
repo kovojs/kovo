@@ -107,7 +107,9 @@ export function LoginForm({ next = '/cart' }: { next?: string }): string {
 export function LogoutForm(): string {
   return (
     <form style={authFormStyles.formInline} mutation={commerceSignOut}>
-      <button style={authFormStyles.textButton} type="submit">Sign out</button>
+      <button style={authFormStyles.textButton} type="submit">
+        Sign out
+      </button>
     </form>
   );
 }

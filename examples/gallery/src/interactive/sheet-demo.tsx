@@ -63,9 +63,7 @@ export const GallerySheetDemo = component({
           titleId={titleId}
         >
           <SheetHeader>
-            <SheetTitle id={titleId}>
-              Account settings
-            </SheetTitle>
+            <SheetTitle id={titleId}>Account settings</SheetTitle>
             <SheetDescription id={descriptionId}>
               Review the account panel side sheet.
             </SheetDescription>

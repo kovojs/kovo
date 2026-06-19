@@ -266,10 +266,7 @@ export const GalleryAutocompleteDemo = component({
             Development
           </AutocompleteOption>
         </AutocompleteList>
-        <AutocompleteValue
-          {...autocompleteState}
-          data-demo-state="autocomplete-value"
-        />
+        <AutocompleteValue {...autocompleteState} data-demo-state="autocomplete-value" />
       </Autocomplete>
     );
   },

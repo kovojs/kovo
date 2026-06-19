@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { mountStaticGalleryRoute, required } from './interactive-gallery.generated-browser-fixtures.js';
+import {
+  mountStaticGalleryRoute,
+  required,
+} from './interactive-gallery.generated-browser-fixtures.js';
 
 afterEach(() => {
   document.body.replaceChildren();

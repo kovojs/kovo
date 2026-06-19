@@ -23,7 +23,10 @@ const productActionStyles = style.create(
       marginInlineStart: 8,
     },
   },
-  { namespace: 'tutorial-product-actions', source: 'site/tutorial/steps/02-islands/src/components/product-actions.tsx' },
+  {
+    namespace: 'tutorial-product-actions',
+    source: 'site/tutorial/steps/02-islands/src/components/product-actions.tsx',
+  },
 );
 
 // snippet:product-actions

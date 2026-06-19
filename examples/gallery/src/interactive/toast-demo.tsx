@@ -94,9 +94,7 @@ export const GalleryToastDemo = component({
           data-state={state.previousOpen ? 'open' : 'closed'}
           hidden={!state.previousOpen}
         >
-          <ToastTitle id="gallery-toast-previous-title">
-            Previous save
-          </ToastTitle>
+          <ToastTitle id="gallery-toast-previous-title">Previous save</ToastTitle>
           <ToastDescription id="gallery-toast-previous-description">
             Gallery settings update.
           </ToastDescription>
@@ -135,7 +133,9 @@ export const GalleryToastDemo = component({
           }}
         >
           <ToastTitle id="gallery-toast-title">Saved</ToastTitle>
-          <ToastDescription id="gallery-toast-description">Gallery settings update.</ToastDescription>
+          <ToastDescription id="gallery-toast-description">
+            Gallery settings update.
+          </ToastDescription>
           <ToastAction
             {...activeToastState}
             actionValue="undo"

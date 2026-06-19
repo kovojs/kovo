@@ -19,7 +19,10 @@ const productListStyles = style.create(
       paddingInlineStart: 20,
     },
   },
-  { namespace: 'tutorial-product-list', source: 'site/tutorial/steps/03-queries/src/components/product-list.tsx' },
+  {
+    namespace: 'tutorial-product-list',
+    source: 'site/tutorial/steps/03-queries/src/components/product-list.tsx',
+  },
 );
 
 // snippet:product-list

@@ -43,7 +43,9 @@ try {
       ? appModule.createCommerceApp().requestHandler
       : undefined;
   if (!requestHandler || !app) {
-    throw new Error('/src/generated/app.kovo-route.tsx must export createCommerceApp and default app.');
+    throw new Error(
+      '/src/generated/app.kovo-route.tsx must export createCommerceApp and default app.',
+    );
   }
   const response = await requestHandler(new Request('https://commerce.test/cart'));
   html = await response.text();

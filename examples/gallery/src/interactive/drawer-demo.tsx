@@ -65,9 +65,7 @@ export const GalleryDrawerDemo = component({
         >
           <DrawerHandle />
           <DrawerHeader>
-            <DrawerTitle id={titleId}>
-              Mobile actions
-            </DrawerTitle>
+            <DrawerTitle id={titleId}>Mobile actions</DrawerTitle>
             <DrawerDescription id={descriptionId}>
               Directional sheet drawer; Vaul drag, snap, and background-scale gestures are not
               modeled.

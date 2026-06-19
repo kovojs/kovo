@@ -19,10 +19,7 @@ export const GalleryCollapsibleDemo = component({
     const contentId = 'gallery-collapsible-content';
 
     return (
-      <Collapsible
-        data-gallery-interactive="collapsible"
-        open={state.open}
-      >
+      <Collapsible data-gallery-interactive="collapsible" open={state.open}>
         <CollapsibleTrigger
           contentId={contentId}
           onClick={() => {

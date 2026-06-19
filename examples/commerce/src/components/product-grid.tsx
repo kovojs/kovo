@@ -95,7 +95,10 @@ const productGridStyles = style.create(
       margin: 0,
     },
   },
-  { namespace: 'commerce-product-grid', source: 'examples/commerce/src/components/product-grid.tsx' },
+  {
+    namespace: 'commerce-product-grid',
+    source: 'examples/commerce/src/components/product-grid.tsx',
+  },
 );
 
 export const productGridStyleCss = style.emitAtomicCss(
@@ -128,9 +131,7 @@ export function ProductGridError(): string {
 
 function renderProductGridError(): string {
   return (
-    <section style={productGridStyles.panelError}>
-      Products are temporarily unavailable.
-    </section>
+    <section style={productGridStyles.panelError}>Products are temporarily unavailable.</section>
   );
 }
 

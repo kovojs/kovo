@@ -99,9 +99,9 @@ export const ProductCard = component({
 });
 ```
 
-Two token families appear here. `tokens.sys.*` are the Material *system roles* every theme defines —
+Two token families appear here. `tokens.sys.*` are the Material _system roles_ every theme defines —
 `surface`, `onSurface`, `outlineVariant`, `primary`, and so on — derived from the seed so a theme
-change re-skins them everywhere. `tokens.customColor('warning')` reads one of the *named extra colors*
+change re-skins them everywhere. `tokens.customColor('warning')` reads one of the _named extra colors_
 you declared under `defineTheme({ colors: { warning } })`; it returns a group (`.color`, `.onColor`,
 `.colorContainer`, …) for palette entries that aren't part of the system role set. Reach for `sys.*` for
 ordinary surfaces and text, and `customColor(name)` for app-specific accents like a low-stock warning.

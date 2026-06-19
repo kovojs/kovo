@@ -66,9 +66,7 @@ function resultRow(entry, active = false) {
 
 function renderResults(element, entries, options = {}) {
   selectedIndex = entries.length > 0 ? 0 : -1;
-  const label = options.label
-    ? `<li data-search-label>${escapeHtml(options.label)}</li>`
-    : '';
+  const label = options.label ? `<li data-search-label>${escapeHtml(options.label)}</li>` : '';
   element.innerHTML = `${label}${entries
     .map((entry, index) => resultRow(entry, index === selectedIndex))
     .join('')}`;

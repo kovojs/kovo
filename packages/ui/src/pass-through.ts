@@ -63,26 +63,24 @@ export function passThroughProps(
   const includeStyle = options.style ?? false;
 
   return Object.fromEntries(
-    Object.entries(props).filter(
-      ([name, value]) => {
-        const isEvent = name.startsWith('on:');
-        const isAllowedDomProp =
-          isEvent ||
-          name.startsWith('aria-') ||
-          (name.startsWith('data-') && name !== 'data-style-src') ||
-          name === 'hidden' ||
-          name === 'tabIndex' ||
-          name === 'style';
+    Object.entries(props).filter(([name, value]) => {
+      const isEvent = name.startsWith('on:');
+      const isAllowedDomProp =
+        isEvent ||
+        name.startsWith('aria-') ||
+        (name.startsWith('data-') && name !== 'data-style-src') ||
+        name === 'hidden' ||
+        name === 'tabIndex' ||
+        name === 'style';
 
-        return (
-          value !== undefined &&
-          value !== null &&
-          isAllowedDomProp &&
-          (includeEvents || !isEvent) &&
-          (includeStyle || name !== 'style') &&
-          !blockedProps.has(name)
-        );
-      },
-    ),
+      return (
+        value !== undefined &&
+        value !== null &&
+        isAllowedDomProp &&
+        (includeEvents || !isEvent) &&
+        (includeStyle || name !== 'style') &&
+        !blockedProps.has(name)
+      );
+    }),
   );
 }

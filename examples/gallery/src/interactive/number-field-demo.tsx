@@ -36,11 +36,7 @@ export const GalleryNumberFieldDemo = component({
     const inputId = 'gallery-number-field-input';
 
     return (
-      <NumberField
-        {...fieldState}
-        data-gallery-interactive="number-field"
-        id={formId}
-      >
+      <NumberField {...fieldState} data-gallery-interactive="number-field" id={formId}>
         <label for={inputId} class={LABEL_CLASS}>
           Seats
         </label>

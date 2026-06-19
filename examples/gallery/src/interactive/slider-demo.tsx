@@ -44,20 +44,12 @@ export const GallerySliderDemo = component({
     };
 
     return (
-      <Slider
-        {...sliderState}
-        data-gallery-interactive="slider"
-        data-value={String(state.value)}
-      >
+      <Slider {...sliderState} data-gallery-interactive="slider" data-value={String(state.value)}>
         <form id="gallery-slider-form" data-gallery-form="slider" />
         <label id="gallery-slider-label" class={LABEL_CLASS}>
           Completion
         </label>
-        <SliderInput
-          {...sliderState}
-          id="gallery-slider-input"
-          value={state.value}
-        />
+        <SliderInput {...sliderState} id="gallery-slider-input" value={state.value} />
         <SliderTrack
           {...sliderState}
           data-value={String(state.value)}

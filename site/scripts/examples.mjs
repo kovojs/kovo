@@ -145,11 +145,7 @@ export async function buildExamplesLlmsSection({ repoRootPath }) {
   for (const manifest of manifests) {
     const sources = await loadExampleSources(manifest, { repoRootPath });
     const blocks = sources.map((file) => {
-      const lang = file.name.endsWith('.tsx')
-        ? 'tsx'
-        : file.name.endsWith('.mjs')
-          ? 'js'
-          : 'ts';
+      const lang = file.name.endsWith('.tsx') ? 'tsx' : file.name.endsWith('.mjs') ? 'js' : 'ts';
       return `\`\`\`${lang} title="${manifest.dir}/${file.name}"\n${file.code.trimEnd()}\n\`\`\``;
     });
     const body = [

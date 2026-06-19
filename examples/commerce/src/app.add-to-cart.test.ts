@@ -115,5 +115,4 @@ describe('commerce example', () => {
     // SECURITY (SECURITY_FINDINGS.md M9): orderHistory is scoped to the session user.
     expect(htmlKeyValues(body)).not.toContain('order-1');
   });
-
 });

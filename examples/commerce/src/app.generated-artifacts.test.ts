@@ -17,9 +17,9 @@ describe('commerce generated app artifacts', () => {
     const html = await response.text();
 
     expect(response.status, html).toBe(200);
-    expect(htmlElementFacts(html, { attrs: { 'kovo-fragment-target': 'cart-badge' } })).toHaveLength(
-      1,
-    );
+    expect(
+      htmlElementFacts(html, { attrs: { 'kovo-fragment-target': 'cart-badge' } }),
+    ).toHaveLength(1);
   });
 
   it('render generated live-target UI fragments for enhanced addToCart success', async () => {

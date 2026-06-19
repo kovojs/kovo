@@ -94,7 +94,7 @@ export function ShippingSection() {
 ```
 
 The framework proves `Select` emits a correct listbox contract; only you can know that it labels
-*delivery speed*, sits under a *Shipping* heading, and that the heading order around it is `h2 → h3`
+_delivery speed_, sits under a _Shipping_ heading, and that the heading order around it is `h2 → h3`
 rather than `h2 → h4`. axe can't infer that intent, and the gallery suite never sees your layout — so
 this is the slice that stays yours.
 

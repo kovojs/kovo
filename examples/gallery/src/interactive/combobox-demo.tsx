@@ -276,10 +276,7 @@ export const GalleryComboboxDemo = component({
             Chicago city
           </ComboboxOption>
         </ComboboxListbox>
-        <ComboboxValue
-          {...selectedState}
-          data-demo-state="combobox-value"
-        />
+        <ComboboxValue {...selectedState} data-demo-state="combobox-value" />
       </Combobox>
     );
   },

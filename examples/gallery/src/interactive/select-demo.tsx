@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { SelectItem as GallerySelectItem } from '@kovojs/headless-ui/select';
 import {
   Select,
   SelectContent,
@@ -11,7 +12,6 @@ import {
   SelectTrigger,
   selectTriggerClick as _selectTriggerClick,
   SelectValue,
-  type SelectItem as GallerySelectItem,
 } from '@kovojs/ui/select';
 
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
@@ -45,20 +45,12 @@ export const GallerySelectDemo = component({
     };
 
     return (
-      <Select
-        {...selectState}
-        data-gallery-interactive="select"
-        id="gallery-select-root"
-      >
+      <Select {...selectState} data-gallery-interactive="select" id="gallery-select-root">
         <form id="gallery-select-form" data-gallery-form="select" />
         <label id="gallery-select-label" for="gallery-select-trigger" class={LABEL_CLASS}>
           Shipping speed
         </label>
-        <SelectHiddenInput
-          {...selectState}
-          id="gallery-select-control"
-          value={state.value}
-        />
+        <SelectHiddenInput {...selectState} id="gallery-select-control" value={state.value} />
         <SelectTrigger
           {...selectState}
           aria-expanded={String(state.open)}
@@ -227,10 +219,7 @@ export const GallerySelectDemo = component({
             Drone
           </SelectItem>
         </SelectContent>
-        <SelectValue
-          {...selectState}
-          data-demo-state="select-value"
-        />
+        <SelectValue {...selectState} data-demo-state="select-value" />
       </Select>
     );
   },

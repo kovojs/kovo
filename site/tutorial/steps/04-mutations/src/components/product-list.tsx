@@ -26,7 +26,10 @@ const productListStyles = style.create(
       paddingInlineStart: 20,
     },
   },
-  { namespace: 'tutorial-product-list', source: 'site/tutorial/steps/04-mutations/src/components/product-list.tsx' },
+  {
+    namespace: 'tutorial-product-list',
+    source: 'site/tutorial/steps/04-mutations/src/components/product-list.tsx',
+  },
 );
 
 export const ProductList = component({

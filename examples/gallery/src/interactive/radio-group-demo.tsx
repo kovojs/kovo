@@ -101,10 +101,7 @@ export const GalleryRadioGroupDemo = component({
             Phone
           </RadioGroupLabel>
         </RadioGroupItem>
-        <RadioGroupItem
-          {...smsState}
-          data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
-        >
+        <RadioGroupItem {...smsState} data-state={state.value === 'sms' ? 'checked' : 'unchecked'}>
           <RadioGroupRadio
             {...smsState}
             aria-checked={String(state.value === 'sms')}
