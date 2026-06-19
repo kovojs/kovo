@@ -81,7 +81,7 @@ export const GalleryFieldDemo = component({
                   ? !checkValidity.call(target)
                   : !/.+@kovo\.sh/.test(nextEmail);
             }}
-            pattern=".+@kovo\\.sh"
+            pattern={'.+@kovo\\.sh'}
             type="email"
             value={state.email}
           />

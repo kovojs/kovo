@@ -1,4 +1,5 @@
-import { isAbsolute, relative } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -19,7 +20,9 @@ import type {
 export interface KovoVitePlugin {
   configureServer?: (server: KovoViteDevServer) => void;
   handleHotUpdate?: (context: KovoViteHotUpdateContext) => Promise<readonly unknown[]>;
+  load?: (id: string) => null | Promise<null | string> | string;
   name: 'kovo';
+  resolveId?: (source: string, importer?: string) => null | Promise<null | string> | string;
   transform: (
     source: string,
     id: string,
@@ -196,6 +199,15 @@ export function createKovoVitePlugin(
       });
     },
     name: 'kovo',
+    resolveId(source: string, importer?: string): null | string {
+      const resolvedId = resolveViteClientModuleId(source, importer, root);
+      if (resolvedId === null) return null;
+
+      return resolvedId;
+    },
+    load(id: string): MaybePromise<null | string> {
+      return loadViteClientModule(compileComponentModule, compileCache, options, root, id);
+    },
     transform(source: string, id: string) {
       const fileName = viteComponentFileName(id, root);
       if (!shouldTransformViteComponentSource(fileName, source, options)) return null;
@@ -387,6 +399,64 @@ function compileViteComponentModule(
     ...(registryFacts === undefined ? {} : { registryFacts }),
     source,
   });
+}
+
+function resolveViteClientModuleId(
+  source: string,
+  importer: string | undefined,
+  root: string,
+): null | string {
+  const sourceFileName = source.split(/[?#]/, 1)[0] ?? source;
+  if (!sourceFileName.endsWith('.client.js')) return null;
+  const importerFileName = importer?.split(/[?#]/, 1)[0];
+  const candidate = isAbsolute(sourceFileName)
+    ? sourceFileName
+    : importerFileName
+      ? resolve(dirname(importerFileName), sourceFileName)
+      : resolve(root, sourceFileName.replace(/^\/+/, ''));
+  if (!existsSync(viteClientModuleSourceFilePath(candidate))) return null;
+
+  return candidate;
+}
+
+function loadViteClientModule(
+  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
+  cache: Map<string, MaybePromise<ViteCompileResult>>,
+  options: KovoVitePluginOptions,
+  root: string,
+  id: string,
+): MaybePromise<null | string> {
+  const clientFilePath = id.split(/[?#]/, 1)[0] ?? id;
+  if (!clientFilePath.endsWith('.client.js')) return null;
+
+  const sourceFilePath = viteClientModuleSourceFilePath(clientFilePath);
+  if (!existsSync(sourceFilePath)) return null;
+
+  const fileName = viteComponentFileName(sourceFilePath, root);
+  const source = readFileSync(sourceFilePath, 'utf8');
+  if (!shouldTransformViteComponentSource(fileName, source, options)) return null;
+
+  const result = compileCachedViteComponentModule(
+    compileComponentModule,
+    cache,
+    options,
+    root,
+    fileName,
+    source,
+  );
+  if (isPromiseLike(result)) {
+    return result.then((resolvedResult) => viteClientSource(resolvedResult));
+  }
+
+  return viteClientSource(result);
+}
+
+function viteClientSource(result: ViteCompileResult): null | string {
+  return result.files.find((file) => file.kind === 'client')?.source ?? null;
+}
+
+function viteClientModuleSourceFilePath(clientFilePath: string): string {
+  return clientFilePath.replace(/\.client\.js$/, '.tsx');
 }
 
 function viteCompileCacheKey(

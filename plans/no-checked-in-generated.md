@@ -186,9 +186,16 @@ authored components/routes, and convert or relocate artifact tests.
       `interactive-docs.generated-fixtures.tsx` and `*.generated-browser-fixtures.ts`.
   - Progress evidence: `interactive-docs.tsx` now imports authored demos from
     `interactive-docs-demos.tsx`, `interactive-docs.generated-fixtures.tsx` was removed, the
-    Gallery app shell compiles authored demo client modules in memory, and
-    `pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts`
-    passes. Gap: generated browser fixtures/tests still import `src/generated/interactive`.
+    Gallery app shell compiles authored demo client modules in memory, the browser fixture/tests
+    were renamed to non-generated names and import authored `src/interactive/*.tsx` plus virtual
+    `.client.js` modules, and these checks pass:
+    `pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts`;
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts run src/interactive-gallery.interactions-a.browser.test.ts src/interactive-gallery.axe.browser.test.ts src/interactive-gallery.native.browser.test.ts`;
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts run src/interactive-gallery.interactions-b.browser.test.ts`;
+    `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts run src/interactive-gallery.visual.browser.test.ts`.
+    Gap: `rg -n "generated-browser-fixtures|generated/interactive|installGeneratedGalleryLoader|expectGeneratedSideDialog|from './generated/interactive'" examples/gallery/src --glob '!**/generated/**'`
+    still finds `interactive-gallery-harness.ts` and `interactive-gallery.artifacts.test.ts`
+    reading `src/generated/interactive` for artifact verification.
 - [ ] **Site** — `site/src/app.ts` exports the authored app/route entry; drop
       `app.generated-fixtures.ts`, `src/generated/app.kovo-route.tsx`, `app.routes.tsx`.
 - [ ] **Tutorial steps 02–07** — each `app.ts` imports authored `components/*.tsx`; drop every

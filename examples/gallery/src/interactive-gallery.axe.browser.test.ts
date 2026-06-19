@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GalleryCommandDemo } from './generated/interactive/command-demo.js';
-import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
-import { GalleryFieldDemo } from './generated/interactive/field-demo.js';
-import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
+import { GalleryCommandDemo } from './interactive/command-demo.js';
+import { GalleryDropdownMenuDemo } from './interactive/dropdown-menu-demo.js';
+import { GalleryFieldDemo } from './interactive/field-demo.js';
+import { GalleryToastDemo } from './interactive/toast-demo.js';
 import { renderInteractiveGalleryRoute } from './interactive-docs.js';
 import {
   expectNoAxeViolations,
-  installGeneratedGalleryLoader,
+  installInteractiveGalleryLoader,
   mountInteractiveDemo,
   required,
   staticVisualFixtureHtml,
   type StaticVisualFixturePath,
-} from './interactive-gallery.generated-browser-fixtures.js';
+} from './interactive-gallery.browser-fixtures.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -28,14 +28,14 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('has no axe violations in representative generated interactive states', async () => {
-    const dropdownRoot = mountInteractiveDemo(GalleryDropdownMenuDemo);
+    const dropdownRoot = await mountInteractiveDemo(GalleryDropdownMenuDemo);
     const dropdownTrigger = required(
       dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-trigger'),
     );
     const dropdownContent = required(
       dropdownRoot.querySelector<HTMLElement>('#gallery-dropdown-menu-content'),
     );
-    installGeneratedGalleryLoader(dropdownRoot, { events: ['click', 'keydown'] });
+    installInteractiveGalleryLoader(dropdownRoot, { events: ['click', 'keydown'] });
 
     dropdownTrigger.click();
 
@@ -46,14 +46,14 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await expectNoAxeViolations(dropdownRoot);
 
-    const commandRoot = mountInteractiveDemo(GalleryCommandDemo);
+    const commandRoot = await mountInteractiveDemo(GalleryCommandDemo);
     const commandTrigger = required(
       commandRoot.querySelector<HTMLButtonElement>('#gallery-command-trigger'),
     );
     const commandDialog = required(
       commandRoot.querySelector<HTMLDialogElement>('#gallery-command-dialog'),
     );
-    installGeneratedGalleryLoader(commandRoot, { events: ['click', 'input', 'keydown'] });
+    installInteractiveGalleryLoader(commandRoot, { events: ['click', 'input', 'keydown'] });
 
     commandTrigger.click();
 
@@ -63,7 +63,7 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await expectNoAxeViolations(commandRoot);
 
-    const fieldRoot = mountInteractiveDemo(GalleryFieldDemo);
+    const fieldRoot = await mountInteractiveDemo(GalleryFieldDemo);
     const email = required(
       fieldRoot.querySelector<HTMLInputElement>('#gallery-interactive-field-email-input'),
     );
@@ -76,13 +76,13 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     await expectNoAxeViolations(fieldRoot);
 
-    const toastRoot = mountInteractiveDemo(GalleryToastDemo);
+    const toastRoot = await mountInteractiveDemo(GalleryToastDemo);
     const showToast = required(toastRoot.querySelector<HTMLButtonElement>('[data-toast-show]'));
     const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
     const disabledAction = required(
       toastRoot.querySelector<HTMLButtonElement>('[data-toast-disabled-action]'),
     );
-    installGeneratedGalleryLoader(toastRoot, { events: ['click'] });
+    installInteractiveGalleryLoader(toastRoot, { events: ['click'] });
 
     expect(toast.hidden).toBe(true);
     showToast.click();

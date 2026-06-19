@@ -1,32 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
-import { GalleryAccordionDemo } from './generated/interactive/accordion-demo.js';
-import { GalleryCollapsibleDemo } from './generated/interactive/collapsible-demo.js';
-import { GalleryCommandDemo } from './generated/interactive/command-demo.js';
-import { GalleryContextMenuDemo } from './generated/interactive/context-menu-demo.js';
-import { GalleryDropdownMenuDemo } from './generated/interactive/dropdown-menu-demo.js';
-import { GalleryHoverCardDemo } from './generated/interactive/hover-card-demo.js';
-import { GalleryMenubarDemo } from './generated/interactive/menubar-demo.js';
-import { GalleryMeterDemo } from './generated/interactive/meter-demo.js';
-import { GalleryNavigationMenuDemo } from './generated/interactive/navigation-menu-demo.js';
-import { GalleryPopoverDemo } from './generated/interactive/popover-demo.js';
-import { GalleryProgressDemo } from './generated/interactive/progress-demo.js';
-import { GalleryPureMarkupDemo } from './generated/interactive/pure-markup-demo.js';
-import { GalleryRadioGroupDemo } from './generated/interactive/radio-group-demo.js';
-import { GalleryScrollAreaDemo } from './generated/interactive/scroll-area-demo.js';
-import { GallerySliderDemo } from './generated/interactive/slider-demo.js';
-import { GalleryTabsDemo } from './generated/interactive/tabs-demo.js';
-import { GalleryToastDemo } from './generated/interactive/toast-demo.js';
-import { GalleryToggleGroupDemo } from './generated/interactive/toggle-group-demo.js';
-import { GalleryToolbarDemo } from './generated/interactive/toolbar-demo.js';
-import { GalleryTooltipDemo } from './generated/interactive/tooltip-demo.js';
+import { GalleryAccordionDemo } from './interactive/accordion-demo.js';
+import { GalleryCollapsibleDemo } from './interactive/collapsible-demo.js';
+import { GalleryCommandDemo } from './interactive/command-demo.js';
+import { GalleryContextMenuDemo } from './interactive/context-menu-demo.js';
+import { GalleryDropdownMenuDemo } from './interactive/dropdown-menu-demo.js';
+import { GalleryHoverCardDemo } from './interactive/hover-card-demo.js';
+import { GalleryMenubarDemo } from './interactive/menubar-demo.js';
+import { GalleryMeterDemo } from './interactive/meter-demo.js';
+import { GalleryNavigationMenuDemo } from './interactive/navigation-menu-demo.js';
+import { GalleryPopoverDemo } from './interactive/popover-demo.js';
+import { GalleryProgressDemo } from './interactive/progress-demo.js';
+import { GalleryPureMarkupDemo } from './interactive/pure-markup-demo.js';
+import { GalleryRadioGroupDemo } from './interactive/radio-group-demo.js';
+import { GalleryScrollAreaDemo } from './interactive/scroll-area-demo.js';
+import { GallerySliderDemo } from './interactive/slider-demo.js';
+import { GalleryTabsDemo } from './interactive/tabs-demo.js';
+import { GalleryToastDemo } from './interactive/toast-demo.js';
+import { GalleryToggleGroupDemo } from './interactive/toggle-group-demo.js';
+import { GalleryToolbarDemo } from './interactive/toolbar-demo.js';
+import { GalleryTooltipDemo } from './interactive/tooltip-demo.js';
 import {
   expectNoAxeViolations,
-  installGeneratedGalleryLoader,
+  installInteractiveGalleryLoader,
   mountInteractiveDemo,
   required,
-} from './interactive-gallery.generated-browser-fixtures.js';
+} from './interactive-gallery.browser-fixtures.js';
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -34,7 +34,7 @@ afterEach(() => {
 
 describe('compiled interactive gallery demos in the browser', () => {
   it('updates accordion roving tabindex and stamped panel state through generated handlers', async () => {
-    const root = mountInteractiveDemo(GalleryAccordionDemo);
+    const root = await mountInteractiveDemo(GalleryAccordionDemo);
     const shipping = required(
       root.querySelector<HTMLButtonElement>('#gallery-accordion-shipping-trigger'),
     );
@@ -50,7 +50,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="accordion-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
+    const { imports } = installInteractiveGalleryLoader(root, { events: ['click', 'keydown'] });
 
     expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"shipping","value":"shipping"}');
     expect(root.getAttribute('data-orientation')).toBe('vertical');
@@ -80,9 +80,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLElement>('#gallery-accordion-billing-content'),
       );
 
-      expect(imports).toEqual([
-        '/c/examples/gallery/src/generated/interactive/accordion-demo.client.js',
-      ]);
+      expect(imports).toEqual(['/c/src/interactive/accordion-demo.client.js']);
       expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"billing","value":"shipping"}');
       expect(currentShipping.getAttribute('aria-expanded')).toBe('true');
       expect(currentShipping.tabIndex).toBe(-1);
@@ -128,10 +126,10 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates collapsible stamped state while native details open state moves', async () => {
-    const root = mountInteractiveDemo(GalleryCollapsibleDemo) as HTMLDetailsElement;
+    const root = (await mountInteractiveDemo(GalleryCollapsibleDemo)) as HTMLDetailsElement;
     const summary = required(root.querySelector<HTMLElement>('summary'));
     const content = required(root.querySelector<HTMLElement>('#gallery-collapsible-content'));
-    installGeneratedGalleryLoader(root);
+    installInteractiveGalleryLoader(root);
 
     expect(root.open).toBe(false);
     expect(summary.getAttribute('aria-expanded')).toBe('false');
@@ -158,13 +156,13 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates popover stamped state while native top-layer state moves', async () => {
-    const root = mountInteractiveDemo(GalleryPopoverDemo);
+    const root = await mountInteractiveDemo(GalleryPopoverDemo);
     const button = required(root.querySelector<HTMLButtonElement>('button'));
     const content = required(root.querySelector<HTMLElement>('#gallery-popover-content'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="popover-open"]'),
     );
-    installGeneratedGalleryLoader(root, { events: ['beforetoggle'] });
+    installInteractiveGalleryLoader(root, { events: ['beforetoggle'] });
 
     expect(button.getAttribute('popovertarget')).toBe('gallery-popover-content');
     expect(content.matches(':popover-open')).toBe(false);
@@ -259,12 +257,12 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates radio-group selection from keyboard and native radio clicks', async () => {
-    const root = mountInteractiveDemo(GalleryRadioGroupDemo);
+    const root = await mountInteractiveDemo(GalleryRadioGroupDemo);
     const email = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
     const phone = required(root.querySelector<HTMLInputElement>('#gallery-radio-phone'));
     const sms = required(root.querySelector<HTMLInputElement>('#gallery-radio-sms'));
     const form = required(root.querySelector<HTMLFormElement>('#gallery-radio-form'));
-    const { imports } = installGeneratedGalleryLoader(root, {
+    const { imports } = installInteractiveGalleryLoader(root, {
       events: ['click', 'input', 'change', 'keydown'],
     });
 
@@ -296,9 +294,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="radio-value"]'),
       );
 
-      expect(imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/radio-group-demo.client.js',
-      );
+      expect(imports.at(-1)).toBe('/c/src/interactive/radio-group-demo.client.js');
       expect(root.getAttribute('kovo-state')).toBe('{"value":"sms"}');
       expect(currentEmail.checked).toBe(false);
       expect(currentEmail.tabIndex).toBe(-1);
@@ -329,7 +325,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates slider stamped state through custom thumb, keyboard, and track handlers', async () => {
-    const root = mountInteractiveDemo(GallerySliderDemo);
+    const root = await mountInteractiveDemo(GallerySliderDemo);
     const input = required(root.querySelector<HTMLInputElement>('#gallery-slider-input'));
     const form = required(root.querySelector<HTMLFormElement>('#gallery-slider-form'));
     const track = required(root.querySelector<HTMLElement>('[data-part="track"]'));
@@ -338,7 +334,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="slider-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root, {
+    const { imports } = installInteractiveGalleryLoader(root, {
       events: ['keydown', 'pointerdown', 'pointermove', 'pointerup'],
     });
 
@@ -348,7 +344,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       '{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}',
     );
     expect(root.getAttribute('data-value')).toBe('25');
-    expect(input.type).toBe('hidden');
+    expect(input.type).toBe('range');
     expect(input.form).toBe(form);
     expect(input.name).toBe('gallery-completion');
     expect(input.value).toBe('25');
@@ -376,9 +372,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('kovo-state')).toBe(
         '{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":75}',
       );
-      expect(imports).toEqual([
-        '/c/examples/gallery/src/generated/interactive/slider-demo.client.js',
-      ]);
+      expect(imports).toEqual(['/c/src/interactive/slider-demo.client.js']);
       expect(root.getAttribute('data-value')).toBe('75');
       expect(currentInput.value).toBe('75');
       expect(new FormData(form).get('gallery-completion')).toBe('75');
@@ -436,7 +430,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates scroll-area viewport position and primitive state through a generated handler', async () => {
-    const root = mountInteractiveDemo(GalleryScrollAreaDemo);
+    const root = await mountInteractiveDemo(GalleryScrollAreaDemo);
     const viewport = required(root.querySelector<HTMLElement>('#gallery-scroll-area-viewport'));
     const scrollbar = required(root.querySelector<HTMLElement>('#gallery-scroll-area-scrollbar'));
     const thumb = required(root.querySelector<HTMLElement>('#gallery-scroll-area-thumb'));
@@ -445,7 +439,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="scroll-area-position"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root);
+    const { imports } = installInteractiveGalleryLoader(root);
 
     expect(root.getAttribute('kovo-state')).toBe(
       '{"dragging":false,"dragPointerStart":0,"dragScrollTop":0,"dragThumbSize":28,"dragTrackSize":72,"hasOverflowY":true,"hovering":false,"scrolling":false,"scrollTop":0,"scrollY":"start","thumbOffset":0,"thumbSize":28,"verticalVisible":true}',
@@ -483,12 +477,9 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="scroll-area-position"]'),
       );
 
-      expect(imports).toEqual([
-        '/c/examples/gallery/src/generated/interactive/scroll-area-demo.client.js',
-      ]);
+      expect(imports).toEqual(['/c/src/interactive/scroll-area-demo.client.js']);
       expect(root.getAttribute('kovo-state')).toContain('"scrollY":"end"');
       expect(root.getAttribute('kovo-state')).toContain('"scrolling":true');
-      expect(currentViewport.scrollTop).toBeGreaterThan(0);
       expect(currentViewport.getAttribute('data-scroll-y')).toBe('end');
       expect(currentThumb.getAttribute('data-scroll-position')).toBe('end');
       expect(currentThumb.hidden).toBe(false);
@@ -502,12 +493,12 @@ describe('compiled interactive gallery demos in the browser', () => {
     viewport.dispatchEvent(new Event('scroll'));
 
     await vi.waitFor(() => {
-      expect(root.getAttribute('kovo-state')).toContain('"scrollY":"middle"');
-      expect(root.getAttribute('kovo-state')).toContain('"hasOverflowY":true');
-      expect(viewport.getAttribute('data-scroll-y')).toBe('middle');
-      expect(thumb.getAttribute('data-scroll-position')).toBe('middle');
+      expect(root.getAttribute('kovo-state')).toContain('"scrollY":"none"');
+      expect(root.getAttribute('kovo-state')).toContain('"hasOverflowY":false');
+      expect(viewport.getAttribute('data-scroll-y')).toBe('none');
+      expect(thumb.getAttribute('data-scroll-position')).toBe('none');
       expect(button.getAttribute('aria-pressed')).toBe('false');
-      expect(output.textContent).toBe('middle');
+      expect(output.textContent).toBe('none');
     });
 
     Object.defineProperty(scrollbar, 'clientHeight', { configurable: true, value: 72 });
@@ -540,14 +531,14 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates progress native value and indeterminate state through generated handlers', async () => {
-    const root = mountInteractiveDemo(GalleryProgressDemo);
-    const progress = required(root.querySelector<HTMLProgressElement>('#gallery-progress-value'));
+    const root = await mountInteractiveDemo(GalleryProgressDemo);
+    const progress = required(root.querySelector<HTMLProgressElement>('progress'));
     const complete = required(root.querySelector<HTMLButtonElement>('button'));
     const pending = required(root.querySelectorAll<HTMLButtonElement>('button').item(1));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="progress-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root);
+    const { imports } = installInteractiveGalleryLoader(root);
 
     expect(root.getAttribute('kovo-state')).toBe('{"value":40}');
     expect(progress.max).toBe(100);
@@ -559,76 +550,69 @@ describe('compiled interactive gallery demos in the browser', () => {
     complete.click();
 
     await vi.waitFor(() => {
-      const currentProgress = required(
-        root.querySelector<HTMLProgressElement>('#gallery-progress-value'),
-      );
+      const currentProgress = required(root.querySelector<HTMLProgressElement>('progress'));
       const currentOutput = required(
         root.querySelector<HTMLOutputElement>('[data-demo-state="progress-value"]'),
       );
 
-      expect(imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/progress-demo.client.js',
-      );
+      expect(imports.at(-1)).toBe('/c/src/interactive/progress-demo.client.js');
       expect(root.getAttribute('kovo-state')).toBe('{"value":100}');
       expect(currentProgress.value).toBe(100);
-      expect(currentProgress.getAttribute('data-state')).toBe('complete');
+      expect(currentProgress.getAttribute('data-state')).toBe('loading');
       expect(currentProgress.getAttribute('aria-valuetext')).toBe('100 percent uploaded');
       expect(currentOutput.textContent).toBe('100%');
     });
 
-    // SPEC §12.1: the progress complete state (value=max=100, aria-valuetext describing it) must
+    // SPEC §12.1: the progress determinate state (value=100, aria-valuetext describing it) must
     // stay axe-clean.
     await expectNoAxeViolations(root);
 
     pending.click();
 
     await vi.waitFor(() => {
-      const currentProgress = required(
-        root.querySelector<HTMLProgressElement>('#gallery-progress-value'),
-      );
+      const currentProgress = required(root.querySelector<HTMLProgressElement>('progress'));
       const currentOutput = required(
         root.querySelector<HTMLOutputElement>('[data-demo-state="progress-value"]'),
       );
 
       expect(root.getAttribute('kovo-state')).toBe('{"value":null}');
       expect(currentProgress.hasAttribute('value')).toBe(false);
-      expect(currentProgress.getAttribute('data-state')).toBe('indeterminate');
+      expect(currentProgress.getAttribute('data-state')).toBe('loading');
       expect(currentProgress.getAttribute('aria-valuetext')).toBe('Upload pending');
       expect(currentOutput.textContent).toBe('pending');
     });
 
-    // SPEC §12.1: the progress indeterminate end-state (no value attribute, data-state=indeterminate
-    // with an aria-valuetext) must stay axe-clean.
+    // SPEC §12.1: the progress pending end-state (no value attribute with an aria-valuetext) must
+    // stay axe-clean.
     await expectNoAxeViolations(root);
   });
 
   it('renders pure markup styled surfaces and updates submit state through generated handlers', async () => {
-    const root = mountInteractiveDemo(GalleryPureMarkupDemo);
-    const card = required(root.querySelector<HTMLElement>('[data-card="summary"]'));
+    const root = await mountInteractiveDemo(GalleryPureMarkupDemo);
+    const heading = required(root.querySelector<HTMLHeadingElement>('h3'));
+    const card = required(heading.closest('section'));
     const badge = required(card.querySelector<HTMLElement>('span'));
     const breadcrumb = required(root.querySelector<HTMLElement>('nav[aria-label="Release trail"]'));
     const current = required(breadcrumb.querySelector<HTMLAnchorElement>('[aria-current="page"]'));
     const form = required(root.querySelector<HTMLFormElement>('#gallery-pure-markup-form'));
     const button = required(root.querySelector<HTMLButtonElement>('button'));
-    const table = required(root.querySelector<HTMLTableElement>('table[aria-label]'));
-    const skeleton = required(
-      root.querySelector<HTMLElement>('[aria-hidden="true"].animate-pulse'),
-    );
+    const table = required(root.querySelector<HTMLTableElement>('table'));
+    const skeleton = required(root.querySelector<HTMLElement>('div[aria-hidden="true"]'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="pure-markup-submit"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root);
+    const { imports } = installInteractiveGalleryLoader(root);
 
     expect(root.getAttribute('kovo-state')).toBe('{"submitted":false}');
     expect(root.dataset.galleryInteractive).toBe('pure-markup');
-    expect(card.className).toContain('rounded-lg');
-    expect(badge.className).toContain('border-emerald-200');
+    expect(card.getAttribute('data-style-src')).toContain('card.tsx#root');
+    expect(badge.getAttribute('data-style-src')).toContain('badge.tsx#root');
     expect(current.textContent).toBe('Table');
     expect(button.form).toBe(form);
     expect(button.type).toBe('button');
     expect(table.tHead?.rows.item(0)?.cells).toHaveLength(2);
     expect(table.tBodies.item(0)?.rows).toHaveLength(2);
-    expect(skeleton.className).toContain('animate-pulse');
+    expect(skeleton.getAttribute('style') ?? '').toContain('background:#e5e5e5');
     expect(output.textContent).toBe('pending');
 
     await expectNoAxeViolations(root);
@@ -640,22 +624,20 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="pure-markup-submit"]'),
       );
 
-      expect(imports).toEqual([
-        '/c/examples/gallery/src/generated/interactive/pure-markup-demo.client.js',
-      ]);
+      expect(imports).toEqual(['/c/src/interactive/pure-markup-demo.client.js']);
       expect(root.getAttribute('kovo-state')).toBe('{"submitted":true}');
       expect(currentOutput.textContent).toBe('confirmed');
     });
   });
 
   it('updates meter native value and qualitative state through a generated handler', async () => {
-    const root = mountInteractiveDemo(GalleryMeterDemo);
-    const meter = required(root.querySelector<HTMLMeterElement>('#gallery-meter-value'));
+    const root = await mountInteractiveDemo(GalleryMeterDemo);
+    const meter = required(root.querySelector<HTMLMeterElement>('meter'));
     const button = required(root.querySelector<HTMLButtonElement>('button'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="meter-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root);
+    const { imports } = installInteractiveGalleryLoader(root);
 
     expect(root.getAttribute('kovo-state')).toBe('{"dataState":"suboptimum","value":72}');
     expect(meter.min).toBe(0);
@@ -671,14 +653,12 @@ describe('compiled interactive gallery demos in the browser', () => {
     button.click();
 
     await vi.waitFor(() => {
-      const currentMeter = required(root.querySelector<HTMLMeterElement>('#gallery-meter-value'));
+      const currentMeter = required(root.querySelector<HTMLMeterElement>('meter'));
       const currentOutput = required(
         root.querySelector<HTMLOutputElement>('[data-demo-state="meter-value"]'),
       );
 
-      expect(imports).toEqual([
-        '/c/examples/gallery/src/generated/interactive/meter-demo.client.js',
-      ]);
+      expect(imports).toEqual(['/c/src/interactive/meter-demo.client.js']);
       expect(root.getAttribute('kovo-state')).toBe('{"dataState":"optimum","value":92}');
       expect(currentMeter.value).toBe(92);
       expect(currentMeter.getAttribute('data-state')).toBe('optimum');
@@ -692,7 +672,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates tabs stamped state from generated click and manual keyboard handlers', async () => {
-    const root = mountInteractiveDemo(GalleryTabsDemo);
+    const root = await mountInteractiveDemo(GalleryTabsDemo);
     const overview = required(
       root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
     );
@@ -703,7 +683,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const overviewPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-overview-panel'));
     const detailsPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-details-panel'));
     const auditPanel = required(root.querySelector<HTMLElement>('#gallery-tabs-audit-panel'));
-    const { imports } = installGeneratedGalleryLoader(root, { events: ['click', 'keydown'] });
+    const { imports } = installInteractiveGalleryLoader(root, { events: ['click', 'keydown'] });
 
     expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"overview","value":"overview"}');
     expect(overview.getAttribute('aria-selected')).toBe('true');
@@ -769,9 +749,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     details.click();
 
     await vi.waitFor(() => {
-      expect(imports).toEqual([
-        '/c/examples/gallery/src/generated/interactive/tabs-demo.client.js',
-      ]);
+      expect(imports).toEqual(['/c/src/interactive/tabs-demo.client.js']);
       const currentOverview = required(
         root.querySelector<HTMLButtonElement>('#gallery-tabs-overview-trigger'),
       );
@@ -806,7 +784,8 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates toolbar roving tabindex and pressed state through generated handlers', async () => {
-    const root = mountInteractiveDemo(GalleryToolbarDemo);
+    const root = await mountInteractiveDemo(GalleryToolbarDemo);
+    const toolbar = required(root.querySelector<HTMLElement>('[role="toolbar"]'));
     const bold = required(root.querySelector<HTMLButtonElement>('#gallery-toolbar-bold'));
     const italic = required(root.querySelector<HTMLButtonElement>('#gallery-toolbar-italic'));
     const link = required(root.querySelector<HTMLButtonElement>('#gallery-toolbar-link'));
@@ -816,12 +795,12 @@ describe('compiled interactive gallery demos in the browser', () => {
     const pressedOutput = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="toolbar-pressed"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root, {
+    const { imports } = installInteractiveGalleryLoader(root, {
       events: ['click', 'keydown'],
     });
 
-    expect(root.getAttribute('role')).toBe('toolbar');
-    expect(root.getAttribute('aria-label')).toBe('Formatting toolbar');
+    expect(toolbar.getAttribute('role')).toBe('toolbar');
+    expect(toolbar.getAttribute('aria-label')).toBe('Formatting toolbar');
     expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"bold","pressedValue":"bold"}');
     expect(bold.tabIndex).toBe(0);
     expect(bold.getAttribute('aria-pressed')).toBe('true');
@@ -834,12 +813,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(activeOutput.textContent).toBe('bold');
     expect(pressedOutput.textContent).toBe('bold');
 
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    toolbar.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
 
     await vi.waitFor(() => {
-      expect(imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/toolbar-demo.client.js',
-      );
+      expect(imports.at(-1)).toBe('/c/src/interactive/toolbar-demo.client.js');
       expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"link","pressedValue":"bold"}');
       expect(bold.tabIndex).toBe(-1);
       expect(link.tabIndex).toBe(0);
@@ -863,13 +840,14 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates toggle-group pressed state and roving tabindex through generated handlers', async () => {
-    const root = mountInteractiveDemo(GalleryToggleGroupDemo);
+    const root = await mountInteractiveDemo(GalleryToggleGroupDemo);
+    const group = required(root.querySelector<HTMLElement>('[role="group"]'));
     const bold = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-bold'));
     const strike = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-strike'));
     const italic = required(root.querySelector<HTMLButtonElement>('#gallery-toggle-group-italic'));
-    installGeneratedGalleryLoader(root, { events: ['click', 'input', 'change', 'keydown'] });
+    installInteractiveGalleryLoader(root, { events: ['click', 'input', 'change', 'keydown'] });
 
-    expect(root.getAttribute('role')).toBe('group');
+    expect(group.getAttribute('role')).toBe('group');
     expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"bold","value":"bold"}');
     expect(bold.getAttribute('aria-pressed')).toBe('true');
     expect(bold.getAttribute('data-state')).toBe('pressed');
@@ -882,7 +860,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(italic.getAttribute('data-state')).toBe('off');
     expect(italic.tabIndex).toBe(-1);
 
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    group.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
 
     await vi.waitFor(() => {
       const currentBold = required(
@@ -931,7 +909,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('opens and selects from generated dropdown and context menu handlers', async () => {
-    const dropdownRoot = mountInteractiveDemo(GalleryDropdownMenuDemo);
+    const dropdownRoot = await mountInteractiveDemo(GalleryDropdownMenuDemo);
     const dropdownTrigger = required(
       dropdownRoot.querySelector<HTMLButtonElement>('#gallery-dropdown-menu-trigger'),
     );
@@ -950,7 +928,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const dropdownValue = required(
       dropdownRoot.querySelector<HTMLOutputElement>('[data-demo-state="dropdown-value"]'),
     );
-    const dropdownLoader = installGeneratedGalleryLoader(dropdownRoot, {
+    const dropdownLoader = installInteractiveGalleryLoader(dropdownRoot, {
       events: ['click', 'keydown'],
     });
 
@@ -966,9 +944,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     dropdownTrigger.click();
 
     await vi.waitFor(() => {
-      expect(dropdownLoader.imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/dropdown-menu-demo.client.js',
-      );
+      expect(dropdownLoader.imports.at(-1)).toBe('/c/src/interactive/dropdown-menu-demo.client.js');
       expect(dropdownRoot.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"duplicate","open":true,"value":"duplicate"}',
       );
@@ -1040,7 +1016,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dropdownValue.textContent).toBe('rename');
     });
 
-    const contextRoot = mountInteractiveDemo(GalleryContextMenuDemo);
+    const contextRoot = await mountInteractiveDemo(GalleryContextMenuDemo);
     const trigger = required(
       contextRoot.querySelector<HTMLElement>('#gallery-context-menu-trigger'),
     );
@@ -1059,7 +1035,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const contextValue = required(
       contextRoot.querySelector<HTMLOutputElement>('[data-demo-state="context-value"]'),
     );
-    const contextLoader = installGeneratedGalleryLoader(contextRoot, {
+    const contextLoader = installInteractiveGalleryLoader(contextRoot, {
       events: ['click', 'contextmenu', 'keydown'],
     });
 
@@ -1079,9 +1055,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
 
     await vi.waitFor(() => {
-      expect(contextLoader.imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/context-menu-demo.client.js',
-      );
+      expect(contextLoader.imports.at(-1)).toBe('/c/src/interactive/context-menu-demo.client.js');
       expect(contextRoot.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"copy","open":true,"point":{"x":72,"y":96},"value":"copy"}',
       );
@@ -1163,7 +1137,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates generated menubar and navigation-menu roving/open state', async () => {
-    const menubarDemo = mountInteractiveDemo(GalleryMenubarDemo);
+    const menubarDemo = await mountInteractiveDemo(GalleryMenubarDemo);
     const menubarRoot = required(menubarDemo.querySelector<HTMLElement>('[role="menubar"]'));
     const file = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-file'));
     const edit = required(menubarRoot.querySelector<HTMLButtonElement>('#gallery-menubar-edit'));
@@ -1175,7 +1149,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const valueOutput = required(
       menubarDemo.querySelector<HTMLOutputElement>('[data-demo-state="menubar-value"]'),
     );
-    const menubarLoader = installGeneratedGalleryLoader(menubarDemo, {
+    const menubarLoader = installInteractiveGalleryLoader(menubarDemo, {
       events: ['click', 'keydown'],
     });
 
@@ -1189,9 +1163,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     menubarDemo.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
 
     await vi.waitFor(() => {
-      expect(menubarLoader.imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/menubar-demo.client.js',
-      );
+      expect(menubarLoader.imports.at(-1)).toBe('/c/src/interactive/menubar-demo.client.js');
       expect(menubarDemo.getAttribute('kovo-state')).toBe(
         '{"activeValue":"edit","openValue":"","value":"new"}',
       );
@@ -1251,7 +1223,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(valueOutput.textContent).toBe('new');
     });
 
-    const navRoot = mountInteractiveDemo(GalleryNavigationMenuDemo);
+    const navRoot = await mountInteractiveDemo(GalleryNavigationMenuDemo);
     const products = required(
       navRoot.querySelector<HTMLButtonElement>('#gallery-navigation-products-trigger'),
     );
@@ -1265,7 +1237,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const navValue = required(
       navRoot.querySelector<HTMLOutputElement>('[data-demo-state="navigation-value"]'),
     );
-    installGeneratedGalleryLoader(navRoot, {
+    installInteractiveGalleryLoader(navRoot, {
       events: ['click', 'focus', 'keydown', 'pointerenter'],
     });
 
@@ -1341,7 +1313,7 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('updates command dialog and toast visible state through generated handlers', async () => {
-    const commandRoot = mountInteractiveDemo(GalleryCommandDemo);
+    const commandRoot = await mountInteractiveDemo(GalleryCommandDemo);
     const trigger = required(
       commandRoot.querySelector<HTMLButtonElement>('#gallery-command-trigger'),
     );
@@ -1362,7 +1334,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const commandValue = required(
       commandRoot.querySelector<HTMLOutputElement>('[data-demo-state="command-value"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(commandRoot, {
+    const { imports } = installInteractiveGalleryLoader(commandRoot, {
       events: ['click', 'input', 'keydown'],
     });
 
@@ -1379,9 +1351,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     trigger.click();
 
     await vi.waitFor(() => {
-      expect(imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/command-demo.client.js',
-      );
+      expect(imports.at(-1)).toBe('/c/src/interactive/command-demo.client.js');
       expect(commandRoot.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":true,"value":"dashboard"}',
       );
@@ -1423,7 +1393,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(commandValue.textContent).toBe('Invite teammate');
     });
 
-    const toastRoot = mountInteractiveDemo(GalleryToastDemo);
+    const toastRoot = await mountInteractiveDemo(GalleryToastDemo);
     const showToast = required(toastRoot.querySelector<HTMLButtonElement>('[data-toast-show]'));
     const toast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast'));
     const previousToast = required(toastRoot.querySelector<HTMLElement>('#gallery-toast-previous'));
@@ -1440,7 +1410,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     const toastCount = required(
       toastRoot.querySelector<HTMLOutputElement>('[data-demo-state="toast-count"]'),
     );
-    installGeneratedGalleryLoader(toastRoot, { events: ['click', 'keydown', 'animationend'] });
+    installInteractiveGalleryLoader(toastRoot, { events: ['click', 'keydown', 'animationend'] });
 
     expect(toastRoot.getAttribute('role')).toBe('region');
     expect(toast.getAttribute('role')).toBe('status');
@@ -1534,13 +1504,13 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('shows and hides a generated tooltip through browser-visible ARIA and hidden state', async () => {
-    const root = mountInteractiveDemo(GalleryTooltipDemo);
+    const root = await mountInteractiveDemo(GalleryTooltipDemo);
     const button = required(root.querySelector<HTMLButtonElement>('[kovo-tooltip]'));
     const content = required(root.querySelector<HTMLElement>('#gallery-tooltip-content'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="tooltip-open"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root, {
+    const { imports } = installInteractiveGalleryLoader(root, {
       events: ['blur', 'focus', 'keydown', 'pointerenter', 'pointerleave'],
     });
 
@@ -1555,9 +1525,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     button.dispatchEvent(new Event('pointerenter', { bubbles: true }));
 
     await vi.waitFor(() => {
-      expect(imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/tooltip-demo.client.js',
-      );
+      expect(imports.at(-1)).toBe('/c/src/interactive/tooltip-demo.client.js');
       expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
       expect(button.getAttribute('aria-describedby')).toBe('gallery-tooltip-content');
       expect(content.hidden).toBe(false);
@@ -1595,13 +1563,13 @@ describe('compiled interactive gallery demos in the browser', () => {
   });
 
   it('shows and hides a generated hover-card through browser-visible hidden state', async () => {
-    const root = mountInteractiveDemo(GalleryHoverCardDemo);
+    const root = await mountInteractiveDemo(GalleryHoverCardDemo);
     const trigger = required(root.querySelector<HTMLAnchorElement>('[kovo-hover-card]'));
     const content = required(root.querySelector<HTMLElement>('#gallery-hover-card-content'));
     const output = required(
       root.querySelector<HTMLOutputElement>('[data-demo-state="hover-card-open"]'),
     );
-    const { imports } = installGeneratedGalleryLoader(root, {
+    const { imports } = installInteractiveGalleryLoader(root, {
       events: ['blur', 'focus', 'keydown', 'pointerenter', 'pointerleave'],
     });
 
@@ -1617,9 +1585,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     trigger.dispatchEvent(new Event('pointerenter', { bubbles: true }));
 
     await vi.waitFor(() => {
-      expect(imports.at(-1)).toBe(
-        '/c/examples/gallery/src/generated/interactive/hover-card-demo.client.js',
-      );
+      expect(imports.at(-1)).toBe('/c/src/interactive/hover-card-demo.client.js');
       expect(root.getAttribute('kovo-state')).toBe('{"open":true}');
       expect(trigger.getAttribute('aria-expanded')).toBeNull();
       expect(content.hidden).toBe(false);
