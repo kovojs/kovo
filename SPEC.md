@@ -16,6 +16,14 @@ It composes ideas from prior systems (Qwik, htmx/LiveView, RTK Query, Replicache
 
 > An application's complete behavior — every handler wiring, navigation target, form field, mutation contract, data dependency, and optimistic prediction — should be provable by TypeScript static checking plus static graph queries, and auditable by reading the page source and the Network panel.
 
+For v1 data freshness, that proof covers staleness caused by this client's own
+statically analyzable, modeled writes. Kovo turns those stale-UI paths into build
+or check errors, and turns freshness gaps it cannot statically prove — raw-SQL
+seams, database-engine side effects, the wall clock — into declared, checked,
+suppressible-in-source decisions. Cross-session liveness is an explicit
+out-of-guarantee boundary for v1 and belongs to the opt-in live tier (§9.3), not
+to the core mutation proof.
+
 ### 1.2 Design driver: machine-auditable generation
 
 Kovo is built to be the most machine-auditable compilation target a code-generation agent can emit: generated apps fail TypeScript static checking if wiring is wrong, and intent is verifiable against printed dependency graphs without headless browsers. Where a design choice trades author convenience for machine-checkability, machine-checkability wins. The corollary holds for every reader, not just agents: debugging always proceeds _down_ into plainer code, never _up_ into compiler internals.
@@ -384,7 +392,7 @@ query cart:
   mini-cart    (subtree)          fragment ✓ — no optimistic update (inferred target)
 ```
 
-Like KV310, the check runs at two altitudes off one derived set: in the compiler during lowering (editor-visible) and as `kovo check coverage` (CI/agents). Together with §10.6 and the touch graph, a mutation's full dataflow is exhaustiveness-checked edge by edge: write → invalidated queries (§11.1) → optimistic prediction (KV310) → every dependent DOM position (KV311) → fragment reconcile (§9.1). No edge may be silently uncovered — Appendix A's "nothing to remember" promise holds _unconditionally_, not just inside the plan grammar.
+Like KV310, the check runs at two altitudes off one derived set: in the compiler during lowering (editor-visible) and as `kovo check coverage` (CI/agents). Together with §10.6 and the touch graph, a mutation's full dataflow is exhaustiveness-checked edge by edge: write → invalidated queries (§11.1) → optimistic prediction (KV310) → every dependent DOM position (KV311) → fragment reconcile (§9.1). No edge from this client's own statically analyzable modeled writes may be silently uncovered; raw-SQL seams, DB-engine fan-outs, wall-clock freshness, and cross-session liveness must be declared through their checked escape hatches or treated as outside the v1 automatic freshness guarantee.
 
 ---
 

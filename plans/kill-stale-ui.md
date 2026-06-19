@@ -333,7 +333,7 @@ products` writes emitting KV413 when no matching fan is declared. - [ ] Matview 
 
 ## Deferred SPEC changes (land only after this plan is approved)
 
-- [ ] Scope SPEC.md:387 and §1.1/§4.9: the promise covers staleness from _this
+- [x] Scope SPEC.md:387 and §1.1/§4.9: the promise covers staleness from _this
       client's own, statically-analyzable, modeled writes_; the raw-SQL, DB-engine,
       and wall-clock gaps become **declared, checked, suppressible-in-source**
       decisions (not silent defaults), and **cross-session freshness is named as an
@@ -344,6 +344,10 @@ products` writes emitting KV413 when no matching fan is declared. - [ ] Matview 
       wall clock) from a silent surprise into a declared, checked,
       suppressible-in-source decision; cross-session liveness is an opt-in v2 tier,
       not a v1 promise."_
+  - Evidence 2026-06-19: `SPEC.md` §1.1 and §4.9 now state the v1 guarantee is
+    limited to this client's own statically analyzable modeled writes, with
+    raw-SQL, DB-engine, wall-clock, and cross-session freshness called out as
+    declared/checked or out-of-guarantee boundaries.
 - [x] Register the new diagnostics (KV407/KV312/KV315/KV412/KV413/KV314) in the
       §11.3 table and `packages/core` diagnostic definitions with teaching
       messages + fix menus (per `SPEC.md` §5.2 rule 5).
