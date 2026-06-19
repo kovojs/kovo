@@ -339,9 +339,13 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
       wall clock) from a silent surprise into a declared, checked,
       suppressible-in-source decision; cross-session liveness is an opt-in v2 tier,
       not a v1 promise."_
-- [ ] Register the new diagnostics (KV407/KV312/KV315/KV412/KV413/KV314) in the
+- [x] Register the new diagnostics (KV407/KV312/KV315/KV412/KV413/KV314) in the
       §11.3 table and `packages/core` diagnostic definitions with teaching
       messages + fix menus (per `SPEC.md` §5.2 rule 5).
+  - Evidence 2026-06-19: `pnpm exec vitest --run packages/core/src/diagnostics.test.ts -u`
+    updated and passed the diagnostic registry snapshot with KV312, KV413, and
+    the previously registered KV407/KV314/KV315/KV412 definitions present in
+    `packages/core/src/diagnostics.ts` and `SPEC.md` §11.3.
 
 ## Sequencing
 

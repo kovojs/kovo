@@ -41,6 +41,7 @@ describe('diagnostic registry', () => {
       'KV304',
       'KV310',
       'KV311',
+      'KV312',
       'KV314',
       'KV315',
       'KV320',
@@ -56,6 +57,7 @@ describe('diagnostic registry', () => {
       'KV410',
       'KV411',
       'KV412',
+      'KV413',
     ]);
   });
 
@@ -353,6 +355,16 @@ describe('diagnostic registry', () => {
           "message": "Query/state-dependent DOM position has no update status.",
           "severity": "warn",
         },
+        "KV312": {
+          "code": "KV312",
+          "help": "Would lower to: an explicit clocks input or query refresh cadence that re-runs the time-dependent rendered position.
+      Blocked reason: the position reads wall-clock-sensitive data without a declared cadence, so rendered output can go stale without any modeled write.
+      Fixes: declare a component clocks entry, add a query .refresh({ every | at | until }) binding modifier, or mark the clock renderOnce when freezing the value is intentional.
+      SPEC §4.8 and §4.9 require every changing rendered fact, including time, to have declared update coverage.
+      Escape: renderOnce is the documented suppression for intentionally immutable clock output.",
+          "message": "Time-dependent rendered position lacks a declared cadence.",
+          "severity": "error",
+        },
         "KV314": {
           "code": "KV314",
           "help": "Would lower to: immutable render output that never receives query update plans or fragment refresh.
@@ -443,6 +455,15 @@ describe('diagnostic registry', () => {
         "KV412": {
           "code": "KV412",
           "message": "Query reads an unmodeled relation.",
+          "severity": "error",
+        },
+        "KV413": {
+          "code": "KV413",
+          "help": "Would lower to: an explicit DB-engine fan-out edge that unions trigger-written domains into the mutation touch graph.
+      Blocked reason: a detected database trigger can mutate data outside the static Drizzle write chain, so invalidation would miss the affected domain.
+      Fixes: declare kovo({ fans: [{ via, domain, when }] }) for the trigger fan-out, move the side-effect into a modeled domain write, or mark the table exempt only when no UI reads it.
+      SPEC §10.1 and §11.1 require DB-engine side effects that cannot be derived statically to be declared and checked.",
+          "message": "Database engine side-effect needs a declared fan-out.",
           "severity": "error",
         },
       }

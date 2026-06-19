@@ -1164,6 +1164,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV304 | error      | Reserved query name such as `state` is not allowed (§4.8 binding roots)                                                                                                        |
 | KV310 | warn       | Invalidated query lacks optimistic transform (write/defer/derive)                                                                                                              |
 | KV311 | warn       | Query/state-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)                                                                          |
+| KV312 | error      | Time-dependent rendered position has no declared clock/query refresh cadence (§4.8/§4.9)                                                                                       |
 | KV315 | warn       | Raw `Date.now()`/`new Date()` read in a derive has no declared clock cadence; use a declared `clocks` input (§4.8/§4.9)                                                        |
 | KV320 | lint       | Event payload overlaps query data — use a transform                                                                                                                            |
 | KV330 | lint       | Direct db access in a mutation handler — route through domain                                                                                                                  |
@@ -1178,6 +1179,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV410 | error      | Opaque query projection (`sql<T>`, raw SQL) — declared output schema required, shape runtime-verified (§10.2)                                                                  |
 | KV411 | error      | Query read set includes an `exempt` table — exemption is write-side only (§10.1), runtime-verified (§11.2)                                                                     |
 | KV412 | error      | Query reads an unmodeled relation (view / materialized view) with no derived or declared domain (§10.1/§11.1)                                                                  |
+| KV413 | error      | Database trigger / engine side-effect needs a declared fan-out edge before invalidation can be proven (§10.1/§11.1)                                                            |
 
 The shared `diagnosticDefinitions` registry is the source of each diagnostic's severity; surfaces
 must not override severity or invent local blocking policies. A diagnostic with `error` severity
