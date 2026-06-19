@@ -13,6 +13,7 @@ import { readMutationResponseBodyChunks } from './wire-parser.js';
 import type { FragmentChunk } from './wire-response-scanner.js';
 import type { IslandSignalScope } from './handler-context.js';
 
+/** @generated Facts about an applied mutation response: the `fragments` and `queries` it touched (SPEC §9.1). */
 export interface AppliedMutationResponse {
   fragments: FragmentChunk[];
   queries: string[];
@@ -43,6 +44,7 @@ export type ApplyMutationResponseBodyToRuntimeOptions =
     body: string;
   };
 
+/** @generated An {@link AppliedMutationResponse} plus the `appliedFragments` morphed into a root (SPEC §9.1). */
 export type AppliedMutationResponseWithRoot = AppliedMutationResponse & {
   appliedFragments: string[];
 };

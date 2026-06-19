@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { type StorageCapability } from './index.js';
 import {
   createFileSystemStorage,
   createMemoryStorage,
@@ -17,8 +18,7 @@ import {
   type S3CompatibleObjectMetadata,
   type S3CompatiblePutObjectInput,
   type S3CompatiblePutObjectOutput,
-  type StorageCapability,
-} from './index.js';
+} from './internal/storage.js';
 
 interface StorageHarness {
   cleanup?: () => Promise<void>;

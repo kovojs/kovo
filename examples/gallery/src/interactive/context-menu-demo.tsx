@@ -1,20 +1,22 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import type { ContextMenuItem as GalleryContextMenuItem } from '@kovojs/headless-ui/context-menu';
 import {
-  ContextMenu,
-  ContextMenuContent,
   contextMenuFocusElement as _contextMenuFocusElement,
-  ContextMenuItem,
   contextMenuItemClick as _contextMenuItemClick,
   contextMenuItemKeyDown as _contextMenuItemKeyDown,
   contextMenuKeyDown as _contextMenuKeyDown,
   contextMenuMove as _contextMenuMove,
-  ContextMenuTrigger,
   contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
   contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
   contextMenuTypeahead as _contextMenuTypeahead,
+  type ContextMenuItem as GalleryContextMenuItem,
   type ContextMenuPoint,
+} from '@kovojs/headless-ui/context-menu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
 } from '@kovojs/ui/context-menu';
 
 export interface GalleryContextMenuDemoState {

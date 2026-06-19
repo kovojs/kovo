@@ -1,15 +1,15 @@
+import type { ComponentMutationDefinitions, ComponentMutationForms, Form } from './forms-types.js';
+import type { JsonValue } from './json.js';
+
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
+export type { JsonValue } from './json.js';
 export type {
-  FileSystemStorageOptions,
-  MemoryStorageOptions,
-  S3CompatibleGetObjectInput,
-  S3CompatibleGetObjectOutput,
-  S3CompatibleHeadObjectInput,
-  S3CompatibleObjectClient,
-  S3CompatibleObjectMetadata,
-  S3CompatiblePutObjectInput,
-  S3CompatiblePutObjectOutput,
-  S3CompatibleStorageOptions,
+  ComponentMutationFormState,
+  Form,
+  FormFailure,
+  FormValidationFailure,
+} from './forms-types.js';
+export type {
   StorageBody,
   StorageCapability,
   StorageGetResult,
@@ -17,13 +17,6 @@ export type {
   StoragePutOptions,
   StoragePutResult,
   StorageStreamResult,
-} from './storage.js';
-export {
-  createFileSystemStorage,
-  createMemoryStorage,
-  createS3CompatibleStorage,
-  normalizeStorageKey,
-  storageBodyToBytes,
 } from './storage.js';
 export type {
   CustomWebhookVerifier,
@@ -44,15 +37,6 @@ export type {
   WebhookVerifier,
 } from './verifier.js';
 export { customVerifier, hmacSignature, standardWebhooks } from './verifier.js';
-
-/** Any value that survives a JSON round-trip; the boundary type for island state and wire payloads (SPEC §4.1). */
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
 
 /** Opaque non-callback result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult =
@@ -77,23 +61,12 @@ export interface ComponentErrorBoundary {
   target?: string;
 }
 
-type ComponentMutationDefinitions = Record<string, Form<string, any, any>>;
 type NoComponentMutations = Record<never, never>;
 type ComponentDefinitionMutations<Definition> = Definition extends { mutations: infer Mutations }
   ? Mutations extends ComponentMutationDefinitions
     ? Mutations
     : NoComponentMutations
   : NoComponentMutations;
-
-/** Render state for one typed mutation form instance. */
-export interface ComponentMutationFormState<Failure> {
-  failure: Failure | null;
-}
-
-/** Render state keyed by a component's declared mutation handles. */
-export type ComponentMutationForms<Mutations extends ComponentMutationDefinitions> = {
-  [Name in keyof Mutations]: ComponentMutationFormState<FormFailure<Mutations[Name]>>;
-};
 
 interface ComponentRenderSlotValues {
   children?: unknown;
@@ -455,17 +428,6 @@ export function query<
   };
 }
 
-/** A typed mutation form handle: its key, input shape, and failure type. */
-export interface Form<
-  Key extends string,
-  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
-  Failure = JsonValue,
-> {
-  failure?: Failure;
-  input?: Input;
-  key: Key;
-}
-
 /** A typed accessor for one search field of a GET form (`form.get(...).input(name)`). */
 export interface GetFormInput<Name extends string> {
   name: Name;
@@ -487,12 +449,6 @@ export interface GetForm<
   input<const Name extends Extract<keyof Search, string>>(name: Name): GetFormInput<Name>;
   method: 'get';
   path: Path;
-}
-
-/** The built-in validation failure shape returned when form input fails parsing. */
-export interface FormValidationFailure {
-  code: 'VALIDATION';
-  fieldErrors: Record<string, string>;
 }
 
 /** Props accepted by the compiler-bound `<FieldError />` mutation failure helper. */
@@ -594,10 +550,6 @@ type MutationErrorFailures<Errors> =
 /** Extract the input shape of a `Form` definition. */
 export type FormInput<Definition> =
   Definition extends Form<string, infer Input, unknown> ? Input : never;
-
-/** Extract the failure type of a `Form`, unioned with the built-in validation failure. */
-export type FormFailure<Definition> =
-  Definition extends Form<string, any, infer Failure> ? Failure | FormValidationFailure : never;
 
 /** The string-literal union of a form's field names. */
 export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;
@@ -786,43 +738,4 @@ function escapeHtmlAttribute(value: string): string {
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
-}
-
-/** A typed event descriptor: its name, payload type, and server-populated payload keys. */
-export interface EventDefinition<Name extends string, Payload extends JsonValue = JsonValue> {
-  name: Name;
-  payload?: Payload;
-  serverFactKeys?: readonly string[];
-}
-
-/** Extract the payload type of an `EventDefinition`. */
-export type EventPayload<Definition> =
-  Definition extends EventDefinition<string, infer Payload> ? Payload : never;
-
-/** Options for `event()`: which payload keys the server is allowed to supply. */
-export interface EventOptions<Payload extends JsonValue = JsonValue> {
-  serverFactKeys?: readonly Extract<keyof Payload, string>[];
-}
-
-/**
- * Declare a typed client event with a serializable payload. Handlers dispatch
- * and listen for events by this name; `serverFactKeys` marks payload fields the
- * server is allowed to populate (SPEC §4.3).
- *
- * @param name - Event name used when dispatching and listening.
- * @param options - Optional `serverFactKeys` naming server-provided payload fields.
- * @returns An `EventDefinition` whose `payload` type is `Payload`.
- * @example
- * import { event } from '@kovojs/core';
- *
- * export const itemAdded = event<'item-added', { id: string }>('item-added');
- */
-export function event<const Name extends string, Payload extends JsonValue = JsonValue>(
-  name: Name,
-  options: EventOptions<Payload> = {},
-): EventDefinition<Name, Payload> {
-  return {
-    name,
-    ...(options.serverFactKeys === undefined ? {} : { serverFactKeys: options.serverFactKeys }),
-  };
 }

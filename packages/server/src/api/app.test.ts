@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import * as packageRootApi from '@kovojs/server';
-import * as packageClientModulesApi from '@kovojs/server/app-shell/client-modules';
-import * as packageCoreApi from '@kovojs/server/app-shell/core';
-import * as packageNodeApi from '@kovojs/server/app-shell/node';
 import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
 import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
@@ -16,20 +13,16 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
-import * as clientModulesSourceApi from '../client-modules.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
 import * as publicApi from '../index.js';
-import * as clientModulesApi from './app-shell/client-modules.js';
-import * as coreApi from './app-shell/core.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
 import * as internalCsrfApi from '../internal/csrf.js';
 import * as internalExecutionApi from '../internal/execution.js';
 import * as internalHtmlApi from '../internal/html.js';
 import * as internalRouteApi from '../internal/route.js';
 import * as mutationApi from '../mutation.js';
-import * as nodeApi from './app-shell/node.js';
 import * as nodeSourceApi from '../node.js';
 import * as queryApi from '../query.js';
 import * as staticExportApi from './app-shell/static-export.js';
@@ -46,8 +39,8 @@ import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
-import * as viteDevApi from '../vite-dev.js';
 import * as viteApi from '../vite.js';
+import * as viteDevApi from '../vite-dev.js';
 import * as internalWireApi from '../internal/wire.js';
 import * as wireHtmlApi from '../wire-html.js';
 
@@ -68,12 +61,6 @@ type RootErrorShellRenderer = import('../index.js').ErrorShellRenderer;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootRequestHandler = import('../index.js').RequestHandler;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootMemoryRegistryOptions = import('../index.js').MemoryVersionedClientModuleRegistryOptions;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootVersionedClientModuleRegistry = import('../index.js').VersionedClientModuleRegistry;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootVersionedClientModuleInput = import('../index.js').VersionedClientModuleInput;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootNodeHandlerOptions = import('../index.js').NodeHandlerOptions;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootNodeRequestHandler = import('../index.js').NodeRequestHandler;
@@ -85,26 +72,49 @@ type RootStaticExportResult = import('../index.js').StaticExportResult;
 type RootStaticExportDiagnostic = import('../index.js').StaticExportDiagnostic;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootStaticExportDiagnosticSeverity = import('../index.js').StaticExportDiagnosticSeverity;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoAppShellViteDevPluginFactory =
-  typeof import('@kovojs/server').kovoAppShellViteDevPlugin;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoAppShellViteDevIntegrationFactory =
-  typeof import('@kovojs/server').createKovoAppShellViteDevIntegration;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoAppShellViteCompilerModuleDiagnosticReport =
-  import('@kovojs/server').KovoAppShellViteCompilerModuleDiagnosticReport;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoAppShellViteDevIntegration = import('@kovojs/server').KovoAppShellViteDevIntegration;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoAppShellViteDevPlugin = import('@kovojs/server').KovoAppShellViteDevPlugin;
-// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootKovoAppShellViteDevPluginOptions =
-  import('@kovojs/server').KovoAppShellViteDevPluginOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalKovoAppShellViteDevPluginFactory =
+  typeof import('@kovojs/server/internal/app-shell-vite').kovoAppShellViteDevPlugin;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalKovoAppShellViteDevIntegrationFactory =
+  typeof import('@kovojs/server/internal/app-shell-vite').createKovoAppShellViteDevIntegration;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalKovoAppShellViteCompilerModuleDiagnosticReport =
+  import('@kovojs/server/internal/app-shell-vite').KovoAppShellViteCompilerModuleDiagnosticReport;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalKovoAppShellViteDevIntegration =
+  import('@kovojs/server/internal/app-shell-vite').KovoAppShellViteDevIntegration;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalKovoAppShellViteDevPlugin =
+  import('@kovojs/server/internal/app-shell-vite').KovoAppShellViteDevPlugin;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalKovoAppShellViteDevPluginOptions =
+  import('@kovojs/server/internal/app-shell-vite').KovoAppShellViteDevPluginOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalMemoryRegistryOptions =
+  import('@kovojs/server/internal/client-modules').MemoryVersionedClientModuleRegistryOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalVersionedClientModuleRegistryType =
+  import('@kovojs/server/internal/client-modules').VersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalVersionedClientModuleInputType =
+  import('@kovojs/server/internal/client-modules').VersionedClientModuleInput;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootIsKovoApp = typeof import('@kovojs/server').isKovoApp;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootStylesheet = typeof import('@kovojs/server').stylesheet;
+// SPEC.md §9.5: the versioned client-module registry constructor and its option
+// surface are public at the root barrel for `createApp({ clientModules })` consumers.
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootCreateMemoryVersionedClientModuleRegistry =
+  typeof import('@kovojs/server').createMemoryVersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootMemoryVersionedClientModuleRegistryOptions =
+  import('@kovojs/server').MemoryVersionedClientModuleRegistryOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootVersionedClientModuleRegistry = import('@kovojs/server').VersionedClientModuleRegistry;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootVersionedClientModuleInput = import('@kovojs/server').VersionedClientModuleInput;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedCreateApp =
@@ -328,7 +338,6 @@ describe('server app-shell public API barrels', () => {
     const packageRootValues = packageRootApi as Record<string, unknown>;
     const rootAppShellEntrypoints = new Set([
       'createApp',
-      'createMemoryVersionedClientModuleRegistry',
       'createRequestHandler',
       'exportStaticApp',
       'isKovoApp',
@@ -339,8 +348,6 @@ describe('server app-shell public API barrels', () => {
     ]);
     const rootAppShellEntrypointValues = {
       createApp: appApi.createApp,
-      createMemoryVersionedClientModuleRegistry:
-        clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
@@ -351,9 +358,11 @@ describe('server app-shell public API barrels', () => {
     };
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
-      createMemoryVersionedClientModuleRegistry:
-        clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
+      // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
+      // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
+      createMemoryVersionedClientModuleRegistry:
+        internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
@@ -366,12 +375,7 @@ describe('server app-shell public API barrels', () => {
     expect(Object.keys(packageRootValues).sort()).toEqual(rootValues);
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
 
-    const splitAppShellValues = aggregateValueKeys(
-      clientModulesApi,
-      coreApi,
-      nodeApi,
-      staticExportApi,
-    );
+    const splitAppShellValues = aggregateValueKeys(staticExportApi);
     for (const key of splitAppShellValues) {
       if (rootAppShellEntrypoints.has(key)) {
         expect(publicValues[key]).toBe(
@@ -383,17 +387,21 @@ describe('server app-shell public API barrels', () => {
     }
 
     expect(publicApi.createApp).toBe(appApi.createApp);
-    expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
-      clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
-    );
     expect(publicApi.createRequestHandler).toBe(appApi.createRequestHandler);
+    expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
+    expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
+    expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
+    // SPEC.md §9.5: `createApp({ clientModules })` consumers construct a registry,
+    // so the constructor stays public at the root and shares the internal value.
+    expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
+      internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
+    );
+    // SPEC.md §9.5: dev integration/plugin are public at the root barrel (create-kovo
+    // starter template vite.config.ts) and share the vite-dev source values.
     expect(publicApi.createKovoAppShellViteDevIntegration).toBe(
       viteDevApi.createKovoAppShellViteDevIntegration,
     );
-    expect(publicApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
-    expect(publicApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
     expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
-    expect(publicApi.stylesheet).toBe(hintsApi.stylesheet);
     expect(packageRootApi.createKovoAppShellViteDevIntegration).toBe(
       viteDevApi.createKovoAppShellViteDevIntegration,
     );
@@ -504,36 +512,32 @@ describe('server app-shell public API barrels', () => {
     // SPEC.md §9.5 keeps request-shell extension points declared and printable; the public
     // app-shell subpaths stay focused so Vite, static export, and outside adoption paths do not
     // regain an aggregate compatibility surface by accident.
-    expect(moduleValueKeys(packageClientModulesApi)).toEqual([]);
     expect(moduleValueKeys(packageInternalClientModulesApi)).toEqual([
+      'createMemoryVersionedClientModuleRegistry',
       'renderVersionedClientModuleResponse',
       'versionedClientModuleHref',
     ]);
     expect(moduleValueKeys(packageInternalCsrfApi)).toEqual(['renderMutationCsrfField']);
     expect(packageInternalCsrfApi).toEqual(internalCsrfApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
+      'createMemoryMutationReplayStore',
       'endpointMatches',
+      'invalidate',
       'runEndpoint',
       'runMutation',
       'runQuery',
       'runRoutePage',
     ]);
     expect(packageInternalExecutionApi).toEqual(internalExecutionApi);
-    expect(moduleValueKeys(packageCoreApi)).toEqual([]);
-    expect(moduleValueKeys(packageNodeApi)).toEqual([]);
     expect(moduleValueKeys(packageStaticExportApi)).toEqual([]);
-    expect(moduleValueKeys(packageViteApi)).toEqual(['createKovoViteIntegration', 'kovo']);
+    expect(moduleValueKeys(packageViteApi)).toEqual(['kovo']);
     expect(packageViteApi.kovo).toBe(viteApi.kovo);
-    expect(packageViteApi.createKovoViteIntegration).toBe(viteApi.createKovoViteIntegration);
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './vite': './src/vite.ts',
     });
     expect(serverPackage.exports as Record<string, string>).not.toHaveProperty('./app-shell/vite');
 
     expect(packageRootApi.createApp).toBe(appApi.createApp);
-    expect(packageRootApi.createMemoryVersionedClientModuleRegistry).toBe(
-      clientModulesSourceApi.createMemoryVersionedClientModuleRegistry,
-    );
     expect(packageRootApi.createRequestHandler).toBe(appApi.createRequestHandler);
     expect(packageRootApi.exportStaticApp).toBe(staticExportOrchestratorApi.exportStaticApp);
     expect(packageRootApi.isKovoApp).toBe(appGuardsApi.isKovoApp);
@@ -542,18 +546,15 @@ describe('server app-shell public API barrels', () => {
     expect(packageRootApi.route).toBe(routeApi.route);
     expect(packageRootApi.stylesheet).toBe(hintsApi.stylesheet);
     expect(packageRootApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
-    expect(packageClientModulesApi).not.toHaveProperty('renderVersionedClientModuleResponse');
-    expect(packageClientModulesApi).not.toHaveProperty('versionedClientModuleHref');
-    expect(packageClientModulesApi).not.toHaveProperty('createMemoryVersionedClientModuleRegistry');
     expect(packageInternalClientModulesApi.renderVersionedClientModuleResponse).toBe(
       internalClientModulesApi.renderVersionedClientModuleResponse,
     );
     expect(packageInternalClientModulesApi.versionedClientModuleHref).toBe(
       internalClientModulesApi.versionedClientModuleHref,
     );
-    expect(packageNodeApi).not.toHaveProperty('toNodeHandler');
-    expect(packageNodeApi).not.toHaveProperty('nodeRequestToWebRequest');
-    expect(packageNodeApi).not.toHaveProperty('writeWebResponseToNode');
+    expect(packageInternalClientModulesApi.createMemoryVersionedClientModuleRegistry).toBe(
+      internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
+    );
     expect(packageStaticExportApi).not.toHaveProperty('exportStaticApp');
     expect(packageStaticExportApi).not.toHaveProperty('StaticExportError');
     expect(packageStaticExportApi).not.toHaveProperty('staticExportInventory');
@@ -603,9 +604,6 @@ describe('server app-shell public API barrels', () => {
       ),
     );
     expect(appShellPackageExports).toEqual({
-      './app-shell/client-modules': './src/api/app-shell/client-modules.ts',
-      './app-shell/core': './src/api/app-shell/core.ts',
-      './app-shell/node': './src/api/app-shell/node.ts',
       './app-shell/static-export': './src/api/app-shell/static-export.ts',
     });
     expect(serverPackage.exports as Record<string, string>).toMatchObject({

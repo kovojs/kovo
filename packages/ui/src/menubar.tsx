@@ -311,5 +311,3 @@ export const MenubarSeparator = component({
     return <div {...styleAttrs} id={attrs.id} role={attrs.role} />;
   },
 });
-
-export * from '@kovojs/headless-ui/menubar';

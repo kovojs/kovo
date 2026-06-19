@@ -109,7 +109,7 @@ export const GalleryOtpFieldDemo = component({
         labelledBy="gallery-interactive-otp-label"
         {...fieldState}
         data-complete={state.value.length === 4 ? '' : null}
-        data-bind:data-complete="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpField_data_complete_derive"
+        data-bind:data-complete="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpField_data_complete_derive"
         kovo-state='{"activeSlot":2,"value":"12"}'
       >
         <form id={formId} data-gallery-form="otp-field" />
@@ -124,78 +124,78 @@ export const GalleryOtpFieldDemo = component({
           id="gallery-interactive-otp-hidden"
           {...fieldState}
           data-complete={state.value.length === 4 ? '' : null}
-          data-bind:data-complete="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldHiddenInput_data_complete_derive"
+          data-bind:data-complete="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldHiddenInput_data_complete_derive"
           value={state.value}
-          data-bind:value="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldHiddenInput_value_derive"
+          data-bind:value="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldHiddenInput_value_derive"
         />
         <OtpFieldGroup>
           <OtpFieldInput
             id="gallery-interactive-otp-slot-0"
             label="Verification code digit 1"
             slotIndex={0}
-            on:input="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input"
-            on:keydown="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown"
-            on:paste="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste"
+            on:input="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input"
+            on:keydown="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown"
+            on:paste="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste"
             {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
-            data-bind:data-complete="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive"
+            data-bind:data-complete="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive"
             data-filled={(state.value[0] ?? '') === '' ? null : ''}
-            data-bind:data-filled="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive"
+            data-bind:data-filled="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive"
             tabIndex={state.activeSlot === 0 ? 0 : -1}
-            data-bind:tabIndex="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive"
+            data-bind:tabIndex="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive"
             value={state.value[0] ?? ''}
-            data-bind:value="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive"
+            data-bind:value="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive"
           />
           <OtpFieldInput
             id="gallery-interactive-otp-slot-1"
             label="Verification code digit 2"
             slotIndex={1}
-            on:input="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input_2"
-            on:keydown="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown_2"
-            on:paste="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste_2"
+            on:input="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input_2"
+            on:keydown="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown_2"
+            on:paste="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste_2"
             {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
-            data-bind:data-complete="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive_2"
+            data-bind:data-complete="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive_2"
             data-filled={(state.value[1] ?? '') === '' ? null : ''}
-            data-bind:data-filled="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive_2"
+            data-bind:data-filled="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive_2"
             tabIndex={state.activeSlot === 1 ? 0 : -1}
-            data-bind:tabIndex="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive_2"
+            data-bind:tabIndex="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive_2"
             value={state.value[1] ?? ''}
-            data-bind:value="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive_2"
+            data-bind:value="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive_2"
           />
           <OtpFieldInput
             id="gallery-interactive-otp-slot-2"
             label="Verification code digit 3"
             slotIndex={2}
-            on:input="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input_3"
-            on:keydown="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown_3"
-            on:paste="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste_3"
+            on:input="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input_3"
+            on:keydown="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown_3"
+            on:paste="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste_3"
             {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
-            data-bind:data-complete="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive_3"
+            data-bind:data-complete="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive_3"
             data-filled={(state.value[2] ?? '') === '' ? null : ''}
-            data-bind:data-filled="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive_3"
+            data-bind:data-filled="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive_3"
             tabIndex={state.activeSlot === 2 ? 0 : -1}
-            data-bind:tabIndex="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive_3"
+            data-bind:tabIndex="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive_3"
             value={state.value[2] ?? ''}
-            data-bind:value="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive_3"
+            data-bind:value="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive_3"
           />
           <OtpFieldInput
             id="gallery-interactive-otp-slot-3"
             label="Verification code digit 4"
             slotIndex={3}
-            on:input="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input_4"
-            on:keydown="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown_4"
-            on:paste="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste_4"
+            on:input="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_input_4"
+            on:keydown="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_keydown_4"
+            on:paste="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_paste_4"
             {...fieldState}
             data-complete={state.value.length === 4 ? '' : null}
-            data-bind:data-complete="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive_4"
+            data-bind:data-complete="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_complete_derive_4"
             data-filled={(state.value[3] ?? '') === '' ? null : ''}
-            data-bind:data-filled="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive_4"
+            data-bind:data-filled="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_data_filled_derive_4"
             tabIndex={state.activeSlot === 3 ? 0 : -1}
-            data-bind:tabIndex="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive_4"
+            data-bind:tabIndex="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_tabIndex_derive_4"
             value={state.value[3] ?? ''}
-            data-bind:value="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive_4"
+            data-bind:value="/c/__v/a9d46258/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive_4"
           />
         </OtpFieldGroup>
         <p id="gallery-interactive-otp-description" class={DESCRIPTION_CLASS}>

@@ -84,7 +84,6 @@ describe('server static export', () => {
       version: 'cart-island',
     });
     const app = createApp({
-      clientModules: registry,
       routes: [
         route('/cart', {
           page: () =>
@@ -97,6 +96,7 @@ describe('server static export', () => {
         }),
       ],
     });
+    app.clientModules = registry;
 
     const result = await exportStaticApp(app, { origin: 'https://shop.example.test/' });
 
@@ -118,7 +118,6 @@ describe('server static export', () => {
       version: 'example-only',
     });
     const app = createApp({
-      clientModules: registry,
       routes: [
         route('/guide', {
           page: () =>
@@ -135,6 +134,7 @@ describe('server static export', () => {
         }),
       ],
     });
+    app.clientModules = registry;
 
     const result = await exportStaticApp(app, { origin: 'https://docs.example.test' });
 

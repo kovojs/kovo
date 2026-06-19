@@ -8741,7 +8741,7 @@ function lineForIndex(source: string, index: number): number {
 //
 // These project-mode extractors lower real Drizzle write/query source into the
 // shared `SymbolicEffect` / `AlgebraicQueryShape` IR (`@kovojs/core/derivation`)
-// that the source-agnostic Stage-3 deriver (`@kovojs/drizzle/derive`) consumes.
+// that the source-agnostic Stage-3 deriver (`@kovojs/drizzle/internal/derive`) consumes.
 // They REUSE the same ts-morph project, table-symbol resolution, write-chain
 // predicate extraction, and select-shape classification used by the touch-graph
 // and query-fact extractors above — never name/string heuristics (project mode

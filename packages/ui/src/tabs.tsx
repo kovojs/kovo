@@ -295,5 +295,3 @@ export const TabsPanel = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/tabs';

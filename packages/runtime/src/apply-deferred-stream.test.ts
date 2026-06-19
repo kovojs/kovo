@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { applyDeferredStreamResponseToRuntime as applyDeferredStreamResponseToRuntimeFromDeferredModule } from './apply-deferred-stream.js';
-import { applyDeferredStreamResponseToRuntime, createQueryStore } from './client.js';
+import { createQueryStore } from './client.js';
+import { applyDeferredStreamResponseToRuntime } from './generated.js';
 import {
   FakeMorphRoot,
   FakeMorphTarget,
@@ -10,11 +10,7 @@ import {
 } from './runtime-test-fakes.js';
 
 describe('deferred stream response apply', () => {
-  it('exports deferred stream response apply through the runtime barrel', () => {
-    expect(applyDeferredStreamResponseToRuntime).toBe(
-      applyDeferredStreamResponseToRuntimeFromDeferredModule,
-    );
-
+  it('applies deferred stream response query truth before fragment morphs', () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();
     root.targets.set('reviews:p1', new FakeMorphTarget());

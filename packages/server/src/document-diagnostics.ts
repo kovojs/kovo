@@ -7,6 +7,7 @@ import {
   type DocumentTemplate,
 } from './document-core.js';
 
+/** @internal */
 export interface DiagnosticDocumentDiagnostic {
   code: DiagnosticCode;
   fileName?: string;
@@ -20,11 +21,13 @@ export interface DiagnosticDocumentDiagnostic {
   };
 }
 
+/** @internal */
 export interface DiagnosticDocumentSource {
   fileName?: string;
   source: string;
 }
 
+/** @internal */
 export interface DiagnosticDocumentOptions {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
   lang?: string;

@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
   createKovoAppShellViteBuild,
@@ -18,7 +17,6 @@ import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
 
 describe('server app shell Vite plugin', () => {
   it('wires build manifest hints and compiled client modules through the app shell', async () => {
-    const registry = createMemoryVersionedClientModuleRegistry();
     const cartRoute = route('/cart', {
       modulepreloads: ['/c/manual.client.js?v=manual'],
       page() {
@@ -27,7 +25,7 @@ describe('server app shell Vite plugin', () => {
       stylesheets: ['/assets/manual.css'],
     });
     const build = createKovoAppShellViteBuild({
-      app: createApp({ clientModules: registry, routes: [cartRoute] }),
+      app: createApp({ routes: [cartRoute] }),
       clientModules: [
         {
           path: '/c/cart.client.js',

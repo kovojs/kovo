@@ -9,6 +9,11 @@ import {
 import type { FragmentChunk } from './wire-response-scanner.js';
 import { readAttribute, unescapeHtml } from './wire-html.js';
 
+/**
+ * One decoded query value from a wire response or inline script: its `name`,
+ * optional instance `key`, and `value` (a full value, or a QueryDelta envelope
+ * when `delta` is set) (SPEC §9.1.1, §9.4). Named by `QueryApplyInterposition`.
+ */
 export interface QueryChunk {
   /** When true, `value` is a QueryDelta envelope (SPEC §9.1.1), not a full value. */
   delta?: boolean;
@@ -17,6 +22,7 @@ export interface QueryChunk {
   value: unknown;
 }
 
+/** The raw `{ attrs, content }` of a `<kovo-query>` element before decoding (SPEC §9.4). */
 export interface QueryElementChunkLike {
   attrs: string;
   content: string;
@@ -27,6 +33,7 @@ export interface MutationResponseBodyChunks {
   queries: QueryChunk[];
 }
 
+/** A `<kovo-query>` script chunk exposing `getAttribute`/`textContent` for hydration (SPEC §9.4). */
 export interface QueryScriptChunkLike {
   getAttribute(name: string): string | null;
   textContent: string | null;

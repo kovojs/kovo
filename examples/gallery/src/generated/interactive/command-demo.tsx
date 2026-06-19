@@ -139,7 +139,7 @@ export const GalleryCommandDemo$output_text_derive_2 = derive(['state'], (state:
 );
 
 import { component } from '@kovojs/core';
-import type { CommandItem as GalleryCommandItem } from '@kovojs/headless-ui/command';
+import { type CommandItem as GalleryCommandItem } from '@kovojs/headless-ui/command';
 import {
   Command,
   CommandClose,
@@ -201,21 +201,21 @@ export const GalleryCommandDemo = component({
         data-gallery-interactive="command"
         {...commandState}
         data-placeholder={state.inputValue === '' ? '' : null}
-        data-bind:data-placeholder="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$Command_data_placeholder_derive"
+        data-bind:data-placeholder="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$Command_data_placeholder_derive"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$Command_data_state_derive"
+        data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$Command_data_state_derive"
         kovo-state='{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":false,"value":"dashboard"}'
       >
         <form id="gallery-command-form" data-gallery-form="command"></form>
         <CommandTrigger
           contentId={contentId}
           id="gallery-command-trigger"
-          on:click="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandTrigger_click"
+          on:click="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandTrigger_click"
           {...commandState}
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandTrigger_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandTrigger_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandTrigger_data_state_derive"
+          data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandTrigger_data_state_derive"
         >
           Open command
         </CommandTrigger>
@@ -225,17 +225,17 @@ export const GalleryCommandDemo = component({
           titleId="gallery-command-title"
           {...commandState}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandDialog_data_state_derive"
+          data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandDialog_data_state_derive"
           open={state.open}
-          data-bind:open="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandDialog_open_derive"
+          data-bind:open="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandDialog_open_derive"
         >
           <h2 id="gallery-command-title">Command menu</h2>
           <p id="gallery-command-description">Search project actions.</p>
           <CommandInput
             id="gallery-command-input"
             labelledBy="gallery-command-title"
-            on:input="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_input"
-            on:keydown="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_keydown"
+            on:input="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_input"
+            on:keydown="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_keydown"
             {...commandState}
             aria-activedescendant={
               state.highlightedValue === 'invite'
@@ -246,45 +246,45 @@ export const GalleryCommandDemo = component({
                     ? 'gallery-command-listbox-item-0'
                     : null
             }
-            data-bind:aria-activedescendant="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_aria_activedescendant_derive"
+            data-bind:aria-activedescendant="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_aria_activedescendant_derive"
             aria-expanded={state.open ? 'true' : 'false'}
-            data-bind:aria-expanded="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_aria_expanded_derive"
+            data-bind:aria-expanded="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_aria_expanded_derive"
             data-placeholder={state.inputValue === '' ? '' : null}
-            data-bind:data-placeholder="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_data_placeholder_derive"
+            data-bind:data-placeholder="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_data_placeholder_derive"
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_data_state_derive"
+            data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_data_state_derive"
             value={state.inputValue}
-            data-bind:value="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_value_derive"
+            data-bind:value="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandInput_value_derive"
           />
           <CommandListbox
             id={listboxId}
             {...commandState}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandListbox_data_state_derive"
+            data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandListbox_data_state_derive"
             hidden={!state.open}
-            data-bind:hidden="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandListbox_hidden_derive"
+            data-bind:hidden="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandListbox_hidden_derive"
           >
             <CommandItem
               id="gallery-command-listbox-item-0"
               itemLabel="Open dashboard"
               itemValue="dashboard"
-              on:click="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_click"
+              on:click="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_click"
               {...commandState}
               aria-selected={state.highlightedValue === 'dashboard' ? 'true' : 'false'}
-              data-bind:aria-selected="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_aria_selected_derive"
+              data-bind:aria-selected="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_aria_selected_derive"
               data-highlighted={state.highlightedValue === 'dashboard' ? '' : null}
-              data-bind:data-highlighted="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_highlighted_derive"
+              data-bind:data-highlighted="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_highlighted_derive"
               data-selected={state.value === 'dashboard' ? '' : null}
-              data-bind:data-selected="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_selected_derive"
+              data-bind:data-selected="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_selected_derive"
               data-state={state.highlightedValue === 'dashboard' ? 'active' : 'inactive'}
-              data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_state_derive"
+              data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_state_derive"
               hidden={
                 state.inputValue !== '' &&
                 !'open dashboard dashboard'.includes(state.inputValue.toLocaleLowerCase())
               }
-              data-bind:hidden="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_hidden_derive"
+              data-bind:hidden="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_hidden_derive"
               tabIndex={state.highlightedValue === 'dashboard' ? 0 : -1}
-              data-bind:tabIndex="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_tabIndex_derive"
+              data-bind:tabIndex="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_tabIndex_derive"
             >
               Open dashboard
             </CommandItem>
@@ -292,23 +292,23 @@ export const GalleryCommandDemo = component({
               id="gallery-command-listbox-item-1"
               itemLabel="Invite teammate"
               itemValue="invite"
-              on:click="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_click_2"
+              on:click="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_click_2"
               {...commandState}
               aria-selected={state.highlightedValue === 'invite' ? 'true' : 'false'}
-              data-bind:aria-selected="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_aria_selected_derive_2"
+              data-bind:aria-selected="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_aria_selected_derive_2"
               data-highlighted={state.highlightedValue === 'invite' ? '' : null}
-              data-bind:data-highlighted="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_highlighted_derive_2"
+              data-bind:data-highlighted="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_highlighted_derive_2"
               data-selected={state.value === 'invite' ? '' : null}
-              data-bind:data-selected="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_selected_derive_2"
+              data-bind:data-selected="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_selected_derive_2"
               data-state={state.highlightedValue === 'invite' ? 'active' : 'inactive'}
-              data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_state_derive_2"
+              data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_state_derive_2"
               hidden={
                 state.inputValue !== '' &&
                 !'invite teammate invite'.includes(state.inputValue.toLocaleLowerCase())
               }
-              data-bind:hidden="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_hidden_derive_2"
+              data-bind:hidden="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_hidden_derive_2"
               tabIndex={state.highlightedValue === 'invite' ? 0 : -1}
-              data-bind:tabIndex="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_tabIndex_derive_2"
+              data-bind:tabIndex="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_tabIndex_derive_2"
             >
               Invite teammate
             </CommandItem>
@@ -320,18 +320,18 @@ export const GalleryCommandDemo = component({
               tabIndex={-1}
               {...commandState}
               aria-selected={state.highlightedValue === 'delete' ? 'true' : 'false'}
-              data-bind:aria-selected="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_aria_selected_derive_3"
+              data-bind:aria-selected="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_aria_selected_derive_3"
               data-highlighted={state.highlightedValue === 'delete' ? '' : null}
-              data-bind:data-highlighted="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_highlighted_derive_3"
+              data-bind:data-highlighted="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_highlighted_derive_3"
               data-selected={state.value === 'delete' ? '' : null}
-              data-bind:data-selected="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_selected_derive_3"
+              data-bind:data-selected="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_selected_derive_3"
               data-state={state.highlightedValue === 'delete' ? 'active' : 'inactive'}
-              data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_state_derive_3"
+              data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_data_state_derive_3"
               hidden={
                 state.inputValue !== '' &&
                 !'delete project delete'.includes(state.inputValue.toLocaleLowerCase())
               }
-              data-bind:hidden="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_hidden_derive_3"
+              data-bind:hidden="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandItem_hidden_derive_3"
             >
               Delete project
             </CommandItem>
@@ -343,24 +343,24 @@ export const GalleryCommandDemo = component({
                   state.inputValue.toLocaleLowerCase(),
                 )
               }
-              data-bind:hidden="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandEmpty_hidden_derive"
+              data-bind:hidden="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandEmpty_hidden_derive"
             >
               No commands found.
             </CommandEmpty>
           </CommandListbox>
           <CommandClose
             contentId={contentId}
-            on:click="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandClose_click"
+            on:click="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandClose_click"
             {...commandState}
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandClose_data_state_derive"
+            data-bind:data-state="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$CommandClose_data_state_derive"
           >
             Close
           </CommandClose>
         </CommandDialog>
         <output
           data-demo-state="command-input"
-          data-bind="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$output_text_derive"
+          data-bind="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$output_text_derive"
         >
           {state.inputValue || 'empty'}
         </output>
@@ -369,7 +369,7 @@ export const GalleryCommandDemo = component({
         </output>
         <output
           data-demo-state="command-value"
-          data-bind="/c/__v/ff1160bb/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$output_text_derive_2"
+          data-bind="/c/__v/cee9210b/examples/gallery/src/generated/interactive/command-demo.client.js#GalleryCommandDemo$output_text_derive_2"
         >
           {state.value === 'invite' ? 'Invite teammate' : 'Open dashboard'}
         </output>

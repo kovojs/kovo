@@ -4,10 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
 import {
-  kovoResponseBodyFact,
   htmlElementFacts,
-  htmlLinkHrefs,
   type HtmlElementSelector,
+  kovoResponseBodyFact,
+  htmlLinkHrefs,
 } from '@kovojs/test/html-fragment';
 import { cssScopeRules, type CssScopeRuleFact } from './source-fixtures.ts';
 import type { AssertTypeScriptProgramOptions } from './typescript-fixtures.ts';
@@ -1518,6 +1518,10 @@ export async function executeInlineEnhancedFormLoaderFixture(
       getAttribute(name: string) {
         if (name === 'kovo-deps') return 'cart';
         if (name === 'kovo-fragment-target') return null;
+        // Real DOM elements expose their `id` via getAttribute('id'); the loader's
+        // request-target identity falls back to it when no kovo-fragment-target is
+        // present (inline-loader-build.ts targetIdentity, SPEC §9.1).
+        if (name === 'id') return 'cart-badge';
         return null;
       },
     },
@@ -1526,6 +1530,7 @@ export async function executeInlineEnhancedFormLoaderFixture(
       getAttribute(name: string) {
         if (name === 'kovo-deps') return 'inventory stock';
         if (name === 'kovo-fragment-target') return 'inventory';
+        if (name === 'id') return 'inventory-panel';
         return null;
       },
     },

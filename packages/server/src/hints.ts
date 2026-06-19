@@ -51,6 +51,7 @@ export interface StylesheetDeclarationOptions {
   theme?: StylesheetTheme;
 }
 
+/** @internal */
 export interface StylesheetManifestEntry extends StylesheetAsset {
   fragmentTargets?: readonly string[];
   sourceFileName?: string;
@@ -67,10 +68,12 @@ export interface PageHintOptions {
   stylesheets?: readonly (string | StylesheetAsset)[];
 }
 
+/** @internal */
 export interface PageHintRenderContext {
   queries?: Record<string, unknown>;
 }
 
+/** @internal */
 export interface PageHints {
   csp?: CspInlineMetadata;
   earlyHints: Record<string, string>;
@@ -82,6 +85,7 @@ interface InlineHtmlWithCsp {
   html: string;
 }
 
+/** @internal */
 export function stylesheetsForTargets(
   manifest: readonly StylesheetManifestEntry[],
   targets?: readonly string[],

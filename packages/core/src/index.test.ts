@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   component,
-  event,
   FieldError,
   form,
   formFields,
@@ -14,7 +13,6 @@ import {
   route,
   type Component as KovoComponent,
   type ComponentDefinitionInput,
-  type EventPayload,
   type FormFailure,
   type FormFieldName,
   type FormInput,
@@ -22,6 +20,7 @@ import {
   type JsonValue,
 } from './index.js';
 import * as coreRoot from './index.js';
+import { event, type EventPayload } from './internal/event.js';
 import { fragmentTarget } from './internal/fragment-target.js';
 import * as internalQueryDelta from './internal/query-delta.js';
 
@@ -83,6 +82,15 @@ describe('core authoring APIs', () => {
     expect('packageComponentPrefixFactFromPackageManifest' in coreRoot).toBe(false);
     expect('validateKovoExplainInput' in coreRoot).toBe(false);
     expect('fragmentTarget' in coreRoot).toBe(false);
+  });
+
+  it('keeps the typed-event declaration family and storage adapters off the root surface', () => {
+    expect('event' in coreRoot).toBe(false);
+    expect('createMemoryStorage' in coreRoot).toBe(false);
+    expect('createFileSystemStorage' in coreRoot).toBe(false);
+    expect('createS3CompatibleStorage' in coreRoot).toBe(false);
+    expect('normalizeStorageKey' in coreRoot).toBe(false);
+    expect('storageBodyToBytes' in coreRoot).toBe(false);
   });
 
   it('keeps query-delta wire helpers off the root surface', () => {

@@ -96,7 +96,7 @@ export const GallerySliderDemo = component({
         data-gallery-interactive="slider"
         {...sliderState}
         data-value={String(state.value)}
-        data-bind:data-value="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$Slider_data_value_derive"
+        data-bind:data-value="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$Slider_data_value_derive"
         kovo-state='{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}'
       >
         <form id="gallery-slider-form" data-gallery-form="slider" />
@@ -107,53 +107,53 @@ export const GallerySliderDemo = component({
           id="gallery-slider-input"
           {...sliderState}
           value={state.value}
-          data-bind:value="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderInput_value_derive"
+          data-bind:value="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderInput_value_derive"
         />
         <SliderTrack
-          on:pointerdown="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderTrack_pointerdown"
+          on:pointerdown="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderTrack_pointerdown"
           {...sliderState}
           data-value={String(state.value)}
-          data-bind:data-value="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderTrack_data_value_derive"
+          data-bind:data-value="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderTrack_data_value_derive"
           data-value-ratio={String(state.value / 100)}
-          data-bind:data-value-ratio="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderTrack_data_value_ratio_derive"
+          data-bind:data-value-ratio="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderTrack_data_value_ratio_derive"
         >
           <SliderRange
             {...sliderState}
             data-value={String(state.value)}
-            data-bind:data-value="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderRange_data_value_derive"
+            data-bind:data-value="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderRange_data_value_derive"
             data-value-ratio={String(state.value / 100)}
-            data-bind:data-value-ratio="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderRange_data_value_ratio_derive"
+            data-bind:data-value-ratio="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderRange_data_value_ratio_derive"
             style={{ width: `${state.value}%` }}
-            data-bind:style="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderRange_style_derive"
+            data-bind:style="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderRange_style_derive"
           />
           <SliderThumb
-            on:keydown="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_keydown"
-            on:pointerdown="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_pointerdown"
-            on:pointermove="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_pointermove"
-            on:pointerup="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_pointerup"
+            on:keydown="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_keydown"
+            on:pointerdown="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_pointerdown"
+            on:pointermove="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_pointermove"
+            on:pointerup="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_pointerup"
             {...sliderState}
             aria-valuenow={state.value}
-            data-bind:aria-valuenow="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_aria_valuenow_derive"
+            data-bind:aria-valuenow="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_aria_valuenow_derive"
             aria-valuetext={`${state.value} percent`}
-            data-bind:aria-valuetext="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_aria_valuetext_derive"
+            data-bind:aria-valuetext="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_aria_valuetext_derive"
             data-dragging={state.dragging ? '' : null}
-            data-bind:data-dragging="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_data_dragging_derive"
+            data-bind:data-dragging="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_data_dragging_derive"
             data-value={String(state.value)}
-            data-bind:data-value="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_data_value_derive"
+            data-bind:data-value="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_data_value_derive"
             data-value-ratio={String(state.value / 100)}
-            data-bind:data-value-ratio="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_data_value_ratio_derive"
+            data-bind:data-value-ratio="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_data_value_ratio_derive"
             style={{
               left: `${state.value}%`,
               top: '50%',
               transform: 'translate(-50%, -50%)',
             }}
-            data-bind:style="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_style_derive"
+            data-bind:style="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$SliderThumb_style_derive"
           />
         </SliderTrack>
         <output
           data-demo-state="slider-value"
           class={OUTPUT_CLASS}
-          data-bind="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$output_text_derive"
+          data-bind="/c/__v/8f358ed0/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

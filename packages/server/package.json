@@ -7,13 +7,11 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./app-shell/client-modules": "./src/api/app-shell/client-modules.ts",
-    "./app-shell/core": "./src/api/app-shell/core.ts",
-    "./app-shell/node": "./src/api/app-shell/node.ts",
     "./app-shell/static-export": "./src/api/app-shell/static-export.ts",
     "./build": "./src/build.ts",
     "./vite": "./src/vite.ts",
     "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
+    "./internal/build": "./src/internal/build.ts",
     "./internal/client-modules": "./src/internal/client-modules.ts",
     "./internal/csrf": "./src/internal/csrf.ts",
     "./internal/execution": "./src/internal/execution.ts",
@@ -30,18 +28,6 @@
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
       },
-      "./app-shell/client-modules": {
-        "types": "./dist/api/app-shell/client-modules.d.mts",
-        "default": "./dist/api/app-shell/client-modules.mjs"
-      },
-      "./app-shell/core": {
-        "types": "./dist/api/app-shell/core.d.mts",
-        "default": "./dist/api/app-shell/core.mjs"
-      },
-      "./app-shell/node": {
-        "types": "./dist/api/app-shell/node.d.mts",
-        "default": "./dist/api/app-shell/node.mjs"
-      },
       "./app-shell/static-export": {
         "types": "./dist/api/app-shell/static-export.d.mts",
         "default": "./dist/api/app-shell/static-export.mjs"
@@ -57,6 +43,10 @@
       "./internal/app-shell-vite": {
         "types": "./dist/internal/app-shell-vite.d.mts",
         "default": "./dist/internal/app-shell-vite.mjs"
+      },
+      "./internal/build": {
+        "types": "./dist/internal/build.d.mts",
+        "default": "./dist/internal/build.mjs"
       },
       "./internal/client-modules": {
         "types": "./dist/internal/client-modules.d.mts",
@@ -97,7 +87,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/api/app-shell/client-modules.ts src/api/app-shell/core.ts src/api/app-shell/node.ts src/api/app-shell/static-export.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/execution.ts src/internal/html.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/api/app-shell/static-export.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/execution.ts src/internal/html.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

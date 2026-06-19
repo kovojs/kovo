@@ -179,5 +179,3 @@ export const TooltipContent = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/tooltip';

@@ -10,7 +10,7 @@ import {
   dropdownMenuTriggerClick as _dropdownMenuTriggerClick,
   dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as _dropdownMenuTypeahead,
-} from '@kovojs/ui/dropdown-menu';
+} from '@kovojs/headless-ui/dropdown-menu';
 
 export const GalleryDropdownMenuDemo$DropdownMenuTrigger_click = handler((event, ctx) => {
   const result = _dropdownMenuTriggerClick(Object(event), {

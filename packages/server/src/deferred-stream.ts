@@ -2,14 +2,17 @@ import type { StylesheetAsset } from './hints.js';
 import type { ServerResponseBase } from './response.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 
+/** @internal */
 export interface DeferredQueryChunk {
   key?: string;
   name: string;
   value: unknown;
 }
 
+/** @internal */
 export type DeferredPriority = 'high' | 'normal' | 'low' | number;
 
+/** @internal */
 export interface DeferredFragmentChunk {
   html: string;
   mode?: 'append' | 'replace';
@@ -18,6 +21,7 @@ export interface DeferredFragmentChunk {
   target: string;
 }
 
+/** @internal */
 export interface DeferredStreamOptions {
   boundary?: string;
   chunks: readonly DeferredStreamChunk[];
@@ -25,12 +29,14 @@ export interface DeferredStreamOptions {
   shell: string;
 }
 
+/** @internal */
 export interface DeferredStreamChunk {
   fragments: readonly DeferredFragmentChunk[];
   priority?: DeferredPriority;
   queries?: readonly DeferredQueryChunk[];
 }
 
+/** @internal */
 export interface DeferredStreamResponse extends ServerResponseBase<
   string,
   Record<string, string>,

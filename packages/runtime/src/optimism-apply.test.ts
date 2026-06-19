@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installPagehideOptimismCleanup } from './client.js';
-import { applyOptimisticTransforms } from './optimism.js';
+import { createQueryStore } from './client.js';
+import { applyOptimisticTransforms, installPagehideOptimismCleanup } from './optimism.js';
 import { FakeRoot } from './runtime-test-fakes.js';
 
 // SPEC.md §10.4: hand-written optimistic transforms apply through the query

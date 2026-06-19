@@ -32,6 +32,11 @@ interface FieldDerivation {
  * Derive the optimistic patch program for one (mutation × invalidated query)
  * pair: push every mutation `effect` through the query `shape`. Returns a
  * `derived(PatchProgram)` or a `punt(PuntReason)` from the §10.5 PUNT list.
+ *
+ * @internal Repo-internal Stage-3 deriver. Its signature is built from
+ * `@kovojs/core/internal/derivation` types, so it cannot be public
+ * (recursive-publicness, `rules/api-surface.md`). Consumed by the CLI and the
+ * drizzle codegen lowerer via `@kovojs/drizzle/internal/derive`.
  */
 export function deriveOptimistic(
   effects: readonly SymbolicEffect[],

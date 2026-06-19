@@ -177,5 +177,3 @@ export const DisclosureContent = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/disclosure';

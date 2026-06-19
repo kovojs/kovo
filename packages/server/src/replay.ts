@@ -6,6 +6,13 @@ export type MutationReplayResponse = ServerResponseBase<
   200 | 422 | 429 | 500
 >;
 
+/**
+ * Idempotent mutation/webhook replay store contract (SPEC §9.1): look up a prior
+ * response by `(scope, idem)`, reserve a pending slot for an in-flight handler, and
+ * record the committed response. Apps inject a custom store via the public webhook
+ * replay lifecycle (e.g. conformance/webhook-spike) and the framework provides
+ * {@link createMemoryMutationReplayStore} as the default in-memory implementation.
+ */
 export interface MutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
 > {
@@ -14,6 +21,11 @@ export interface MutationReplayStore<
   set(scope: string, idem: string, response: Response): void;
 }
 
+/**
+ * A pending reservation returned by {@link MutationReplayStore.reserve}: commit the
+ * eventual response or abort to release the slot (SPEC §9.1). Part of the public
+ * replay-store surface (recursive publicness, rules/api-surface.md).
+ */
 export interface MutationReplayReservation<
   Response extends MutationReplayResponse = MutationReplayResponse,
 > {
@@ -46,6 +58,11 @@ type CsrfReplayScope<Request> =
       sessionId(request: Request): string | undefined;
     };
 
+/**
+ * Build the default in-memory {@link MutationReplayStore} (SPEC §9.1): bounded by
+ * `maxEntries` with a `ttlMs` expiry. Apps name this to provision an idempotent
+ * replay store for webhook/mutation handlers (e.g. conformance/webhook-spike).
+ */
 export function createMemoryMutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
 >(options: MutationReplayStoreOptions = {}): MutationReplayStore<Response> {

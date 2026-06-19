@@ -9,7 +9,7 @@ import {
   hoverCardTriggerFocus as _hoverCardTriggerFocus,
   hoverCardTriggerPointerEnter as _hoverCardTriggerPointerEnter,
   hoverCardTriggerPointerLeave as _hoverCardTriggerPointerLeave,
-} from '@kovojs/ui/hover-card';
+} from '@kovojs/headless-ui/hover-card';
 
 export const GalleryHoverCardDemo$HoverCardTrigger_blur = handler((event, ctx) => {
   const result = _hoverCardTriggerBlur(Object(event), { open: ctx.state.open });

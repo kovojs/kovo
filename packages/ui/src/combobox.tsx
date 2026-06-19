@@ -367,5 +367,3 @@ export const ComboboxValue = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/combobox';

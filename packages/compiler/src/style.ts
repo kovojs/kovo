@@ -1,6 +1,5 @@
 import {
   attrs,
-  createAtomicStyles,
   createTheme,
   defineVars,
   emitAtomicCss,
@@ -10,6 +9,7 @@ import {
   type CssValue,
   type StyleObject,
 } from '@kovojs/style';
+import { createAtomicStyles } from '@kovojs/style/internal';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import ts from 'typescript';
 

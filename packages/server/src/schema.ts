@@ -154,6 +154,7 @@ export const s = {
   },
 };
 
+/** Minimal uploaded-file shape accepted by `s.file()` schemas (SPEC.md §6). */
 export interface FileLike {
   arrayBuffer(): Promise<ArrayBuffer>;
   name: string;
@@ -161,33 +162,37 @@ export interface FileLike {
   type: string;
 }
 
+/** File-upload schema produced by `s.file()`; chains size/MIME limits and `.store()` (SPEC.md §6). */
 export interface FileSchema extends Schema<FileLike> {
   maxBytes(value: number): FileSchema;
   mime(types: readonly string[]): FileSchema;
   store(options: StoredFileSchemaOptions): StoredFileSchema;
 }
 
+/** Size/MIME constraints captured by an `s.file()` schema (SPEC.md §6). */
 export interface FileSchemaOptions {
   maxBytes?: number;
   mime?: readonly string[];
 }
 
+/** Result of a stored upload produced by `s.file().store(...)` (SPEC.md §6). */
 export interface StoredFileUpload {
   file: FileLike;
   key: string;
   storage: StorageObjectInfo;
 }
 
+/** Stored-upload schema produced by `s.file().store(...)` (SPEC.md §6). */
 export interface StoredFileSchema extends AsyncSchema<StoredFileUpload> {}
 
-export type MaybePromise<Value> = Promise<Value> | Value;
-
+/** Options for `s.file().store(...)`: storage capability, object key, and metadata (SPEC.md §6). */
 export interface StoredFileSchemaOptions {
-  key: string | ((file: FileLike) => MaybePromise<string>);
+  key: string | ((file: FileLike) => Promise<string> | string);
   metadata?: (file: FileLike) => Readonly<Record<string, string>>;
   storage: StorageCapability;
 }
 
+/** Numeric schema produced by `s.number()`; chains int/min/default refinements (SPEC.md §6). */
 export interface NumberSchema extends Schema<number> {
   default(value: number): NumberSchema;
   int(): NumberSchema;

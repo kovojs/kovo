@@ -19,6 +19,12 @@ import type { QueryStore } from './query-store.js';
 import { queryWireKey } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 
+/**
+ * An app hook that interposes on each incoming query chunk before the runtime
+ * writes it to the store: return `{ value }` to override the applied value, or
+ * nothing to apply the wire value unchanged (SPEC §9.4). Named by
+ * `KovoLoaderOptions.applyQuery`.
+ */
 export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } | void;
 
 /** Invoked when a delta cannot be applied (missing base or deploy-skew). The

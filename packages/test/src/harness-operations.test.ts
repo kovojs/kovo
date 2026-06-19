@@ -5,7 +5,7 @@ import {
   executeHarnessMutation,
   executeHarnessQuery,
   loadHarnessPage,
-} from '@kovojs/test/harness-operations';
+} from '@kovojs/test/internal/harness-operations';
 import {
   createFakeDb,
   createRecordingOperationVerifier,

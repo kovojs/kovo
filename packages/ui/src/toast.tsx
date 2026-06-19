@@ -355,5 +355,3 @@ export const ToastClose = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/toast';

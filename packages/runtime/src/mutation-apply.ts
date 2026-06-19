@@ -13,7 +13,7 @@ import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Inputs for applying a fetched enhanced mutation response to the runtime (SPEC §9.1). */
 export interface EnhancedMutationRuntimeApplyOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -29,7 +29,7 @@ export interface EnhancedMutationRuntimeApplyOptions {
   store: QueryStore;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Result of applying an enhanced mutation response: applied fragments, changes, idem, targets (SPEC §9.1). */
 export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   appliedFragments: string[];
   changes: MutationChangeRecord[];
@@ -37,13 +37,13 @@ export type EnhancedMutationAppliedResult = AppliedMutationResponse & {
   targets: string[];
 };
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Optional apply-time hooks for interposing on query application (SPEC §9.1). */
 export interface MutationRuntimeApplyHooks {
   applyQuery?: QueryApplyInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Apply a fetched enhanced mutation response and broadcast success (SPEC §9.1/§9.2). */
 export function applyFetchedEnhancedMutationResponseToRuntime(
   options: EnhancedMutationRuntimeApplyOptions,
   fetched: FetchedEnhancedMutation,

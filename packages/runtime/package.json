@@ -11,6 +11,7 @@
     "./generated": "./src/generated.ts",
     "./internal/delegation": "./src/internal/delegation.ts",
     "./internal/inline-loader": "./src/internal/inline-loader.ts",
+    "./internal/morph": "./src/internal/morph.ts",
     "./internal/mutation": "./src/internal/mutation.ts",
     "./internal/output": "./src/internal/output.ts"
   },
@@ -36,6 +37,10 @@
         "types": "./dist/internal/inline-loader.d.mts",
         "default": "./dist/internal/inline-loader.mjs"
       },
+      "./internal/morph": {
+        "types": "./dist/internal/morph.d.mts",
+        "default": "./dist/internal/morph.mjs"
+      },
       "./internal/mutation": {
         "types": "./dist/internal/mutation.d.mts",
         "default": "./dist/internal/mutation.mjs"
@@ -51,7 +56,7 @@
     "build:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts",
     "check": "pnpm run check:inline-loader",
     "check:inline-loader": "node --experimental-strip-types src/inline-loader-build.ts --check",
-    "build:dist": "vp pack src/client.ts src/generated.ts src/index.ts src/internal/delegation.ts src/internal/inline-loader.ts src/internal/mutation.ts src/internal/output.ts --dts",
+    "build:dist": "vp pack src/client.ts src/generated.ts src/index.ts src/internal/delegation.ts src/internal/inline-loader.ts src/internal/morph.ts src/internal/mutation.ts src/internal/output.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

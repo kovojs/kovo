@@ -1,21 +1,23 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import type { CommandItem as GalleryCommandItem } from '@kovojs/headless-ui/command';
+import {
+  commandCloseClick as _commandCloseClick,
+  commandFilteredItems as _commandFilteredItems,
+  commandInput as _commandInput,
+  commandItemClick as _commandItemClick,
+  commandKeyDown as _commandKeyDown,
+  commandTriggerClick as _commandTriggerClick,
+  type CommandItem as GalleryCommandItem,
+} from '@kovojs/headless-ui/command';
 import {
   Command,
   CommandClose,
-  commandCloseClick as _commandCloseClick,
   CommandDialog,
   CommandEmpty,
-  commandFilteredItems as _commandFilteredItems,
-  commandInput as _commandInput,
   CommandInput,
   CommandItem,
-  commandItemClick as _commandItemClick,
-  commandKeyDown as _commandKeyDown,
   CommandListbox,
   CommandTrigger,
-  commandTriggerClick as _commandTriggerClick,
 } from '@kovojs/ui/command';
 
 export interface GalleryCommandDemoState {

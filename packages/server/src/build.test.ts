@@ -7,29 +7,22 @@ import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
 import { createApp } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
-import { cloudflare, node, vercel, writeKovoNeutralBuild } from './build.js';
+import { cloudflare, node, vercel } from './build.js';
 import { stylesheet } from './hints.js';
+import { writeKovoNeutralBuild } from './neutral-build.js';
 
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
     expect(packageBuildApi.cloudflare).toBe(cloudflare);
     expect(packageBuildApi.node).toBe(node);
     expect(packageBuildApi.vercel).toBe(vercel);
-    expect(packageBuildApi.writeKovoNeutralBuild).toBe(writeKovoNeutralBuild);
-    expect(node()).toMatchObject({ name: 'node', options: {} });
-    expect(node({ dockerfile: false })).toMatchObject({
-      name: 'node',
-      options: { dockerfile: false },
-    });
-    expect(vercel({ maxDuration: 10, regions: ['iad1'] })).toMatchObject({
-      name: 'vercel',
-      options: { maxDuration: 10, regions: ['iad1'] },
-    });
+    expect(packageBuildApi).not.toHaveProperty('writeKovoNeutralBuild');
+    expect(node()).toMatchObject({ name: 'node' });
+    expect(node({ dockerfile: false })).toMatchObject({ name: 'node' });
+    expect(vercel({ maxDuration: 10, regions: ['iad1'] })).toMatchObject({ name: 'vercel' });
     expect(cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' })).toMatchObject({
       name: 'cloudflare',
-      options: { compatibilityDate: '2026-06-18', name: 'kovo-test' },
     });
   });
 
@@ -247,13 +240,13 @@ describe('server build-time deployment API', () => {
         outDir: join(root, '.kovo'),
       });
 
-      expect(node().inspect(build, { declaredEnv: [] })).toEqual([
+      expect(node().inspect!(build, { declaredEnv: [] })).toEqual([
         clientModuleRetentionWarning('node'),
       ]);
-      expect(vercel().inspect(build, { declaredEnv: [] })).toEqual([
+      expect(vercel().inspect!(build, { declaredEnv: [] })).toEqual([
         clientModuleRetentionWarning('vercel'),
       ]);
-      await expect(cloudflare().inspect(build, { declaredEnv: [] })).resolves.toEqual([
+      await expect(cloudflare().inspect!(build, { declaredEnv: [] })).resolves.toEqual([
         clientModuleRetentionWarning('cloudflare'),
       ]);
     } finally {
@@ -263,8 +256,16 @@ describe('server build-time deployment API', () => {
 
   it('emits app-registered client modules by default in neutral builds', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-default-modules-'));
-    const clientModules = createMemoryVersionedClientModuleRegistry();
-    clientModules.put({
+    const app = createApp({
+      routes: [
+        route('/app', {
+          page() {
+            return '<main>App</main>';
+          },
+        }),
+      ],
+    });
+    app.clientModules.put({
       path: '/c/app.client.js',
       source: 'export const appClient = true;',
       version: 'app-v1',
@@ -273,16 +274,7 @@ describe('server build-time deployment API', () => {
     try {
       const outDir = join(root, '.kovo');
       const build = await writeKovoNeutralBuild({
-        app: createApp({
-          clientModules,
-          routes: [
-            route('/app', {
-              page() {
-                return '<main>App</main>';
-              },
-            }),
-          ],
-        }),
+        app,
         outDir,
         serverHandlerSource:
           'export default async function handler() { return new Response("ok"); }\n',
@@ -373,7 +365,7 @@ export default async function handler(request) {
 
       const logs: string[] = [];
       const nodeOutDir = join(root, 'node-output');
-      await node({ dockerfile: false }).emit(build, {
+      await node({ dockerfile: false }).emit!(build, {
         declaredEnv: [],
         log(message) {
           logs.push(message);
@@ -449,7 +441,7 @@ export default async function handler(request) {
       });
       const nodeOutDir = join(root, 'node-output');
 
-      await node().emit(build, {
+      await node().emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: nodeOutDir,
@@ -521,7 +513,7 @@ export default async function handler(request) {
 
       const logs: string[] = [];
       const vercelOutDir = join(root, '.vercel/output');
-      await vercel({ maxDuration: 8, regions: ['iad1'] }).emit(build, {
+      await vercel({ maxDuration: 8, regions: ['iad1'] }).emit!(build, {
         declaredEnv: [],
         log(message) {
           logs.push(message);
@@ -630,7 +622,7 @@ export default async function handler(request) {
       expect(build.staticOutput).toMatchObject({ dir: join(root, '.kovo/static') });
 
       const nodeOutDir = join(root, 'node-static');
-      await node().emit(build, {
+      await node().emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: nodeOutDir,
@@ -646,7 +638,7 @@ export default async function handler(request) {
       ).resolves.toContain('staticClient');
 
       const vercelOutDir = join(root, '.vercel/output');
-      await vercel().emit(build, {
+      await vercel().emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: vercelOutDir,
@@ -667,7 +659,7 @@ export default async function handler(request) {
       });
 
       const cloudflareOutDir = join(root, 'cloudflare-static');
-      await cloudflare().emit(build, {
+      await cloudflare().emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: cloudflareOutDir,
@@ -752,7 +744,7 @@ export default async function handler(request) {
       });
 
       const nodeOutDir = join(root, 'node-mixed');
-      await node({ dockerfile: false }).emit(build, {
+      await node({ dockerfile: false }).emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: nodeOutDir,
@@ -783,7 +775,7 @@ export default async function handler(request) {
       }
 
       const vercelOutDir = join(root, '.vercel/output');
-      await vercel().emit(build, {
+      await vercel().emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: vercelOutDir,
@@ -823,7 +815,7 @@ export default async function handler(request) {
       });
 
       const cloudflareOutDir = join(root, 'cloudflare-mixed');
-      await cloudflare().emit(build, {
+      await cloudflare().emit!(build, {
         declaredEnv: [],
         log() {},
         outDir: cloudflareOutDir,
@@ -913,7 +905,7 @@ export default async function handler(request) {
 
       const logs: string[] = [];
       const cloudflareOutDir = join(root, 'cloudflare-output');
-      await cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' }).emit(build, {
+      await cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' }).emit!(build, {
         declaredEnv: [],
         log(message) {
           logs.push(message);
@@ -1013,22 +1005,22 @@ export default async function handler() {
 `,
       });
 
-      await expect(cloudflare().inspect(build, { declaredEnv: ['DATABASE_URL'] })).resolves.toEqual(
-        [
-          {
-            code: 'cloudflare-tcp-database',
-            message:
-              'The cloudflare preset emits a Worker with nodejs_compat. TCP database drivers behind DATABASE_URL need Hyperdrive, Cloudflare Containers, or an HTTP database driver before deploy.',
-            severity: 'warning',
-          },
-          {
-            code: 'cloudflare-unsupported-node-api',
-            message:
-              'The cloudflare preset cannot run node:child_process; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.',
-            severity: 'error',
-          },
-        ],
-      );
+      await expect(
+        cloudflare().inspect!(build, { declaredEnv: ['DATABASE_URL'] }),
+      ).resolves.toEqual([
+        {
+          code: 'cloudflare-tcp-database',
+          message:
+            'The cloudflare preset emits a Worker with nodejs_compat. TCP database drivers behind DATABASE_URL need Hyperdrive, Cloudflare Containers, or an HTTP database driver before deploy.',
+          severity: 'warning',
+        },
+        {
+          code: 'cloudflare-unsupported-node-api',
+          message:
+            'The cloudflare preset cannot run node:child_process; Cloudflare exposes this Node API as a non-functional compatibility stub. Move that code off the request path or deploy with the node preset/Containers.',
+          severity: 'error',
+        },
+      ]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }

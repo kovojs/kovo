@@ -269,5 +269,3 @@ export const AccordionContent = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/accordion';

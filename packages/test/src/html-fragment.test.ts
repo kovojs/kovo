@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  documentQueryScriptBehaviorFact,
   fragmentHtml,
-  kovoFragmentFacts,
-  kovoQueryFacts,
   kovoQueryJsonValues,
-  kovoResponseBodyFact,
   htmlDocumentFacts,
-  htmlDocumentRegions,
   htmlElementCount,
   htmlElementFacts,
   htmlFormActions,
   htmlFormFacts,
   htmlFormFieldsByName,
   htmlFormFields,
+  htmlKeyValues,
+  htmlTextContent,
+  documentQueryScriptBehaviorFact,
+  kovoFragmentFacts,
+  kovoQueryFacts,
+  kovoResponseBodyFact,
+  htmlDocumentRegions,
   htmlJsonScriptFacts,
   htmlKeyFacts,
   htmlKeyTextMap,
-  htmlKeyValues,
   htmlLinkHrefs,
   htmlMainMarkerFact,
-  htmlTextContent,
 } from '@kovojs/test/html-fragment';
 
 describe('@kovojs/test html fragment seam', () => {

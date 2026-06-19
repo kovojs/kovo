@@ -18,13 +18,13 @@ describe('server static export', () => {
       version: 'cart-dry-run',
     });
     const app = createApp({
-      clientModules: registry,
       routes: [
         route('/cart', {
           page: () => `<main><button on:click="${cartHref}#Cart$add">Add</button></main>`,
         }),
       ],
     });
+    app.clientModules = registry;
 
     const result = await exportStaticApp(app);
 
@@ -57,7 +57,6 @@ describe('server static export', () => {
         version: 'menu-1',
       });
       const app = createApp({
-        clientModules: registry,
         routes: [
           route('/cart', {
             modulepreloads: [cartHref],
@@ -65,6 +64,7 @@ describe('server static export', () => {
           }),
         ],
       });
+      app.clientModules = registry;
       const handler = createRequestHandler(app);
 
       const result = await exportStaticApp(app, { outDir });
@@ -108,7 +108,6 @@ describe('server static export', () => {
       const cartUrl = new URL(cartHref, 'https://shop.example.test').href;
       const menuUrl = new URL(menuHref, 'https://shop.example.test').href;
       const app = createApp({
-        clientModules: registry,
         routes: [
           route('/cart', {
             modulepreloads: [cartUrl],
@@ -116,6 +115,7 @@ describe('server static export', () => {
           }),
         ],
       });
+      app.clientModules = registry;
 
       const result = await exportStaticApp(app, {
         origin: 'https://shop.example.test',
@@ -141,24 +141,6 @@ describe('server static export', () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
     try {
       const app = createApp({
-        clientModules: {
-          buildToken() {
-            return '';
-          },
-          entries() {
-            return [];
-          },
-          put() {
-            throw new Error('unused');
-          },
-          resolve() {
-            return {
-              body: '<!doctype html><h1>Wrong handler</h1>',
-              headers: { 'Content-Type': 'text/html; charset=utf-8' },
-              status: 200,
-            };
-          },
-        },
         routes: [
           route('/', {
             modulepreloads: ['/c/cart.client.js?v=cart-1'],
@@ -166,6 +148,24 @@ describe('server static export', () => {
           }),
         ],
       });
+      app.clientModules = {
+        buildToken() {
+          return '';
+        },
+        entries() {
+          return [];
+        },
+        put() {
+          throw new Error('unused');
+        },
+        resolve() {
+          return {
+            body: '<!doctype html><h1>Wrong handler</h1>',
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 200,
+          };
+        },
+      };
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
         code: 'KV229',
@@ -191,24 +191,6 @@ describe('server static export', () => {
     try {
       const badHref = '/c/%2Fescape.client.js?v=v1';
       const app = createApp({
-        clientModules: {
-          buildToken() {
-            return '';
-          },
-          entries() {
-            return [];
-          },
-          put() {
-            throw new Error('unused');
-          },
-          resolve() {
-            return {
-              body: 'export const unsafe = true;',
-              headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
-              status: 200,
-            };
-          },
-        },
         routes: [
           route('/unsafe', {
             modulepreloads: [badHref],
@@ -216,6 +198,24 @@ describe('server static export', () => {
           }),
         ],
       });
+      app.clientModules = {
+        buildToken() {
+          return '';
+        },
+        entries() {
+          return [];
+        },
+        put() {
+          throw new Error('unused');
+        },
+        resolve() {
+          return {
+            body: 'export const unsafe = true;',
+            headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+            status: 200,
+          };
+        },
+      };
 
       await expect(exportStaticApp(app, { outDir })).rejects.toMatchObject({
         code: 'KV229',

@@ -80,7 +80,7 @@ export type OptimisticFor<
 };
 
 /**
- * A staged optimistic prediction: `commit` it to keep the predicted store state,
+ * @internal A staged optimistic prediction: `commit` it to keep the predicted store state,
  * or `restore` it to roll back to the captured `snapshot` when the server rejects
  * the mutation (SPEC §10.4).
  */
@@ -91,7 +91,7 @@ export interface PendingOptimism {
 }
 
 /**
- * One recorded optimistic transform awaiting reconciliation: the `change` that
+ * @internal One recorded optimistic transform awaiting reconciliation: the `change` that
  * triggered it, the mutation `id` it belongs to, and the pure `transform` re-run
  * on rebase against server truth (SPEC §10.5).
  */
@@ -106,13 +106,13 @@ interface PagehideRoot {
   removeEventListener?: (type: 'pagehide', listener: () => void) => void;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for installing pagehide-driven optimistic cleanup (SPEC §10.4). */
 export interface PagehideOptimismCleanupOptions {
   discardPendingOptimism: () => readonly string[] | void;
   root: PagehideRoot;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Tracks pending optimistic transforms and rebases them against server truth (SPEC §10.5). */
 export class OptimisticRebaser {
   #pendingByQuery = new Map<string, PendingTransform[]>();
   #serverTruthByQuery = new Map<string, unknown>();
@@ -225,7 +225,7 @@ export class OptimisticRebaser {
   }
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Install a bfcache-safe pagehide listener that discards pending optimism (SPEC §10.4). */
 export function installPagehideOptimismCleanup(
   options: PagehideOptimismCleanupOptions,
 ): () => void {
@@ -249,7 +249,7 @@ function globalPagehideTarget(root: PagehideRoot): PagehideRoot | undefined {
   return target !== root && typeof target.addEventListener === 'function' ? target : undefined;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Apply a plan's optimistic transforms to the store, returning a commit/restore handle (SPEC §10.4). */
 export function applyOptimisticTransforms<Input>(
   store: QueryStore,
   input: Input,
@@ -304,7 +304,7 @@ export function tempId(): string {
 }
 
 /**
- * Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5).
+ * @internal Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5).
  */
 export function now(): number {
   return Date.now();

@@ -1,13 +1,15 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  accordionKeyDown as _accordionKeyDown,
+  accordionTriggerClick as _accordionTriggerClick,
+} from '@kovojs/headless-ui/accordion';
+import {
   Accordion,
   AccordionContent,
   AccordionHeader,
   AccordionItem,
-  accordionKeyDown as _accordionKeyDown,
   AccordionTrigger,
-  accordionTriggerClick as _accordionTriggerClick,
 } from '@kovojs/ui/accordion';
 
 export interface GalleryAccordionDemoState {

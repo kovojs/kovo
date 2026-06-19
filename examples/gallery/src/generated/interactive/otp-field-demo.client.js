@@ -5,7 +5,7 @@ import {
   otpFieldInput as _otpFieldInput,
   otpFieldKeyDown as _otpFieldKeyDown,
   otpFieldPaste as _otpFieldPaste,
-} from '@kovojs/ui/otp-field';
+} from '@kovojs/headless-ui/otp-field';
 
 export const GalleryOtpFieldDemo$OtpFieldInput_input = handler((event, ctx) => {
   const result = _otpFieldInput(Object(event), {

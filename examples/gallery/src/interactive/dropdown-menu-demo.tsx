@@ -1,19 +1,21 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import type { DropdownMenuItem as GalleryDropdownMenuItem } from '@kovojs/headless-ui/dropdown-menu';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
   dropdownMenuFocusElement as _dropdownMenuFocusElement,
-  DropdownMenuItem,
   dropdownMenuItemClick as _dropdownMenuItemClick,
   dropdownMenuItemKeyDown as _dropdownMenuItemKeyDown,
   dropdownMenuKeyDown as _dropdownMenuKeyDown,
   dropdownMenuMove as _dropdownMenuMove,
-  DropdownMenuTrigger,
   dropdownMenuTriggerClick as _dropdownMenuTriggerClick,
   dropdownMenuTriggerKeyDown as _dropdownMenuTriggerKeyDown,
   dropdownMenuTypeahead as _dropdownMenuTypeahead,
+  type DropdownMenuItem as GalleryDropdownMenuItem,
+} from '@kovojs/headless-ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@kovojs/ui/dropdown-menu';
 
 export interface GalleryDropdownMenuDemoState {

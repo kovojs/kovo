@@ -6,7 +6,7 @@ import {
   numberFieldIncrementClick as _numberFieldIncrementClick,
   numberFieldInput as _numberFieldInput,
   numberFieldKeyDown as _numberFieldKeyDown,
-} from '@kovojs/ui/number-field';
+} from '@kovojs/headless-ui/number-field';
 
 export const GalleryNumberFieldDemo$NumberFieldDecrement_click = handler((event, ctx) => {
   const result = _numberFieldDecrementClick(Object(event), {

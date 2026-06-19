@@ -10,6 +10,7 @@ import { createPageAssertion, type PageAssertion } from './page.js';
 import { diagnosticMessage } from './verifier-diagnostics.js';
 import type { ObservedDbOperation } from './verifier-observation.js';
 
+/** @internal Verifier seam used internally by the test harness (SPEC.md §11). */
 export interface HarnessOperationVerifier {
   assertCoveredOperations(observed: readonly ObservedDbOperation[], touchGraphKey?: string): void;
   assertReadsCoveredOperations(
@@ -21,12 +22,14 @@ export interface HarnessOperationVerifier {
   ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
 }
 
+/** @internal Per-`exec` mutation options surfaced publicly via `KovoTestExecOptions`. */
 export interface HarnessMutationOptions<Request> {
   csrf?: CsrfValidationOptions<Request>;
   request?: Partial<Omit<Request, 'db'>>;
   touchGraphKey?: string;
 }
 
+/** @internal Lower-level harness mutation execution wrapped by `createKovoTestHarness`. */
 export async function executeHarnessMutation<
   InputSchema extends Schema<unknown>,
   Errors extends Record<string, Schema<unknown>>,
@@ -60,6 +63,7 @@ export async function executeHarnessMutation<
   return captured.result;
 }
 
+/** @internal Lower-level harness page loading wrapped by `createKovoTestHarness`. */
 export async function loadHarnessPage(
   pages: Record<string, string | (() => string | Promise<string>)> | undefined,
   path: string,
@@ -71,6 +75,7 @@ export async function loadHarnessPage(
   return createPageAssertion(html);
 }
 
+/** @internal Lower-level harness query execution wrapped by `createKovoTestHarness`. */
 export async function executeHarnessQuery<Db>(
   query: QueryDefinition,
   input: unknown,

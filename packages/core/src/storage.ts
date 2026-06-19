@@ -39,17 +39,17 @@ export interface StorageCapability {
   stream(key: string): Promise<StorageStreamResult | undefined>;
 }
 
-/** Options for the filesystem-backed storage: the root directory objects are stored under. */
+/** @internal Options for the filesystem-backed storage adapter: the root directory objects are stored under. */
 export interface FileSystemStorageOptions {
   root: string;
 }
 
-/** Options for the in-memory storage: an optional clock used for deterministic modified times. */
+/** @internal Options for the in-memory storage adapter: an optional clock used for deterministic modified times. */
 export interface MemoryStorageOptions {
   now?: () => Date;
 }
 
-/** Input to an S3-compatible put-object call: target bucket and key, the body, and optional content type and metadata. */
+/** @internal Input to an S3-compatible put-object call: target bucket and key, the body, and optional content type and metadata. */
 export interface S3CompatiblePutObjectInput {
   body: StorageBody;
   bucket: string;
@@ -58,19 +58,19 @@ export interface S3CompatiblePutObjectInput {
   metadata?: Readonly<Record<string, string>>;
 }
 
-/** Input to an S3-compatible get-object call: the target bucket and key. */
+/** @internal Input to an S3-compatible get-object call: the target bucket and key. */
 export interface S3CompatibleGetObjectInput {
   bucket: string;
   key: string;
 }
 
-/** Input to an S3-compatible head-object call: the target bucket and key. */
+/** @internal Input to an S3-compatible head-object call: the target bucket and key. */
 export interface S3CompatibleHeadObjectInput {
   bucket: string;
   key: string;
 }
 
-/** Object metadata returned by an S3-compatible client: content length, content type, etag, modified time, and custom metadata. */
+/** @internal Object metadata returned by an S3-compatible client: content length, content type, etag, modified time, and custom metadata. */
 export interface S3CompatibleObjectMetadata {
   contentLength?: number;
   contentType?: string;
@@ -79,24 +79,24 @@ export interface S3CompatibleObjectMetadata {
   metadata?: Readonly<Record<string, string>>;
 }
 
-/** Output of an S3-compatible put-object call: the object metadata plus an optional size. */
+/** @internal Output of an S3-compatible put-object call: the object metadata plus an optional size. */
 export interface S3CompatiblePutObjectOutput extends S3CompatibleObjectMetadata {
   size?: number;
 }
 
-/** Output of an S3-compatible get-object call: the object metadata plus the object body. */
+/** @internal Output of an S3-compatible get-object call: the object metadata plus the object body. */
 export interface S3CompatibleGetObjectOutput extends S3CompatibleObjectMetadata {
   body: StorageBody;
 }
 
-/** The minimal S3-compatible client an app supplies: get, head, and put object operations. */
+/** @internal The minimal S3-compatible client an app supplies: get, head, and put object operations. */
 export interface S3CompatibleObjectClient {
   getObject(input: S3CompatibleGetObjectInput): Promise<S3CompatibleGetObjectOutput | undefined>;
   headObject(input: S3CompatibleHeadObjectInput): Promise<S3CompatibleObjectMetadata | undefined>;
   putObject(input: S3CompatiblePutObjectInput): Promise<S3CompatiblePutObjectOutput>;
 }
 
-/** Options for S3-compatible storage: the bucket, the underlying object client, and an optional key prefix. */
+/** @internal Options for the S3-compatible storage adapter: the bucket, the underlying object client, and an optional key prefix. */
 export interface S3CompatibleStorageOptions {
   bucket: string;
   client: S3CompatibleObjectClient;
@@ -120,16 +120,12 @@ const textEncoder = new TextEncoder();
 const sidecarSuffix = '.kovo-storage.json';
 
 /**
- * Create an in-memory object store implementing `StorageCapability`. Useful for
- * tests and local development where uploads should not touch disk or a bucket.
+ * @internal Create an in-memory object store implementing `StorageCapability`.
+ * Useful for tests and local development where uploads should not touch disk or
+ * a bucket. Repo-internal adapter; apps wire storage through `@kovojs/server`.
  *
  * @param options - Optional `now` clock for deterministic `lastModified` values.
  * @returns A `StorageCapability` backed by a `Map`.
- * @example
- * import { createMemoryStorage } from '@kovojs/core';
- *
- * const storage = createMemoryStorage();
- * await storage.put('avatars/1.png', new Uint8Array([1, 2, 3]));
  */
 export function createMemoryStorage(options: MemoryStorageOptions = {}): StorageCapability {
   const objects = new Map<string, StoredMemoryObject>();
@@ -175,15 +171,12 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
 }
 
 /**
- * Create an object store backed by a directory on the local filesystem. Object
- * metadata is kept in sidecar JSON files alongside each blob.
+ * @internal Create an object store backed by a directory on the local
+ * filesystem. Object metadata is kept in sidecar JSON files alongside each
+ * blob. Repo-internal adapter; apps wire storage through `@kovojs/server`.
  *
  * @param options - The `root` directory under which objects are stored.
  * @returns A `StorageCapability` backed by the filesystem.
- * @example
- * import { createFileSystemStorage } from '@kovojs/core';
- *
- * const storage = createFileSystemStorage({ root: './uploads' });
  */
 export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
   const root = options.root;
@@ -242,8 +235,9 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
 }
 
 /**
- * Adapt any S3-compatible object client (AWS S3, R2, MinIO, …) to the
+ * @internal Adapt any S3-compatible object client (AWS S3, R2, MinIO, …) to the
  * `StorageCapability` interface, so the same upload code works across backends.
+ * Repo-internal adapter; apps wire storage through `@kovojs/server`.
  *
  * @param options - The bucket and an `S3CompatibleObjectClient` implementation.
  * @returns A `StorageCapability` backed by the given client and bucket.
@@ -304,15 +298,12 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
 }
 
 /**
- * Normalize a storage key: trim, collapse slashes, and reject path-traversal so
- * keys cannot escape their prefix.
+ * @internal Normalize a storage key: trim, collapse slashes, and reject
+ * path-traversal so keys cannot escape their prefix. Repo-internal helper used
+ * by the storage adapters.
  *
  * @param key - The raw object key.
  * @returns The normalized key.
- * @example
- * import { normalizeStorageKey } from '@kovojs/core';
- *
- * const key: string = normalizeStorageKey('/avatars//1.png');
  */
 export function normalizeStorageKey(key: string): string {
   if (key.length === 0) throw new Error('Storage key must not be empty.');
@@ -328,15 +319,12 @@ export function normalizeStorageKey(key: string): string {
 }
 
 /**
- * Materialize any `StorageBody` (string, ArrayBuffer, typed array, or stream)
- * into a single `Uint8Array`.
+ * @internal Materialize any `StorageBody` (string, ArrayBuffer, typed array, or
+ * stream) into a single `Uint8Array`. Repo-internal helper used by the storage
+ * adapters.
  *
  * @param body - The storage body to read.
  * @returns The body's bytes as a `Uint8Array`.
- * @example
- * import { storageBodyToBytes } from '@kovojs/core';
- *
- * const bytes: Uint8Array = await storageBodyToBytes('hello');
  */
 export async function storageBodyToBytes(body: StorageBody): Promise<Uint8Array> {
   if (typeof body === 'string') return textEncoder.encode(body);

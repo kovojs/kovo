@@ -21,7 +21,7 @@ export interface InlineQueryEvent {
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryEventHydrationTarget extends ListenerTargetLike<InlineQueryEvent> {}
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for applying an inline `kovo:query` event to the runtime (SPEC §9.4). */
 export interface ApplyInlineQueryEventOptions {
   applyQuery?: QueryApplyInterposition;
   onError?: RuntimeErrorReporter;
@@ -30,13 +30,13 @@ export interface ApplyInlineQueryEventOptions {
   store: QueryStore;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for installing the inline `kovo:query` event hydration listener (SPEC §9.4). */
 export interface InstallInlineQueryEventHydrationOptions extends ApplyInlineQueryEventOptions {
   onAppliedQueries?: (queries: readonly string[]) => void;
   target: QueryEventHydrationTarget;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Apply an inline `kovo:query` event's chunks to the query store (SPEC §9.4). */
 export function applyInlineQueryEventToRuntime(
   event: InlineQueryEvent,
   options: ApplyInlineQueryEventOptions,
@@ -56,7 +56,7 @@ export function applyInlineQueryEventToRuntime(
   });
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Install a `kovo:query` listener that hydrates inline query events (SPEC §9.4). */
 export function installInlineQueryEventHydration(
   options: InstallInlineQueryEventHydrationOptions,
 ): () => void {

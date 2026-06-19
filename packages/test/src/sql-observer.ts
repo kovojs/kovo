@@ -1,6 +1,7 @@
 import { parseSqlOperations } from './verifier-sql.js';
 import type { DbVerificationConfig, ObservationRecorder } from './verifier-observation.js';
 
+/** @internal Observe a SQL statement argument and record its operations (SPEC.md §11.2). */
 export function observeSqlStatementArgument(
   statement: unknown,
   config: DbVerificationConfig,
@@ -16,14 +17,7 @@ export function observeSqlStatementArgument(
   }
 }
 
-export function observeSqlStatementIfString(
-  statement: unknown,
-  config: DbVerificationConfig,
-  recorder: ObservationRecorder,
-): void {
-  observeSqlStatementArgument(statement, config, recorder);
-}
-
+/** @internal Extract SQL text from a statement string or `{text}`/`{sql}` carrier. */
 export function sqlStatementText(statement: unknown): string | undefined {
   if (typeof statement === 'string') return statement;
   if (typeof statement !== 'object' || statement === null) return undefined;

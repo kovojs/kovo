@@ -4,148 +4,52 @@
   "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md.",
   "duplicates": [
     {
-      "packageName": "@kovojs/server",
-      "symbol": "Fragment",
+      "packageName": "@kovojs/runtime",
+      "symbol": "ImportHandlerModule",
       "homes": [
         {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
-          "kind": "value",
-          "subpath": "./jsx-dev-runtime"
-        },
-        {
-          "importPath": "@kovojs/server/jsx-runtime",
-          "kind": "value",
-          "subpath": "./jsx-runtime"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/server",
-      "symbol": "jsx",
-      "homes": [
-        {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
-          "kind": "value",
-          "subpath": "./jsx-dev-runtime"
-        },
-        {
-          "importPath": "@kovojs/server/jsx-runtime",
-          "kind": "value",
-          "subpath": "./jsx-runtime"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/server",
-      "symbol": "JSX",
-      "homes": [
-        {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
-          "kind": "namespace",
-          "subpath": "./jsx-dev-runtime"
-        },
-        {
-          "importPath": "@kovojs/server/jsx-runtime",
-          "kind": "namespace",
-          "subpath": "./jsx-runtime"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/server",
-      "symbol": "JsxComponent",
-      "homes": [
-        {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
+          "importPath": "@kovojs/runtime",
           "kind": "type",
-          "subpath": "./jsx-dev-runtime"
+          "subpath": "."
         },
         {
-          "importPath": "@kovojs/server/jsx-runtime",
+          "importPath": "@kovojs/runtime/client",
           "kind": "type",
-          "subpath": "./jsx-runtime"
+          "subpath": "./client"
         }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
+      ]
+    },
+    {
+      "packageName": "@kovojs/runtime",
+      "symbol": "MutationChangeRecord",
+      "homes": [
+        {
+          "importPath": "@kovojs/runtime",
+          "kind": "type",
+          "subpath": "."
+        },
+        {
+          "importPath": "@kovojs/runtime/client",
+          "kind": "type",
+          "subpath": "./client"
+        }
+      ]
     },
     {
       "packageName": "@kovojs/server",
-      "symbol": "jsxDEV",
+      "symbol": "StaticExportNonExportablePolicy",
       "homes": [
         {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
-          "kind": "value",
-          "subpath": "./jsx-dev-runtime"
+          "importPath": "@kovojs/server",
+          "kind": "type",
+          "subpath": "."
         },
         {
-          "importPath": "@kovojs/server/jsx-runtime",
-          "kind": "value",
-          "subpath": "./jsx-runtime"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/server",
-      "symbol": "JsxNode",
-      "homes": [
-        {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
+          "importPath": "@kovojs/server/app-shell/static-export",
           "kind": "type",
-          "subpath": "./jsx-dev-runtime"
-        },
-        {
-          "importPath": "@kovojs/server/jsx-runtime",
-          "kind": "type",
-          "subpath": "./jsx-runtime"
+          "subpath": "./app-shell/static-export"
         }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/server",
-      "symbol": "JsxProps",
-      "homes": [
-        {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
-          "kind": "type",
-          "subpath": "./jsx-dev-runtime"
-        },
-        {
-          "importPath": "@kovojs/server/jsx-runtime",
-          "kind": "type",
-          "subpath": "./jsx-runtime"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
-    },
-    {
-      "packageName": "@kovojs/server",
-      "symbol": "jsxs",
-      "homes": [
-        {
-          "importPath": "@kovojs/server/jsx-dev-runtime",
-          "kind": "value",
-          "subpath": "./jsx-dev-runtime"
-        },
-        {
-          "importPath": "@kovojs/server/jsx-runtime",
-          "kind": "value",
-          "subpath": "./jsx-runtime"
-        }
-      ],
-      "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-      "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md."
+      ]
     }
   ]
 }

@@ -13,6 +13,8 @@ import type { ValidationFailurePayload } from './schema.js';
  * This mirrors the SPEC §4.5 composition call shape: callers may provide
  * compiler-hoisted slots and a serializable component state value, while query
  * data stays the explicit second argument to `renderComponent(...)`.
+ *
+ * @internal
  */
 export interface ComponentRenderOptions<State extends JsonValue = JsonValue> {
   /** Named slot renderers hoisted from fragment-target children. */
@@ -24,6 +26,8 @@ export interface ComponentRenderOptions<State extends JsonValue = JsonValue> {
 /**
  * Options for rendering a component with one SPEC §6.3 mutation form failure
  * injected into its `forms.<name>.failure` slot.
+ *
+ * @internal
  */
 export interface ComponentMutationFailureRenderOptions<
   State extends JsonValue = JsonValue,
@@ -67,6 +71,8 @@ export function renderComponent<
  * Enhanced mutation failures rerender the submitted form target through the same component
  * render function; this helper prepares the `forms.<mutation>.failure` slot value that
  * app-authored TSX reads during that render.
+ *
+ * @internal
  */
 export function renderComponentMutationFailure<
   const Definition extends ComponentDefinitionInput,
@@ -92,6 +98,8 @@ export function renderComponentMutationFailure<
  * This lower-level helper is useful when a component render helper needs to
  * merge a mutation failure with existing slots before calling
  * `renderComponent(...)` or `definition.render(...)` directly.
+ *
+ * @internal
  */
 export function componentMutationFailureSlots(
   formName: string,

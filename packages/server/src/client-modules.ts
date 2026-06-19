@@ -3,8 +3,9 @@ import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 
 /**
- * Source module registered into the request-shell client-module registry for
- * versioned browser delivery (SPEC §9.5).
+ * Source module registered into a {@link VersionedClientModuleRegistry} for
+ * versioned browser delivery (SPEC §9.5). Apps that inject a custom registry via
+ * `createApp({ clientModules })` name this when calling `put`.
  */
 export interface VersionedClientModuleInput {
   contentType?: string;
@@ -22,7 +23,10 @@ export interface VersionedClientModuleResponse extends ServerResponseBase<
 
 /**
  * Registry used by the server request shell to publish immutable versioned
- * client modules and resolve browser requests for them (SPEC §9.5).
+ * client modules and resolve browser requests for them (SPEC §9.5). Apps inject
+ * a custom implementation through `createApp({ clientModules })` and hold a
+ * reference to register interactive modules (e.g. examples/gallery, crm,
+ * stackoverflow, reference; site/src/client/modules.ts).
  */
 export interface VersionedClientModuleRegistry {
   /**
@@ -49,7 +53,10 @@ export interface VersionedClientModuleRequest {
   url?: string | null;
 }
 
-/** Options for the in-memory versioned client-module registry. */
+/**
+ * Options for {@link createMemoryVersionedClientModuleRegistry} — the in-memory
+ * versioned client-module registry (SPEC §9.5).
+ */
 export interface MemoryVersionedClientModuleRegistryOptions {
   maxVersionsPerPath?: number;
 }
@@ -63,10 +70,12 @@ export function versionedClientModuleHref(href: string, version: string): string
 
 /**
  * Create an in-memory registry of versioned client modules — the default store
- * `createApp` uses to serve hashed island/handler bundles to the browser.
+ * `createApp` uses to serve hashed island/handler bundles to the browser, and
+ * the registry apps construct to inject via `createApp({ clientModules })`
+ * (SPEC §9.5).
  *
  * @param options - Optional registry configuration.
- * @returns A `VersionedClientModuleRegistry`.
+ * @returns A {@link VersionedClientModuleRegistry}.
  */
 export function createMemoryVersionedClientModuleRegistry(
   options: MemoryVersionedClientModuleRegistryOptions = {},

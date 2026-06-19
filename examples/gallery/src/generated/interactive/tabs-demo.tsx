@@ -84,37 +84,37 @@ export const GalleryTabsDemo = component({
       <Tabs
         {...rootState}
         data-gallery-interactive="tabs"
-        on:keydown="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$Tabs_keydown"
+        on:keydown="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$Tabs_keydown"
         kovo-state='{"activeValue":"overview","value":"overview"}'
       >
         <TabsList {...rootState} label="Gallery sections">
           <TabsTrigger
             id="gallery-tabs-overview-trigger"
             itemValue="overview"
-            on:click="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_click"
+            on:click="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_click"
             panelId="gallery-tabs-overview-panel"
             {...rootState}
             aria-selected={String(state.value === 'overview')}
-            data-bind:aria-selected="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_aria_selected_derive"
+            data-bind:aria-selected="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_aria_selected_derive"
             data-state={state.value === 'overview' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_data_state_derive"
+            data-bind:data-state="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_data_state_derive"
             tabIndex={state.activeValue === 'overview' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_tabIndex_derive"
+            data-bind:tabIndex="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_tabIndex_derive"
           >
             Overview
           </TabsTrigger>
           <TabsTrigger
             id="gallery-tabs-details-trigger"
             itemValue="details"
-            on:click="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_click_2"
+            on:click="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_click_2"
             panelId="gallery-tabs-details-panel"
             {...rootState}
             aria-selected={String(state.value === 'details')}
-            data-bind:aria-selected="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_aria_selected_derive_2"
+            data-bind:aria-selected="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_aria_selected_derive_2"
             data-state={state.value === 'details' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_data_state_derive_2"
+            data-bind:data-state="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_data_state_derive_2"
             tabIndex={state.activeValue === 'details' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_tabIndex_derive_2"
+            data-bind:tabIndex="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_tabIndex_derive_2"
           >
             Details
           </TabsTrigger>
@@ -126,9 +126,9 @@ export const GalleryTabsDemo = component({
             tabIndex={-1}
             {...rootState}
             aria-selected={String(state.value === 'audit')}
-            data-bind:aria-selected="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_aria_selected_derive_3"
+            data-bind:aria-selected="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_aria_selected_derive_3"
             data-state={state.value === 'audit' ? 'active' : 'inactive'}
-            data-bind:data-state="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_data_state_derive_3"
+            data-bind:data-state="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsTrigger_data_state_derive_3"
           >
             Audit
           </TabsTrigger>
@@ -139,11 +139,11 @@ export const GalleryTabsDemo = component({
           triggerId="gallery-tabs-overview-trigger"
           {...rootState}
           data-state={state.value === 'overview' ? 'active' : 'inactive'}
-          data-bind:data-state="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_data_state_derive"
+          data-bind:data-state="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_data_state_derive"
           hidden={state.value !== 'overview'}
-          data-bind:hidden="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_hidden_derive"
+          data-bind:hidden="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_hidden_derive"
           tabIndex={state.value === 'overview' ? 0 : undefined}
-          data-bind:tabIndex="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_tabIndex_derive"
+          data-bind:tabIndex="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_tabIndex_derive"
         >
           Summary metrics stay visible without client runtime.
         </TabsPanel>
@@ -153,11 +153,11 @@ export const GalleryTabsDemo = component({
           triggerId="gallery-tabs-details-trigger"
           {...rootState}
           data-state={state.value === 'details' ? 'active' : 'inactive'}
-          data-bind:data-state="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_data_state_derive_2"
+          data-bind:data-state="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_data_state_derive_2"
           hidden={state.value !== 'details'}
-          data-bind:hidden="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_hidden_derive_2"
+          data-bind:hidden="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_hidden_derive_2"
           tabIndex={state.value === 'details' ? 0 : undefined}
-          data-bind:tabIndex="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_tabIndex_derive_2"
+          data-bind:tabIndex="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_tabIndex_derive_2"
         >
           Detailed notes are selected by click or arrow-key activation.
         </TabsPanel>
@@ -167,11 +167,11 @@ export const GalleryTabsDemo = component({
           triggerId="gallery-tabs-audit-trigger"
           {...rootState}
           data-state={state.value === 'audit' ? 'active' : 'inactive'}
-          data-bind:data-state="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_data_state_derive_3"
+          data-bind:data-state="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_data_state_derive_3"
           hidden={state.value !== 'audit'}
-          data-bind:hidden="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_hidden_derive_3"
+          data-bind:hidden="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_hidden_derive_3"
           tabIndex={state.value === 'audit' ? 0 : undefined}
-          data-bind:tabIndex="/c/__v/f7b2ca41/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_tabIndex_derive_3"
+          data-bind:tabIndex="/c/__v/dfdc0f51/examples/gallery/src/generated/interactive/tabs-demo.client.js#GalleryTabsDemo$TabsPanel_tabIndex_derive_3"
         >
           Disabled audit notes stay out of the roving keyboard path.
         </TabsPanel>

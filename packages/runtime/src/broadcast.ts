@@ -8,7 +8,7 @@ import type { QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { MutationChangeRecord } from './optimism.js';
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal The `BroadcastChannel`-like seam the mutation broadcast uses (SPEC §9.1). */
 export interface BroadcastLike {
   close?: () => void;
   onmessage: ((event: { data: unknown }) => void) | null;
@@ -21,7 +21,7 @@ export interface MutationBroadcast {
   publish(body: string, changes?: readonly MutationChangeRecord[]): void;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for {@link installMutationBroadcast} (SPEC §9.1). */
 export interface InstallMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   channel: BroadcastLike;
@@ -34,7 +34,7 @@ export interface InstallMutationBroadcastOptions {
   store: QueryStore;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Options for {@link withDefaultMutationBroadcast} (SPEC §9.1). */
 export interface DefaultMutationBroadcastOptions {
   applyQuery?: QueryApplyInterposition;
   broadcast?: MutationBroadcast;
@@ -46,7 +46,7 @@ export interface DefaultMutationBroadcastOptions {
   store: QueryStore;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Wrap broadcast options with a default `kovo:mutation-response` channel when available (SPEC §9.1). */
 export function withDefaultMutationBroadcast<Options extends DefaultMutationBroadcastOptions>(
   options: Options,
 ): {
@@ -83,7 +83,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
   }
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Subscribe to the mutation broadcast channel and apply replayed responses (SPEC §9.1). */
 export function installMutationBroadcast(
   options: InstallMutationBroadcastOptions,
 ): MutationBroadcast {

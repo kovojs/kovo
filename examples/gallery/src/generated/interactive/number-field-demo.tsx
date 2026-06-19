@@ -72,12 +72,12 @@ export const GalleryNumberFieldDemo = component({
           <NumberFieldDecrement
             inputId={inputId}
             label="Decrease seats"
-            on:click="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldDecrement_click"
+            on:click="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldDecrement_click"
             {...fieldState}
             data-disabled={state.value <= 0 ? '' : null}
-            data-bind:data-disabled="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldDecrement_data_disabled_derive"
+            data-bind:data-disabled="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldDecrement_data_disabled_derive"
             disabled={state.value <= 0}
-            data-bind:disabled="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldDecrement_disabled_derive"
+            data-bind:disabled="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldDecrement_disabled_derive"
           >
             -
           </NumberFieldDecrement>
@@ -85,21 +85,21 @@ export const GalleryNumberFieldDemo = component({
             form={formId}
             id={inputId}
             label="Seats"
-            on:input="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldInput_input"
-            on:keydown="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldInput_keydown"
+            on:input="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldInput_input"
+            on:keydown="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldInput_keydown"
             {...fieldState}
             value={state.value}
-            data-bind:value="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldInput_value_derive"
+            data-bind:value="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldInput_value_derive"
           />
           <NumberFieldIncrement
             inputId={inputId}
             label="Increase seats"
-            on:click="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldIncrement_click"
+            on:click="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldIncrement_click"
             {...fieldState}
             data-disabled={state.value >= 5 ? '' : null}
-            data-bind:data-disabled="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldIncrement_data_disabled_derive"
+            data-bind:data-disabled="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldIncrement_data_disabled_derive"
             disabled={state.value >= 5}
-            data-bind:disabled="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldIncrement_disabled_derive"
+            data-bind:disabled="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$NumberFieldIncrement_disabled_derive"
           >
             +
           </NumberFieldIncrement>
@@ -107,7 +107,7 @@ export const GalleryNumberFieldDemo = component({
         <output
           data-demo-state="value"
           class="text-xs text-neutral-500"
-          data-bind="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$output_text_derive"
+          data-bind="/c/__v/ead4bd49/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$output_text_derive"
         >
           {String(state.value)}
         </output>

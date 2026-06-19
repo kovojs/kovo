@@ -344,5 +344,3 @@ export const ContextMenuSeparator = component({
     return <div {...styleAttrs} id={attrs.id} role={attrs.role} />;
   },
 });
-
-export * from '@kovojs/headless-ui/context-menu';

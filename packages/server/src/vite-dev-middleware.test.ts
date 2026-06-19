@@ -7,10 +7,10 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import {
   createKovoAppShellDevDiagnosticLedger,
+  kovoAppShellViteDevPlugin,
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
 } from './internal/app-shell-vite.js';
-import { kovoAppShellViteDevPlugin } from './index.js';
 import { nodeFetch } from './vite-test-http.js';
 
 describe('server app shell Vite plugin', () => {
@@ -215,7 +215,8 @@ describe('server app shell Vite plugin', () => {
         return `<main>${params.id}</main>`;
       },
     });
-    const app = createApp({ clientModules: registry, routes: [productRoute] });
+    const app = createApp({ routes: [productRoute] });
+    app.clientModules = registry;
     const plugin = kovoAppShellViteDevPlugin();
     const middlewares: KovoAppShellViteMiddleware[] = [];
     let moduleLoads = 0;

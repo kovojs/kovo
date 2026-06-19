@@ -1,9 +1,6 @@
-import {
-  applyDeferredStreamResponseToRuntime,
-  createQueryStore,
-  DomMorphRoot,
-  keyedDomMorph,
-} from '@kovojs/runtime/client';
+import { createQueryStore } from '@kovojs/runtime/client';
+import { applyDeferredStreamResponseToRuntime } from '@kovojs/runtime/generated';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
 
 const store = createQueryStore();
 const fixtureGlobal = globalThis as typeof globalThis & {

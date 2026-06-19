@@ -376,5 +376,3 @@ export const AutocompleteValue = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/autocomplete';

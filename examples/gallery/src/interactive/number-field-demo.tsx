@@ -1,15 +1,17 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  numberFieldDecrementClick as _numberFieldDecrementClick,
+  numberFieldIncrementClick as _numberFieldIncrementClick,
+  numberFieldInput as _numberFieldInput,
+  numberFieldKeyDown as _numberFieldKeyDown,
+} from '@kovojs/headless-ui/number-field';
+import {
   NumberField,
   NumberFieldControl,
   NumberFieldDecrement,
-  numberFieldDecrementClick as _numberFieldDecrementClick,
   NumberFieldIncrement,
-  numberFieldIncrementClick as _numberFieldIncrementClick,
-  numberFieldInput as _numberFieldInput,
   NumberFieldInput,
-  numberFieldKeyDown as _numberFieldKeyDown,
 } from '@kovojs/ui/number-field';
 
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
