@@ -164,6 +164,10 @@ authored components/routes, and convert or relocate artifact tests.
     with the compiler plugin active.
 - [ ] **CRM** — same; reconcile `mutations.ts`/`optimistic-merge.ts` with non-committed optimistic
       plans (authored mutation exports own the runtime plan; generated optimistic is emit-only).
+  - Progress evidence: `interactive-app.generated-fixtures.ts` and the generated artifact test were
+    removed, `scripts/demo-serve.mjs` now SSR-loads `/src/interactive-app.tsx`, and
+    `pnpm --filter @kovojs/example-crm test` passes. Gap: `src/graph.test.ts` still reads
+    `src/generated/graph.json`.
 - [ ] **StackOverflow** — same as Commerce.
   - Progress evidence: `interactive-app.generated-fixtures.ts` and the generated artifact test were
     removed, `scripts/demo-serve.mjs` now SSR-loads `/src/interactive-app.tsx`, and
