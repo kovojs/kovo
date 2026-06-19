@@ -217,10 +217,12 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
 - [ ] Concurrency safety for parallel vitest workers and parallel builds (per-entry atomic writes;
       no global lock that serializes compilation). Prune policy (size/LRU cap) so the cache can't
       grow unbounded.
-- [ ] Add `**/.kovo/cache/` to `.gitignore`; confirm it is never an `input`/`output` of a `vp` task
+- [x] Add `**/.kovo/cache/` to `.gitignore`; confirm it is never an `input`/`output` of a `vp` task
       in a way that would re-trigger tasks (Phase 5 wires it deliberately).
-  - Evidence target: run the perf corpus in one process (cold), exit, run again in a fresh process
-    (warm-from-disk) — second run is a near-total cache hit and lands well under cold budget.
+  - Evidence 2026-06-19:
+    `.gitignore` ignores `.kovo/cache/` and nested `**/.kovo/cache/`; `rg -n "\\.kovo/cache" vite.config.ts package.json .github scripts packages examples site tests -S`
+    returns no task input/output or workflow references, so the future cache directory cannot
+    currently retrigger `vp` tasks.
 
 ## Phase 4 — Incremental whole-program graph
 

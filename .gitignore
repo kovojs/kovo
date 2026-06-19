@@ -4,6 +4,8 @@ coverage/
 .vite/
 .vitest/
 .vp/
+.kovo/cache/
+**/.kovo/cache/
 *.tsbuildinfo
 test-results/
 .playwright/
