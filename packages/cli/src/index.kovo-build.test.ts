@@ -242,6 +242,77 @@ describe('kovo build', () => {
     }
   });
 
+  it('references build fragment CSS chunks from enhanced mutation live targets', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fragment-css-'));
+    const appPath = join(root, 'app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
+      writeReactJsxRuntimeStub(root);
+      writeFileSync(appPath, mutationFragmentStylesheetAppModuleSource(), 'utf8');
+      writeSplitStyledComponentClientEntry(root);
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const baseCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/base-[a-f0-9]{8}\.css$/.test(href),
+      );
+      const homeCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/routes\/index-[a-f0-9]{8}\.css$/.test(href),
+      );
+      const loginCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href),
+      );
+      const homeFragmentCss = neutralClientAsset(outDir, (href) =>
+        /^\/assets\/fragments\/home-panel-home-panel-[a-f0-9]{8}\.css$/.test(href),
+      );
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      try {
+        const mutationResponse = await fetch(`${origin}/_m/home/touch`, {
+          body: new URLSearchParams(),
+          headers: {
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': 'home-panel#home-panel/home-panel:{}',
+            'Kovo-Targets': 'home-panel=home',
+            Referer: `${origin}/`,
+          },
+          method: 'POST',
+        });
+        const mutationBody = await mutationResponse.text();
+        expect(mutationResponse.status, mutationBody).toBe(200);
+        expect(mutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
+        expect(mutationBody).toContain(`<link rel="stylesheet" href="${homeCss.href}">`);
+        expect(mutationBody).toContain(
+          `<link rel="stylesheet" href="${homeFragmentCss.href}">`,
+        );
+        expect(mutationBody).not.toContain(loginCss.href);
+      } finally {
+        await close(server);
+      }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('boots emitted node preset output from production dependencies with dev-package guards', async () => {
     const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-prod-deps-'));
     const appPath = join(root, 'app.mjs');
@@ -812,6 +883,54 @@ import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 
 export default createApp({
+  routes: [
+    route('/', {
+      page: () => <><SharedCard /><HomePanel /></>,
+    }),
+    route('/login', {
+      page: () => <><SharedCard /><LoginPanel /></>,
+    }),
+  ],
+  stylesheets: [stylesheet('./styles.css')],
+});
+`;
+}
+
+function mutationFragmentStylesheetAppModuleSource(): string {
+  return `
+/** @jsxImportSource @kovojs/server */
+import { createApp, domain, mutation, query, route, s, stylesheet } from '@kovojs/server';
+import { HomePanel } from './src/home-panel.js';
+import { LoginPanel } from './src/login-panel.js';
+import { SharedCard } from './src/shared-card.js';
+
+const home = domain('home');
+const homeQuery = query('home', {
+  load: () => ({ ok: true }),
+  reads: [home],
+});
+const touchHome = mutation('home/touch', {
+  csrf: false,
+  input: s.object({}),
+  registry: {
+    queries: [homeQuery],
+    touches: [home],
+  },
+  handler() {
+    return {};
+  },
+});
+
+export default createApp({
+  liveTargetRenderers: [
+    {
+      component: 'home-panel/home-panel',
+      queries: ['home'],
+      render: () => '<home-panel>HomePanel</home-panel>',
+    },
+  ],
+  mutations: [touchHome],
+  queries: [homeQuery],
   routes: [
     route('/', {
       page: () => <><SharedCard /><HomePanel /></>,

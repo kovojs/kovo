@@ -2470,7 +2470,6 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
         kovoBuildStylesheetCss(resolvedAppModulePath),
       ]);
     const app = appFromModule(appModule, options.appModulePath);
-    const serverHandlerSource = await bundleKovoServerHandler(resolvedAppModulePath);
     const outDir = resolve(options.outDir);
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
@@ -2482,6 +2481,10 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
       clientBuild.assets,
     ]);
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets);
+    const serverHandlerSource = await bundleKovoServerHandler(
+      resolvedAppModulePath,
+      buildCssAssets,
+    );
     const neutralBuild = await writeKovoNeutralBuild({
       app: buildApp,
       buildStylesheetCss: [...buildStylesheetCss.stylesheetCss, ...clientBuild.stylesheetCss],
@@ -2900,10 +2903,24 @@ function mergeStylesheetAssets(assets: readonly (string | StylesheetAsset)[]): S
 }
 
 function appWithBuildStylesheetAssets(app: KovoApp, assets: KovoBuildStylesheetAssets): KovoApp {
-  if (assets.app.length === 0 && Object.keys(assets.routes).length === 0) return app;
+  if (
+    assets.app.length === 0 &&
+    Object.keys(assets.fragments).length === 0 &&
+    Object.keys(assets.routes).length === 0
+  )
+    return app;
 
   return {
     ...app,
+    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {
+      const fragmentAssets = assets.fragments[renderer.component] ?? [];
+      if (fragmentAssets.length === 0) return renderer;
+
+      return {
+        ...renderer,
+        stylesheets: mergeStylesheetAssets([...(renderer.stylesheets ?? []), ...fragmentAssets]),
+      };
+    }),
     stylesheets: mergeStylesheetAssets([...app.stylesheets, ...assets.app]),
     routes: app.routes.map((route) => {
       const routeAssets = assets.routes[route.path] ?? [];
@@ -2925,14 +2942,17 @@ function kovoClientBuildRoot(appModulePath: string): string {
   }
 }
 
-async function bundleKovoServerHandler(appModulePath: string): Promise<string> {
+async function bundleKovoServerHandler(
+  appModulePath: string,
+  stylesheetAssets: KovoBuildStylesheetAssets = emptyKovoBuildStylesheetAssets(),
+): Promise<string> {
   const { build } = await import('vite-plus');
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-build-'));
   const entryPath = join(tempDir, 'entry.mjs');
   const outDir = join(tempDir, 'out');
 
   try {
-    writeFileSync(entryPath, kovoServerHandlerEntrySource(appModulePath), 'utf8');
+    writeFileSync(entryPath, kovoServerHandlerEntrySource(appModulePath, stylesheetAssets), 'utf8');
     await build({
       appType: 'custom',
       build: {
@@ -2974,12 +2994,50 @@ async function bundleKovoServerHandler(appModulePath: string): Promise<string> {
   }
 }
 
-function kovoServerHandlerEntrySource(appModulePath: string): string {
+function kovoServerHandlerEntrySource(
+  appModulePath: string,
+  stylesheetAssets: KovoBuildStylesheetAssets,
+): string {
   return [
     "import { createRequestHandler } from '@kovojs/server';",
     `import * as appModule from ${JSON.stringify(pathToFileURL(appModulePath).href)};`,
     'const app = appModule.default ?? appModule.app;',
-    'export default createRequestHandler(app);',
+    `const stylesheetAssets = ${JSON.stringify(stylesheetAssets)};`,
+    'export default createRequestHandler(appWithBuildStylesheetAssets(app, stylesheetAssets));',
+    '',
+    'function appWithBuildStylesheetAssets(app, assets) {',
+    '  if (assets.app.length === 0 && Object.keys(assets.fragments).length === 0 && Object.keys(assets.routes).length === 0) return app;',
+    '  return {',
+    '    ...app,',
+    '    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {',
+    '      const fragmentAssets = assets.fragments[renderer.component] ?? [];',
+    '      if (fragmentAssets.length === 0) return renderer;',
+    '      return { ...renderer, stylesheets: mergeStylesheetAssets([...(renderer.stylesheets ?? []), ...fragmentAssets]) };',
+    '    }),',
+    '    stylesheets: mergeStylesheetAssets([...app.stylesheets, ...assets.app]),',
+    '    routes: app.routes.map((route) => {',
+    '      const routeAssets = assets.routes[route.path] ?? [];',
+    '      if (routeAssets.length === 0) return route;',
+    '      return { ...route, stylesheets: mergeStylesheetAssets([...(route.stylesheets ?? []), ...routeAssets]) };',
+    '    }),',
+    '  };',
+    '}',
+    '',
+    'function mergeStylesheetAssets(assets) {',
+    '  const byHref = new Map();',
+    '  const hrefOrder = [];',
+    '  for (const asset of assets) {',
+    "    const href = typeof asset === 'string' ? asset : asset.href;",
+    '    if (!byHref.has(href)) hrefOrder.push(href);',
+    '    const chunks = byHref.get(href) ?? [];',
+    "    if (typeof asset !== 'string' && asset.criticalCss) chunks.push(asset.criticalCss);",
+    '    byHref.set(href, chunks);',
+    '  }',
+    '  return hrefOrder.map((href) => {',
+    '    const criticalCss = (byHref.get(href) ?? []).map((chunk) => chunk.trim()).filter(Boolean).join("\\n");',
+    '    return { ...(criticalCss ? { criticalCss } : {}), href };',
+    '  });',
+    '}',
     '',
   ].join('\n');
 }

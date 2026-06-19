@@ -242,13 +242,19 @@ routes/<route>.css]` (theme stays on `base`/app), using
 
 ### Phase 4 — Fragments, islands, and mutation responses
 
-- [ ] Ship fragment-only atoms in `fragments/<target>.css` and have a
+- [x] Ship fragment-only atoms in `fragments/<target>.css` and have a
       fragment/mutation response reference its chunk so a patched-in island is
       styled without a flash, reusing the `stylesheets` already threaded through
-      `deferred-stream.ts:81` and `mutation.ts:1090+`. Skip atoms already present
-      in `base`/the current route chunk (no double-ship, no FOUC). - Evidence: a mutation that morphs in a fragment whose CSS is not in the
-      loaded set pulls `fragments/<target>.css`; one already covered by `base`
-      pulls nothing. Cross-check morph survival (`SPEC.md` §4.4 / §7.5).
+      `mutation.ts`.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "references build fragment CSS chunks"`
+    proves the built node server's enhanced mutation live-target response links
+    base, source-route, and `fragments/home-panel-home-panel-*.css` chunks while
+    excluding the unrelated `/login` route chunk.
+- [ ] Skip fragment atoms already present in `base`/the current route chunk
+      (no double-ship, no FOUC). Evidence: a mutation target already covered by
+      `base` pulls no extra fragment chunk; cross-check morph survival
+      (`SPEC.md` §4.4 / §7.5).
 - [ ] Client navigation: when a client-side route change swaps to a route whose
       chunk is not yet loaded, load it before/with the swap. Confirm against how
       Kovo navigations actually transfer (full nav vs. fragment) and document the
