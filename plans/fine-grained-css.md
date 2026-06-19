@@ -141,12 +141,16 @@ mutation pulls `fragments/cart.css` if not already present.
     inline sheet over 40 KB. Current `site/src/route-kit.test.ts` now asserts
     those component atoms are not manually listed in critical CSS after
     `plans/css-auto-collection.md` Phase 3.
-- [ ] Add per-route byte accounting that records linked CSS and inlined critical
-      CSS vs. bytes reachable from that route's component graph. Capture
-      commerce + site numbers as the regression baseline this plan must beat.
-  - Gap:
-    route→component CSS facts land in Phase 1; exact reachable-byte accounting
-    depends on those facts.
+- [x] Add per-route byte accounting that records linked CSS and inlined critical
+      CSS vs. bytes reachable from that route's component graph.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/css.test.ts packages/cli/src/index.kovo-build.test.ts -t "accounts linked and inlined route CSS bytes|links only reachable build CSS chunks"`
+    proves `cssRouteByteAccounting()` records route-linked, inline-critical,
+    and graph-reachable CSS byte counts, and `kovo build` route fixtures assert
+    `/` and `/login` link/inline fewer page CSS bytes than the all-route chunk
+    total.
+- [ ] Capture commerce + site route CSS byte numbers as the regression baseline
+      this plan must beat.
 - [x] Decide chunk topology and the base-hoist threshold (atoms used by ≥ N
       routes, plus anything the shared layout/chrome renders, go to `base.css`;
       route-unique atoms to `routes/<route>.css`; fragment-only atoms to

@@ -1,8 +1,11 @@
+import { Buffer } from 'node:buffer';
+
 import { describe, expect, it } from 'vitest';
 
 import {
   collectCssAssetManifest,
   createCssAssetResolver,
+  cssRouteByteAccounting,
   cssRouteSplitTargetsFromRouteFacts,
   dedupeCss,
   scopeComponentCss,
@@ -498,6 +501,56 @@ export const Recommendations = component({
     `);
   });
 
+  it('accounts linked and inlined route CSS bytes against reachable route CSS', () => {
+    const sharedCss = '.shared-card{display:grid}';
+    const homeCss = '.home-panel{color:teal}';
+    const loginCss = '.login-panel{color:purple}';
+    const homeRoute = {
+      route: '/',
+      sourceFileNames: ['components/shared.css', 'routes/home.css'],
+    };
+    const loginRoute = {
+      route: '/login',
+      sourceFileNames: ['components/shared.css', 'routes/login.css'],
+    };
+    const routes = [homeRoute, loginRoute];
+    const manifest = collectCssAssetManifest(
+      {
+        cssAssets: [
+          cssAccountingAsset('components/shared.css', 'shared-card', sharedCss),
+          cssAccountingAsset('routes/home.css', 'home-panel', homeCss),
+          cssAccountingAsset('routes/login.css', 'login-panel', loginCss),
+        ],
+      },
+      { split: { routes } },
+    );
+    const homeBytes = Buffer.byteLength(sharedCss, 'utf8') + Buffer.byteLength(homeCss, 'utf8');
+    const loginBytes = Buffer.byteLength(sharedCss, 'utf8') + Buffer.byteLength(loginCss, 'utf8');
+
+    expect(cssRouteByteAccounting(manifest, homeRoute)).toEqual({
+      inlinedCriticalCssBytes: homeBytes,
+      linkedCssBytes: homeBytes,
+      linkedHrefs: [
+        expect.stringMatching(/^\/assets\/base-[a-f0-9]{8}\.css$/),
+        expect.stringMatching(/^\/assets\/routes\/index-[a-f0-9]{8}\.css$/),
+      ],
+      linkedSourceFileNames: [
+        expect.stringMatching(/^base-[a-f0-9]{8}\.css$/),
+        expect.stringMatching(/^routes\/index-[a-f0-9]{8}\.css$/),
+      ],
+      reachableCssBytes: homeBytes,
+      reachableSourceFileNames: ['components/shared.css', 'routes/home.css'],
+      route: '/',
+    });
+    expect(cssRouteByteAccounting(manifest, loginRoute)).toMatchObject({
+      inlinedCriticalCssBytes: loginBytes,
+      linkedCssBytes: loginBytes,
+      reachableCssBytes: loginBytes,
+      reachableSourceFileNames: ['components/shared.css', 'routes/login.css'],
+      route: '/login',
+    });
+  });
+
   it('carries preload policy for late fragment stylesheet delivery', () => {
     const result = compileComponentModule({
       fileName: './components/reviews.tsx',
@@ -551,3 +604,17 @@ export const Reviews = component({
     ]);
   });
 });
+
+function cssAccountingAsset(
+  sourceFileName: string,
+  componentName: string,
+  criticalCss: string,
+): ComponentCssAsset {
+  return {
+    componentName,
+    criticalCss,
+    fragmentTargets: [],
+    href: `/assets/${sourceFileName}`,
+    sourceFileName,
+  };
+}

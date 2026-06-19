@@ -19,6 +19,7 @@ export type {
   CssAssetManifest,
   CssAssetManifestOptions,
   CssAssetResolver,
+  CssRouteByteAccounting,
   CssRenderTarget,
   CssRouteSplitTarget,
   CssSplitChunks,
@@ -30,6 +31,7 @@ export type {
 export {
   collectCssAssetManifest,
   createCssAssetResolver,
+  cssRouteByteAccounting,
   cssRouteSplitTargetsFromRouteFacts,
   dedupeCss,
   scopeComponentCss,

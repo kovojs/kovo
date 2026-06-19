@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 
 import { findMatchingToken } from './scan/text.js';
@@ -85,6 +86,17 @@ export interface CssSplitChunks {
   base: readonly ComponentCssAsset[];
   fragments: Readonly<Record<string, readonly ComponentCssAsset[]>>;
   routes: Readonly<Record<string, readonly ComponentCssAsset[]>>;
+}
+
+/** @internal Per-route CSS delivery accounting for fine-grained CSS regression gates. */
+export interface CssRouteByteAccounting {
+  inlinedCriticalCssBytes: number;
+  linkedCssBytes: number;
+  linkedHrefs: readonly string[];
+  linkedSourceFileNames: readonly string[];
+  reachableCssBytes: number;
+  reachableSourceFileNames: readonly string[];
+  route: string;
 }
 
 /**
@@ -249,6 +261,34 @@ export function cssRouteSplitTargetsFromRouteFacts(
   });
 }
 
+/**
+ * @internal Account for route-scoped CSS delivery against the same route target facts
+ * consumed by the splitter (SPEC.md §13.1, emitted stylesheet assets).
+ */
+export function cssRouteByteAccounting(
+  manifest: CssAssetManifest,
+  route: CssRouteSplitTarget,
+): CssRouteByteAccounting {
+  const reachableAssets = selectRouteCssAssets(manifest, route);
+  const linkedAssets = manifest.chunks
+    ? dedupeComponentCssAssets([
+        ...manifest.chunks.base,
+        ...(manifest.chunks.routes[route.route] ?? []),
+      ])
+    : reachableAssets;
+  const linkedCssBytes = cssAssetCriticalBytes(linkedAssets);
+
+  return {
+    inlinedCriticalCssBytes: linkedCssBytes,
+    linkedCssBytes,
+    linkedHrefs: linkedAssets.map((asset) => asset.href),
+    linkedSourceFileNames: linkedAssets.map((asset) => asset.sourceFileName),
+    reachableCssBytes: cssAssetCriticalBytes(reachableAssets),
+    reachableSourceFileNames: reachableAssets.map((asset) => asset.sourceFileName),
+    route: route.route,
+  };
+}
+
 function computeCssSplitChunks(
   manifest: Pick<CssAssetManifest, 'byFileName' | 'stylesheets'>,
   options: CssAssetManifestOptions,
@@ -394,6 +434,13 @@ function chunkAsset(
   );
   if (styleRuleUsages.length > 0) chunk.styleRuleUsages = styleRuleUsages;
   return chunk;
+}
+
+function cssAssetCriticalBytes(assets: readonly ComponentCssAsset[]): number {
+  return assets.reduce(
+    (total, asset) => total + Buffer.byteLength(asset.criticalCss ?? '', 'utf8'),
+    0,
+  );
 }
 
 function hashedChunkFileName(fileName: string, css: string): string {

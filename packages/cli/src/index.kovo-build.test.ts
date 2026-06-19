@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import {
   cpSync,
   existsSync,
@@ -221,6 +222,19 @@ describe('kovo build', () => {
       expect(readFileSync(homeCss.filePath, 'utf8')).toContain('home-panel');
       expect(readFileSync(loginCss.filePath, 'utf8')).toContain('login-panel');
       expect(readFileSync(homeFragmentCss.filePath, 'utf8')).toContain('home-panel');
+      const baseCssBytes = readFileSync(baseCss.filePath).byteLength;
+      const homeCssBytes = readFileSync(homeCss.filePath).byteLength;
+      const loginCssBytes = readFileSync(loginCss.filePath).byteLength;
+      const baseCriticalCssBytes = criticalCssBytes(baseCss.filePath);
+      const homeCriticalCssBytes = criticalCssBytes(homeCss.filePath);
+      const loginCriticalCssBytes = criticalCssBytes(loginCss.filePath);
+      const allPageCssBytes = baseCssBytes + homeCssBytes + loginCssBytes;
+      const homeRouteCssBytes = baseCssBytes + homeCssBytes;
+      const loginRouteCssBytes = baseCssBytes + loginCssBytes;
+      const homeRouteCriticalCssBytes = baseCriticalCssBytes + homeCriticalCssBytes;
+      const loginRouteCriticalCssBytes = baseCriticalCssBytes + loginCriticalCssBytes;
+      expect(homeRouteCssBytes).toBeLessThan(allPageCssBytes);
+      expect(loginRouteCssBytes).toBeLessThan(allPageCssBytes);
       const homeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
       expect(homeDocument).toContain(baseCss.href);
       expect(homeDocument).toContain(homeCss.href);
@@ -228,6 +242,7 @@ describe('kovo build', () => {
       expect(homeDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
       expect(homeDocument).toContain(`data-kovo-critical-href="${homeCss.href}"`);
       expect(homeDocument).not.toContain(`data-kovo-critical-href="${loginCss.href}"`);
+      expect(inlinedCriticalCssBytes(homeDocument)).toBe(homeRouteCriticalCssBytes);
       const loginDocument = readFileSync(join(outDir, '.kovo/static/login/index.html'), 'utf8');
       expect(loginDocument).toContain(baseCss.href);
       expect(loginDocument).toContain(loginCss.href);
@@ -235,6 +250,7 @@ describe('kovo build', () => {
       expect(loginDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
       expect(loginDocument).toContain(`data-kovo-critical-href="${loginCss.href}"`);
       expect(loginDocument).not.toContain(`data-kovo-critical-href="${homeCss.href}"`);
+      expect(inlinedCriticalCssBytes(loginDocument)).toBe(loginRouteCriticalCssBytes);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -1141,6 +1157,16 @@ function neutralClientAsset(
   }
 
   throw new Error(`Expected neutral client asset in ${outDir}`);
+}
+
+function inlinedCriticalCssBytes(document: string): number {
+  return [...document.matchAll(/<style data-kovo-critical-href="[^"]+"[^>]*>([\s\S]*?)<\/style>/g)]
+    .map((match) => match[1] ?? '')
+    .reduce((total, css) => total + Buffer.byteLength(css, 'utf8'), 0);
+}
+
+function criticalCssBytes(filePath: string): number {
+  return Buffer.byteLength(readFileSync(filePath, 'utf8').trimEnd(), 'utf8');
 }
 
 function readBuildJson(filePath: string): unknown {
