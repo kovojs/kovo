@@ -21,6 +21,7 @@
     "check:kovo": "vp run kovo-check",
     "check:no-committed-generated": "node scripts/no-committed-generated.mjs",
     "check:inline-loader": "pnpm --filter @kovojs/browser run check:inline-loader",
+    "bump": "node scripts/bump.mjs",
     "docs:serve": "pnpm run check:build && pnpm --filter @kovojs/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
     "test": "vitest --run",
     "test:browser": "vp run browser",
