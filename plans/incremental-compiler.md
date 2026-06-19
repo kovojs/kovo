@@ -242,9 +242,14 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
     proves Vite writes a persistent compile entry and a fresh plugin instance over the same root
     serves the same transform without calling the compile callback; the CLI component compile path
     writes a non-empty `.kovo/cache/compiler` manifest under its compile root.
-- [ ] Concurrency safety for parallel vitest workers and parallel builds (per-entry atomic writes;
+- [x] Concurrency safety for parallel vitest workers and parallel builds (per-entry atomic writes;
       no global lock that serializes compilation). Prune policy (size/LRU cap) so the cache can't
       grow unbounded.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/persistent-compile-cache.test.ts -t "persistent compile cache"`
+    proves parallel writes use unique temp files plus per-entry atomic manifests, both entries are
+    recovered by manifest loading even under concurrent writers, and `prunePersistentCompileCache`
+    enforces a newest-entry cap.
 - [x] Add `**/.kovo/cache/` to `.gitignore`; confirm it is never an `input`/`output` of a `vp` task
       in a way that would re-trigger tasks (Phase 5 wires it deliberately).
   - Evidence 2026-06-19:

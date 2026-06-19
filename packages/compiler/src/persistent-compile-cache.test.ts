@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   persistentCompileCacheDir,
+  prunePersistentCompileCache,
   readPersistentCompileCacheEntry,
   readPersistentCompileCacheManifest,
   writePersistentCompileCacheEntry,
@@ -40,7 +41,7 @@ describe('persistent compile cache format', () => {
     expect(entry.artifactRefs.result).toMatch(/^blobs\/[0-9a-f]{64}\.json$/);
     const manifest = await readPersistentCompileCacheManifest(cacheDir);
     expect(manifest).toEqual({
-      entries: { 'cache-key-a': entry },
+      entries: { 'cache-key-a': { ...entry, updatedAtMs: expect.any(Number) } },
       version: 'kovo-compile-cache/v1',
     });
     await expect(readFile(join(cacheDir, entry.artifactRefs.result), 'utf8')).resolves.toContain(
@@ -49,6 +50,29 @@ describe('persistent compile cache format', () => {
     await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toEqual({
       files: [{ fileName: 'cart.server.js', source: 'export {};' }],
     });
+  });
+
+  it('preserves parallel per-entry writes and prunes older entries', async () => {
+    const cacheDir = persistentCompileCacheDir(await tempRoot());
+    await Promise.all([
+      writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey: 'cache-key-a',
+        footprint: { reads: { queryShapeNames: ['a'] } },
+        result: { value: 'a' },
+      }),
+      writePersistentCompileCacheEntry(cacheDir, {
+        cacheKey: 'cache-key-b',
+        footprint: { reads: { queryShapeNames: ['b'] } },
+        result: { value: 'b' },
+      }),
+    ]);
+
+    const manifest = await readPersistentCompileCacheManifest(cacheDir);
+    expect(Object.keys(manifest.entries).sort()).toEqual(['cache-key-a', 'cache-key-b']);
+
+    await prunePersistentCompileCache(cacheDir, { maxEntries: 1 });
+    const pruned = await readPersistentCompileCacheManifest(cacheDir);
+    expect(Object.keys(pruned.entries)).toHaveLength(1);
   });
 
   it('treats a missing or corrupt manifest as an empty cache miss', async () => {

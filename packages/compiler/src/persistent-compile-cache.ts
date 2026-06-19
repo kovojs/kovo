@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { compilerBuildId } from './cache-identity.js';
@@ -15,6 +15,7 @@ export interface PersistentCompileCacheEntry {
   cacheKey: string;
   compilerBuildId: string;
   footprint: CompileDependencyFootprint;
+  updatedAtMs: number;
 }
 
 /** @internal Versioned manifest stored under `.kovo/cache/compiler/manifest.json`. */
@@ -32,12 +33,43 @@ export function persistentCompileCacheDir(root: string): string {
 export async function readPersistentCompileCacheManifest(
   cacheDir: string,
 ): Promise<PersistentCompileCacheManifest> {
+  const manifest = await readManifestFile(cacheDir);
+  for (const entry of await readEntryFiles(cacheDir)) manifest.entries[entry.cacheKey] = entry;
+  return manifest;
+}
+
+async function readManifestFile(cacheDir: string): Promise<PersistentCompileCacheManifest> {
   try {
     const parsed = JSON.parse(await readFile(manifestPath(cacheDir), 'utf8')) as unknown;
     return isPersistentCompileCacheManifest(parsed) ? parsed : emptyPersistentCompileCacheManifest();
   } catch {
     return emptyPersistentCompileCacheManifest();
   }
+}
+
+async function readEntryFiles(cacheDir: string): Promise<PersistentCompileCacheEntry[]> {
+  let fileNames: string[];
+  try {
+    fileNames = await readdir(join(cacheDir, 'entries'));
+  } catch {
+    return [];
+  }
+
+  const entries = await Promise.all(
+    fileNames
+      .filter((fileName) => fileName.endsWith('.json'))
+      .map(async (fileName) => {
+        try {
+          const parsed = JSON.parse(
+            await readFile(join(cacheDir, 'entries', fileName), 'utf8'),
+          ) as unknown;
+          return isPersistentCompileCacheEntry(parsed) ? parsed : null;
+        } catch {
+          return null;
+        }
+      }),
+  );
+  return entries.filter((entry): entry is PersistentCompileCacheEntry => entry !== null);
 }
 
 /** @internal Read one cached result blob, returning null on miss, stale compiler id, or corruption. */
@@ -76,10 +108,35 @@ export async function writePersistentCompileCacheEntry(
     cacheKey: entry.cacheKey,
     compilerBuildId: compilerBuildId(),
     footprint: entry.footprint,
+    updatedAtMs: Date.now(),
   };
+  await atomicWriteFile(entryPath(cacheDir, entry.cacheKey), `${stableJson(manifestEntry)}\n`);
   manifest.entries[entry.cacheKey] = manifestEntry;
   await atomicWriteFile(manifestPath(cacheDir), `${stableJson(manifest)}\n`);
   return manifestEntry;
+}
+
+/** @internal Best-effort size policy: keep the newest N entries and remove older entry/blob files. */
+export async function prunePersistentCompileCache(
+  cacheDir: string,
+  options: { maxEntries: number },
+): Promise<void> {
+  if (options.maxEntries < 1) return;
+  const manifest = await readPersistentCompileCacheManifest(cacheDir);
+  const entries = Object.values(manifest.entries).sort(
+    (left, right) => right.updatedAtMs - left.updatedAtMs,
+  );
+  const keep = new Set(entries.slice(0, options.maxEntries).map((entry) => entry.cacheKey));
+
+  for (const entry of entries) {
+    if (keep.has(entry.cacheKey)) continue;
+    delete manifest.entries[entry.cacheKey];
+    await Promise.all([
+      rm(join(cacheDir, entry.artifactRefs.result), { force: true }),
+      rm(entryPath(cacheDir, entry.cacheKey), { force: true }),
+    ]);
+  }
+  await atomicWriteFile(manifestPath(cacheDir), `${stableJson(manifest)}\n`);
 }
 
 function emptyPersistentCompileCacheManifest(): PersistentCompileCacheManifest {
@@ -93,15 +150,31 @@ function isPersistentCompileCacheManifest(value: unknown): value is PersistentCo
   return Boolean(candidate.entries && typeof candidate.entries === 'object');
 }
 
+function isPersistentCompileCacheEntry(value: unknown): value is PersistentCompileCacheEntry {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as PersistentCompileCacheEntry;
+  return (
+    typeof candidate.cacheKey === 'string' &&
+    typeof candidate.compilerBuildId === 'string' &&
+    typeof candidate.updatedAtMs === 'number' &&
+    Boolean(candidate.artifactRefs && typeof candidate.artifactRefs.result === 'string') &&
+    Boolean(candidate.footprint && typeof candidate.footprint === 'object')
+  );
+}
+
 async function atomicWriteFile(fileName: string, source: string): Promise<void> {
   await mkdir(dirname(fileName), { recursive: true });
-  const tempFileName = `${fileName}.${process.pid}.${Date.now()}.tmp`;
+  const tempFileName = `${fileName}.${process.pid}.${randomUUID()}.tmp`;
   await writeFile(tempFileName, source);
   await rename(tempFileName, fileName);
 }
 
 function manifestPath(cacheDir: string): string {
   return join(cacheDir, 'manifest.json');
+}
+
+function entryPath(cacheDir: string, cacheKey: string): string {
+  return join(cacheDir, 'entries', `${sha256(cacheKey)}.json`);
 }
 
 function sha256(source: string): string {
