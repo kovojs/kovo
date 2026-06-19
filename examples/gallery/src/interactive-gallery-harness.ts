@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 
+import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
 import * as accordionPrimitives from '@kovojs/headless-ui/accordion';
 import * as alertDialogPrimitives from '@kovojs/headless-ui/alert-dialog';
 import * as autocompletePrimitives from '@kovojs/headless-ui/autocomplete';
@@ -38,6 +39,7 @@ import * as toolbarPrimitives from '@kovojs/headless-ui/toolbar';
 import * as tooltipPrimitives from '@kovojs/headless-ui/tooltip';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
+const compiledInteractiveDemos = new Map<string, CompiledInteractiveDemo>();
 const primitiveActions = {
   ...accordionPrimitives,
   ...alertDialogPrimitives,
@@ -105,12 +107,20 @@ export interface FakeDocument {
   readonly querySelector: (selector: string) => FakeElement | undefined;
 }
 
-export function readGenerated(fileName: string): string {
-  return readFileSync(resolve(galleryRoot, `src/generated/interactive/${fileName}`), 'utf8');
+interface CompiledInteractiveDemo {
+  readonly client: string;
+  readonly server: string;
 }
 
-export function generatedInteractiveDemoNames(): string[] {
-  return readdirSync(resolve(galleryRoot, 'src/generated/interactive'))
+export function readCompiledArtifact(fileName: string): string {
+  const demo = compileInteractiveDemo(fileName);
+  if (fileName.endsWith('.client.js')) return demo.client;
+
+  return demo.server;
+}
+
+export function interactiveDemoNames(): string[] {
+  return readdirSync(resolve(galleryRoot, 'src/interactive'))
     .filter((fileName) => fileName.endsWith('-demo.tsx'))
     .map((fileName) => fileName.replace(/\.tsx$/, ''))
     .sort(compareStrings);
@@ -122,7 +132,7 @@ export function extractClientExports(source: string): string[] {
     .sort(compareStrings);
 }
 
-export function extractGeneratedClientRefs(
+export function extractCompiledClientRefs(
   html: string,
 ): Array<{ eventName: string; exportName: string; modulePath: string; version: string }> {
   return [...html.matchAll(/on:([a-z]+)="([^"]+)"/g)].map((match) => {
@@ -152,10 +162,10 @@ export function compareStrings(left: string, right: string): number {
 }
 
 export function readCompiledDemo(fileName: string): string {
-  const server = readGenerated(fileName);
+  const server = readCompiledArtifact(fileName);
   const clientFileName = fileName.replace(/\.tsx$/, '.client.js');
   try {
-    return `${server}\n${readGenerated(clientFileName)}`;
+    return `${server}\n${readCompiledArtifact(clientFileName)}`;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return server;
     throw error;
@@ -166,10 +176,10 @@ export function evaluateClientModule(
   fileName: string,
   globals: Record<string, unknown> = {},
 ): ClientExports {
-  const source = readGenerated(fileName)
-    .replace(/import \{[\s\S]*?\} from '@kovojs\/runtime(?:\/generated)?';\n\n?/, '')
-    .replace(/import \{[\s\S]*?\} from '@kovojs\/headless-ui\/[^']+';\n\n?/g, '')
-    .replace(/import \{[\s\S]*?\} from '@kovojs\/ui\/[^']+';\n\n?/g, '')
+  const source = readCompiledArtifact(fileName)
+    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/runtime(?:\/generated)?["'];\n\n?/g, '')
+    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/headless-ui\/[^"']+["'];\n\n?/g, '')
+    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/ui\/[^"']+["'];\n\n?/g, '')
     .replaceAll('export const ', 'exports.');
   const exports: ClientExports = {};
   vm.runInNewContext(source, {
@@ -292,6 +302,47 @@ export function evaluateClientModule(
   });
 
   return exports;
+}
+
+function compileInteractiveDemo(fileName: string): CompiledInteractiveDemo {
+  const demoName = fileName.replace(/(?:\.client\.js|\.tsx)$/, '');
+  const cached = compiledInteractiveDemos.get(demoName);
+  if (cached !== undefined) return cached;
+
+  const sourcePath = resolve(galleryRoot, `src/interactive/${demoName}.tsx`);
+  const source = readFileSync(sourcePath, 'utf8');
+  const componentFileName = `src/interactive/${demoName}.tsx`;
+  const result = compileComponentModule({
+    fileName: componentFileName,
+    source,
+  });
+  const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error');
+  if (errors.length > 0) {
+    throw new Error(
+      `Failed to compile ${componentFileName}:\n${errors
+        .map((diagnostic) => `${diagnostic.code}: ${diagnostic.message}`)
+        .join('\n')}`,
+    );
+  }
+
+  const server = normalizeCompiledServerSource(
+    result.loweredSource ?? result.files.find((artifact) => artifact.kind === 'server')?.source,
+  );
+  const client = result.files.find((artifact) => artifact.kind === 'client')?.source;
+  if (server === undefined || client === undefined) {
+    throw new Error(`${componentFileName} did not emit both server and client artifacts.`);
+  }
+
+  const compiled = { client, server };
+  compiledInteractiveDemos.set(demoName, compiled);
+
+  return compiled;
+}
+
+function normalizeCompiledServerSource(source: string | undefined): string | undefined {
+  return source?.replace(/kovo-state="([^"]+)"/g, (_match, value: string) => {
+    return `kovo-state='${value.replaceAll('&quot;', '"')}'`;
+  });
 }
 
 export function clientHandler(exports: ClientExports, name: string): ClientExports[string] {

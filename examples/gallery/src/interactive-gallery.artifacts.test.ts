@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -11,43 +11,42 @@ import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './intera
 import {
   compareStrings,
   extractClientExports,
-  extractGeneratedClientRefs,
+  extractCompiledClientRefs,
   galleryRoot,
-  generatedInteractiveDemoNames,
+  interactiveDemoNames,
   pascalCase,
-  readGenerated,
+  readCompiledArtifact,
+  readCompiledDemo,
 } from './interactive-gallery-harness.js';
 
 describe('compiled interactive gallery demos', () => {
-  it('keeps generated interactive artifacts in sync with app-authored TSX', () => {
-    execFileSync(process.execPath, ['scripts/emit-interactive-gallery.mjs', '--check'], {
-      cwd: galleryRoot,
-      stdio: 'pipe',
-    });
-  }, 180_000);
+  it('compiles app-authored interactive demos into emitted artifacts on demand', () => {
+    for (const demo of interactiveDemoNames()) {
+      const compiled = readCompiledDemo(`${demo}.tsx`);
+      expect(compiled, demo).toContain(`data-gallery-interactive="${demo.replace(/-demo$/, '')}"`);
+      expect(compiled, demo).toContain(`Gallery${pascalCase(demo.replace(/-demo$/, ''))}Demo`);
+    }
+  });
 
   it('wires every compiled interactive demo into the docs gallery route', async () => {
     const packageJson = JSON.parse(readFileSync(resolve(galleryRoot, 'package.json'), 'utf8')) as {
       kovo?: { interactiveGallery?: { compiledDemos?: unknown } };
     };
     const manifestDemos = packageJson.kovo?.interactiveGallery?.compiledDemos;
-    const generatedDemos = readdirSync(resolve(galleryRoot, 'src/generated/interactive'))
-      .filter((fileName) => fileName.endsWith('-demo.tsx'))
-      .map((fileName) => fileName.replace(/\.tsx$/, ''))
-      .sort(compareStrings);
+    const compiledDemos = interactiveDemoNames();
     const docsDemos = interactiveGalleryDemos.map((demo) => demo.name).sort(compareStrings);
 
     expect(
       Array.isArray(manifestDemos) ? [...manifestDemos].map(String).sort(compareStrings) : [],
-    ).toEqual(generatedDemos);
-    expect(docsDemos).toEqual(generatedDemos);
+    ).toEqual(compiledDemos);
+    expect(docsDemos).toEqual(compiledDemos);
 
     const html = await renderInteractiveGalleryRoute();
     expect(html).toContain('data-gallery-route="/gallery/interactive"');
     expect(html).toContain('data-demo-summary="compiled"');
     expect(html).not.toContain('[object Promise]');
 
-    for (const demo of generatedDemos) {
+    for (const demo of compiledDemos) {
       const componentName = demo.replace(/-demo$/, '');
       expect(html).toContain(`href="#${demo}"`);
       expect(html).toContain(`data-gallery-interactive="${componentName}"`);
@@ -81,7 +80,7 @@ describe('compiled interactive gallery demos', () => {
       expect(output).toContain('gallery-interactive-export/v1');
       expect(output).toContain('html=1');
       // One module per demo, plus the shared kovo-runtime module and the served headless-ui
-      // primitive modules imported by generated handlers (SPEC §4.4: resolvable URLs, no import map).
+      // primitive modules imported by compiled handlers (SPEC §4.4: resolvable URLs, no import map).
       expect(output).toContain(
         `client-modules=${
           interactiveGalleryDemos.length + galleryHeadlessUiClientModuleHrefs.length + 1
@@ -138,15 +137,15 @@ describe('compiled interactive gallery demos', () => {
     }
   }, 180_000);
 
-  it('keeps rendered generated-client DOM refs in lockstep with client exports', async () => {
-    for (const demo of generatedInteractiveDemoNames()) {
+  it('keeps rendered compiled-client DOM refs in lockstep with client exports', async () => {
+    for (const demo of interactiveDemoNames()) {
       const componentName = demo.replace(/-demo$/, '');
       const expectedModulePath = `/c/src/interactive/${demo}.client.js`;
-      const clientExports = extractClientExports(readGenerated(`${demo}.client.js`));
+      const clientExports = extractClientExports(readCompiledArtifact(`${demo}.client.js`));
       const renderedDemo = interactiveGalleryDemos.find((entry) => entry.name === demo);
       if (renderedDemo === undefined) throw new Error(`Missing docs route demo: ${demo}`);
 
-      const renderedRefs = extractGeneratedClientRefs(await renderedDemo.render());
+      const renderedRefs = extractCompiledClientRefs(await renderedDemo.render());
 
       expect(clientExports, `${demo} client exports`).not.toEqual([]);
       expect(renderedRefs, `${demo} rendered refs`).not.toEqual([]);

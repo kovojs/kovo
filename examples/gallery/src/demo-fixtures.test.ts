@@ -1066,7 +1066,7 @@ function readVisualFixture(fileName: string): string {
   return readFileSync(new URL(`./visual-fixtures/${fileName}`, import.meta.url), 'utf8');
 }
 
-const forbiddenAuthoredSourceMarkers = ['kovo-c=', 'data-bind=', '__kovo', 'generated/interactive'];
+const forbiddenAuthoredSourceMarkers = ['kovo-c=', 'data-bind=', '__kovo'];
 
 const staticRouteFixtureMatrix = expectedRoutes.map((path) => {
   const component = path.slice('/components/'.length) as GalleryRoute['component'];
