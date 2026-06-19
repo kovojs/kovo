@@ -175,18 +175,33 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
     `corepack pnpm --filter @kovojs/site run build` is blocked by the existing
     tutorial snippet extractor error `05-optimistic/src/app.ts:77`, after CSS
     generation succeeds.
-- [ ] Update styling docs (`docs/`, starter README, `kovo explain`) to teach the
+- [x] Update styling docs (`docs/`, starter README, `kovo explain`) to teach the
       one-import + no-export surface.
+  - Evidence 2026-06-19:
+    `site/content/guides/styling.md`, `packages/create-kovo/templates/README.md`,
+    and `packages/create-kovo/templates/docs/framework-rules.md` teach
+    `style.create(...)` + `style.attrs(...)` with build-known CSS and no CSS
+    string exports; `rg -n "style\\.create|style\\.attrs|emitAtomicCss|__rules|criticalCss|StyleCss|stylesheet" packages/cli packages/create-kovo/templates site/content docs -g'*.ts' -g'*.md'`
+    shows `kovo explain` only reports stylesheet hrefs.
 
 ### Phase 4 — Demote the now-unnecessary public API
 
-- [ ] Move `emitAtomicCss`, `AtomicRule`, `createAtomicStyles`, `AtomicCssResult`,
+- [x] Move `emitAtomicCss`, `AtomicRule`, `createAtomicStyles`, `AtomicCssResult`,
       and the `__rules` accessor off the app-facing `@kovojs/style` entry to
       `@kovojs/style/internal` (or a generated subpath), keeping app-facing
       surface to `create`, `attrs`/`props`, `defineVars`, `createTheme`,
-      `defineConsts`, `keyframes`, `tokens`, `defineTheme`, `raw`,
-      `firstThatWorks`. Resolves `plans/audit-api-20260618-180210.md:1324`. - Evidence: `api-surface-baseline.json` diff shows the symbols removed from
-      the public entry; `rules/api-surface.md` gate passes.
+      `keyframes`, `tokens`, and `defineTheme`. Resolves
+      `plans/audit-api-20260618-180210.md:1324`.
+  - Evidence 2026-06-19:
+    `packages/style/src/index.test.ts` asserts the root style module does not
+    expose `emitAtomicCss`, `createAtomicStyles`, or `raw`; `packages/style/dist/index.d.mts`
+    omits `emitAtomicCss`, `AtomicRule`, `CssEmitOptions`, and `CompiledStyle`
+    after `corepack pnpm --filter @kovojs/style run build:dist`.
+  - Evidence 2026-06-19:
+    `pnpm run check:api-surface` passes with
+    `public-exports-needing-attention=1571 (baseline=1571, fixed-this-run=0)`;
+    the count is unchanged because these root exports were already documented,
+    not baseline debt.
 
 ### Phase 5 — Authoring ergonomics polish
 

@@ -1,25 +1,24 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  attrs,
-  create,
-  defineTheme,
-  createTheme,
-  defineVars,
-  emitAtomicCss,
-  keyframes,
-  tokens,
-} from './index.js';
+import * as publicStyle from './index.js';
+import { attrs, create, defineTheme, createTheme, defineVars, keyframes, tokens } from './index.js';
 import {
   createAtomicStyles,
   defineConsts,
   defineThemeFromBase,
+  emitAtomicCss,
   getPriority,
   raw,
   themeFromSeed,
 } from './internal.js';
 
 describe('@kovojs/style phase 1 runtime fork', () => {
+  it('keeps CSS emission helpers on the internal subpath', () => {
+    expect(publicStyle).not.toHaveProperty('emitAtomicCss');
+    expect(publicStyle).not.toHaveProperty('createAtomicStyles');
+    expect(publicStyle).not.toHaveProperty('raw');
+  });
+
   it('merges atoms with property-level last-wins semantics', () => {
     const base = create({
       root: {

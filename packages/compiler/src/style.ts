@@ -5,14 +5,16 @@ import {
   attrs,
   createTheme,
   defineVars,
-  emitAtomicCss,
   tokens as publicThemeTokens,
-  type AtomicRule,
-  type CompiledStyle,
   type CssValue,
   type StyleObject,
 } from '@kovojs/style';
-import { createAtomicStyles } from '@kovojs/style/internal';
+import {
+  createAtomicStyles,
+  emitAtomicCss,
+  type AtomicRule,
+  type CompiledStyle,
+} from '@kovojs/style/internal';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { escapeAttribute, type SourceReplacement } from './shared.js';

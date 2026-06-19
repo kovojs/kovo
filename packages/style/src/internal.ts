@@ -3,8 +3,14 @@ import upstreamGetPriority from './property-priorities.js';
 // Repo-internal style ABI re-exports. These symbols are not part of the
 // app-facing public surface; the compiler and conformance tests consume them
 // through `@kovojs/style/internal` (SPEC.md §13.1, rules/api-surface.md).
-export { createAtomicStyles, defineConsts, raw } from './engine.js';
-export type { AtomicCssResult, Consts } from './engine.js';
+export { createAtomicStyles, defineConsts, emitAtomicCss, raw } from './engine.js';
+export type {
+  AtomicCssResult,
+  AtomicRule,
+  CompiledStyle,
+  Consts,
+  CssEmitOptions,
+} from './engine.js';
 export { defineThemeFromBase, themeFromSeed } from './theme.js';
 export type {
   DefineThemeFromBaseOptions,

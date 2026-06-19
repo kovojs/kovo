@@ -1,9 +1,6 @@
-export { create, attrs, defineVars, createTheme, keyframes, emitAtomicCss } from './engine.js';
+export { create, attrs, defineVars, createTheme, keyframes } from './engine.js';
 export type {
-  AtomicRule,
   AttrsResult,
-  CompiledStyle,
-  CssEmitOptions,
   CssValue,
   InlineStyle,
   Keyframes,
