@@ -123,6 +123,13 @@ const generatedStyles = style.create({ root: { color: 'red' } });
       expect(result.css).toContain('color:var(--kovo-theme-sys-color-primary)');
       expect(result.css).toContain('padding:8px');
       expect(result.css).not.toContain('red');
+      expect(result.cssAssets).toEqual([
+        expect.objectContaining({
+          criticalCss: expect.stringContaining('padding:8px'),
+          href: '/assets/app.css',
+          sourceFileName: 'app.css',
+        }),
+      ]);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

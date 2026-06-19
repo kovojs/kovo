@@ -4,6 +4,7 @@ import { dirname, extname, isAbsolute, relative, resolve } from 'node:path';
 import { UNITLESS_CSS_PROPERTIES } from '@kovojs/style/internal';
 
 import { dedupeCss } from './css.js';
+import type { ComponentCssAsset } from './css.js';
 import { cssIrHeader } from './ir.js';
 import {
   resolvePackageManifestPath,
@@ -33,6 +34,8 @@ export interface PackageComponentCssDiagnostic {
 export interface PackageComponentCssResult {
   /** Deduped CSS across every styled component file in the package. */
   readonly css: string | null;
+  /** Per-source CSS assets retained for build splitting. */
+  readonly cssAssets: readonly ComponentCssAsset[];
   /**
    * Files that import `@kovojs/style` and call `style.create(...)` but yielded
    * no extracted CSS — the conservative extractor bailed (spreads, computed
@@ -47,6 +50,8 @@ export interface PackageComponentCssResult {
 export interface AppComponentCssResult {
   /** Deduped CSS across every styled app source file. */
   readonly css: string | null;
+  /** Per-source CSS assets retained for build splitting. */
+  readonly cssAssets: readonly ComponentCssAsset[];
   /** Styled files whose CSS could not be statically lowered. */
   readonly diagnostics: readonly PackageComponentCssDiagnostic[];
   /** Absolute app source files scanned, in stable order. */
@@ -71,7 +76,7 @@ export function extractPackageComponentCss(
 ): PackageComponentCssResult {
   const resolved = resolvePackage(packageName, options);
   if (!resolved) {
-    return { css: null, diagnostics: [], sourceFiles: [] };
+    return { css: null, cssAssets: [], diagnostics: [], sourceFiles: [] };
   }
 
   return extractComponentCssFromFiles(packageComponentSourceFiles(resolved), {
@@ -106,6 +111,7 @@ function extractComponentCssFromFiles(
   options: ExtractComponentCssFromFilesOptions,
 ): PackageComponentCssResult {
   const chunks: string[] = [];
+  const cssAssets: ComponentCssAsset[] = [];
   const diagnostics: PackageComponentCssDiagnostic[] = [];
 
   for (const fileName of sourceFiles) {
@@ -124,6 +130,7 @@ function extractComponentCssFromFiles(
     });
     if (extraction.css) {
       chunks.push(extraction.css);
+      cssAssets.push(componentCssAssetForSource(fileName, options.rootDir, extraction.css));
     } else {
       diagnostics.push({
         fileName: relativeToRoot(options.rootDir, fileName),
@@ -135,13 +142,29 @@ function extractComponentCssFromFiles(
   }
 
   if (chunks.length === 0) {
-    return { css: null, diagnostics, sourceFiles };
+    return { css: null, cssAssets, diagnostics, sourceFiles };
   }
 
   return {
     css: `${cssIrHeader}\n${normalizeServedCss(dedupeCss(chunks))}`,
+    cssAssets,
     diagnostics,
     sourceFiles,
+  };
+}
+
+function componentCssAssetForSource(
+  fileName: string,
+  rootDir: string,
+  css: string,
+): ComponentCssAsset {
+  const sourceFileName = replaceSourceExtension(relativeToRoot(rootDir, fileName), '.css');
+  return {
+    componentName: sourceFileName.replace(/\.css$/, ''),
+    criticalCss: `${cssIrHeader}\n${normalizeServedCss(css)}`,
+    fragmentTargets: [],
+    href: `/assets/${sourceFileName}`,
+    sourceFileName,
   };
 }
 
@@ -300,6 +323,13 @@ function ignoredAppSourceDirectory(name: string): boolean {
 
 function appSourceExtension(fileName: string): boolean {
   return ['.js', '.jsx', '.ts', '.tsx'].includes(extname(fileName));
+}
+
+function replaceSourceExtension(fileName: string, extension: string): string {
+  const currentExtension = extname(fileName);
+  return currentExtension
+    ? `${fileName.slice(0, -currentExtension.length)}${extension}`
+    : `${fileName}${extension}`;
 }
 
 function exportTargetPath(target: unknown): string | null {
