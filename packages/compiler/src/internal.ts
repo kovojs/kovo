@@ -5,6 +5,7 @@ export {
   compileCacheKey,
   compileComponentCacheKeyInput,
   type CompileCacheKeyInput,
+  type CompileDependencyFactChange,
 } from './compile-cache.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export type {

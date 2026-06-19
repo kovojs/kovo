@@ -167,6 +167,47 @@ describe('CompileCache', () => {
     expect(compile).toHaveBeenCalledTimes(1);
   });
 
+  it('invalidates only modules indexed to changed dependency facts', () => {
+    const cache = new CompileCache<{ dependencyFootprint: CompileDependencyFootprint; value: string }>();
+    const compileCart = vi.fn((): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
+      dependencyFootprint: {
+        queryShapes: { cart: { count: 'number' } },
+        reads: { queryShapeNames: ['cart'] },
+      },
+      value: `cart-${compileCart.mock.calls.length}`,
+    }));
+    const compileProduct = vi.fn(
+      (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
+        dependencyFootprint: {
+          queryShapes: { product: { name: 'string' } },
+          reads: { queryShapeNames: ['product'] },
+        },
+        value: `product-${compileProduct.mock.calls.length}`,
+      }),
+    );
+    const cartInput = compileComponentCacheKeyInput({
+      fileName: 'cart.tsx',
+      queryShapes: { cart: { count: 'number' } },
+      source: 'component({})',
+    });
+    const productInput = compileComponentCacheKeyInput({
+      fileName: 'product.tsx',
+      queryShapes: { product: { name: 'string' } },
+      source: 'component({})',
+    });
+
+    const firstCart = cache.getOrCreate(cartInput, compileCart);
+    const firstProduct = cache.getOrCreate(productInput, compileProduct);
+    cache.invalidateFacts([{ kind: 'queryShape', name: 'cart' }]);
+    const secondCart = cache.getOrCreate(cartInput, compileCart);
+    const secondProduct = cache.getOrCreate(productInput, compileProduct);
+
+    expect(secondCart).not.toBe(firstCart);
+    expect(secondProduct).toBe(firstProduct);
+    expect(compileCart).toHaveBeenCalledTimes(2);
+    expect(compileProduct).toHaveBeenCalledTimes(1);
+  });
+
   it('includes every declared component compile input that can affect lowering', () => {
     const base = compileComponentCacheKeyInput({
       fileName: 'product-card.tsx',

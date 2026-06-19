@@ -206,11 +206,16 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
     `corepack pnpm exec vitest --run tests/compiler-cache-transparency.test.ts packages/compiler/src/vite.test.ts packages/test/src/integration/fixture-compiler-plugin.test.ts -t "cache|caches repeated transforms|fixture plugin|compiles"`
     proves cache-on output remains transparent across the compiler corpus and the Vite/test plugin
     cache paths still hit repeated transforms.
-- [ ] Build the inverse index (fact → dependent modules) so when the whole-program graph changes,
+- [x] Build the inverse index (fact → dependent modules) so when the whole-program graph changes,
       only modules whose footprint touched the changed facts are recompiled.
   - Evidence target: edit module A's mutation input; assert only A and the modules whose footprint
     referenced that mutation recompile, while a structurally-unrelated module B is a cache hit
     (compile-count assertion).
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/compile-component.test.ts -t "CompileCache|dependency footprint|footprint slice|learned footprint|invalidates only"`
+    proves `CompileCache.invalidateFacts()` uses a fact→entry inverse index: invalidating
+    `queryShape:cart` recompiles the cart-footprint entry and keeps the product-footprint entry as
+    a cache hit.
 - [x] **Transparency gate:** a test compiling each perf corpus with cache enabled vs a fresh
       cache-disabled run asserts byte-identical artifacts — including after a targeted single-module
       edit (the incremental path must equal the from-scratch path).
