@@ -292,10 +292,13 @@ routes/<route>.css]` (theme stays on `base`/app), using
     proves the app-shell dev plugin can receive build-owned base/route
     stylesheet assets and serve the active route with the same linked and
     inline-critical chunk set.
+    `corepack pnpm exec vitest --run packages/server/src/vite.test.ts packages/server/src/vite-dev.test.ts -t "threads compiler route CSS chunks|serves build-owned stylesheet chunks|loads the authored app entry"`
+    proves the public `@kovojs/server/vite` adapter now runs the compiler Vite
+    hooks, passes the split compiler CSS manifest into app-shell dev, and serves
+    the active route's hashed CSS chunk while excluding the unrelated route.
   - Gap 2026-06-19:
-    A dev-served vs. built/static-export comparison test still needs to wire the
-    compiler Vite plugin manifest into this structural dev stylesheet handoff
-    and compare the resulting `<link>`/critical sets for the same route.
+    A dev-served vs. built/static-export comparison test still needs to compare
+    the resulting `<link>`/critical sets for the same route byte-for-byte.
 
 ### Phase 6 — Migrate examples + site off the monolith
 

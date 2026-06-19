@@ -296,9 +296,21 @@ export function kovoAppShellViteDevPlugin(
     server.middlewares.use((request, response, next) => {
       Promise.resolve(server.ssrLoadModule(moduleId))
         .then((module) => {
+          const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
+          const stylesheetResponse = renderKovoAppShellViteDevStylesheetAsset(
+            request,
+            stylesheetAssets,
+          );
+          if (stylesheetResponse) {
+            return writeWebResponseToNode(
+              stylesheetResponse,
+              response,
+              request.method ?? 'GET',
+            );
+          }
           const app = appWithDevStylesheetAssets(
             readKovoAppShellViteDevApp(module, appExportName, moduleId),
-            readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets),
+            stylesheetAssets,
           );
           const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
             request,
@@ -1102,6 +1114,37 @@ function readKovoAppShellViteDevStylesheetAssets(
   value: KovoAppShellViteDevPluginOptions['stylesheetAssets'],
 ): KovoAppShellViteDevStylesheetAssets | undefined {
   return typeof value === 'function' ? value() : value;
+}
+
+function renderKovoAppShellViteDevStylesheetAsset(
+  request: IncomingMessage,
+  assets: KovoAppShellViteDevStylesheetAssets | undefined,
+): Response | undefined {
+  if (!assets) return undefined;
+  if ((request.method ?? 'GET') !== 'GET' && request.method !== 'HEAD') return undefined;
+
+  const href = request.url ? new URL(request.url, 'http://kovo.local').pathname : undefined;
+  if (!href) return undefined;
+  const asset = devStylesheetAssets(assets).find((candidate) => candidate.href === href);
+  if (!asset?.criticalCss) return undefined;
+
+  return new Response(asset.criticalCss, {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'text/css; charset=utf-8',
+    },
+    status: 200,
+  });
+}
+
+function devStylesheetAssets(
+  assets: KovoAppShellViteDevStylesheetAssets,
+): readonly StylesheetAsset[] {
+  return [
+    ...(assets.app ?? []),
+    ...Object.values(assets.routes ?? {}).flat(),
+    ...Object.values(assets.fragments ?? {}).flat(),
+  ].filter((asset): asset is StylesheetAsset => typeof asset !== 'string');
 }
 
 function appWithDevStylesheetAssets(
