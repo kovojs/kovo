@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { CompileCache, compileCacheKey } from './compile-cache.js';
+import {
+  CompileCache,
+  compileCacheKey,
+  compileComponentCacheKeyInput,
+} from './compile-cache.js';
 
 describe('CompileCache', () => {
   it('dedupes compile work for the same conservative key', () => {
@@ -44,5 +48,30 @@ describe('CompileCache', () => {
         source: 'component({ render: () => null })',
       }),
     ).not.toBe(base);
+  });
+
+  it('includes every declared component compile input that can affect lowering', () => {
+    const base = compileComponentCacheKeyInput({
+      fileName: 'product-card.tsx',
+      packagePrefixDiscoveryRoot: '/workspace/app',
+      queryShapeFacts: [{ query: 'product', shape: { name: 'string' }, source: 'queries.ts' }],
+      queryShapes: { product: { name: 'string' } },
+      registryFacts: { mutationInputs: { updateProduct: [] } },
+      source: 'component({})',
+      sourceProvenance: 'app',
+    });
+
+    expect(
+      compileCacheKey({
+        ...base,
+        queryShapeFacts: [{ query: 'product', shape: { name: 'number' }, source: 'queries.ts' }],
+      }),
+    ).not.toBe(compileCacheKey(base));
+    expect(compileCacheKey({ ...base, queryShapes: { product: { name: 'number' } } })).not.toBe(
+      compileCacheKey(base),
+    );
+    expect(compileCacheKey({ ...base, sourceProvenance: 'compiler-emitted' })).not.toBe(
+      compileCacheKey(base),
+    );
   });
 });

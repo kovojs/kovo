@@ -8,7 +8,12 @@
 // with live query results (SPEC §5.2; commerce does exactly this with its
 // src/generated/*.tsx artifacts).
 import { compileComponentModule } from '@kovojs/compiler';
-import type { ComponentCssAsset } from '@kovojs/compiler/internal';
+import {
+  CompileCache,
+  compileComponentCacheKeyInput,
+  type ComponentCssAsset,
+  type CompileResult,
+} from '@kovojs/compiler/internal';
 import type { Plugin } from 'vite';
 
 const virtualCssManifestId = 'virtual:kovo-fixture-css-manifest';
@@ -18,9 +23,13 @@ interface FixtureCssAsset extends ComponentCssAsset {
   source: string;
 }
 
-export function kovoFixtureCompilerPlugin(): Plugin {
+export function kovoFixtureCompilerPlugin(
+  compile: (options: Parameters<typeof compileComponentModule>[0]) => CompileResult =
+    compileComponentModule,
+): Plugin {
   let root = process.cwd();
   const cssAssets = new Map<string, FixtureCssAsset>();
+  const compileCache = new CompileCache<CompileResult>();
 
   return {
     name: 'kovo-fixture-compiler',
@@ -79,18 +88,22 @@ export function kovoFixtureStylesheetsForTargets(targets) {
 }
 `;
     },
-    transform(source, id) {
+    async transform(source, id) {
       // Same claim rule as kovoVitePlugin: a `.tsx`/`.ts` module that declares a
       // Kovo component. (The plugin matches the component-call token as source
       // text, so non-component modules must keep it out of comments.)
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
       const fileName = fixtureComponentFileName(id, root);
-      const result = compileComponentModule({
+      const compileOptions = {
         fileName,
         packagePrefixDiscoveryRoot: root,
         source,
-      });
+      };
+      const result = await compileCache.getOrCreate(
+        compileComponentCacheKeyInput(compileOptions),
+        () => compile(compileOptions),
+      );
 
       const errors = (result.diagnostics ?? []).filter(
         (diagnostic) => diagnostic.severity === 'error',

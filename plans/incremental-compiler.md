@@ -117,9 +117,14 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 
 ## Phase 0 — Determinism + sequencing prerequisites
 
-- [ ] Confirm `no-checked-in-generated.md` Phase 1 (compile-on-the-fly harness + temp-emit helper)
+- [x] Confirm `no-checked-in-generated.md` Phase 1 (compile-on-the-fly harness + temp-emit helper)
       has landed; this plan layers caching onto that single funnel. Record the dependency in both
       ledgers.
+  - Evidence 2026-06-19:
+    `plans/no-checked-in-generated.md` Phase 1 records the Vite/test compile-on-the-fly harness,
+    `scripts/commerce-graph.mjs` temp graph helper, and non-Vite temp emit flow as landed; this
+    ledger now points Phase 1 cache wrapping at those same Vite, fixture-test, and CLI/temp compile
+    funnels.
 - [ ] Determinism audit of `compileComponentModule` output: enumerate every nondeterminism source
       (iteration order over `Map`/`Set`/object keys in `internal-graph.ts`, `registry.ts`, `css.ts`,
       `style.ts`; any `Date`/clock; absolute path / `process.cwd()` leakage into emitted source or
@@ -142,18 +147,24 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
       the _whole_ passed-in fact set in the key (over-invalidates but always correct); Phase 2
       narrows it to the per-module footprint.
   - Evidence 2026-06-19:
-    `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/cache-identity.test.ts -t "CompileCache|caches repeated transforms by source hash and compile context|compilerBuildId"`
-    proves the internal `CompileCache` dedupes work, keys by source and the
-    whole passed registry fact set, and still preserves Vite repeated-transform
-    cache behavior.
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts -t "CompileCache|caches repeated transforms by source hash and compile context|includes every declared component compile input"`
+    proves the internal `CompileCache` dedupes work, keys by source and declared
+    component compile inputs (`registryFacts`, query-shape inputs, package prefixes,
+    root, provenance), and preserves Vite repeated-transform cache behavior.
 - [x] Wrap the Vite `transform`/client-module hot path so `compileViteComponentModule`
       consults `CompileCache` before calling `compileComponentModule`.
   - Evidence 2026-06-19:
     `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/cache-identity.test.ts -t "CompileCache|caches repeated transforms by source hash and compile context|compilerBuildId"`
     proves repeated Vite transforms use the shared `CompileCache` and preserve
     existing client-module behavior.
-- [ ] Wrap the test-pipeline plugin call site and the temp-emit helper from the
+- [x] Wrap the test-pipeline plugin call site and the temp-emit helper from the
       predecessor plan with the same `CompileCache` abstraction.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/test/src/integration/fixture-compiler-plugin.test.ts`
+    proves the test-pipeline fixture plugin reuses `CompileCache`; `corepack pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.compile-mcp.test.ts -t "compile/v1|writes and checks component artifacts|writes component client files|passes query-shape"`
+    proves the CLI/MCP component temp-emit facade remains correct through the shared cache wrapper;
+    `corepack pnpm exec tsc --noEmit --pretty false` proves the new internal cache helper is valid
+    across package boundaries.
 - [x] Add a process-lifetime cache in the Vite plugin closure (alongside `clientModules`/`hmrImpacts`)
       so repeated imports of the same module within one dev session / test run never recompile.
   - Evidence 2026-06-19:

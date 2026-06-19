@@ -17,6 +17,8 @@ relocated the dependency behind `*generated-fixtures.ts` wrappers and kept the f
   import **authored** components/routes. Lowering happens transparently through the Kovo Vite
   plugin in dev, build, and the (Vite-powered) test pipeline. No `src/generated/` directory is
   required to exist in a clean checkout; when present it is a gitignored build artifact only.
+- **Incremental cache dependency recorded.** `plans/incremental-compiler.md` now treats this plan's
+  Vite/test compile-on-the-fly harness and temp emit helpers as the cache integration funnel.
 
 ## End State
 

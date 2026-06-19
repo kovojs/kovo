@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
-import { CompileCache } from './compile-cache.js';
+import { CompileCache, compileComponentCacheKeyInput } from './compile-cache.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   collectCssAssetManifest,
@@ -399,13 +399,15 @@ function compileCachedViteComponentModule(
 ): MaybePromise<ViteCompileResult> {
   const registryFacts = resolveViteRegistryFacts(options, fileName);
   return cache.getOrCreate(
-    {
+    compileComponentCacheKeyInput({
       fileName,
-      packageComponentPrefixes: options.packageComponentPrefixes,
-      registryFacts,
-      root,
+      ...(options.packageComponentPrefixes === undefined
+        ? {}
+        : { packageComponentPrefixes: options.packageComponentPrefixes }),
+      packagePrefixDiscoveryRoot: root,
+      ...(registryFacts === undefined ? {} : { registryFacts }),
       source,
-    },
+    }),
     () =>
       compileViteComponentModule(
         compileComponentModule,

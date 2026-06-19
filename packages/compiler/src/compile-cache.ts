@@ -1,12 +1,16 @@
 import { compilerBuildId } from './cache-identity.js';
+import type { CompileComponentOptions } from './types.js';
 
 /** @internal Conservative per-module compiler cache key input. */
 export interface CompileCacheKeyInput {
   readonly fileName: string;
   readonly packageComponentPrefixes?: unknown;
+  readonly queryShapeFacts?: unknown;
+  readonly queryShapes?: unknown;
   readonly registryFacts?: unknown;
   readonly root?: string;
   readonly source: string;
+  readonly sourceProvenance?: unknown;
 }
 
 /** @internal Process-lifetime compile cache used before the persistent cache lands. */
@@ -33,10 +37,35 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
     compilerBuildId: compilerBuildId(),
     fileName: input.fileName,
     packageComponentPrefixes: input.packageComponentPrefixes ?? null,
+    queryShapeFacts: input.queryShapeFacts ?? null,
+    queryShapes: input.queryShapes ?? null,
     registryFacts: input.registryFacts ?? null,
     root: input.root ?? null,
     sourceHash: stableHash(input.source),
+    sourceProvenance: input.sourceProvenance ?? null,
   });
+}
+
+/** @internal Converts declared component compile inputs into the conservative Phase 1 key shape. */
+export function compileComponentCacheKeyInput(
+  options: CompileComponentOptions,
+): CompileCacheKeyInput {
+  return {
+    fileName: options.fileName,
+    ...(options.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: options.packageComponentPrefixes }),
+    ...(options.queryShapeFacts === undefined ? {} : { queryShapeFacts: options.queryShapeFacts }),
+    ...(options.queryShapes === undefined ? {} : { queryShapes: options.queryShapes }),
+    ...(options.registryFacts === undefined ? {} : { registryFacts: options.registryFacts }),
+    ...(options.packagePrefixDiscoveryRoot === undefined
+      ? {}
+      : { root: options.packagePrefixDiscoveryRoot }),
+    source: options.source,
+    ...(options.sourceProvenance === undefined
+      ? {}
+      : { sourceProvenance: options.sourceProvenance }),
+  };
 }
 
 function stableHash(source: string): string {

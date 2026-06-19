@@ -9,9 +9,11 @@ import { pathToFileURL } from 'node:url';
 
 import type {
   CompileComponentOptions,
+  CompileResult,
   CompileRouteModuleOptions,
   RouteComponentImportRewrite,
 } from '@kovojs/compiler';
+import { CompileCache, compileComponentCacheKeyInput } from '@kovojs/compiler/internal';
 import type * as CompilerInternal from '@kovojs/compiler/internal';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -74,6 +76,7 @@ export interface KovoCheckResult {
 
 type KovoCheckFamily = 'all' | 'coverage' | 'optimistic';
 type CliCommandResult = KovoCheckResult | { error: string; exitCode: 1 };
+const cliCompileComponentCache = new CompileCache<CompileResult>();
 
 const outputVersion = 'kovo-check/v1';
 const explainOutputVersion = 'kovo-explain/v1';
@@ -250,8 +253,7 @@ export type KovoMcpResponse =
 export async function compileComponentV1(
   input: CompileComponentV1Input,
 ): Promise<CompileComponentV1Result> {
-  const { compileComponentModule } = await import('@kovojs/compiler');
-  const result = compileComponentModule(compileComponentOptions(input));
+  const result = await compileCachedComponentModule(compileComponentOptions(input));
 
   return {
     componentGraphFacts: [...result.componentGraphFacts],
@@ -293,6 +295,15 @@ export async function compileComponentV1(
     version: compileOutputVersion,
     viewTransitions: [...result.viewTransitions],
   };
+}
+
+async function compileCachedComponentModule(
+  options: CompileComponentOptions,
+): Promise<CompileResult> {
+  const { compileComponentModule } = await import('@kovojs/compiler');
+  return cliCompileComponentCache.getOrCreate(compileComponentCacheKeyInput(options), () =>
+    compileComponentModule(options),
+  );
 }
 
 function compileComponentOptions(input: CompileComponentV1Input): CompileComponentOptions {
@@ -1702,8 +1713,7 @@ async function runCompileCommand(options: CompileCommandOptions): Promise<CliCom
 async function runCompileComponentCommand(
   options: CompileComponentCommandOptions,
 ): Promise<CliCommandResult> {
-  const { assertFixpoint, assertRenderEquivalence, compileComponentModule } =
-    await import('@kovojs/compiler');
+  const { assertFixpoint, assertRenderEquivalence } = await import('@kovojs/compiler');
   const compileOptions: CompileComponentOptions = {
     fileName: options.fileName ?? options.sourcePath,
     source: readFileSync(options.sourcePath, 'utf8'),
@@ -1718,7 +1728,7 @@ async function runCompileComponentCommand(
       CompileComponentOptions['queryShapeFacts']
     >;
   }
-  const result = compileComponentModule(compileOptions);
+  const result = await compileCachedComponentModule(compileOptions);
   const allowedDiagnosticCodes = new Set(options.allowedDiagnosticCodes);
   const warnings = result.diagnostics.filter((diagnostic) =>
     allowedDiagnosticCodes.has(diagnostic.code),
