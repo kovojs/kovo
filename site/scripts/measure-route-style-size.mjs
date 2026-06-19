@@ -1,60 +1,52 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { readFileSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { createServer } from 'vite-plus';
 
-const defaultCommerceRoot = fileURLToPath(new URL('../', import.meta.url));
+import { runContentPipeline } from './content-pipeline.mjs';
+import { emitSiteUiCss } from './emit-ui-css.mjs';
 
+const defaultSiteRoot = fileURLToPath(new URL('../', import.meta.url));
 const options = parseArgs(process.argv.slice(2));
-const commerceRoot = path.resolve(options.root ?? defaultCommerceRoot);
-const distRoot = path.join(commerceRoot, 'dist');
+const siteRoot = path.resolve(options.root ?? defaultSiteRoot);
+const distCssRoot = path.join(siteRoot, 'dist-css');
+const routes =
+  options.routes.length > 0 ? options.routes : ['/', '/docs/quickstart', '/guides/styling'];
 
-rmSync(distRoot, { force: true, recursive: true });
+await runContentPipeline();
+emitSiteUiCss();
+rmSync(distCssRoot, { force: true, recursive: true });
 const buildStart = performance.now();
-execFileSync('corepack', ['pnpm', '--dir', commerceRoot, 'run', 'build'], {
-  cwd: commerceRoot,
+execFileSync('corepack', ['pnpm', '--dir', siteRoot, 'run', 'build:css'], {
+  cwd: siteRoot,
   stdio: options.verbose ? 'inherit' : 'pipe',
 });
 const buildMs = Math.round(performance.now() - buildStart);
 
-const assetFiles = firstPopulatedFileSet([
-  path.join(distRoot, 'server/client/assets'),
-  path.join(distRoot, '.kovo/client/assets'),
-  path.join(distRoot, 'assets'),
-  path.join(distRoot, '.kovo-client/assets'),
-]);
-const cssFiles = assetFiles.filter((file) => file.endsWith('.css'));
-const jsFiles = assetFiles.filter((file) => file.endsWith('.js'));
+const cssFiles = [path.join(distCssRoot, 'assets/site.css')];
 const cssBytes = sumBytes(cssFiles);
-const jsBytes = sumBytes(jsFiles);
-
 const viteServer = await createServer({
   appType: 'custom',
   logLevel: 'error',
-  optimizeDeps: { noDiscovery: true },
-  root: commerceRoot,
+  root: siteRoot,
   server: { hmr: false, middlewareMode: true },
 });
 
-const routes = options.routes.length > 0 ? options.routes : ['/', '/cart', '/login'];
 const routeResults = [];
 try {
-  const appModule = await viteServer.ssrLoadModule('/src/app.tsx');
-  const app = appModule.default ?? appModule.commerceApp?.app;
-  const requestHandler =
-    typeof appModule.createCommerceApp === 'function'
-      ? appModule.createCommerceApp().requestHandler
-      : undefined;
-  if (!requestHandler || !app) {
-    throw new Error('/src/app.tsx must export createCommerceApp and default app.');
-  }
+  const [{ createRequestHandler }, appModule] = await Promise.all([
+    viteServer.ssrLoadModule('@kovojs/server'),
+    viteServer.ssrLoadModule('/src/app.tsx'),
+  ]);
+  const app = appModule.siteStaticExportApp ?? appModule.default;
+  const requestHandler = createRequestHandler(app);
   for (const route of routes) {
-    const response = await requestHandler(new Request(new URL(route, 'https://commerce.test')));
+    const response = await requestHandler(new Request(new URL(route, 'https://kovo.dev')));
     const html = await response.text();
-    routeResults.push(routeStyleSize(route, html, cssFiles, commerceRoot));
+    routeResults.push(routeStyleSize(route, html, cssFiles, siteRoot));
   }
 } finally {
   await viteServer.close();
@@ -63,11 +55,9 @@ try {
 const result = {
   buildMs,
   cssBytes,
-  cssFiles: cssFiles.map((file) => relativeFile(file, commerceRoot)),
-  jsBytes,
-  jsFiles: jsFiles.map((file) => relativeFile(file, commerceRoot)),
+  cssFiles: cssFiles.map((file) => relativeFile(file, siteRoot)),
+  root: relativeFile(siteRoot, process.cwd()),
   routes: routeResults,
-  root: relativeFile(commerceRoot, process.cwd()),
 };
 
 if (options.json) {
@@ -75,13 +65,11 @@ if (options.json) {
 } else {
   process.stdout.write(
     [
-      'commerce-style-size/v1',
+      'site-route-style-size/v1',
       `root=${JSON.stringify(result.root)}`,
       `build-ms=${result.buildMs}`,
       `css-bytes=${result.cssBytes}`,
       `css-files=${result.cssFiles.join(',') || '-'}`,
-      `js-bytes=${result.jsBytes}`,
-      `js-files=${result.jsFiles.join(',') || '-'}`,
       ...result.routes.flatMap((route) => [
         `route=${route.route}`,
         `  html-bytes=${route.htmlBytes}`,
@@ -131,41 +119,9 @@ function parseArgs(args) {
       parsed.routes.push(route);
       continue;
     }
-    throw new Error(`Unknown measure-style-size option ${JSON.stringify(arg)}.`);
+    throw new Error(`Unknown measure-route-style-size option ${JSON.stringify(arg)}.`);
   }
   return parsed;
-}
-
-function listFiles(root) {
-  const entries = [];
-  for (const name of readdirSync(root)) {
-    const file = path.join(root, name);
-    const stats = statSync(file);
-    if (stats.isDirectory()) entries.push(...listFiles(file));
-    else if (stats.isFile()) entries.push(file);
-  }
-  return entries.sort((left, right) => left.localeCompare(right));
-}
-
-function listFilesIfExists(root) {
-  return existsSync(root) ? listFiles(root) : [];
-}
-
-function firstPopulatedFileSet(roots) {
-  for (const root of roots) {
-    const files = listFilesIfExists(root);
-    if (files.length > 0) return files;
-  }
-  return [];
-}
-
-function relativeFile(file, from) {
-  const relative = path.relative(from, file);
-  return relative.startsWith('..') ? pathToFileURL(file).href : relative || '.';
-}
-
-function sumBytes(files) {
-  return files.reduce((total, file) => total + readFileSync(file).byteLength, 0);
 }
 
 function routeStyleSize(route, html, cssFiles, root) {
@@ -195,6 +151,15 @@ function cssFileForHref(cssFiles, href, root) {
     cssFiles.find((file) => relativeFile(file, root).replaceAll('\\', '/').endsWith(normalized)) ??
     null
   );
+}
+
+function relativeFile(file, from) {
+  const relative = path.relative(from, file);
+  return relative.startsWith('..') ? pathToFileURL(file).href : relative || '.';
+}
+
+function sumBytes(files) {
+  return files.reduce((total, file) => total + statSync(file).size, 0);
 }
 
 function unique(values) {

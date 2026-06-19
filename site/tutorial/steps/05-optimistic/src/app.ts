@@ -60,7 +60,6 @@ export const addToCartTouches = [
 ] as const;
 // /snippet
 
-// snippet:add-to-cart
 export const addToCart = mutation('cart/add', {
   csrf: shopCsrf,
   input: s.object({
@@ -111,7 +110,6 @@ export const addToCart = mutation('cart/add', {
     return { productId: input.productId, quantity: input.quantity };
   },
 });
-// /snippet
 
 export const addToCartOptimistic = optimisticPlan<AddToCartInput>(addToCart);
 

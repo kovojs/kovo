@@ -149,8 +149,16 @@ mutation pulls `fragments/cart.css` if not already present.
     and graph-reachable CSS byte counts, and `kovo build` route fixtures assert
     `/` and `/login` link/inline fewer page CSS bytes than the all-route chunk
     total.
-- [ ] Capture commerce + site route CSS byte numbers as the regression baseline
+- [x] Capture commerce + site route CSS byte numbers as the regression baseline
       this plan must beat.
+  - Evidence 2026-06-19:
+    `node examples/commerce/scripts/measure-style-size.mjs --json` records
+    commerce emitted CSS at 125,079 bytes; `/`, `/cart`, and `/login` each link
+    `/assets/styles.css` at 118,746 bytes and inline 11,001 critical CSS bytes.
+    `node site/scripts/measure-route-style-size.mjs --json` records site emitted
+    CSS at 109,111 bytes; `/`, `/docs/quickstart`, and `/guides/styling` each
+    link `/assets/site.css` at 109,111 bytes and inline 10,986 critical CSS
+    bytes.
 - [x] Decide chunk topology and the base-hoist threshold (atoms used by ≥ N
       routes, plus anything the shared layout/chrome renders, go to `base.css`;
       route-unique atoms to `routes/<route>.css`; fragment-only atoms to
