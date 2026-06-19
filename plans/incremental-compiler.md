@@ -144,11 +144,12 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 - [ ] Wrap the `transform` hot path: `compileViteComponentModule` (`vite.ts:241`) consults the cache
       before calling `compileComponentModule`. Same wrap for the test-pipeline plugin call site and
       the temp-emit helper from the predecessor plan.
-- [ ] Add a process-lifetime cache in the Vite plugin closure (alongside `clientModules`/`hmrImpacts`)
+- [x] Add a process-lifetime cache in the Vite plugin closure (alongside `clientModules`/`hmrImpacts`)
       so repeated imports of the same module within one dev session / test run never recompile.
-  - Evidence target: instrument a compile-count counter; a test run importing N modules M times each
-    triggers N compiles, not N·M (extend the `compileCount` counter already in
-    `tests/compiler-perf.test.ts`).
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/vite.test.ts packages/compiler/src/cache-identity.test.ts -t "caches repeated transforms by source hash and compile context|compilerBuildId"`
+    proves repeated Vite transforms hit the in-process cache, source changes
+    miss, and the cache key namespace includes the stable compiler build id.
 
 ## Phase 2 — Cross-module dependency tracking (correctness core)
 

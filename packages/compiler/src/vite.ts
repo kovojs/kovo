@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
+import { compilerBuildId } from './cache-identity.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   collectCssAssetManifest,
@@ -495,6 +496,7 @@ function viteCompileCacheKey(
   source: string,
 ): string {
   return stableJson({
+    compilerBuildId: compilerBuildId(),
     fileName,
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
     registryFacts: resolveViteRegistryFacts(options, fileName) ?? null,
