@@ -196,8 +196,12 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
         `UpdateCoverageFact.query` × touch-graph invalidation sets, §4.9 × §11.1);
         hard error naming the conflicting mutation(s).
     - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/diagnostics.test.ts` covers `kovo check coverage` emitting `ERROR KV314` for a `renderOnce` query path invalidated by modeled mutation/touch domains and allowing non-overlapping modeled writes.
-  - [ ] Extend the render-input ⊆ (queries ∪ stamped props ∪ state) check
+  - [x] Extend the render-input ⊆ (queries ∪ stamped props ∪ state) check
         (currently gated on fragment targets) to `isomorphic` islands.
+    - Evidence 2026-06-19: `pnpm exec vitest --run packages/compiler/src/fragment-targets.test.ts`
+      covers isomorphic islands accepting declared query/prop/state/static render
+      inputs and emitting KV303 for undeclared render inputs or non-static module
+      globals.
   - [ ] A PUNTed/Opaque position under `disableServerRefresh:true` must carry its
         own non-fragment status — do not let a same-path sibling's `plan` coverage
         satisfy it (use the §10.5 punt list, already named in

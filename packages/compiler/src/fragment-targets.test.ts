@@ -207,6 +207,63 @@ export const CartRow = component({
     ]);
   });
 
+  it('accepts isomorphic render inputs declared as queries, props, state, or static module constants', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+const DISPLAY = { currency: 'USD' };
+
+export const CartBadge = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  props: { rowId: String },
+  state: () => ({ selected: false }),
+  render: ({ cart, rowId }, state) => (
+    <cart-badge data-row={rowId} data-selected={state.selected}>
+      {cart.count} {DISPLAY.currency}
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports KV303 when isomorphic render inputs are not live-declared', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+const env = getEnv();
+
+export const CartBadge = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart, priceList }) => (
+    <cart-badge>
+      {cart.count} {priceList.version} {env.discountRate}
+    </cart-badge>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV303')).toMatchObject([
+      {
+        code: 'KV303',
+        fileName: 'cart-badge.tsx',
+        message: `${kv303.message} priceList`,
+        severity: kv303.severity,
+      },
+      {
+        code: 'KV303',
+        fileName: 'cart-badge.tsx',
+        message: `${kv303.message} env`,
+        severity: kv303.severity,
+      },
+    ]);
+  });
+
   it('accepts fragment target children that can hoist through serializable props', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',

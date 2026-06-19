@@ -7,6 +7,7 @@ import {
   callExpressions,
   componentFragmentTargetNames,
   componentOptionObjectKeys,
+  componentOptionStaticValue,
   componentHasInferredServerRefreshTarget,
   componentRenderHostElement,
   componentRenderInputModels,
@@ -17,6 +18,8 @@ import {
   type ComponentModuleModel,
   type JsxElementChildBody,
   jsxElements,
+  type PropertyAccessPathModel,
+  type RenderInputModel,
 } from '../scan/parse.js';
 import { dedupeBy, generatedOffsetToOriginal, type SourceOffsetMap } from '../shared.js';
 import type { QueryShape, QueryShapeFact, QueryUpdateCoverageFact } from '../types.js';
@@ -127,20 +130,66 @@ export function validateFragmentTargetInputs(
   model: ComponentModuleModel,
   fileName: string,
 ): CompilerDiagnostic[] {
-  if (componentFragmentTargetNames(model).length === 0) return [];
+  const validatesFragmentTarget = componentFragmentTargetNames(model).length > 0;
+  const validatesIsomorphicIsland = componentOptionStaticValue(model, 'isomorphic') === true;
+  if (!validatesFragmentTarget && !validatesIsomorphicIsland) return [];
 
-  const allowedInputs = new Set([
+  const allowedInputs = declaredRenderInputRoots(model, validatesIsomorphicIsland);
+  const renderInputs = componentRenderInputModels(model);
+  const missingInputs = renderInputs.filter((input) => !allowedInputs.has(input.name));
+  const missingIsomorphicReads = validatesIsomorphicIsland
+    ? isomorphicRenderReads(model).filter((input) => !allowedInputs.has(input.name))
+    : [];
+
+  return dedupeBy([...missingInputs, ...missingIsomorphicReads], (input) => input.name).map(
+    (input) => ({
+      ...diagnosticFor(fileName, 'KV303', source, input.start, input.end - input.start),
+      message: `${diagnosticDefinitions.KV303.message} ${input.name}`,
+    }),
+  );
+}
+
+function declaredRenderInputRoots(
+  model: ComponentModuleModel,
+  includeState: boolean,
+): Set<string> {
+  return new Set([
     ...componentOptionObjectKeys(model, 'queries'),
     ...componentOptionObjectKeys(model, 'props'),
+    ...model.moduleScopeBindings.map((binding) => binding.name),
+    ...(includeState ? ['state'] : []),
   ]);
-  const renderInputs = componentRenderInputModels(model);
-  if (renderInputs.length === 0) return [];
+}
 
-  const missing = renderInputs.filter((input) => !allowedInputs.has(input.name));
-  return missing.map((input) => ({
-    ...diagnosticFor(fileName, 'KV303', source, input.start, input.end - input.start),
-    message: `${diagnosticDefinitions.KV303.message} ${input.name}`,
-  }));
+function isomorphicRenderReads(model: ComponentModuleModel): RenderInputModel[] {
+  return jsxExpressions(model)
+    .filter((expression) => !isJsxEventAttributeExpression(expression, model))
+    .flatMap((expression) => expression.propertyAccesses.map(renderInputFromPropertyAccessRoot));
+}
+
+function renderInputFromPropertyAccessRoot(access: PropertyAccessPathModel): RenderInputModel {
+  const [root = access.path] = access.path.split('.');
+  return {
+    end: access.start + root.length,
+    name: root,
+    start: access.start,
+  };
+}
+
+function isJsxEventAttributeExpression(
+  expression: { end: number; start: number },
+  model: ComponentModuleModel,
+): boolean {
+  return jsxElements(model).some((element) =>
+    element.attributes.some(
+      (attribute) =>
+        (attribute.domEventName !== undefined || attribute.executionTriggerName !== undefined) &&
+        attribute.expressionStart !== undefined &&
+        attribute.expressionEnd !== undefined &&
+        expression.start >= attribute.expressionStart &&
+        expression.end <= attribute.expressionEnd,
+    ),
+  );
 }
 
 export function validateFragmentTargetChildren(
