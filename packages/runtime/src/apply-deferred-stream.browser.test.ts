@@ -1,11 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
-import {
-  applyDeferredStreamResponseToRuntime,
-  createQueryStore,
-  DomMorphRoot,
-  keyedDomMorph,
-} from './client.js';
+import { createQueryStore } from './client.js';
+import { applyDeferredStreamResponseToRuntime } from './generated.js';
+import { DomMorphRoot, keyedDomMorph } from './morph.js';
 
 afterEach(() => {
   document.body.replaceChildren();

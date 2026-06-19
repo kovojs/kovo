@@ -32,4 +32,23 @@ export {
   renderMutationResponse,
   renderNoJsMutationResponse,
 } from '../mutation.js';
-export { renderQueryEndpointResponse, renderQueryRegistryEndpointResponse } from '../query.js';
+export {
+  renderQueryEndpointResponse,
+  renderQueryRegistryEndpointResponse,
+  type QueryEndpointFailure,
+  type QueryEndpointRegistry,
+  type QueryEndpointRequest,
+  type QueryEndpointResponse,
+  type QueryEndpointResult,
+  type QueryEndpointSuccess,
+  type QuerySearchInput,
+  type RegisteredQueryDefinition,
+} from '../query.js';
+export type {
+  WebhookFailureStatus,
+  WebhookReplayReservation,
+  WebhookReplayStore,
+  WebhookResponseStatus,
+  WebhookSuccessStatus,
+  WebhookWireResponse,
+} from '../webhook.js';

@@ -8,12 +8,12 @@ import {
   type ApplyMutationResponseChunksToRuntimeOptions,
 } from './apply-mutation-response.js';
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @generated Applied deferred-stream result when a root morphed fragments in place (SPEC §5.2, §9.1). */
 export type AppliedDeferredStreamResponseWithRoot = AppliedMutationResponseWithRoot & {
   chunks: AppliedMutationResponseWithRoot[];
 };
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @generated Applied deferred-stream result: rootless chunk facts, or {@link AppliedDeferredStreamResponseWithRoot} (SPEC §5.2, §9.1). */
 export type AppliedDeferredStreamResponseToRuntime =
   | (AppliedMutationResponse & { chunks: AppliedMutationResponse[] })
   | AppliedDeferredStreamResponseWithRoot;
@@ -26,13 +26,17 @@ interface ApplyDeferredStreamResponseToRuntimeBaseOptions extends Omit<
   boundary?: string;
 }
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @generated Options for {@link applyDeferredStreamResponseToRuntime} (SPEC §5.2, §9.1). */
 export type ApplyDeferredStreamResponseToRuntimeOptions =
   ApplyDeferredStreamResponseToRuntimeBaseOptions & {
     root?: MorphRoot | undefined;
   };
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/**
+ * @generated Apply a multipart deferred-stream mutation response body to the
+ * runtime: split it on the boundary and apply each chunk's fragments and queries
+ * (SPEC §5.2, §9.1). Compiler-emitted bootstrap calls this; not app-authored.
+ */
 export function applyDeferredStreamResponseToRuntime(
   options: ApplyDeferredStreamResponseToRuntimeOptions & { root: MorphRoot },
 ): AppliedDeferredStreamResponseWithRoot;

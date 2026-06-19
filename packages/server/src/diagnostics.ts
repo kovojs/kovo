@@ -1,3 +1,9 @@
+/**
+ * Diagnostic context passed to a `createApp({ onError })` {@link ServerErrorHandler}
+ * when a request-shell phase throws. `operation` names the failing phase and the
+ * optional fields carry whatever request/route/mutation/query identity is known
+ * for that phase (SPEC.md §9.2).
+ */
 export interface ServerErrorDiagnosticContext {
   mutationKey?: string;
   operation:
@@ -18,6 +24,12 @@ export interface ServerErrorDiagnosticContext {
   url?: string;
 }
 
+/**
+ * Observability hook supplied to `createApp({ onError })`. Invoked when a
+ * request-shell phase throws, with the original error and a
+ * {@link ServerErrorDiagnosticContext}; it must not change the stable
+ * SPEC.md §9.2 server-error responses (errors thrown here are swallowed).
+ */
 export type ServerErrorHandler = (
   error: unknown,
   context: ServerErrorDiagnosticContext,

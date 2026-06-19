@@ -8,11 +8,6 @@ import {
   readElementStateHost,
   writeElementState,
 } from './handler-context.js';
-import {
-  readElementParams as readElementParamsFromBarrel,
-  readElementState as readElementStateFromBarrel,
-  writeElementState as writeElementStateFromBarrel,
-} from './client.js';
 import type { EventElementLike } from './events.js';
 
 class FakeElement implements EventElementLike {
@@ -52,13 +47,6 @@ class FakeElement implements EventElementLike {
 }
 
 describe('handler context module', () => {
-  it('is the public owner for delegated handler context helpers', () => {
-    // SPEC.md §4.7: delegated handlers receive params, mutable state, and ctx.signal.
-    expect(readElementParamsFromBarrel).toBe(readElementParams);
-    expect(readElementStateFromBarrel).toBe(readElementState);
-    expect(writeElementStateFromBarrel).toBe(writeElementState);
-  });
-
   it('defaults missing or malformed serialized state to an empty object', () => {
     expect(readElementState(new FakeElement({}))).toEqual({});
     expect(readElementState(new FakeElement({ 'kovo-state': '{' }))).toEqual({});

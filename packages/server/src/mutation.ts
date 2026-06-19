@@ -140,11 +140,13 @@ export function write<
   return definition;
 }
 
+/** @internal */
 export interface QueryRerun {
   instanceKey?: string;
   key: string;
 }
 
+/** @internal */
 export interface MutationRegistry {
   inferredTouches?: readonly MutationTouchSite[];
   queries?: readonly RegisteredQueryDefinition[];
@@ -199,6 +201,7 @@ export interface MutationFormAttributes<Key extends string = string, Request = u
   mutation: MutationFormDefinition<Key, Request>;
 }
 
+/** @internal */
 export interface RunMutationOptions<
   Request,
   SessionValue = unknown,

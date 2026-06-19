@@ -5,6 +5,11 @@ import type { DbVerificationConfig, ObservedDbOperation } from './verifier-obser
 
 export type { DiagnosticCode } from '@kovojs/core';
 
+/**
+ * A database-verification diagnostic emitted by the harness verification API
+ * (`KovoTestContext.verificationDiagnostics`): an uncovered/declared-but-unobserved
+ * write or branch, with its domain, message, and severity (SPEC.md §11).
+ */
 export interface DbVerificationDiagnostic {
   branch?: string;
   code: DiagnosticCode;
@@ -14,6 +19,7 @@ export interface DbVerificationDiagnostic {
   site?: string;
 }
 
+/** @internal Compute verification diagnostics for observed operations vs the touch graph. */
 export function diagnosticsForObservations(
   observed: readonly ObservedDbOperation[],
   touchGraph: CoreGraph.TouchGraph,
@@ -63,6 +69,7 @@ export function diagnosticsForObservations(
   return [...unobservedBranches, ...unobservedDomains];
 }
 
+/** @internal Throw if any observed write is not covered by the touch graph (SPEC.md §11). */
 export function assertObservedWritesCovered(
   observed: readonly ObservedDbOperation[],
   touchGraph: CoreGraph.TouchGraph,
@@ -110,6 +117,7 @@ export function assertObservedWritesCovered(
   }
 }
 
+/** @internal Throw if any observed read is not covered by the declared read set (SPEC.md §11). */
 export function assertObservedReadsCovered(
   observed: readonly ObservedDbOperation[],
   domains: readonly string[],
@@ -141,6 +149,7 @@ export function assertObservedReadsCovered(
   }
 }
 
+/** @internal Format a `KVxxx` diagnostic code and detail into a verification error message. */
 export function diagnosticMessage(code: DiagnosticCode, detail: string): string {
   return `${code} ${trimDiagnosticSentence(diagnosticDefinitions[code].message)}: ${detail}`;
 }

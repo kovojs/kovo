@@ -16,6 +16,11 @@ import {
 import { readHeader, type DocumentRouteResponseBase, type ServerResponseBase } from './response.js';
 import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
+/**
+ * Assembled document parts (`head`, `body`, `lang`, and serialized query
+ * scripts) handed to a custom {@link DocumentTemplate} so it can frame the page
+ * without dropping framework-required markup (SPEC.md §9.5).
+ */
 export interface DocumentParts {
   body: string;
   head: string;
@@ -23,27 +28,33 @@ export interface DocumentParts {
   queryScripts: readonly string[];
 }
 
+/** Context passed to a custom {@link DocumentTemplate} (SPEC.md §9.5). */
 export interface DocumentTemplateContext {
   csp: CspInlineMetadata;
   parts: DocumentParts;
 }
 
+/** Custom document framing template applied via `AppDocumentOptions.template` (SPEC.md §9.5). */
 export type DocumentTemplate = (context: DocumentTemplateContext) => string;
 
+/** @internal */
 export interface DeferredDocumentFrame {
   closeHtml: string;
   shell: string;
 }
 
+/** @internal */
 export interface DeferredDocumentTemplateContext {
   csp: CspInlineMetadata;
   parts: DocumentParts;
 }
 
+/** @internal */
 export type DeferredDocumentTemplate = (
   context: DeferredDocumentTemplateContext,
 ) => DeferredDocumentFrame;
 
+/** @internal */
 export interface DocumentAssemblyOptions {
   /**
    * Build-global render-plan version token (SPEC §5.1, §9.1.1). When present and
@@ -58,16 +69,20 @@ export interface DocumentAssemblyOptions {
   template?: DocumentTemplate;
 }
 
+/** @internal */
 export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {}
 
+/** @internal */
 export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {}
 
+/** @internal */
 export interface DeferredDocumentAssemblyOptions extends Omit<DocumentAssemblyOptions, 'template'> {
   boundary?: string;
   chunks: readonly DeferredStreamChunk[];
   template?: DeferredDocumentTemplate;
 }
 
+/** @internal */
 export interface ErrorDocumentOptions {
   hints?: PageHintOptions;
   lang?: string;
@@ -77,12 +92,14 @@ export interface ErrorDocumentOptions {
   title?: string;
 }
 
+/** @internal */
 export interface DocumentRenderResult {
   csp: CspInlineMetadata;
   earlyHints: PageHints['earlyHints'];
   html: string;
 }
 
+/** @internal */
 export interface DeferredDocumentRenderResult extends ServerResponseBase<
   string,
   Record<string, string>,

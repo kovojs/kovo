@@ -15,11 +15,13 @@ import {
 
 import type { ObservedDbOperation } from './verifier-observation.js';
 
+/** @internal Parsed read/write operation extracted from a SQL statement. */
 export type ParsedSqlOperation = Pick<
   ObservedDbOperation,
   'kind' | 'mutationRead' | 'rowKey' | 'table'
 >;
 
+/** @internal Parse a SQL statement into the read/write operations it performs (SPEC.md §11.2). */
 export function parseSqlOperations(statement: string): ParsedSqlOperation[] {
   return parse(statement).flatMap((parsed) => operationsForStatement(parsed, new Set()));
 }

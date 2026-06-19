@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { abortRemovedIslandSignals, createQueryStore, dispatchDelegatedEvent } from './client.js';
+import { createQueryStore } from './client.js';
+import { dispatchDelegatedEvent } from './handlers.js';
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
-import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
+import {
+  abortIslandSignalScope,
+  abortRemovedIslandSignals,
+  createIslandSignalScope,
+} from './handler-context.js';
 import { FakeElement, FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 

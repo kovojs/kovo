@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { dispatchDelegatedEvent } from './client.js';
+import { dispatchDelegatedEvent } from './handlers.js';
 import {
   dispatchInlineDelegatedClick,
   InlineTriggerElement,

@@ -4,7 +4,7 @@ import {
   type AlgebraicQueryShape,
   type SymbolicEffect,
 } from '@kovojs/core/internal/derivation';
-import { deriveOptimistic } from '@kovojs/drizzle/derive';
+import { deriveOptimistic } from '@kovojs/drizzle/internal/derive';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';

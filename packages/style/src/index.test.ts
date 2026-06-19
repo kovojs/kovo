@@ -3,20 +3,21 @@ import { describe, expect, it } from 'vitest';
 import {
   attrs,
   create,
-  createAtomicStyles,
-  defineConsts,
   defineTheme,
   createTheme,
   defineVars,
   emitAtomicCss,
-  firstThatWorks,
   keyframes,
-  props,
-  raw,
-  themeFromSeed,
   tokens,
 } from './index.js';
-import { getPriority } from './internal.js';
+import {
+  createAtomicStyles,
+  defineConsts,
+  defineThemeFromBase,
+  getPriority,
+  raw,
+  themeFromSeed,
+} from './internal.js';
 
 describe('@kovojs/style phase 1 runtime fork', () => {
   it('merges atoms with property-level last-wins semantics', () => {
@@ -157,7 +158,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(tokens.accent).toBe('var(--kovo-tokens-accent)');
     expect(theme.className).toMatch(/^kv-theme-theme-[a-z0-9]+$/);
     expect(theme.__rules?.[0]?.rule).toContain('--kovo-tokens-accent:#16a34a');
-    expect(props(styles.root).className).toMatch(/^kv-style-bg-[a-z0-9]+ kv-style-fg-[a-z0-9]+$/);
+    expect(attrs(styles.root).class).toMatch(/^kv-style-bg-[a-z0-9]+ kv-style-fg-[a-z0-9]+$/);
   });
 
   it('defines typed constants that can feed static style objects', () => {
@@ -223,7 +224,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
 
   it('derives one final theme from a generated base without callbacks', () => {
     const base = defineTheme({ seed: '#6750A4' });
-    const theme = defineTheme({
+    const theme = defineThemeFromBase({
       base,
       component: { buttonBorder: base.sys.color.primary },
       sys: {
@@ -311,7 +312,6 @@ describe('ported upstream StyleX runtime fixtures', () => {
       ['createTheme', createTheme as RuntimeApi],
       ['defineConsts', defineConsts as RuntimeApi],
       ['defineVars', defineVars as RuntimeApi],
-      ['firstThatWorks', firstThatWorks as RuntimeApi],
       ['keyframes', keyframes as RuntimeApi],
     ] as const;
 
@@ -348,11 +348,6 @@ describe('ported upstream StyleX runtime fixtures', () => {
         {
           "api": "defineVars",
           "message": "style.defineVars requires tokens to be an object.",
-          "name": "TypeError",
-        },
-        {
-          "api": "firstThatWorks",
-          "message": "style.firstThatWorks requires at least one value.",
           "name": "TypeError",
         },
         {
@@ -400,43 +395,43 @@ describe('ported upstream StyleX runtime fixtures', () => {
     `);
   });
 
-  it('matches upstream basic props resolution', () => {
+  it('matches upstream basic merge resolution', () => {
     // Ported from ../stylex/packages/@stylexjs/stylex/__tests__/stylex-test.js "basic resolve".
-    expect(props({ a: 'aaa', b: 'bbb', $$css: true }).className).toBe('aaa bbb');
+    expect(attrs({ a: 'aaa', b: 'bbb', $$css: true }).class).toBe('aaa bbb');
   });
 
   it('matches upstream array merge order', () => {
     // Ported from StyleX "merge order": classes keep first-seen property order unless replaced.
     expect(
-      props([
+      attrs([
         { a: 'a', ':hover__aa': 'aa', $$css: true },
         { b: 'b', $$css: true },
         { c: 'c', ':hover__cc': 'cc', $$css: true },
-      ]).className,
+      ]).class,
     ).toBe('a aa b c cc');
   });
 
   it('matches upstream same-property override behavior', () => {
     // Ported from StyleX "top-level array of simple overridden classes".
     expect(
-      props([
+      attrs([
         { backgroundColor: 'nu7423ey', $$css: true },
         { backgroundColor: 'gh25dzvf', $$css: true },
-      ]).className,
+      ]).class,
     ).toBe('gh25dzvf');
   });
 
-  it('matches upstream props resolution with just pseudoclasses', () => {
+  it('matches upstream merge resolution with just pseudoclasses', () => {
     // Ported from StyleX "with just pseudoclasses".
     expect(
-      props(
+      attrs(
         { ':hover__backgroundColor': 'rse6dlih', $$css: true },
         { ':hover__color': 'gofk2cf1', $$css: true },
-      ).className,
+      ).class,
     ).toBe('rse6dlih gofk2cf1');
   });
 
-  it('matches upstream props resolution for a complicated nested argument set', () => {
+  it('matches upstream merge resolution for a complicated nested argument set', () => {
     // Ported from StyleX "with complicated set of arguments".
     const styles = [
       {
@@ -535,8 +530,8 @@ describe('ported upstream StyleX runtime fixtures', () => {
       ],
     ] as const;
 
-    const value = props(styles).className ?? '';
-    const repeat = props(styles).className ?? '';
+    const value = attrs(styles).class ?? '';
+    const repeat = attrs(styles).class ?? '';
 
     expect(value).toBe(repeat);
     expect(value.split(' ').sort().join(' ')).toBe(
@@ -550,11 +545,11 @@ describe('ported upstream StyleX runtime fixtures', () => {
   it('matches upstream nested arrays and pseudo-class override behavior', () => {
     // Ported from StyleX "nested arrays and pseudoClasses overriding things".
     expect(
-      props([
+      attrs([
         { backgroundColor: 'nu7423ey', $$css: true },
         [{ backgroundColor: 'abcdefg', ':hover__backgroundColor': 'ksdfmwjs', $$css: true }],
         { color: 'gofk2cf1', ':hover__backgroundColor': 'rse6dlih', $$css: true },
-      ]).className,
+      ]).class,
     ).toBe('abcdefg gofk2cf1 rse6dlih');
   });
 
@@ -578,19 +573,17 @@ describe('ported upstream StyleX runtime fixtures', () => {
     expect(attrs({ a: 'aaa', b: 'bbb', $$css: true }).class).toBe('aaa bbb');
   });
 
-  it('ports upstream dynamic props fixture through Kovo raw inline style', () => {
+  it('ports upstream dynamic merge fixture through Kovo raw inline style', () => {
     // Upstream accepts a bare inline object; Kovo requires the explicit `raw(...)` escape hatch.
     expect(
-      props([
+      attrs([
         { backgroundColor: 'backgroundColor-red', $$css: 'components/Foo.react.js:1' },
         raw({ color: 'red' }),
       ]),
     ).toEqual({
-      className: 'backgroundColor-red',
+      class: 'backgroundColor-red',
       'data-style-src': 'components/Foo.react.js:1',
-      style: {
-        color: 'red',
-      },
+      style: 'color:red',
     });
   });
 

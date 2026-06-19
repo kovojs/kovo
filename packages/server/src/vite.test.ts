@@ -7,9 +7,16 @@ import { route } from './route.js';
 import { kovo } from './vite.js';
 import type { KovoAppShellViteMiddleware } from './vite-dev.js';
 
+interface KovoViteConfigureServer {
+  configureServer(server: {
+    middlewares: { use(handler: KovoAppShellViteMiddleware): void };
+    ssrLoadModule(id: string): Promise<Record<string, unknown>>;
+  }): Promise<unknown> | unknown;
+}
+
 describe('public Kovo Vite plugin', () => {
   it('loads the authored app entry default export', async () => {
-    const plugin = kovo({ app: '/src/app.tsx' });
+    const plugin = kovo({ app: '/src/app.tsx' }) as unknown as KovoViteConfigureServer;
     const middlewares: KovoAppShellViteMiddleware[] = [];
 
     await plugin.configureServer({
@@ -19,7 +26,7 @@ describe('public Kovo Vite plugin', () => {
         },
       },
       async ssrLoadModule(id) {
-        if (id === '@kovojs/server') {
+        if (id === '@kovojs/server/internal/app-shell-vite') {
           return {
             createKovoAppShellViteDevIntegration(options: { moduleId: string }) {
               return {

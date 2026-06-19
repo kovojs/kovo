@@ -1,7 +1,7 @@
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal A queued mutation task: a thunk returning a value or promise (SPEC §10.4). */
 export type MutationTask<Value> = () => Promise<Value> | Value;
 
-/** Runtime API used by Kovo applications and generated runtime integration. */
+/** @internal Serializes optimistic mutations per named queue so they apply in order (SPEC §10.4). */
 export class MutationQueue {
   #tails = new Map<string, Promise<unknown>>();
 

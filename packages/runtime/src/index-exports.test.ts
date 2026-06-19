@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import type {
+  StructuralMorphBrowserState,
+  StructuralMorphKey,
+  StructuralMorphNode,
+} from './client.js';
 import * as root from './index.js';
 import * as client from './client.js';
 import * as generated from './generated.js';
@@ -21,17 +26,47 @@ describe('runtime public export boundaries', () => {
     expect(Object.keys(root).sort()).toEqual(['derive', 'handler', 'tempId', 'trustedHtml']);
   });
 
-  it('moves browser client machinery to the client subpath', () => {
-    expect(client.applyDeferredStreamResponseToRuntime).toBe(
-      generated.applyDeferredStreamResponseToRuntime,
-    );
-    expect(client.applyCompiledQueryUpdatePlan).toBe(generated.applyCompiledQueryUpdatePlan);
+  it('keeps the client subpath to the browser bootstrap value helpers', () => {
+    // SPEC.md §§4.4, 9.1: an app entry installs the loader and query store and
+    // builds the browser root; the loader engine internals are no longer here.
     expect(client.createQueryStore).toBe(generated.createQueryStore);
     expect(client.installKovoLoader).toBe(generated.installKovoLoader);
+    expect(typeof client.createBrowserKovoRoot).toBe('function');
+    expect(typeof client.defaultEnhancedFetch).toBe('function');
+
+    expect(Object.keys(client).sort()).toEqual([
+      'createBrowserKovoRoot',
+      'createQueryStore',
+      'defaultEnhancedFetch',
+      'installKovoLoader',
+    ]);
+
     expect(Object.hasOwn(root, 'installKovoLoader')).toBe(false);
     expect(Object.hasOwn(root, 'createQueryStore')).toBe(false);
-    expect(Object.hasOwn(root, 'applyCompiledQueryUpdatePlan')).toBe(false);
-    expect(Object.hasOwn(root, 'applyDeferredStreamResponseToRuntime')).toBe(false);
+  });
+
+  it('keeps the structural-morph shape types public for hand-written conformance helpers', () => {
+    // SPEC.md §9.1: the structural-morph shape types are consumed by
+    // examples/commerce/src/app-test-helpers.ts. They are type-only exports
+    // (no runtime value), so assert their assignability shape here.
+    const key: StructuralMorphKey = 'k';
+    const browserState: StructuralMorphBrowserState = { focused: true };
+    const node: StructuralMorphNode = { type: 'div', key, browserState };
+    expect(node.type).toBe('div');
+    expect(node.key).toBe('k');
+    expect(node.browserState?.focused).toBe(true);
+  });
+
+  it('moves the deferred-stream and query-binding ABI to the generated subpath only', () => {
+    // SPEC.md §5.2: compiler-emitted apply helpers are generated ABI, not on the
+    // app-facing client subpath.
+    expect(typeof generated.applyDeferredStreamResponseToRuntime).toBe('function');
+    expect(typeof generated.applyCompiledQueryUpdatePlan).toBe('function');
+    expect(Object.hasOwn(client, 'applyDeferredStreamResponseToRuntime')).toBe(false);
+    expect(Object.hasOwn(client, 'applyCompiledQueryUpdatePlan')).toBe(false);
+    expect(Object.hasOwn(client, 'createEventBus')).toBe(false);
+    expect(Object.hasOwn(client, 'submitEnhancedMutation')).toBe(false);
+    expect(Object.hasOwn(client, 'installMutationBroadcast')).toBe(false);
   });
 
   it('keeps inline-loader and generated output helpers off public app-authored surfaces', () => {

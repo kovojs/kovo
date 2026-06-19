@@ -15,7 +15,10 @@ export interface QueryWireRenderOptions {
   version?: number | string | undefined;
 }
 
-/** Options for `renderQueryScript`: the query `name`, its `value`, and optional instance `key`. */
+/**
+ * Options for `renderQueryScript`: the query `name`, its `value`, and optional instance `key`.
+ * @internal
+ */
 export interface QueryScriptRenderOptions {
   key?: string | undefined;
   name: string;

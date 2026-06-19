@@ -1,3 +1,4 @@
+import type { BrowserKovoRoot } from './browser-root.js';
 import { withDefaultMutationBroadcast } from './broadcast.js';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
@@ -21,11 +22,21 @@ import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 
 /**
+ * Enhanced-mutation wiring for `installKovoLoader`: the same options as
+ * {@link EnhancedMutationLoaderOptions}, but with the `root` typed as the opaque
+ * {@link BrowserKovoRoot} from `createBrowserKovoRoot` so an app entry does not
+ * hand-build the low-level morph/target objects (SPEC §9.1).
+ */
+export type BrowserEnhancedMutationOptions = Omit<EnhancedMutationLoaderOptions, 'root'> & {
+  root: BrowserKovoRoot;
+};
+
+/**
  * Options for `installKovoLoader`: the root, module importer, query store/plans, and lifecycle hooks.
  */
 export interface KovoLoaderOptions {
   discardPendingOptimism?: () => readonly string[] | void;
-  enhancedMutations?: EnhancedMutationLoaderOptions;
+  enhancedMutations?: BrowserEnhancedMutationOptions;
   events?: readonly string[];
   focusTarget?: LoaderLifecycleTarget;
   importModule: ImportHandlerModule;

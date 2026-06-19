@@ -4,7 +4,6 @@ import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
-import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { domain } from './domain.js';
 import { mutation } from './mutation.js';
 import { toNodeHandler } from './node.js';
@@ -102,12 +101,6 @@ describe('server node adapter', () => {
   it('serves a SPEC §9.5 app shell surface through node:http', async () => {
     const cart = domain('cart');
     const db = { count: 0 };
-    const clientModules = createMemoryVersionedClientModuleRegistry();
-    const clientHref = clientModules.put({
-      path: '/c/cart.client.js',
-      source: 'export const cartClient = true;',
-      version: 'cart-v1',
-    });
     const cartQuery = query('cart', {
       load: () => ({ count: db.count }),
       reads: [cart],
@@ -125,16 +118,21 @@ describe('server node adapter', () => {
       },
     });
     const app = createApp({
-      clientModules,
       mutations: [addToCart],
       queries: [cartQuery],
       routes: [
         route('/cart', {
-          modulepreloads: [clientHref],
+          modulepreloads: [],
           page: () => `<main>Cart ${db.count}</main>`,
         }),
       ],
     });
+    const clientHref = app.clientModules.put({
+      path: '/c/cart.client.js',
+      source: 'export const cartClient = true;',
+      version: 'cart-v1',
+    });
+    app.routes[0]!.modulepreloads = [clientHref];
     const server = await serveWithNode(toNodeHandler(createRequestHandler(app)));
 
     try {

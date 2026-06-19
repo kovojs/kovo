@@ -83,6 +83,8 @@ export type KovoAppShellViteMiddleware = (
  * The Vite dev-server plugin object returned by kovoAppShellViteDevPlugin, ready to be
  * placed in a vite.config.ts plugins array. It wires the app shell into the dev server
  * for the SPEC.md §9.5 dev/build/export replay path.
+ *
+ * @internal
  */
 export interface KovoAppShellViteDevPlugin {
   configureServer(server: KovoAppShellViteDevModuleServer): void | (() => void);
@@ -102,6 +104,8 @@ export interface KovoAppShellViteHotUpdateContext {
  * Options for kovoAppShellViteDevPlugin. Control how the dev-server middleware loads
  * and serves the app shell during SPEC.md §9.5 Vite dev/build/export replay, including
  * which module/export to load, request filtering, and Early Hints relay.
+ *
+ * @internal
  */
 export interface KovoAppShellViteDevPluginOptions {
   appExportName?: string;
@@ -130,6 +134,8 @@ export interface KovoAppShellViteDevPluginOptions {
 /**
  * Compiler-compatible module diagnostic report accepted by the app-shell dev integration.
  * It is structural on purpose so `@kovojs/server` does not depend on `@kovojs/compiler`.
+ *
+ * @internal
  */
 export interface KovoAppShellViteCompilerModuleDiagnosticReport {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
@@ -137,7 +143,11 @@ export interface KovoAppShellViteCompilerModuleDiagnosticReport {
   source: string;
 }
 
-/** Combined app-shell dev plugin plus compiler-diagnostic callback for Vite dev. */
+/**
+ * Combined app-shell dev plugin plus compiler-diagnostic callback for Vite dev.
+ *
+ * @internal
+ */
 export interface KovoAppShellViteDevIntegration {
   diagnostics: KovoAppShellDevDiagnosticLedger;
   onModuleDiagnostics(report: KovoAppShellViteCompilerModuleDiagnosticReport): void;
@@ -235,6 +245,8 @@ export function createKovoAppShellDevDiagnosticLedger(): KovoAppShellDevDiagnost
  * `integration.onModuleDiagnostics` to the compiler plugin and
  * `integration.plugin` to Vite, while the request shell owns the diagnostic ledger
  * and rendering behavior (SPEC.md §9.5.1).
+ *
+ * @internal
  */
 export function createKovoAppShellViteDevIntegration(
   options: KovoAppShellViteDevPluginOptions = {},
@@ -259,6 +271,8 @@ export function createKovoAppShellViteDevIntegration(
  * Request -> Response shell that SPEC.md §9.5 uses for build/export replay. The plugin's
  * configureServer hook mounts middleware that ssrLoadModule-loads the app and dispatches
  * matching requests to it.
+ *
+ * @internal
  */
 export function kovoAppShellViteDevPlugin(
   options: KovoAppShellViteDevPluginOptions = {},

@@ -1,5 +1,4 @@
 export type {
-  DiagnosticCode,
   KovoDomainTableAnnotation,
   KovoTableAnnotation,
   KovoTableExtraConfig,

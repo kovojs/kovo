@@ -25,13 +25,8 @@ import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic } from '@kovojs/server';
-import type {
-  KovoConfig,
-  KovoNeutralBuild,
-  KovoPreset,
-  PresetContext,
-  PresetDiagnostic,
-} from '@kovojs/server/build';
+import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
+import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 
 import {
   availableAddComponents,
@@ -1931,7 +1926,7 @@ interface DrizzleOptimisticCommandInput {
 async function runCompileDrizzleOptimisticCommand(
   options: CompileDrizzleOptimisticCommandOptions,
 ): Promise<CliCommandResult> {
-  const { deriveOptimistic } = await import('@kovojs/drizzle/derive');
+  const { deriveOptimistic } = await import('@kovojs/drizzle/internal/derive');
   const { serializeDerivedOptimistic } = await import('@kovojs/drizzle/internal/derive-codegen');
   const input = readJsonFile(options.inputPath) as DrizzleOptimisticCommandInput;
   const derivedEntries: Parameters<typeof serializeDerivedOptimistic>[0]['entries'][number][] = [];
@@ -2388,9 +2383,10 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     const loadedConfig = await loadKovoBuildConfig(process.cwd());
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     const resolvedAppModulePath = resolve(options.appModulePath);
-    const [{ cloudflare, node, vercel, writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
+    const [{ cloudflare, node, vercel }, { writeKovoNeutralBuild }, appModule, buildStylesheetCss] =
       await Promise.all([
         import('@kovojs/server/build'),
+        import('@kovojs/server/internal/build'),
         loadBuildAppModule(resolvedAppModulePath, process.cwd()),
         kovoBuildStylesheetCss(resolvedAppModulePath),
       ]);
@@ -3094,6 +3090,29 @@ function isNodeErrorCode(error: unknown, code: string): boolean {
 }
 
 /**
+ * Verifier graph accepted by the public `kovoCheck` entry.
+ *
+ * This is the committed verifier graph produced by Kovo's compiler/tooling
+ * pipeline (SPEC.md §11.4). It is the public `@kovojs/cli` verifier contract; the
+ * lower-level graph declarations it mirrors live under
+ * `@kovojs/core/internal/graph`. KNOWN LIMITATION: the nested member types are
+ * still the `@internal` core graph declarations, so this only names the top-level
+ * input publicly. The complete fix (an opaque runtime-validated input so app code
+ * never names the IR graph) is tracked as a design item; both `kovoCheck` and
+ * `kovoExplain` already runtime-validate their input via `validateKovoExplainInput`.
+ */
+export interface KovoCheckInput extends CoreGraph.KovoCheckInput {}
+
+/**
+ * Verifier graph accepted by the public `kovoExplain` entry.
+ *
+ * Extends the `kovoCheck` graph with explain-only metadata used to render verifier
+ * reports in-process (SPEC.md §11.4). Same known limitation as `KovoCheckInput`:
+ * nested member types remain the `@internal` core graph declarations.
+ */
+export interface KovoExplainInput extends CoreGraph.KovoExplainInput {}
+
+/**
  * The kind of graph subject a targeted `kovo explain` describes — a component,
  * request context, mutation, query, or page (SPEC.md §5.3).
  */
@@ -3161,10 +3180,7 @@ export interface KovoUnscopedExplainOptions {
  * code that is non-zero only when an audit ran with `failOnFindings` and findings
  * were present.
  */
-export function kovoExplain(
-  input: CoreGraph.KovoExplainInput,
-  options: KovoExplainOptions,
-): KovoCheckResult {
+export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(explainOutputVersion, validationErrors);
@@ -3478,7 +3494,7 @@ export function kovoAudit(
  * any error-severity finding is present (SPEC.md §1.1 proof claims).
  */
 export function kovoCheck(
-  input: CoreGraph.KovoCheckInput,
+  input: KovoCheckInput,
   options: { family?: KovoCheckFamily } = {},
 ): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);

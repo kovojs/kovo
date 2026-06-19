@@ -1,5 +1,3 @@
-export type { DiagnosticCode } from '@kovojs/core';
-
 export type {
   KovoDomainTableAnnotation,
   KovoTableAnnotation,

@@ -1,11 +1,17 @@
 export {
   createKovoAppShellDevDiagnosticLedger,
+  createKovoAppShellViteDevIntegration,
+  kovoAppShellViteDevPlugin,
   renderKovoAppShellViteDevDiagnosticResponse,
   shouldHandleKovoAppShellViteRequest,
   type KovoAppShellDevDiagnosticLedger,
   type KovoAppShellDevDiagnosticRecord,
   type KovoAppShellDevModuleDiagnostics,
+  type KovoAppShellViteCompilerModuleDiagnosticReport,
+  type KovoAppShellViteDevIntegration,
   type KovoAppShellViteDevModuleServer,
+  type KovoAppShellViteDevPlugin,
+  type KovoAppShellViteDevPluginOptions,
   type KovoAppShellViteDevServer,
   type KovoAppShellViteMiddleware,
 } from '../vite-dev.js';

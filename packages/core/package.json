@@ -7,18 +7,25 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./internal/component-render": "./src/internal/component-render.ts",
     "./internal/derivation": "./src/internal/derivation.ts",
     "./internal/diagnostics": "./src/internal/diagnostics.ts",
+    "./internal/event": "./src/internal/event.ts",
     "./internal/fragment-target": "./src/internal/fragment-target.ts",
     "./internal/graph": "./src/internal/graph.ts",
     "./internal/package-prefix": "./src/internal/package-prefix.ts",
-    "./internal/query-delta": "./src/internal/query-delta.ts"
+    "./internal/query-delta": "./src/internal/query-delta.ts",
+    "./internal/storage": "./src/internal/storage.ts"
   },
   "publishConfig": {
     "exports": {
       ".": {
         "types": "./dist/index.d.mts",
         "default": "./dist/index.mjs"
+      },
+      "./internal/component-render": {
+        "types": "./dist/internal/component-render.d.mts",
+        "default": "./dist/internal/component-render.mjs"
       },
       "./internal/derivation": {
         "types": "./dist/internal/derivation.d.mts",
@@ -27,6 +34,10 @@
       "./internal/diagnostics": {
         "types": "./dist/internal/diagnostics.d.mts",
         "default": "./dist/internal/diagnostics.mjs"
+      },
+      "./internal/event": {
+        "types": "./dist/internal/event.d.mts",
+        "default": "./dist/internal/event.mjs"
       },
       "./internal/fragment-target": {
         "types": "./dist/internal/fragment-target.d.mts",
@@ -43,11 +54,15 @@
       "./internal/query-delta": {
         "types": "./dist/internal/query-delta.d.mts",
         "default": "./dist/internal/query-delta.mjs"
+      },
+      "./internal/storage": {
+        "types": "./dist/internal/storage.d.mts",
+        "default": "./dist/internal/storage.mjs"
       }
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/index.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/package-prefix.ts src/internal/query-delta.ts --dts",
+    "build:dist": "vp pack src/index.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/storage.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

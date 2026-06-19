@@ -8,13 +8,12 @@ import type {
   EndpointMethod,
   Guard,
   GuardDenial,
-  MaybePromise,
   MutationDefinition,
   MutationFail,
-  MutationRegistry,
   SessionProvider,
   SessionRequestLike,
 } from '@kovojs/server';
+import type { MutationRegistry } from '@kovojs/server/internal/execution';
 
 /**
  * Options passed to a Better Auth `getSession` call. Carries the incoming request
@@ -43,7 +42,11 @@ export interface BetterAuthSessionPayload<Session, User> {
 export interface BetterAuthApi<Session, User> {
   getSession(
     options: BetterAuthGetSessionOptions,
-  ): MaybePromise<BetterAuthSessionPayload<Session, User> | null | undefined>;
+  ):
+    | Promise<BetterAuthSessionPayload<Session, User> | null | undefined>
+    | BetterAuthSessionPayload<Session, User>
+    | null
+    | undefined;
 }
 
 /**
@@ -69,7 +72,7 @@ export interface BetterAuthRequestLike {
  * fetch-style handler, mounted at a prefix endpoint by `mount` to serve the
  * library's browser redirect protocol (OAuth/SAML/magic-link callbacks; SPEC.md §9.1).
  */
-export type BetterAuthMountHandler = (request: Request) => MaybePromise<Response>;
+export type BetterAuthMountHandler = (request: Request) => Promise<Response> | Response;
 
 /**
  * Structural shape of a Better Auth instance accepted by `mount`: it just needs a
@@ -195,7 +198,7 @@ export interface BetterAuthSignInEmailApi {
     asResponse: true;
     body: BetterAuthSignInEmailBody;
     headers: Headers;
-  }): MaybePromise<BetterAuthResponseLike>;
+  }): Promise<BetterAuthResponseLike> | BetterAuthResponseLike;
 }
 
 /**
@@ -207,7 +210,7 @@ export interface BetterAuthSignUpEmailApi {
     asResponse: true;
     body: BetterAuthSignUpEmailBody;
     headers: Headers;
-  }): MaybePromise<BetterAuthResponseLike>;
+  }): Promise<BetterAuthResponseLike> | BetterAuthResponseLike;
 }
 
 /**
@@ -216,7 +219,10 @@ export interface BetterAuthSignUpEmailApi {
  * headers can be forwarded (SPEC.md §6.5).
  */
 export interface BetterAuthSignOutApi {
-  signOut(options: { asResponse: true; headers: Headers }): MaybePromise<BetterAuthResponseLike>;
+  signOut(options: {
+    asResponse: true;
+    headers: Headers;
+  }): Promise<BetterAuthResponseLike> | BetterAuthResponseLike;
 }
 
 /**

@@ -95,6 +95,12 @@ export interface CreateAppOptions<
   RawRequest extends globalThis.Request = globalThis.Request,
   AppRequest = AppLifecycleRequest<RawRequest, SessionValue, DbValue>,
 > {
+  /**
+   * Versioned client-module registry to inject (SPEC §9.5). Apps that emit
+   * interactive client modules pass their own registry here (e.g. via
+   * `createMemoryVersionedClientModuleRegistry`); when omitted, `createApp`
+   * provisions a fresh in-memory registry.
+   */
   clientModules?: VersionedClientModuleRegistry;
   csrf?: CsrfValidationOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
@@ -104,7 +110,6 @@ export interface CreateAppOptions<
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];
   mutationResponses?: AppMutationResponses;
   mutations?: AppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>;
-  mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
   queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;

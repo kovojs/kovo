@@ -253,10 +253,11 @@ import {
   type ProjectGraphFixture,
 } from '@kovojs/conformance-fixtures/graph-fixtures';
 import {
+  type DbVerificationDiagnostic,
   type KovoTestContext,
   type KovoTestExecOptions,
   type KovoTestHarnessOptions,
-  type KovoTestRequest,
+  type PageAssertion,
 } from '@kovojs/test/harness';
 import {
   executeHarnessMutation,
@@ -264,7 +265,7 @@ import {
   loadHarnessPage,
   type HarnessMutationOptions,
   type HarnessOperationVerifier,
-} from '@kovojs/test/harness-operations';
+} from '@kovojs/test/internal/harness-operations';
 import {
   cookiePair,
   firstSetCookiePair,
@@ -273,29 +274,31 @@ import {
   type HeaderRecord,
 } from '@kovojs/test/headers';
 import {
-  documentQueryScriptBehaviorFact,
   fragmentHtml,
-  kovoFragmentFacts,
-  kovoQueryFacts,
   kovoQueryJsonValues,
-  kovoResponseBodyFact,
   htmlDocumentFacts,
-  htmlDocumentRegions,
   htmlElementCount,
   htmlElementFacts,
   htmlFormActions,
   htmlFormFacts,
   htmlFormFieldsByName,
   htmlFormFields,
+  htmlKeyValues,
+  htmlTextContent,
+} from '@kovojs/test/html-fragment';
+import {
+  documentQueryScriptBehaviorFact,
+  kovoFragmentFacts,
+  kovoQueryFacts,
+  kovoResponseBodyFact,
+  htmlDocumentRegions,
   htmlJsonScriptFacts,
   htmlKeyFacts,
   htmlKeyTextMap,
-  htmlKeyValues,
   htmlLinkHrefs,
   htmlMainMarkerFact,
-  htmlTextContent,
   type DocumentQueryScriptBehaviorFact,
-} from '@kovojs/test/html-fragment';
+} from '@kovojs/test/internal/html-fragment';
 import {
   markdownBoldSectionHeadings,
   markdownCanonicalSpecRuleTitle,
@@ -326,7 +329,7 @@ import {
   type McpCompileResponseFact,
   type McpJsonRpcResponseFact,
 } from '@kovojs/conformance-fixtures/mcp-fixtures';
-import { createPageAssertion, type PageAssertion } from '@kovojs/test/page';
+import { createPageAssertion } from '@kovojs/test/internal/page';
 import type { PgliteTestDb } from '@kovojs/test/pglite';
 import {
   enhancedMutationBehaviorFact,
@@ -411,11 +414,7 @@ import {
   type StarterTemplatePackageFacts,
   type StarterTemplateSources,
 } from '@kovojs/conformance-fixtures/starter-template-fixtures';
-import {
-  observeSqlStatementArgument,
-  observeSqlStatementIfString,
-  sqlStatementText,
-} from '@kovojs/test/sql-observer';
+import { observeSqlStatementArgument, sqlStatementText } from '@kovojs/test/internal/sql-observer';
 import type { KovoTestCase, KovoTestRunner } from '@kovojs/test/test-case';
 import {
   touchGraphProvenanceFact,
@@ -438,12 +437,11 @@ import {
   type DbVerificationConfig,
   type DbVerifier,
   type ObservedDbOperation,
-} from '@kovojs/test/verifier';
+} from '@kovojs/test/internal/verifier';
 import {
   diagnosticMessage,
   diagnosticsForObservations,
-  type DbVerificationDiagnostic,
-} from '@kovojs/test/verifier-diagnostics';
+} from '@kovojs/test/internal/verifier-diagnostics';
 import {
   createVerificationFakeDb,
   verificationLayerBehaviorFact,
@@ -453,7 +451,7 @@ import {
   type VerificationLayerKovoCheckDiagnosticsRuntime,
   type VerificationLayerRuntime,
 } from '@kovojs/conformance-fixtures/verification-fixtures';
-import { parseSqlOperations, type ParsedSqlOperation } from '@kovojs/test/verifier-sql';
+import { parseSqlOperations, type ParsedSqlOperation } from '@kovojs/test/internal/verifier-sql';
 import {
   viteGeneratedHandlerMiddlewareFact,
   viteHandlerTransformFact,
@@ -973,7 +971,6 @@ describe('@kovojs/test package subpath exports', () => {
     expect(executeHarnessQuery).toBeTypeOf('function');
     expect(loadHarnessPage).toBeTypeOf('function');
     expect(observeSqlStatementArgument).toBeTypeOf('function');
-    expect(observeSqlStatementIfString).toBeTypeOf('function');
     expect(sqlStatementText({ text: 'select * from cart_items' })).toBe('select * from cart_items');
     expect(parseSqlOperations('select * from cart_items')).toEqual([
       {
@@ -1660,8 +1657,8 @@ describe('@kovojs/test package subpath exports', () => {
   });
 
   it('keeps harness exec options on the operation module surface', () => {
-    expectTypeOf<KovoTestExecOptions<KovoTestRequest<{ cart: string[] }>>>().toEqualTypeOf<
-      HarnessMutationOptions<KovoTestRequest<{ cart: string[] }>>
+    expectTypeOf<KovoTestExecOptions<{ db: { cart: string[] } }>>().toEqualTypeOf<
+      HarnessMutationOptions<{ db: { cart: string[] } }>
     >();
   });
 });
@@ -1743,14 +1740,13 @@ type _PublicSubpathTypes = [
   ServerCommerceAdoptDontInventBehaviorFact,
   ServerCommerceAdoptDontInventRuntime,
   KovoTestContext<{ cart: string[] }>,
-  KovoTestExecOptions<KovoTestRequest<{ cart: string[] }>>,
+  KovoTestExecOptions<{ db: { cart: string[] } }>,
   KovoTestHarnessOptions<{ cart: string[] }>,
-  KovoTestRequest<{ cart: string[] }>,
   PageAssertion,
   PgliteTestDb,
   KovoTestCase,
   KovoTestRunner,
-  HarnessMutationOptions<KovoTestRequest<{ cart: string[] }>>,
+  HarnessMutationOptions<{ db: { cart: string[] } }>,
   HarnessOperationVerifier,
   MarkdownFields,
   MarkdownTableRow,

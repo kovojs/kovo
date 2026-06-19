@@ -3,12 +3,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
 
-import {
-  kovoResponseBodyFact,
-  htmlElementFacts,
-  htmlLinkHrefs,
-  type HtmlElementSelector,
-} from '@kovojs/test/html-fragment';
+import { htmlElementFacts, type HtmlElementSelector } from '@kovojs/test/html-fragment';
+import { kovoResponseBodyFact, htmlLinkHrefs } from '@kovojs/test/internal/html-fragment';
 import { cssScopeRules, type CssScopeRuleFact } from './source-fixtures.ts';
 import type { AssertTypeScriptProgramOptions } from './typescript-fixtures.ts';
 

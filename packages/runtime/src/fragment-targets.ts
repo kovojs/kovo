@@ -1,3 +1,8 @@
+/**
+ * A DOM root the runtime resolves fragment targets against: a `ParentNode` with
+ * an optional `getElementById` (SPEC §9.1). `Document` and element subtrees both
+ * satisfy it; `createBrowserKovoRoot` wraps one to build a `BrowserKovoRoot`.
+ */
 export interface FragmentTargetRoot extends ParentNode {
   getElementById?(id: string): Element | null;
 }

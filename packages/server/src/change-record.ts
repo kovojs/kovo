@@ -18,7 +18,10 @@ export interface InvalidateOptions<Input = unknown> {
   reason?: string;
 }
 
-/** A statically inferred touch site on a mutation: a domain and an optional key expression. */
+/**
+ * A statically inferred touch site on a mutation: a domain and an optional key expression.
+ * @internal
+ */
 export interface MutationTouchSite {
   domain: string;
   keys: null | string;
@@ -38,11 +41,7 @@ interface MutationChangeRecordRegistry {
  * @param domain - The domain to invalidate.
  * @param options - Optional row `keys`, an `input` echo, and a `reason`.
  * @returns A `ChangeRecord` for the touched domain.
- * @example
- * import { domain, invalidate } from '@kovojs/server';
- *
- * const cart = domain('cart');
- * const change = invalidate(cart, { reason: 'item added' });
+ * @internal
  */
 export function invalidate<const DomainKey extends string, Input = unknown>(
   domain: Domain<DomainKey>,
