@@ -34,7 +34,6 @@ describe('create-kovo starter', () => {
       'vite.config.ts',
       '.github/workflows/ci.yml',
       'README.md',
-      'graph.json',
       'scripts/export-static.mjs',
       'scripts/preview-static.mjs',
       'scripts/serve.mjs',
@@ -112,6 +111,14 @@ describe('create-kovo starter', () => {
         test: 'vp test',
       });
 
+      expect(existsSync(join(root, 'graph.json'))).toBe(false);
+      expect(
+        execFileSync(process.execPath, ['scripts/emit-graph.mjs'], {
+          cwd: root,
+          encoding: 'utf8',
+          stdio: 'pipe',
+        }),
+      ).toBe('emit-graph/v1\nOK\n');
       const graph = JSON.parse(readFileSync(join(root, 'graph.json'), 'utf8')) as KovoExplainInput;
       expect(graph.components?.map((component) => component.name)).toEqual([
         'CartBadge',
@@ -403,7 +410,9 @@ describe('create-kovo starter', () => {
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
         'KOVO_CSRF_SECRET=replace-with-a-deployed-secret',
       );
-      expect(readFileSync(join(root, '.gitignore'), 'utf8')).toContain('.env');
+      const gitignore = readFileSync(join(root, '.gitignore'), 'utf8');
+      expect(gitignore).toContain('.env');
+      expect(gitignore).toContain('graph.json');
 
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'example-shop',
@@ -784,7 +793,7 @@ describe('create-kovo starter', () => {
 
     try {
       expect(main([root])).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 25 files to ${root}\n`);
+      expect(stdout).toHaveBeenCalledWith(`create-kovo: wrote 24 files to ${root}\n`);
       expect(JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))).toMatchObject({
         name: 'hello-cli',
       });

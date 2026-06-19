@@ -2,28 +2,15 @@ import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   lint: {
-    // site/tutorial/steps/*/src/generated holds compiler-emitted IR pinned
-    // byte-identical to @kovojs/compiler output; lint governs authored code.
-    ignorePatterns: ['packages/create-kovo/templates/**', 'site/tutorial/steps/*/src/generated/**'],
+    // Starter templates are copied verbatim; lint governs authored workspace code.
+    ignorePatterns: ['packages/create-kovo/templates/**'],
     options: {
       typeAware: true,
       typeCheck: true,
     },
   },
   fmt: {
-    // examples/commerce/src/generated and the tutorial step generated dirs
-    // hold compiler-emitted IR that must stay byte-identical to
-    // @kovojs/compiler output (SPEC.md section 5.2.3 staleness and fixpoint
-    // pins), so the formatter must not rewrite them.
-    ignorePatterns: [
-      'dist/**',
-      'coverage/**',
-      'node_modules/**',
-      'examples/commerce/src/generated/**',
-      'examples/stackoverflow/src/generated/**',
-      'examples/crm/src/generated/**',
-      'site/tutorial/steps/*/src/generated/**',
-    ],
+    ignorePatterns: ['dist/**', 'coverage/**', 'node_modules/**'],
     semi: true,
     singleQuote: true,
     sortPackageJson: true,
@@ -146,13 +133,13 @@ export default defineConfig({
           { pattern: 'examples/commerce/package.json', base: 'workspace' },
           { pattern: 'examples/commerce/scripts/**', base: 'workspace' },
           { pattern: 'examples/commerce/src/**', base: 'workspace' },
-          { pattern: 'examples/commerce/src/generated/graph.json', base: 'workspace' },
           { pattern: 'fixtures/wire/**', base: 'workspace' },
           { pattern: 'package.json', base: 'workspace' },
           { pattern: 'packages/*/package.json', base: 'workspace' },
           { pattern: 'packages/**/src/**', base: 'workspace' },
           { pattern: 'pnpm-lock.yaml', base: 'workspace' },
           { pattern: 'scripts/kovo-check.mjs', base: 'workspace' },
+          { pattern: 'scripts/commerce-graph.mjs', base: 'workspace' },
           { pattern: 'tests/kovo-check.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -55,15 +55,6 @@ try {
       `${fileName} hand-writes stamps`,
     );
 
-    if (check) {
-      const current = readFileSync(generatedPath, 'utf8');
-      assert.ok(
-        current.startsWith(header),
-        `generated ${name}.tsx has a stale header; run \`pnpm --filter @kovojs/example-crm run emit-components\``,
-      );
-      writeFileSync(loweredPath, current.slice(header.length));
-    }
-
     runKovo([
       'compile',
       'component',
@@ -76,10 +67,10 @@ try {
       registryFactsPath,
       '--fixpoint',
       '--render-equivalence',
-      ...(check ? ['--check'] : []),
     ]);
 
     if (!check) {
+      mkdirSync(dirname(generatedPath), { recursive: true });
       writeFileSync(generatedPath, `${header}${readFileSync(loweredPath, 'utf8')}`);
     }
   }
@@ -99,18 +90,15 @@ export const liveTargetRenderers = collectGeneratedLiveTargetRenderers([
 ]);
 `;
 
-  if (check) {
-    assert.equal(
-      readFileSync(liveTargetsPath, 'utf8'),
-      liveTargetsSource,
-      'generated live-targets.ts is stale; run `pnpm --filter @kovojs/example-crm run emit-components`',
-    );
-  } else {
+  if (!check) {
+    mkdirSync(dirname(liveTargetsPath), { recursive: true });
     writeFileSync(liveTargetsPath, liveTargetsSource);
   }
 
   const routeSourcePath = resolve(crmRoot, 'src/interactive-app.tsx');
-  const routeGeneratedPath = resolve(crmRoot, 'src/generated/interactive-app.kovo-route.tsx');
+  const routeGeneratedPath = check
+    ? resolve(tempRoot, 'interactive-app.kovo-route.tsx')
+    : resolve(crmRoot, 'src/generated/interactive-app.kovo-route.tsx');
   const routeFileName = 'examples/crm/src/interactive-app.tsx';
   const routeArtifactFileName = 'examples/crm/src/generated/interactive-app.kovo-route.tsx';
 
@@ -130,7 +118,6 @@ export const liveTargetRenderers = collectGeneratedLiveTargetRenderers([
     'DealDetailRegion=./deal-detail.js',
     '--rewrite',
     'PipelineRegion=./pipeline.js',
-    ...(check ? ['--check'] : []),
   ]);
 } finally {
   rmSync(tempRoot, { force: true, recursive: true });

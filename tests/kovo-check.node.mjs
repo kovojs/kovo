@@ -2214,7 +2214,6 @@ void test('P10 starter wires graph assertions into CI', async () => {
   });
   assert.deepEqual(starterAcceptance.tasks.graphAssertions, {
     input: [
-      { pattern: 'graph.json', base: 'workspace' },
       { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
       { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
       { pattern: 'src/**/*', base: 'workspace' },
@@ -2231,7 +2230,7 @@ void test('P10 starter wires graph assertions into CI', async () => {
   ]);
   assert.deepEqual(
     starterAcceptance.taskOutputs.map((taskOutput) => taskOutput.output),
-    ['emit-graph/v1\nOK\nkovo-check/v1\nOK\n', 'emit-graph/v1\nOK\ngraph-assertions/v1\nOK\n'],
+    ['emit-graph/v1\nOK\nkovo-check/v1\nOK\n', 'graph-assertions/v1\nOK\n'],
   );
   assert.deepEqual(
     starterAcceptance.taskOutputs.map((taskOutput) => taskOutput.graph),

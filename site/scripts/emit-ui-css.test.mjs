@@ -2,14 +2,18 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
-import { assertExtractedComponentCss } from './emit-ui-css.mjs';
+import { assertExtractedComponentCss, emitSiteUiCss } from './emit-ui-css.mjs';
 import { assertServedStylesheetContent } from './export-static.mjs';
 
 const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 describe('site UI CSS generation', () => {
+  beforeAll(() => {
+    emitSiteUiCss();
+  });
+
   it('keeps gallery @kovojs/ui atoms in the site stylesheet input', () => {
     const siteCss = readFileSync(resolve(siteRoot, 'src/styles.css'), 'utf8');
     const uiCss = readFileSync(resolve(siteRoot, 'src/generated/kovo-ui.css'), 'utf8');
@@ -26,6 +30,10 @@ describe('site UI CSS generation', () => {
 });
 
 describe('emit-ui-css component CSS guard', () => {
+  beforeAll(() => {
+    emitSiteUiCss();
+  });
+
   // A real broken-install state produced an empty/short extraction that shipped
   // silently; the guard must fail loudly instead (SPEC §6.1.1, §13.1).
   it('passes for the real generated component CSS', () => {

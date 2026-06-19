@@ -55,9 +55,8 @@ export default defineConfig({
         output: ['graph.json'],
       },
       'graph-assertions': {
-        command: 'node scripts/emit-graph.mjs && node scripts/graph-assertions.mjs',
+        command: 'node scripts/graph-assertions.mjs',
         input: [
-          { pattern: 'graph.json', base: 'workspace' },
           { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
           { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
           { pattern: 'src/**/*', base: 'workspace' },

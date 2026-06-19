@@ -33,6 +33,14 @@ const { createCrmGraph } = await import('../src/graph.js');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const crmRoot = resolve(scriptDir, '..');
+const outDirArgIndex = process.argv.indexOf('--out-dir');
+const outputRoot =
+  outDirArgIndex === -1
+    ? resolve(crmRoot, 'src/generated')
+    : resolve(process.argv[outDirArgIndex + 1] ?? '');
+if (outDirArgIndex !== -1 && !process.argv[outDirArgIndex + 1]) {
+  throw new Error('emit-graph: --out-dir requires a directory path');
+}
 const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-crm-graph-'));
 let drizzleStaticCounter = 0;
 process.on('exit', () => rmSync(tempRoot, { force: true, recursive: true }));
@@ -288,23 +296,20 @@ declare module '@kovojs/core' {
 const graphJson = formatSource(`${formatJson(graph)}\n`, 'graph.json');
 
 // ── Write or --check ──────────────────────────────────────────────────────────
-const graphPath = resolve(crmRoot, 'src/generated/graph.json');
-const touchGraphPath = resolve(crmRoot, 'src/generated/touch-graph.ts');
-const optimisticDir = resolve(crmRoot, 'src/generated/optimistic');
+const graphPath = resolve(outputRoot, 'graph.json');
+const touchGraphPath = resolve(outputRoot, 'touch-graph.ts');
+const optimisticDir = resolve(outputRoot, 'optimistic');
 const modulePath = (key) => resolve(optimisticDir, `${kebab(key)}.ts`);
 
 if (process.argv.includes('--print-graph-json')) {
   process.stdout.write(graphJson);
 } else if (process.argv.includes('--check')) {
-  assertFile(graphPath, graphJson, 'generated graph.json');
-  assertFile(touchGraphPath, touchGraphSource, 'generated touch-graph.ts');
-  for (const module of generatedModules) {
-    assertFile(
-      modulePath(module.key),
-      module.source,
-      `generated optimistic/${kebab(module.key)}.ts`,
-    );
-  }
+  const checkGraphPath = resolve(tempRoot, 'graph.check.json');
+  writeFileSync(checkGraphPath, graphJson);
+  execFileSync('kovo', ['check', checkGraphPath], {
+    cwd: crmRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
   // Surface the named punts for the operator (parity with `kovo explain --optimistic`).
   for (const entry of optimisticEntries) {
     if (entry.derivation?.status === 'PUNTED') {
@@ -315,8 +320,9 @@ if (process.argv.includes('--print-graph-json')) {
     }
   }
   // eslint-disable-next-line no-console
-  console.log('emit-graph --check: CRM generated artifacts are up to date.');
+  console.log('emit-graph --check: CRM graph extracts and passes kovo check.');
 } else {
+  mkdirSync(outputRoot, { recursive: true });
   mkdirSync(optimisticDir, { recursive: true });
   writeFileSync(graphPath, graphJson);
   writeFileSync(touchGraphPath, touchGraphSource);
@@ -348,11 +354,6 @@ function typeDerivedSubset(source, formName, derivedQueries) {
   const closing = '\n};\n';
   assert.ok(withImport.endsWith(closing), 'expected a satisfies-free plan close');
   return `${withImport.slice(0, -closing.length)}\n} satisfies CrmDerivedSubset<typeof ${formName}, ${keysUnion}>;\n`;
-}
-
-function assertFile(path, expected, label) {
-  assert.ok(existsSync(path), `${label} is missing — run emit-graph without --check`);
-  assert.equal(readFileSync(path, 'utf8'), expected, `${label} is stale — run emit-graph`);
 }
 
 function deriveGraphViaCli(input) {

@@ -29,9 +29,17 @@ const { createSoGraph } = await import('../src/graph.js');
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const soRoot = resolve(scriptDir, '..');
 const srcDir = resolve(soRoot, 'src');
-const graphPath = resolve(soRoot, 'src/generated/graph.json');
-const touchGraphPath = resolve(soRoot, 'src/generated/touch-graph.ts');
-const optimisticDir = resolve(soRoot, 'src/generated/optimistic');
+const outDirArgIndex = process.argv.indexOf('--out-dir');
+const outputRoot =
+  outDirArgIndex === -1
+    ? resolve(soRoot, 'src/generated')
+    : resolve(process.argv[outDirArgIndex + 1] ?? '');
+if (outDirArgIndex !== -1 && !process.argv[outDirArgIndex + 1]) {
+  throw new Error('emit-graph: --out-dir requires a directory path');
+}
+const graphPath = resolve(outputRoot, 'graph.json');
+const touchGraphPath = resolve(outputRoot, 'touch-graph.ts');
+const optimisticDir = resolve(outputRoot, 'optimistic');
 const tempRoot = mkdtempSync(resolve(tmpdir(), 'kovo-so-graph-'));
 let drizzleStaticCounter = 0;
 process.on('exit', () => rmSync(tempRoot, { force: true, recursive: true }));
@@ -306,18 +314,15 @@ function compileDrizzleStatic(input) {
 if (process.argv.includes('--print-graph-json')) {
   process.stdout.write(graphJson);
 } else if (process.argv.includes('--check')) {
-  assert.equal(readFileSync(graphPath, 'utf8'), graphJson, 'generated graph.json is stale');
-  assert.equal(
-    readFileSync(touchGraphPath, 'utf8'),
-    touchGraphSource,
-    'generated touch-graph.ts is stale',
-  );
-  for (const [path, source] of optimisticSources) {
-    assert.equal(readFileSync(path, 'utf8'), source, `generated ${path} is stale`);
-  }
-  console.log('emit-graph --check: artifacts are up to date');
+  const checkGraphPath = resolve(tempRoot, 'graph.check.json');
+  writeFileSync(checkGraphPath, graphJson);
+  execFileSync('kovo', ['check', checkGraphPath], {
+    cwd: soRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  console.log('emit-graph --check: Stack Overflow graph extracts and passes kovo check');
 } else {
-  mkdirSync(resolve(soRoot, 'src/generated'), { recursive: true });
+  mkdirSync(outputRoot, { recursive: true });
   mkdirSync(optimisticDir, { recursive: true });
   writeFileSync(graphPath, graphJson);
   writeFileSync(touchGraphPath, touchGraphSource);

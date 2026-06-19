@@ -1,11 +1,12 @@
 # Kovo Dataflow Devtools (example)
 
 A thin consumer of [`@kovojs/devtool`](../../packages/devtool). It wires three
-sibling example apps' own committed graphs (commerce, crm, stackoverflow) into the
+sibling example apps' own emitted graphs (commerce, crm, stackoverflow) into the
 reusable devtool — select any node and trace the **queries that go into it** and
 the **mutations that go out**, with syntax-highlighted source previews. All the
 logic (graph derivation, rendering, MCP, mount) lives in the package; this example
-just reads each app's `generated/graph.json` and hands it to `createDevtoolApp`.
+emits each app's gitignored `generated/graph.json`, reads it, and hands it to
+`createDevtoolApp`.
 
 ## Run
 

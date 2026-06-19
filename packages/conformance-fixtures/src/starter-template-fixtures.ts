@@ -230,7 +230,6 @@ export async function loadStarterTemplateFacts(
   const [
     packageJsonSource,
     ciWorkflowSource,
-    graphSource,
     clientSource,
     appSource,
     stylesSource,
@@ -239,13 +238,13 @@ export async function loadStarterTemplateFacts(
   ] = await Promise.all([
     readFile(join(templateRoot, 'package.json'), 'utf8'),
     readFile(join(templateRoot, '.github/workflows/ci.yml'), 'utf8'),
-    readFile(join(templateRoot, 'graph.json'), 'utf8'),
     readFile(join(templateRoot, 'src/client.ts'), 'utf8'),
     readFile(join(templateRoot, 'src/app.tsx'), 'utf8'),
     readFile(join(templateRoot, 'src/styles.css'), 'utf8'),
     readFile(join(templateRoot, 'index.html'), 'utf8'),
     readFile(join(templateRoot, 'vite.config.ts'), 'utf8'),
   ]);
+  const graphSource = await emitStarterTemplateGraphSource(paths);
 
   return starterTemplateFacts({
     appSource,
@@ -369,6 +368,22 @@ const compilerModuleUrlFor = (paths: StarterTemplateFixturePaths): string =>
   paths.compilerModuleUrl ??
   pathToFileURL(join(pathFrom(paths.projectRoot), 'dist/compiler/src/index.mjs')).href;
 
+async function emitStarterTemplateGraphSource(paths: StarterTemplateFixturePaths): Promise<string> {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'kovo-template-graph-source-'));
+
+  try {
+    await cp(paths.templateRoot, fixtureRoot, { recursive: true });
+    execFileSync('node', ['scripts/emit-graph.mjs'], {
+      cwd: fixtureRoot,
+      encoding: 'utf8',
+      env: { ...process.env, CI: '1' },
+    });
+    return readFile(join(fixtureRoot, 'graph.json'), 'utf8');
+  } finally {
+    await rm(fixtureRoot, { force: true, recursive: true });
+  }
+}
+
 const writeCompilerShim = async (fixtureRoot: string, compilerModuleUrl: string): Promise<void> => {
   const compilerShimRoot = join(fixtureRoot, 'node_modules/@kovojs/compiler');
   await mkdir(compilerShimRoot, { recursive: true });
@@ -413,18 +428,20 @@ export async function runStarterTemplateGraphAssertions(
   paths: StarterTemplateFixturePaths,
   kovoOutputs: readonly StarterTemplateKovoOutput[],
 ): Promise<string> {
-  const fakeBin = await mkdtemp(join(tmpdir(), 'kovo-fake-kovo-'));
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'kovo-template-graph-assertions-'));
+  const fakeBin = join(fixtureRoot, '.fake-bin');
 
   try {
+    await cp(paths.templateRoot, fixtureRoot, { recursive: true });
     await writeFakeKovo(fakeBin, kovoOutputs);
 
     return execFileSync('node', ['scripts/graph-assertions.mjs'], {
-      cwd: pathFrom(paths.templateRoot),
+      cwd: fixtureRoot,
       encoding: 'utf8',
       env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
     });
   } finally {
-    await rm(fakeBin, { force: true, recursive: true });
+    await rm(fixtureRoot, { force: true, recursive: true });
   }
 }
 

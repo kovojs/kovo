@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 import { registerHooks } from 'node:module';
@@ -17,12 +17,9 @@ registerHooks({
 });
 
 // Compiles the authored TSX components (src/components/*.tsx) through
-// `kovo compile` and commits the lowered IR modules to src/generated/ — the
-// SPEC.md section 3 pipeline with the section 5.2.3 fixpoint gate and committed
-// lowered-source freshness applied to every component. The app imports the
-// committed IR at runtime, so served HTML carries the compiler-derived stamps
-// (kovo-c, kovo-deps, data-bind — SPEC.md sections 4.2 and 4.8) instead of
-// hand-written ones. `--check` verifies the committed IR is not stale.
+// `kovo compile`. Normal mode writes ignored inspection artifacts under
+// src/generated/; `--check` compiles to a temp dir with the SPEC.md section
+// 5.2.3 fixpoint and render-equivalence gates and never reads committed output.
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
@@ -93,13 +90,8 @@ try {
     );
     const generated = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`pnpm run emit-components\`.\n${lowered}`;
 
-    if (checkMode) {
-      assert.equal(
-        readFileSync(generatedPath, 'utf8'),
-        generated,
-        `generated ${name}.tsx is stale; run \`pnpm --filter @kovojs/example-commerce run emit-components\``,
-      );
-    } else {
+    if (!checkMode) {
+      mkdirSync(dirname(generatedPath), { recursive: true });
       writeFileSync(generatedPath, generated);
     }
   }
@@ -125,18 +117,15 @@ export const liveTargetRenderers: readonly LiveTargetRenderer<CommerceRequest>[]
 ];
 `;
 
-  if (checkMode) {
-    assert.equal(
-      readFileSync(liveTargetsPath, 'utf8'),
-      liveTargetsSource,
-      'generated live-targets.ts is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
-    );
-  } else {
+  if (!checkMode) {
+    mkdirSync(dirname(liveTargetsPath), { recursive: true });
     writeFileSync(liveTargetsPath, liveTargetsSource);
   }
 
   const routeSourcePath = resolve(commerceRoot, 'src/app.tsx');
-  const routeGeneratedPath = resolve(commerceRoot, 'src/generated/app.kovo-route.tsx');
+  const routeGeneratedPath = checkMode
+    ? resolve(tempRoot, 'app.kovo-route.tsx')
+    : resolve(commerceRoot, 'src/generated/app.kovo-route.tsx');
   const routeFileName = 'examples/commerce/src/app.tsx';
   const routeArtifactFileName = 'examples/commerce/src/generated/app.kovo-route.tsx';
   const routeGenerated = compileArtifact(
@@ -157,13 +146,8 @@ export const liveTargetRenderers: readonly LiveTargetRenderer<CommerceRequest>[]
     resolve(tempRoot, 'app.kovo-route.tsx'),
   );
 
-  if (checkMode) {
-    assert.equal(
-      readFileSync(routeGeneratedPath, 'utf8'),
-      routeGenerated,
-      'generated app.kovo-route.tsx is stale; run `pnpm --filter @kovojs/example-commerce run emit-components`',
-    );
-  } else {
+  if (!checkMode) {
+    mkdirSync(dirname(routeGeneratedPath), { recursive: true });
     writeFileSync(routeGeneratedPath, routeGenerated);
   }
 } finally {

@@ -19,6 +19,6 @@ vp run graph-assertions
 
 `@kovojs/style` is the default app styling path. Define typed style objects with `style.create(...)`, apply them with `style.attrs(...)`, and keep raw global document defaults in `src/styles.css`. Change the seed and custom colors in `src/theme.ts` to retheme the starter; the app shell inlines the generated theme variables with the initial StyleX-compatible atomic CSS while preserving the linked stylesheet identity required by SPEC.md section 13.1.
 
-Compiler fixpoint and render-equivalence checks are Kovo framework CI coverage. Starter apps should keep their own confidence loop on `vp check`, `vp test`, `kovo check graph.json`, and static export/preview checks.
+Compiler fixpoint and render-equivalence checks are Kovo framework CI coverage. Starter apps should keep their own confidence loop on `vp check`, `vp test`, `vp run kovo-check`, and static export/preview checks.
 
 `src/auth.tsx` is the starter auth recipe. Pass your Better Auth server instance to `createStarterAuth(auth)` and register the returned `sessionProvider`, `signIn`, and `signOut` with your app shell. The rendered login/logout forms post directly to Kovo mutation endpoints, so they keep the no-JS POST path and only use `enhance` as a progressive upgrade.

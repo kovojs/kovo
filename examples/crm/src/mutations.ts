@@ -18,7 +18,13 @@ import {
 import type { CrmDerivedSubset } from './optimistic-merge.js';
 import { contacts, deals } from './schema.js';
 
-import type { ContactListResult, OpenDealsResult, PipelineByStageResult } from './queries.js';
+import type {
+  ContactDealCountResult,
+  ContactListResult,
+  DealListResult,
+  OpenDealsResult,
+  PipelineByStageResult,
+} from './queries.js';
 
 /**
  * The per-request value handed to every CRM mutation: a Drizzle/PGlite db plus
@@ -53,7 +59,7 @@ const duplicateEmailError = s.object({ email: s.string() });
 const addContactDerivedOptimistic = {
   queue: 'crm',
   transforms: {
-    contactList: (current, $input) => {
+    contactList: (current: ContactListResult, $input: AddContactInput) => {
       const next = structuredClone(current);
       const row = {
         dealCount: 0,
@@ -73,12 +79,12 @@ const addContactDerivedOptimistic = {
 const createDealDerivedOptimistic = {
   queue: 'crm',
   transforms: {
-    contactDealCount: (current, _$input) => {
+    contactDealCount: (current: ContactDealCountResult, _$input: CreateDealInput) => {
       const next = structuredClone(current);
       next.count = (next.count ?? 0) + 1;
       return next;
     },
-    dealList: (current, $input) => {
+    dealList: (current: DealListResult, $input: CreateDealInput) => {
       const next = structuredClone(current);
       const row = {
         amount: $input.amount,
@@ -87,12 +93,13 @@ const createDealDerivedOptimistic = {
         ownerId: $input.ownerId,
         stage: $input.stage,
       };
-      const index = next.items.findIndex((entry) => entry.id > row.id);
+      const rowId = row.id ?? '';
+      const index = next.items.findIndex((entry) => entry.id > rowId);
       if (index < 0) next.items.push(row);
       else next.items.splice(index, 0, row);
       return next;
     },
-    openDeals: (current, $input) => {
+    openDeals: (current: OpenDealsResult, $input: CreateDealInput) => {
       const next = structuredClone(current);
       const row = {
         amount: $input.amount,
@@ -101,7 +108,8 @@ const createDealDerivedOptimistic = {
         ownerId: $input.ownerId,
         stage: $input.stage,
       };
-      const index = next.items.findIndex((entry) => entry.id > row.id);
+      const rowId = row.id ?? '';
+      const index = next.items.findIndex((entry) => entry.id > rowId);
       if (index < 0) next.items.push(row);
       else next.items.splice(index, 0, row);
       return next;
@@ -112,8 +120,9 @@ const createDealDerivedOptimistic = {
 const moveDealDerivedOptimistic = {
   queue: 'crm',
   transforms: {
-    contactDealCount: (current, _$input) => structuredClone(current),
-    dealList: (current, $input) => {
+    contactDealCount: (current: ContactDealCountResult, _$input: MoveDealInput) =>
+      structuredClone(current),
+    dealList: (current: DealListResult, $input: MoveDealInput) => {
       const next = structuredClone(current);
       const target = next.items.find((entry) => entry.id === $input.dealId);
       if (target) target.stage = $input.stage;
@@ -125,7 +134,8 @@ const moveDealDerivedOptimistic = {
 const closeDealDerivedOptimistic = {
   queue: 'crm',
   transforms: {
-    contactDealCount: (current, _$input) => structuredClone(current),
+    contactDealCount: (current: ContactDealCountResult, _$input: CloseDealInput) =>
+      structuredClone(current),
   },
 } satisfies CrmDerivedSubset<typeof closeDealForm, 'contactDealCount'>;
 

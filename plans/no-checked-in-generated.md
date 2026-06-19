@@ -195,42 +195,55 @@ authored components/routes, and convert or relocate artifact tests.
     `pnpm --filter @kovojs/example-gallery exec vitest --config vitest.browser.config.ts run src/interactive-gallery.visual.browser.test.ts`.
     `rg -n "generated-browser-fixtures|generated/interactive|installGeneratedGalleryLoader|expectGeneratedSideDialog|from './generated/interactive'|readGenerated|generatedInteractiveDemoNames|extractGeneratedClientRefs|src/generated/interactive" examples/gallery/src --glob '!**/generated/**'`
     finds no app-authored Gallery source dependencies on generated interactive artifacts.
-- [ ] **Site** — `site/src/app.ts` exports the authored app/route entry; drop
+- [x] **Site** — `site/src/app.ts` exports the authored app/route entry; drop
       `app.generated-fixtures.ts`, `src/generated/app.kovo-route.tsx`, `app.routes.tsx`.
-  - Progress evidence: `site/src/app.tsx` now builds the docs app shell from authored route data,
-    `app.generated-fixtures.ts` was removed, dev/export load `/src/app.tsx`, and
-    `pnpm --filter @kovojs/site test` plus `pnpm --filter @kovojs/site build` pass. Gap:
-    `site/scripts/emit-routes.mjs` and tracked `site/src/generated/app.{routes,kovo-route}.tsx`
-    remain for the generated-artifact deletion/replacement phases.
-- [ ] **Tutorial steps 02–07** — each `app.ts` imports authored `components/*.tsx`; drop every
+  - Evidence: `site/src/app.tsx` builds the docs app shell from authored route data,
+    `app.generated-fixtures.ts` and tracked `site/src/generated/app.{routes,kovo-route}.tsx` were
+    removed, and `pnpm --filter @kovojs/site test` plus `pnpm --filter @kovojs/site build` pass.
+- [x] **Tutorial steps 02–07** — each `app.ts` imports authored `components/*.tsx`; drop every
       `generated-fixtures.ts` and `src/generated/*`. Update `site/tutorial/run-steps.mjs` to emit
       to a temp/gitignored dir for any check it performs.
-  - Progress evidence: steps 02–07 now import authored `src/components/*.tsx` modules directly,
+  - Evidence: steps 02–07 import authored `src/components/*.tsx` modules directly,
     all `generated-fixtures.ts` wrappers were removed, Site Vitest installs the compiler plugin for
     `tutorial/steps`, `site/tutorial/run-steps.mjs` verifies component compilation in temp by
-    default instead of diffing committed outputs, and `pnpm --filter @kovojs/site exec node tutorial/run-steps.mjs`
-    plus `pnpm --filter @kovojs/site test` pass. Gap: tracked
-    `site/tutorial/steps/*/src/generated/*` artifacts and the step 07
-    `examples/commerce/src/generated/graph.json` comparison remain for the deletion/graph-temp
-    phases.
+    default instead of diffing committed outputs, tracked `site/tutorial/steps/*/src/generated/*`
+    artifacts were removed, and `pnpm --filter @kovojs/site exec node tutorial/run-steps.mjs` plus
+    `pnpm --filter @kovojs/site test` pass.
 
 ## Phase 3 — Stop committing + gitignore
 
-- [ ] Add ignore rules: `**/src/generated/`, plus root-level `graph.json` artifacts where
+- [x] Add ignore rules: `**/src/generated/`, plus root-level `graph.json` artifacts where
       committed (e.g. `packages/create-kovo/templates/graph.json`). Confirm the `.deepsec` and
       `__screenshots__` exclusions in Scope are preserved.
-- [ ] `git rm -r --cached` all tracked generated artifacts enumerated in the audit table.
-- [ ] Remove generated dirs from `vite.config.ts` lint/fmt `ignorePatterns` and from task `input`
+  - Evidence: `.gitignore` now ignores only the in-scope app/site generated roots and the
+    create-kovo template graph; `.deepsec` and screenshot paths were not added.
+- [x] `git rm -r --cached` all tracked generated artifacts enumerated in the audit table.
+  - Evidence: `git ls-files 'examples/*/src/generated/**' 'site/src/generated/**'
+'site/tutorial/steps/*/src/generated/**' 'packages/create-kovo/templates/graph.json'`
+    returns no files after the explicit `git rm -r` removal.
+- [x] Remove generated dirs from `vite.config.ts` lint/fmt `ignorePatterns` and from task `input`
       lists (`kovo-check` `graph.json` input, etc.).
-- [ ] `create-kovo` template: add `.gitignore` covering generated output, remove committed
+  - Evidence: root `vite.config.ts` no longer ignores generated app roots for lint/fmt or lists the
+    commerce generated graph as a `kovo-check` input; `pnpm exec vp check --fix` passes.
+- [x] `create-kovo` template: add `.gitignore` covering generated output, remove committed
       `templates/graph.json`, and update `templates/docs/graph-assertions.md` +
       `scripts/graph-assertions.mjs`/`emit-graph.mjs` to emit-then-assert on demand.
+  - Evidence: `packages/create-kovo/templates/graph.json` was removed, scaffolded `.gitignore`
+    includes `graph.json`, `graph-assertions.mjs` emits before explaining, and
+    `pnpm exec vitest --run packages/create-kovo/src/index.test.ts` passes.
 
 ## Phase 4 — Replace committed-artifact freshness gates
 
-- [ ] Rework `examples/*/scripts/emit-components.mjs` and `emit-graph.mjs` `--check`: compile to a
-      temp dir and assert the **fixpoint** (recompiling the output is a no-op) and
-      render-equivalence, instead of diffing against a committed file.
+- [x] Rework `examples/*/scripts/emit-components.mjs` and `emit-graph.mjs` `--check`: component
+      checks compile to temp dirs with fixpoint + render-equivalence, and graph checks derive temp
+      graphs and run `kovo check`, instead of diffing against committed files.
+  - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components -- --check`,
+    `pnpm --filter @kovojs/example-crm run emit-components -- --check`,
+    `pnpm --filter @kovojs/example-stackoverflow run emit-components -- --check`,
+    `pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+    `pnpm --filter @kovojs/example-crm run emit-graph -- --check`, and
+    `pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check` pass without tracked
+    generated files.
 - [x] `scripts/kovo-check.mjs`: emit the commerce graph to a temp path, then run `kovo check
 <temp>` (no committed `graph.json` dependency).
   - Evidence: `node scripts/kovo-check.mjs` passed after `scripts/commerce-graph.mjs` was wired to

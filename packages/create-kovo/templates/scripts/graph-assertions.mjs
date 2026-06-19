@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 
+execFileSync(process.execPath, ['scripts/emit-graph.mjs'], { stdio: ['ignore', 'pipe', 'pipe'] });
+
 function kovoExplain(args) {
   return execFileSync('kovo', ['explain', ...args, 'graph.json'], { encoding: 'utf8' });
 }

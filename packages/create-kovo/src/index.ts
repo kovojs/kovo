@@ -31,7 +31,6 @@ const templateFiles = [
   'vite.config.ts',
   '.github/workflows/ci.yml',
   'README.md',
-  'graph.json',
   'scripts/export-static.mjs',
   'scripts/preview-static.mjs',
   'scripts/serve.mjs',
@@ -84,7 +83,15 @@ function renderEnvExampleFile(): string {
   ].join('\n');
 }
 
-const gitignoreEntries = ['node_modules', 'dist', '.env', '.env.*', '!.env.example', ''].join('\n');
+const gitignoreEntries = [
+  'node_modules',
+  'dist',
+  'graph.json',
+  '.env',
+  '.env.*',
+  '!.env.example',
+  '',
+].join('\n');
 
 export function createKovoProject(options: CreateKovoOptions): CreateKovoProject {
   const packageName = normalizePackageName(options.name);

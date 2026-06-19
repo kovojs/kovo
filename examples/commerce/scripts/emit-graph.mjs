@@ -359,17 +359,9 @@ const optimisticSource = [
 ].join('\n');
 
 if (process.argv.includes('--check')) {
-  assert.equal(readFileSync(graphPath, 'utf8'), graphJson, 'generated graph.json is stale');
-  assert.equal(
-    readFileSync(touchGraphPath, 'utf8'),
-    touchGraphSource,
-    'generated touch-graph.ts is stale',
-  );
-  assert.equal(
-    readFileSync(optimisticPath, 'utf8'),
-    optimisticSource,
-    'generated optimistic/cart-add.ts is stale',
-  );
+  const checkGraphPath = resolve(tempRoot, 'graph.check.json');
+  writeFileSync(checkGraphPath, graphJson);
+  runKovo(['check', checkGraphPath]);
 } else {
   mkdirSync(outputRoot, { recursive: true });
   writeFileSync(graphPath, graphJson);

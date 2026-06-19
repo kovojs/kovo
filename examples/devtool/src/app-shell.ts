@@ -1,5 +1,5 @@
 // Thin consumer of @kovojs/devtool. It wires three sibling example apps' own
-// committed graphs into the reusable devtool; all the logic (graph derivation,
+// emitted graphs into the reusable devtool; all the logic (graph derivation,
 // rendering, MCP, mount) lives in the package. This is what any host does to
 // inspect its own app — read its graph.json, hand it to createDevtoolApp.
 import { existsSync, readFileSync } from 'node:fs';

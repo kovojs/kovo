@@ -4,12 +4,13 @@
   "type": "module",
   "scripts": {
     "check": "vp check",
-    "conformance": "node scripts/conformance.mjs",
-    "dev": "vp dev",
-    "dev:mounted": "KOVO_DEVTOOL_BASE=/__kovo vp dev",
-    "mcp": "kovo-devtool mcp --graph ../commerce/src/generated/graph.json --src ../commerce/src --label Commerce --graph ../crm/src/generated/graph.json --src ../crm/src --label CRM --graph ../stackoverflow/src/generated/graph.json --src ../stackoverflow/src --label 'Stack Overflow'",
+    "conformance": "node scripts/emit-example-graphs.mjs && node scripts/conformance.mjs",
+    "dev": "node scripts/emit-example-graphs.mjs && vp dev",
+    "dev:mounted": "node scripts/emit-example-graphs.mjs && KOVO_DEVTOOL_BASE=/__kovo vp dev",
+    "emit-example-graphs": "node scripts/emit-example-graphs.mjs",
+    "mcp": "node scripts/emit-example-graphs.mjs && kovo-devtool mcp --graph ../commerce/src/generated/graph.json --src ../commerce/src --label Commerce --graph ../crm/src/generated/graph.json --src ../crm/src --label CRM --graph ../stackoverflow/src/generated/graph.json --src ../stackoverflow/src --label 'Stack Overflow'",
     "test": "vp test",
-    "test:mcp": "node scripts/test-mcp.mjs"
+    "test:mcp": "node scripts/emit-example-graphs.mjs && node scripts/test-mcp.mjs"
   },
   "dependencies": {
     "@kovojs/devtool": "workspace:*",

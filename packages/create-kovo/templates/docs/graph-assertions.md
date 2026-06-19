@@ -1,6 +1,7 @@
 # Graph Assertion Recipes
 
-Kovo keeps application wiring auditable through the generated graph file consumed by the CLI:
+Kovo keeps application wiring auditable through an on-demand generated graph file consumed by the
+CLI:
 
 ```sh
 vp run emit-graph
@@ -13,8 +14,8 @@ kovo explain query cart graph.json
 kovo explain page /cart graph.json
 ```
 
-Use `kovo check graph.json` in CI for semantic checks that do not belong in `vp check`: optimistic coverage (`KV310`), update coverage (`KV311`), touch-graph consistency, unguarded mutation audits, manual invalidation review, and Kovo-specific lints.
-Use `kovo explain --unguarded graph.json` when you need the stable, diffable audit list from SPEC.md section 10.3.
+Use `vp run kovo-check` in CI for semantic checks that do not belong in `vp check`: optimistic coverage (`KV310`), update coverage (`KV311`), touch-graph consistency, unguarded mutation audits, manual invalidation review, and Kovo-specific lints.
+Use `kovo explain --unguarded graph.json` after `vp run emit-graph` when you need the stable, diffable audit list from SPEC.md section 10.3.
 When debugging enhanced mutations, keep the wire contract from SPEC.md section 9.1 visible: `Kovo-Idem` keys make duplicate POSTs replayable, and `Kovo-Targets` shows which live DOM dependencies asked for fragments.
 
 ## Intent Assertions
@@ -22,7 +23,7 @@ When debugging enhanced mutations, keep the wire contract from SPEC.md section 9
 SPEC.md section 11.4.3 treats behavior checks as graph queries over stable `kovo explain` output. Keep these assertions in CI beside ordinary tests when a product rule matters more than one rendered page snapshot.
 This starter wires the minimal cart assertions into `vp run graph-assertions` and GitHub Actions; extend `scripts/graph-assertions.mjs` as product rules become important.
 
-This starter's `scripts/emit-graph.mjs` is the tiny runnable graph-emission path. Keep app facts explicit in that local script or replace it with your own app-owned generator before writing `graph.json`; the starter's CI contract is `kovo check` plus focused graph assertions, not direct compiler API ownership.
+This starter's `scripts/emit-graph.mjs` is the tiny runnable graph-emission path. Keep app facts explicit in that local script or replace it with your own app-owned generator; `graph.json` is a gitignored local artifact and the starter's CI contract is `kovo check` plus focused graph assertions, not direct compiler API ownership.
 
 Assert that every component displaying cart data is registered as a cart consumer:
 
@@ -42,7 +43,7 @@ grep '^domain-writes: .*cart.addItem' .kovo/cart.query.txt
 kovo explain mutation cart/add --optimistic graph.json | grep '^OPTIMISTIC cart await-fragment'
 ```
 
-Keep every mutation/query pair explicit in `graph.json`:
+Keep every mutation/query pair explicit in the emitted graph:
 
 ```json
 {

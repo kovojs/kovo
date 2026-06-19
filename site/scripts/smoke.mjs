@@ -213,10 +213,7 @@ try {
   const galleryScripts = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
-    if (
-      url.pathname.startsWith('/c/') &&
-      url.pathname.includes('/examples/gallery/src/generated/interactive/')
-    ) {
+    if (url.pathname.startsWith('/c/') && url.pathname.includes('/src/interactive/')) {
       galleryScripts.push(url.pathname);
     }
   });
@@ -238,9 +235,7 @@ try {
     () => document.querySelector('#accordion-demo [data-state="open"]') !== null,
   );
   check(
-    galleryScripts.some((script) =>
-      script.endsWith('/examples/gallery/src/generated/interactive/accordion-demo.client.js'),
-    ),
+    galleryScripts.some((script) => script.endsWith('/src/interactive/accordion-demo.client.js')),
     'JS: interactive gallery client module loads on interaction',
   );
   await page.goto(`${origin}/gallery/components/toggle/`, { waitUntil: 'networkidle' });
@@ -251,9 +246,7 @@ try {
       document.querySelector('#toggle-demo [data-demo-state="pressed"]')?.textContent === 'pressed',
   );
   check(
-    galleryScripts.some((script) =>
-      script.endsWith('/examples/gallery/src/generated/interactive/toggle-demo.client.js'),
-    ),
+    galleryScripts.some((script) => script.endsWith('/src/interactive/toggle-demo.client.js')),
     'JS: folded toggle gallery page runs the compiled handler',
   );
 

@@ -39,7 +39,7 @@ export const EXAMPLES = [
       'src/components/cart-badge.tsx',
       'src/components/order-history.tsx',
       'src/queries.ts',
-      'src/generated/optimistic/cart-add.ts',
+      'scripts/emit-graph.mjs',
     ],
   },
   {
@@ -60,7 +60,7 @@ export const EXAMPLES = [
       'src/components/deal-detail.tsx',
       'src/queries.ts',
       'src/mutations.ts',
-      'src/generated/optimistic/create-deal.ts',
+      'src/optimistic-merge.ts',
     ],
   },
   {
@@ -80,7 +80,7 @@ export const EXAMPLES = [
       'src/components/question-detail.tsx',
       'src/queries.ts',
       'src/mutations.ts',
-      'src/generated/optimistic/vote-up.ts',
+      'scripts/emit-graph.mjs',
     ],
   },
 ];

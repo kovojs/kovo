@@ -7,3 +7,12 @@ coverage/
 *.tsbuildinfo
 test-results/
 .playwright/
+
+# Kovo app-local generated artifacts are reproducible and must not be committed.
+examples/commerce/src/generated/
+examples/crm/src/generated/
+examples/gallery/src/generated/
+examples/stackoverflow/src/generated/
+site/src/generated/
+site/tutorial/steps/*/src/generated/
+packages/create-kovo/templates/graph.json

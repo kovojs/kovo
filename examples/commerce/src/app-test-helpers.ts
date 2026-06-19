@@ -302,9 +302,13 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
   }
 
   async function addToCartFields(input: AddToCartInput): Promise<Record<string, string | number>> {
+    const productId = typeof input.productId === 'string' ? input.productId : undefined;
+    const quantity = typeof input.quantity === 'number' ? input.quantity : undefined;
+    if (productId === undefined) throw new Error('Expected add-to-cart productId input');
+    if (quantity === undefined) throw new Error('Expected add-to-cart quantity input');
     const cartPage = await get('/cart');
     const html = await cartPage.text();
-    const fields = formFieldsByName(html, '/_m/cart/add', input.productId);
+    const fields = formFieldsByName(html, '/_m/cart/add', productId);
     const csrf = fields.csrf?.value;
     const formKey = fields['kovo-form-key']?.value;
     if (csrf === undefined) throw new Error('Expected add-to-cart CSRF field');
@@ -312,8 +316,8 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
     return {
       csrf,
       'kovo-form-key': formKey,
-      productId: input.productId,
-      quantity: input.quantity,
+      productId,
+      quantity,
     };
   }
 
