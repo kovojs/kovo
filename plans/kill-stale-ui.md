@@ -214,9 +214,13 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
       covers a `disableServerRefresh:true` component where `data-bind` plan
       coverage for `cart.count` no longer hides a same-path class expression;
       the unstamped position emits `UNHANDLED` coverage and KV311.
-  - [ ] Make "guard rerun produced no server truth for an await-fragment
+  - [x] Make "guard rerun produced no server truth for an await-fragment
         position" a visible dev/CI diagnostic (reuse the §10.4 missing-server-truth
         channel).
+    - Evidence 2026-06-19: `pnpm exec vitest --run packages/browser/src/mutation-optimistic-failure.test.ts`
+      covers an `await-fragment` optimistic position reporting missing server
+      truth through the existing optimistic diagnostic channel, while legitimate
+      await-fragment truth passes.
   - Acceptance: each hatch fixture that hides a live position fails the relevant
     check; legitimate uses (genuinely immutable / force-off) still pass.
 
