@@ -163,14 +163,14 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   - Gap (per audit; verify against `static.ts` table-resolution + `§10.1`/`§10.2`):
     `§11.1` resolves `pgTable` identifiers only; `pgView`/`pgMaterializedView`
     resolve to empty read sets; FK/trigger effects are engine-side.
-  - [ ] **X2 static derive (zero annotation):** parse `references()/onDelete`
-        into a cascade graph — a `delete(parent)`/key-update auto-unions
-        cascade/set-null child domains into the touch set; run the existing query
-        extractor over `pgView('n').as((qb)=>…)` to derive view read-sets. - Partial evidence 2026-06-19: `pnpm --filter @kovojs/drizzle exec vitest --run src/index.writes-receivers.test.ts`
+  - [x] **X2 static derive (zero annotation):** cascade FK and normal `pgView`
+        read-set derivation. - Evidence 2026-06-19: `pnpm --filter @kovojs/drizzle exec vitest --run src/index.query-shapes.test.ts src/index.writes-receivers.test.ts`
         covers project-mode `references(() => products.id, { onDelete:
 "cascade", onUpdate: "set null" })`; parent `delete(products)` and
-        `update(products)` now also touch the child `cart` domain. View read-set
-        derivation remains open.
+        `update(products)` now also touch the child `cart` domain. It also covers
+        a normal `pgView(...).as((qb) => qb.select(...).from(products))`
+        contributing the `product` read while an unmodeled materialized view still
+        emits KV412.
   - [ ] **X3 declared seam:** `kovo({ fans:[{ via, domain, when }] })` for opaque
         PL/pgSQL triggers (**KV413** if a detected trigger source lacks it);
         `kovo({ view:{ of, refresh } })` for matviews — async-`REFRESH` matviews

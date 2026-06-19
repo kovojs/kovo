@@ -366,13 +366,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
-  it('reports KV412 when a query reads an unmodeled view or materialized view', () => {
+  it('derives view read sets and reports KV412 for unmodeled materialized views', () => {
     const facts = extractQueryFactsFromProject({
       files: [
         {
           fileName: 'product.queries.ts',
           source: `
-          export const productSearch = pgView("product_search").as((qb) => qb.select({ name: sql<string>\`name\` }));
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "product", key: "id" }));
+          export const productSearch = pgView("product_search").as((qb) => qb.select({ name: products.name }).from(products));
           export const productStats = pgMaterializedView("product_stats").as((qb) => qb.select({ productId: sql<string>\`product_id\` }));
 
           export const searchQuery = query("search", {
@@ -394,24 +398,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV412',
             message:
-              'Query reads an unmodeled relation. view product_search has no derived or declared domain.',
-            severity: 'error',
-            site: 'product.queries.ts:5',
-          },
-          {
-            code: 'KV412',
-            message:
               'Query reads an unmodeled relation. materialized-view product_stats has no derived or declared domain.',
             severity: 'error',
-            site: 'product.queries.ts:5',
+            site: 'product.queries.ts:9',
           },
         ],
         query: 'search',
-        reads: [],
+        reads: ['product'],
         shape: {
           name: 'string',
         },
-        site: 'product.queries.ts:5',
+        site: 'product.queries.ts:9',
       },
     ]);
     expect(
@@ -421,12 +418,6 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         severity,
       })),
     ).toEqual([
-      {
-        code: 'KV412',
-        message:
-          'Query reads an unmodeled relation. view product_search has no derived or declared domain.',
-        severity: 'error',
-      },
       {
         code: 'KV412',
         message:

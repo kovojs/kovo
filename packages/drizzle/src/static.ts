@@ -1985,7 +1985,7 @@ function extractQueryFactsFromPreparedFiles(
       )
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
-        .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, site))
+        .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, fileTables, site))
         .concat(exemptQueryReadDiagnostics(query.tableExpressions, fileTables, site))
         .concat(localQueryHelperDiagnostics(localHelperSummary));
       const allReads = [...new Set([...reads, ...helperReads])].sort();
@@ -5031,9 +5031,11 @@ function exemptQueryReadDiagnostics(
 
 function unmodeledRelationReadDiagnostics(
   tableExpressions: readonly string[],
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   site: string,
 ): TouchGraphDiagnostic[] {
   const relations = tableExpressions
+    .filter((expression) => (tables.get(expression) ?? []).length === 0)
     .map(unmodeledRelationFromExpression)
     .filter((relation): relation is UnmodeledRelationFact => relation !== undefined);
   if (relations.length === 0) return [];
@@ -5879,6 +5881,10 @@ function projectSourceModuleContext(extraction: ProjectExtraction): SourceModule
   // SPEC §10-§11: project-mode table facts come from resolved ts-morph symbols, not rewritten
   // source text that is reparsed through source-mode table extraction.
   const tablesBySyntheticName = projectTablesBySyntheticName(extraction);
+  const derivedRelationTablesByExpression = projectDerivedRelationTablesByExpression(
+    extraction,
+    tablesBySyntheticName,
+  );
   const tablesByFileName = new Map<string, Map<string, ExtractedTable[]>>();
 
   extraction.sourceFiles.forEach((sourceFile, index) => {
@@ -5888,6 +5894,7 @@ function projectSourceModuleContext(extraction: ProjectExtraction): SourceModule
     const tables = new Map<string, ExtractedTable[]>();
     appendProjectDeclaredTables(tables, sourceFile, extraction, tablesBySyntheticName);
     appendProjectReferencedTables(tables, sourceFile, extraction, tablesBySyntheticName);
+    appendProjectDerivedRelationTables(tables, derivedRelationTablesByExpression);
     appendProjectGlobalSyntheticTables(tables, tablesBySyntheticName, extraction);
     tablesByFileName.set(file.fileName, tables);
   });
@@ -5960,6 +5967,106 @@ function projectTablesBySyntheticName(
   return tables;
 }
 
+function projectDerivedRelationTablesByExpression(
+  extraction: ProjectExtraction,
+  tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+): ReadonlyMap<string, readonly ExtractedTable[]> {
+  const relationTables = new Map<string, ExtractedTable[]>();
+
+  for (const sourceFile of extraction.sourceFiles) {
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const expression = extraction.unmodeledRelationNamesBySymbol.get(
+        resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
+      );
+      if (!expression) continue;
+
+      const relation = unmodeledRelationFromExpression(expression);
+      if (relation?.kind !== 'view') continue;
+
+      const tableExpressions = projectViewReadTableExpressions(
+        declaration.getInitializer(),
+        extraction.tableNamesBySymbol,
+        namespaceTableNames,
+      );
+      const tables = tableExpressions.flatMap((tableExpression) => {
+        const table =
+          tablesBySyntheticName.get(tableExpression) ??
+          tablesBySyntheticName.get(tableExpression.split('.').at(-1) ?? '');
+        return table ? [table] : [];
+      });
+      if (tables.length > 0) {
+        relationTables.set(expression, [
+          ...new Map(tables.map((table) => [extractedTableKey(table), table])).values(),
+        ]);
+      }
+    }
+  }
+
+  return relationTables;
+}
+
+function projectViewReadTableExpressions(
+  initializer: Node | undefined,
+  tableNamesBySymbol: ReadonlyMap<string, string>,
+  namespaceTableNames: ProjectNamespaceTableNames,
+): string[] {
+  const callback = viewAsCallback(initializer);
+  if (!callback) return [];
+
+  const parameter = callback.getParameters()[0]?.getNameNode();
+  if (!parameter || !Node.isIdentifier(parameter)) return [];
+
+  const receiverReferences: QueryReceiverReferences = {
+    names: new Set([parameter.getText()]),
+    projectContainers: true,
+    symbolKeys: new Set(),
+  };
+  const body = callback.getBody();
+  return queryReadTableExpressionsForBody(body, receiverReferences, (node) =>
+    projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames),
+  );
+}
+
+function viewAsCallback(initializer: Node | undefined): ArrowFunction | FunctionExpression | null {
+  if (!initializer || !Node.isCallExpression(initializer)) return null;
+
+  const calls = [
+    ...(Node.isCallExpression(initializer) ? [initializer] : []),
+    ...initializer.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  const asCall = calls.find((call) => propertyAccessCallName(call) === 'as');
+  const callback = asCall?.getArguments()[0];
+  return callback && (Node.isArrowFunction(callback) || Node.isFunctionExpression(callback))
+    ? callback
+    : null;
+}
+
+function queryReadTableExpressionsForBody(
+  body: Node,
+  receiverReferences: QueryReceiverReferences,
+  readTableIdentifier: (node: Node) => string | undefined,
+): string[] {
+  return touchBodyCallExpressions(body)
+    .sort((left, right) => callSourceOrder(left) - callSourceOrder(right))
+    .flatMap((call) => {
+      const name = propertyAccessCallName(call);
+      if (!name || !isQueryReadCallName(name)) return [];
+      if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
+
+      const tableArgument = call.getArguments()[0];
+      const table = tableArgument ? readTableIdentifier(tableArgument) : undefined;
+      return table ? [table] : [];
+    });
+}
+
+function extractedTableKey(table: ExtractedTable): string {
+  return `${table.annotation.name}\0${JSON.stringify(table.annotation)}`;
+}
+
 function appendProjectDeclaredTables(
   tables: Map<string, ExtractedTable[]>,
   sourceFile: SourceFile,
@@ -6008,6 +6115,15 @@ function appendProjectReferencedTables(
 
   for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
     appendProjectNamespaceTableAccess(tables, access, namespaceTableNames, tablesBySyntheticName);
+  }
+}
+
+function appendProjectDerivedRelationTables(
+  tables: Map<string, ExtractedTable[]>,
+  derivedRelationTablesByExpression: ReadonlyMap<string, readonly ExtractedTable[]>,
+): void {
+  for (const [expression, entries] of derivedRelationTablesByExpression) {
+    appendTableEntries(tables, expression, entries);
   }
 }
 
