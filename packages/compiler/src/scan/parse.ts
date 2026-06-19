@@ -77,6 +77,7 @@ export interface CallExpressionModel {
 export interface ArrowFunctionPartsModel {
   expression: string;
   param: string;
+  params: readonly string[];
 }
 
 export interface SourceSpan {
@@ -589,13 +590,14 @@ function arrowFunctionPartsFromExpression(
 ): ArrowFunctionPartsModel | null {
   if (!ts.isArrowFunction(expression)) return null;
 
-  const param = expression.parameters[0];
-  if (!param || expression.parameters.length !== 1 || !ts.isIdentifier(param.name)) return null;
+  const params = expression.parameters.map((parameter) => parameter.name);
+  if (params.length === 0 || !params.every(ts.isIdentifier)) return null;
   if (ts.isBlock(expression.body)) return null;
 
   return {
     expression: expression.body.getText(sourceFile).trim(),
-    param: param.name.text,
+    param: params[0]?.text ?? '',
+    params: params.map((param) => param.text),
   };
 }
 

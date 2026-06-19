@@ -29,6 +29,10 @@ describe('kovo explain', () => {
                   rule: 'binding-target-conflict',
                 },
               ],
+              clocks: [
+                { cadence: "every='1s'", name: 'ago' },
+                { cadence: 'renderOnce', name: 'pub' },
+              ],
               derives: [
                 {
                   inputs: ['cart'],
@@ -91,6 +95,8 @@ describe('kovo explain', () => {
         'dom-name: cart-badge',
         'effective-dom-name: components/cart/cart-badge/cart-badge',
         'STYLE class=kv-button-bg-a1b2c3 source=button.tsx#root style-ref=base.root',
+        "CLOCK ago cadence=every='1s'",
+        'CLOCK pub cadence=renderOnce',
         'HANDLER click export=CartBadge$button_click ref=/c/cart-badge.client.js#CartBadge$button_click captures=ctx,element-params params=itemId substitution=-',
         'SUBSTITUTION dialog tag=button event=click target=cart-drawer action=show-modal',
         'DERIVE CartBadge$isEmpty inputs=cart ref=/c/cart-badge.client.js#CartBadge$isEmpty target=button[data-bind:disabled]',

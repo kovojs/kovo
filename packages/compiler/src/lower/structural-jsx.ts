@@ -76,6 +76,8 @@ interface InlineAttributeDerive {
   element: JsxIrElement;
   baseName: string;
   expression: string;
+  inputs?: readonly string[];
+  params?: readonly string[];
   query: string;
   source: 'query' | 'state';
   targetAttr: string;
@@ -85,6 +87,16 @@ interface InlineStateTextDerive {
   baseName: string;
   expression: string;
   expressionNode: JsxIrExpression;
+  wrapper?: JsxIrElement;
+}
+
+interface InlineQueryTextDerive {
+  baseName: string;
+  expression: string;
+  expressionNode: JsxIrExpression;
+  inputs: readonly string[];
+  params: readonly string[];
+  query: string;
   wrapper?: JsxIrElement;
 }
 
@@ -535,9 +547,11 @@ function lowerAttributeDerive(
     candidate.source === 'state'
       ? deriveExpression(candidate.attribute, candidate.expression)
       : candidate.expression.trim();
+  const deriveInputs = candidate.inputs ?? [candidate.query];
+  const deriveParams = candidate.params ?? [deriveParam(candidate)];
 
   deriveExports.push(
-    `export const ${exportName} = derive([${JSON.stringify(candidate.query)}], (${deriveParam(candidate)}) => ${expression});`,
+    `export const ${exportName} = derive(${JSON.stringify(deriveInputs)}, (${deriveParams.join(', ')}) => ${expression});`,
   );
   if (candidate.source === 'state') {
     stateDerives.push({
@@ -914,17 +928,34 @@ function lowerInlineTextBindings(
       continue;
     }
     const derive = inlineTextDerive(element, expression, componentName);
-    if (!derive) continue;
+    if (derive) {
+      boundElementStarts.add(element.element.start);
+      const exportName = nextExportName(derive.baseName, nameCounts);
+      const stampName = `state.${exportName}`;
+      recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
+      setJsxIrAttribute(
+        element,
+        generatedJsxIrAttribute(
+          'data-bind',
+          { kind: 'string', value: stampName },
+          'inline state text derive',
+          options,
+        ),
+      );
+      continue;
+    }
+    const queryDerive = inlineQueryTextDerive(element, expression, componentName, knownQueries);
+    if (!queryDerive) continue;
     boundElementStarts.add(element.element.start);
-    const exportName = nextExportName(derive.baseName, nameCounts);
-    const stampName = `state.${exportName}`;
-    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
+    const exportName = nextExportName(queryDerive.baseName, nameCounts);
+    const stampName = `${queryDerive.query}.${exportName}`;
+    recordQueryTextDerive(queryDerive, exportName, deriveExports, outputContexts);
     setJsxIrAttribute(
       element,
       generatedJsxIrAttribute(
-        'data-bind',
+        'data-derive',
         { kind: 'string', value: stampName },
-        'inline state text derive',
+        'inline query text derive',
         options,
       ),
     );
@@ -946,11 +977,19 @@ function lowerInlineTextBindings(
       continue;
     }
     const derive = inlineMixedTextDerive(expression, model, componentName);
-    if (!derive) continue;
-    const exportName = nextExportName(derive.baseName, nameCounts);
-    const stampName = `state.${exportName}`;
-    recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
-    expression.replacement = `<span data-bind="${escapeAttribute(stampName)}">{${derive.expression}}</span>`;
+    if (derive) {
+      const exportName = nextExportName(derive.baseName, nameCounts);
+      const stampName = `state.${exportName}`;
+      recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
+      expression.replacement = `<span data-bind="${escapeAttribute(stampName)}">{${derive.expression}}</span>`;
+      continue;
+    }
+    const queryDerive = inlineMixedQueryTextDerive(expression, model, componentName, knownQueries);
+    if (!queryDerive) continue;
+    const exportName = nextExportName(queryDerive.baseName, nameCounts);
+    const stampName = `${queryDerive.query}.${exportName}`;
+    recordQueryTextDerive(queryDerive, exportName, deriveExports, outputContexts);
+    expression.replacement = `<span data-derive="${escapeAttribute(stampName)}">{${queryDerive.expression}}</span>`;
   }
 }
 
@@ -1077,10 +1116,11 @@ function inlineAttributeDerive(
       .filter((root): root is string => root !== null),
   );
   const stateOnly = roots.size > 0 && [...roots].every((root) => root === 'state');
-  if (queryRoots.size !== 1 && !stateOnly) return null;
+  const clockInputs = clockQueryInputsFromRoots(roots, knownQueries);
+  if (queryRoots.size !== 1 && !stateOnly && !clockInputs) return null;
   if (queryRoots.size > 0 && roots.has('state')) return null;
 
-  const query = stateOnly ? 'state' : [...queryRoots][0];
+  const query = stateOnly ? 'state' : clockInputs ? 'now' : [...queryRoots][0];
   if (!query) return null;
 
   return {
@@ -1088,6 +1128,7 @@ function inlineAttributeDerive(
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attribute.name)}_derive`,
     element,
     expression: styleObjectExpression ?? attribute.expression.trim(),
+    ...(clockInputs ? { inputs: clockInputs, params: clockInputs } : {}),
     query,
     source: stateOnly ? 'state' : 'query',
     targetAttr: attribute.name,
@@ -1157,6 +1198,27 @@ function inlineTextDerive(
   };
 }
 
+function inlineQueryTextDerive(
+  element: JsxIrElement,
+  expression: JsxIrExpression | null,
+  componentName: string,
+  knownQueries: ReadonlySet<string>,
+): InlineQueryTextDerive | null {
+  if (element.selfClosing || hasBindingAttribute(element) || !expression) return null;
+  if (expression.expression.solePropertyAccessPath) return null;
+  const inputs = clockQueryInputsFromAccesses(expression.expression.propertyAccesses, knownQueries);
+  if (!inputs) return null;
+  return {
+    baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
+    expression: expression.expression.expression,
+    expressionNode: expression,
+    inputs,
+    params: inputs,
+    query: 'now',
+    wrapper: element,
+  };
+}
+
 function inlineMixedTextBinding(
   expression: JsxIrExpression,
   model: ComponentModuleModel,
@@ -1188,6 +1250,50 @@ function inlineMixedTextDerive(
     expression: expression.expression.expression,
     expressionNode: expression,
   };
+}
+
+function inlineMixedQueryTextDerive(
+  expression: JsxIrExpression,
+  model: ComponentModuleModel,
+  componentName: string,
+  knownQueries: ReadonlySet<string>,
+): InlineQueryTextDerive | null {
+  const inputs = clockQueryInputsFromAccesses(expression.expression.propertyAccesses, knownQueries);
+  if (!inputs) return null;
+  if (isJsxAttributeExpression(expression.expression, model)) return null;
+  const element = innermostContainingElement(expression.expression, model);
+  if (!element) return null;
+  if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
+  if (element.childNonWhitespaceCount === 1) return null;
+  return {
+    baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
+    expression: expression.expression.expression,
+    expressionNode: expression,
+    inputs,
+    params: inputs,
+    query: 'now',
+  };
+}
+
+function clockQueryInputsFromAccesses(
+  accesses: readonly { path: string }[],
+  knownQueries: ReadonlySet<string>,
+): readonly string[] | null {
+  const roots = new Set(
+    accesses
+      .map((access) => queryNameFromPath(access.path))
+      .filter((root): root is string => root !== null),
+  );
+  return clockQueryInputsFromRoots(roots, knownQueries);
+}
+
+function clockQueryInputsFromRoots(
+  roots: ReadonlySet<string>,
+  knownQueries: ReadonlySet<string>,
+): readonly string[] | null {
+  if (!roots.has('now')) return null;
+  if (![...roots].every((root) => root === 'now' || knownQueries.has(root))) return null;
+  return ['now', ...[...roots].filter((root) => root !== 'now').sort()];
 }
 
 function recordStateDerive(
@@ -1224,6 +1330,27 @@ function recordStateDerive(
       sink: 'textContent',
       source: 'client-state',
       writer: 'inline state text derive',
+    }),
+  );
+}
+
+function recordQueryTextDerive(
+  derive: InlineQueryTextDerive,
+  exportName: string,
+  deriveExports: string[],
+  outputContexts: GeneratedOutputWriteFact[],
+): void {
+  const expression = derive.expression.trim();
+  deriveExports.push(
+    `export const ${exportName} = derive(${JSON.stringify(derive.inputs)}, (${derive.params.join(', ')}) => ${expression});`,
+  );
+  outputContexts.push(
+    outputWriteFact({
+      context: 'text',
+      expression,
+      sink: 'textContent',
+      source: 'client-query',
+      writer: 'inline query text derive',
     }),
   );
 }

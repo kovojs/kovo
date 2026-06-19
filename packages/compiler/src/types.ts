@@ -31,6 +31,7 @@ export interface CompileComponentOptions {
 export type ComponentGraphFact = Pick<
   CoreGraph.ComponentExplain,
   | 'disambiguatedDomName'
+  | 'clocks'
   | 'domName'
   | 'exportName'
   | 'fragments'
@@ -502,8 +503,10 @@ export interface QueryDeriveFact {
   expression: string;
   exportName: string;
   input: string;
+  inputs?: readonly string[];
   name: string;
   param: string;
+  params?: readonly string[];
   selector: string;
 }
 

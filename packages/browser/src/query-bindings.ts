@@ -5,6 +5,7 @@ import type {
   QuerySelectorAllRootLike,
 } from './dom-like.js';
 import { morphDomElement } from './morph.js';
+import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -38,14 +39,14 @@ export interface TemplateStampHost extends QueryBindingElement {
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface CompiledQueryDerive {
   name: string;
-  select(value: unknown, root: QueryBindingRoot): unknown;
+  select(value: unknown, root: QueryBindingRoot, context: CompiledQueryUpdateContext): unknown;
   selector?: string;
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface CompiledQueryStamp {
   attr: string;
-  select(value: unknown, root: QueryBindingRoot): unknown;
+  select(value: unknown, root: QueryBindingRoot, context: CompiledQueryUpdateContext): unknown;
   selector: string;
 }
 
@@ -95,7 +96,14 @@ export interface ApplyStateBindingsOptions extends ApplyQueryBindingsOptions {
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
-export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsOptions {}
+export interface ApplyCompiledQueryUpdatePlanOptions extends ApplyQueryBindingsOptions {
+  queryStore?: QueryStore;
+}
+
+/** Runtime API used by generated runtime integration. */
+export interface CompiledQueryUpdateContext {
+  queryStore?: QueryStore;
+}
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function createQueryBindingIndex(root: QueryBindingRoot): QueryBindingIndex {
@@ -194,10 +202,13 @@ export function applyCompiledQueryUpdatePlan(
     stamps: [],
     templateStamps: [],
   };
+  const context: CompiledQueryUpdateContext = options.queryStore
+    ? { queryStore: options.queryStore }
+    : {};
 
   for (const derive of plan.derives ?? []) {
     const selector = derive.selector ?? `[data-derive="${queryName}.${derive.name}"]`;
-    const rendered = formatBoundValue(derive.select(value, root));
+    const rendered = formatBoundValue(derive.select(value, root, context));
 
     for (const element of root.querySelectorAll(selector)) {
       writeQueryPlanElement(element, rendered);
@@ -206,7 +217,7 @@ export function applyCompiledQueryUpdatePlan(
   }
 
   for (const stamp of plan.stamps ?? []) {
-    const selected = stamp.select(value, root);
+    const selected = stamp.select(value, root, context);
 
     for (const element of root.querySelectorAll(stamp.selector)) {
       if (selected === undefined || selected === null) {

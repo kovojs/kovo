@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installClockUpdatePlans } from './clock-tick-bus.js';
+import { createQueryStore } from './query-store.js';
 import { FakeMorphRoot } from './runtime-test-fakes.js';
 
 describe('clock tick bus', () => {
@@ -83,6 +84,33 @@ describe('clock tick bus', () => {
     vi.advanceTimersByTime(1_000);
 
     expect(update).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('passes the query store to clock plans and records the current now input', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(5_000);
+    const root = new FakeMorphRoot();
+    const store = createQueryStore();
+    const contexts: unknown[] = [];
+
+    const dispose = installClockUpdatePlans(
+      root,
+      [
+        {
+          clocks: { ago: { every: '1s' } },
+          update(_root, _now, context) {
+            contexts.push(context.queryStore?.get('now'));
+          },
+        },
+      ],
+      { queryStore: store },
+    );
+
+    vi.advanceTimersByTime(0);
+
+    expect(contexts).toEqual([{ ago: new Date(5_000) }]);
+    expect(store.get('now')).toEqual({ ago: new Date(5_000) });
     dispose();
   });
 });

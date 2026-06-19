@@ -676,7 +676,11 @@ export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count ===
     expect(derive?.argumentStaticValues).toEqual([undefined, undefined]);
     expect(derive?.argumentArrowFunctionParts).toEqual([
       null,
-      { expression: 'cart.count === 0 && Date.now() > new Date().getTime()', param: 'cart' },
+      {
+        expression: 'cart.count === 0 && Date.now() > new Date().getTime()',
+        param: 'cart',
+        params: ['cart'],
+      },
     ]);
     expect(derive?.argumentTemporalReads.map((reads) => reads.map((read) => read.kind))).toEqual([
       [],

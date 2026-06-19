@@ -60,7 +60,11 @@ export function installLoaderQueryRuntime(
     typeof options.root.querySelectorAll === 'function'
   ) {
     disposers.push(
-      installClockUpdatePlans(options.root as QueryBindingRoot, options.clockUpdatePlans),
+      installClockUpdatePlans(
+        options.root as QueryBindingRoot,
+        options.clockUpdatePlans,
+        options.queryStore ? { queryStore: options.queryStore } : {},
+      ),
     );
   }
 

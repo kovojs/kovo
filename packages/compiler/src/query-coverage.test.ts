@@ -236,14 +236,103 @@ export const ClockLabel = component({
         query: 'now',
       }),
     ]);
+    expect(result.componentGraphFacts[0]?.clocks).toEqual([
+      { cadence: "every='1s'", name: 'ago' },
+      { cadence: 'renderOnce', name: 'pub' },
+    ]);
     expect(clientSource).toContain(
       "import { applyCompiledQueryUpdatePlan, derive, installClockUpdatePlans } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain('export const ClockLabel$clockUpdatePlans = [{');
     expect(clientSource).toContain('clocks: { "ago": { every: \'1s\' } }');
     expect(clientSource).not.toContain('"pub"');
-    expect(clientSource).toContain('return ClockLabel$queryUpdatePlans.now(root, now);');
+    expect(clientSource).toContain('return ClockLabel$queryUpdatePlans.now(root, now, context);');
     expect(clientSource).toContain('export function installClockLabelClockUpdates(root)');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('emits store-backed clock plans for derives that mix now and query inputs', () => {
+    const result = compileComponentModule({
+      fileName: 'clock-label.tsx',
+      source: `
+export const ClockLabel$value = derive(['now', 'cart'], (now, cart) =>
+  formatRelative(now.ago, cart.updatedAt),
+);
+
+export const ClockLabel = component({
+  queries: { cart: cartQuery },
+  clocks: { ago: { every: '1s' } },
+  render: () => <time data-derive="now.ClockLabel$value">initial</time>,
+});
+`,
+    });
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.queryUpdatePlans.map((plan) => plan.query).sort()).toEqual(['cart', 'now']);
+    expect(clientSource).toContain(
+      `export const ClockLabel$value = derive(["now","cart"], (now, cart) => formatRelative(now.ago, cart.updatedAt));`,
+    );
+    expect(clientSource).toContain(
+      'function kovoDeriveValues(inputs, currentInput, currentValue, context)',
+    );
+    expect(clientSource).toContain('context?.queryStore?.get(input)');
+    expect(clientSource).toContain('return ClockLabel$queryUpdatePlans.now(root, now, context);');
+    expect(clientSource).toContain(
+      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [{ name: "ClockLabel$value", selector: "[data-derive=\\"now.ClockLabel$value\\"]", select(value, root, context) { return ClockLabel$value.run(...kovoDeriveValues(["now","cart"], "cart", value, context)); } }]',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lowers inline text expressions that mix now and query inputs into clock-backed derives', () => {
+    const result = compileComponentModule({
+      fileName: 'clock-label.tsx',
+      source: `
+export const ClockLabel = component({
+  queries: { cart: cartQuery },
+  clocks: { ago: { every: '1s' } },
+  render: ({ cart, now }) => <time>{formatRelative(now.ago, cart.updatedAt)}</time>,
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(serverSource).toContain('data-derive="now.ClockLabel$time_text_derive"');
+    expect(result.queryUpdatePlans.map((plan) => plan.query).sort()).toEqual(['cart', 'now']);
+    expect(result.updateCoverage).not.toContainEqual(
+      expect.objectContaining({ status: 'UNHANDLED' }),
+    );
+    expect(clientSource).toContain(
+      'export const ClockLabel$time_text_derive = derive(["now","cart"], (now, cart) => formatRelative(now.ago, cart.updatedAt));',
+    );
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('lowers inline attribute expressions that mix now and query inputs into clock-backed derives', () => {
+    const result = compileComponentModule({
+      fileName: 'clock-label.tsx',
+      source: `
+export const ClockLabel = component({
+  queries: { cart: cartQuery },
+  clocks: { ago: { every: '1s' } },
+  render: ({ cart, now }) => (
+    <time title={formatRelative(now.ago, cart.updatedAt)}>Updated</time>
+  ),
+});
+`,
+    });
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(serverSource).toContain('data-derive="now.ClockLabel$time_title_derive"');
+    expect(serverSource).toContain('data-derive-attr="title"');
+    expect(result.queryUpdatePlans.map((plan) => plan.query).sort()).toEqual(['cart', 'now']);
+    expect(result.updateCoverage).not.toContainEqual(
+      expect.objectContaining({ status: 'UNHANDLED' }),
+    );
+    expect(clientSource).toContain(
+      'export const ClockLabel$time_title_derive = derive(["now","cart"], (now, cart) => formatRelative(now.ago, cart.updatedAt));',
+    );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
@@ -310,7 +399,7 @@ export const CartBadge = component({
       'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.count === 0);',
     );
     expect(clientSource).toContain(
-      'stamps: [{ attr: "disabled", selector: "[data-derive=\\"cart.CartBadge$button_disabled_derive\\"]", select(value) { return CartBadge$button_disabled_derive.run(value); } }]',
+      'stamps: [{ attr: "disabled", selector: "[data-derive=\\"cart.CartBadge$button_disabled_derive\\"]", select(value, root, context) { return CartBadge$button_disabled_derive.run(value); } }]',
     );
     expect(result.updateCoverage).not.toContainEqual(
       expect.objectContaining({ query: 'cart.count', status: 'UNHANDLED' }),
@@ -465,7 +554,7 @@ export const CartBadge = component({
     ]);
     expect(result.diagnostics).toEqual([]);
     expect(clientSource).toContain(
-      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });',
+      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });

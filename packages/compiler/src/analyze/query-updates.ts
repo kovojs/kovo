@@ -83,16 +83,20 @@ export function collectQueryUpdatePlans(
   const deriveStamps = dataDeriveStamps(model, exportedDerives(model));
 
   for (const derive of deriveStamps.derives) {
-    const derives = derivesByQuery.get(derive.input) ?? [];
-    derives.push(derive);
-    derivesByQuery.set(derive.input, derives);
+    for (const input of derivePlanInputs(derive)) {
+      const derives = derivesByQuery.get(input) ?? [];
+      derives.push({ ...derive, input });
+      derivesByQuery.set(input, derives);
+    }
   }
 
   for (const stamp of deriveStamps.stamps) {
-    const stamps = stampsByQuery.get(stamp.derive.input) ?? [];
-    stamps.push(stamp);
-    stampsByQuery.set(stamp.derive.input, stamps);
-    pushOutputContext(outputContextsByQuery, stamp.derive.input, stamp.outputContext);
+    for (const input of derivePlanInputs(stamp.derive)) {
+      const stamps = stampsByQuery.get(input) ?? [];
+      stamps.push({ ...stamp, derive: { ...stamp.derive, input } });
+      stampsByQuery.set(input, stamps);
+      pushOutputContext(outputContextsByQuery, input, stamp.outputContext);
+    }
   }
 
   const queries = new Set([
@@ -314,26 +318,33 @@ function exportedDerives(
   for (const call of callExpressions(model)) {
     if (call.name !== 'derive' || !call.exportedConstName) continue;
 
-    const input = deriveInputName(call.argumentStringLiteralArrayValues[0]);
+    const inputs = deriveInputNames(call.argumentStringLiteralArrayValues[0]);
     const derive = call.argumentArrowFunctionParts[1];
-    if (!input || !derive) continue;
+    if (inputs.length === 0 || !derive || derive.params.length !== inputs.length) continue;
+    const input = inputs[0];
+    if (!input) continue;
     const exportName = call.exportedConstName;
 
     derives.set(exportName, {
       exportName,
       expression: derive.expression,
       input,
+      ...(inputs.length > 1 ? { inputs } : {}),
       name: exportName,
       param: derive.param,
+      ...(derive.params.length > 1 ? { params: derive.params } : {}),
     });
   }
 
   return derives;
 }
 
-function deriveInputName(values: readonly string[] | null | undefined): string | null {
-  const [input] = values ?? [];
-  return values?.length === 1 && input ? input : null;
+function deriveInputNames(values: readonly string[] | null | undefined): string[] {
+  return values?.filter((input) => input.length > 0) ?? [];
+}
+
+function derivePlanInputs(derive: Pick<QueryDeriveFact, 'input' | 'inputs'>): readonly string[] {
+  return derive.inputs ?? [derive.input];
 }
 
 function dataDeriveStamps(
@@ -353,7 +364,8 @@ function dataDeriveStamps(
       if (!inputSegment || !nameSegment || extraSegments.length > 0) continue;
 
       const derive = derives.get(nameSegment.name);
-      if (!derive || derive.input !== inputSegment.name || derive.input === 'state') continue;
+      if (!derive || !derivePlanInputs(derive).includes(inputSegment.name)) continue;
+      if (inputSegment.name === 'state') continue;
 
       const attr = attribute.name.slice('data-bind:'.length);
       stampFacts.push(
@@ -392,7 +404,7 @@ function dataDeriveStamps(
     const name = nameSegment.name;
 
     const derive = derives.get(name);
-    if (!derive || derive.input !== input) continue;
+    if (!derive || !derivePlanInputs(derive).includes(input)) continue;
 
     const deriveFact = {
       ...derive,

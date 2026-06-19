@@ -310,10 +310,18 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
         covers shared interval/rAF coalescing, generated clock plan exports, and
         bootstrap wiring; `corepack pnpm exec tsc --noEmit --pretty false` and
         `git diff --check` passed.
-    - [ ] Remaining delivery contract: mixed `now.<clock>` + query/state render
-          expressions need a multi-input/store-backed compiled derive path before
-          every declared clock read can be tick-driven; `kovo explain` cadence
-          budget output and any lint gate also remain open.
+    - [x] Mixed `now.<clock>` + query render expressions lower to a
+          multi-input/store-backed compiled derive path, and component explain
+          prints clock inputs plus cadences.
+      - Evidence 2026-06-19:
+        `npx vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/scan/parse.test.ts packages/browser/src/clock-tick-bus.test.ts packages/cli/src/index.kovo-explain.test.ts`
+        covers exported and inline `derive(['now', 'cart'], ...)` update plans,
+        query-store-backed clock ticks, and `CLOCK <name> cadence=...` component
+        explain output.
+    - [ ] Remaining delivery contract: `at`/`until` scheduling and per-element
+          state-mixed clock derives still need runtime ownership; keep the parent
+          tick-bus item open until those declared clock reads are tick-driven or
+          lint-gated with a diagnostic.
   - [x] Extend KV410 with the `volatile:'time'` output facet for raw-SQL `now()`
         projections (`req.now`); extend the §11.1/§10.2 read-set deriver to flag
         time-predicate WHEREs (`expiresAt > req.now`) as time-volatile rowsets.

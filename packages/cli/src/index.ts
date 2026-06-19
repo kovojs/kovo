@@ -3334,6 +3334,10 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
       );
     }
 
+    for (const clock of component.clocks ?? []) {
+      lines.push(`CLOCK ${clock.name} cadence=${clock.cadence}`);
+    }
+
     for (const handler of component.handlers ?? []) {
       lines.push(
         [

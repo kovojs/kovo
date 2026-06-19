@@ -81,8 +81,8 @@ function emitClockUpdatePlanExport(
 
   return `export const ${componentName}$clockUpdatePlans = [{
   clocks: { ${clocks} },
-  update(root, now) {
-    return ${componentName}$queryUpdatePlans.now(root, now);
+  update(root, now, context) {
+    return ${componentName}$queryUpdatePlans.now(root, now, context);
   },
 }];
 
@@ -249,25 +249,45 @@ function emitQueryUpdatePlanExport(
   const deriveExports = derives
     .map(
       (derive) =>
-        `export const ${derive.exportName} = derive([${JSON.stringify(derive.input)}], (${derive.param}) => ${derive.expression});`,
+        `export const ${derive.exportName} = derive(${JSON.stringify(deriveInputs(derive))}, (${deriveParams(derive).join(', ')}) => ${derive.expression});`,
     )
     .join('\n');
+  const helper = derives.some((derive) => deriveInputs(derive).length > 1)
+    ? `${deriveExports ? '\n\n' : ''}function kovoDeriveValues(inputs, currentInput, currentValue, context) {
+  return inputs.map((input) => input === currentInput ? currentValue : context?.queryStore?.get(input));
+}`
+    : '';
   const entries = queryUpdatePlans
     .map(
       (plan) =>
-        `  ${JSON.stringify(plan.query)}(root, value) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [${plan.stamps?.map(emitStampPlan).join(', ') ?? ''}], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] });\n  },`,
+        `  ${JSON.stringify(plan.query)}(root, value, context = {}) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [${plan.stamps?.map(emitStampPlan).join(', ') ?? ''}], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] }, { queryStore: context.queryStore });\n  },`,
     )
     .join('\n');
 
-  return `${deriveExports ? `${deriveExports}\n\n` : ''}export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
+  return `${deriveExports}${helper}${deriveExports || helper ? '\n\n' : ''}export const ${componentName}$queryUpdatePlans = {\n${entries}\n};`;
 }
 
 function emitDerivePlan(derive: QueryDeriveFact): string {
-  return `{ name: ${JSON.stringify(derive.name)}, selector: ${JSON.stringify(derive.selector)}, select(value) { return ${derive.exportName}.run(value); } }`;
+  return `{ name: ${JSON.stringify(derive.name)}, selector: ${JSON.stringify(derive.selector)}, select(value, root, context) { return ${emitDeriveRun(derive)}; } }`;
 }
 
 function emitStampPlan(stamp: QueryStampFact): string {
-  return `{ attr: ${JSON.stringify(stamp.attr)}, selector: ${JSON.stringify(stamp.selector)}, select(value) { return ${stamp.derive.exportName}.run(value); } }`;
+  return `{ attr: ${JSON.stringify(stamp.attr)}, selector: ${JSON.stringify(stamp.selector)}, select(value, root, context) { return ${emitDeriveRun(stamp.derive)}; } }`;
+}
+
+function deriveInputs(derive: QueryDeriveFact): readonly string[] {
+  return derive.inputs ?? [derive.input];
+}
+
+function deriveParams(derive: QueryDeriveFact): readonly string[] {
+  return derive.params ?? [derive.param];
+}
+
+function emitDeriveRun(derive: QueryDeriveFact): string {
+  const inputs = deriveInputs(derive);
+  return inputs.length === 1
+    ? `${derive.exportName}.run(value)`
+    : `${derive.exportName}.run(...kovoDeriveValues(${JSON.stringify(inputs)}, ${JSON.stringify(derive.input)}, value, context))`;
 }
 
 function emitTemplateStampPlan(stamp: QueryTemplateStampFact): string {

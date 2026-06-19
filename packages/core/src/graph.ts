@@ -91,6 +91,7 @@ export interface RequestProviderExplain {
 /** @internal */
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
+  clocks?: readonly ClockExplain[];
   derives?: readonly DeriveExplain[];
   disambiguatedDomName?: string;
   domName?: string;
@@ -103,6 +104,12 @@ export interface ComponentExplain {
   queries?: readonly string[];
   styleRules?: readonly StyleRuleExplain[];
   triggers?: readonly TriggerExplain[];
+}
+
+/** @internal */
+export interface ClockExplain {
+  cadence: string;
+  name: string;
 }
 
 /** @internal */

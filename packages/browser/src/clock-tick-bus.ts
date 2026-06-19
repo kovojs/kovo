@@ -1,9 +1,10 @@
 import type { QueryBindingRoot } from './query-bindings.js';
+import type { QueryStore } from './query-store.js';
 
 /** Runtime API used by generated clock update plans. */
 export interface ClockUpdatePlan {
   clocks: Readonly<Record<string, ClockUpdateSpec | undefined>>;
-  update(root: QueryBindingRoot, now: Record<string, Date>): unknown;
+  update(root: QueryBindingRoot, now: Record<string, Date>, context: ClockUpdateContext): unknown;
 }
 
 /** Runtime API used by generated clock update plans. */
@@ -12,9 +13,15 @@ export interface ClockUpdateSpec {
   renderOnce?: true;
 }
 
+/** Runtime API used by generated clock update plans. */
+export interface ClockUpdateContext {
+  queryStore?: QueryStore;
+}
+
 interface ClockSubscription {
   nextDue: Map<string, number>;
   plan: ClockUpdatePlan;
+  queryStore?: QueryStore;
   root: QueryBindingRoot;
 }
 
@@ -26,6 +33,7 @@ let framePending = false;
 export function installClockUpdatePlans(
   root: QueryBindingRoot,
   plans: readonly ClockUpdatePlan[],
+  context: ClockUpdateContext = {},
 ): () => void {
   const activePlans = plans.filter((plan) => tickingClockEntries(plan).length > 0);
   if (activePlans.length === 0) return () => {};
@@ -34,6 +42,7 @@ export function installClockUpdatePlans(
   const installed = activePlans.map((plan) => ({
     nextDue: initialDueTimes(plan, now),
     plan,
+    ...(context.queryStore ? { queryStore: context.queryStore } : {}),
     root,
   }));
 
@@ -98,7 +107,12 @@ function runClockFrame(): void {
   for (const subscription of subscriptions) {
     const now = dueClockValues(subscription, current);
     if (Object.keys(now).length === 0) continue;
-    subscription.plan.update(subscription.root, now);
+    subscription.queryStore?.set('now', now);
+    subscription.plan.update(
+      subscription.root,
+      now,
+      subscription.queryStore ? { queryStore: subscription.queryStore } : {},
+    );
   }
 }
 

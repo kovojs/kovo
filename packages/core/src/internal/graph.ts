@@ -1,6 +1,7 @@
 export type {
   AttributeMergeExplain,
   CaptureChannel,
+  ClockExplain,
   ComponentExplain,
   DerivedMutationDomainSet,
   DeriveExplain,

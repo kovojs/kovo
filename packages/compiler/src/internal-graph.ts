@@ -130,8 +130,10 @@ export function componentGraphFact(
   mutationForms: readonly CoreGraph.MutationFormExplain[] = [],
 ): ComponentGraphFact {
   const queries = componentQueryNames(model);
+  const clocks = componentClockExplainFacts(model);
 
   return {
+    ...(clocks.length === 0 ? {} : { clocks }),
     domName,
     ...(exportName === undefined ? {} : { exportName }),
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
@@ -148,6 +150,27 @@ export function componentGraphFact(
           })),
         }),
   };
+}
+
+function componentClockExplainFacts(model: ComponentModuleModel): CoreGraph.ClockExplain[] {
+  return componentOptionObjectEntries(model, 'clocks').flatMap((entry) =>
+    entry.value ? [{ cadence: clockCadenceSummary(entry.value), name: entry.key }] : [],
+  );
+}
+
+function clockCadenceSummary(source: string): string {
+  if (/\brenderOnce\s*:\s*true\b/.test(source)) return 'renderOnce';
+
+  const parts = ['every', 'at', 'until'].flatMap((key) => {
+    const value = objectPropertySource(source, key);
+    return value ? [`${key}=${value}`] : [];
+  });
+  return parts.length > 0 ? parts.join(',') : 'manual';
+}
+
+function objectPropertySource(source: string, key: string): string | null {
+  const match = new RegExp(`\\b${key}\\s*:\\s*([^,}]+)`).exec(source);
+  return match?.[1]?.trim().replace(/\s+/g, ' ') ?? null;
 }
 
 /**
