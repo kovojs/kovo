@@ -167,17 +167,19 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
     - Evidence 2026-06-19:
       `pnpm --filter @kovojs/drizzle exec vitest --run src/index.query-shapes.test.ts src/index.writes-receivers.test.ts`
       covers cascade FK fan-out and normal `pgView` read domains.
-  - [ ] **X3 declared seam:** trigger fan-outs and matview refresh declarations.
+  - [x] **X3 declared seam:** trigger fan-outs and matview refresh declarations.
     - [x] Trigger `fans` seam:
           `pnpm --filter @kovojs/drizzle exec vitest --run src/index.writes-receivers.test.ts src/index.serialization.test.ts`
           covers fan-out touches and KV413 for an undeclared trigger.
-    - [ ] Matview declaration and async-refresh bridge.
-      - Partial evidence 2026-06-19:
+    - [x] Matview declaration and async-refresh bridge.
+      - Evidence 2026-06-19:
         `pnpm --filter @kovojs/drizzle exec vitest --run src/index.query-shapes.test.ts src/index.write-targets-predicates.test.ts`
         covers declared matview read domains and internal `await-fragment`
         refresh facts.
-      - Remaining gap: no automatic bridge yet feeds that refresh fact into
-        `kovo compile drizzle-optimistic` entries.
+      - Evidence 2026-06-19:
+        `pnpm exec vitest --run packages/cli/src/index.kovo-compile.test.ts`
+        covers `drizzle-static` emitting refresh facts and `drizzle-optimistic`
+        defaulting matching query-domain entries to `await-fragment`.
   - [x] **KV412** build error when a query's resolved `.from()`/join target is a
         view/matview with no derived or declared domain.
     - Evidence 2026-06-19: `packages/drizzle/src/static.ts` detects

@@ -1817,7 +1817,13 @@ async function runCompileMutationInputsCommand(
 type DrizzleOptimisticEntryStatus = 'await-fragment' | 'derived' | 'hand-written';
 
 interface DrizzleStaticCommandInput {
-  extract?: readonly ('algebraicShapes' | 'queryFacts' | 'symbolicEffects' | 'touchGraph')[];
+  extract?: readonly (
+    | 'algebraicShapes'
+    | 'materializedViewRefreshFacts'
+    | 'queryFacts'
+    | 'symbolicEffects'
+    | 'touchGraph'
+  )[];
   files?: readonly unknown[];
   invalidation?: {
     constName?: string;
@@ -1839,6 +1845,7 @@ async function runCompileDrizzleStaticCommand(
     deriveInvalidationRegistry,
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
+    extractMaterializedViewRefreshFactsFromProject,
     extractQueryFactsFromProject,
     extractSymbolicEffectsFromProject,
     extractTouchGraphFromProject,
@@ -1854,9 +1861,20 @@ async function runCompileDrizzleStaticCommand(
 
   if (files !== undefined) {
     const extract = new Set(
-      input.extract ?? ['algebraicShapes', 'queryFacts', 'symbolicEffects', 'touchGraph'],
+      input.extract ?? [
+        'algebraicShapes',
+        'materializedViewRefreshFacts',
+        'queryFacts',
+        'symbolicEffects',
+        'touchGraph',
+      ],
     );
     if (extract.has('touchGraph')) output.touchGraph = extractTouchGraphFromProject({ files });
+    if (extract.has('materializedViewRefreshFacts')) {
+      output.materializedViewRefreshFacts = extractMaterializedViewRefreshFactsFromProject({
+        files,
+      });
+    }
     if (extract.has('queryFacts')) {
       const queryFacts = extractQueryFactsFromProject({ files });
       output.queryFacts = queryFacts;
@@ -1924,12 +1942,23 @@ interface DrizzleOptimisticCommandInput {
   constName: string;
   effects: readonly unknown[];
   entries: readonly {
+    domains?: readonly string[];
     query: string;
     shape: unknown;
     status?: DrizzleOptimisticEntryStatus;
   }[];
   formImport: { name: string; path: string };
+  materializedViewRefreshFacts?: readonly {
+    domain?: unknown;
+    mutation?: unknown;
+    optimisticStatus?: unknown;
+  }[];
+  mutation?: string;
   overrides?: readonly string[];
+  queryDomains?: readonly {
+    domains?: readonly string[];
+    query?: string;
+  }[];
   queue?: string;
 }
 
@@ -1941,6 +1970,7 @@ async function runCompileDrizzleOptimisticCommand(
   const input = readJsonFile(options.inputPath) as DrizzleOptimisticCommandInput;
   const derivedEntries: Parameters<typeof serializeDerivedOptimistic>[0]['entries'][number][] = [];
   const awaitFragmentQueries: string[] = [];
+  const matviewAwaitFragmentQueries = materializedViewAwaitFragmentQueries(input);
   const facts: {
     derivation?: { reason?: unknown; status: 'PUNTED' | 'derived' };
     query: string;
@@ -1948,7 +1978,8 @@ async function runCompileDrizzleOptimisticCommand(
   }[] = [];
 
   for (const entry of input.entries) {
-    const status = entry.status ?? 'derived';
+    const status =
+      entry.status ?? (matviewAwaitFragmentQueries.has(entry.query) ? 'await-fragment' : 'derived');
     if (status === 'await-fragment') {
       awaitFragmentQueries.push(entry.query);
       facts.push({
@@ -1987,7 +2018,9 @@ async function runCompileDrizzleOptimisticCommand(
     input.overrides ??
     input.entries
       .filter((entry) => {
-        const status = entry.status ?? 'derived';
+        const status =
+          entry.status ??
+          (matviewAwaitFragmentQueries.has(entry.query) ? 'await-fragment' : 'derived');
         return status !== 'derived' && status !== 'await-fragment';
       })
       .map((entry) => entry.query);
@@ -2011,6 +2044,42 @@ async function runCompileDrizzleOptimisticCommand(
     });
   }
   return compileArtifactsResult(options.check, artifacts);
+}
+
+function materializedViewAwaitFragmentQueries(input: DrizzleOptimisticCommandInput): Set<string> {
+  const mutation = input.mutation;
+  if (!mutation) return new Set();
+
+  const domainsByQuery = new Map<string, Set<string>>();
+  for (const entry of input.entries) {
+    const domains = entry.domains ?? [];
+    if (domains.length > 0) domainsByQuery.set(entry.query, new Set(domains));
+  }
+  for (const fact of input.queryDomains ?? []) {
+    if (typeof fact.query !== 'string') continue;
+    const domains = fact.domains ?? [];
+    if (domains.length === 0) continue;
+    const queryDomains = domainsByQuery.get(fact.query) ?? new Set<string>();
+    for (const domain of domains) queryDomains.add(domain);
+    domainsByQuery.set(fact.query, queryDomains);
+  }
+
+  const refreshDomains = new Set(
+    (input.materializedViewRefreshFacts ?? []).flatMap((fact) =>
+      fact.mutation === mutation &&
+      fact.optimisticStatus === 'await-fragment' &&
+      typeof fact.domain === 'string'
+        ? [fact.domain]
+        : [],
+    ),
+  );
+  if (refreshDomains.size === 0) return new Set();
+
+  return new Set(
+    [...domainsByQuery]
+      .filter(([, domains]) => [...refreshDomains].some((domain) => domains.has(domain)))
+      .map(([query]) => query),
+  );
 }
 
 async function runCompilePackageCssCommand(

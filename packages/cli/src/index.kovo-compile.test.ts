@@ -487,6 +487,70 @@ export const addToCart = mutation('cart/add', {
     }
   });
 
+  it('writes materialized-view refresh facts through the Drizzle static CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-matview-'));
+    const inputPath = join(root, 'static.json');
+    const outPath = join(root, 'static-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            extract: ['materializedViewRefreshFacts'],
+            files: [
+              {
+                fileName: 'catalog.domain.ts',
+                source: [
+                  'import { pgMaterializedView, text, type PgDatabase } from "drizzle-orm/pg-core";',
+                  'import { kovo } from "@kovojs/drizzle";',
+                  '',
+                  'export const productSearch = pgMaterializedView(',
+                  '  "product_search",',
+                  '  { productId: text("product_id") },',
+                  '  kovo({ view: { of: "product", refresh: "async" } }),',
+                  ');',
+                  '',
+                  'export async function refreshCatalog(db: PgDatabase<any, any, any>) {',
+                  '  await db.refreshMaterializedView(productSearch);',
+                  '}',
+                ].join('\n'),
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(JSON.parse(readFileSync(outPath, 'utf8')).materializedViewRefreshFacts).toEqual([
+        {
+          domain: 'product',
+          mutation: 'refreshCatalog',
+          optimisticStatus: 'await-fragment',
+          refresh: 'async',
+          site: 'catalog.domain.ts:11',
+          view: 'product_search',
+        },
+      ]);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE drizzle-static path=${JSON.stringify(outPath)}`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes Drizzle optimistic codegen through the CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-optimistic-'));
     const inputPath = join(root, 'optimistic.json');
@@ -549,6 +613,66 @@ export const addToCart = mutation('cart/add', {
       expect(readFileSync(outPath, 'utf8')).toContain('export const cartAddDerivedOptimistic = {');
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
         { derivation: { status: 'derived' }, query: 'cart', status: 'derived' },
+      ]);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE drizzle-optimistic path=${JSON.stringify(outPath)}`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('bridges materialized-view refresh facts into Drizzle optimistic await-fragment entries', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-optimistic-matview-'));
+    const inputPath = join(root, 'optimistic.json');
+    const outPath = join(root, 'refresh-catalog.ts');
+    const factsPath = join(root, 'optimistic-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            constName: 'refreshCatalogOptimistic',
+            effects: [],
+            entries: [{ query: 'productStats', shape: { query: 'productStats' } }],
+            formImport: { name: 'refreshCatalogForm', path: '../../app.js' },
+            materializedViewRefreshFacts: [
+              {
+                domain: 'product',
+                mutation: 'refreshCatalog',
+                optimisticStatus: 'await-fragment',
+              },
+            ],
+            mutation: 'refreshCatalog',
+            queryDomains: [{ domains: ['product'], query: 'productStats' }],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'compile',
+          'drizzle-optimistic',
+          inputPath,
+          '--out',
+          outPath,
+          '--facts-out',
+          factsPath,
+        ]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      expect(readFileSync(outPath, 'utf8')).toContain(`productStats: 'await-fragment'`);
+      expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
+        { query: 'productStats', status: 'await-fragment' },
       ]);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE drizzle-optimistic path=${JSON.stringify(outPath)}`,
