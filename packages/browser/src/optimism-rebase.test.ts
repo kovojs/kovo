@@ -11,9 +11,9 @@ describe('optimistic query rebase', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     store.set('cart', { count: 0 });
-    const transform = (current: unknown, input: { quantity: number }) => {
-      const cart = current as { count: number };
-      return { count: cart.count + input.quantity };
+    const transform = (draft: unknown, input: { quantity: number }) => {
+      const cart = draft as { count: number };
+      cart.count += input.quantity;
     };
 
     rebaser.add('m1', { quantity: 1 }, { transforms: { cart: transform } });
@@ -37,9 +37,9 @@ describe('optimistic query rebase', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     store.set('reviews', { items: [{ id: 'r1' }] }, 'product:p1');
-    const transform = (current: unknown, input: { reviewId: string }) => {
-      const reviews = current as { items: { id: string }[] };
-      return { items: [...reviews.items, { id: input.reviewId }] };
+    const transform = (draft: unknown, input: { reviewId: string }) => {
+      const reviews = draft as { items: { id: string }[] };
+      reviews.items.push({ id: input.reviewId });
     };
 
     rebaser.add(
@@ -84,9 +84,9 @@ describe('optimistic query rebase', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     store.set('cart', { count: 0 });
-    const transform = (current: unknown, input: { quantity: number }) => {
-      const cart = current as { count: number };
-      return { count: cart.count + input.quantity };
+    const transform = (draft: unknown, input: { quantity: number }) => {
+      const cart = draft as { count: number };
+      cart.count += input.quantity;
     };
 
     rebaser.add('m1', { quantity: 1 }, { transforms: { cart: transform } });

@@ -68,9 +68,9 @@ describe('optimistic query apply', () => {
       { quantity: 2 },
       {
         transforms: {
-          cart(current, input) {
-            const cart = current as { count: number };
-            return { count: cart.count + input.quantity };
+          cart(draft, input) {
+            const cart = draft as { count: number };
+            cart.count += input.quantity;
           },
         },
       },
@@ -96,9 +96,9 @@ describe('optimistic query apply', () => {
       {
         keys: { reviews: 'product:p1' },
         transforms: {
-          reviews(current, input) {
-            const reviews = current as { items: { id: string }[] };
-            return { items: [...reviews.items, { id: input.reviewId }] };
+          reviews(draft, input) {
+            const reviews = draft as { items: { id: string }[] };
+            reviews.items.push({ id: input.reviewId });
           },
         },
       },
@@ -131,9 +131,9 @@ describe('optimistic query apply', () => {
           reviews: (change) => `product:${change.keys?.[0]}`,
         },
         transforms: {
-          reviews(current, input) {
-            const reviews = current as { items: { id: string }[] };
-            return { items: [...reviews.items, { id: input.reviewId }] };
+          reviews(draft, input) {
+            const reviews = draft as { items: { id: string }[] };
+            reviews.items.push({ id: input.reviewId });
           },
         },
       },
@@ -166,9 +166,9 @@ describe('optimistic query apply', () => {
       { quantity: 2 },
       {
         transforms: {
-          cart(current, input) {
-            const cart = current as { count: number };
-            return { count: cart.count + input.quantity };
+          cart(draft, input) {
+            const cart = draft as { count: number };
+            cart.count += input.quantity;
           },
         },
       },

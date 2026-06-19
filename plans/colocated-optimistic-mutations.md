@@ -93,13 +93,26 @@ export const addContact = mutation('addContact', {
       `mutation<Key, InputSchema, …>` already carries `Key` and `InputSchema`. Evidence
       target: type tests in `packages/server` proving `draft` (mutable, query-value typed)
       and `input` are correctly typed and a missing non-derivable key is a compile error.
-- [ ] **Draft-style apply in the optimism runtime.** Adjust the optimistic apply/rebase
+  - [x] Base inline field typing and queue metadata are accepted on `mutation()`.
+    - Evidence 2026-06-19:
+      `npx vitest --run packages/server/src/mutation.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts packages/browser/src/optimism-typing.test.ts`
+      covers `queue`, invalid optimistic query-key rejection, and contextual
+      `draft`/`input` typing from `InvalidationSets`, `QueryRegistry`, and the
+      sibling input schema; `corepack pnpm exec tsc --noEmit --pretty false`
+      passed.
+  - [ ] KV310-backed missing non-derivable key type/error coverage remains open.
+- [x] **Draft-style apply in the optimism runtime.** Adjust the optimistic apply/rebase
       loop (`packages/browser/src/optimism.ts`) to hand each transform the
       already-cloned query value as a mutable draft and read the mutated draft back, rather
       than using a returned value. The snapshot/`structuredClone`, per-query pending log,
       rebase ordering, and reconcile are otherwise unchanged (§10.4). Evidence target:
       optimism runtime tests pass with draft-style transforms; a wrong-prediction case
       still silently corrects on server truth.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts`
+    covers draft mutation during optimistic apply, restore, keyed query instances,
+    rebase over server truth, and pagehide discard. Legacy returned values remain
+    accepted during migration.
 - [ ] **Lower the inline field to the optimistic transform IR.** The compiler extracts
       inline transforms into the same transform module the generated/hand-written path
       emits (now draft-style), so `kovo explain --optimistic` and the §5.2 fixpoint hold

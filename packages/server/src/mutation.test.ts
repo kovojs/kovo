@@ -14,7 +14,52 @@ import { query } from './query.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
+declare module '@kovojs/core' {
+  interface InvalidationSets {
+    'contacts/add': 'contactList';
+  }
+
+  interface QueryRegistry {
+    contactList: {
+      items: Array<{ id: string; name: string }>;
+    };
+  }
+}
+
 describe('server mutation lifecycle', () => {
+  it('types inline optimistic transforms from mutation key and input schema', () => {
+    const addContact = mutation('contacts/add', {
+      input: s.object({ id: s.string(), name: s.string() }),
+      queue: 'crm',
+      optimistic: {
+        contactList(draft, input) {
+          draft.items.push({ id: input.id, name: input.name });
+          // @ts-expect-error input is inferred from the sibling input schema.
+          draft.items.push({ id: input.missing, name: input.name });
+        },
+      },
+      handler() {
+        return 'ok';
+      },
+    });
+    const assertUnknownOptimisticKeyRejected = () => {
+      mutation('contacts/add', {
+        input: s.object({ id: s.string(), name: s.string() }),
+        optimistic: {
+          // @ts-expect-error unknownQuery is not invalidated by contacts/add.
+          unknownQuery(_draft, _input) {},
+        },
+        handler() {
+          return 'ok';
+        },
+      });
+    };
+
+    expect(addContact.queue).toBe('crm');
+    expect(Object.keys(addContact.optimistic ?? {})).toEqual(['contactList']);
+    expect(assertUnknownOptimisticKeyRejected).toBeTypeOf('function');
+  });
+
   it('derives direct-render form attributes from typed mutation values', () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

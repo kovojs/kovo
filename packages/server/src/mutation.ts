@@ -1,4 +1,4 @@
-import type { JsonValue } from '@kovojs/core';
+import type { InvalidationSets, JsonValue, QueryRegistry } from '@kovojs/core';
 import { buildQueryDelta, queryDeltaIsSmaller } from '@kovojs/core/internal/query-delta';
 import { serializeCookie, validateRawSetCookie, type CookieOptions } from './cookies.js';
 import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
@@ -155,6 +155,34 @@ export interface MutationRegistry {
   touches?: readonly Domain[];
 }
 
+type MutationInvalidatedQueryNames<Key extends string> = Key extends keyof InvalidationSets
+  ? Extract<InvalidationSets[Key], Extract<keyof QueryRegistry, string>>
+  : never;
+
+type MutableDraft<Value> = Value extends (...args: any[]) => unknown
+  ? Value
+  : Value extends readonly (infer Item)[]
+    ? MutableDraft<Item>[]
+    : Value extends object
+      ? { -readonly [Key in keyof Value]: MutableDraft<Value[Key]> }
+      : Value;
+
+export type MutationOptimisticTransform<Input = unknown, Value = unknown> = (
+  draft: MutableDraft<Value>,
+  input: Input,
+) => void;
+
+export type MutationOptimisticEntry<Input = unknown, Value = unknown> =
+  | MutationOptimisticTransform<Input, Value>
+  | 'await-fragment';
+
+export type MutationOptimisticMap<Key extends string, InputSchema extends Schema<unknown>> = {
+  [QueryName in MutationInvalidatedQueryNames<Key>]?: MutationOptimisticEntry<
+    InferSchema<InputSchema>,
+    QueryRegistry[QueryName]
+  >;
+};
+
 export interface MutationDefinition<
   Key extends string = string,
   InputSchema extends Schema<unknown> = Schema<unknown>,
@@ -175,6 +203,8 @@ export interface MutationDefinition<
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;
   key: Key;
+  optimistic?: MutationOptimisticMap<Key, InputSchema>;
+  queue?: string;
   /** Mutation-local success redirect policy for dynamic POST-redirect-GET targets. */
   redirectTo?: string | ((result: MutationSuccess<Value, InferSchema<InputSchema>>) => string);
   registry?: MutationRegistry;

@@ -2,11 +2,11 @@ import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/c
 import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 
-/** A pure optimistic predictor: map a query's current value plus the mutation input to the predicted value. */
+/** A pure optimistic predictor: mutate the cloned query draft for the mutation input. */
 export type OptimisticTransform<Input = unknown, Value = unknown> = (
-  current: Value,
+  draft: Value,
   input: Input,
-) => Value;
+) => Value | void;
 
 /** One query's optimistic policy: a transform, or `'await-fragment'` to wait for server truth. */
 export type OptimisticEntry<Input = unknown, Value = unknown> =
@@ -139,7 +139,11 @@ export class OptimisticRebaser {
       pending.push({ change, id, transform: transform as OptimisticTransform });
       this.#pendingByQuery.set(storeKey, pending);
 
-      this.#store.set(queryName, transform(this.#store.get(queryName, key), change.input), key);
+      this.#store.set(
+        queryName,
+        applyOptimisticTransform(this.#store.get(queryName, key), change.input, transform),
+        key,
+      );
     }
   }
 
@@ -164,7 +168,11 @@ export class OptimisticRebaser {
     let next = structuredClone(this.#serverTruthByQuery.get(storeKey));
 
     for (const pendingTransform of nextPending) {
-      next = pendingTransform.transform(next, pendingTransform.change.input);
+      next = applyOptimisticTransform(
+        next,
+        pendingTransform.change.input,
+        pendingTransform.transform,
+      );
     }
 
     this.#store.set(queryName, next, key);
@@ -189,7 +197,7 @@ export class OptimisticRebaser {
     }
 
     for (const pending of pendingTransforms) {
-      next = pending.transform(next, pending.change.input);
+      next = applyOptimisticTransform(next, pending.change.input, pending.transform);
     }
 
     this.#store.set(queryName, next, key);
@@ -265,7 +273,11 @@ export function applyOptimisticTransforms<Input>(
     if (!transform || transform === 'await-fragment') continue;
     const key = keys[queryName];
 
-    store.set(queryName, transform(store.get(queryName, key), change.input), key);
+    store.set(
+      queryName,
+      applyOptimisticTransform(store.get(queryName, key), change.input, transform),
+      key,
+    );
   }
 
   return {
@@ -280,6 +292,16 @@ export function applyOptimisticTransforms<Input>(
     },
     snapshot,
   };
+}
+
+function applyOptimisticTransform<Input>(
+  current: unknown,
+  input: Input,
+  transform: OptimisticTransform<Input>,
+): unknown {
+  const draft = structuredClone(current);
+  const returned = transform(draft, input);
+  return returned === undefined ? draft : returned;
 }
 
 export function optimisticChangeFromInput<Input>(
