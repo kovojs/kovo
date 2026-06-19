@@ -89,8 +89,22 @@ export const selectStyles = style.create(
   {
     content: {
       backgroundColor: uiTheme.color.background,
+      borderColor: uiTheme.color.border,
+      borderRadius: uiTheme.radius.md,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
       color: uiTheme.color.foreground,
       fontSize: 14,
+      marginTop: 4,
+      maxHeight: 224,
+      minWidth: 180,
+      outlineStyle: 'none',
+      overflow: 'auto',
+      padding: 4,
+      position: 'absolute',
+      width: '100%',
+      zIndex: 50,
       '[data-state=closed]': {
         display: 'none',
       },
@@ -100,18 +114,44 @@ export const selectStyles = style.create(
     },
     hiddenInput: {},
     item: {
+      alignItems: 'center',
+      borderRadius: uiTheme.radius.sm,
       color: uiTheme.color.foreground,
+      cursor: 'default',
+      display: 'flex',
+      fontSize: 14,
+      outlineStyle: 'none',
+      paddingBlock: 6,
+      paddingInline: 8,
+      paddingLeft: 28,
+      position: 'relative',
       '[data-disabled]': {
         color: uiTheme.color.foregroundMuted,
+        opacity: 0.5,
+        pointerEvents: 'none',
+      },
+      '[data-highlighted]': {
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foreground,
       },
       '[data-state=checked]': {
         fontWeight: 500,
+      },
+      '[data-state=checked]::before': {
+        content: '"\\2713"',
+        left: 8,
+        position: 'absolute',
+      },
+      ':hover': {
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foreground,
       },
     },
     root: {
       color: uiTheme.color.foreground,
       display: 'grid',
       fontSize: 14,
+      position: 'relative',
       rowGap: 8,
       '[data-disabled]': {
         opacity: 0.5,

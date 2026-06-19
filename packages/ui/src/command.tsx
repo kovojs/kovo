@@ -198,6 +198,8 @@ export const commandStyles = style.create(
       alignItems: 'center',
       borderRadius: uiTheme.radius.sm,
       color: uiTheme.color.foregroundMuted,
+      columnGap: 8,
+      cursor: 'default',
       display: 'flex',
       fontSize: 14,
       outlineStyle: 'none',
@@ -210,11 +212,15 @@ export const commandStyles = style.create(
         pointerEvents: 'none',
       },
       '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
+        backgroundColor: uiTheme.color.backgroundSubtle,
         color: uiTheme.color.foreground,
       },
       '[data-state=checked]': {
         fontWeight: 500,
+      },
+      ':hover': {
+        backgroundColor: uiTheme.color.backgroundSubtle,
+        color: uiTheme.color.foreground,
       },
     },
     listbox: {
@@ -223,12 +229,17 @@ export const commandStyles = style.create(
       borderRadius: uiTheme.radius.md,
       borderStyle: 'solid',
       borderWidth: 1,
+      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
       marginTop: 12,
       maxHeight: 256,
+      minWidth: 180,
       overflow: 'auto',
       padding: 4,
       '[data-state=closed]': {
         display: 'none',
+      },
+      '[data-state=open]': {
+        display: 'block',
       },
     },
     root: {
