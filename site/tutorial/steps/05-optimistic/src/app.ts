@@ -4,7 +4,8 @@ import { mutation, route, s, type MutationFail } from '@kovojs/server';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
-import { CartBadge, productListComponent } from './generated-fixtures.js';
+import { CartBadge } from './components/cart-badge.js';
+import * as productListComponent from './components/product-list.js';
 import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
 
 // Tutorial step 05 (chapter 5): the mutation declares what it touches, the

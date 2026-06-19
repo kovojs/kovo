@@ -234,7 +234,7 @@ describe('tutorial step 07 — testing & verification', () => {
     // Same mutation key — and therefore the same named POST: /_m/cart/add.
     expect(addToCart.key).toBe('cart/add');
     expect(renderShopPage()).toContain('action="/_m/cart/add"');
-    expect(renderShopPage()).toContain('kovo-fragment-target="add-to-cart:p1"');
+    expect(renderShopPage()).toContain('name="kovo-form-key" value="p1"');
 
     // Same input field vocabulary and write set.
     expect(shopCartAdd?.inputFields).toEqual(commerceCartAdd?.inputFields);

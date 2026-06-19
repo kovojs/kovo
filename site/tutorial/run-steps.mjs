@@ -30,12 +30,11 @@ registerHooks({
  * Tutorial step gate (plan W5): every checked-in step state must
  *  1. typecheck against the workspace @kovojs/* packages (tsgo per step),
  *  2. compile its TSX components with zero error diagnostics through the
- *     SPEC.md §5.2.3 fixpoint gate, with committed lowered IR proven fresh
- *     (the emit-components.mjs doctrine from examples/commerce),
+ *     SPEC.md §5.2.3 fixpoint gate,
  *  3. pass its vitest tests.
  * Chapter snippet references are validated here too, so a renamed marker
- * fails this gate even before the site build runs. `--write` regenerates
- * the committed lowered IR.
+ * fails this gate even before the site build runs. `--write` refreshes the
+ * legacy generated artifacts for inspection while they still exist.
  */
 
 const tutorialDir = path.dirname(fileURLToPath(import.meta.url));
@@ -53,6 +52,10 @@ const steps = readdirSync(stepsDir, { withFileTypes: true })
 
 function run(command, args) {
   execFileSync(command, args, { cwd: repoRoot, stdio: 'inherit' });
+}
+
+function runSite(command, args) {
+  execFileSync(command, args, { cwd: siteRoot, stdio: 'inherit' });
 }
 
 function compileStepComponents(step) {
@@ -89,23 +92,16 @@ function compileStepComponents(step) {
       assert.ok(compiledComponent.lowered, `${fileName} produced no lowered render source`);
       assert.ok(compiledComponent.clientSource, `${fileName} produced no client module`);
 
-      const loweredFile = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`node site/tutorial/run-steps.mjs --write\`.\n${compiledComponent.lowered}`;
-      const targets = [
-        [path.join(generatedDir, `${name}.tsx`), loweredFile],
-        [path.join(generatedDir, `${name}.client.js`), compiledComponent.clientSource],
-      ];
+      if (write) {
+        const loweredFile = `// @kovojs-ir — lowered from ${fileName} by @kovojs/compiler (SPEC.md section 5.2). Do not edit; regenerate with \`node site/tutorial/run-steps.mjs --write\`.\n${compiledComponent.lowered}`;
+        const targets = [
+          [path.join(generatedDir, `${name}.tsx`), loweredFile],
+          [path.join(generatedDir, `${name}.client.js`), compiledComponent.clientSource],
+        ];
 
-      for (const [target, content] of targets) {
-        if (write) {
+        for (const [target, content] of targets) {
           mkdirSync(generatedDir, { recursive: true });
           writeFileSync(target, content);
-        } else {
-          assert.ok(existsSync(target), `${target} missing; run run-steps.mjs --write`);
-          assert.equal(
-            readFileSync(target, 'utf8'),
-            content,
-            `${path.relative(repoRoot, target)} is stale; run \`node site/tutorial/run-steps.mjs --write\``,
-          );
         }
       }
       compiled += 1;
@@ -173,8 +169,7 @@ function compileTutorialComponent({ fileName, registryFactsPath, root, sourcePat
 
 let components = 0;
 for (const step of steps) {
-  // 1. Compile TSX components; verify (or, with --write, refresh) the
-  //    committed lowered IR the step imports at runtime.
+  // 1. Compile TSX components; with --write, also refresh legacy generated artifacts.
   components += compileStepComponents(step);
   // 2. Typecheck the step against the real workspace packages.
   run(path.join(repoRoot, 'node_modules/.bin/tsgo'), [
@@ -201,8 +196,9 @@ if (existsSync(contentDir)) {
   }
 }
 
-// 4. Run every step's vitest suite.
-run(path.join(repoRoot, 'node_modules/.bin/vitest'), ['--run', 'site/tutorial/steps']);
+// 4. Run every step's vitest suite with the site Vite config, which installs
+// the Kovo compiler plugin for tutorial component imports.
+runSite(path.join(repoRoot, 'node_modules/.bin/vitest'), ['--run', 'tutorial/steps']);
 
 process.stdout.write(
   `tutorial-steps/v1\nsteps=${steps.length} components=${components} snippets=${snippets.size} references=${references}\ntutorial-steps/v1 steps=${steps.length} OK\n`,

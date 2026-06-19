@@ -2,6 +2,8 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { defineConfig } from 'vite-plus';
 
+import { exampleKovoCompilerPlugin } from '../examples/vite-kovo-compiler.js';
+
 // The docs site is a real Kovo app authored in src/app.tsx. Vite builds the document CSS (with a
 // manifest) into dist-css/; the app-shell export bridge replays the declared route documents into
 // dist/. The dev plugin serves the same app live through its node handler so `serve` matches export
@@ -19,7 +21,10 @@ export default defineConfig({
       },
     },
   },
-  plugins: [siteSharedAppShellDevPlugin()],
+  plugins: [
+    exampleKovoCompilerPlugin({ include: ['tutorial/steps'] }),
+    siteSharedAppShellDevPlugin(),
+  ],
   run: {
     tasks: {
       export: {

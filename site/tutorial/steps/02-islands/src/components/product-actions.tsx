@@ -7,8 +7,8 @@ import * as style from '@kovojs/style';
 // closure equivalent to a platform invoker and emits popovertarget instead of
 // JavaScript (SPEC.md section 5.2 rule 4). The save button is L1 — an island
 // whose handler loads on first interaction (SPEC.md section 4.3). Authored
-// sugar carries no stamps (SPEC.md section 4.1); the committed lowered IR in
-// ../generated/ is what the app imports.
+// sugar carries no stamps (SPEC.md section 4.1); the test/build pipeline
+// lowers it on demand.
 
 // A type alias (not an interface) so TypeScript can prove assignability to
 // the JsonValue state constraint (SPEC.md section 4.1: serializable by

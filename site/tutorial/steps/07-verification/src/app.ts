@@ -4,7 +4,9 @@ import { guards, mutation, route, s, session, type MutationFail } from '@kovojs/
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
-import { CartBadge, OrderHistory, productListComponent } from './generated-fixtures.js';
+import { CartBadge } from './components/cart-badge.js';
+import { OrderHistory } from './components/order-history.js';
+import * as productListComponent from './components/product-list.js';
 import {
   cartQuery,
   loadCart,

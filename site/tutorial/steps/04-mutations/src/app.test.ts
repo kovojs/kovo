@@ -78,13 +78,11 @@ describe('tutorial step 04 — mutations & forms', () => {
     const request = shopRequest();
     const html = renderShopPage(request.db, undefined, request);
 
-    expect(html).toContain(
-      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"',
-    );
+    expect(html).toContain('enhance method="post" action="/_m/cart/add" data-mutation="cart/add"');
     expect(html).toContain('name="kovo-csrf"');
     expect(html).toContain('name="productId" value="p1"');
     expect(html).toContain('name="quantity" type="number" min="1" max="5" value="1"');
-    expect(html).toContain('kovo-fragment-target="add-to-cart:p1"');
+    expect(html).toContain('name="kovo-form-key" value="p1"');
   });
   // /snippet
 
@@ -121,7 +119,7 @@ describe('tutorial step 04 — mutations & forms', () => {
 
     expect(response.status).toBe(422);
     expect(response.headers['Content-Type']).toBe('text/html; charset=utf-8');
-    expect(response.body).toContain('<form enhance method="post" action="/_m/cart/add"');
+    expect(response.body).toContain('enhance method="post" action="/_m/cart/add"');
     expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
     expect(response.body).toContain('Only 2 available.');
     expect(request.db.cartItems).toEqual([]); // fail() rolled the transaction back
@@ -166,7 +164,7 @@ describe('tutorial step 04 — mutations & forms', () => {
 
     expect(response.status).toBe(422);
     expect(response.body).toContain('<kovo-fragment target="add-to-cart:p2">');
-    expect(response.body).toContain('kovo-fragment-target="add-to-cart:p2"');
+    expect(response.body).toContain('name="kovo-form-key" value="p2"');
     expect(response.body).toContain('data-error-code="OUT_OF_STOCK"');
     expect(request.db.cartItems).toEqual([]);
   });

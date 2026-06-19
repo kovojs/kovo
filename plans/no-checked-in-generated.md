@@ -205,6 +205,14 @@ authored components/routes, and convert or relocate artifact tests.
 - [ ] **Tutorial steps 02–07** — each `app.ts` imports authored `components/*.tsx`; drop every
       `generated-fixtures.ts` and `src/generated/*`. Update `site/tutorial/run-steps.mjs` to emit
       to a temp/gitignored dir for any check it performs.
+  - Progress evidence: steps 02–07 now import authored `src/components/*.tsx` modules directly,
+    all `generated-fixtures.ts` wrappers were removed, Site Vitest installs the compiler plugin for
+    `tutorial/steps`, `site/tutorial/run-steps.mjs` verifies component compilation in temp by
+    default instead of diffing committed outputs, and `pnpm --filter @kovojs/site exec node tutorial/run-steps.mjs`
+    plus `pnpm --filter @kovojs/site test` pass. Gap: tracked
+    `site/tutorial/steps/*/src/generated/*` artifacts and the step 07
+    `examples/commerce/src/generated/graph.json` comparison remain for the deletion/graph-temp
+    phases.
 
 ## Phase 3 — Stop committing + gitignore
 

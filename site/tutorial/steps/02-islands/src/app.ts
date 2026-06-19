@@ -1,6 +1,6 @@
 import { notFound, route, s } from '@kovojs/server';
 
-import { ProductActions } from './generated-fixtures.js';
+import { ProductActions } from './components/product-actions.js';
 
 // Tutorial step 02 (chapter 2): the product page gains an interactive island.
 // The app renders committed lowered artifacts through an explicit fixture, so
