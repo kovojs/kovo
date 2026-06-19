@@ -3,29 +3,131 @@
 //
 // SPEC.md §4.6 (KV232): @kovojs/ui primitives own their reactive state attributes.
 // This data table snapshots each headless-ui primitive attribute function diffed
-// between its controlling boolean field = false vs true. The compiler reads this
+// between inactive vs active control states. The compiler reads this
 // table (no headless-ui import in production src/**) to emit reactive
 // data-bind:<attr> derives for primitive-owned attributes automatically.
 
-/** One reactive attribute the compiler should bind from the controlling boolean. */
+/** Supported reactive-control expression families. */
+export type PrimitiveReactiveControlKind = 'boolean' | 'equality' | 'set-membership' | 'tri-state';
+
+/** One reactive attribute the compiler should bind from the controlling state. */
 export interface PrimitiveReactiveAttr {
   /** True when the attribute's presence (not its value) is the reactive signal. */
   readonly booleanPresence: boolean;
-  /** Serialized attribute value when the controlling field is false. */
+  /** Serialized attribute value when the controlling condition is inactive. */
   readonly whenFalse: boolean | string;
-  /** Serialized attribute value when the controlling field is true. */
+  /** Serialized attribute value when the controlling condition is active. */
   readonly whenTrue: boolean | string;
+  /** Serialized attribute value when a tri-state checkbox is indeterminate. */
+  readonly whenIndeterminate?: boolean | string;
 }
 
-/** All reactive attributes a primitive derives from one boolean control field. */
+/** All reactive attributes a primitive derives from one control field. */
 export interface PrimitiveReactiveAttrEntry {
   readonly attrs: Readonly<Record<string, PrimitiveReactiveAttr>>;
-  /** Name of the boolean state field these attributes are derived from. */
+  /** Name of the state field these attributes are derived from. */
   readonly controlField: string;
+  /** How the compiler should derive the active/inactive condition. */
+  readonly controlKind: PrimitiveReactiveControlKind;
+  /** Per-element static prop compared with the control field when applicable. */
+  readonly discriminatorField?: string;
+  /** Optional per-element mode prop, used by accordion single vs multiple. */
+  readonly modeField?: string;
 }
 
 /** Per primitive-fn key (e.g. `switch.root`) → its reactive attribute manifest. */
 export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAttrEntry>> = {
+  'accordion.item': {
+    attrs: {
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'closed',
+        whenTrue: 'open',
+      },
+      open: {
+        booleanPresence: true,
+        whenFalse: false,
+        whenTrue: true,
+      },
+    },
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+  },
+  'accordion.header': {
+    attrs: {
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'closed',
+        whenTrue: 'open',
+      },
+    },
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+  },
+  'accordion.trigger': {
+    attrs: {
+      'aria-expanded': {
+        booleanPresence: false,
+        whenFalse: 'false',
+        whenTrue: 'true',
+      },
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'closed',
+        whenTrue: 'open',
+      },
+    },
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+  },
+  'accordion.content': {
+    attrs: {
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'closed',
+        whenTrue: 'open',
+      },
+      hidden: {
+        booleanPresence: true,
+        whenFalse: true,
+        whenTrue: false,
+      },
+    },
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+  },
+  'checkbox.root': {
+    attrs: {
+      'aria-checked': {
+        booleanPresence: false,
+        whenFalse: 'false',
+        whenTrue: 'true',
+        whenIndeterminate: 'mixed',
+      },
+      checked: {
+        booleanPresence: true,
+        whenFalse: false,
+        whenTrue: true,
+        whenIndeterminate: false,
+      },
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'unchecked',
+        whenTrue: 'checked',
+        whenIndeterminate: 'indeterminate',
+      },
+    },
+    controlField: 'checked',
+    controlKind: 'tri-state',
+  },
   'switch.root': {
     attrs: {
       'aria-checked': {
@@ -45,6 +147,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'checked',
+    controlKind: 'boolean',
   },
   'toggle.root': {
     attrs: {
@@ -60,6 +163,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'pressed',
+    controlKind: 'boolean',
   },
   'disclosure.root': {
     attrs: {
@@ -70,6 +174,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'disclosure.trigger': {
     attrs: {
@@ -85,6 +190,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'disclosure.content': {
     attrs: {
@@ -100,6 +206,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'collapsible.root': {
     attrs: {
@@ -115,6 +222,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'collapsible.trigger': {
     attrs: {
@@ -130,6 +238,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'collapsible.content': {
     attrs: {
@@ -140,6 +249,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'dialog.root': {
     attrs: {
@@ -150,6 +260,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'dialog.content': {
     attrs: {
@@ -165,6 +276,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'dialog.close': {
     attrs: {
@@ -175,6 +287,53 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
+  },
+  'radio-group.item': {
+    attrs: {
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'unchecked',
+        whenTrue: 'checked',
+      },
+    },
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+  },
+  'radio-group.radio': {
+    attrs: {
+      'aria-checked': {
+        booleanPresence: false,
+        whenFalse: 'false',
+        whenTrue: 'true',
+      },
+      checked: {
+        booleanPresence: true,
+        whenFalse: false,
+        whenTrue: true,
+      },
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'unchecked',
+        whenTrue: 'checked',
+      },
+    },
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+  },
+  'radio-group.label': {
+    attrs: {
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'unchecked',
+        whenTrue: 'checked',
+      },
+    },
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
   },
   'tooltip.root': {
     attrs: {
@@ -185,6 +344,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'tooltip.trigger': {
     attrs: {
@@ -195,6 +355,7 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
   'tooltip.content': {
     attrs: {
@@ -210,5 +371,6 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
       },
     },
     controlField: 'open',
+    controlKind: 'boolean',
   },
 } as const;

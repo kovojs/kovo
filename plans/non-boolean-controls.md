@@ -1,72 +1,56 @@
 # Reactive Primitive Attributes — Non-Boolean Controls
 
-Extend the reactive-primitive-attribute compiler kernel to cover components whose
-state is controlled by a **non-boolean** prop, so their primitive-owned
-`aria-*`/`data-state`/`hidden` attributes (and decorative visuals) update on the
-client without the demos hand-writing state attributes.
+Extend the reactive-primitive-attribute compiler kernel to cover primitives whose
+state is controlled by non-boolean props, so primitive-owned `aria-*`,
+`data-state`, `hidden`, and checked-state attributes update without demos
+hand-writing them.
 
 Authority: `SPEC.md` §4.6 (primitives own `aria-*`/`data-state`; hand-writing
-them is **KV232**) and §5.2/**KV235** (TSX is the only app-authoring surface).
-Follow-up to the shipped kernel on this branch (`agent/gallery-fix`).
+them is KV232) and §5.2/KV235 (TSX is the app-authoring surface).
 
-## What already works (do not rebuild)
+## Current State
 
-The kernel handles **boolean-controlled** primitives end-to-end:
+- [x] **Accordion value/itemValue derives are emitted.**
+      Evidence: `corepack pnpm --filter @kovojs/compiler exec vitest run`
+      passes `packages/compiler/src/primitive-reactive-attributes.test.ts`
+      coverage for single equality and multiple membership derives; regenerated
+      `examples/gallery/src/generated/interactive/accordion-demo.tsx` contains
+      `data-bind:aria-expanded` and `data-bind:hidden`.
+- [x] **Checkbox tri-state derives are emitted.**
+      Evidence: compiler vitest covers `checked: true | false | "indeterminate"`
+      mapping to `aria-checked` and `data-state`; regenerated
+      `examples/gallery/src/generated/interactive/checkbox-demo.tsx` contains
+      `data-bind:aria-checked` and `data-bind:data-state`.
+- [x] **Radio-group value/itemValue derives are emitted.**
+      Evidence: compiler vitest covers `value === itemValue` derives for
+      `RadioGroupItem` and `RadioGroupRadio`; regenerated
+      `examples/gallery/src/generated/interactive/radio-group-demo.tsx` contains
+      `data-bind:aria-checked`, `data-bind:checked`, and `data-bind:data-state`.
+- [x] **Decorative checkbox/radio visuals receive reactive `data-state`.**
+      Evidence: `packages/ui/src/checkbox.tsx` and
+      `packages/ui/src/radio-group.tsx` use `bindingProps(props, ['data-state'])`
+      on decorative spans and `passThroughProps(props, { island: false })` on
+      inner native inputs.
+- [x] **Authored accordion/checkbox/radio demos do not hand-write primitive state
+      attrs.**
+      Evidence: `! rg "aria-expanded=|aria-checked=|data-state=" \
+examples/gallery/src/interactive/accordion-demo.tsx \
+examples/gallery/src/interactive/checkbox-demo.tsx \
+examples/gallery/src/interactive/radio-group-demo.tsx`.
+- [x] **Static verification is green for this slice.**
+      Evidence: `corepack pnpm exec vp check --fix`; `node scripts/import-boundary.mjs`;
+      `corepack pnpm --filter @kovojs/example-gallery run emit:interactive-gallery`;
+      `corepack pnpm --dir site run build`; `corepack pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts src/interactive-gallery.aria-contracts.test.ts src/interactive-gallery.client-behavior.test.ts`;
+      `corepack pnpm exec vp run conformance`; `corepack pnpm run check:build`;
+      `corepack pnpm run check:kovo`; `corepack pnpm run test`.
 
-- Phase `lowerPrimitiveReactiveAttributes` — `packages/compiler/src/lower/structural-jsx.ts`
-- Component→primitive registry — `packages/compiler/src/lower/primitive-reactive-registry.ts`
-- Dev-time snapshot generator — `packages/compiler/scripts/gen-primitive-reactive-attrs.mjs`
-  → committed data `packages/compiler/src/generated/primitive-reactive-attrs.ts`
-- Decorative-child reactivity helpers — `packages/ui/src/pass-through.ts`
-  (`island: false` strips `kovo-*` ownership so the root is the sole island host
-  per §4.6/KV231; `bindingProps()` forwards only `data-bind:*` to decorative spans).
-  Applied to `switch` (track/thumb reactive).
+## Open Verification
 
-Covered: switch, toggle, disclosure, collapsible, dialog, tooltip. Probe 49/51.
-
-## The gap
-
-The snapshot technique diffs a primitive attr fn over a boolean field
-(`{true,false}`). Three components use a non-boolean control and are skipped, so
-their state-derived attributes serialize once at SSR and freeze:
-
-- [ ] **accordion** — control is `value` (string/array); trigger `aria-expanded` /
-      content `hidden` derive from `value === itemValue` (single) or
-      `value.includes(itemValue)` (multiple). The only remaining broken
-      _interaction_ (click does not toggle `aria-expanded`). - Evidence: probe `accordion: click toggles aria-expanded :: false->false`;
-      `accordionTriggerAttributes` (`packages/headless-ui/src/primitives/accordion.ts:117`)
-      computes `aria-expanded` from `value`+`itemValue`+`type`.
-- [ ] **checkbox** — control is tri-state `checked` (`true|false|'indeterminate'`);
-      `data-state` is 3-way. Interaction works (native), but the custom box glyph
-      (`packages/ui/src/checkbox.tsx`, `[data-state=checked]::after`) is static.
-- [ ] **radio-group** — control is group `value`; each item's `data-state`/checked
-      derives from `value === itemValue`. Item interaction works (native), but the
-      custom dot (`packages/ui/src/radio-group.tsx`) is static.
-
-## Plan
-
-- [ ] **Extend the kernel to non-boolean control props.** Generalize
-      `lowerPrimitiveReactiveAttributes` + the registry to support a control whose
-      derive compares state against a per-element static discriminator
-      (`itemValue`) and/or enumerates a small value set (tri-state). Synthesize
-      `(state) => state.<ctrl> === '<itemValue>' ? <on> : <off>` (equality form) and
-      a 3-way form for tri-state, reading the static discriminator from the element
-      attributes. Add registry entries: AccordionTrigger/AccordionContent (`value`,
-      discriminator `itemValue`, `type`), Checkbox (`checked` tri-state),
-      RadioGroupItem (`value`, discriminator `itemValue`). - Evidence target: regenerated `examples/gallery/src/generated/interactive/accordion-demo.tsx`
-      gains `data-bind:aria-expanded`/`data-bind:hidden`; live probe
-      `accordion: click toggles aria-expanded :: false->true`.
-- [ ] **Forward reactive `data-state` to checkbox/radio decorative children** once
-      the kernel emits it — apply the `island:false` + `bindingProps()` pattern used
-      in `switch.tsx` to `checkbox.tsx` (box) and `radio-group.tsx` (dot).
-- [ ] **Verify against the no-hand-write rule.** Confirm the accordion/checkbox/
-      radio demos add no `aria-*`/`data-state` by hand and that interactions +
-      decorative visuals are reactive.
-
-## Verification (run from the worktree root)
-
-- `corepack pnpm --filter @kovojs/compiler exec vitest run` (kernel unit + gallery-merge-fixtures + fixpoint)
-- `node scripts/import-boundary.mjs` (no production headless-ui import)
-- `pnpm --filter @kovojs/example-gallery run emit:interactive-gallery` then rebuild
-  `@kovojs/site` and re-run the Playwright interaction probe (target 51/51)
-- `vp run conformance`
+- [ ] **Browser interaction probe target 51/51 remains unproven.**
+      `corepack pnpm --dir examples/gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.generated-interactions-a.browser.test.ts src/interactive-gallery.generated-interactions-b.browser.test.ts`
+      fails before component-specific assertions in the checked-in harness
+      (`Missing interactive gallery browser fixture element`). A local harness
+      experiment that removed unconditional async rendering let tests mount, but
+      then exposed broader existing browser-test expectation failures such as
+      versioned `/c/__v/<hash>/...` client-module URLs. Do not record the live
+      Playwright probe as passed until that harness/probe is fixed separately.

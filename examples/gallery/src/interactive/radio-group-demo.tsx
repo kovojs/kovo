@@ -31,11 +31,7 @@ export const GalleryRadioGroupDemo = component({
       items: radioItems,
       name: 'gallery-contact-channel',
       required: true,
-      value: state.value,
     };
-    const emailState = { ...groupState, itemValue: 'email' };
-    const phoneState = { ...groupState, itemValue: 'phone' };
-    const smsState = { ...groupState, itemValue: 'sms' };
 
     return (
       <RadioGroup
@@ -50,21 +46,17 @@ export const GalleryRadioGroupDemo = component({
           if (!result) return;
           state.value = result.value ?? state.value;
         }}
+        value={state.value}
       >
         <form id="gallery-radio-form" data-gallery-form="radio-group" />
         <h3 id="gallery-radio-group-label" style="font-size:0.875rem;font-weight:500">
           Contact channel
         </h3>
-        <RadioGroupItem
-          {...emailState}
-          data-state={state.value === 'email' ? 'checked' : 'unchecked'}
-        >
+        <RadioGroupItem {...groupState} itemValue="email" value={state.value}>
           <RadioGroupRadio
-            {...emailState}
-            aria-checked={String(state.value === 'email')}
-            checked={state.value === 'email'}
+            {...groupState}
             controlId="gallery-radio-email"
-            data-state={state.value === 'email' ? 'checked' : 'unchecked'}
+            itemValue="email"
             onClick={() => {
               const result = _radioGroupItemClick(Object(event), {
                 itemValue: 'email',
@@ -74,42 +66,39 @@ export const GalleryRadioGroupDemo = component({
               state.value = result.value ?? state.value;
             }}
             tabIndex={state.value === 'email' ? 0 : -1}
+            value={state.value}
           />
           <RadioGroupLabel
-            {...emailState}
+            {...groupState}
             controlId="gallery-radio-email"
-            data-state={state.value === 'email' ? 'checked' : 'unchecked'}
+            itemValue="email"
+            value={state.value}
           >
             Email
           </RadioGroupLabel>
         </RadioGroupItem>
-        <RadioGroupItem
-          {...phoneState}
-          data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
-        >
+        <RadioGroupItem {...groupState} itemValue="phone" value={state.value}>
           <RadioGroupRadio
-            {...phoneState}
-            aria-checked={String(state.value === 'phone')}
-            checked={state.value === 'phone'}
+            {...groupState}
             controlId="gallery-radio-phone"
-            data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
+            itemValue="phone"
             tabIndex={-1}
+            value={state.value}
           />
           <RadioGroupLabel
-            {...phoneState}
+            {...groupState}
             controlId="gallery-radio-phone"
-            data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
+            itemValue="phone"
+            value={state.value}
           >
             Phone
           </RadioGroupLabel>
         </RadioGroupItem>
-        <RadioGroupItem {...smsState} data-state={state.value === 'sms' ? 'checked' : 'unchecked'}>
+        <RadioGroupItem {...groupState} itemValue="sms" value={state.value}>
           <RadioGroupRadio
-            {...smsState}
-            aria-checked={String(state.value === 'sms')}
-            checked={state.value === 'sms'}
+            {...groupState}
             controlId="gallery-radio-sms"
-            data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
+            itemValue="sms"
             onClick={() => {
               const result = _radioGroupItemClick(Object(event), {
                 itemValue: 'sms',
@@ -119,11 +108,13 @@ export const GalleryRadioGroupDemo = component({
               state.value = result.value ?? state.value;
             }}
             tabIndex={state.value === 'sms' ? 0 : -1}
+            value={state.value}
           />
           <RadioGroupLabel
-            {...smsState}
+            {...groupState}
             controlId="gallery-radio-sms"
-            data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
+            itemValue="sms"
+            value={state.value}
           >
             SMS
           </RadioGroupLabel>

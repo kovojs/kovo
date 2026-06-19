@@ -54,7 +54,11 @@ import {
   type PlatformSubstitution,
 } from './platform.js';
 import { staticHrefAttributeValue } from './navigation.js';
-import { primitiveReactiveAttrs } from '../generated/primitive-reactive-attrs.js';
+import {
+  primitiveReactiveAttrs,
+  type PrimitiveReactiveAttr,
+  type PrimitiveReactiveAttrEntry,
+} from '../generated/primitive-reactive-attrs.js';
 import {
   isKovoUiModuleSpecifier,
   primitiveReactiveComponents,
@@ -622,7 +626,7 @@ function lowerAttributeDerive(
 /**
  * SPEC.md §4.6 (KV232): @kovojs/ui primitives own their reactive state attributes
  * (aria-checked / aria-pressed / aria-expanded / data-state / hidden / checked).
- * When an author forwards a reactive boolean control prop to a @kovojs/ui
+ * When an author forwards a reactive control prop to a @kovojs/ui
  * component (e.g. `<Switch checked={state.checked}>`), the component derives all
  * those attributes internally, but a static SSR render freezes them on the
  * client. This pass emits a `data-bind:<attr>` + `derive(...)` for each
@@ -661,6 +665,10 @@ function lowerPrimitiveReactiveAttributes(
     );
     const statePath = reactiveStatePath(control);
     if (statePath === null) continue;
+    if (manifest.controlField !== entry.controlProp) continue;
+
+    const condition = primitiveReactiveCondition(element, manifest, statePath);
+    if (condition === null) continue;
 
     for (const [attrName, attr] of Object.entries(manifest.attrs)) {
       // Idempotency: skip attributes already bound (by this pass on a previous
@@ -675,7 +683,7 @@ function lowerPrimitiveReactiveAttributes(
         componentName,
         attrName,
         attr,
-        statePath,
+        condition,
         options,
         deriveExports,
         stateDerives,
@@ -690,8 +698,8 @@ function lowerPrimitiveReactiveAttribute(
   element: JsxIrElement,
   componentName: string,
   attrName: string,
-  attr: { booleanPresence: boolean; whenFalse: boolean | string; whenTrue: boolean | string },
-  statePath: string,
+  attr: PrimitiveReactiveAttr,
+  condition: PrimitiveReactiveCondition,
   options: StructuralJsxLoweringOptions,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
@@ -701,7 +709,7 @@ function lowerPrimitiveReactiveAttribute(
   const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attrName)}_derive`;
   const exportName = nextExportName(baseName, nameCounts);
   const stampName = `state.${exportName}`;
-  const expression = primitiveReactiveExpression(statePath, attr);
+  const expression = primitiveReactiveExpression(condition, attr);
 
   deriveExports.push(
     `export const ${exportName} = derive(["state"], (state: any) => ${expression});`,
@@ -737,18 +745,75 @@ function lowerPrimitiveReactiveAttribute(
 }
 
 function primitiveReactiveExpression(
-  statePath: string,
-  attr: { booleanPresence: boolean; whenFalse: boolean | string; whenTrue: boolean | string },
+  condition: PrimitiveReactiveCondition,
+  attr: PrimitiveReactiveAttr,
+): string {
+  if (condition.kind === 'tri-state' && attr.whenIndeterminate !== undefined) {
+    return `((${condition.statePath}) === "indeterminate" ? ${primitiveReactiveValueExpression(attr, attr.whenIndeterminate)} : (${condition.truthy} ? ${primitiveReactiveValueExpression(attr, attr.whenTrue)} : ${primitiveReactiveValueExpression(attr, attr.whenFalse)}))`;
+  }
+
+  return `(${condition.truthy} ? ${primitiveReactiveValueExpression(attr, attr.whenTrue)} : ${primitiveReactiveValueExpression(attr, attr.whenFalse)})`;
+}
+
+function primitiveReactiveValueExpression(
+  attr: PrimitiveReactiveAttr,
+  value: boolean | string,
 ): string {
   if (attr.booleanPresence) {
     // Boolean-presence attributes (checked/hidden/open ...) signal via presence:
     // emit `""` when the attribute should be present, `null` when it should be
     // absent. Matches how the inline-attribute-derive pass emits `checked`.
-    const truthy = attr.whenTrue === true ? '""' : 'null';
-    const falsy = attr.whenFalse === true ? '""' : 'null';
-    return `((${statePath}) ? ${truthy} : ${falsy})`;
+    return value === true ? '""' : 'null';
   }
-  return `((${statePath}) ? ${JSON.stringify(String(attr.whenTrue))} : ${JSON.stringify(String(attr.whenFalse))})`;
+
+  return JSON.stringify(String(value));
+}
+
+interface PrimitiveReactiveCondition {
+  readonly kind: 'boolean' | 'tri-state';
+  readonly statePath?: string;
+  readonly truthy: string;
+}
+
+function primitiveReactiveCondition(
+  element: JsxIrElement,
+  manifest: PrimitiveReactiveAttrEntry,
+  statePath: string,
+): PrimitiveReactiveCondition | null {
+  if (manifest.controlKind === 'boolean') {
+    return { kind: 'boolean', truthy: `(${statePath})` };
+  }
+
+  if (manifest.controlKind === 'tri-state') {
+    return { kind: 'tri-state', statePath, truthy: `((${statePath}) === true)` };
+  }
+
+  const discriminatorField = manifest.discriminatorField;
+  if (discriminatorField === undefined) return null;
+  const discriminator = staticAttributeString(element, discriminatorField);
+  if (discriminator === null) return null;
+  const discriminatorLiteral = JSON.stringify(discriminator);
+
+  if (manifest.controlKind === 'equality') {
+    return { kind: 'boolean', truthy: `((${statePath}) === ${discriminatorLiteral})` };
+  }
+
+  const multiple = accordionMultipleExpression(element, manifest.modeField);
+  if (multiple === null) return null;
+  const value = `(${statePath})`;
+  if (multiple === 'true') {
+    return {
+      kind: 'boolean',
+      truthy: `(Array.isArray(${value}) && ${value}.includes(${discriminatorLiteral}))`,
+    };
+  }
+  if (multiple === 'false') {
+    return { kind: 'boolean', truthy: `(${value} === ${discriminatorLiteral})` };
+  }
+  return {
+    kind: 'boolean',
+    truthy: `((${multiple}) ? (Array.isArray(${value}) && ${value}.includes(${discriminatorLiteral})) : ${value} === ${discriminatorLiteral})`,
+  };
 }
 
 /**
@@ -771,8 +836,32 @@ function primitiveReactiveComponentForTag(
   return primitiveReactiveComponents[namedImport.importedName] ?? null;
 }
 
+function staticAttributeString(element: JsxIrElement, name: string): string | null {
+  const attribute = element.element.attributes.find((candidate) => candidate.name === name);
+  if (!attribute) return null;
+  if (attribute.value !== undefined) return attribute.value;
+  return staticStringValue(attribute.expressionStaticValue);
+}
+
+function accordionMultipleExpression(
+  element: JsxIrElement,
+  modeField: string | undefined,
+): string | null {
+  if (modeField === undefined) return 'false';
+  const mode = element.element.attributes.find((attribute) => attribute.name === modeField);
+  if (!mode) return 'false';
+
+  const staticMode = mode.value ?? staticStringValue(mode.expressionStaticValue);
+  if (staticMode !== null) return staticMode === 'multiple' ? 'true' : 'false';
+
+  const modeStatePath = reactiveStatePath(mode);
+  if (modeStatePath !== null) return `(${modeStatePath} === "multiple")`;
+
+  return null;
+}
+
 /**
- * The state path an author forwarded as a reactive boolean control prop, or null
+ * The state path an author forwarded as a reactive control prop, or null
  * when the prop is absent, not an expression, or references anything other than
  * `state`. Mirrors the state-only detection used by inline attribute derives.
  */

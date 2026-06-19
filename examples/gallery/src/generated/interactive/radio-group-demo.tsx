@@ -2,13 +2,61 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
+export const GalleryRadioGroupDemo$RadioGroup_value_derive = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupItem_value_derive = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive = derive(
+  ['state'],
+  (state: any) => (state.value === 'email' ? 0 : -1),
+);
+export const GalleryRadioGroupDemo$RadioGroupRadio_value_derive = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupLabel_value_derive = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupItem_value_derive_2 = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupRadio_value_derive_2 = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupLabel_value_derive_2 = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupItem_value_derive_3 = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive_2 = derive(
+  ['state'],
+  (state: any) => (state.value === 'sms' ? 0 : -1),
+);
+export const GalleryRadioGroupDemo$RadioGroupRadio_value_derive_3 = derive(
+  ['state'],
+  (state: any) => state.value,
+);
+export const GalleryRadioGroupDemo$RadioGroupLabel_value_derive_3 = derive(
+  ['state'],
+  (state: any) => state.value,
+);
 export const GalleryRadioGroupDemo$RadioGroupItem_data_state_derive = derive(
   ['state'],
   (state: any) => (state.value === 'email' ? 'checked' : 'unchecked'),
 );
 export const GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive = derive(
   ['state'],
-  (state: any) => String(state.value === 'email'),
+  (state: any) => (state.value === 'email' ? 'true' : 'false'),
 );
 export const GalleryRadioGroupDemo$RadioGroupRadio_checked_derive = derive(
   ['state'],
@@ -17,10 +65,6 @@ export const GalleryRadioGroupDemo$RadioGroupRadio_checked_derive = derive(
 export const GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive = derive(
   ['state'],
   (state: any) => (state.value === 'email' ? 'checked' : 'unchecked'),
-);
-export const GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive = derive(
-  ['state'],
-  (state: any) => (state.value === 'email' ? 0 : -1),
 );
 export const GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive = derive(
   ['state'],
@@ -32,7 +76,7 @@ export const GalleryRadioGroupDemo$RadioGroupItem_data_state_derive_2 = derive(
 );
 export const GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive_2 = derive(
   ['state'],
-  (state: any) => String(state.value === 'phone'),
+  (state: any) => (state.value === 'phone' ? 'true' : 'false'),
 );
 export const GalleryRadioGroupDemo$RadioGroupRadio_checked_derive_2 = derive(
   ['state'],
@@ -52,7 +96,7 @@ export const GalleryRadioGroupDemo$RadioGroupItem_data_state_derive_3 = derive(
 );
 export const GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive_3 = derive(
   ['state'],
-  (state: any) => String(state.value === 'sms'),
+  (state: any) => (state.value === 'sms' ? 'true' : 'false'),
 );
 export const GalleryRadioGroupDemo$RadioGroupRadio_checked_derive_3 = derive(
   ['state'],
@@ -61,10 +105,6 @@ export const GalleryRadioGroupDemo$RadioGroupRadio_checked_derive_3 = derive(
 export const GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive_3 = derive(
   ['state'],
   (state: any) => (state.value === 'sms' ? 'checked' : 'unchecked'),
-);
-export const GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive_2 = derive(
-  ['state'],
-  (state: any) => (state.value === 'sms' ? 0 : -1),
 );
 export const GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive_3 = derive(
   ['state'],
@@ -99,18 +139,16 @@ export const GalleryRadioGroupDemo = component({
       items: radioItems,
       name: 'gallery-contact-channel',
       required: true,
-      value: state.value,
     };
-    const emailState = { ...groupState, itemValue: 'email' };
-    const phoneState = { ...groupState, itemValue: 'phone' };
-    const smsState = { ...groupState, itemValue: 'sms' };
 
     return (
       <RadioGroup
-        {...groupState}
         data-gallery-interactive="radio-group"
         labelledBy="gallery-radio-group-label"
-        on:keydown="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroup_keydown"
+        on:keydown="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroup_keydown"
+        {...groupState}
+        value={state.value}
+        data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroup_value_derive"
         kovo-state='{"value":"email"}'
       >
         <form id="gallery-radio-form" data-gallery-form="radio-group" />
@@ -118,80 +156,92 @@ export const GalleryRadioGroupDemo = component({
           Contact channel
         </h3>
         <RadioGroupItem
-          {...emailState}
-          data-state={state.value === 'email' ? 'checked' : 'unchecked'}
-          data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_data_state_derive"
+          itemValue="email"
+          {...groupState}
+          value={state.value}
+          data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_value_derive"
+          data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_data_state_derive"
         >
           <RadioGroupRadio
             controlId="gallery-radio-email"
-            on:click="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_click"
-            {...emailState}
-            aria-checked={String(state.value === 'email')}
-            data-bind:aria-checked="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive"
-            checked={state.value === 'email'}
-            data-bind:checked="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_checked_derive"
-            data-state={state.value === 'email' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive"
+            itemValue="email"
+            on:click="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_click"
+            {...groupState}
             tabIndex={state.value === 'email' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive"
+            data-bind:tabIndex="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive"
+            value={state.value}
+            data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_value_derive"
+            data-bind:aria-checked="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive"
+            data-bind:checked="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_checked_derive"
+            data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive"
           />
           <RadioGroupLabel
             controlId="gallery-radio-email"
-            {...emailState}
-            data-state={state.value === 'email' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive"
+            itemValue="email"
+            {...groupState}
+            value={state.value}
+            data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_value_derive"
+            data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive"
           >
             Email
           </RadioGroupLabel>
         </RadioGroupItem>
         <RadioGroupItem
-          {...phoneState}
-          data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
-          data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_data_state_derive_2"
+          itemValue="phone"
+          {...groupState}
+          value={state.value}
+          data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_value_derive_2"
+          data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_data_state_derive_2"
         >
           <RadioGroupRadio
             controlId="gallery-radio-phone"
+            itemValue="phone"
             tabIndex={-1}
-            {...phoneState}
-            aria-checked={String(state.value === 'phone')}
-            data-bind:aria-checked="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive_2"
-            checked={state.value === 'phone'}
-            data-bind:checked="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_checked_derive_2"
-            data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive_2"
+            {...groupState}
+            value={state.value}
+            data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_value_derive_2"
+            data-bind:aria-checked="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive_2"
+            data-bind:checked="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_checked_derive_2"
+            data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive_2"
           />
           <RadioGroupLabel
             controlId="gallery-radio-phone"
-            {...phoneState}
-            data-state={state.value === 'phone' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive_2"
+            itemValue="phone"
+            {...groupState}
+            value={state.value}
+            data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_value_derive_2"
+            data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive_2"
           >
             Phone
           </RadioGroupLabel>
         </RadioGroupItem>
         <RadioGroupItem
-          {...smsState}
-          data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
-          data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_data_state_derive_3"
+          itemValue="sms"
+          {...groupState}
+          value={state.value}
+          data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_value_derive_3"
+          data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupItem_data_state_derive_3"
         >
           <RadioGroupRadio
             controlId="gallery-radio-sms"
-            on:click="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_click_2"
-            {...smsState}
-            aria-checked={String(state.value === 'sms')}
-            data-bind:aria-checked="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive_3"
-            checked={state.value === 'sms'}
-            data-bind:checked="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_checked_derive_3"
-            data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive_3"
+            itemValue="sms"
+            on:click="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_click_2"
+            {...groupState}
             tabIndex={state.value === 'sms' ? 0 : -1}
-            data-bind:tabIndex="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive_2"
+            data-bind:tabIndex="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_tabIndex_derive_2"
+            value={state.value}
+            data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_value_derive_3"
+            data-bind:aria-checked="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_aria_checked_derive_3"
+            data-bind:checked="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_checked_derive_3"
+            data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupRadio_data_state_derive_3"
           />
           <RadioGroupLabel
             controlId="gallery-radio-sms"
-            {...smsState}
-            data-state={state.value === 'sms' ? 'checked' : 'unchecked'}
-            data-bind:data-state="/c/__v/6f0126d6/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive_3"
+            itemValue="sms"
+            {...groupState}
+            value={state.value}
+            data-bind:value="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_value_derive_3"
+            data-bind:data-state="/c/__v/dac440ec/examples/gallery/src/generated/interactive/radio-group-demo.client.js#GalleryRadioGroupDemo$RadioGroupLabel_data_state_derive_3"
           >
             SMS
           </RadioGroupLabel>

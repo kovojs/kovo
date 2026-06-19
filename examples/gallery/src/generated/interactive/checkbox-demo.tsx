@@ -5,6 +5,16 @@ import { derive } from '@kovojs/runtime/generated';
 export const GalleryCheckboxDemo$Checkbox_checked_derive = derive(['state'], (state: any) =>
   state.checked ? '' : null,
 );
+export const GalleryCheckboxDemo$Checkbox_aria_checked_derive = derive(['state'], (state: any) =>
+  state.checked === 'indeterminate' ? 'mixed' : state.checked === true ? 'true' : 'false',
+);
+export const GalleryCheckboxDemo$Checkbox_data_state_derive = derive(['state'], (state: any) =>
+  state.checked === 'indeterminate'
+    ? 'indeterminate'
+    : state.checked === true
+      ? 'checked'
+      : 'unchecked',
+);
 export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state: any) =>
   String(state.checked),
 );
@@ -25,17 +35,19 @@ export const GalleryCheckboxDemo = component({
     <Checkbox
       data-gallery-interactive="checkbox"
       name="gallery-email-summary"
-      on:click="/c/__v/e384cb9b/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_click"
+      on:click="/c/__v/ed68fd86/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_click"
       value="enabled"
       checked={state.checked}
-      data-bind:checked="/c/__v/e384cb9b/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_checked_derive"
+      data-bind:checked="/c/__v/ed68fd86/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_checked_derive"
+      data-bind:aria-checked="/c/__v/ed68fd86/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_aria_checked_derive"
+      data-bind:data-state="/c/__v/ed68fd86/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_data_state_derive"
       kovo-state='{"checked":"indeterminate"}'
     >
       <span style="user-select:none;line-height:1">Email summary</span>
       <output
         style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
         data-demo-state="checked"
-        data-bind="/c/__v/e384cb9b/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$output_text_derive"
+        data-bind="/c/__v/ed68fd86/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$output_text_derive"
       >
         {String(state.checked)}
       </output>

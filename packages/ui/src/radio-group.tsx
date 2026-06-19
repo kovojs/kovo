@@ -10,7 +10,7 @@ import {
 import * as style from '@kovojs/style';
 
 import type { CollectionOrientation, TextDirection } from './navigation-types.js';
-import { passThroughProps } from './pass-through.js';
+import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
@@ -264,10 +264,14 @@ export const RadioGroupRadio = component({
     );
 
     return (
-      <span {...controlStyleAttrs} data-state={attrs['data-state']}>
+      <span
+        {...controlStyleAttrs}
+        {...bindingProps(props, ['data-state'])}
+        data-state={attrs['data-state']}
+      >
         <input
           {...styleAttrs}
-          {...passThroughProps(props)}
+          {...passThroughProps(props, { island: false })}
           aria-checked={attrs['aria-checked']}
           checked={attrs.checked}
           data-disabled={attrs['data-disabled']}

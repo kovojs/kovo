@@ -80,6 +80,52 @@ export const GalleryAccordionDemo$AccordionContent_value_derive_2 = derive(
   ['state'],
   (state) => state.value || undefined,
 );
+export const GalleryAccordionDemo$AccordionItem_data_state_derive = derive(['state'], (state) =>
+  (state.value || undefined) === 'shipping' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$AccordionItem_open_derive = derive(['state'], (state) =>
+  (state.value || undefined) === 'shipping' ? '' : null,
+);
+export const GalleryAccordionDemo$AccordionHeader_data_state_derive = derive(['state'], (state) =>
+  (state.value || undefined) === 'shipping' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$AccordionTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state) => ((state.value || undefined) === 'shipping' ? 'true' : 'false'),
+);
+export const GalleryAccordionDemo$AccordionTrigger_data_state_derive = derive(['state'], (state) =>
+  (state.value || undefined) === 'shipping' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$AccordionContent_data_state_derive = derive(['state'], (state) =>
+  (state.value || undefined) === 'shipping' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$AccordionContent_hidden_derive = derive(['state'], (state) =>
+  (state.value || undefined) === 'shipping' ? null : '',
+);
+export const GalleryAccordionDemo$AccordionItem_data_state_derive_2 = derive(['state'], (state) =>
+  (state.value || undefined) === 'billing' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$AccordionItem_open_derive_2 = derive(['state'], (state) =>
+  (state.value || undefined) === 'billing' ? '' : null,
+);
+export const GalleryAccordionDemo$AccordionHeader_data_state_derive_2 = derive(['state'], (state) =>
+  (state.value || undefined) === 'billing' ? 'open' : 'closed',
+);
+export const GalleryAccordionDemo$AccordionTrigger_aria_expanded_derive_2 = derive(
+  ['state'],
+  (state) => ((state.value || undefined) === 'billing' ? 'true' : 'false'),
+);
+export const GalleryAccordionDemo$AccordionTrigger_data_state_derive_2 = derive(
+  ['state'],
+  (state) => ((state.value || undefined) === 'billing' ? 'open' : 'closed'),
+);
+export const GalleryAccordionDemo$AccordionContent_data_state_derive_2 = derive(
+  ['state'],
+  (state) => ((state.value || undefined) === 'billing' ? 'open' : 'closed'),
+);
+export const GalleryAccordionDemo$AccordionContent_hidden_derive_2 = derive(['state'], (state) =>
+  (state.value || undefined) === 'billing' ? null : '',
+);
 export const GalleryAccordionDemo$output_text_derive = derive(
   ['state'],
   (state) => state.value || 'none',

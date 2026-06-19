@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import { checkboxRootAttributes, type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
 import * as style from '@kovojs/style';
 
-import { passThroughProps } from './pass-through.js';
+import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
@@ -140,10 +140,14 @@ export const Checkbox = component({
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
       >
-        <span {...boxStyleAttrs} data-state={attrs['data-state']}>
+        <span
+          {...boxStyleAttrs}
+          {...bindingProps(props, ['data-state'])}
+          data-state={attrs['data-state']}
+        >
           <input
             {...inputStyleAttrs}
-            {...passThroughProps(props)}
+            {...passThroughProps(props, { island: false })}
             aria-checked={attrs['aria-checked']}
             aria-describedby={props.describedBy}
             aria-labelledby={props.labelledBy}

@@ -1319,9 +1319,15 @@ export async function assertGeneratedRegistryConsumerTypes(
     options.registryFileName ?? join(workspaceRoot, '.kovo-test-generated', 'registry.ts');
   const consumerFileName =
     options.consumerFileName ?? join(workspaceRoot, '.kovo-test-generated', 'consumer.ts');
+  const coreGeneratedFileName = join(
+    workspaceRoot,
+    '.kovo-test-generated',
+    'core-generated-import.ts',
+  );
 
   await assertTypeScriptProgramHasNoDiagnostics(
     {
+      [coreGeneratedFileName]: `import '@kovojs/core/generated';\n`,
       [registryFileName]: generatedArtifactSource(files, 'registry'),
       [consumerFileName]: consumerSource,
     },

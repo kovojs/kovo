@@ -1,18 +1,17 @@
-// SPEC.md §4.6 (KV232): @kovojs/ui components forward a reactive boolean control
-// prop (e.g. `checked`, `open`, `pressed`) to a headless primitive that derives
-// the matching state attributes (aria-checked / aria-pressed / aria-expanded /
-// data-state / hidden / checked ...). The compiler makes those attributes
-// reactive automatically so gallery demos never hand-write them.
+// SPEC.md §4.6 (KV232): @kovojs/ui components forward a reactive control prop
+// (e.g. `checked`, `open`, `pressed`, `value`) to a headless primitive that
+// derives the matching state attributes (aria-checked / aria-pressed /
+// aria-expanded / data-state / hidden / checked ...). The compiler makes those
+// attributes reactive automatically so gallery demos never hand-write them.
 //
 // This registry maps each @kovojs/ui component export name to the primitive
 // attribute key it delegates to (see src/generated/primitive-reactive-attrs.ts)
-// plus the boolean control prop the author passes. The prop name equals the
-// primitive's control field (confirmed by the gallery demos). Non-boolean
-// controls (e.g. Accordion's `value`) are out of scope and intentionally absent.
+// plus the control prop the author passes. The prop name equals the primitive's
+// control field (confirmed by the gallery demos).
 
 /** @internal How one @kovojs/ui component maps to a reactive primitive entry. */
 export interface PrimitiveReactiveComponent {
-  /** Boolean prop the author passes (e.g. `checked`, `open`, `pressed`). */
+  /** Control prop the author passes (e.g. `checked`, `open`, `pressed`, `value`). */
   readonly controlProp: string;
   /** Key into the generated reactive-attr manifest (e.g. `switch.root`). */
   readonly primitiveKey: string;
@@ -20,10 +19,14 @@ export interface PrimitiveReactiveComponent {
 
 /**
  * @internal @kovojs/ui component export name → reactive primitive mapping.
- * Only components whose control prop is a single boolean are listed; the
- * generated manifest's `controlField` must match `controlProp`.
+ * The generated manifest's `controlField` must match `controlProp`.
  */
 export const primitiveReactiveComponents: Readonly<Record<string, PrimitiveReactiveComponent>> = {
+  AccordionContent: { controlProp: 'value', primitiveKey: 'accordion.content' },
+  AccordionHeader: { controlProp: 'value', primitiveKey: 'accordion.header' },
+  AccordionItem: { controlProp: 'value', primitiveKey: 'accordion.item' },
+  AccordionTrigger: { controlProp: 'value', primitiveKey: 'accordion.trigger' },
+  Checkbox: { controlProp: 'checked', primitiveKey: 'checkbox.root' },
   Collapsible: { controlProp: 'open', primitiveKey: 'collapsible.root' },
   CollapsibleContent: { controlProp: 'open', primitiveKey: 'collapsible.content' },
   CollapsibleTrigger: { controlProp: 'open', primitiveKey: 'collapsible.trigger' },
@@ -33,6 +36,9 @@ export const primitiveReactiveComponents: Readonly<Record<string, PrimitiveReact
   Disclosure: { controlProp: 'open', primitiveKey: 'disclosure.root' },
   DisclosureContent: { controlProp: 'open', primitiveKey: 'disclosure.content' },
   DisclosureTrigger: { controlProp: 'open', primitiveKey: 'disclosure.trigger' },
+  RadioGroupItem: { controlProp: 'value', primitiveKey: 'radio-group.item' },
+  RadioGroupLabel: { controlProp: 'value', primitiveKey: 'radio-group.label' },
+  RadioGroupRadio: { controlProp: 'value', primitiveKey: 'radio-group.radio' },
   Switch: { controlProp: 'checked', primitiveKey: 'switch.root' },
   Toggle: { controlProp: 'pressed', primitiveKey: 'toggle.root' },
   Tooltip: { controlProp: 'open', primitiveKey: 'tooltip.root' },

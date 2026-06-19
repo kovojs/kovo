@@ -38,9 +38,12 @@ registerHooks({
   },
 });
 
+const accordion = await import('@kovojs/headless-ui/accordion');
+const checkbox = await import('@kovojs/headless-ui/checkbox');
 const collapsible = await import('@kovojs/headless-ui/collapsible');
 const dialog = await import('@kovojs/headless-ui/dialog');
 const disclosure = await import('@kovojs/headless-ui/disclosure');
+const radioGroup = await import('@kovojs/headless-ui/radio-group');
 const switchPrimitive = await import('@kovojs/headless-ui/switch');
 const toggle = await import('@kovojs/headless-ui/toggle');
 const tooltip = await import('@kovojs/headless-ui/tooltip');
@@ -60,78 +63,222 @@ const BOOLEAN_PRESENCE_ATTRIBUTES = new Set([
 ]);
 
 // Each probe snapshots one primitive attribute function. `controlField` is the
-// boolean state field the compiler binds reactively; `base` holds the minimal
-// stable options (e.g. a fixed contentId) so idref/static attrs do NOT show up
-// in the false-vs-true diff and only genuinely reactive attributes remain.
+// state field the compiler binds reactively; `base` holds the minimal stable
+// options (e.g. a fixed contentId) so idref/static attrs do NOT show up in the
+// false-vs-true diff and only genuinely reactive attributes remain.
 const probes = [
+  {
+    key: 'accordion.item',
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+    attrs: accordion.accordionItemAttributes,
+    base: { itemValue: 'item-a', type: 'single' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'accordion.header',
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+    attrs: accordion.accordionHeaderAttributes,
+    base: { itemValue: 'item-a', level: 3, type: 'single' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'accordion.trigger',
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+    attrs: accordion.accordionTriggerAttributes,
+    base: { contentId: 'c', itemValue: 'item-a', type: 'single' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'accordion.content',
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+    attrs: accordion.accordionContentAttributes,
+    base: { contentId: 'c', itemValue: 'item-a', type: 'single' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'checkbox.root',
+    controlField: 'checked',
+    controlKind: 'tri-state',
+    attrs: checkbox.checkboxRootAttributes,
+    base: {},
+    whenFalse: { checked: false },
+    whenTrue: { checked: true },
+    enumStates: {
+      indeterminate: { checked: 'indeterminate' },
+    },
+  },
   {
     key: 'switch.root',
     controlField: 'checked',
+    controlKind: 'boolean',
     attrs: switchPrimitive.switchRootAttributes,
     base: {},
+    whenFalse: { checked: false },
+    whenTrue: { checked: true },
   },
-  { key: 'toggle.root', controlField: 'pressed', attrs: toggle.toggleRootAttributes, base: {} },
+  {
+    key: 'toggle.root',
+    controlField: 'pressed',
+    controlKind: 'boolean',
+    attrs: toggle.toggleRootAttributes,
+    base: {},
+    whenFalse: { pressed: false },
+    whenTrue: { pressed: true },
+  },
   {
     key: 'disclosure.root',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: disclosure.disclosureRootAttributes,
     base: {},
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
   {
     key: 'disclosure.trigger',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: disclosure.disclosureTriggerAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
   {
     key: 'disclosure.content',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: disclosure.disclosureContentAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
   {
     key: 'collapsible.root',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: collapsible.collapsibleRootAttributes,
     base: {},
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
   {
     key: 'collapsible.trigger',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: collapsible.collapsibleTriggerAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
   {
     key: 'collapsible.content',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: collapsible.collapsibleContentAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
-  { key: 'dialog.root', controlField: 'open', attrs: dialog.dialogRootAttributes, base: {} },
+  {
+    key: 'dialog.root',
+    controlField: 'open',
+    controlKind: 'boolean',
+    attrs: dialog.dialogRootAttributes,
+    base: {},
+    whenFalse: { open: false },
+    whenTrue: { open: true },
+  },
   {
     key: 'dialog.content',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: dialog.dialogContentAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
   {
     key: 'dialog.close',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: dialog.dialogCloseAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
-  { key: 'tooltip.root', controlField: 'open', attrs: tooltip.tooltipRootAttributes, base: {} },
+  {
+    key: 'radio-group.item',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: radioGroup.radioGroupItemAttributes,
+    base: { itemValue: 'item-a' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'radio-group.radio',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: radioGroup.radioGroupRadioAttributes,
+    base: { itemValue: 'item-a' },
+    ignoreAttrs: ['tabIndex'],
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'radio-group.label',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: radioGroup.radioGroupLabelAttributes,
+    base: { itemValue: 'item-a' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'tooltip.root',
+    controlField: 'open',
+    controlKind: 'boolean',
+    attrs: tooltip.tooltipRootAttributes,
+    base: {},
+    whenFalse: { open: false },
+    whenTrue: { open: true },
+  },
   {
     key: 'tooltip.trigger',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: tooltip.tooltipTriggerAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
   {
     key: 'tooltip.content',
     controlField: 'open',
+    controlKind: 'boolean',
     attrs: tooltip.tooltipContentAttributes,
     base: { contentId: 'c' },
+    whenFalse: { open: false },
+    whenTrue: { open: true },
   },
 ];
 
@@ -141,17 +288,36 @@ function serializeValue(value) {
 }
 
 function diffAttributes(probe) {
-  const whenFalse = probe.attrs({ ...probe.base, [probe.controlField]: false });
-  const whenTrue = probe.attrs({ ...probe.base, [probe.controlField]: true });
-  const names = new Set([...Object.keys(whenFalse), ...Object.keys(whenTrue)]);
+  const whenFalse = probe.attrs({ ...probe.base, ...probe.whenFalse });
+  const whenTrue = probe.attrs({ ...probe.base, ...probe.whenTrue });
+  const enumOutputs = Object.fromEntries(
+    Object.entries(probe.enumStates ?? {}).map(([name, state]) => [
+      name,
+      probe.attrs({ ...probe.base, ...state }),
+    ]),
+  );
+  const names = new Set([
+    ...Object.keys(whenFalse),
+    ...Object.keys(whenTrue),
+    ...Object.values(enumOutputs).flatMap((output) => Object.keys(output)),
+  ]);
   const attrs = {};
 
   for (const name of [...names].sort()) {
-    const trueValue = whenTrue[name];
+    if (probe.ignoreAttrs?.includes(name)) continue;
     const falseValue = whenFalse[name];
+    const trueValue = whenTrue[name];
     const booleanPresence = BOOLEAN_PRESENCE_ATTRIBUTES.has(name);
+    const enumValues = Object.fromEntries(
+      Object.entries(enumOutputs).map(([state, output]) => [state, output[name]]),
+    );
     // Only attributes that actually change between the two states are reactive.
-    if (trueValue === falseValue) continue;
+    if (
+      trueValue === falseValue &&
+      Object.values(enumValues).every((value) => value === falseValue)
+    ) {
+      continue;
+    }
     // String-valued attributes that appear/disappear (one side undefined/null)
     // are conditional idrefs (e.g. tooltip's aria-describedby depends on
     // contentId, not just `open`). The existing primitive-composition / idref
@@ -165,6 +331,12 @@ function diffAttributes(probe) {
       booleanPresence,
       whenFalse: serializeValue(falseValue),
       whenTrue: serializeValue(trueValue),
+      ...Object.fromEntries(
+        Object.entries(enumValues).map(([state, value]) => [
+          `when${state[0].toUpperCase()}${state.slice(1)}`,
+          serializeValue(value),
+        ]),
+      ),
     };
   }
 
@@ -173,7 +345,15 @@ function diffAttributes(probe) {
 
 const manifest = {};
 for (const probe of probes) {
-  manifest[probe.key] = { attrs: diffAttributes(probe), controlField: probe.controlField };
+  manifest[probe.key] = {
+    attrs: diffAttributes(probe),
+    controlField: probe.controlField,
+    controlKind: probe.controlKind,
+    ...(probe.discriminatorField === undefined
+      ? {}
+      : { discriminatorField: probe.discriminatorField }),
+    ...(probe.modeField === undefined ? {} : { modeField: probe.modeField }),
+  };
 }
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -186,27 +366,42 @@ const banner = `// GENERATED by packages/compiler/scripts/gen-primitive-reactive
 //
 // SPEC.md §4.6 (KV232): @kovojs/ui primitives own their reactive state attributes.
 // This data table snapshots each headless-ui primitive attribute function diffed
-// between its controlling boolean field = false vs true. The compiler reads this
+// between inactive vs active control states. The compiler reads this
 // table (no headless-ui import in production src/**) to emit reactive
 // data-bind:<attr> derives for primitive-owned attributes automatically.
 `;
 
 const body = `
-/** One reactive attribute the compiler should bind from the controlling boolean. */
+/** Supported reactive-control expression families. */
+export type PrimitiveReactiveControlKind =
+  | 'boolean'
+  | 'equality'
+  | 'set-membership'
+  | 'tri-state';
+
+/** One reactive attribute the compiler should bind from the controlling state. */
 export interface PrimitiveReactiveAttr {
   /** True when the attribute's presence (not its value) is the reactive signal. */
   readonly booleanPresence: boolean;
-  /** Serialized attribute value when the controlling field is false. */
+  /** Serialized attribute value when the controlling condition is inactive. */
   readonly whenFalse: boolean | string;
-  /** Serialized attribute value when the controlling field is true. */
+  /** Serialized attribute value when the controlling condition is active. */
   readonly whenTrue: boolean | string;
+  /** Serialized attribute value when a tri-state checkbox is indeterminate. */
+  readonly whenIndeterminate?: boolean | string;
 }
 
-/** All reactive attributes a primitive derives from one boolean control field. */
+/** All reactive attributes a primitive derives from one control field. */
 export interface PrimitiveReactiveAttrEntry {
   readonly attrs: Readonly<Record<string, PrimitiveReactiveAttr>>;
-  /** Name of the boolean state field these attributes are derived from. */
+  /** Name of the state field these attributes are derived from. */
   readonly controlField: string;
+  /** How the compiler should derive the active/inactive condition. */
+  readonly controlKind: PrimitiveReactiveControlKind;
+  /** Per-element static prop compared with the control field when applicable. */
+  readonly discriminatorField?: string;
+  /** Optional per-element mode prop, used by accordion single vs multiple. */
+  readonly modeField?: string;
 }
 
 /** Per primitive-fn key (e.g. \`switch.root\`) → its reactive attribute manifest. */

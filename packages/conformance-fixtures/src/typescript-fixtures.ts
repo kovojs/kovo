@@ -24,6 +24,7 @@ export async function assertTypeScriptProgramHasNoDiagnostics(
     noEmit: true,
     paths: {
       '@kovojs/core': ['dist/core/src/index.d.mts'],
+      '@kovojs/core/generated': ['dist/core/src/generated.d.mts'],
       '@kovojs/core/internal/fragment-target': ['dist/core/src/internal/fragment-target.d.mts'],
     },
     skipLibCheck: true,

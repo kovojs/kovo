@@ -136,6 +136,113 @@ export const CollapsibleDemo = component({
     );
   });
 
+  it('binds accordion item/trigger/content attributes from value and itemValue', () => {
+    const server = compile(
+      'accordion-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@kovojs/ui/accordion';
+export const AccordionDemo = component({
+  state: () => ({ value: 'billing' }),
+  render: (_q: Record<string, never>, state: { value: string }) => (
+    <Accordion type="single" value={state.value}>
+      <AccordionItem itemValue="shipping" type="single" value={state.value}>
+        <AccordionTrigger contentId="shipping-panel" itemValue="shipping" type="single" value={state.value}>Shipping</AccordionTrigger>
+        <AccordionContent contentId="shipping-panel" itemValue="shipping" type="single" value={state.value}>Panel</AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  ),
+});
+`,
+    );
+
+    expect(server).toContain('data-bind:aria-expanded=');
+    expect(server).toContain('data-bind:hidden=');
+    expect(server).toContain('data-bind:open=');
+    expect(server).toContain('(state.value) === "shipping"');
+    expect(server).toContain(
+      'export const AccordionDemo$AccordionTrigger_aria_expanded_derive = derive(["state"], (state: any) => (((state.value) === "shipping") ? "true" : "false"));',
+    );
+    expect(server).toContain(
+      'export const AccordionDemo$AccordionContent_hidden_derive = derive(["state"], (state: any) => (((state.value) === "shipping") ? null : ""));',
+    );
+  });
+
+  it('binds accordion multiple content attributes with membership checks', () => {
+    const server = compile(
+      'accordion-multiple-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { AccordionContent, AccordionTrigger } from '@kovojs/ui/accordion';
+export const AccordionMultipleDemo = component({
+  state: () => ({ value: ['billing'] }),
+  render: (_q: Record<string, never>, state: { value: readonly string[] }) => (
+    <>
+      <AccordionTrigger contentId="shipping-panel" itemValue="shipping" type="multiple" value={state.value}>Shipping</AccordionTrigger>
+      <AccordionContent contentId="shipping-panel" itemValue="shipping" type="multiple" value={state.value}>Panel</AccordionContent>
+    </>
+  ),
+});
+`,
+    );
+
+    expect(server).toContain('Array.isArray((state.value)) && (state.value).includes("shipping")');
+    expect(server).toContain(
+      'export const AccordionMultipleDemo$AccordionTrigger_aria_expanded_derive = derive(["state"], (state: any) => ((Array.isArray((state.value)) && (state.value).includes("shipping")) ? "true" : "false"));',
+    );
+  });
+
+  it('binds checkbox tri-state aria-checked/data-state from a reactive checked prop', () => {
+    const server = compile(
+      'checkbox-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { Checkbox } from '@kovojs/ui/checkbox';
+export const CheckboxDemo = component({
+  state: () => ({ checked: 'indeterminate' as boolean | 'indeterminate' }),
+  render: (_q: Record<string, never>, state: { checked: boolean | 'indeterminate' }) => (
+    <Checkbox checked={state.checked}>Receive updates</Checkbox>
+  ),
+});
+`,
+    );
+
+    expect(server).toContain('data-bind:aria-checked=');
+    expect(server).toContain('data-bind:data-state=');
+    expect(server).toContain(
+      'export const CheckboxDemo$Checkbox_aria_checked_derive = derive(["state"], (state: any) => ((state.checked) === "indeterminate" ? "mixed" : (((state.checked) === true) ? "true" : "false")));',
+    );
+    expect(server).toContain(
+      'export const CheckboxDemo$Checkbox_data_state_derive = derive(["state"], (state: any) => ((state.checked) === "indeterminate" ? "indeterminate" : (((state.checked) === true) ? "checked" : "unchecked")));',
+    );
+  });
+
+  it('binds radio item/radio attributes by comparing value with itemValue', () => {
+    const server = compile(
+      'radio-group-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { RadioGroupItem, RadioGroupLabel, RadioGroupRadio } from '@kovojs/ui/radio-group';
+export const RadioGroupDemo = component({
+  state: () => ({ value: 'basic' }),
+  render: (_q: Record<string, never>, state: { value: string }) => (
+    <RadioGroupItem itemValue="pro" value={state.value}>
+      <RadioGroupRadio itemValue="pro" value={state.value} />
+      <RadioGroupLabel itemValue="pro" value={state.value}>Pro</RadioGroupLabel>
+    </RadioGroupItem>
+  ),
+});
+`,
+    );
+
+    expect(server).toContain('data-bind:aria-checked=');
+    expect(server).toContain('data-bind:checked=');
+    expect(server).toContain('data-bind:data-state=');
+    expect(server).toContain(
+      'export const RadioGroupDemo$RadioGroupRadio_aria_checked_derive = derive(["state"], (state: any) => (((state.value) === "pro") ? "true" : "false"));',
+    );
+  });
+
   it('does not bind primitives whose control prop is not reactive state', () => {
     const result = compileComponentModule({
       fileName: 'static-switch.tsx',
