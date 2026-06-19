@@ -275,16 +275,28 @@ routes/<route>.css]` (theme stays on `base`/app), using
       (`static-export-*`) emit identical chunking, so dev critical CSS and linked
       chunks match production byte-for-byte. - Evidence: a parity test comparing dev-served vs. built `<link>`/critical
       sets for one route.
+  - Gap 2026-06-19:
+    `packages/server/src/vite-dev.ts` loads and serves the app directly through
+    `createRequestHandler(app)`, while `kovo build` patches the app with
+    build-owned base/route/fragment stylesheet assets in `packages/cli/src/index.ts`.
+    Dev parity needs a compiler-CSS-manifest handoff from the Vite compiler
+    plugin into the app-shell dev plugin.
 
 ### Phase 6 — Migrate examples + site off the monolith
 
-- [ ] Drop the hand-rolled single `criticalCss: [...]` / one-sheet declarations
+- [x] Drop the hand-rolled single `criticalCss: [...]` / one-sheet declarations
       from `examples/{commerce,crm,stackoverflow}`, `site/src/route-kit.ts`, and
-      the `create-kovo` starter; routes keep only
-      `stylesheet('./styles.css', { theme })` and inherit chunked delivery. - Evidence: each example renders styled HTML with strictly smaller per-route
-      CSS than the Phase 0 baseline; update `graph.json`,
+      the `create-kovo` starter; routes keep only stylesheet declarations and
+      inherit build-owned chunked delivery.
+  - Evidence 2026-06-19:
+    `rg -n "criticalCss|emitAtomicCss|__rules|StyleCss|styleCss|stylesheet\\('./styles\\.css'|stylesheets" examples/commerce/src examples/crm/src examples/stackoverflow/src site/src packages/create-kovo/templates -g '*.ts' -g '*.tsx'`
+    shows no generated-rule exports or component critical lists in those apps;
+    remaining matches are authored stylesheet declarations and route-kit theme
+    critical CSS.
+- [ ] Prove each example renders styled HTML with strictly smaller per-route CSS
+      than the Phase 0 baseline; update `graph.json`,
       `app.rendering.test.ts` (`examples/commerce/src/app.rendering.test.ts`),
-      and `route-kit.test.ts` expectations.
+      and `route-kit.test.ts` expectations with byte evidence.
 
 ### Phase 7 — Overship regression gate
 
