@@ -120,11 +120,19 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
     `css:` block and `stylesheet('./styles.css')`, then verifies
     `.kovo/client/assets/styles.css` contains the component CSS while Vite CSS
     remains in its manifest asset.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS"`
+    also verifies the same build writes the collected route chunk at
+    `.kovo/client/assets/routes/index.css`.
 - [x] Wire the Vite plugin to accumulate each compiled component's `cssAssets`
       and surface the manifest to the build. (Seam A)
   - Evidence 2026-06-19:
     `packages/compiler/src/vite.test.ts` covers plugin accumulation; `packages/cli/src/index.ts`
     passes the manifest CSS into `writeKovoNeutralBuild()`.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/vite.test.ts -t "resolved Vite root|CSS asset manifest"`
+    proves build-time Vite root resolution keeps CSS asset source names
+    app-relative for route split matching.
 - [ ] Inline route-critical CSS from the collected manifest during document
       rendering.
   - Gap:
@@ -185,3 +193,6 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 
 - 2026-06-19 Phase 0 ledger review:
   `rg -n "13\\.1|CSS|style|stylesheet|auto-collection|open design" plans/open-design-areas.md SPEC.md`.
+- 2026-06-19 CSS build slice:
+  `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
+  `git diff --check`.

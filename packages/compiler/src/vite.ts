@@ -24,6 +24,7 @@ import type {
  * wires into its `vite.config` (SPEC.md §5.2).
  */
 export interface KovoVitePlugin {
+  configResolved?: (config: KovoViteResolvedConfig) => void;
   configureServer?: (server: KovoViteDevServer) => void;
   enforce?: 'pre';
   handleHotUpdate?: (context: KovoViteHotUpdateContext) => Promise<readonly unknown[]>;
@@ -97,6 +98,11 @@ export interface KovoViteDevServer {
   };
   ssrLoadModule?: (id: string) => Promise<Record<string, unknown>>;
   ws?: KovoViteWebSocket;
+}
+
+/** @internal Minimal Vite resolved config shape needed by the plugin. */
+export interface KovoViteResolvedConfig {
+  root?: string;
 }
 
 /** @internal Connect-style middleware the plugin registers to serve emitted client islands. */
@@ -194,6 +200,9 @@ export function createKovoVitePlugin(
 
   return {
     enforce: 'pre',
+    configResolved(config) {
+      root = config.root ?? root;
+    },
     configureServer(server) {
       root = server.config?.root ?? root;
       server.middlewares.use((req, res, next) => {

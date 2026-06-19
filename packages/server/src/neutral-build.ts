@@ -387,6 +387,7 @@ function buildStylesheetCssHref(
 ): string {
   const assetPath = localStylesheetAssetPath(href);
   if (assetPath && cssByPath.has(assetPath)) return href;
+  if (assetPath && assetPath !== '/assets/styles.css') return href;
   if (cssAssetPaths.length === 1 && cssAssetPaths[0] !== undefined) return cssAssetPaths[0];
   return href;
 }

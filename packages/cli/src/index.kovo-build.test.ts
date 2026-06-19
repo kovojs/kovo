@@ -143,7 +143,7 @@ describe('kovo build', () => {
 
   it('auto-collects compiled component CSS into the build stylesheet asset', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-app-css-'));
-    const appPath = join(root, 'app.mjs');
+    const appPath = join(root, 'app.tsx');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -152,8 +152,9 @@ describe('kovo build', () => {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
       writeReactJsxRuntimeStub(root);
-      writeFileSync(appPath, staticStylesheetAppModuleSource(), 'utf8');
+      writeFileSync(appPath, staticStylesheetRouteComponentAppModuleSource(), 'utf8');
       writeStyledComponentClientEntry(root);
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
@@ -164,6 +165,9 @@ describe('kovo build', () => {
       const stylesheet = readFileSync(join(outDir, '.kovo/client/assets/styles.css'), 'utf8');
       expect(stylesheet).toContain('auto-css-card');
       expect(stylesheet).toContain('color: teal');
+      expect(readFileSync(join(outDir, '.kovo/client/assets/routes/index.css'), 'utf8')).toContain(
+        'auto-css-card',
+      );
       const viteStylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
         'main{color:#639}',
@@ -719,14 +723,16 @@ export default createApp({
 `;
 }
 
-function staticStylesheetAppModuleSource(): string {
+function staticStylesheetRouteComponentAppModuleSource(): string {
   return `
+/** @jsxImportSource @kovojs/server */
 import { createApp, route, stylesheet } from '@kovojs/server';
+import { AutoCssCard } from './src/auto-css-card.js';
 
 export default createApp({
   routes: [
     route('/', {
-      page: () => '<main>Static Home</main>',
+      page: () => <AutoCssCard />,
     }),
   ],
   stylesheets: [stylesheet('./styles.css')],

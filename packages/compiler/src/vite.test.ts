@@ -245,6 +245,36 @@ export function renderSource() {
     ]);
   });
 
+  it('uses the resolved Vite root for build CSS asset names', async () => {
+    const compiledFileNames: string[] = [];
+    const plugin = createKovoVitePlugin((options) => {
+      compiledFileNames.push(options.fileName);
+      return {
+        cssAssets: [
+          {
+            componentName: 'cart-badge',
+            criticalCss: '.cart-badge{color:teal}',
+            fragmentTargets: ['src/cart-badge/cart-badge'],
+            href: '/assets/src/cart-badge.css',
+            sourceFileName: 'src/cart-badge.css',
+          },
+        ],
+        files: [{ kind: 'server', source: 'export function renderSource() {}' }],
+      };
+    });
+
+    plugin.configResolved?.({ root: '/workspace/app' });
+    await plugin.transform('component(', '/workspace/app/src/cart-badge.tsx');
+
+    expect(compiledFileNames).toEqual(['src/cart-badge.tsx']);
+    expect(plugin.getCssAssetManifest?.().stylesheets).toEqual([
+      expect.objectContaining({
+        href: '/assets/src/cart-badge.css',
+        sourceFileName: 'src/cart-badge.css',
+      }),
+    ]);
+  });
+
   it('serves project-relative client modules when Vite passes absolute ids', async () => {
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];

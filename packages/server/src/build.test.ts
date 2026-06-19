@@ -193,6 +193,7 @@ describe('server build-time deployment API', () => {
         }),
         buildStylesheetCss: [
           { css: '.kovo-ui-button{display:inline-flex}', href: '/assets/styles.css' },
+          { css: '.route-card{color:teal}', href: '/assets/routes/index.css' },
         ],
         manifestFile: join(distDir, '.vite/manifest.json'),
         outDir,
@@ -205,11 +206,17 @@ describe('server build-time deployment API', () => {
       await expect(readFile(join(outDir, 'client/assets/route.css'), 'utf8')).resolves.toBe(
         '.route-shell{display:grid}\n',
       );
+      await expect(readFile(join(outDir, 'client/assets/routes/index.css'), 'utf8')).resolves.toBe(
+        '.route-card{color:teal}\n',
+      );
 
       const staticStyles = await readFile(join(outDir, 'static/assets/styles.css'), 'utf8');
       expect(staticStyles).toBe(builtStyles);
       await expect(readFile(join(outDir, 'static/assets/route.css'), 'utf8')).resolves.toBe(
         '.route-shell{display:grid}\n',
+      );
+      await expect(readFile(join(outDir, 'static/assets/routes/index.css'), 'utf8')).resolves.toBe(
+        '.route-card{color:teal}\n',
       );
     } finally {
       await rm(root, { force: true, recursive: true });

@@ -2475,6 +2475,7 @@ async function runBuildCommand(options: KovoBuildOptions): Promise<CliCommandRes
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
       kovoClientBuildRoot(resolvedAppModulePath),
+      resolvedAppModulePath,
     );
     const neutralBuild = await writeKovoNeutralBuild({
       app,
@@ -2557,12 +2558,16 @@ function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string 
 
 async function kovoBuildStylesheetCss(
   appModulePath: string,
-): Promise<readonly { css: string; href: string }[]> {
-  const [{ extractAppComponentCss, extractPackageComponentCss }, { kovoUiTokenSheetCss }] =
-    await Promise.all([
-      import('@kovojs/compiler/package-styles'),
-      import('@kovojs/headless-ui/internal'),
-    ]);
+): Promise<readonly KovoBuildStylesheetCss[]> {
+  const [
+    { extractAppComponentCss, extractAppRouteCssTargets, extractPackageComponentCss },
+    { collectCssAssetManifest },
+    { kovoUiTokenSheetCss },
+  ] = await Promise.all([
+    import('@kovojs/compiler/package-styles'),
+    import('@kovojs/compiler/internal'),
+    import('@kovojs/headless-ui/internal'),
+  ]);
   const extractionOptions = {
     fileName: appModulePath,
     packagePrefixDiscoveryRoot: dirname(appModulePath),
@@ -2570,6 +2575,15 @@ async function kovoBuildStylesheetCss(
   };
   const packageResult = extractPackageComponentCss('@kovojs/ui', extractionOptions);
   const appResult = extractAppComponentCss(extractionOptions);
+  const appRouteTargets = extractAppRouteCssTargets(extractionOptions);
+  const appSplitManifest =
+    appResult.cssAssets.length === 0 || appRouteTargets.routeTargets.length === 0
+      ? undefined
+      : collectCssAssetManifest(
+          { cssAssets: appResult.cssAssets },
+          { split: { routes: appRouteTargets.routeTargets } },
+        );
+  const appSplitStylesheetCss = stylesheetCssFromCssSplitChunks(appSplitManifest?.chunks);
 
   if (!packageResult.css && !appResult.css) return [];
   const tokenCss = kovoUiTokenSheetCss.replace(/@theme[^{]*\{[\s\S]*?\n\}/, '').trim();
@@ -2578,6 +2592,7 @@ async function kovoBuildStylesheetCss(
       css: [tokenCss, packageResult.css, appResult.css].filter(Boolean).join('\n'),
       href: '/assets/styles.css',
     },
+    ...appSplitStylesheetCss,
   ];
 }
 
@@ -2701,19 +2716,43 @@ function isKovoPreset(value: unknown): value is KovoPreset {
 
 interface KovoClientManifestBuild {
   manifestFile: string;
-  stylesheetCss: readonly { css: string; href: string }[];
+  stylesheetCss: readonly KovoBuildStylesheetCss[];
+}
+
+interface KovoBuildStylesheetCss {
+  css: string;
+  href: string;
+}
+
+interface KovoBuildCssSplitChunk {
+  criticalCss?: string;
+  href: string;
+}
+
+interface KovoBuildCssSplitChunks {
+  base: readonly KovoBuildCssSplitChunk[];
+  fragments: Readonly<Record<string, readonly KovoBuildCssSplitChunk[]>>;
+  routes: Readonly<Record<string, readonly KovoBuildCssSplitChunk[]>>;
 }
 
 async function buildKovoClientManifest(
   outDir: string,
   root: string,
+  appModulePath: string,
 ): Promise<KovoClientManifestBuild> {
-  const [{ kovoVitePlugin }, { dedupeCss }, { build }] = await Promise.all([
-    import('@kovojs/compiler'),
-    import('@kovojs/compiler/internal'),
-    import('vite-plus'),
-  ]);
+  const [{ kovoVitePlugin }, { dedupeCss }, { extractAppRouteCssTargets }, { build }] =
+    await Promise.all([
+      import('@kovojs/compiler'),
+      import('@kovojs/compiler/internal'),
+      import('@kovojs/compiler/package-styles'),
+      import('vite-plus'),
+    ]);
   const kovoPlugin = kovoVitePlugin();
+  const routeTargets = extractAppRouteCssTargets({
+    fileName: appModulePath,
+    packagePrefixDiscoveryRoot: dirname(appModulePath),
+    source: existsSync(appModulePath) ? readFileSync(appModulePath, 'utf8') : '',
+  }).routeTargets;
 
   await build({
     appType: 'custom',
@@ -2727,16 +2766,35 @@ async function buildKovoClientManifest(
     root,
   });
 
+  const cssAssetManifest = kovoPlugin.getCssAssetManifest?.(
+    routeTargets.length === 0 ? undefined : { split: { routes: routeTargets } },
+  );
   const appCss = dedupeCss(
-    (kovoPlugin.getCssAssetManifest?.().stylesheets ?? []).flatMap((asset) =>
+    (cssAssetManifest?.stylesheets ?? []).flatMap((asset) =>
       asset.criticalCss ? [asset.criticalCss] : [],
     ),
   );
+  const splitStylesheetCss = stylesheetCssFromCssSplitChunks(cssAssetManifest?.chunks);
 
   return {
     manifestFile: join(outDir, '.vite/manifest.json'),
-    stylesheetCss: appCss ? [{ css: appCss, href: '/assets/styles.css' }] : [],
+    stylesheetCss: [
+      ...(appCss ? [{ css: appCss, href: '/assets/styles.css' }] : []),
+      ...splitStylesheetCss,
+    ],
   };
+}
+
+function stylesheetCssFromCssSplitChunks(
+  chunks: KovoBuildCssSplitChunks | undefined,
+): KovoBuildStylesheetCss[] {
+  if (!chunks) return [];
+
+  return [
+    ...chunks.base,
+    ...Object.values(chunks.routes).flat(),
+    ...Object.values(chunks.fragments).flat(),
+  ].flatMap((asset) => (asset.criticalCss ? [{ css: asset.criticalCss, href: asset.href }] : []));
 }
 
 function kovoClientBuildRoot(appModulePath: string): string {

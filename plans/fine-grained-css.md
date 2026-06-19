@@ -181,13 +181,16 @@ mutation pulls `fragments/cart.css` if not already present.
 
 ### Phase 2 — Feed the splitter in the real build (Seam D)
 
-- [ ] In the build, construct `CssSplitOptions.routes` from Phase 1 facts and
+- [x] In the build, construct `CssSplitOptions.routes` from Phase 1 facts and
       call `collectCssAssetManifest` with `split` so `chunks =
 { base, routes, fragments }` is populated (`css.ts:232`). Source the asset
       manifest from `css-auto-collection.md` Phase 1's app-graph collector (or the
-      package collector as interim). - Evidence: a build test asserting `chunks.routes['/login']` contains the
-      login form's atom and `chunks.routes['/']` does not; shared atoms land in
-      `chunks.base` via `sharedRouteCssAssets`.
+      package collector as interim).
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/css.test.ts packages/compiler/src/package-styles.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/vite.test.ts packages/server/src/build.test.ts packages/cli/src/index.kovo-build.test.ts -t "maps route page CSS facts|extracts route CSS split targets|serializes route page CSS facts|CSS asset manifest|resolved Vite root|materializes declared and build-owned CSS|auto-collects compiled component CSS"`
+    proves route facts map into splitter targets, Vite-collected CSS uses
+    app-relative source names, and `kovo build` emits
+    `.kovo/client/assets/routes/index.css` for a route-owned component.
 - [ ] Materialize each chunk as a real emitted asset
       (`base.css`, `routes/*.css`, `fragments/*.css`) through
       `stylesheetCssByPath` / `vite-build-assets`, replacing the single-sink
