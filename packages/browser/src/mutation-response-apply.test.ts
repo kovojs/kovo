@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   applyMutationResponseBodyToRuntime,
   applyMutationResponseChunksToRuntime,
+  applyStreamingMutationResponseBodyToRuntime,
 } from './apply-mutation-response.js';
 import { createQueryStore } from './client.js';
 import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
@@ -215,5 +216,93 @@ describe('decoded mutation response apply', () => {
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(count.textContent).toBe('2');
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>2</cart-badge>');
+  });
+
+  it('applies escaped stream text to declared stream targets', () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      { 'data-stream-text': 'assistant:a1' },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+
+    const applied = applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-text target="assistant:a1">Hello &lt;em&gt;not html&lt;/em&gt;</kovo-text>',
+        '<kovo-text target="assistant:a1" mode="checkpoint">Hello server</kovo-text>',
+        '<kovo-text target="assistant:a1"> truth</kovo-text>',
+      ].join(''),
+      root,
+      store,
+    });
+
+    // SPEC.md §9.1: streamed model text is appended as escaped text into a
+    // declared target; checkpoint chunks replace the accumulated source.
+    expect(streamTarget.textContent).toBe('Hello server truth');
+    expect(streamTarget.getAttribute('data-stream-state')).toBe('streaming');
+    expect(applied).toEqual({
+      appliedFragments: [],
+      fragments: [],
+      queries: [],
+      streams: ['assistant:a1', 'assistant:a1', 'assistant:a1'],
+      texts: [
+        { target: 'assistant:a1', text: 'Hello <em>not html</em>' },
+        { mode: 'checkpoint', target: 'assistant:a1', text: 'Hello server' },
+        { target: 'assistant:a1', text: ' truth' },
+      ],
+    });
+  });
+
+  it('applies streaming mutation response bodies as complete wire elements arrive', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      { 'data-stream-text': 'assistant:a1' },
+      { textContent: '' },
+    );
+    root.targets.set('messages', new FakeMorphTarget());
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(
+            '<kovo-fragment target="messages" mode="append"><article data-stream-text="assistant:a1"></article></kovo-fragment>',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode('<kovo-text target="assistant:a1">Hel'),
+        );
+        controller.enqueue(
+          encoder.encode('lo</kovo-text><kovo-query name="chat">{"count":1}</kovo-query>'),
+        );
+        controller.close();
+      },
+    });
+
+    const applied = await applyStreamingMutationResponseBodyToRuntime({
+      body,
+      root,
+      store,
+    });
+
+    expect(root.targets.get('messages')?.html).toBe(
+      '<article data-stream-text="assistant:a1"></article>',
+    );
+    expect(streamTarget.textContent).toBe('Hello');
+    expect(store.get('chat')).toEqual({ count: 1 });
+    expect(applied.fragments).toEqual([
+      {
+        html: '<article data-stream-text="assistant:a1"></article>',
+        mode: 'append',
+        target: 'messages',
+      },
+    ]);
+    expect(applied.queries).toEqual(['chat']);
+    expect(applied.streams).toEqual(['assistant:a1']);
   });
 });

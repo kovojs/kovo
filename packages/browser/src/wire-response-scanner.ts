@@ -6,19 +6,28 @@ export interface FragmentChunk {
   target: string;
 }
 
+export interface StreamTextChunk {
+  mode?: 'append' | 'checkpoint';
+  target: string;
+  text: string;
+}
+
 export interface InlineMutationResponseBodyChunks {
   fragments: FragmentChunk[];
   queries: ElementChunk[];
+  texts?: StreamTextChunk[];
 }
 
 export interface MutationResponseElementChunks {
   fragments: ElementChunk[];
   queries: ElementChunk[];
+  texts: ElementChunk[];
 }
 
 export interface ReadMutationResponseElementChunksOptions {
   onMalformedFragment?: (reason: string) => void;
   onMalformedQuery?: (reason: string) => void;
+  onMalformedText?: (reason: string) => void;
 }
 
 export interface ElementChunk {
@@ -48,6 +57,7 @@ export function readMutationResponseBodyCore(
   return {
     fragments: readFragmentChunksFromElements(chunks.fragments),
     queries: chunks.queries,
+    ...(chunks.texts.length === 0 ? {} : { texts: readStreamTextChunksFromElements(chunks.texts) }),
   };
 }
 
@@ -74,10 +84,14 @@ export function readMutationResponseElementChunks(
   const fragmentOptions: ReadElementChunksOptions = options.onMalformedFragment
     ? { nested: true, onMalformed: options.onMalformedFragment }
     : { nested: true };
+  const textOptions: ReadElementChunksOptions = options.onMalformedText
+    ? { onMalformed: options.onMalformedText }
+    : {};
 
   return {
     queries: readElementChunks(body, 'kovo-query', queryOptions),
     fragments: readElementChunks(body, 'kovo-fragment', fragmentOptions),
+    texts: readElementChunks(body, 'kovo-text', textOptions),
   };
 }
 
@@ -105,6 +119,33 @@ export function readFragmentChunksFromElements(
   }
 
   return fragments;
+}
+
+function readStreamTextElementChunk(
+  chunk: Pick<ElementChunk, 'attrs' | 'content'>,
+): StreamTextChunk | undefined {
+  const target = readAttribute(chunk.attrs, 'target');
+  if (!target) return undefined;
+
+  const mode = readAttribute(chunk.attrs, 'mode');
+  return {
+    ...(mode === 'checkpoint' ? { mode: 'checkpoint' as const } : {}),
+    target,
+    text: chunk.content,
+  };
+}
+
+export function readStreamTextChunksFromElements(
+  chunks: Iterable<Pick<ElementChunk, 'attrs' | 'content'>>,
+): StreamTextChunk[] {
+  const texts: StreamTextChunk[] = [];
+
+  for (const chunk of chunks) {
+    const text = readStreamTextElementChunk(chunk);
+    if (text) texts.push(text);
+  }
+
+  return texts;
 }
 
 export function readElementChunks(

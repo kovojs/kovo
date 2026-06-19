@@ -353,4 +353,37 @@ describe('wire parser HTML entity handling', () => {
       }),
     ).toEqual({ delta: true, name: 'cart', value: { set: { count: 5 } } });
   });
+
+  it('decodes escaped kovo-text chunks without treating token text as HTML', () => {
+    expect(
+      readMutationResponseBodyChunks(
+        '<kovo-text target="assistant:a1" mode="append">&lt;strong&gt;safe &amp; escaped&lt;/strong&gt;</kovo-text>',
+      ),
+    ).toEqual({
+      fragments: [],
+      queries: [],
+      texts: [
+        {
+          target: 'assistant:a1',
+          text: '<strong>safe & escaped</strong>',
+        },
+      ],
+    });
+  });
+
+  it('parses checkpoint kovo-text chunks beside query and fragment chunks', () => {
+    expect(
+      readMutationResponseBodyChunks(
+        [
+          '<kovo-fragment target="messages" mode="append"><article></article></kovo-fragment>',
+          '<kovo-text target="assistant:a1" mode="checkpoint">server text so far</kovo-text>',
+          '<kovo-query name="chat">{"count":1}</kovo-query>',
+        ].join(''),
+      ),
+    ).toEqual({
+      fragments: [{ html: '<article></article>', mode: 'append', target: 'messages' }],
+      queries: [{ name: 'chat', value: { count: 1 } }],
+      texts: [{ mode: 'checkpoint', target: 'assistant:a1', text: 'server text so far' }],
+    });
+  });
 });

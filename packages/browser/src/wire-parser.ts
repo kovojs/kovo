@@ -5,8 +5,9 @@ import {
   readElementChunks,
   readMutationResponseBodyCore,
   readMutationResponseElementChunks,
+  readStreamTextChunksFromElements,
 } from './wire-response-scanner.js';
-import type { FragmentChunk } from './wire-response-scanner.js';
+import type { ElementChunk, FragmentChunk, StreamTextChunk } from './wire-response-scanner.js';
 import { readAttribute, unescapeHtml } from './wire-html.js';
 
 /**
@@ -31,6 +32,7 @@ export interface QueryElementChunkLike {
 export interface MutationResponseBodyChunks {
   fragments: FragmentChunk[];
   queries: QueryChunk[];
+  texts?: StreamTextChunk[];
 }
 
 /** A `<kovo-query>` script chunk exposing `getAttribute`/`textContent` for hydration (SPEC §9.4). */
@@ -65,11 +67,15 @@ export function deferredStreamChunks(body: string, boundary: string): string[] {
       onMalformedQuery() {
         containsMutationResponseElement = true;
       },
+      onMalformedText() {
+        containsMutationResponseElement = true;
+      },
     });
     if (
       containsMutationResponseElement ||
       responseElements.queries.length > 0 ||
-      responseElements.fragments.length > 0
+      responseElements.fragments.length > 0 ||
+      responseElements.texts.length > 0
     ) {
       chunks.push(chunk);
     }
@@ -241,12 +247,16 @@ export function readMutationResponseBodyChunks(
   // fragment malformed reasons are buffered during the shared scan and replayed
   // only once the query decode loop has finished.
   const malformedFragments: string[] = [];
+  const malformedTexts: string[] = [];
   const chunks = readMutationResponseBodyCore(body, {
     onMalformedFragment(reason) {
       malformedFragments.push(reason);
     },
     onMalformedQuery(reason) {
       reportRuntimeError(onError, malformedQueryError(reason));
+    },
+    onMalformedText(reason) {
+      malformedTexts.push(reason);
     },
   });
   const queries: QueryChunk[] = [];
@@ -258,8 +268,57 @@ export function readMutationResponseBodyChunks(
   for (const reason of malformedFragments) {
     reportRuntimeError(onError, malformedFragmentError(reason));
   }
+  for (const reason of malformedTexts) {
+    reportRuntimeError(onError, malformedTextError(reason));
+  }
 
-  return { fragments: chunks.fragments, queries };
+  return {
+    fragments: chunks.fragments,
+    queries,
+    ...(chunks.texts === undefined ? {} : { texts: decodeStreamTextChunks(chunks.texts) }),
+  };
+}
+
+export function readMutationResponseBodyPrefixChunks(
+  body: string,
+  onError?: RuntimeErrorReporter,
+): { chunks: MutationResponseBodyChunks; consumed: number } {
+  const elements = readMutationResponseElementChunks(body);
+  const consumed = consumedElementEnd(elements.queries, elements.fragments, elements.texts);
+  const queries: QueryChunk[] = [];
+
+  for (const chunk of elements.queries) {
+    const query = readQueryElementChunk(chunk, onError);
+    if (query) queries.push(query);
+  }
+
+  return {
+    chunks: {
+      fragments: readMutationResponseBodyCore(body.slice(0, consumed)).fragments,
+      queries,
+      ...(elements.texts.length === 0
+        ? {}
+        : { texts: decodeStreamTextChunks(readStreamTextChunksFromElements(elements.texts)) }),
+    },
+    consumed,
+  };
+}
+
+function consumedElementEnd(...groups: readonly ElementChunk[][]): number {
+  let end = 0;
+  for (const group of groups) {
+    for (const chunk of group) {
+      end = Math.max(end, chunk.end);
+    }
+  }
+  return end;
+}
+
+function decodeStreamTextChunks(chunks: readonly StreamTextChunk[]): StreamTextChunk[] {
+  return chunks.map((chunk) => ({
+    ...chunk,
+    text: unescapeHtml(chunk.text),
+  }));
 }
 
 function malformedQueryError(reason: string): Error {
@@ -268,4 +327,8 @@ function malformedQueryError(reason: string): Error {
 
 function malformedFragmentError(reason: string): Error {
   return new Error(`Malformed kovo-fragment chunk: ${reason}`);
+}
+
+function malformedTextError(reason: string): Error {
+  return new Error(`Malformed kovo-text chunk: ${reason}`);
 }

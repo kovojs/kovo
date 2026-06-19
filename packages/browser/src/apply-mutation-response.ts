@@ -9,14 +9,20 @@ import { applyFragments } from './morph.js';
 import type { MorphFragment, MorphRoot } from './morph.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { MutationResponseBodyChunks, QueryChunk } from './wire-parser.js';
-import { readMutationResponseBodyChunks } from './wire-parser.js';
-import type { FragmentChunk } from './wire-response-scanner.js';
+import {
+  readMutationResponseBodyChunks,
+  readMutationResponseBodyPrefixChunks,
+} from './wire-parser.js';
+import type { FragmentChunk, StreamTextChunk } from './wire-response-scanner.js';
 import type { IslandSignalScope } from './handler-context.js';
+import { applyStreamTextChunks, type StreamTextRoot } from './stream-text.js';
 
 /** @generated Facts about an applied mutation response: the `fragments` and `queries` it touched (SPEC §9.1). */
 export interface AppliedMutationResponse {
   fragments: FragmentChunk[];
   queries: string[];
+  streams?: string[];
+  texts?: StreamTextChunk[];
 }
 
 export interface ApplyMutationResponseChunksToRuntimeOptions {
@@ -42,6 +48,11 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
 export type ApplyMutationResponseBodyToRuntimeOptions =
   ApplyMutationResponseChunksToRuntimeOptions & {
     body: string;
+  };
+
+export type ApplyStreamingMutationResponseBodyToRuntimeOptions =
+  ApplyMutationResponseChunksToRuntimeOptions & {
+    body: ReadableStream<Uint8Array>;
   };
 
 /** @generated An {@link AppliedMutationResponse} plus the `appliedFragments` morphed into a root (SPEC §9.1). */
@@ -114,7 +125,15 @@ export function applyMutationResponseChunksToRuntime(
         }),
       }),
     ],
+    ...(effectiveChunks.texts === undefined ? {} : { texts: effectiveChunks.texts }),
   };
+
+  const streams = applyStreamTextChunks(
+    options.root as StreamTextRoot | undefined,
+    effectiveChunks.texts,
+    definedProps({ onError: options.onError }),
+  );
+  if (streams.length > 0) applied.streams = streams;
 
   if (!options.root) return applied;
 
@@ -149,4 +168,99 @@ export function applyMutationResponseBodyToRuntime(
     readMutationResponseBodyChunks(body, options.onError),
     applyOptions,
   );
+}
+
+export async function applyStreamingMutationResponseBodyToRuntime(
+  options: ApplyStreamingMutationResponseBodyToRuntimeOptions & { root: MorphRoot },
+): Promise<AppliedMutationResponseWithRoot>;
+export async function applyStreamingMutationResponseBodyToRuntime(
+  options: ApplyStreamingMutationResponseBodyToRuntimeOptions & { root?: undefined },
+): Promise<AppliedMutationResponse>;
+export async function applyStreamingMutationResponseBodyToRuntime(
+  options: ApplyStreamingMutationResponseBodyToRuntimeOptions,
+): Promise<AppliedMutationResponse | AppliedMutationResponseWithRoot>;
+export async function applyStreamingMutationResponseBodyToRuntime(
+  options: ApplyStreamingMutationResponseBodyToRuntimeOptions,
+): Promise<AppliedMutationResponse | AppliedMutationResponseWithRoot> {
+  const { body, ...applyOptions } = options;
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let pending = '';
+  let aggregate: AppliedMutationResponse | AppliedMutationResponseWithRoot | undefined;
+
+  try {
+    while (true) {
+      const read = await reader.read();
+      if (read.done) break;
+      pending += decoder.decode(read.value, { stream: true });
+      const result = flushCompleteMutationResponsePrefix(pending, applyOptions);
+      pending = result.pending;
+      aggregate = mergeAppliedMutationResponses(aggregate, result.applied);
+    }
+
+    pending += decoder.decode();
+    if (pending.length > 0) {
+      aggregate = mergeAppliedMutationResponses(
+        aggregate,
+        applyMutationResponseChunksToRuntime(
+          readMutationResponseBodyChunks(pending, options.onError),
+          applyOptions,
+        ),
+      );
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return aggregate ?? emptyAppliedMutationResponse(options.root);
+}
+
+function flushCompleteMutationResponsePrefix(
+  pending: string,
+  options: ApplyMutationResponseChunksToRuntimeOptions,
+): {
+  applied?: AppliedMutationResponse | AppliedMutationResponseWithRoot;
+  pending: string;
+} {
+  const { chunks, consumed } = readMutationResponseBodyPrefixChunks(pending, options.onError);
+  if (consumed === 0) return { pending };
+
+  return {
+    applied: applyMutationResponseChunksToRuntime(chunks, options),
+    pending: pending.slice(consumed),
+  };
+}
+
+function mergeAppliedMutationResponses(
+  current: AppliedMutationResponse | AppliedMutationResponseWithRoot | undefined,
+  next: AppliedMutationResponse | AppliedMutationResponseWithRoot | undefined,
+): AppliedMutationResponse | AppliedMutationResponseWithRoot | undefined {
+  if (!next) return current;
+  if (!current) return next;
+
+  const merged: AppliedMutationResponse | AppliedMutationResponseWithRoot = {
+    fragments: [...current.fragments, ...next.fragments],
+    queries: [...current.queries, ...next.queries],
+    ...(('appliedFragments' in current || 'appliedFragments' in next)
+      ? {
+          appliedFragments: [
+            ...('appliedFragments' in current ? current.appliedFragments : []),
+            ...('appliedFragments' in next ? next.appliedFragments : []),
+          ],
+        }
+      : {}),
+    ...((current.streams || next.streams)
+      ? { streams: [...(current.streams ?? []), ...(next.streams ?? [])] }
+      : {}),
+    ...((current.texts || next.texts)
+      ? { texts: [...(current.texts ?? []), ...(next.texts ?? [])] }
+      : {}),
+  };
+  return merged;
+}
+
+function emptyAppliedMutationResponse(
+  root: MorphRoot | undefined,
+): AppliedMutationResponse | AppliedMutationResponseWithRoot {
+  return root ? { appliedFragments: [], fragments: [], queries: [] } : { fragments: [], queries: [] };
 }

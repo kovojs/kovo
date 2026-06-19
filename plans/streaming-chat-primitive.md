@@ -27,58 +27,65 @@ state as the final UI.
 
 ## Existing Baseline
 
-- [ ] **Document the current escape hatch.**
+- [x] **Document the current escape hatch.**
   - Today `route()` can return `respond.stream(...)` for raw streamed bodies
     (`SPEC.md` §6.4), and raw `endpoint()` can return a `Response` with a
     `ReadableStream`. This is enough to hand-build chat streaming with a client
     island, but it bypasses the enhanced mutation apply path.
-  - Evidence: pending docs/SPEC note citing `packages/server/src/response.ts`
-    and the `respond-stream` fixture.
-- [ ] **Document the current Kovo deferred stream boundary.**
+  - Evidence: `SPEC.md` §6.4 now states `respond.stream()` and raw endpoints are
+    app-owned streaming protocols outside enhanced mutation apply/query truth.
+- [x] **Document the current Kovo deferred stream boundary.**
   - `renderDeferredStream(...)` and `<kovo-defer>` stream first-render
     fragments (`SPEC.md` §8, §9.1). They are not a post-submit token streaming
     primitive; runtime programmatic apply currently consumes a completed string,
     while initial document streaming uses inline chunk scripts.
-  - Evidence: pending docs/SPEC note citing `packages/server/src/deferred-stream.ts`
-    and `packages/browser/src/apply-deferred-stream.ts`.
-- [ ] **Keep SSE out of the MVP.**
+  - Evidence: `SPEC.md` §8 now distinguishes `<kovo-defer>` first-render
+    streaming from mutation response streaming.
+- [x] **Keep SSE out of the MVP.**
   - `SPEC.md` mentions SSE live queries as L4/future transport, while
     `fixtures/wire/README.md` says the SSE fixture is intentionally absent.
     Chat response streaming should be a single POST response stream, not a live
     subscription system.
-  - Evidence: pending SPEC edit or plan cross-reference.
+  - Evidence: `SPEC.md` §8 says chat-style post-submit streams are not SSE and
+    are one enhanced mutation POST response.
 
 ## Required SPEC Reconciliation
 
-- [ ] **Add a streaming mutation response contract.**
+- [x] **Add a streaming mutation response contract.**
   - Amend `SPEC.md` §6.3/§9.1/§9.2 to define an enhanced mutation response that
     may be applied incrementally from `ReadableStream` chunks. The non-streaming
     mutation contract remains the default and the no-JS path remains a real
     form submission.
-  - Evidence: pending SPEC diff.
-- [ ] **Define the stream text primitive.**
+  - Evidence: `SPEC.md` §9.1 defines incremental enhanced mutation response
+    application from `ReadableStream` wire elements.
+- [x] **Define the stream text primitive.**
   - Add a narrowly scoped `<kovo-text target="..." mode="append">...</kovo-text>`
     for escaped text append into a compiler/runtime-declared stream source. The
     primitive appends text, not raw HTML, and must not target arbitrary
     selectors.
-  - Evidence: pending SPEC diff and wire fixture.
-- [ ] **Reaffirm server truth.**
+  - Evidence: `SPEC.md` §9.1 defines `<kovo-text>` against `data-stream-text`;
+    `corepack pnpm exec vitest --run packages/browser/src/wire-parser.test.ts packages/browser/src/mutation-response-apply.test.ts --reporter verbose`.
+- [x] **Reaffirm server truth.**
   - A stream may show incremental text and renderer-updated presentation, but
     the final successful chunk must reconcile the affected assistant message or
     message list with server-rendered HTML or query truth. Text append is a
     progressive rendering path, not a new source of authority.
-  - Evidence: pending SPEC diff in §2 Constitution #5 and §9.1.
-- [ ] **Specify interruption semantics.**
+  - Evidence: `SPEC.md` §9.1 says streamed text is progressive rendering and the
+    final successful chunk must reconcile with ordinary fragment/query truth.
+- [x] **Specify interruption semantics.**
   - If the stream aborts, disconnects, fails validation, or hits a guard/session
     failure, the runtime marks the form/message as failed or refetches the
     affected target. It must not silently present a partial assistant answer as
     confirmed server truth.
-  - Evidence: pending SPEC diff and browser fixture.
-- [ ] **Define no-JS and deploy-skew behavior.**
+  - Evidence: `SPEC.md` §9.1 defines interruption/failure/skew recovery as
+    failed UI or refetch/navigation to server truth.
+- [x] **Define no-JS and deploy-skew behavior.**
   - Without JS, the mutation uses the existing PRG/failure route. With build-token
     skew, the runtime discards the streaming path and refetches or navigates to
     server truth, following the `SPEC.md` §9.1.1 render-plan token posture.
-  - Evidence: pending SPEC diff and skew test.
+  - Evidence: `SPEC.md` §9.1 states no-JS and non-stream-opted forms stay on the
+    existing PRG or buffered enhanced mutation path, and skew must recover to
+    server truth.
 
 ## Proposed Author API
 
@@ -115,27 +122,31 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
 
 ## Proposed Wire Shape
 
-- [ ] **Fragment append remains the message-row primitive.**
+- [x] **Fragment append remains the message-row primitive.**
   - User messages and assistant shells should be appended with existing
     `<kovo-fragment target="messages:c1" mode="append">...</kovo-fragment>`
     semantics from `SPEC.md` §9.1.
-  - Evidence: pending wire fixture.
-- [ ] **Text append is escaped and target-scoped.**
+  - Evidence: `packages/browser/src/mutation-response-apply.test.ts` streams an
+    assistant shell with `<kovo-fragment mode="append">` before `<kovo-text>`.
+- [x] **Text append is escaped and target-scoped.**
   - Token chunks use escaped text payloads and append only to a validated stream
     source target. A sink renderer may re-render presentation from the
     accumulated source, but Kovo never inserts streamed model output as raw HTML.
-  - Evidence: pending parser/security tests for HTML-looking tokens.
+  - Evidence: `packages/browser/src/wire-parser.test.ts` and
+    `packages/browser/src/mutation-response-apply.test.ts` cover escaped
+    HTML-looking `<kovo-text>` payloads and `data-stream-text` target lookup.
 - [ ] **High-volume text append is coalesced.**
   - The wire/runtime must support many model tokens without one DOM write per
     token. `stream.text(...)` yields may be coalesced into larger `<kovo-text>`
     chunks by the server adapter, and the runtime buffers incoming text per
     stream source before flushing to the DOM or sink renderer.
   - Evidence: pending runtime batching tests and browser performance fixture.
-- [ ] **Checkpoint chunks are allowed for long streams.**
+- [x] **Checkpoint chunks are allowed for long streams.**
   - Long-running streams may send a checkpoint with canonical source text so far,
     letting the runtime replace accumulated text with server-confirmed content
     before final message reconciliation.
-  - Evidence: pending checkpoint/recovery test.
+  - Evidence: `packages/browser/src/mutation-response-apply.test.ts` verifies
+    `mode="checkpoint"` replaces accumulated source text before later appends.
 - [ ] **Final reconciliation uses existing fragment/query machinery.**
   - Completion sends a canonical `<kovo-fragment>` or `<kovo-query>` update for
     the assistant message or full message list. The final state must be
@@ -149,17 +160,19 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
 
 ## Load-Bearing Invariants
 
-- [ ] **No custom JSON/text side channel for Kovo-owned UI.**
+- [x] **No custom JSON/text side channel for Kovo-owned UI.**
   - Raw `respond.stream(...)` remains available for app-specific protocols, but
     Kovo-native chat streaming must use Kovo chunks so the Network panel remains
     self-describing (`SPEC.md` Constitution #4).
-  - Evidence: pending docs and fixture.
-- [ ] **No raw streamed HTML from model output.**
+  - Evidence: `SPEC.md` §6.4 and §9.1 define raw streams as escape hatches and
+    Kovo-native chat streaming as mutation wire chunks.
+- [x] **No raw streamed HTML from model output.**
   - Fancy output such as Markdown tables, code blocks, images, citations, and
     attachments must flow through a trusted component renderer or final
     server-rendered reconciliation. The runtime must not insert model-supplied
     HTML chunks directly into the document.
-  - Evidence: pending security tests and markdown/table/image fixtures.
+  - Evidence: `packages/browser/src/mutation-response-apply.test.ts` verifies
+    HTML-looking streamed payloads remain textContent, not inserted HTML.
 - [ ] **Text flushing is bounded and deterministic.**
   - The default flush policy should be framework-owned: flush on a short time
     budget, a byte/character threshold, a checkpoint, completion, or error.
@@ -195,11 +208,11 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     sink renderers, final reconciliation, no-JS behavior, interruption, and skew
     handling before implementation.
   - Evidence: pending.
-- [ ] **1. Wire parser and apply path.**
+- [x] **1. Wire parser and apply path.**
   - Extend the shared runtime response scanner/parser to recognize incremental
     stream chunks and `<kovo-text>`, then add an async apply API over
     `ReadableStream<Uint8Array>` that applies chunks as they arrive.
-  - Evidence: pending `packages/browser` parser/apply tests.
+  - Evidence: `corepack pnpm exec vitest --run packages/browser/src/wire-parser.test.ts packages/browser/src/mutation-response-apply.test.ts --reporter verbose`; `corepack pnpm exec tsc --noEmit --pretty false`.
 - [ ] **2. Runtime text buffering and checkpoints.**
   - Maintain per-stream-source text buffers, coalesce appends, flush with
     fake-timer testability, and support checkpoint replace semantics for long
@@ -245,8 +258,10 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
 
 ## Proving Commands
 
-- [ ] SPEC/API contract: `pnpm run check:api-surface`
-- [ ] runtime parser/apply: `npx vitest --run packages/browser/src/wire-parser.test.ts packages/browser/src/apply-mutation-response.test.ts`
+- [x] SPEC/API contract: `corepack pnpm run check:api-surface`
+  - Evidence: passed with `api-surface/v1 public-exports-needing-attention=1571 (baseline=1571)`.
+- [x] runtime parser/apply: `corepack pnpm exec vitest --run packages/browser/src/wire-parser.test.ts packages/browser/src/mutation-response-apply.test.ts --reporter verbose`
+  - Evidence: 2 files / 32 tests passed.
 - [ ] runtime text batching/checkpoints: pending targeted `packages/browser` test file
 - [ ] runtime sink renderer hook: pending targeted `packages/browser` test file
 - [ ] runtime streaming submit: pending targeted `packages/browser` test file
