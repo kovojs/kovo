@@ -19,6 +19,12 @@ export const GallerySwitchDemo$Switch_keydown = handler((event, ctx) => {
 export const GallerySwitchDemo$Switch_checked_derive = derive(['state'], (state) =>
   state.checked ? '' : null,
 );
+export const GallerySwitchDemo$Switch_aria_checked_derive = derive(['state'], (state) =>
+  state.checked ? 'true' : 'false',
+);
+export const GallerySwitchDemo$Switch_data_state_derive = derive(['state'], (state) =>
+  state.checked ? 'checked' : 'unchecked',
+);
 export const GallerySwitchDemo$output_text_derive = derive(['state'], (state) =>
   state.checked ? 'on' : 'off',
 );

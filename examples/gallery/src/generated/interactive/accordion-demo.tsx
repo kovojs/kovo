@@ -166,7 +166,7 @@ export const GalleryAccordionDemo = component({
           </AccordionContent>
         </AccordionItem>
         <output
-          class="text-xs text-neutral-500"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="accordion-value"
           data-bind="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$output_text_derive"
         >

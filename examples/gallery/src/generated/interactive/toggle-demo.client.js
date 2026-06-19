@@ -10,6 +10,12 @@ export const GalleryToggleDemo$Toggle_click = handler((event, ctx) => {
 });
 
 export const GalleryToggleDemo$Toggle_pressed_derive = derive(['state'], (state) => state.pressed);
+export const GalleryToggleDemo$Toggle_aria_pressed_derive = derive(['state'], (state) =>
+  state.pressed ? 'true' : 'false',
+);
+export const GalleryToggleDemo$Toggle_data_state_derive = derive(['state'], (state) =>
+  state.pressed ? 'pressed' : 'off',
+);
 export const GalleryToggleDemo$output_text_derive = derive(['state'], (state) =>
   state.pressed ? 'pressed' : 'off',
 );

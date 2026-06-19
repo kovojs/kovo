@@ -64,8 +64,6 @@ import {
   SelectValue,
 } from '@kovojs/ui/select';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
-
 export interface GallerySelectDemoState {
   highlightedValue: string;
   open: boolean;
@@ -102,7 +100,11 @@ export const GallerySelectDemo = component({
         kovo-state='{"highlightedValue":"standard","open":false,"value":"standard"}'
       >
         <form id="gallery-select-form" data-gallery-form="select" />
-        <label id="gallery-select-label" for="gallery-select-trigger" class={LABEL_CLASS}>
+        <label
+          id="gallery-select-label"
+          for="gallery-select-trigger"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           Shipping speed
         </label>
         <SelectHiddenInput

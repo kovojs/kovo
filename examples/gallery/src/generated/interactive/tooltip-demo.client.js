@@ -48,6 +48,18 @@ export const GalleryTooltipDemo$TooltipTrigger_open_derive = derive(['state'], (
 export const GalleryTooltipDemo$TooltipContent_open_derive = derive(['state'], (state) =>
   state.open ? '' : null,
 );
+export const GalleryTooltipDemo$Tooltip_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$TooltipTrigger_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$TooltipContent_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$TooltipContent_hidden_derive = derive(['state'], (state) =>
+  state.open ? null : '',
+);
 export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );

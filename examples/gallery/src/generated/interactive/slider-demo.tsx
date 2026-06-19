@@ -60,9 +60,6 @@ export const GallerySliderDemo$output_text_derive = derive(['state'], (state: an
 import { component } from '@kovojs/core';
 import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from '@kovojs/ui/slider';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
-const OUTPUT_CLASS = 'text-xs text-neutral-500';
-
 export interface GallerySliderDemoState {
   dragging: boolean;
   dragPointerStart: number;
@@ -100,7 +97,10 @@ export const GallerySliderDemo = component({
         kovo-state='{"dragging":false,"dragPointerStart":0,"dragValueStart":25,"value":25}'
       >
         <form id="gallery-slider-form" data-gallery-form="slider" />
-        <label id="gallery-slider-label" class={LABEL_CLASS}>
+        <label
+          id="gallery-slider-label"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           Completion
         </label>
         <SliderInput
@@ -152,7 +152,7 @@ export const GallerySliderDemo = component({
         </SliderTrack>
         <output
           data-demo-state="slider-value"
-          class={OUTPUT_CLASS}
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-bind="/c/__v/21c09a9e/examples/gallery/src/generated/interactive/slider-demo.client.js#GallerySliderDemo$output_text_derive"
         >
           {String(state.value)}

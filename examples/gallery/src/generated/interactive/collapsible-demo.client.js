@@ -19,3 +19,18 @@ export const GalleryCollapsibleDemo$CollapsibleTrigger_open_derive = derive(['st
 export const GalleryCollapsibleDemo$CollapsibleContent_open_derive = derive(['state'], (state) =>
   state.open ? '' : null,
 );
+export const GalleryCollapsibleDemo$Collapsible_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryCollapsibleDemo$CollapsibleTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'true' : 'false'),
+);
+export const GalleryCollapsibleDemo$CollapsibleTrigger_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
+);
+export const GalleryCollapsibleDemo$CollapsibleContent_data_state_derive = derive(
+  ['state'],
+  (state) => (state.open ? 'open' : 'closed'),
+);

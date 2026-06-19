@@ -98,8 +98,6 @@ import {
   type AutocompleteItem,
 } from '@kovojs/ui/autocomplete';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
-
 export interface GalleryAutocompleteDemoState {
   highlightedValue: string;
   inputValue: string;
@@ -150,7 +148,11 @@ export const GalleryAutocompleteDemo = component({
         data-bind:data-state="/c/__v/19b591e8/examples/gallery/src/generated/interactive/autocomplete-demo.client.js#GalleryAutocompleteDemo$Autocomplete_data_state_derive"
         kovo-state='{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}'
       >
-        <label id="gallery-autocomplete-label" for="gallery-autocomplete-input" class={LABEL_CLASS}>
+        <label
+          id="gallery-autocomplete-label"
+          for="gallery-autocomplete-input"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           Tag
         </label>
         <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />

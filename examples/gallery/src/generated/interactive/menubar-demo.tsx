@@ -81,7 +81,7 @@ export const GalleryMenubarDemo = component({
 
     return (
       <section
-        class="grid gap-2"
+        style="display:grid;gap:0.5rem"
         data-gallery-interactive="menubar"
         on:keydown="/c/__v/f423040f/examples/gallery/src/generated/interactive/menubar-demo.client.js#GalleryMenubarDemo$section_keydown"
         data-open={state.openValue || 'none'}

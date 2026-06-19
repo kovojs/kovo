@@ -13,6 +13,22 @@ export const GalleryCollapsibleDemo$CollapsibleContent_open_derive = derive(
   ['state'],
   (state: any) => (state.open ? '' : null),
 );
+export const GalleryCollapsibleDemo$Collapsible_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'open' : 'closed'),
+);
+export const GalleryCollapsibleDemo$CollapsibleTrigger_aria_expanded_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'true' : 'false'),
+);
+export const GalleryCollapsibleDemo$CollapsibleTrigger_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'open' : 'closed'),
+);
+export const GalleryCollapsibleDemo$CollapsibleContent_data_state_derive = derive(
+  ['state'],
+  (state: any) => (state.open ? 'open' : 'closed'),
+);
 
 import { component } from '@kovojs/core';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@kovojs/ui/collapsible';
@@ -32,21 +48,25 @@ export const GalleryCollapsibleDemo = component({
       <Collapsible
         data-gallery-interactive="collapsible"
         open={state.open}
-        data-bind:open="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$Collapsible_open_derive"
+        data-bind:open="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$Collapsible_open_derive"
+        data-bind:data-state="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$Collapsible_data_state_derive"
         kovo-state='{"open":false}'
       >
         <CollapsibleTrigger
           contentId={contentId}
-          on:click="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_click"
+          on:click="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_click"
           open={state.open}
-          data-bind:open="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_open_derive"
+          data-bind:open="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_open_derive"
+          data-bind:aria-expanded="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_aria_expanded_derive"
+          data-bind:data-state="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleTrigger_data_state_derive"
         >
           Release notes
         </CollapsibleTrigger>
         <CollapsibleContent
           contentId={contentId}
           open={state.open}
-          data-bind:open="/c/__v/f702007c/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleContent_open_derive"
+          data-bind:open="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleContent_open_derive"
+          data-bind:data-state="/c/__v/986a9a33/examples/gallery/src/generated/interactive/collapsible-demo.client.js#GalleryCollapsibleDemo$CollapsibleContent_data_state_derive"
         >
           Added browser-backed compiled coverage.
         </CollapsibleContent>

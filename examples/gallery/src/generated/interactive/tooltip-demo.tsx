@@ -15,6 +15,18 @@ export const GalleryTooltipDemo$TooltipTrigger_open_derive = derive(['state'], (
 export const GalleryTooltipDemo$TooltipContent_open_derive = derive(['state'], (state: any) =>
   state.open ? '' : null,
 );
+export const GalleryTooltipDemo$Tooltip_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$TooltipTrigger_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$TooltipContent_data_state_derive = derive(['state'], (state: any) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryTooltipDemo$TooltipContent_hidden_derive = derive(['state'], (state: any) =>
+  state.open ? null : '',
+);
 export const GalleryTooltipDemo$output_text_derive = derive(['state'], (state: any) =>
   state.open ? 'open' : 'closed',
 );
@@ -37,33 +49,37 @@ export const GalleryTooltipDemo = component({
       <Tooltip
         data-gallery-interactive="tooltip"
         open={state.open}
-        data-bind:open="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$Tooltip_open_derive"
+        data-bind:open="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$Tooltip_open_derive"
+        data-bind:data-state="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$Tooltip_data_state_derive"
         kovo-state='{"open":false}'
       >
         <TooltipTrigger
           contentId={contentId}
-          on:blur="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_blur"
-          on:focus="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_focus"
-          on:keydown="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_keydown"
-          on:pointerenter="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_pointerenter"
-          on:pointerleave="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_pointerleave"
+          on:blur="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_blur"
+          on:focus="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_focus"
+          on:keydown="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_keydown"
+          on:pointerenter="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_pointerenter"
+          on:pointerleave="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_pointerleave"
           aria-describedby={state.open ? 'gallery-tooltip-content' : null}
-          data-bind:aria-describedby="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_aria_describedby_derive"
+          data-bind:aria-describedby="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_aria_describedby_derive"
           open={state.open}
-          data-bind:open="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_open_derive"
+          data-bind:open="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_open_derive"
+          data-bind:data-state="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipTrigger_data_state_derive"
         >
           Shipping code
         </TooltipTrigger>
         <TooltipContent
           contentId={contentId}
           open={state.open}
-          data-bind:open="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipContent_open_derive"
+          data-bind:open="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipContent_open_derive"
+          data-bind:data-state="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipContent_data_state_derive"
+          data-bind:hidden="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$TooltipContent_hidden_derive"
         >
           Use the code printed on the packing slip.
         </TooltipContent>
         <output
           data-demo-state="tooltip-open"
-          data-bind="/c/__v/9d77b79d/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$output_text_derive"
+          data-bind="/c/__v/8e82e452/examples/gallery/src/generated/interactive/tooltip-demo.client.js#GalleryTooltipDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

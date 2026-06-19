@@ -104,10 +104,10 @@ export const GalleryCheckboxGroupDemo = component({
         kovo-state='{"activeValue":"updates","value":"updates"}'
       >
         <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
-        <h3 id="gallery-checkbox-group-label" class="text-sm font-medium">
+        <h3 id="gallery-checkbox-group-label" style="font-size:0.875rem;font-weight:500">
           Notifications
         </h3>
-        <label class="inline-flex items-center gap-2">
+        <label style="display:inline-flex;align-items:center;gap:0.5rem">
           <input
             id="gallery-checkbox-group-all"
             on:click="/c/__v/f3aca4b0/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js#GalleryCheckboxGroupDemo$input_click"
@@ -192,7 +192,7 @@ export const GalleryCheckboxGroupDemo = component({
           </CheckboxGroupLabel>
         </CheckboxGroupItem>
         <output
-          class="text-xs text-neutral-500"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="checkbox-group-value"
           data-bind="/c/__v/f3aca4b0/examples/gallery/src/generated/interactive/checkbox-group-demo.client.js#GalleryCheckboxGroupDemo$output_text_derive"
         >

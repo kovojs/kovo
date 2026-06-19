@@ -77,10 +77,6 @@ export const GalleryOtpFieldDemo$OtpFieldInput_value_derive_4 = derive(
 import { component } from '@kovojs/core';
 import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from '@kovojs/ui/otp-field';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
-const DESCRIPTION_CLASS = 'text-sm text-neutral-500';
-const OUTPUT_CLASS = 'text-xs text-neutral-500';
-
 export interface GalleryOtpFieldDemoState {
   activeSlot: number;
   value: string;
@@ -116,7 +112,7 @@ export const GalleryOtpFieldDemo = component({
         <label
           id="gallery-interactive-otp-label"
           for="gallery-interactive-otp-hidden"
-          class={LABEL_CLASS}
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
         >
           Verification code
         </label>
@@ -198,10 +194,14 @@ export const GalleryOtpFieldDemo = component({
             data-bind:value="/c/__v/178bd8b6/examples/gallery/src/generated/interactive/otp-field-demo.client.js#GalleryOtpFieldDemo$OtpFieldInput_value_derive_4"
           />
         </OtpFieldGroup>
-        <p id="gallery-interactive-otp-description" class={DESCRIPTION_CLASS}>
+        <p id="gallery-interactive-otp-description" style="font-size:0.875rem;color:#6b7280">
           Enter the four digit code.
         </p>
-        <output data-demo-state="otp-value" class={OUTPUT_CLASS} data-bind="state.value">
+        <output
+          data-demo-state="otp-value"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-bind="state.value"
+        >
           {state.value}
         </output>
       </OtpField>

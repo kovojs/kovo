@@ -6,6 +6,12 @@ export const GalleryToggleDemo$Toggle_pressed_derive = derive(
   ['state'],
   (state: any) => state.pressed,
 );
+export const GalleryToggleDemo$Toggle_aria_pressed_derive = derive(['state'], (state: any) =>
+  state.pressed ? 'true' : 'false',
+);
+export const GalleryToggleDemo$Toggle_data_state_derive = derive(['state'], (state: any) =>
+  state.pressed ? 'pressed' : 'off',
+);
 export const GalleryToggleDemo$output_text_derive = derive(['state'], (state: any) =>
   state.pressed ? 'pressed' : 'off',
 );
@@ -23,23 +29,25 @@ export const GalleryToggleDemo = component({
   state: () => ({ pressed: false }),
   render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => (
     <section
-      class="grid gap-2 text-sm text-neutral-950"
+      style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
       data-gallery-interactive="toggle"
       kovo-c="gallery-toggle-demo"
       kovo-state='{"pressed":false}'
     >
       <Toggle
         aria-label="Toggle gallery density"
-        on:click="/c/__v/3df9eaef/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_click"
+        on:click="/c/__v/2e9c5e37/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_click"
         pressed={state.pressed}
-        data-bind:pressed="/c/__v/3df9eaef/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_pressed_derive"
+        data-bind:pressed="/c/__v/2e9c5e37/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_pressed_derive"
+        data-bind:aria-pressed="/c/__v/2e9c5e37/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_aria_pressed_derive"
+        data-bind:data-state="/c/__v/2e9c5e37/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_data_state_derive"
       >
         Dense rows
       </Toggle>
       <output
-        class="text-xs text-neutral-500"
+        style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
         data-demo-state="pressed"
-        data-bind="/c/__v/3df9eaef/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$output_text_derive"
+        data-bind="/c/__v/2e9c5e37/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$output_text_derive"
       >
         {state.pressed ? 'pressed' : 'off'}
       </output>

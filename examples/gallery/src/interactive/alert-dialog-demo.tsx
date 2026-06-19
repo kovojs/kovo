@@ -12,8 +12,6 @@ import {
   alertDialogTriggerClick as _alertDialogTriggerClick,
 } from '@kovojs/ui/alert-dialog';
 
-const TITLE_STYLE = 'font-size:1rem;font-weight:600';
-const DESCRIPTION_STYLE = 'font-size:0.875rem;color:#525252';
 
 export interface GalleryAlertDialogDemoState {
   open: boolean;
@@ -60,10 +58,10 @@ export const GalleryAlertDialogDemo = component({
           }}
           titleId={titleId}
         >
-          <h2 style={TITLE_STYLE} id={titleId}>
+          <h2 style="font-size:1rem;font-weight:600" id={titleId}>
             Delete workspace?
           </h2>
-          <p style={DESCRIPTION_STYLE} id={descriptionId}>
+          <p style="font-size:0.875rem;color:#525252" id={descriptionId}>
             This removes the shared gallery workspace for every member.
           </p>
           <AlertDialogCancel

@@ -30,9 +30,9 @@ export const GalleryCheckboxDemo = component({
       data-bind:checked="/c/__v/817caa85/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_checked_derive"
       kovo-state='{"checked":"indeterminate"}'
     >
-      <span class="select-none leading-none">Email summary</span>
+      <span style="user-select:none;line-height:1">Email summary</span>
       <output
-        class="text-xs text-neutral-500"
+        style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
         data-demo-state="checked"
         data-bind="/c/__v/817caa85/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$output_text_derive"
       >

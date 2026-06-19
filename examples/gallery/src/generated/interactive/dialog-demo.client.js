@@ -35,6 +35,15 @@ export const GalleryDialogDemo$DialogContent_open_derive = derive(['state'], (st
 export const GalleryDialogDemo$DialogClose_open_derive = derive(['state'], (state) =>
   state.open ? '' : null,
 );
+export const GalleryDialogDemo$Dialog_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDialogDemo$DialogContent_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
+export const GalleryDialogDemo$DialogClose_data_state_derive = derive(['state'], (state) =>
+  state.open ? 'open' : 'closed',
+);
 export const GalleryDialogDemo$output_text_derive = derive(['state'], (state) =>
   state.open ? 'open' : 'closed',
 );

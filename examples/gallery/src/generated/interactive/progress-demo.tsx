@@ -17,8 +17,6 @@ import { component } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
 import { Progress } from '@kovojs/ui/progress';
 
-const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
-
 export interface GalleryProgressDemoState {
   value: number | null;
 }
@@ -32,7 +30,7 @@ export const GalleryProgressDemo = component({
 
     return (
       <section
-        class={ROOT_CLASS}
+        style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
         data-gallery-interactive="progress"
         kovo-c="gallery-progress-demo"
         kovo-state='{"value":40}'
@@ -51,7 +49,7 @@ export const GalleryProgressDemo = component({
         >
           Upload progress
         </Progress>
-        <div class="inline-flex gap-2">
+        <div style="display:inline-flex;gap:0.5rem">
           <Button
             type="button"
             variant="secondary"
@@ -68,6 +66,7 @@ export const GalleryProgressDemo = component({
           </Button>
         </div>
         <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="progress-value"
           data-bind="/c/__v/fb6e5dee/examples/gallery/src/generated/interactive/progress-demo.client.js#GalleryProgressDemo$output_text_derive"
         >

@@ -64,12 +64,12 @@ export const GalleryToggleGroupDemo = component({
 
     return (
       <section
-        class="grid gap-2 text-sm text-neutral-950"
+        style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
         data-gallery-interactive="toggle-group"
         kovo-c="gallery-toggle-group-demo"
         kovo-state='{"activeValue":"bold","value":"bold"}'
       >
-        <h3 id="gallery-toggle-group-label" class="text-sm font-medium">
+        <h3 id="gallery-toggle-group-label" style="font-size:0.875rem;font-weight:500">
           Text style
         </h3>
         <ToggleGroup
@@ -124,7 +124,7 @@ export const GalleryToggleGroupDemo = component({
           </ToggleGroupItem>
         </ToggleGroup>
         <output
-          class="text-xs text-neutral-500"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="toggle-group-value"
           data-bind="/c/__v/01d06719/examples/gallery/src/generated/interactive/toggle-group-demo.client.js#GalleryToggleGroupDemo$output_text_derive"
         >

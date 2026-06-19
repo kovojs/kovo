@@ -15,8 +15,6 @@ import {
   toastViewportKeyDown as _toastViewportKeyDown,
 } from '@kovojs/ui/toast';
 
-const TRIGGER_STYLE =
-  'display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)';
 
 export interface GalleryToastDemoState {
   activeCount: number;
@@ -75,7 +73,7 @@ export const GalleryToastDemo = component({
       >
         <style>{'@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}'}</style>
         <button
-          style={TRIGGER_STYLE}
+          style="display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)"
           data-toast-show=""
           type="button"
           onClick={() => {

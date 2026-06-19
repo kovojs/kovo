@@ -114,7 +114,7 @@ export const GalleryRadioGroupDemo = component({
         kovo-state='{"value":"email"}'
       >
         <form id="gallery-radio-form" data-gallery-form="radio-group" />
-        <h3 id="gallery-radio-group-label" class="text-sm font-medium">
+        <h3 id="gallery-radio-group-label" style="font-size:0.875rem;font-weight:500">
           Contact channel
         </h3>
         <RadioGroupItem
@@ -197,7 +197,7 @@ export const GalleryRadioGroupDemo = component({
           </RadioGroupLabel>
         </RadioGroupItem>
         <output
-          class="text-xs text-neutral-500"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="radio-value"
           data-bind="state.value"
         >

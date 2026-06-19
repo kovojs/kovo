@@ -19,8 +19,6 @@ import { component } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
 import { Meter, type MeterDataState } from '@kovojs/ui/meter';
 
-const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
-
 export interface GalleryMeterDemoState {
   dataState: MeterDataState;
   value: number;
@@ -43,7 +41,7 @@ export const GalleryMeterDemo = component({
 
     return (
       <section
-        class={ROOT_CLASS}
+        style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
         data-gallery-interactive="meter"
         kovo-c="gallery-meter-demo"
         kovo-state='{"dataState":"suboptimum","value":72}'
@@ -74,6 +72,7 @@ export const GalleryMeterDemo = component({
           Optimize capacity
         </Button>
         <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="meter-value"
           data-bind="/c/__v/b4ef4e1c/examples/gallery/src/generated/interactive/meter-demo.client.js#GalleryMeterDemo$output_text_derive"
         >

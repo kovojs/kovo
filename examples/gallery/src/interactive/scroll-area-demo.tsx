@@ -17,8 +17,6 @@ import {
 // enough to scroll; that inline style wins over the @kovojs/ui max-h-56 utility.
 // The jump-to-end control is not part of the scroll-area component surface, so it
 // carries demo-local inline styling (the gallery has no Tailwind/utility CSS).
-const TOGGLE_STYLE =
-  'display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;gap:0.5rem;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)';
 
 export interface GalleryScrollAreaDemoState {
   dragging: boolean;
@@ -264,7 +262,7 @@ export const GalleryScrollAreaDemo = component({
         <button
           aria-controls={viewportId}
           aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
-          style={TOGGLE_STYLE}
+          style="display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;gap:0.5rem;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)"
           id="gallery-scroll-area-toggle"
           onClick={() => {
             const nextAtEnd = state.scrollY !== 'end';

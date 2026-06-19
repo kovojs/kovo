@@ -67,7 +67,7 @@ export const GalleryToolbarDemo = component({
 
     return (
       <div
-        class="grid gap-2"
+        style="display:grid;gap:0.5rem"
         data-gallery-interactive="toolbar"
         kovo-c="gallery-toolbar-demo"
         kovo-state='{"activeValue":"bold","pressedValue":"bold"}'

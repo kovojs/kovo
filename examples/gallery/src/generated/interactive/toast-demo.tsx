@@ -35,9 +35,6 @@ import {
   ToastViewport,
 } from '@kovojs/ui/toast';
 
-const TRIGGER_CLASS =
-  'inline-flex h-9 w-fit items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-950 shadow-sm transition-colors hover:bg-neutral-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-neutral-950';
-
 export interface GalleryToastDemoState {
   activeCount: number;
   activeOpen: boolean;
@@ -77,7 +74,7 @@ export const GalleryToastDemo = component({
       >
         <style>{'@keyframes gallery-toast-auto-dismiss{from{opacity:1}to{opacity:1}}'}</style>
         <button
-          class={TRIGGER_CLASS}
+          style="display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)"
           data-toast-show=""
           type="button"
           on:click="/c/__v/68d4399d/examples/gallery/src/generated/interactive/toast-demo.client.js#GalleryToastDemo$button_click"
@@ -157,12 +154,17 @@ export const GalleryToastDemo = component({
           </ToastAction>
         </Toast>
         <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-demo-state="toast-open"
           data-bind="/c/__v/68d4399d/examples/gallery/src/generated/interactive/toast-demo.client.js#GalleryToastDemo$output_text_derive"
         >
           {state.activeOpen ? 'open' : state.previousOpen ? 'stacked' : 'empty'}
         </output>
-        <output data-demo-state="toast-count" data-bind="state.activeCount">
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="toast-count"
+          data-bind="state.activeCount"
+        >
           {state.activeCount}
         </output>
       </ToastViewport>

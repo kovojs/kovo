@@ -35,8 +35,6 @@ import {
   NumberFieldInput,
 } from '@kovojs/ui/number-field';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
-
 export interface GalleryNumberFieldDemoState {
   value: number;
 }
@@ -65,7 +63,7 @@ export const GalleryNumberFieldDemo = component({
         id={formId}
         kovo-state='{"value":2}'
       >
-        <label for={inputId} class={LABEL_CLASS}>
+        <label for={inputId} style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
           Seats
         </label>
         <NumberFieldControl {...fieldState}>
@@ -106,7 +104,7 @@ export const GalleryNumberFieldDemo = component({
         </NumberFieldControl>
         <output
           data-demo-state="value"
-          class="text-xs text-neutral-500"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
           data-bind="/c/__v/14473a3d/examples/gallery/src/generated/interactive/number-field-demo.client.js#GalleryNumberFieldDemo$output_text_derive"
         >
           {String(state.value)}

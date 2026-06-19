@@ -10,8 +10,6 @@ import {
   dialogTriggerClick as _dialogTriggerClick,
 } from '@kovojs/ui/dialog';
 
-const TITLE_STYLE = 'font-size:1rem;font-weight:600';
-const DESCRIPTION_STYLE = 'font-size:0.875rem;color:#525252';
 
 export interface GalleryDialogDemoState {
   open: boolean;
@@ -50,10 +48,10 @@ export const GalleryDialogDemo = component({
           open={state.open}
           titleId={titleId}
         >
-          <h2 style={TITLE_STYLE} id={titleId}>
+          <h2 style="font-size:1rem;font-weight:600" id={titleId}>
             Cart review
           </h2>
-          <p style={DESCRIPTION_STYLE} id={descriptionId}>
+          <p style="font-size:0.875rem;color:#525252" id={descriptionId}>
             Confirm the current cart before checkout.
           </p>
           <DialogClose

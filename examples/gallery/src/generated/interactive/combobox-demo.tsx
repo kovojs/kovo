@@ -107,8 +107,6 @@ import {
   type ComboboxItem,
 } from '@kovojs/ui/combobox';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
-
 export interface GalleryComboboxDemoState {
   highlightedValue: string;
   inputValue: string;
@@ -153,7 +151,11 @@ export const GalleryComboboxDemo = component({
         data-bind:data-state="/c/__v/e6767835/examples/gallery/src/generated/interactive/combobox-demo.client.js#GalleryComboboxDemo$Combobox_data_state_derive"
         kovo-state='{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}'
       >
-        <label id="gallery-combobox-label" for="gallery-combobox-input" class={LABEL_CLASS}>
+        <label
+          id="gallery-combobox-label"
+          for="gallery-combobox-input"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           City
         </label>
         <form id="gallery-combobox-form" data-gallery-form="combobox" />
