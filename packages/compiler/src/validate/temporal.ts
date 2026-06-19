@@ -1,12 +1,16 @@
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { componentQueryShapes } from '../analyze/query-shapes.js';
 import {
   callExpressions,
+  componentOptionObjectEntries,
   componentOptionObjectKeys,
   jsxElements,
   jsxExpressions,
   type ComponentModuleModel,
   type PropertyAccessPathModel,
 } from '../scan/parse.js';
+import type { CompileComponentOptions, QueryShape } from '../types.js';
+import { isQueryShapeObject, isQueryShapeWrapper, unwrapQueryShape } from '../types.js';
 
 export function validateUntrackedClockReadsInDerives(
   source: string,
@@ -41,6 +45,7 @@ export function validateDeclaredClockReadsInRender(
   source: string,
   model: ComponentModuleModel,
   fileName: string,
+  options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> = {},
 ): CompilerDiagnostic[] {
   const declaredClocks = new Set(componentOptionObjectKeys(model, 'clocks'));
   const renderOnceSpans = callExpressions(model)
@@ -58,6 +63,17 @@ export function validateDeclaredClockReadsInRender(
     });
   }
 
+  const refreshedQueries = refreshedComponentQueryNames(model);
+  for (const read of renderedVolatileQueryReads(model, options)) {
+    if (refreshedQueries.has(read.query)) continue;
+    if (renderOnceSpans.some((span) => read.start >= span.start && read.end <= span.end)) continue;
+
+    diagnostics.push({
+      ...diagnosticFor(fileName, 'KV312', source, read.start, read.end - read.start),
+      message: `${diagnosticFor(fileName, 'KV312').message} ${read.path}`,
+    });
+  }
+
   return diagnostics;
 }
 
@@ -67,6 +83,84 @@ function renderedClockReads(model: ComponentModuleModel): ClockRead[] {
     .flatMap((expression) => expression.propertyAccesses.flatMap(clockReadFromPropertyAccess));
 
   return dedupeClockReads(reads);
+}
+
+interface VolatileQueryRead {
+  end: number;
+  path: string;
+  query: string;
+  start: number;
+}
+
+function renderedVolatileQueryReads(
+  model: ComponentModuleModel,
+  options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'>,
+): VolatileQueryRead[] {
+  const queryShapes = componentQueryShapes(options);
+  if (!queryShapes) return [];
+
+  const reads = jsxExpressions(model)
+    .filter((expression) => !isJsxEventAttributeExpression(expression, model))
+    .flatMap((expression) =>
+      expression.propertyAccesses.flatMap((access) =>
+        volatileQueryReadFromPropertyAccess(access, queryShapes),
+      ),
+    );
+
+  return dedupeBy(reads, (read) => `${read.path}\0${read.start}\0${read.end}`);
+}
+
+function volatileQueryReadFromPropertyAccess(
+  access: PropertyAccessPathModel,
+  queryShapes: Record<string, QueryShape>,
+): VolatileQueryRead[] {
+  const segments = access.path.split('.').map((segment) => segment.replace(/\?$/, ''));
+  const query = segments[0];
+  if (!query || !queryShapes[query]) return [];
+
+  const fieldSegments = segments.slice(1);
+  if (fieldSegments.length === 0) return [];
+  const shape = shapeAtSegments(queryShapes[query], fieldSegments);
+  if (!shapeHasVolatileTime(shape)) return [];
+
+  return [
+    {
+      end: access.end,
+      path: `${query}.${fieldSegments.join('.')}`,
+      query,
+      start: access.start,
+    },
+  ];
+}
+
+function refreshedComponentQueryNames(model: ComponentModuleModel): Set<string> {
+  return new Set(
+    componentOptionObjectEntries(model, 'queries').flatMap((entry) =>
+      entry.value?.includes('.refresh(') ? [entry.key] : [],
+    ),
+  );
+}
+
+function shapeAtSegments(
+  shape: QueryShape | undefined,
+  segments: readonly string[],
+): QueryShape | undefined {
+  if (shape === undefined || segments.length === 0) return shape;
+  const current = unwrapQueryShape(shape);
+  if (Array.isArray(current)) return shapeAtSegments(current[0], segments);
+  if (!isQueryShapeObject(current)) return undefined;
+
+  const [head, ...tail] = segments;
+  if (!head) return current;
+  return shapeAtSegments(current[head], tail);
+}
+
+function shapeHasVolatileTime(shape: QueryShape | undefined): boolean {
+  if (shape === undefined) return false;
+  if (isQueryShapeWrapper(shape)) {
+    return shape.kind === 'volatile-time' || shapeHasVolatileTime(shape.shape);
+  }
+  return false;
 }
 
 function clockReadFromPropertyAccess(access: PropertyAccessPathModel): ClockRead[] {
@@ -87,14 +181,18 @@ function clockReadFromPropertyAccess(access: PropertyAccessPathModel): ClockRead
 }
 
 function dedupeClockReads(reads: readonly ClockRead[]): ClockRead[] {
-  const seen = new Set<string>();
-  const result: ClockRead[] = [];
+  return dedupeBy(reads, (read) => `${read.path}\0${read.start}\0${read.end}`);
+}
 
-  for (const read of reads) {
-    const key = `${read.path}\0${read.start}\0${read.end}`;
+function dedupeBy<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const result: T[] = [];
+
+  for (const item of items) {
+    const key = keyOf(item);
     if (seen.has(key)) continue;
     seen.add(key);
-    result.push(read);
+    result.push(item);
   }
 
   return result;

@@ -71,7 +71,7 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) => validateEventPayloads(source, model, options),
   ({ model, options, source }) => validateDirectDbAccess(source, model, options.fileName),
   ({ options, originalModel }) =>
-    validateDeclaredClockReadsInRender(options.source, originalModel, options.fileName),
+    validateDeclaredClockReadsInRender(options.source, originalModel, options.fileName, options),
   ({ model, options, source }) =>
     validateUntrackedClockReadsInDerives(source, model, options.fileName),
   ({ options, originalModel }) =>

@@ -676,6 +676,40 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts.map((fact) => fact.query)).toEqual(['cart/computed', 'cart/literal']);
   });
 
+  it('marks typed SQL time projections as volatile-time query shape fields', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'subscription.queries.ts',
+          source: `
+          export const subscriptions = pgTable("subscriptions", {
+            id: text("id").primaryKey(),
+          }, kovo({ domain: "subscription", key: "id" }));
+
+          export const subscriptionQuery = query("subscription", {
+            output: s.object({ serverNow: s.string() }),
+            async load(_input, db: PgDatabase) {
+              return db.select({ serverNow: sql<string>\`now()\` }).from(subscriptions);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'subscription',
+        reads: ['subscription'],
+        shape: {
+          serverNow: { kind: 'volatile-time', shape: 'string' },
+        },
+        site: 'subscription.queries.ts:6',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not treat comments or strings as declared query output schemas', () => {
     const facts = extractQueryFactsFromProject({
       files: [

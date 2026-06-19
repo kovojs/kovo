@@ -228,7 +228,7 @@ function liveTargetQueryBindingFact(fact: LiveTargetFact['queryBindings'][number
       : `; argsPropertyAccesses: readonly [${fact.argsPropertyAccesses
           .map((path) => `'${path}'`)
           .join(', ')}]`
-  } }`;
+  }${fact.hasRefresh === true ? '; hasRefresh: true' : ''} }`;
 }
 
 function componentRegistryFactLines(componentNames: readonly string[]): string {

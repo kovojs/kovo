@@ -2,8 +2,8 @@ import { componentOptionObjectKeys, type ComponentModuleModel } from '../scan/pa
 import type { CompileComponentOptions, QueryShape, QueryShapeFact } from '../types.js';
 import {
   isArrayQueryShape,
+  isNullableQueryShapeWrapper,
   isQueryShapeObject,
-  isQueryShapeWrapper,
   queryShapesFromFacts,
   unwrapQueryShape,
 } from '../types.js';
@@ -93,7 +93,7 @@ export function validatePathInShape(
   if (!head || !(head.name in current)) return { exists: false };
 
   const child = current[head.name] ?? 'object';
-  const nullableTraversal = tail.length > 0 && isQueryShapeWrapper(child) && !head.optional;
+  const nullableTraversal = tail.length > 0 && isNullableQueryShapeWrapper(child) && !head.optional;
   if (nullableTraversal) {
     const childValidation = validatePathInShape(child, tail);
     return childValidation.exists

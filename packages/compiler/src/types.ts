@@ -76,6 +76,7 @@ export interface LiveTargetQueryBindingFact {
   argsExpression?: string;
   argsParam?: string;
   argsPropertyAccesses?: readonly string[];
+  hasRefresh?: boolean;
   name: string;
   queryExpression: string;
 }
@@ -620,7 +621,7 @@ export type QueryShape =
 
 /** @internal A nullable/optional wrapper around a {@link QueryShape}. In-repo use only. */
 export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional';
+  kind: 'nullable' | 'optional' | 'volatile-time';
   shape: QueryShape;
 }
 
@@ -696,7 +697,14 @@ export function unwrapQueryShape(shape: QueryShape): QueryShape {
 export function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
   const record = shape as Record<string, unknown>;
-  return (record.kind === 'nullable' || record.kind === 'optional') && 'shape' in shape;
+  return (
+    (record.kind === 'nullable' || record.kind === 'optional' || record.kind === 'volatile-time') &&
+    'shape' in shape
+  );
+}
+
+export function isNullableQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
+  return isQueryShapeWrapper(shape) && (shape.kind === 'nullable' || shape.kind === 'optional');
 }
 
 export function isQueryShapeObject(

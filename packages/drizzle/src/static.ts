@@ -147,7 +147,7 @@ export type QueryShape =
 
 /** @internal */
 export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional';
+  kind: 'nullable' | 'optional' | 'volatile-time';
   shape: QueryShape;
 }
 
@@ -4976,10 +4976,26 @@ function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
   if (callee !== 'sql' || typeArguments?.length !== 1) return null;
 
   const typeText = typeArguments[0]?.getText(node.getSourceFile()).trim();
-  if (typeText === 'number') return 'number';
-  if (typeText === 'boolean') return 'boolean';
-  if (typeText === 'string') return 'string';
-  return null;
+  const shape =
+    typeText === 'number'
+      ? 'number'
+      : typeText === 'boolean'
+        ? 'boolean'
+        : typeText === 'string'
+          ? 'string'
+          : null;
+  if (!shape) return null;
+  if (isTimeVolatileSqlProjection(expression)) return { kind: 'volatile-time', shape };
+  return shape;
+}
+
+function isTimeVolatileSqlProjection(expression: ts.Expression): boolean {
+  const source = unwrappedTsExpression(expression).getText().toLowerCase();
+  return (
+    /\bnow\s*\(/.test(source) ||
+    /\bclock_timestamp\s*\(/.test(source) ||
+    /\bcurrent_timestamp\b/.test(source)
+  );
 }
 
 function staticTsExpressionPath(expression: ts.Expression): string | undefined {

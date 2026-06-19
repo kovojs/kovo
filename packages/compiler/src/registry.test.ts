@@ -160,7 +160,7 @@ export const ProductDetail = component({
     const registry = result.files[2]?.source ?? '';
 
     expect(registry).toContain(
-      `queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }, { name: 'reviews'; queryExpression: "reviewsQuery"; argsExpression: "({\\n      id: props.productId,\\n    })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId'] }]`,
+      `queryBindings: readonly [{ name: 'product'; queryExpression: "productQuery"; argsExpression: "({ id: props.productId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId']; hasRefresh: true }, { name: 'reviews'; queryExpression: "reviewsQuery"; argsExpression: "({\\n      id: props.productId,\\n    })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.productId']; hasRefresh: true }]`,
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });

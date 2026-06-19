@@ -412,6 +412,7 @@ function queryBindingFromParsedExpression(
   expression: ts.Expression,
 ): Omit<LiveTargetQueryBindingFact, 'name'> | null {
   const unwrappedExpression = unwrapQueryRefreshExpression(expression);
+  const hasRefresh = expressionHasQueryRefresh(expression);
 
   if (
     ts.isCallExpression(unwrappedExpression) &&
@@ -422,6 +423,7 @@ function queryBindingFromParsedExpression(
     const arrow = mapper && ts.isArrowFunction(mapper) ? mapper : null;
     return {
       ...(arrow ? queryArgsArrowFacts(sourceFile, arrow) : {}),
+      ...(hasRefresh ? { hasRefresh } : {}),
       queryExpression: unwrapQueryRefreshExpression(
         unwrappedExpression.expression.expression,
       ).getText(sourceFile),
@@ -429,6 +431,7 @@ function queryBindingFromParsedExpression(
   }
 
   return {
+    ...(hasRefresh ? { hasRefresh } : {}),
     queryExpression: unwrappedExpression.getText(sourceFile),
   };
 }
@@ -442,6 +445,14 @@ function unwrapQueryRefreshExpression(expression: ts.Expression): ts.Expression 
     return unwrapQueryRefreshExpression(expression.expression.expression);
   }
   return expression;
+}
+
+function expressionHasQueryRefresh(expression: ts.Expression): boolean {
+  if (ts.isCallExpression(expression) && ts.isPropertyAccessExpression(expression.expression)) {
+    if (expression.expression.name.text === 'refresh') return true;
+    return expressionHasQueryRefresh(expression.expression.expression);
+  }
+  return false;
 }
 
 function queryArgsArrowFacts(

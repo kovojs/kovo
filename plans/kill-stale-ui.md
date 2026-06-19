@@ -286,8 +286,12 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
       - Evidence 2026-06-19: `corepack pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts`
         covers undeclared `now.ago` emitting KV312, declared `clocks.ago`
         clearing it, event-handler exclusion, and `renderOnce` suppression.
-    - [ ] Server `volatile:'time'` query-field reads and the per-binding
+    - [x] Server `volatile:'time'` query-field reads and the per-binding
           `.refresh({ every | at | until })` classifier remain open.
+      - Evidence 2026-06-19:
+        `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/registry.test.ts packages/drizzle/src/index.query-shapes.test.ts`
+        covers volatile-time query fields emitting KV312 unless the component
+        query binding has `.refresh(...)`.
   - [x] Co-locate freshness on the query: a `.refresh({ every | at | until })`
         binding modifier parallel to `.args()` (returns a per-use binding, so the
         shared query object is untouched); `at`/`until` receive the query's value.
@@ -301,6 +305,10 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   - [ ] Extend KV410 with the `volatile:'time'` output facet for raw-SQL `now()`
         projections (`req.now`); extend the §11.1/§10.2 read-set deriver to flag
         time-predicate WHEREs (`expiresAt > req.now`) as time-volatile rowsets.
+    - [x] Raw SQL time projections:
+          `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts`
+          covers typed `sql<T>\`now()\``carrying`volatile-time`.
+    - [ ] Time-predicate rowsets remain open.
   - [x] **KV315 (warn):** a raw `Date.now()`/`new Date()` read in a derive is an
         untracked clock; teaching message redirects to a declared `clocks` input.
     - Evidence 2026-06-19: `packages/compiler/src/scan/parse.ts` emits typed
