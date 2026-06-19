@@ -87,6 +87,28 @@ export const MessageRow = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('reports KV312 for declared component clock cadences that are not tick-driven', () => {
+    const result = compileComponentModule({
+      fileName: 'message-row.tsx',
+      source: `
+export const MessageRow = component({
+  queries: { messages: messagesQuery },
+  clocks: { gate: { at: ({ messages }) => messages.expiresAt } },
+  render: ({ now }) => <time>{formatRelative(now.gate)}</time>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV312',
+        message:
+          'Time-dependent rendered position lacks a declared cadence. now.gate unsupported cadence',
+        severity: 'error',
+      }),
+    );
+  });
+
   it('reports KV312 when rendered volatile-time query fields have no refresh binding', () => {
     const result = compileComponentModule({
       fileName: 'subscription-row.tsx',
@@ -334,6 +356,31 @@ export const ClockLabel = component({
       'export const ClockLabel$time_title_derive = derive(["now","cart"], (now, cart) => formatRelative(now.ago, cart.updatedAt));',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
+  it('reports KV311 for clock expressions that still mix per-element state', () => {
+    const result = compileComponentModule({
+      fileName: 'clock-label.tsx',
+      source: `
+export const ClockLabel = component({
+  state: () => ({ open: false }),
+  clocks: { ago: { every: '1s' } },
+  render: (_queries, state, { now }) => (
+    <time>{state.open ? formatRelative(now.ago) : 'closed'}</time>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        message:
+          'Query/state-dependent DOM position has no update status. ClockLabel state.open expression',
+        severity: 'warn',
+      }),
+    );
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV312' }));
   });
 
   it('lowers inline attribute expressions into compiled query update stamps', () => {

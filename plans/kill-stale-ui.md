@@ -240,7 +240,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
 
 ## Tier 2 — the boundary the slogan quietly narrows
 
-- [ ] **T2-TEMPORAL — wall-clock staleness ("time is not an input").** Relative
+- [x] **T2-TEMPORAL — wall-clock staleness ("time is not an input").** Relative
       timestamps, countdowns, "open now", "expires in N days" decay with the
       clock with no row change and no mutation, so the graph never fires. A
       `now`-reading derive lowers to `plan`, is considered covered, and freezes
@@ -273,7 +273,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   }
   ```
 
-  - [ ] **X4 / KV312 — clock as a tracked input.** Extend the §4.9 classifier
+  - [x] **X4 / KV312 — clock as a tracked input.** Extend the §4.9 classifier
         (`packages/core` graph): a clock builtin is a synthetic input. A position
         reading `now.<name>` must resolve to a declared `clocks` entry, and a
         position reading a `volatile:'time'` query field must have a `.refresh({…})`
@@ -299,29 +299,27 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
       query-level and args-level `.refresh()` metadata without mutating the
       shared handle; `packages/compiler/src/registry.test.ts` proves refreshed
       bindings still emit query/args facts for server refresh.
-  - [ ] Ship one shared coalesced rAF/interval tick-bus (mirroring the §4.7
+  - [x] Ship one shared coalesced rAF/interval tick-bus (mirroring the §4.7
         shared IntersectionObserver) driving every `clocks` derive on the page;
-        lint-gated and budget-printed in `kovo explain` (clock inputs + cadences).
-    - [x] Bounded delivery slice: declared component `clocks` with `every`
-          coalesce through one browser tick-bus and drive generated
-          `derive(['now'], …)` update plans; `renderOnce` clocks stay frozen.
-      - Evidence 2026-06-19:
+        lint-gated and budget-printed in `kovo explain` (clock inputs + cadences). - [x] Bounded delivery slice: declared component `clocks` with `every`
+        coalesce through one browser tick-bus and drive generated
+        `derive(['now'], …)` update plans; `renderOnce` clocks stay frozen. - Evidence 2026-06-19:
         `corepack pnpm exec vitest --run packages/browser/src/clock-tick-bus.test.ts packages/compiler/src/query-coverage.test.ts`
         covers shared interval/rAF coalescing, generated clock plan exports, and
         bootstrap wiring; `corepack pnpm exec tsc --noEmit --pretty false` and
-        `git diff --check` passed.
-    - [x] Mixed `now.<clock>` + query render expressions lower to a
-          multi-input/store-backed compiled derive path, and component explain
-          prints clock inputs plus cadences.
-      - Evidence 2026-06-19:
+        `git diff --check` passed. - [x] Mixed `now.<clock>` + query render expressions lower to a
+        multi-input/store-backed compiled derive path, and component explain
+        prints clock inputs plus cadences. - Evidence 2026-06-19:
         `npx vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/scan/parse.test.ts packages/browser/src/clock-tick-bus.test.ts packages/cli/src/index.kovo-explain.test.ts`
         covers exported and inline `derive(['now', 'cart'], ...)` update plans,
         query-store-backed clock ticks, and `CLOCK <name> cadence=...` component
-        explain output.
-    - [ ] Remaining delivery contract: `at`/`until` scheduling and per-element
-          state-mixed clock derives still need runtime ownership; keep the parent
-          tick-bus item open until those declared clock reads are tick-driven or
-          lint-gated with a diagnostic.
+        explain output. - [x] Remaining delivery contract: unsupported `at`/`until` component clock
+        scheduling and per-element state-mixed clock derives are lint/error-gated
+        with diagnostics instead of silently freezing. - Evidence 2026-06-19:
+        `npx vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/scan/parse.test.ts packages/browser/src/clock-tick-bus.test.ts packages/cli/src/index.kovo-explain.test.ts`
+        covers KV312 for declared but non-tick-driven component clock cadences
+        and KV311 for state-mixed clock render positions; `corepack pnpm exec
+tsc --noEmit --pretty false` passed.
   - [x] Extend KV410 with the `volatile:'time'` output facet for raw-SQL `now()`
         projections (`req.now`); extend the §11.1/§10.2 read-set deriver to flag
         time-predicate WHEREs (`expiresAt > req.now`) as time-volatile rowsets.
