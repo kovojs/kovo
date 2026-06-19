@@ -19,6 +19,14 @@ import { CrmShell, crmChromeStyleCss } from "../components/chrome.js";
 import { createCrmDb, type CrmDb } from "../db.js";
 import { seedCrmDemo } from "../demo-data.js";
 import { addContact, closeDeal, createDeal, moveDeal } from "../mutations.js";
+import {
+  activityListQuery,
+  contactDealCountQuery,
+  contactListQuery,
+  dealListQuery,
+  openDealsQuery,
+  pipelineByStageQuery,
+} from "../queries.js";
 import { crmTheme } from "../theme.js";
 
 // Interactive CRM app: pipeline, contacts, and deal detail pages backed by the
@@ -97,6 +105,14 @@ export async function buildCrmInteractiveApp(
     db: () => database,
     document: { lang: 'en-US' },
     mutations: [addContact, createDeal, moveDeal, closeDeal],
+    queries: [
+      contactListQuery,
+      dealListQuery,
+      contactDealCountQuery,
+      openDealsQuery,
+      pipelineByStageQuery,
+      activityListQuery,
+    ],
     routes: [
       route('/', {
         meta: {

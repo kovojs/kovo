@@ -38,6 +38,37 @@ const docsLayoutStyles = style.create(
       flex: 1,
       minWidth: 0,
     },
+    pageEyebrow: {
+      color: 'var(--teal)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.68rem',
+      letterSpacing: '0.22em',
+      marginBottom: '0.9rem',
+      textTransform: 'uppercase',
+    },
+    prose: {
+      color: 'var(--ink)',
+      fontSize: '1rem',
+      lineHeight: 1.75,
+      maxWidth: '46rem',
+    },
+    specBanner: {
+      borderColor: 'color-mix(in srgb, var(--amber) 45%, transparent)',
+      borderLeftColor: 'var(--amber)',
+      borderLeftStyle: 'solid',
+      borderLeftWidth: 2,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: 'var(--dim)',
+      fontSize: '0.86rem',
+      lineHeight: 1.6,
+      marginBottom: '2.5rem',
+      maxWidth: '48rem',
+      padding: '0.8rem 1.1rem',
+    },
+    specBannerLink: {
+      color: 'var(--amber)',
+    },
     mobileBody: {
       paddingTop: '1.1rem',
     },
@@ -184,7 +215,7 @@ export function DocsRoutePage({
             <summary style={docsLayoutStyles.mobileSummary}>Menu</summary>
             <div style={docsLayoutStyles.mobileBody}>{sidebar}</div>
           </details>
-          {eyebrow ? <p class="eyebrow">{escapeHtml(eyebrow)}</p> : ''}
+          {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{escapeHtml(eyebrow)}</p> : ''}
           <DocsRouteContentView content={content} />
           {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
         </main>
@@ -197,7 +228,33 @@ export function DocsRoutePage({
 
 function DocsRouteContentView({ content }: { content: DocsRouteContent }): string {
   if (content.kind === 'html') {
-    return content.prose === false ? content.html : <article class="prose">{content.html}</article>;
+    return content.prose === false ? (
+      content.html
+    ) : (
+      <article style={docsLayoutStyles.prose} data-prose>
+        {content.html}
+      </article>
+    );
+  }
+  if (content.kind === 'spec') {
+    return (
+      <div>
+        <p style={docsLayoutStyles.specBanner}>
+          This is the normative specification, rendered verbatim from{' '}
+          <a
+            href="https://github.com/kovojs/kovo/blob/main/SPEC.md"
+            rel="external"
+            style={docsLayoutStyles.specBannerLink}
+          >
+            SPEC.md
+          </a>{' '}
+          at build time. The docs explain; the spec decides.
+        </p>
+        <article style={docsLayoutStyles.prose} data-prose>
+          {content.html}
+        </article>
+      </div>
+    );
   }
   if (content.kind === 'gallery') return <GalleryPage input={content.gallery} />;
   if (content.kind === 'example') return <ExampleSplit input={content.example} />;

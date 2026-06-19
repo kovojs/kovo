@@ -100,83 +100,6 @@ canvas {
   background: color-mix(in srgb, var(--teal) 25%, transparent);
 }
 
-/* ── Docs layout ──────────────────────────────────────────────── */
-
-.eyebrow {
-  color: var(--teal);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 0.22em;
-  margin-bottom: 0.9rem;
-  text-transform: uppercase;
-}
-
-/* ── Component gallery injected demo markup ───────────────────── */
-.gallery-demo [data-gallery-demo] {
-  display: grid;
-  gap: 1rem;
-}
-
-.gallery-demo [data-demo-summary] {
-  color: var(--dim);
-  margin: 0;
-}
-
-.gallery-demo [data-ui-demo] {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.gallery-demo [data-gallery-contract] {
-  border-collapse: collapse;
-  display: block;
-  font-size: 0.82rem;
-  overflow-x: auto;
-  width: 100%;
-}
-
-.gallery-demo [data-gallery-contract] th {
-  color: var(--faint);
-  font-family: var(--font-mono);
-  font-size: 0.64rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  padding: 0.45rem 1rem 0.45rem 0;
-  text-align: left;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.gallery-demo [data-gallery-contract] td {
-  border-top: 1px solid var(--edge-soft);
-  color: var(--dim);
-  padding: 0.45rem 0;
-}
-
-/* ── Examples injected source markup ──────────────────────────── */
-[data-example-panel] .code-window {
-  border: 0;
-  margin: 0;
-}
-
-/* ── Notices ──────────────────────────────────────────────────── */
-.note-banner {
-  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
-  border-left: 2px solid var(--amber);
-  color: var(--dim);
-  font-size: 0.86rem;
-  line-height: 1.6;
-  margin-bottom: 2.5rem;
-  max-width: 48rem;
-  padding: 0.8rem 1.1rem;
-}
-
-.note-banner a {
-  color: var(--amber);
-}
-
 .e404-code {
   color: var(--teal);
   font-family: var(--font-mono);
@@ -215,15 +138,9 @@ canvas {
 
 /* ── Markdown body ─────────────────────────────────────────────
    The content pipeline emits plain semantic HTML; these rules style
-   it without per-element utility classes so .md mirrors stay clean. */
-.prose {
-  color: var(--ink);
-  font-size: 1rem;
-  line-height: 1.75;
-  max-width: 46rem;
-}
-
-.prose h1 {
+   generated prose under the route-boundary [data-prose] hook so .md
+   mirrors stay clean. */
+[data-prose] h1 {
   font-size: 2.2rem;
   font-weight: 750;
   letter-spacing: -0.025em;
@@ -231,7 +148,7 @@ canvas {
   margin-bottom: 1.25rem;
 }
 
-.prose h2 {
+[data-prose] h2 {
   font-size: 1.4rem;
   font-weight: 650;
   letter-spacing: -0.015em;
@@ -240,7 +157,7 @@ canvas {
   scroll-margin-top: 5.5rem;
 }
 
-.prose h3 {
+[data-prose] h3 {
   font-size: 1.12rem;
   font-weight: 650;
   margin-bottom: 0.5rem;
@@ -248,40 +165,40 @@ canvas {
   scroll-margin-top: 5.5rem;
 }
 
-.prose h4 {
+[data-prose] h4 {
   scroll-margin-top: 5.5rem;
 }
 
-.prose h2:first-child,
-.prose h3:first-child {
+[data-prose] h2:first-child,
+[data-prose] h3:first-child {
   margin-top: 0;
 }
 
-.prose p,
-.prose ul,
-.prose ol {
+[data-prose] p,
+[data-prose] ul,
+[data-prose] ol {
   margin-bottom: 1rem;
 }
 
-.prose ul {
+[data-prose] ul {
   list-style: disc;
   padding-left: 1.5rem;
 }
 
-.prose ol {
+[data-prose] ol {
   list-style: decimal;
   padding-left: 1.5rem;
 }
 
-.prose li {
+[data-prose] li {
   margin-bottom: 0.35rem;
 }
 
-.prose li::marker {
+[data-prose] li::marker {
   color: var(--faint);
 }
 
-.prose a {
+[data-prose] a {
   color: var(--teal);
   font-weight: 500;
   text-decoration: underline;
@@ -290,16 +207,16 @@ canvas {
   transition: text-decoration-color 0.15s;
 }
 
-.prose a:hover {
+[data-prose] a:hover {
   text-decoration-color: var(--teal);
 }
 
-.prose strong {
+[data-prose] strong {
   color: var(--ink);
   font-weight: 650;
 }
 
-.prose code {
+[data-prose] code {
   background: var(--panel);
   border: 1px solid var(--edge-soft);
   font-family: var(--font-mono);
@@ -307,8 +224,8 @@ canvas {
   padding: 0.1rem 0.3rem;
 }
 
-.prose pre code,
-.prose .artifact code {
+[data-prose] pre code,
+[data-prose] .artifact code {
   background: transparent;
   border: none;
   font-size: inherit;
@@ -317,7 +234,7 @@ canvas {
 
 /* SPEC § citations render as quiet reference chips at the end of a
    passage instead of inline legalese (md.mjs adds the class). */
-.prose a.spec-chip,
+[data-prose] a.spec-chip,
 a.spec-chip {
   background: var(--panel);
   border: 1px solid var(--edge);
@@ -335,7 +252,7 @@ a.spec-chip {
     color 0.15s;
 }
 
-.prose a.spec-chip:hover,
+[data-prose] a.spec-chip:hover,
 a.spec-chip:hover {
   border-color: var(--teal);
   color: var(--teal);
@@ -409,12 +326,12 @@ a.spec-chip:hover {
 }
 
 /* Bare pre (no shiki language). */
-.prose pre.shiki {
+[data-prose] pre.shiki {
   color: #d6d6d6;
   font-family: var(--font-mono);
 }
 
-.prose table {
+[data-prose] table {
   border-collapse: collapse;
   display: block;
   font-size: 0.9rem;
@@ -423,7 +340,7 @@ a.spec-chip:hover {
   width: 100%;
 }
 
-.prose th {
+[data-prose] th {
   border-bottom: 1px solid var(--edge);
   color: var(--faint);
   font-family: var(--font-mono);
@@ -435,7 +352,7 @@ a.spec-chip:hover {
   text-transform: uppercase;
 }
 
-.prose td {
+[data-prose] td {
   border-bottom: 1px solid var(--edge-soft);
   padding: 0.6rem 1rem 0.6rem 0;
   vertical-align: top;
@@ -443,7 +360,7 @@ a.spec-chip:hover {
 
 /* Callouts: blockquotes render as square note cards with a teal rule.
    A leading <strong> acts as the callout title. */
-.prose blockquote {
+[data-prose] blockquote {
   background: var(--panel);
   border: 1px solid var(--edge);
   border-left: 2px solid var(--teal);
@@ -452,34 +369,34 @@ a.spec-chip:hover {
   padding: 0.9rem 1.15rem;
 }
 
-.prose blockquote p {
+[data-prose] blockquote p {
   margin-bottom: 0.5rem;
 }
 
-.prose blockquote p:last-child {
+[data-prose] blockquote p:last-child {
   margin-bottom: 0;
 }
 
-.prose blockquote strong:first-child {
+[data-prose] blockquote strong:first-child {
   color: var(--teal);
 }
 
-.prose hr {
+[data-prose] hr {
   border: none;
   border-top: 1px solid var(--edge);
   margin: 2.5rem 0;
 }
 
-.prose .heading-anchor {
+[data-prose] .heading-anchor {
   color: var(--faint);
   margin-left: 0.4rem;
   opacity: 0;
   text-decoration: none;
 }
 
-.prose h2:hover .heading-anchor,
-.prose h3:hover .heading-anchor,
-.prose h4:hover .heading-anchor {
+[data-prose] h2:hover .heading-anchor,
+[data-prose] h3:hover .heading-anchor,
+[data-prose] h4:hover .heading-anchor {
   opacity: 1;
 }
 

@@ -71,10 +71,20 @@ internals, emit/check scripts, and narrowly named artifact tests.
     `pnpm --filter @kovojs/example-gallery exec vitest --run
     src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts`
     passed.
-- [ ] Keep generated artifacts committed and inspectable without making ordinary
+- [x] Keep generated artifacts committed and inspectable without making ordinary
       scenario tests import them.
   - Acceptance: `emit-components -- --check`, `emit-graph -- --check`, compiler
     conformance tests, and package-level generated-artifact tests own freshness.
+  - Evidence: `pnpm --filter @kovojs/example-commerce run emit-components --
+    --check`, `pnpm --filter @kovojs/example-commerce run emit-graph --
+    --check`, `pnpm --filter @kovojs/example-crm run emit-components --
+    --check`, `pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+    `pnpm --filter @kovojs/example-stackoverflow run emit-components --
+    --check`, `pnpm --filter @kovojs/example-stackoverflow run emit-graph
+    -- --check`, and `pnpm --filter @kovojs/example-gallery run
+    emit:interactive-gallery -- --check` passed after refreshing route
+    artifacts. Generated-artifact tests also passed for Commerce, CRM, and
+    StackOverflow, and `node scripts/import-boundary.mjs` passed.
 
 ## Commerce
 
@@ -258,58 +268,30 @@ internals, emit/check scripts, and narrowly named artifact tests.
 
 ## Docs Site
 
-- [ ] Migrate the docs site to the same authored styling format as the examples.
+- [x] Migrate the docs site to the same authored styling format as the examples.
   - Component-specific styles should live next to the component that owns them,
     authored JSX should use `style={styles.foo}` / `style={[...]}`, and
     `style.attrs(...)` should remain a low-level runtime or package-internal
     escape hatch rather than the app-author-facing pattern.
-  - Current progress: `site/src/components/docs-layout.tsx`,
-    `site/src/components/example-split.tsx`, and
-    `site/src/components/gallery.tsx` now co-locate authored style objects and
-    feed their emitted CSS through `siteStylesheets`; `pnpm --filter
-    @kovojs/site test`, `pnpm --filter @kovojs/site run build:css`, `pnpm
-    --filter @kovojs/site exec node scripts/export-static.mjs`, and `rg -n
-    "style\\.attrs" site/src --glob '!generated/**' -S` passed. Keep open for
-    remaining class-based docs components and prose examples.
-  - Current progress: docs site and tutorial generated artifact imports now sit
-    behind explicit generated fixtures, and the islands guide imports
-    `handler` from the public `@kovojs/runtime` root in its snippet. `pnpm
-    --filter @kovojs/site test`, `pnpm --filter @kovojs/site exec node
-    scripts/export-static.mjs`, and `node scripts/import-boundary.mjs` passed.
-  - Current progress: docs prose examples now teach `style={...}` /
-    `style={[...]}` instead of `style.attrs(...)`; `rg -n "style\\.attrs"
-    site/content site/src site/tutorial --glob '!**/generated/**' -S`, `pnpm
-    --filter @kovojs/site test`, and `git diff --check` passed. Keep open for
-    remaining class-based docs components, especially `chrome.tsx` and
-    `landing.tsx`.
-  - Current progress: tutorial authored component snippets now co-locate
-    component styles with `@kovojs/style`, generated tutorial component
-    artifacts were refreshed, and `rg -n "class=|style\\.attrs"
-    site/tutorial/steps/*/src --glob '!**/generated/**' -S`, `pnpm --filter
-    @kovojs/site test`, `pnpm exec vitest --run site/tutorial/steps`, and `git
-    diff --check` passed. Keep open for remaining class-based docs site
-    components.
-  - Current progress: `site/src/components/chrome.tsx` now co-locates its
-    header/footer/sidebar/TOC/API-rail styles with `@kovojs/style`, feeds
-    `chromeStyleCss` through `siteStylesheets`, and uses data hooks instead of
-    styling classes for the API rail script. `rg -n "class=|className="
-    site/src/components/chrome.tsx -S`, `rg -n "style\\.attrs" site/content
-    site/src site/tutorial --glob '!**/generated/**' -S`, `pnpm --filter
-    @kovojs/site test`, `pnpm --filter @kovojs/site run build:css`, `pnpm
-    --filter @kovojs/site exec node scripts/export-static.mjs`, and `git diff
-    --check` passed. Keep open for remaining class-based docs site components,
-    especially `landing.tsx`, and global/generated-content markup.
-  - Current progress: `site/src/components/landing.tsx` now co-locates landing
-    styles with `@kovojs/style`, `site/src/document-template.ts` co-locates
-    search dialog styles for the raw document shell, and
-    `site/src/client/search.js` uses data-state hooks instead of styling
-    classes. `pnpm --filter @kovojs/site test`, `pnpm --filter @kovojs/site run
+  - Evidence: `site/src/components/chrome.tsx`,
+    `site/src/components/docs-layout.tsx`,
+    `site/src/components/example-split.tsx`, `site/src/components/gallery.tsx`,
+    and `site/src/components/landing.tsx` now co-locate component-owned
+    `@kovojs/style` objects and use `style={...}` / `style={[...]}` in authored
+    JSX. `site/src/route-kit.ts` feeds the emitted component CSS through
+    `siteStylesheets`; `site/src/styles.css` is limited to base document,
+    generated markdown/code-artifact styling, and other content-pipeline
+    selectors. `site/src/document-template.ts` keeps the only remaining
+    `style.attrs(...)` use as a raw-string search-dialog bridge, not as an
+    authored TSX pattern.
+  - Evidence: `rg -n "class=|className=|style\\.attrs|\\.prose|eyebrow|gallery-demo|note-banner"
+    site/src site/content site/tutorial --glob '!**/generated/**' -S` shows only
+    prose/code examples, route-data field names, and the raw search-dialog
+    bridge; `pnpm --filter @kovojs/site test`, `pnpm --filter @kovojs/site run
     build:css`, `node scripts/import-boundary.mjs`, and `git diff --check`
     passed. `pnpm --filter @kovojs/site exec node scripts/export-static.mjs`
-    is currently blocked in this isolated HEAD by missing
-    `examples/devtool/src/graph-model.mjs`, outside the docs-site slice.
-    Keep open for remaining generated/prose global class surfaces and any final
-    no-`style.attrs` app-authoring audit beyond the raw document-template bridge.
+    remains blocked by missing `examples/devtool/src/graph-model.mjs`, outside
+    the docs-style slice.
 
 ## Verification
 
@@ -344,3 +326,8 @@ internals, emit/check scripts, and narrowly named artifact tests.
     equivalent `pnpm --filter @kovojs/example-gallery run
     emit:interactive-gallery -- --check` also passed.
 - [ ] Run `pnpm run check` and `git diff --check` before closing the plan.
+  - Latest attempt: `git diff --check` passed, but `pnpm run check` failed at
+    `vp check` formatting discovery across files outside this slice, including
+    unrelated untracked `examples/devtool/data/*` and `plans/browser-rename.md`.
+    Keep this item open until those broader formatting findings are resolved or
+    explicitly scoped out.
