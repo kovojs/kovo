@@ -82,13 +82,13 @@ exports[`@kovojs/ui styled package foundation > wraps menubar and navigation-men
 exports[`@kovojs/ui styled package foundation > wraps the headless dialog primitive for a bounded sheet component 1`] = `
 {
   "drawerContentClasses": [
-    "kv-drawer-bg-1noq3u kv-drawer-bd-jllngq kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-5bneq7 kv-drawer-fg-1f1he7 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y",
+    "kv-drawer-bg-1noq3u kv-drawer-bd-jllngq kv-drawer-bd-1hi42t kv-drawer-bd-b9bdux kv-drawer-box-yxqv5r kv-drawer-fg-1f1he7 kv-drawer-d-z1wnt7 kv-drawer-flex-ghzzqp kv-drawer-gap-53gj4t kv-drawer-max-1gar32 kv-drawer-pad-1kfxum kv-drawer-position-qymjrz kv-drawer-z-1ag0ds kv-drawer-d-1que9w kv-drawer-side-bd-m1idbw kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y",
     "kv-drawer-side-bd-8y7uhv kv-drawer-side-bottom-jbyfoh kv-drawer-side-left-xnn69v kv-drawer-side-max-5ahn0m kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
     "kv-drawer-side-bd-1tuf6s kv-drawer-side-bottom-jbyfoh kv-drawer-side-max-5ahn0m kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d kv-drawer-side-w-9lrs26",
     "kv-drawer-side-bd-r2so6s kv-drawer-side-left-xnn69v kv-drawer-side-max-1ipckk kv-drawer-side-right-19ea6y kv-drawer-side-top-1tjk6d",
   ],
   "sheetContentClasses": [
-    "kv-sheet-bg-1noq3u kv-sheet-bd-jllngq kv-sheet-bd-1hi42t kv-sheet-bd-b9bdux kv-sheet-box-5bneq7 kv-sheet-fg-1f1he7 kv-sheet-d-z1wnt7 kv-sheet-flex-ghzzqp kv-sheet-gap-53gj4t kv-sheet-pad-1kfxum kv-sheet-position-qymjrz kv-sheet-z-1ag0ds kv-sheet-side-bd-1tuf6s kv-sheet-side-bottom-jbyfoh kv-sheet-side-max-5ahn0m kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
+    "kv-sheet-bg-1noq3u kv-sheet-bd-jllngq kv-sheet-bd-1hi42t kv-sheet-bd-b9bdux kv-sheet-box-yxqv5r kv-sheet-fg-1f1he7 kv-sheet-d-z1wnt7 kv-sheet-flex-ghzzqp kv-sheet-gap-53gj4t kv-sheet-pad-1kfxum kv-sheet-position-qymjrz kv-sheet-z-1ag0ds kv-sheet-d-1que9w kv-sheet-side-bd-1tuf6s kv-sheet-side-bottom-jbyfoh kv-sheet-side-max-5ahn0m kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
     "kv-sheet-side-bd-m1idbw kv-sheet-side-bottom-jbyfoh kv-sheet-side-left-xnn69v kv-sheet-side-max-1ipckk kv-sheet-side-right-19ea6y",
     "kv-sheet-side-bd-8y7uhv kv-sheet-side-bottom-jbyfoh kv-sheet-side-left-xnn69v kv-sheet-side-max-5ahn0m kv-sheet-side-top-1tjk6d kv-sheet-side-w-9lrs26",
     "kv-sheet-side-bd-r2so6s kv-sheet-side-left-xnn69v kv-sheet-side-max-1ipckk kv-sheet-side-right-19ea6y kv-sheet-side-top-1tjk6d",
