@@ -1,6 +1,9 @@
 # No Magical Generated Imports
 
 Created 2026-06-18. `SPEC.md` remains the framework behavior source of truth.
+Superseded for app-local generated artifact tracking by
+[`no-checked-in-generated.md`](./no-checked-in-generated.md); this ledger records the earlier
+transitional stance that kept generated artifacts committed.
 This plan removes app-author-facing knowledge of `src/generated/*` from examples,
 tests, Vite config, and CSS. Generated artifacts stay committed and inspectable,
 but app authors should interact with authored entries and public framework APIs.

@@ -397,8 +397,8 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
                        │
                        ├─▶ generated/registries/*.d.ts   (module aliases, fragment targets, query keys, domains,
                        │                                  routes, element ids, invalidation sets)
-                       ├─▶ generated/touch-graph.ts      (§11.3 — committed, reviewable)
-                       └─▶ generated/optimistic/*.ts     (§10.4; committed, overridable)
+                       ├─▶ generated/touch-graph.ts      (§11.3 — reproducible/checkable on demand)
+                       └─▶ generated/optimistic/*.ts     (§10.4; emitted output; authored transforms override)
 ```
 
 \* Minification may never rename exported handler symbols or anything appearing in HTML attributes (Constitution #1 — enforced because those names are load-bearing at runtime); this holds in prod too, where payloads are delta-encoded (§9.1.1) but names stay verbatim. The prod build additionally stamps a **render-plan version token** into emitted module URLs (alongside the cache-busting hash, §5.2.1) and into delta/patch responses, so §9.1.1 base-version validation can fail loud on deploy skew instead of patching stale DOM silently.
@@ -412,7 +412,7 @@ cart.tsx ──parse──▶ analyze ──lower──▶ cart.server.js + cart
 5. **Teaching errors.** Every diagnostic shows the lowering: what would have been generated, why it can't be, and the fix menu.
 6. **Registry atomicity.** Registry `.d.ts` emission is part of every compile; `vp dev` and `vp check` regenerate registries before type-checking runs. A stale registry is unrepresentable, not just unlikely — the typegen failure modes (fresh clone red until first generation, watch-mode races) are designed out.
 7. **TSX-only authoring.** TSX is the sole app-authoring surface. The lowered IR is an output format: valid Kovo source for fixpoint/render-equivalence gates and readable artifacts, but not something app code hand-authors or vendors. Hand-authored lowered IR in app source is **KV235** with a teaching message that shows the TSX equivalent. There is no suppression pragma or ejection workflow in v1; a front-end gap is fixed in the compiler or recorded as a SPEC conflict.
-8. **Public imports in app source.** App-authored source may import Kovo packages only through documented public entrypoints. Imports from framework-maintenance subpaths (`@kovojs/*/internal`, `kovo/internal`) and compiler-emitted ABI subpaths (`@kovojs/*/generated`) are invalid in app source and must produce a teaching diagnostic. Compiler-emitted modules may import generated ABI subpaths such as `@kovojs/runtime/generated`; those imports are compiler-owned artifacts, not app-authored API. Generated app artifacts are reviewable outputs, not app dependencies: app-authored modules MUST NOT import app-local generated modules such as `src/generated/*`; tests and scripts SHOULD prefer authored entry points and public explain/check APIs. Direct generated reads are reserved for compiler/build internals, emit freshness checks, and explicitly named artifact tests.
+8. **Public imports in app source.** App-authored source may import Kovo packages only through documented public entrypoints. Imports from framework-maintenance subpaths (`@kovojs/*/internal`, `kovo/internal`) and compiler-emitted ABI subpaths (`@kovojs/*/generated`) are invalid in app source and must produce a teaching diagnostic. Compiler-emitted modules may import generated ABI subpaths such as `@kovojs/runtime/generated`; those imports are compiler-owned artifacts, not app-authored API. Generated app artifacts are reproducible outputs, not app dependencies: app-authored modules MUST NOT import app-local generated modules such as `src/generated/*`; tests and scripts SHOULD prefer authored entry points and public explain/check APIs. Direct generated reads are reserved for compiler/build internals, on-demand emit/explain/check flows, and explicitly named artifact tests.
 9. **Post-parse decisions use typed facts, not source strings.** After parsing, the compiler's post-parse phases (`lower/**`, `validate/**`, `analyze/**`, `emit/**`, and `graph.ts`) MUST decide from typed model facts and spans, never from raw source snippets, regexes, `getText()`/`getFullText()`, or ad hoc string slicing; the scanner/parser is the sole boundary that reads source text into typed facts. Permitted source-text uses elsewhere are narrow: diagnostic source-frame rendering, span-based source-patch application by known offsets, generated-artifact body carry and `renderSource()` emission, generated-artifact verification, IR-header provenance checks (`source.startsWith(compilerIrHeader)`), binding-path grammar parsing on typed `.path` fields, URL/route parsing of an extracted literal `attribute.value`, import-specifier boundary validation for the public/generated/internal Kovo subpath rule above, and name-formatting of model-derived identifiers. A mechanical kovo-check guard enforces this.
 
 ### 5.3 `kovo explain`
@@ -1007,7 +1007,7 @@ Optimism is keyed to **queries** (the data), never islands. One transform per (m
 **Derived:** for writes whose dataflow is closed over `{mutation input, schema constants, data the query already ships}` and queries within the shape grammar `{scalar-from-keyed-row, COUNT, SUM(arith), jsonAgg, filtered-COUNT, membership transitions}`, the compiler generates the transform (full derivation algebra in §10.5). Hand-written transforms share the same IR, so an app can override generated transforms pair by pair.
 
 ```ts
-// generated/optimistic/cart.add.ts — DO NOT EDIT (override in cart.mutations.ts)
+// emitted optimistic/cart.add.ts — DO NOT EDIT (override in cart.mutations.ts)
 export const derived = {
   [cartQuery.key]: (cart, $input) => {
     const r = cart.items.find((i) => i.productId === $input.productId);
@@ -1104,10 +1104,12 @@ For each write() body (ts-morph over the program):
      write param ⇒ key derivation recorded; ranges/IN ⇒ table-level (KV409 notice).
 ```
 
-Output is **committed and reviewable** — invalidation-graph changes appear as diffs in code review:
+Output is **reproducible on demand** through `kovo emit` / `kovo explain` and mechanically proven
+by fixpoint plus render-equivalence gates. Invalidation-graph changes are inspected through those
+commands and CI evidence, not by committing app-local generated files:
 
 ```ts
-// generated/touch-graph.ts — DO NOT EDIT
+// emitted generated/touch-graph.ts — DO NOT EDIT
 export const touchGraph = {
   'cart.addItem': {
     touches: [

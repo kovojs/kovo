@@ -97,19 +97,27 @@ committed `graph.json`).
 
 ## Phase 0 — SPEC & rules amendments (unblocks everything)
 
-- [ ] Amend `SPEC.md` to drop "committed" as the normative audit mechanism, replacing it with
+- [x] Amend `SPEC.md` to drop "committed" as the normative audit mechanism, replacing it with
       "reproducible on demand (`kovo emit`/`kovo explain`) and proven by fixpoint +
       render-equivalence."
+  - Evidence: `SPEC.md` §5.1, §5.2 rule 8, §10.4, and §11.1 now describe emitted generated
+    artifacts as reproducible outputs inspected through emit/explain/check flows rather than
+    committed app-local files.
   - Targets: §11 line ~1107 ("Output is **committed and reviewable**…"), §10.4 optimistic
     ("committed, overridable"), §11.3 touch-graph ("committed, reviewable"), the §3 pipeline
     diagram annotations (lines ~400–401), and §5.2 rule 8 wording.
   - Keep Constitution #3 (fixpoint no-op) and #4 (the wire is the documentation) intact — those do
     not require committing, only reproducibility/inspectability.
-- [ ] Update `rules/` if any rule restates "committed/reviewable generated output" as binding
+- [x] Update `rules/` if any rule restates "committed/reviewable generated output" as binding
       (audit `rules/data-layer-policy.md`, `rules/compiler-hard-rules.md`,
       `rules/api-surface.md`). `rules/constitution.md` #3 stays as-is.
-- [ ] Add a one-line supersede note to `no-magical-generated.md` (or move it to `archive.md`)
+  - Evidence: `rg -n "committed|reviewable|generated output|generated artifacts|src/generated|generated dir|inspectable" rules`
+    finds only `rules/constitution.md` #3, which remains the SPEC §5.2 fixpoint/auditability
+    rule and does not require committed artifacts.
+- [x] Add a one-line supersede note to `no-magical-generated.md` (or move it to `archive.md`)
       pointing here.
+  - Evidence: `plans/no-magical-generated.md` now points readers to this plan as the superseding
+    ledger for app-local generated artifact tracking.
 
 ## Phase 1 — Compile-on-the-fly harness (load-bearing)
 
