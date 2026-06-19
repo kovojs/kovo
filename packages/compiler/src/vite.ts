@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
-import { compilerBuildId } from './cache-identity.js';
+import { CompileCache } from './compile-cache.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   collectCssAssetManifest,
@@ -193,7 +193,7 @@ export function createKovoVitePlugin(
   compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
-  const compileCache = new Map<string, MaybePromise<ViteCompileResult>>();
+  const compileCache = new CompileCache<ViteCompileResult>();
   const clientModules = new Map<string, string>();
   const cssAssetsByFileName = new Map<string, readonly ComponentCssAsset[]>();
   const hmrImpacts = new Map<string, HmrImpactMetadata>();
@@ -391,25 +391,31 @@ function matchesViteFilter(
 
 function compileCachedViteComponentModule(
   compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
-  cache: Map<string, MaybePromise<ViteCompileResult>>,
+  cache: CompileCache<ViteCompileResult>,
   options: KovoVitePluginOptions,
   root: string,
   fileName: string,
   source: string,
 ): MaybePromise<ViteCompileResult> {
-  const cacheKey = viteCompileCacheKey(options, root, fileName, source);
-  const cached = cache.get(cacheKey);
-  if (cached) return cached;
-
-  const result = compileViteComponentModule(
-    compileComponentModule,
-    options,
-    root,
-    fileName,
-    source,
+  const registryFacts = resolveViteRegistryFacts(options, fileName);
+  return cache.getOrCreate(
+    {
+      fileName,
+      packageComponentPrefixes: options.packageComponentPrefixes,
+      registryFacts,
+      root,
+      source,
+    },
+    () =>
+      compileViteComponentModule(
+        compileComponentModule,
+        options,
+        root,
+        fileName,
+        source,
+        registryFacts,
+      ),
   );
-  cache.set(cacheKey, result);
-  return result;
 }
 
 function compileViteComponentModule(
@@ -418,8 +424,8 @@ function compileViteComponentModule(
   root: string,
   fileName: string,
   source: string,
+  registryFacts = resolveViteRegistryFacts(options, fileName),
 ): MaybePromise<ViteCompileResult> {
-  const registryFacts = resolveViteRegistryFacts(options, fileName);
   return compileComponentModule({
     fileName,
     ...(options.packageComponentPrefixes === undefined
@@ -451,7 +457,7 @@ function resolveViteClientModuleId(
 
 function loadViteClientModule(
   compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
-  cache: Map<string, MaybePromise<ViteCompileResult>>,
+  cache: CompileCache<ViteCompileResult>,
   options: KovoVitePluginOptions,
   root: string,
   id: string,
@@ -489,40 +495,12 @@ function viteClientModuleSourceFilePath(clientFilePath: string): string {
   return clientFilePath.replace(/\.client\.js$/, '.tsx');
 }
 
-function viteCompileCacheKey(
-  options: KovoVitePluginOptions,
-  root: string,
-  fileName: string,
-  source: string,
-): string {
-  return stableJson({
-    compilerBuildId: compilerBuildId(),
-    fileName,
-    packageComponentPrefixes: options.packageComponentPrefixes ?? null,
-    registryFacts: resolveViteRegistryFacts(options, fileName) ?? null,
-    root,
-    sourceHash: viteClientModuleVersion(source),
-  });
-}
-
 function resolveViteRegistryFacts(
   options: KovoVitePluginOptions,
   fileName: string,
 ): RegistryFacts | undefined {
   if (typeof options.registryFacts === 'function') return options.registryFacts(fileName);
   return options.registryFacts;
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
-      .join(',')}}`;
-  }
-
-  return JSON.stringify(value);
 }
 
 function reportViteDiagnostics(

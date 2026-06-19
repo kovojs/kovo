@@ -1,5 +1,6 @@
 export type { CompilerDiagnostic, SourcePosition } from './diagnostics.js';
 export { compilerBuildId, type CompilerBuildIdInput } from './cache-identity.js';
+export { CompileCache, compileCacheKey, type CompileCacheKeyInput } from './compile-cache.js';
 export type { PlatformSubstitution } from './lower/platform.js';
 export type {
   AttributeMergeResult,

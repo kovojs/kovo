@@ -137,10 +137,15 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 
 ## Phase 1 — In-memory per-module cache (single process)
 
-- [ ] Introduce a `CompileCache` abstraction in `@kovojs/compiler` keyed by `hash(source)` +
+- [x] Introduce a `CompileCache` abstraction in `@kovojs/compiler` keyed by `hash(source)` +
       `hash(cross-module facts passed in)` + `compilerBuildId`, storing `CompileResult`. Start with
       the _whole_ passed-in fact set in the key (over-invalidates but always correct); Phase 2
       narrows it to the per-module footprint.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/vite.test.ts packages/compiler/src/cache-identity.test.ts -t "CompileCache|caches repeated transforms by source hash and compile context|compilerBuildId"`
+    proves the internal `CompileCache` dedupes work, keys by source and the
+    whole passed registry fact set, and still preserves Vite repeated-transform
+    cache behavior.
 - [ ] Wrap the `transform` hot path: `compileViteComponentModule` (`vite.ts:241`) consults the cache
       before calling `compileComponentModule`. Same wrap for the test-pipeline plugin call site and
       the temp-emit helper from the predecessor plan.
