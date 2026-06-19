@@ -593,6 +593,9 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../packages/core
+      '@kovojs/headless-ui':
+        specifier: workspace:*
+        version: link:../packages/headless-ui
       '@kovojs/runtime':
         specifier: workspace:*
         version: link:../packages/runtime
@@ -602,6 +605,9 @@ importers:
       '@kovojs/style':
         specifier: workspace:*
         version: link:../packages/style
+      '@kovojs/ui':
+        specifier: workspace:*
+        version: link:../packages/ui
     devDependencies:
       '@kovojs/cli':
         specifier: workspace:*
