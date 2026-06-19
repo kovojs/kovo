@@ -17,16 +17,21 @@ export interface AlertProps {
 const base = style.create(
   {
     root: {
+      alignItems: 'start',
       borderRadius: uiTheme.radius.lg,
       borderStyle: 'solid',
       borderWidth: 1,
       display: 'grid',
       fontSize: 14,
       gap: 4,
-      padding: 16,
+      lineHeight: 1.45,
+      paddingBlock: 12,
+      paddingInline: 16,
     },
     title: {
-      fontWeight: 500,
+      fontWeight: 600,
+      letterSpacing: '-0.006em',
+      lineHeight: 1.3,
     },
   },
   { namespace: 'alert', source: 'alert.tsx' },

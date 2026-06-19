@@ -65,18 +65,41 @@ export const collapsibleStyles = style.create(
       },
     },
     trigger: {
+      alignItems: 'center',
       color: uiTheme.color.foreground,
       cursor: 'pointer',
+      display: 'flex',
       fontWeight: 500,
+      justifyContent: 'space-between',
+      listStyle: 'none',
       outlineStyle: 'none',
       paddingBlock: 8,
       paddingInline: 12,
+      width: '100%',
+      '::after': {
+        borderColor: uiTheme.color.foregroundMuted,
+        borderStyle: 'solid',
+        borderWidth: '0 2px 2px 0',
+        content: '""',
+        flexShrink: 0,
+        height: 8,
+        marginLeft: 8,
+        transform: 'rotate(45deg)',
+        transitionProperty: 'transform',
+        width: 8,
+      },
+      '::-webkit-details-marker': {
+        display: 'none',
+      },
       '[data-disabled]': {
         cursor: 'not-allowed',
         opacity: 0.5,
       },
       '[data-state=open]': {
         backgroundColor: uiTheme.color.backgroundRaised,
+      },
+      '[data-state=open]::after': {
+        transform: 'rotate(-135deg)',
       },
       ':focus-visible': {
         outlineColor: uiTheme.color.borderStrong,

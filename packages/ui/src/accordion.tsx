@@ -109,11 +109,26 @@ export const accordionStyles = style.create(
       textAlign: 'left',
       transitionProperty: 'background-color, color',
       width: '100%',
+      '::after': {
+        borderColor: uiTheme.color.foregroundMuted,
+        borderStyle: 'solid',
+        borderWidth: '0 2px 2px 0',
+        content: '""',
+        flexShrink: 0,
+        height: 8,
+        marginLeft: 8,
+        transform: 'rotate(45deg)',
+        transitionProperty: 'transform',
+        width: 8,
+      },
       '[data-disabled]': {
         opacity: 0.5,
       },
       '[data-state=open]': {
         backgroundColor: uiTheme.color.backgroundRaised,
+      },
+      '[data-state=open]::after': {
+        transform: 'rotate(-135deg)',
       },
       ':disabled': {
         pointerEvents: 'none',

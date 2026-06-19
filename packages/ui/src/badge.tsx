@@ -4,7 +4,7 @@ import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
 
-export type BadgeVariant = 'neutral' | 'success' | 'warning';
+export type BadgeVariant = 'neutral' | 'success' | 'warning' | 'destructive' | 'outline';
 
 export interface BadgeProps {
   children?: string;
@@ -31,8 +31,18 @@ const base = style.create(
 
 const variants = style.create(
   {
+    destructive: {
+      backgroundColor: uiTheme.color.danger.background,
+      borderColor: uiTheme.color.danger.border,
+      color: uiTheme.color.danger.foreground,
+    },
     neutral: {
       backgroundColor: uiTheme.color.backgroundSubtle,
+      borderColor: uiTheme.color.border,
+      color: uiTheme.color.foreground,
+    },
+    outline: {
+      backgroundColor: 'transparent',
       borderColor: uiTheme.color.border,
       color: uiTheme.color.foreground,
     },
@@ -59,6 +69,8 @@ export const badgeClasses = [
   style.attrs(base.root, variants.neutral).class ?? '',
   style.attrs(variants.success).class ?? '',
   style.attrs(variants.warning).class ?? '',
+  style.attrs(variants.destructive).class ?? '',
+  style.attrs(variants.outline).class ?? '',
 ] as const;
 
 export const Badge = component({
