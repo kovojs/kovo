@@ -126,6 +126,50 @@ describe('@kovojs/test PGlite harness integration', () => {
     }
   });
 
+  it('verifies engine-side cascade writes against the static touch graph', async () => {
+    const deleteProduct = mutation('product/delete', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: Pick<PgliteTestDb, 'exec'> }) {
+        await request.db.exec(`delete from products where id = '${input.productId}'`);
+        return input.productId;
+      },
+    });
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table products (id text primary key)');
+      await db.exec(
+        'create table cart_items (product_id text references products(id) on delete cascade)',
+      );
+      await db.exec("insert into products (id) values ('p1')");
+      await db.exec("insert into cart_items (product_id) values ('p1')");
+      const harness = createKovoTestHarness({
+        db,
+        touchGraph: {
+          'product.delete': {
+            touches: [
+              { domain: 'product', keys: 'sql:id', site: 'product.domain.ts:1', via: 'products' },
+            ],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            cart_items: 'cart',
+            products: 'product',
+          },
+        },
+      });
+
+      await expect(harness.exec(deleteProduct, { productId: 'p1' })).rejects.toThrow(
+        expectedDiagnostic('KV402', 'cart'),
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
   it('verifies raw pglite handle calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,

@@ -155,7 +155,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
     wrong-domain mutation writes fail loud with KV402 and undeclared query reads
     fail loud with KV407 on the request path.
 
-- [ ] **T1-ENGINE — DB-engine side-effects invisible to the AST.** Triggers,
+- [x] **T1-ENGINE — DB-engine side-effects invisible to the AST.** Triggers,
       `ON DELETE CASCADE`, generated columns, and `pgView`/`pgMaterializedView`
       reads change data behind a modeled write; the touch/read graph never
       connects them. Trigger denormalization and cascade ghost rows are
@@ -187,8 +187,12 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
       unmodeled relations, `packages/core/src/diagnostics.ts` registers KV412,
       and `SPEC.md` §11.3 lists the diagnostic. Focused tests passed:
       Drizzle query-shapes, core diagnostics, CLI kovo-check, and `tsc --noEmit`.
-  - [ ] Backstop all of the above with **X1** (observed per-table affected-row
+  - [x] Backstop all of the above with **X1** (observed per-table affected-row
         deltas after COMMIT vs the static graph).
+    - Evidence 2026-06-19:
+      `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/verifier.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/mutation-verifier.test.ts`
+      covers pglite row-count snapshots around write SQL detecting an
+      `ON DELETE CASCADE` write to `cart_items` not present in the static graph.
   - Acceptance: cascade/trigger/view fixtures each produce the correct
     invalidation edge or a teaching KV412/KV413; matview read forces
     `await-fragment`.

@@ -1,4 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import { observeSqlEngineSideEffects, tableCounts } from './sql-observer.js';
 import {
   assertObservedReadsCovered,
   assertObservedWritesCovered,
@@ -191,13 +192,25 @@ function wrapSqlHandle<Handle extends object>(
           value,
           methodCache,
           () =>
-            (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) =>
-              value.call(
+            async (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) => {
+              const before = await tableCounts(target, Object.keys(config.domainByTable));
+              const start = recorder.observed.length;
+              const result = await value.call(
                 target,
                 (tx: object) =>
                   callback(wrapSqlHandle(tx, config, recorder, proxyCache, methodCache)),
                 ...args,
-              ),
+              );
+              await observeSqlEngineSideEffects(
+                target,
+                '<transaction>',
+                config,
+                recorder,
+                recorder.observed.slice(start),
+                before,
+              );
+              return result;
+            },
         );
       }
 

@@ -1,6 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
-import { observeSqlStatementArgument } from './sql-observer.js';
+import {
+  observeSqlEngineSideEffects,
+  observeSqlStatementArgument,
+  sqlStatementText,
+  tableCounts,
+} from './sql-observer.js';
 
 /** @internal Verification config: which tables map to which domains/keys (SPEC.md §11). */
 export interface DbVerificationConfig {
@@ -104,8 +109,27 @@ export function observableSqlMethod(
   recorder: ObservationRecorder,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
-    observeSqlStatementArgument(statement, config, recorder);
-    return value.call(target, statement, ...args);
+    const explicitOperations = observeSqlStatementArgument(statement, config, recorder);
+    const hasWrite = explicitOperations.some((operation) => operation.kind === 'write');
+    if (!hasWrite) return value.call(target, statement, ...args);
+
+    const sql = sqlStatementText(statement);
+    const before = tableCounts(target, Object.keys(config.domainByTable));
+    return Promise.resolve(before).then((counts) => {
+      if (counts.size === 0) return value.call(target, statement, ...args);
+
+      return Promise.resolve(value.call(target, statement, ...args)).then(async (result) => {
+        await observeSqlEngineSideEffects(
+          target,
+          sql,
+          config,
+          recorder,
+          explicitOperations,
+          counts,
+        );
+        return result;
+      });
+    });
   };
 }
 
