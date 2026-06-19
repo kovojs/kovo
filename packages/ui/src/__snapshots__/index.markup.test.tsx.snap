@@ -66,10 +66,10 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-select-bg-clz9dn kv-select-bd-4k01u5 kv-select-bd-1u9xv6 kv-select-bd-1vad9u kv-select-bd-115o9z kv-select-box-kdtwje kv-select-fg-16p8sm kv-select-font-1cumtw kv-select-h-ln0fuf kv-select-outline-19nyy6 kv-select-pad-raz2zz kv-select-transition-1icn30 kv-select-w-1ca06y kv-select-fg-j0urq1 kv-select-bd-5mwy53 kv-select-bg-174e8a kv-select-fg-1xegkn kv-select-cursor-1eaeoz kv-select-outline-1l8onk kv-select-outline-1iz9f5 kv-select-outline-iee2jp kv-select-outline-1bfidg",
   ],
   "sliderClasses": [
-    "kv-slider-fg-18y7qo kv-slider-d-1mghfj kv-slider-font-ms8kpd kv-slider-row-1m16zq kv-slider-opacity-1wmp2v kv-slider-fg-1j04p9 kv-slider-d-13ld8m",
+    "kv-slider-align-pcwyi kv-slider-fg-18y7qo kv-slider-d-13iw1g kv-slider-font-ms8kpd kv-slider-min-13c0yn kv-slider-position-ojetho kv-slider-touch-ru7ktn kv-slider-w-lhhf6b kv-slider-opacity-1wmp2v kv-slider-fg-1j04p9 kv-slider-d-1pvggd kv-slider-h-1051un kv-slider-min-1rr5f8 kv-slider-w-25wd9l",
   ],
   "sliderInputClasses": [
-    "kv-slider-accent-1koklt kv-slider-h-1tqmpk kv-slider-w-lhhf6b kv-slider-h-k3ojn kv-slider-w-1gi3rz kv-slider-cursor-1puzf0 kv-slider-opacity-6caix7",
+    "kv-slider-cursor-1rtfyn kv-slider-h-i8ke14 kv-slider-left-1hp4pw kv-slider-m-9505pz kv-slider-opacity-1ntpd0 kv-slider-position-1uzy1e kv-slider-top-1or6xt kv-slider-w-lhhf6b kv-slider-z-ev9kh2 kv-slider-cursor-1puzf0",
   ],
   "toastClasses": [
     "kv-toast-bg-1wqigr kv-toast-bd-1gezg0 kv-toast-bd-12jlys kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-box-16dxlr kv-toast-fg-nxulax kv-toast-d-1mghfj kv-toast-font-1h16nm kv-toast-pad-1uhz8j kv-toast-row-1m16zq kv-toast-opacity-1wmp2v kv-toast-d-kgigk0 kv-toast-bg-1cg7x5 kv-toast-bd-hcmn8o kv-toast-bg-1onn1h kv-toast-bd-1ry346 kv-toast-bg-tietjt kv-toast-bd-gf5zgh kv-toast-bg-e66ch2 kv-toast-bd-1lfh1v",
