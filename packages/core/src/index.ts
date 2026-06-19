@@ -1,9 +1,14 @@
-import type {
-  ComponentMutationDefinitions,
-  ComponentMutationForms,
-} from './internal/component-render.js';
+import type { ComponentMutationDefinitions, ComponentMutationForms, Form } from './forms-types.js';
+import type { JsonValue } from './json.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
+export type { JsonValue } from './json.js';
+export type {
+  ComponentMutationFormState,
+  Form,
+  FormFailure,
+  FormValidationFailure,
+} from './forms-types.js';
 export type {
   StorageBody,
   StorageCapability,
@@ -32,15 +37,6 @@ export type {
   WebhookVerifier,
 } from './verifier.js';
 export { customVerifier, hmacSignature, standardWebhooks } from './verifier.js';
-
-/** Any value that survives a JSON round-trip; the boundary type for island state and wire payloads (SPEC §4.1). */
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
 
 /** Opaque non-callback result of a component's `render` — the compiler lowers it to HTML/IR. */
 export type ComponentRenderResult =
@@ -71,11 +67,6 @@ type ComponentDefinitionMutations<Definition> = Definition extends { mutations: 
     ? Mutations
     : NoComponentMutations
   : NoComponentMutations;
-
-/** Render state for one typed mutation form instance. */
-export interface ComponentMutationFormState<Failure> {
-  failure: Failure | null;
-}
 
 interface ComponentRenderSlotValues {
   children?: unknown;
@@ -437,17 +428,6 @@ export function query<
   };
 }
 
-/** A typed mutation form handle: its key, input shape, and failure type. */
-export interface Form<
-  Key extends string,
-  Input extends Record<string, JsonValue> = Record<string, JsonValue>,
-  Failure = JsonValue,
-> {
-  failure?: Failure;
-  input?: Input;
-  key: Key;
-}
-
 /** A typed accessor for one search field of a GET form (`form.get(...).input(name)`). */
 export interface GetFormInput<Name extends string> {
   name: Name;
@@ -469,12 +449,6 @@ export interface GetForm<
   input<const Name extends Extract<keyof Search, string>>(name: Name): GetFormInput<Name>;
   method: 'get';
   path: Path;
-}
-
-/** The built-in validation failure shape returned when form input fails parsing. */
-export interface FormValidationFailure {
-  code: 'VALIDATION';
-  fieldErrors: Record<string, string>;
 }
 
 /** Props accepted by the compiler-bound `<FieldError />` mutation failure helper. */
@@ -576,10 +550,6 @@ type MutationErrorFailures<Errors> =
 /** Extract the input shape of a `Form` definition. */
 export type FormInput<Definition> =
   Definition extends Form<string, infer Input, unknown> ? Input : never;
-
-/** Extract the failure type of a `Form`, unioned with the built-in validation failure. */
-export type FormFailure<Definition> =
-  Definition extends Form<string, any, infer Failure> ? Failure | FormValidationFailure : never;
 
 /** The string-literal union of a form's field names. */
 export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;

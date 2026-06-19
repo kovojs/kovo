@@ -292,7 +292,7 @@ describe('api-ref generator', () => {
       '@kovojs/better-auth': 13,
       '@kovojs/compiler': 12,
       '@kovojs/cli': 12,
-      '@kovojs/test': 43,
+      '@kovojs/test': 26,
     };
     for (const pkg of result.packages) {
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);

@@ -18,3 +18,5 @@ export type {
   InlineQueryEvent,
   InstallInlineQueryEventHydrationOptions,
 } from '../query-events.js';
+/** @internal Background query refetch applier (SPEC §4.4, §9.4) — framework white-box, not public `./client`. */
+export { refetchQueries } from '../query-refetch.js';

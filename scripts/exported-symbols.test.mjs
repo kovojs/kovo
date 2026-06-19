@@ -113,9 +113,9 @@ describe('exported-symbols script', () => {
                 symbols: [{ name: 'createApp', kind: 'value' }],
               },
               {
-                subpath: './app-shell/core',
-                importPath: '@kovojs/server/app-shell/core',
-                source: 'packages/server/src/api/app-shell/core.ts',
+                subpath: './app-shell/static-export',
+                importPath: '@kovojs/server/app-shell/static-export',
+                source: 'packages/server/src/api/app-shell/static-export.ts',
                 symbols: [{ name: 'createApp', kind: 'value' }],
               },
               {
@@ -135,9 +135,9 @@ describe('exported-symbols script', () => {
         homes: [
           { importPath: '@kovojs/server', kind: 'value', subpath: '.' },
           {
-            importPath: '@kovojs/server/app-shell/core',
+            importPath: '@kovojs/server/app-shell/static-export',
             kind: 'value',
-            subpath: './app-shell/core',
+            subpath: './app-shell/static-export',
           },
         ],
       },

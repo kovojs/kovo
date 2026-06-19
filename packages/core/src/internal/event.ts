@@ -1,4 +1,4 @@
-import type { JsonValue } from '../index.js';
+import type { JsonValue } from '../json.js';
 
 /**
  * @internal A typed event descriptor: its name, payload type, and

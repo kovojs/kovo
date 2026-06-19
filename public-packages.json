@@ -118,7 +118,6 @@
           "./internal/integration",
           "./internal/integration/define",
           "./internal/harness-operations",
-          "./internal/html-fragment",
           "./internal/page",
           "./internal/sql-observer",
           "./internal/verifier",

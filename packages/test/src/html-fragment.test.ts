@@ -12,8 +12,6 @@ import {
   htmlFormFields,
   htmlKeyValues,
   htmlTextContent,
-} from '@kovojs/test/html-fragment';
-import {
   documentQueryScriptBehaviorFact,
   kovoFragmentFacts,
   kovoQueryFacts,
@@ -24,7 +22,7 @@ import {
   htmlKeyTextMap,
   htmlLinkHrefs,
   htmlMainMarkerFact,
-} from '@kovojs/test/internal/html-fragment';
+} from '@kovojs/test/html-fragment';
 
 describe('@kovojs/test html fragment seam', () => {
   it('extracts explicit fragments without constructing a harness page assertion', () => {

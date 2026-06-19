@@ -6,3 +6,5 @@
 // for framework-owned tests and emit tooling.
 export { DomMorphRoot, DomMorphTarget, keyedDomMorph } from '../morph.js';
 export type { MorphFragment, MorphRoot, MorphTarget } from '../morph.js';
+/** @internal Structural-tree morph applier (SPEC §9.1) — framework white-box, not public `./client`. */
+export { morphStructuralTree } from '../morph.js';

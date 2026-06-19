@@ -285,8 +285,6 @@ import {
   htmlFormFields,
   htmlKeyValues,
   htmlTextContent,
-} from '@kovojs/test/html-fragment';
-import {
   documentQueryScriptBehaviorFact,
   kovoFragmentFacts,
   kovoQueryFacts,
@@ -298,7 +296,7 @@ import {
   htmlLinkHrefs,
   htmlMainMarkerFact,
   type DocumentQueryScriptBehaviorFact,
-} from '@kovojs/test/internal/html-fragment';
+} from '@kovojs/test/html-fragment';
 import {
   markdownBoldSectionHeadings,
   markdownCanonicalSpecRuleTitle,
