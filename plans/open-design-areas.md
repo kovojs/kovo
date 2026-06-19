@@ -13,7 +13,9 @@ with documented workarounds.
       cascade-priority `@layer` buckets, and keeps rule attribution so a single
       v1 stylesheet can later split without changing render callers. Raw
       co-located component CSS remains an escape hatch for selectors or
-      third-party theming StyleX cannot express well.
+      third-party theming StyleX cannot express well. App-side CSS auto-collection
+      (removing the manual `emitAtomicCss`/`criticalCss: [...]` registration) is
+      tracked in `plans/css-auto-collection.md`.
 - [ ] **13.2 Lists at scale.** Template stamps and the shared `kovo-key` identity
       contract are normative in `SPEC.md` §4.8. Remaining design: cursor
       pagination through URL params, infinite scroll as fragment appends, and
