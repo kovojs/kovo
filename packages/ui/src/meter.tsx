@@ -7,6 +7,7 @@ import { meterRootAttributes } from '@kovojs/headless-ui/meter';
 
 import { uiTheme } from './theme.js';
 
+/** Style override slots for the meter primitive. */
 export interface MeterStyleOverrides {
   indicator?: style.StyleInput;
   native?: style.StyleInput;
@@ -70,7 +71,9 @@ export const meterStyles = style.create(
 );
 
 export const meterClasses = [style.attrs(meterStyles.root).class ?? ''] as const;
+/** CSS class tuple for the visual meter indicator slot. */
 export const meterIndicatorClasses = [style.attrs(meterStyles.indicator).class ?? ''] as const;
+/** CSS class tuple for the native semantic meter slot. */
 export const meterNativeClasses = [style.attrs(meterStyles.native).class ?? ''] as const;
 
 function fillStyle(
@@ -90,7 +93,7 @@ function fillStyle(
     return undefined;
   }
   const ratio = Math.min(1, Math.max(0, (parsedValue - parsedMin) / (parsedMax - parsedMin)));
-  return `width: ${(ratio * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
+  return `${(ratio * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
 export const Meter = component({
@@ -109,7 +112,7 @@ export const Meter = component({
     const rootStyleAttrs = style.attrs(meterStyles.root, slots?.root, rootOverride);
     const nativeStyleAttrs = style.attrs(meterStyles.native, slots?.native);
     const indicatorStyleAttrs = style.attrs(meterStyles.indicator, slots?.indicator);
-    const indicatorInline = fillStyle(attrs['data-value'], attrs['data-min'], attrs['data-max']);
+    const indicatorWidth = fillStyle(attrs['data-value'], attrs['data-min'], attrs['data-max']);
 
     return (
       <div {...rootStyleAttrs} data-state={attrs['data-state']}>
@@ -137,7 +140,7 @@ export const Meter = component({
           {...indicatorStyleAttrs}
           aria-hidden="true"
           data-state={attrs['data-state']}
-          style={indicatorInline}
+          style={{ width: indicatorWidth }}
         />
       </div>
     );

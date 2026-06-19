@@ -117,6 +117,7 @@ export const checkboxStyles = style.create(
 
 export const checkboxClasses = [style.attrs(checkboxStyles.root).class ?? ''] as const;
 export const checkboxInputClasses = [style.attrs(checkboxStyles.input).class ?? ''] as const;
+/** CSS class tuple for the visual checkbox box slot. */
 export const checkboxBoxClasses = [style.attrs(checkboxStyles.box).class ?? ''] as const;
 
 export const Checkbox = component({

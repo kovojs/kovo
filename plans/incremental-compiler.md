@@ -10,7 +10,7 @@ checkout / CI run / test run warm-starts instead of recompiling every module fro
 ## Sequencing
 
 **Sequenced after [`no-checked-in-generated.md`](./no-checked-in-generated.md).** That plan deletes
-the committed lowered IR and makes compile-on-the-fly the *only* path in dev, build, **and the test
+the committed lowered IR and makes compile-on-the-fly the _only_ path in dev, build, **and the test
 pipeline** (its Phase 1 wires the Kovo plugin into vitest/browser). Once no checkout ships
 prebuilt IR, every dev boot, `vp test`, browser run, and CI job pays full compilation cost on cold
 state. That is exactly what makes a persistent incremental cache load-bearing rather than a nicety:
@@ -57,7 +57,7 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
   only JIT-warmed, there is no cache, so the budgets can't distinguish a cache hit from a recompile.
 - **Outer task cache exists, coarse.** `vp`'s `run.cache.tasks` (`vite.config.ts:31-35`) content-
   hashes task `input` globs and skips whole tasks. That is make-level (all-or-nothing per task);
-  it does not make a *single edit within* a task incremental. This plan adds the fine-grained tier
+  it does not make a _single edit within_ a task incremental. This plan adds the fine-grained tier
   beneath it.
 
 ## End State
@@ -66,7 +66,7 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
   unchanged modules return cached `CompileResult`s. Measured cache-hit rate is asserted in CI.
 - A persistent on-disk cache (the `.tsbuildinfo` equivalent) survives process restarts: a second
   `vp test` / `kovo build` / CI job on unchanged source is a near-total cache hit.
-- Warm budgets in `compiler-perf.budgets.json` drop **substantially** below cold (the gap *is* the
+- Warm budgets in `compiler-perf.budgets.json` drop **substantially** below cold (the gap _is_ the
   incremental win), and a new single-edit corpus proves O(changed) not O(total) recompile cost.
 - **Cache transparency gate:** compiling with the cache enabled is byte-identical to compiling with
   it disabled, on every corpus — the cache can never alter semantics, only latency.
@@ -80,14 +80,14 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
   cross-module dependency tracking for correct invalidation, integration at the Vite/test/CLI call
   sites, and perf+correctness gates.
 - **Out of scope (call out, don't touch):**
-  - The wire/output format. SPEC §5.2 #1 forbids hashed *names* in emitted artifacts; this cache is
+  - The wire/output format. SPEC §5.2 #1 forbids hashed _names_ in emitted artifacts; this cache is
     **internal build state**, never shipped, so content-addressing it does not conflict with #1.
     Emitted module URLs keep their existing cache-busting query hashes unchanged.
-  - Fixpoint / render-equivalence *semantics* (§5.2 #3). The cache must preserve them, not redefine
+  - Fixpoint / render-equivalence _semantics_ (§5.2 #3). The cache must preserve them, not redefine
     them; those gates remain the behavioral source of truth.
   - The coarse `vp` task cache and CI job graph — coordinated with (Phase 5), not replaced.
   - Authoritative invalidation-graph derivation (`plans/authoritative-invalidation-graph.md`) — that
-    changes *what* facts exist; this plan caches *whichever* facts the pipeline produces.
+    changes _what_ facts exist; this plan caches _whichever_ facts the pipeline produces.
 
 ## Design (load-bearing decisions)
 
@@ -98,11 +98,11 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
   facts slice right, record per module **which** external facts it actually read during lowering
   (package prefixes it resolved against, mutation inputs it referenced, registry facts it consumed).
   Store that dependency footprint with the cache entry. On the next compile, recompute only the
-  footprint hash; a hit means none of *this module's* real dependencies changed. This is the
+  footprint hash; a hit means none of _this module's_ real dependencies changed. This is the
   `.tsbuildinfo` "referenced-file signatures" idea, adapted to fact-slices instead of files.
 - **Determinism is a prerequisite, and largely already holds.** §5.2 #3's byte-stable IR / fixpoint
   property means `compileComponentModule` is intended to be a deterministic pure function of its
-  declared inputs. Content-addressed caching *requires* that. Phase 0 audits and closes any
+  declared inputs. Content-addressed caching _requires_ that. Phase 0 audits and closes any
   nondeterminism (map/Set iteration order, `Date`/timestamps, absolute-path or cwd leakage into
   output, ambient env) so identical inputs always yield identical bytes; `canonicalJson()` already
   proves the team can serialize facts stably.
@@ -135,7 +135,7 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 
 - [ ] Introduce a `CompileCache` abstraction in `@kovojs/compiler` keyed by `hash(source)` +
       `hash(cross-module facts passed in)` + `compilerBuildId`, storing `CompileResult`. Start with
-      the *whole* passed-in fact set in the key (over-invalidates but always correct); Phase 2
+      the _whole_ passed-in fact set in the key (over-invalidates but always correct); Phase 2
       narrows it to the per-module footprint.
 - [ ] Wrap the `transform` hot path: `compileViteComponentModule` (`vite.ts:241`) consults the cache
       before calling `compileComponentModule`. Same wrap for the test-pipeline plugin call site and
@@ -166,11 +166,11 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 ## Phase 3 — Persistent on-disk cache (the `.tsbuildinfo` equivalent)
 
 - [ ] Define the on-disk format: a versioned manifest (`cacheKey → { artifactRefs, footprint,
-      compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo/cache/`.
+compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo/cache/`.
       Atomic write (temp + rename), format-version prefix, corruption-tolerant (a bad/partial entry
       is a miss, never a crash).
 - [ ] Persistence round-trip in Vite + CLI: warm-load the manifest at startup, write back new
-      entries, so a *second* process on unchanged source hits disk instead of recompiling.
+      entries, so a _second_ process on unchanged source hits disk instead of recompiling.
 - [ ] Concurrency safety for parallel vitest workers and parallel builds (per-entry atomic writes;
       no global lock that serializes compilation). Prune policy (size/LRU cap) so the cache can't
       grow unbounded.
@@ -197,7 +197,7 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
       repeated builds are incremental; a `--no-cache` / clean flag forces a cold build for the
       transparency gate and debugging.
 - [ ] Coordinate with the `vp` task cache (`vite.config.ts:31`): the fine-grained module cache lives
-      *beneath* the coarse task cache. Ensure task `input` lists for compile-driven tasks
+      _beneath_ the coarse task cache. Ensure task `input` lists for compile-driven tasks
       (`build`, `compiler-perf`, example builds) stay correct now that lowering reads `.kovo/cache`
       rather than committed IR (ties into `no-checked-in-generated.md` Phase "CI cache churn" risk).
 - [ ] `.github/workflows/`: cache `.kovo/cache` across CI runs keyed by `compilerBuildId` + source,
@@ -219,7 +219,7 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 
 - **Footprint completeness (the staleness hazard).** If a module consumes a cross-module fact that
   Phase 2 fails to record in its footprint, a real dependency change yields a wrong cache hit →
-  stale IR. Mitigation: derive the footprint at the same site facts are *consumed* (not a hand-kept
+  stale IR. Mitigation: derive the footprint at the same site facts are _consumed_ (not a hand-kept
   list), and let the transparency gate (cache-on ≡ cache-off after edits) catch any gap. Highest-risk
   item; treat an over-broad footprint (extra recompiles) as acceptable, an under-broad one as a bug.
 - **Determinism regressions.** New compiler passes can reintroduce nondeterminism and silently lower
@@ -234,7 +234,7 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
   used; `compilerBuildId` in the key plus a format-version prefix must make cross-version reuse a
   clean miss. Validate with a forced `compilerBuildId` bump → full miss test.
 - **Concurrency.** Parallel vitest workers and parallel Vite builds write the same cache; design for
-  lock-free per-entry atomic writes. A botched lock could serialize compilation and *regress* perf.
+  lock-free per-entry atomic writes. A botched lock could serialize compilation and _regress_ perf.
 
 ## Latest verification
 

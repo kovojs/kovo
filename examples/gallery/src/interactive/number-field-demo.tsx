@@ -14,7 +14,6 @@ import {
   NumberFieldInput,
 } from '@kovojs/ui/number-field';
 
-
 export interface GalleryNumberFieldDemoState {
   value: number;
 }

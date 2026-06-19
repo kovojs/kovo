@@ -45,7 +45,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
 
 ## Proposed diagnostics
 
-| Code  | Severity | Meaning                                                                          |
+| Code  | Severity | Meaning                                                                         |
 | ----- | -------- | ------------------------------------------------------------------------------- |
 | KV407 | error    | Proven Drizzle write in a write() body yielded zero touches and zero unresolved |
 | KV312 | error    | Position reads a clock builtin / time-volatile value with no declared cadence   |

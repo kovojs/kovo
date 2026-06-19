@@ -15,7 +15,6 @@ import {
   ComboboxValue,
 } from '@kovojs/ui/combobox';
 
-
 export interface GalleryComboboxDemoState {
   highlightedValue: string;
   inputValue: string;
@@ -58,7 +57,11 @@ export const GalleryComboboxDemo = component({
         data-state={state.open ? 'open' : 'closed'}
         id="gallery-combobox-root"
       >
-        <label id="gallery-combobox-label" for="gallery-combobox-input" style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
+        <label
+          id="gallery-combobox-label"
+          for="gallery-combobox-input"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           City
         </label>
         <form id="gallery-combobox-form" data-gallery-form="combobox" />

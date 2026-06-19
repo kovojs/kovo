@@ -13,7 +13,6 @@ import {
   FieldTextarea,
 } from '@kovojs/ui/field';
 
-
 export interface GalleryFieldDemoState {
   email: string;
   invalid: boolean;
@@ -96,7 +95,10 @@ export const GalleryFieldDemo = component({
           >
             Enter a complete email address.
           </UiFieldError>
-          <output data-demo-state="field-email" style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block">
+          <output
+            data-demo-state="field-email"
+            style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          >
             {state.email}
           </output>
         </Field>
@@ -150,7 +152,10 @@ export const GalleryFieldDemo = component({
           <FieldDescription id="gallery-interactive-field-plan-description">
             Native select remains the submitted control.
           </FieldDescription>
-          <output data-demo-state="field-plan" style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block">
+          <output
+            data-demo-state="field-plan"
+            style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          >
             {state.plan}
           </output>
         </Field>

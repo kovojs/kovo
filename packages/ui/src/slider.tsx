@@ -173,18 +173,6 @@ function valuePercent(ratio: string | undefined): string {
   return `${(clamped * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
-// Inline fill size for the range (filled portion grows from the start edge).
-function rangeFillStyle(ratio: string | undefined, vertical: boolean): string {
-  const pct = valuePercent(ratio);
-  return vertical ? `height: ${pct}` : `width: ${pct}`;
-}
-
-// Inline thumb offset along the track (value-driven; updates on re-render).
-function thumbOffsetStyle(ratio: string | undefined, vertical: boolean): string {
-  const pct = valuePercent(ratio);
-  return vertical ? `bottom: ${pct}; top: auto` : `left: ${pct}`;
-}
-
 export const sliderClasses = [style.attrs(sliderStyles.root).class ?? ''] as const;
 export const sliderInputClasses = [style.attrs(sliderStyles.input).class ?? ''] as const;
 export const sliderTrackClasses = [style.attrs(sliderStyles.track).class ?? ''] as const;
@@ -333,12 +321,8 @@ export const SliderRange = component({
       ...(props.value === undefined ? {} : { value: props.value }),
     });
     const styleAttrs = style.attrs(sliderStyles.range, props.styles?.range);
-    const authorStyle = (props as { style?: string }).style;
-    const fill = rangeFillStyle(
-      attrs['data-value-ratio'],
-      attrs['data-orientation'] === 'vertical',
-    );
-    const inlineStyle = authorStyle ? `${fill}; ${authorStyle}` : fill;
+    const vertical = attrs['data-orientation'] === 'vertical';
+    const pct = valuePercent(attrs['data-value-ratio']);
 
     return (
       <span
@@ -355,7 +339,7 @@ export const SliderRange = component({
         data-value={attrs['data-value']}
         data-value-ratio={attrs['data-value-ratio']}
         id={attrs.id}
-        style={inlineStyle}
+        style={{ height: vertical ? pct : undefined, width: vertical ? undefined : pct }}
       >
         {props.children}
       </span>
@@ -383,12 +367,8 @@ export const SliderThumb = component({
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
     const styleAttrs = style.attrs(sliderStyles.thumb, props.styles?.thumb);
-    const authorStyle = (props as { style?: string }).style;
-    const offset = thumbOffsetStyle(
-      attrs['data-value-ratio'],
-      attrs['data-orientation'] === 'vertical',
-    );
-    const inlineStyle = authorStyle ? `${offset}; ${authorStyle}` : offset;
+    const vertical = attrs['data-orientation'] === 'vertical';
+    const pct = valuePercent(attrs['data-value-ratio']);
 
     return (
       <span
@@ -415,7 +395,11 @@ export const SliderThumb = component({
         data-value-ratio={attrs['data-value-ratio']}
         id={attrs.id}
         role={attrs.role}
-        style={inlineStyle}
+        style={{
+          bottom: vertical ? pct : undefined,
+          left: vertical ? undefined : pct,
+          top: vertical ? 'auto' : undefined,
+        }}
         tabIndex={attrs.tabIndex}
       />
     );

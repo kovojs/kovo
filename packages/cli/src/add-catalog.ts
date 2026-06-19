@@ -124,7 +124,10 @@ function readVendoredSource(sourcePath: string): string {
 
 export function vendoredUiComponentSource(source: string): string {
   let transformed = source
-    .replace(/\nimport \{ passThroughProps \} from '\.\/pass-through\.js';\n/g, '\n')
+    .replace(
+      /\nimport \{ (?:bindingProps, )?passThroughProps \} from '\.\/pass-through\.js';\n/g,
+      '\n',
+    )
     .replace(/\nimport \{ uiTheme \} from '\.\/theme\.js';\n/g, '\n');
 
   if (source.includes("from './pass-through.js'")) {
@@ -215,6 +218,15 @@ function rewriteLocalPulseKeyframes(source: string): string {
         '\n',
       )
       .replace('animationName: pulse,', "animationName: 'kv-progress-pulse-7z2qlm',");
+  }
+
+  if (source.includes("namespace: 'progressSlide'")) {
+    transformed = transformed
+      .replace(
+        /\nconst indeterminateSlide = style\.keyframes\(\n[\s\S]*?\{ namespace: 'progressSlide' \},\n\);\n/,
+        '\n',
+      )
+      .replace('animationName: indeterminateSlide,', "animationName: 'kv-progress-slide-18g4y3',");
   }
 
   if (source.includes("namespace: 'skeletonPulse'")) {
@@ -315,6 +327,19 @@ function passThroughProps(
         !blockedProps.has(name)
       );
     }),
+  );
+}
+
+function bindingProps(props: object, attrs?: readonly string[]): Record<string, unknown> {
+  const allow = attrs ? new Set(attrs.map((name) => \`data-bind:\${name}\`)) : null;
+  return Object.fromEntries(
+    Object.entries(props).filter(
+      ([name, value]) =>
+        value !== undefined &&
+        value !== null &&
+        name.startsWith('data-bind:') &&
+        (allow === null || allow.has(name)),
+    ),
   );
 }`;
 }

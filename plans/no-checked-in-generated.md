@@ -45,14 +45,14 @@ relocated the dependency behind `*generated-fixtures.ts` wrappers and kept the f
 
 **127 git-tracked generated source files** under `src/generated/` (excluding `.deepsec`):
 
-| Area | Count | Notable artifacts |
-| --- | --- | --- |
-| `examples/commerce/src/generated/` | 9 | `app.kovo-route.tsx`, components, `live-targets.ts`, `graph.json`, `touch-graph.ts`, `optimistic/`, `kovo-ui.css` |
-| `examples/crm/src/generated/` | 12 | same families + 4 `optimistic/*` |
-| `examples/gallery/src/generated/interactive/` | 70 | per-demo `*.tsx` + `*.client.js` |
-| `examples/stackoverflow/src/generated/` | 10 | same families as commerce |
-| `site/src/generated/` | 2 | `app.kovo-route.tsx`, `app.routes.tsx` |
-| `site/tutorial/steps/0{2..7}/src/generated/` | 24 | per-step components + `*.client.js` |
+| Area                                          | Count | Notable artifacts                                                                                                 |
+| --------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------- |
+| `examples/commerce/src/generated/`            | 9     | `app.kovo-route.tsx`, components, `live-targets.ts`, `graph.json`, `touch-graph.ts`, `optimistic/`, `kovo-ui.css` |
+| `examples/crm/src/generated/`                 | 12    | same families + 4 `optimistic/*`                                                                                  |
+| `examples/gallery/src/generated/interactive/` | 70    | per-demo `*.tsx` + `*.client.js`                                                                                  |
+| `examples/stackoverflow/src/generated/`       | 10    | same families as commerce                                                                                         |
+| `site/src/generated/`                         | 2     | `app.kovo-route.tsx`, `app.routes.tsx`                                                                            |
+| `site/tutorial/steps/0{2..7}/src/generated/`  | 24    | per-step components + `*.client.js`                                                                               |
 
 **The production path does not need them.** `kovo build ./src/app.tsx` and the Vite plugin
 (`kovo({ app: '/src/app.tsx' })`, `packages/server/src/vite.ts`) compile from the **authored**
@@ -64,6 +64,7 @@ output.
 removed direct `./generated/*` imports but added `*generated-fixtures.ts` wrappers (exempted by
 `scripts/import-boundary.mjs` via `isExplicitArtifactFixture`). App entries import the wrapper;
 the wrapper re-exports the committed artifact:
+
 - `site/src/app.ts` → `./app.generated-fixtures.js` → `./generated/app.kovo-route.js`
 - every `site/tutorial/steps/*/src/app.ts` → `./generated-fixtures.js` → `./generated/*`
 - `examples/gallery/src/interactive-docs.tsx` → `./interactive-docs.generated-fixtures.js`
@@ -76,6 +77,7 @@ component/route to `CompileResult` ({server, client, css, registry stamp, diagno
 
 **Why tests/typecheck currently read committed artifacts.** Vitest and `tsc` do **not** run the
 Kovo Vite plugin today. Key mitigations:
+
 - Vitest is Vite-powered: adding the Kovo plugin to the test config lowers `.tsx` on the fly for
   **both** node and browser vitest (vitest browser mode is also Vite-served). This is the unifying
   fix for the two hardest consumers.
@@ -83,7 +85,7 @@ Kovo Vite plugin today. Key mitigations:
   same public API shape, so typecheck resolves authored source fine — no lowering needed, only the
   removal of generated files from the `tsc` include set.
 - Remaining non-Vite consumers: `node --test tests/kovo-check.node.mjs` and `kovo check
-  examples/commerce/src/generated/graph.json` (both must emit to a temp dir instead of reading a
+examples/commerce/src/generated/graph.json` (both must emit to a temp dir instead of reading a
   committed copy).
 
 **Gates that read committed copies (must change):** `emit-components --check` / `emit-graph
@@ -165,7 +167,7 @@ authored components/routes, and convert or relocate artifact tests.
       temp dir and assert the **fixpoint** (recompiling the output is a no-op) and
       render-equivalence, instead of diffing against a committed file.
 - [ ] `scripts/kovo-check.mjs`: emit the commerce graph to a temp path, then run `kovo check
-      <temp>` (no committed `graph.json` dependency).
+<temp>` (no committed `graph.json` dependency).
 - [ ] `.github/workflows/pages.yml`: keep `emit:interactive-gallery` as a build step that writes
       into the gitignored generated dir before the pages build (it is not `--check`).
 - [ ] Confirm `scripts/prod-emit-check.mjs` already compiles in-memory (no committed input) and

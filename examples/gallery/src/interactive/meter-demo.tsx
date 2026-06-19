@@ -7,7 +7,6 @@ import {
 } from '@kovojs/headless-ui/meter';
 import { Meter } from '@kovojs/ui/meter';
 
-
 export interface GalleryMeterDemoState {
   dataState: MeterDataState;
   value: number;
@@ -29,7 +28,10 @@ export const GalleryMeterDemo = component({
     };
 
     return (
-      <section style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a" data-gallery-interactive="meter">
+      <section
+        style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
+        data-gallery-interactive="meter"
+      >
         <label for="gallery-meter-value">Storage capacity</label>
         <Meter
           aria-valuetext={`${state.value} percent capacity`}

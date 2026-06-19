@@ -104,10 +104,7 @@ export function passThroughProps(
 // component call site (e.g. data-bind:data-state); a static SSR value on the
 // child stays the initial paint and the stamp keeps it live. Pass `attrs` to
 // limit which base attributes (e.g. ['data-state']) are forwarded.
-export function bindingProps(
-  props: object,
-  attrs?: readonly string[],
-): Record<string, unknown> {
+export function bindingProps(props: object, attrs?: readonly string[]): Record<string, unknown> {
   const allow = attrs ? new Set(attrs.map((name) => `data-bind:${name}`)) : null;
   return Object.fromEntries(
     Object.entries(props).filter(

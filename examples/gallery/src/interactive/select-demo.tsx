@@ -16,7 +16,6 @@ import {
   SelectValue,
 } from '@kovojs/ui/select';
 
-
 export interface GallerySelectDemoState {
   highlightedValue: string;
   open: boolean;
@@ -48,7 +47,11 @@ export const GallerySelectDemo = component({
     return (
       <Select {...selectState} data-gallery-interactive="select" id="gallery-select-root">
         <form id="gallery-select-form" data-gallery-form="select" />
-        <label id="gallery-select-label" for="gallery-select-trigger" style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
+        <label
+          id="gallery-select-label"
+          for="gallery-select-trigger"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           Shipping speed
         </label>
         <SelectHiddenInput {...selectState} id="gallery-select-control" value={state.value} />

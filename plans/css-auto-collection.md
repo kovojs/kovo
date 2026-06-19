@@ -29,8 +29,13 @@ export const productGridStyleCss = style.emitAtomicCss(
 
 ```tsx
 stylesheet('./styles.css', {
-  criticalCss: [commerceAppStyleCss, authFormStyleCss, cartBadgeStyleCss,
-                orderHistoryStyleCss, productGridStyleCss],
+  criticalCss: [
+    commerceAppStyleCss,
+    authFormStyleCss,
+    cartBadgeStyleCss,
+    orderHistoryStyleCss,
+    productGridStyleCss,
+  ],
   theme: commerceTheme,
 });
 ```
@@ -48,6 +53,7 @@ import { style, tokens } from '@kovojs/style';
 const s = style.create({ field: {...}, row: {...} });
 <div style={s.row} />
 ```
+
 ```tsx
 // route/app — one sink, no criticalCss list; build fills it from the route's
 // reachable component graph and auto-inlines critical CSS
@@ -76,7 +82,7 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
   components' `cssAssets`. The Vite plugin (`packages/compiler/src/vite.ts:153`)
   compiles components but discards their `cssAssets` and emits no CSS manifest.
 - **Seam B — routes carry no CSS facts.** `compileRouteModule`
-  (`packages/compiler/src/route-pages.ts`) records component *names*, not a
+  (`packages/compiler/src/route-pages.ts`) records component _names_, not a
   route→component→CSS mapping, so per-route critical CSS can't be computed.
 - **Seam C — collection is package-scoped only.** There is no app-source
   equivalent of `extractPackageComponentCss`; app components fall back to the
@@ -87,14 +93,15 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 ## Plan
 
 ### Phase 0 — Decision & SPEC alignment
+
 - [ ] Record the target authoring surface above as normative for v1 styling and
       reconcile with `plans/open-design-areas.md` §13.1 (still open). Confirm no
       §5.2/KV235 conflict: the served sheet is an emitted artifact; app TSX only
-      writes `style.create` + `style={...}`.
-      - Evidence: link this ledger from `plans/open-design-areas.md` §13.1; cite
-        `SPEC.md` §13.1 ("compiler **may** extract … into ordinary CSS assets").
+      writes `style.create` + `style={...}`. - Evidence: link this ledger from `plans/open-design-areas.md` §13.1; cite
+      `SPEC.md` §13.1 ("compiler **may** extract … into ordinary CSS assets").
 
 ### Phase 1 — App-source CSS collection in the build (core)
+
 - [ ] Add an app-scoped collector that runs `extractKovoStyles` over the app's
       compiled component graph and produces one `CssAssetManifest`
       (reuse `collectCssAssetManifest`). Model it on `extractPackageComponentCss`
@@ -108,46 +115,47 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
       of only reading hand-supplied `criticalCss`. (Seam A)
 - [ ] Wire the Vite plugin (`vite.ts:153`) to accumulate each compiled
       component's `cssAssets` and surface the manifest to the build (dev + prod
-      parity), so `kovo build` and `vite build` produce identical sheets.
-      - Evidence: a build test asserting an app component's atom (e.g.
-        `productGridStyles.field` background) appears in the emitted
-        `/assets/styles.css` **without** any `emitAtomicCss` export in app source;
-        critical CSS inlined in the page `<style>` (`hints.ts:202`).
+      parity), so `kovo build` and `vite build` produce identical sheets. - Evidence: a build test asserting an app component's atom (e.g.
+      `productGridStyles.field` background) appears in the emitted
+      `/assets/styles.css` **without** any `emitAtomicCss` export in app source;
+      critical CSS inlined in the page `<style>` (`hints.ts:202`).
 
 ### Phase 2 — Route-scoped critical CSS (optional, builds on existing splitter)
+
 > Moved to `plans/fine-grained-css.md`, which owns route/fragment CSS splitting
 > end-to-end (route facts → splitter → per-route link/inline). The Seam B work
 > below is the shared prerequisite; check this item off with a pointer to that
 > ledger when fine-grained-css Phases 1–3 land.
+
 - [ ] Have `compileRouteModule` emit route→component CSS facts so the build can
       feed `CssRouteSplitTarget` and use `createCssAssetResolver`
       (`css.ts:202`) to inline only the active route's critical CSS while the
-      full sheet loads lazily. (Seam B)
-      - Evidence: two routes with disjoint components inline disjoint critical CSS;
-        shared atoms dedupe into the base chunk.
+      full sheet loads lazily. (Seam B) - Evidence: two routes with disjoint components inline disjoint critical CSS;
+      shared atoms dedupe into the base chunk.
 
 ### Phase 3 — Migrate examples, starter, docs off the manual surface
+
 - [ ] Remove `export const *StyleCss = style.emitAtomicCss(... __rules ...)` and
       the `criticalCss: [...]` lists from `examples/{commerce,crm,stackoverflow}`,
       `site/tutorial/steps/*`, and `create-kovo` starter; routes keep only
-      `stylesheet('./styles.css', { theme })`.
-      - Evidence: `grep -rn "emitAtomicCss\|__rules\|StyleCss" examples site packages/create-kovo`
-        returns no app-source hits; each example renders byte-identical styled
-        HTML before/after (golden/build test).
+      `stylesheet('./styles.css', { theme })`. - Evidence: `grep -rn "emitAtomicCss\|__rules\|StyleCss" examples site packages/create-kovo`
+      returns no app-source hits; each example renders byte-identical styled
+      HTML before/after (golden/build test).
 - [ ] Update styling docs (`docs/`, starter README, `kovo explain`) to teach the
       one-import + no-export surface.
 
 ### Phase 4 — Demote the now-unnecessary public API
+
 - [ ] Move `emitAtomicCss`, `AtomicRule`, `createAtomicStyles`, `AtomicCssResult`,
       and the `__rules` accessor off the app-facing `@kovojs/style` entry to
       `@kovojs/style/internal` (or a generated subpath), keeping app-facing
       surface to `create`, `attrs`/`props`, `defineVars`, `createTheme`,
       `defineConsts`, `keyframes`, `tokens`, `defineTheme`, `raw`,
-      `firstThatWorks`. Resolves `plans/audit-api-20260618-180210.md:1324`.
-      - Evidence: `api-surface-baseline.json` diff shows the symbols removed from
-        the public entry; `rules/api-surface.md` gate passes.
+      `firstThatWorks`. Resolves `plans/audit-api-20260618-180210.md:1324`. - Evidence: `api-surface-baseline.json` diff shows the symbols removed from
+      the public entry; `rules/api-surface.md` gate passes.
 
 ### Phase 5 — Authoring ergonomics polish
+
 - [ ] Collapse the double import: drop `import { tokens }` in favor of the
       namespace re-export (already present, `index.ts:2`) or ship a single
       `{ style, tokens }` entry; update examples/docs.
@@ -156,11 +164,13 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
       `{ namespace: 'button', source: 'button.tsx' }` (`packages/ui/src/*.tsx`).
 
 ## Out of scope
+
 - `style.raw(...)` dynamic escape hatch (unchanged; `SPEC.md` §13.1).
 - Shadow-DOM scoping or a runtime theme store (explicitly rejected, §13.1).
 - The component-level `style.attrs(...)` merge path — it is ergonomic and stays.
 
 ## Latest verification
+
 - _(none yet — plan created 2026-06-18)_. Per-checkbox proving commands are noted
   inline; run the narrowest first (focused build test for Phase 1), broaden to
   root `tsc` + API-surface + `git diff --check` before each checkpoint commit.

@@ -14,7 +14,6 @@ import {
   AlertDialogTrigger,
 } from '@kovojs/ui/alert-dialog';
 
-
 export interface GalleryAlertDialogDemoState {
   open: boolean;
 }

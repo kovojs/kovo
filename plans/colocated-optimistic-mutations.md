@@ -39,13 +39,19 @@ export const addContact = mutation('addContact', {
   input: s.object({ id: s.string(), name: s.string(), email: s.string(), ownerId: s.string() }),
   errors: { DUPLICATE_EMAIL: duplicateEmailError },
   guard: authed,
-  queue: 'crm',                                   // sibling field: per-mutation FIFO lane (§10.4)
+  queue: 'crm', // sibling field: per-mutation FIFO lane (§10.4)
   optimistic: {
     // key autocompletes to exactly the queries addContact invalidates (InvalidationSets);
     // `draft` typed as contactList's value, `input` typed from the input schema above.
     // Draft-style: mutate in place, no structuredClone, no return.
     contactList: (draft, input) => {
-      draft.items.push({ id: input.id, name: input.name, email: input.email, ownerId: input.ownerId, dealCount: 0 });
+      draft.items.push({
+        id: input.id,
+        name: input.name,
+        email: input.email,
+        ownerId: input.ownerId,
+        dealCount: 0,
+      });
     },
     // a key may also be the explicit deferral marker:
     // contactDealCount: 'await-fragment',
@@ -69,7 +75,7 @@ export const addContact = mutation('addContact', {
   per-query, so it does not belong inside the transform map.
 - **Transforms are draft-style `(draft, input) => void`.** The author mutates a draft and
   returns nothing. The runtime already `structuredClone`s the affected query value before
-  applying optimism (§10.4), so the draft *is* that clone — the current
+  applying optimism (§10.4), so the draft _is_ that clone — the current
   `(current, input) => next` immutable form forces the author to write a redundant clone
   by hand. Apply/rebase reads the mutated draft instead of a return value; transforms stay
   pure and re-appliable, so the rebase protocol is unchanged in shape. (Generated derived
@@ -82,8 +88,8 @@ export const addContact = mutation('addContact', {
       value type computed from the mutation's own type params, roughly
       `{ [Q in InvalidationSets[Key]]?: ((draft: QueryRegistry[Q], input: InferSchema<InputSchema>) => void) | 'await-fragment' }`,
       plus a sibling `queue?: string`. The load-bearing risk: today
-      `OptimisticFor<typeof form>` infers *after* the form value exists; here the field is
-      contextually typed *within* the same `mutation()` literal. Feasible because
+      `OptimisticFor<typeof form>` infers _after_ the form value exists; here the field is
+      contextually typed _within_ the same `mutation()` literal. Feasible because
       `mutation<Key, InputSchema, …>` already carries `Key` and `InputSchema`. Evidence
       target: type tests in `packages/server` proving `draft` (mutable, query-value typed)
       and `input` are correctly typed and a missing non-derivable key is a compile error.

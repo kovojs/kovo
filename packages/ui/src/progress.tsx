@@ -7,6 +7,7 @@ import { progressRootAttributes } from '@kovojs/headless-ui/progress';
 
 import { uiTheme } from './theme.js';
 
+/** Style override slots for the progress primitive. */
 export interface ProgressStyleOverrides {
   indicator?: style.StyleInput;
   native?: style.StyleInput;
@@ -78,9 +79,11 @@ export const progressStyles = style.create(
 );
 
 export const progressClasses = [style.attrs(progressStyles.root).class ?? ''] as const;
+/** CSS class tuple for the visual progress indicator slot. */
 export const progressIndicatorClasses = [
   style.attrs(progressStyles.indicator).class ?? '',
 ] as const;
+/** CSS class tuple for the native semantic progress slot. */
 export const progressNativeClasses = [style.attrs(progressStyles.native).class ?? ''] as const;
 
 function fillStyle(value: string | undefined, max: string | undefined): string | undefined {
@@ -91,7 +94,7 @@ function fillStyle(value: string | undefined, max: string | undefined): string |
     return undefined;
   }
   const ratio = Math.min(1, Math.max(0, parsedValue / parsedMax));
-  return `width: ${(ratio * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
+  return `${(ratio * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
 export const Progress = component({
@@ -106,7 +109,7 @@ export const Progress = component({
     const rootStyleAttrs = style.attrs(progressStyles.root, slots?.root, rootOverride);
     const nativeStyleAttrs = style.attrs(progressStyles.native, slots?.native);
     const indicatorStyleAttrs = style.attrs(progressStyles.indicator, slots?.indicator);
-    const indicatorInline = fillStyle(attrs['data-value'], attrs['data-max']);
+    const indicatorWidth = fillStyle(attrs['data-value'], attrs['data-max']);
 
     return (
       <div {...rootStyleAttrs} data-state={attrs['data-state']}>
@@ -126,7 +129,7 @@ export const Progress = component({
           {...indicatorStyleAttrs}
           aria-hidden="true"
           data-state={attrs['data-state']}
-          style={indicatorInline}
+          style={{ width: indicatorWidth }}
         />
       </div>
     );

@@ -7,7 +7,6 @@ import {
 } from '@kovojs/headless-ui/dialog';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@kovojs/ui/dialog';
 
-
 export interface GalleryDialogDemoState {
   open: boolean;
 }

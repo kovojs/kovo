@@ -23,6 +23,8 @@ const ts = await import('typescript');
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const commerceRoot = resolve(scriptDir, '..');
+const repoRoot = resolve(commerceRoot, '../..');
+const localCliPath = resolve(repoRoot, 'packages/cli/src/bin.ts');
 const sourcePath = resolve(commerceRoot, 'src/domain.ts');
 const graphPath = resolve(commerceRoot, 'src/generated/graph.json');
 const touchGraphPath = resolve(commerceRoot, 'src/generated/touch-graph.ts');
@@ -431,7 +433,11 @@ function readJson(path) {
 }
 
 function runKovo(args) {
-  execFileSync('kovo', args, {
+  const command = existsSync(localCliPath) ? process.execPath : 'kovo';
+  const commandArgs = existsSync(localCliPath)
+    ? ['--experimental-strip-types', localCliPath, ...args]
+    : args;
+  execFileSync(command, commandArgs, {
     cwd: commerceRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
   });

@@ -159,6 +159,7 @@ export const radioGroupStyles = style.create(
 export const radioGroupClasses = [style.attrs(radioGroupStyles.root).class ?? ''] as const;
 export const radioGroupItemClasses = [style.attrs(radioGroupStyles.item).class ?? ''] as const;
 export const radioGroupRadioClasses = [style.attrs(radioGroupStyles.radio).class ?? ''] as const;
+/** CSS class tuple for the visual radio control slot. */
 export const radioGroupRadioControlClasses = [
   style.attrs(radioGroupStyles.radioControl).class ?? '',
 ] as const;

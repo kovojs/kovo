@@ -7,7 +7,6 @@ import {
 } from '@kovojs/headless-ui/otp-field';
 import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from '@kovojs/ui/otp-field';
 
-
 export interface GalleryOtpFieldDemoState {
   activeSlot: number;
   value: string;
@@ -216,7 +215,10 @@ export const GalleryOtpFieldDemo = component({
         <p id="gallery-interactive-otp-description" style="font-size:0.875rem;color:#6b7280">
           Enter the four digit code.
         </p>
-        <output data-demo-state="otp-value" style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block">
+        <output
+          data-demo-state="otp-value"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+        >
           {state.value}
         </output>
       </OtpField>

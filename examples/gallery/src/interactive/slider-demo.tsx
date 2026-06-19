@@ -8,7 +8,6 @@ import {
 } from '@kovojs/headless-ui/slider';
 import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from '@kovojs/ui/slider';
 
-
 export interface GallerySliderDemoState {
   dragging: boolean;
   dragPointerStart: number;
@@ -40,7 +39,10 @@ export const GallerySliderDemo = component({
     return (
       <Slider {...sliderState} data-gallery-interactive="slider" data-value={String(state.value)}>
         <form id="gallery-slider-form" data-gallery-form="slider" />
-        <label id="gallery-slider-label" style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
+        <label
+          id="gallery-slider-label"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           Completion
         </label>
         <SliderInput {...sliderState} id="gallery-slider-input" value={state.value} />
@@ -122,7 +124,10 @@ export const GallerySliderDemo = component({
             }}
           />
         </SliderTrack>
-        <output data-demo-state="slider-value" style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block">
+        <output
+          data-demo-state="slider-value"
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+        >
           {String(state.value)}
         </output>
       </Slider>

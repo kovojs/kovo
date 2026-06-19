@@ -7,8 +7,8 @@ build split the collected atomic CSS into a small shared **base** chunk plus
 per-**route** and per-**fragment** chunks, and have the server link/inline only
 the chunks a given route (or patched-in fragment) can reach.
 
-Authority: `SPEC.md` §13.1 (StyleX styles compile to *globally collision-free
-atomic classes* that *dedupe into declared stylesheet assets* — splitting a
+Authority: `SPEC.md` §13.1 (StyleX styles compile to _globally collision-free
+atomic classes_ that _dedupe into declared stylesheet assets_ — splitting a
 deduped global sheet into route-reachable subsets is an emission-artifact
 decision, not a new authoring surface) and §5.2 / **KV235** (the served sheet and
 its chunks are emitted artifacts; app TSX only writes `style.create` +
@@ -19,7 +19,7 @@ ships the smallest correct first paint.
 
 This plan **depends on and supersedes Phase 2 of** `plans/css-auto-collection.md`:
 
-- `css-auto-collection.md` Phase 1 makes the build *collect* app-authored
+- `css-auto-collection.md` Phase 1 makes the build _collect_ app-authored
   `style.create(...)` atoms into one `CssAssetManifest` (closing **Seam A**: the
   Vite plugin currently discards each compiled component's `cssAssets`,
   `vite.ts:153`). This plan **consumes** that manifest; it does not re-solve
@@ -38,17 +38,17 @@ This plan **depends on and supersedes Phase 2 of** `plans/css-auto-collection.md
 Every route links the same monolithic sheet and inlines every component's
 critical CSS:
 
-- The build merges *all* app + route stylesheets into one file and reads only
+- The build merges _all_ app + route stylesheets into one file and reads only
   hand-supplied `criticalCss`; it never splits per route
   (`stylesheetCssByPath`, `packages/server/src/build.ts:659-683`).
-- The serving layer already supports a per-route stylesheet *list*
+- The serving layer already supports a per-route stylesheet _list_
   (`[...app.stylesheets, ...route.stylesheets]`,
   `packages/server/src/app-document.ts:137`), but apps register exactly one
   monolithic sheet, so the list is one entry on every route.
 - Apps hand-author one critical-CSS list spanning every component:
   - `examples/commerce/src/app.tsx:74` — `criticalCss: [commerceAppStyleCss,
-    authFormStyleCss, cartBadgeStyleCss, orderHistoryStyleCss,
-    productGridStyleCss, …]` shipped to `/login` and every other route.
+authFormStyleCss, cartBadgeStyleCss, orderHistoryStyleCss,
+productGridStyleCss, …]` shipped to `/login` and every other route.
   - `site/src/route-kit.ts:16-29` — one `/assets/site.css` whose `criticalCss`
     inlines `chrome`, `docs-layout`, `example-split`, `gallery`, `landing`, and
     `searchDialog` on **every** page; the landing route pays for gallery + docs
@@ -94,7 +94,7 @@ first-paint critical CSS and the linked sheet for routes that never use it.
 
 - **Seam B — routes carry no CSS facts.** `compileRouteModule`
   (`packages/compiler/src/route-pages.ts`) records each route's component
-  *names* (`CompiledRoutePageMetadata.components`, `route.ts:258`), not a
+  _names_ (`CompiledRoutePageMetadata.components`, `route.ts:258`), not a
   route→component→CSS-asset mapping. Without the reachable source-file /
   fragment-target set per route, the build cannot build `CssRouteSplitTarget`s.
 - **Seam D — the build never invokes the splitter.** `stylesheetCssByPath`
@@ -131,104 +131,102 @@ mutation pulls `fragments/cart.css` if not already present.
 ## Plan
 
 ### Phase 0 — Baseline measurement & topology decision
+
 - [ ] Quantify today's overship: add a build report (or test) that, per route,
       records bytes of linked CSS and bytes of inlined critical CSS vs. the bytes
       actually reachable from that route's component graph. Capture commerce +
-      site numbers as the baseline this plan must beat.
-      - Evidence: a committed report/test asserting e.g. site `/` currently
-        inlines `gallery`/`docs-layout` critical CSS it cannot reach
-        (`site/src/route-kit.ts:16-29`).
+      site numbers as the baseline this plan must beat. - Evidence: a committed report/test asserting e.g. site `/` currently
+      inlines `gallery`/`docs-layout` critical CSS it cannot reach
+      (`site/src/route-kit.ts:16-29`).
 - [ ] Decide chunk topology and the base-hoist threshold (atoms used by ≥ N
       routes, plus anything the shared layout/chrome renders, go to `base.css`;
       route-unique atoms to `routes/<route>.css`; fragment-only atoms to
       `fragments/<target>.css`). Record how `style.raw(...)` and the runtime
-      `emitAtomicCss` escape hatch (un-attributable to a route) stay in `base`.
-      - Evidence: decision recorded here; reconcile with `SPEC.md` §13.1 (global
-        atomic, deduped) and `plans/open-design-areas.md` §13.1.
+      `emitAtomicCss` escape hatch (un-attributable to a route) stay in `base`. - Evidence: decision recorded here; reconcile with `SPEC.md` §13.1 (global
+      atomic, deduped) and `plans/open-design-areas.md` §13.1.
 
 ### Phase 1 — Emit route→component→CSS facts (Seam B; shared with css-auto-collection)
+
 - [ ] Have `compileRouteModule` (`route-pages.ts`) emit, per route, the set of
       reachable component source file names and fragment targets, surfaced on the
       route metadata and the route graph (`graph.json`) so the build can read it
-      without re-deriving the component tree.
-      - Evidence: `graph.json` for a two-route example shows disjoint
-        `sourceFileNames`/`fragmentTargets` per route; a unit test on
-        `compileRouteModule` output.
+      without re-deriving the component tree. - Evidence: `graph.json` for a two-route example shows disjoint
+      `sourceFileNames`/`fragmentTargets` per route; a unit test on
+      `compileRouteModule` output.
 - [ ] Map those facts to `CssRouteSplitTarget` shape (`route`, `sourceFileNames`,
       `hrefs`, `fragmentTargets`) — the exact input `selectRouteCssAssets`
       (`css.ts:301`) already consumes.
 
 ### Phase 2 — Feed the splitter in the real build (Seam D)
+
 - [ ] In the build, construct `CssSplitOptions.routes` from Phase 1 facts and
       call `collectCssAssetManifest` with `split` so `chunks =
-      { base, routes, fragments }` is populated (`css.ts:232`). Source the asset
+{ base, routes, fragments }` is populated (`css.ts:232`). Source the asset
       manifest from `css-auto-collection.md` Phase 1's app-graph collector (or the
-      package collector as interim).
-      - Evidence: a build test asserting `chunks.routes['/login']` contains the
-        login form's atom and `chunks.routes['/']` does not; shared atoms land in
-        `chunks.base` via `sharedRouteCssAssets`.
+      package collector as interim). - Evidence: a build test asserting `chunks.routes['/login']` contains the
+      login form's atom and `chunks.routes['/']` does not; shared atoms land in
+      `chunks.base` via `sharedRouteCssAssets`.
 - [ ] Materialize each chunk as a real emitted asset
       (`base.css`, `routes/*.css`, `fragments/*.css`) through
       `stylesheetCssByPath` / `vite-build-assets`, replacing the single-sink
-      write at `build.ts:651`. Keep content-hashed hrefs for caching.
-      - Evidence: `kovo build` of an example writes the chunk files; `git
-        diff --check` clean; bytes-per-route report from Phase 0 drops.
+      write at `build.ts:651`. Keep content-hashed hrefs for caching. - Evidence: `kovo build` of an example writes the chunk files; `git
+diff --check` clean; bytes-per-route report from Phase 0 drops.
 
 ### Phase 3 — Link/inline only the route's chunks (Seam E)
+
 - [ ] Rewrite each route's resolved `stylesheets` to `[base.css,
-      routes/<route>.css]` (theme stays on `base`/app), using
+routes/<route>.css]` (theme stays on `base`/app), using
       `createCssAssetResolver` (`css.ts:202`) at the document boundary
       (`app-document.ts:136`) so the linked set is route-reachable only. App-wide
-      `stylesheets` shrinks to the global/base entry.
-      - Evidence: rendering test — `/` links `base.css` + `routes/index.css` and
-        **not** `routes/login.css`; the 103 Early-Hints `Link` header lists only
-        those (`hints.ts:163`).
+      `stylesheets` shrinks to the global/base entry. - Evidence: rendering test — `/` links `base.css` + `routes/index.css` and
+      **not** `routes/login.css`; the 103 Early-Hints `Link` header lists only
+      those (`hints.ts:163`).
 - [ ] Inline only the active route's chunks' critical CSS via the existing
       `renderPageStylesheetHint` path (`hints.ts:202`); drop the hand-authored
-      `criticalCss: [...]` lists.
-      - Evidence: site `/` no longer inlines `gallery`/`docs-layout` critical CSS
-        (direct fix of `route-kit.ts:16-29`); two routes with disjoint components
-        inline disjoint critical CSS.
+      `criticalCss: [...]` lists. - Evidence: site `/` no longer inlines `gallery`/`docs-layout` critical CSS
+      (direct fix of `route-kit.ts:16-29`); two routes with disjoint components
+      inline disjoint critical CSS.
 
 ### Phase 4 — Fragments, islands, and mutation responses
+
 - [ ] Ship fragment-only atoms in `fragments/<target>.css` and have a
       fragment/mutation response reference its chunk so a patched-in island is
       styled without a flash, reusing the `stylesheets` already threaded through
       `deferred-stream.ts:81` and `mutation.ts:1090+`. Skip atoms already present
-      in `base`/the current route chunk (no double-ship, no FOUC).
-      - Evidence: a mutation that morphs in a fragment whose CSS is not in the
-        loaded set pulls `fragments/<target>.css`; one already covered by `base`
-        pulls nothing. Cross-check morph survival (`SPEC.md` §4.4 / §7.5).
+      in `base`/the current route chunk (no double-ship, no FOUC). - Evidence: a mutation that morphs in a fragment whose CSS is not in the
+      loaded set pulls `fragments/<target>.css`; one already covered by `base`
+      pulls nothing. Cross-check morph survival (`SPEC.md` §4.4 / §7.5).
 - [ ] Client navigation: when a client-side route change swaps to a route whose
       chunk is not yet loaded, load it before/with the swap. Confirm against how
       Kovo navigations actually transfer (full nav vs. fragment) and document the
       chosen mechanism.
 
 ### Phase 5 — Dev/prod/static-export parity
+
 - [ ] Make the Vite dev plugin (`vite.ts:153`), `kovo build`, and static export
       (`static-export-*`) emit identical chunking, so dev critical CSS and linked
-      chunks match production byte-for-byte.
-      - Evidence: a parity test comparing dev-served vs. built `<link>`/critical
-        sets for one route.
+      chunks match production byte-for-byte. - Evidence: a parity test comparing dev-served vs. built `<link>`/critical
+      sets for one route.
 
 ### Phase 6 — Migrate examples + site off the monolith
+
 - [ ] Drop the hand-rolled single `criticalCss: [...]` / one-sheet declarations
       from `examples/{commerce,crm,stackoverflow}`, `site/src/route-kit.ts`, and
       the `create-kovo` starter; routes keep only
-      `stylesheet('./styles.css', { theme })` and inherit chunked delivery.
-      - Evidence: each example renders styled HTML with strictly smaller per-route
-        CSS than the Phase 0 baseline; update `graph.json`,
-        `app.rendering.test.ts` (`examples/commerce/src/app.rendering.test.ts`),
-        and `route-kit.test.ts` expectations.
+      `stylesheet('./styles.css', { theme })` and inherit chunked delivery. - Evidence: each example renders styled HTML with strictly smaller per-route
+      CSS than the Phase 0 baseline; update `graph.json`,
+      `app.rendering.test.ts` (`examples/commerce/src/app.rendering.test.ts`),
+      and `route-kit.test.ts` expectations.
 
 ### Phase 7 — Overship regression gate
+
 - [ ] Add a conformance check that fails the build if a route links or inlines an
       atom unreachable from that route's component/fragment graph, and emits the
       bytes-per-route number from Phase 0 as an artifact so regressions are
-      visible. Wire into `rules/v1-acceptance.md` CSS/assets gate if appropriate.
-      - Evidence: the gate flags a deliberately over-listed route in a fixture.
+      visible. Wire into `rules/v1-acceptance.md` CSS/assets gate if appropriate. - Evidence: the gate flags a deliberately over-listed route in a fixture.
 
 ## Risks & open questions
+
 - **Chunk granularity vs. request count.** Too many tiny route chunks trade bytes
   for round-trips; the base+route 2-chunk model plus `sharedRouteCssAssets`
   hoisting is the floor. Consider merging sub-threshold route chunks into base.
@@ -248,7 +246,8 @@ mutation pulls `fragments/cart.css` if not already present.
   that slips, Phases 2–3 run against the package manifest as interim.
 
 ## Out of scope
-- The CSS *collection* mechanism (app-source `style.create` → manifest) — owned by
+
+- The CSS _collection_ mechanism (app-source `style.create` → manifest) — owned by
   `plans/css-auto-collection.md` Phase 1; this plan consumes its output.
 - Shadow-DOM scoping or a runtime theme store (explicitly rejected, `SPEC.md`
   §13.1).
@@ -257,6 +256,7 @@ mutation pulls `fragments/cart.css` if not already present.
   (possible follow-up, not required for "don't overship").
 
 ## Latest verification
+
 - _(none yet — plan created 2026-06-18)._ Per-checkbox proving commands are noted
   inline; run the narrowest first (a split-chunk unit test for Phase 2, a
   rendering test for Phase 3), broaden to root `tsc` + the CSS/assets conformance

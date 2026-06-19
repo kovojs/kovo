@@ -12,6 +12,7 @@ Follow-up to the shipped kernel on this branch (`agent/gallery-fix`).
 ## What already works (do not rebuild)
 
 The kernel handles **boolean-controlled** primitives end-to-end:
+
 - Phase `lowerPrimitiveReactiveAttributes` — `packages/compiler/src/lower/structural-jsx.ts`
 - Component→primitive registry — `packages/compiler/src/lower/primitive-reactive-registry.ts`
 - Dev-time snapshot generator — `packages/compiler/scripts/gen-primitive-reactive-attrs.mjs`
@@ -32,10 +33,9 @@ their state-derived attributes serialize once at SSR and freeze:
 - [ ] **accordion** — control is `value` (string/array); trigger `aria-expanded` /
       content `hidden` derive from `value === itemValue` (single) or
       `value.includes(itemValue)` (multiple). The only remaining broken
-      *interaction* (click does not toggle `aria-expanded`).
-      - Evidence: probe `accordion: click toggles aria-expanded :: false->false`;
-        `accordionTriggerAttributes` (`packages/headless-ui/src/primitives/accordion.ts:117`)
-        computes `aria-expanded` from `value`+`itemValue`+`type`.
+      _interaction_ (click does not toggle `aria-expanded`). - Evidence: probe `accordion: click toggles aria-expanded :: false->false`;
+      `accordionTriggerAttributes` (`packages/headless-ui/src/primitives/accordion.ts:117`)
+      computes `aria-expanded` from `value`+`itemValue`+`type`.
 - [ ] **checkbox** — control is tri-state `checked` (`true|false|'indeterminate'`);
       `data-state` is 3-way. Interaction works (native), but the custom box glyph
       (`packages/ui/src/checkbox.tsx`, `[data-state=checked]::after`) is static.
@@ -53,10 +53,9 @@ their state-derived attributes serialize once at SSR and freeze:
       a 3-way form for tri-state, reading the static discriminator from the element
       attributes. Add registry entries: AccordionTrigger/AccordionContent (`value`,
       discriminator `itemValue`, `type`), Checkbox (`checked` tri-state),
-      RadioGroupItem (`value`, discriminator `itemValue`).
-      - Evidence target: regenerated `examples/gallery/src/generated/interactive/accordion-demo.tsx`
-        gains `data-bind:aria-expanded`/`data-bind:hidden`; live probe
-        `accordion: click toggles aria-expanded :: false->true`.
+      RadioGroupItem (`value`, discriminator `itemValue`). - Evidence target: regenerated `examples/gallery/src/generated/interactive/accordion-demo.tsx`
+      gains `data-bind:aria-expanded`/`data-bind:hidden`; live probe
+      `accordion: click toggles aria-expanded :: false->true`.
 - [ ] **Forward reactive `data-state` to checkbox/radio decorative children** once
       the kernel emits it — apply the `island:false` + `bindingProps()` pattern used
       in `switch.tsx` to `checkbox.tsx` (box) and `radio-group.tsx` (dot).

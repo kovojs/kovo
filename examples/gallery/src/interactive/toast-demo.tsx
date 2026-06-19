@@ -17,7 +17,6 @@ import {
   ToastViewport,
 } from '@kovojs/ui/toast';
 
-
 export interface GalleryToastDemoState {
   activeCount: number;
   activeOpen: boolean;

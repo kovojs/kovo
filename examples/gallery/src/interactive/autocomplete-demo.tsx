@@ -15,7 +15,6 @@ import {
   AutocompleteValue,
 } from '@kovojs/ui/autocomplete';
 
-
 export interface GalleryAutocompleteDemoState {
   highlightedValue: string;
   inputValue: string;
@@ -64,7 +63,11 @@ export const GalleryAutocompleteDemo = component({
         data-state={state.open ? 'open' : 'closed'}
         id="gallery-autocomplete-root"
       >
-        <label id="gallery-autocomplete-label" for="gallery-autocomplete-input" style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
+        <label
+          id="gallery-autocomplete-label"
+          for="gallery-autocomplete-input"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+        >
           Tag
         </label>
         <form id="gallery-autocomplete-form" data-gallery-form="autocomplete" />
