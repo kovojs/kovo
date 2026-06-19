@@ -41,65 +41,63 @@ export interface TooltipContentProps extends TooltipStateProps {
   styles?: TooltipStyleOverrides;
 }
 
-export const tooltipStyles = style.create(
-  {
-    content: {
-      backgroundColor: uiTheme.color.backgroundInverse,
-      borderRadius: uiTheme.radius.sm,
-      color: uiTheme.color.foregroundInverse,
-      fontSize: 12,
-      marginTop: 4,
-      maxWidth: 256,
-      paddingBlock: 6,
-      paddingInline: 10,
-      position: 'absolute',
-      width: 'max-content',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+export const tooltipStyles = style.create({
+  content: {
+    backgroundColor: uiTheme.color.backgroundInverse,
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foregroundInverse,
+    fontSize: 12,
+    marginTop: 4,
+    maxWidth: 256,
+    paddingBlock: 6,
+    paddingInline: 10,
+    position: 'absolute',
+    width: 'max-content',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
     },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'inline-block',
-      fontSize: 14,
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 32,
-      justifyContent: 'center',
-      paddingInline: 10,
-      transitionProperty: 'background-color',
-      '[data-state=open]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'inline-block',
+    fontSize: 14,
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
     },
   },
-);
+  trigger: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 32,
+    justifyContent: 'center',
+    paddingInline: 10,
+    transitionProperty: 'background-color',
+    '[data-state=open]': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+});
 
 export const tooltipClasses = [style.attrs(tooltipStyles.root).class ?? ''] as const;
 export const tooltipTriggerClasses = [style.attrs(tooltipStyles.trigger).class ?? ''] as const;

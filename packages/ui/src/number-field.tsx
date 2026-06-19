@@ -55,102 +55,100 @@ export interface NumberFieldButtonProps extends NumberFieldStateProps {
   styles?: NumberFieldStyleOverrides;
 }
 
-export const numberFieldStyles = style.create(
-  {
-    button: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.backgroundRaised,
-      borderColor: uiTheme.color.border,
-      borderStyle: 'solid',
+export const numberFieldStyles = style.create({
+  button: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.backgroundRaised,
+    borderColor: uiTheme.color.border,
+    borderStyle: 'solid',
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    justifyContent: 'center',
+    transitionProperty: 'background-color, color',
+    width: 36,
+    '[data-action=decrement]': {
+      borderRightWidth: 1,
+    },
+    '[data-action=increment]': {
+      borderLeftWidth: 1,
+    },
+    '[data-disabled]': {
+      opacity: 0.7,
+    },
+    ':disabled': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
       color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      justifyContent: 'center',
-      transitionProperty: 'background-color, color',
-      width: 36,
-      '[data-action=decrement]': {
-        borderRightWidth: 1,
-      },
-      '[data-action=increment]': {
-        borderLeftWidth: 1,
-      },
-      '[data-disabled]': {
-        opacity: 0.7,
-      },
-      ':disabled': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foregroundMuted,
-        cursor: 'not-allowed',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: -2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-      },
+      cursor: 'not-allowed',
     },
-    control: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      display: 'inline-flex',
-      height: 36,
-      overflow: 'hidden',
-      width: 'fit-content',
-      '[data-disabled]': {
-        opacity: 0.6,
-      },
-      '[data-invalid]': {
-        borderColor: uiTheme.color.danger.border,
-      },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: -2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
-    input: {
-      backgroundColor: 'transparent',
-      borderWidth: 0,
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      height: 36,
-      outlineStyle: 'none',
-      paddingInline: 12,
-      textAlign: 'center',
-      width: 80,
-      '[aria-invalid=true]': {
-        color: uiTheme.color.danger.foreground,
-      },
-      ':disabled': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foregroundMuted,
-        cursor: 'not-allowed',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
     },
   },
-);
+  control: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    display: 'inline-flex',
+    height: 36,
+    overflow: 'hidden',
+    width: 'fit-content',
+    '[data-disabled]': {
+      opacity: 0.6,
+    },
+    '[data-invalid]': {
+      borderColor: uiTheme.color.danger.border,
+    },
+  },
+  input: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    height: 36,
+    outlineStyle: 'none',
+    paddingInline: 12,
+    textAlign: 'center',
+    width: 80,
+    '[aria-invalid=true]': {
+      color: uiTheme.color.danger.foreground,
+    },
+    ':disabled': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foregroundMuted,
+      cursor: 'not-allowed',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+  },
+});
 
 export const numberFieldClasses = [style.attrs(numberFieldStyles.root).class ?? ''] as const;
 export const numberFieldControlClasses = [

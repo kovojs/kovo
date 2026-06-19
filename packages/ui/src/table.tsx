@@ -41,63 +41,61 @@ function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
 }
 
-export const tableStyles = style.create(
-  {
-    body: {
-      '[&_tr:last-child]': {
-        borderBottomWidth: 0,
-      },
-    },
-    caption: {
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      marginTop: 12,
-    },
-    cell: {
-      color: uiTheme.color.foreground,
-      padding: 12,
-      verticalAlign: 'middle',
-    },
-    head: {
-      backgroundColor: uiTheme.color.backgroundRaised,
-      borderBottomColor: uiTheme.color.border,
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-    },
-    headerCell: {
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      fontWeight: 500,
-      height: 40,
-      paddingInline: 12,
-      textAlign: 'left',
-      verticalAlign: 'middle',
-    },
-    row: {
-      borderBottomColor: uiTheme.color.border,
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      transitionProperty: 'background-color',
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
-    },
-    table: {
-      borderCollapse: 'collapse',
-      captionSide: 'bottom',
-      fontSize: 14,
-      width: '100%',
-    },
-    wrapper: {
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      overflowX: 'auto',
-      width: '100%',
+export const tableStyles = style.create({
+  body: {
+    '[&_tr:last-child]': {
+      borderBottomWidth: 0,
     },
   },
-);
+  caption: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    marginTop: 12,
+  },
+  cell: {
+    color: uiTheme.color.foreground,
+    padding: 12,
+    verticalAlign: 'middle',
+  },
+  head: {
+    backgroundColor: uiTheme.color.backgroundRaised,
+    borderBottomColor: uiTheme.color.border,
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+  },
+  headerCell: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    fontWeight: 500,
+    height: 40,
+    paddingInline: 12,
+    textAlign: 'left',
+    verticalAlign: 'middle',
+  },
+  row: {
+    borderBottomColor: uiTheme.color.border,
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    transitionProperty: 'background-color',
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+  table: {
+    borderCollapse: 'collapse',
+    captionSide: 'bottom',
+    fontSize: 14,
+    width: '100%',
+  },
+  wrapper: {
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    overflowX: 'auto',
+    width: '100%',
+  },
+});
 
 export const tableWrapperClasses = [style.attrs(tableStyles.wrapper).class ?? ''] as const;
 export const tableRootClasses = [style.attrs(tableStyles.table).class ?? ''] as const;

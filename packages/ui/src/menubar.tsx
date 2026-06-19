@@ -77,92 +77,90 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-export const menubarStyles = style.create(
-  {
-    group: {
-      display: 'grid',
-      gap: 4,
-      paddingBlock: 4,
-      paddingInline: 4,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    item: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.sm,
-      color: uiTheme.color.foregroundMuted,
-      cursor: 'default',
-      display: 'inline-flex',
-      fontSize: 14,
-      height: 32,
-      outlineStyle: 'none',
-      paddingInline: 10,
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-      '[data-state=open]': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-    },
-    root: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      padding: 4,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-orientation=vertical]': {
-        flexDirection: 'column',
-      },
-    },
-    separator: {
-      backgroundColor: uiTheme.color.border,
-      height: 1,
-      marginBlock: 4,
-    },
-    submenu: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      marginTop: 4,
-      minWidth: 180,
-      outlineStyle: 'none',
-      padding: 4,
-      position: 'absolute',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '[data-state=open]': {
-        display: 'block',
-      },
+export const menubarStyles = style.create({
+  group: {
+    display: 'grid',
+    gap: 4,
+    paddingBlock: 4,
+    paddingInline: 4,
+    '[data-disabled]': {
+      opacity: 0.5,
     },
   },
-);
+  item: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foregroundMuted,
+    cursor: 'default',
+    display: 'inline-flex',
+    fontSize: 14,
+    height: 32,
+    outlineStyle: 'none',
+    paddingInline: 10,
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    '[data-highlighted]': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+    '[data-state=open]': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+  },
+  root: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    padding: 4,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-orientation=vertical]': {
+      flexDirection: 'column',
+    },
+  },
+  separator: {
+    backgroundColor: uiTheme.color.border,
+    height: 1,
+    marginBlock: 4,
+  },
+  submenu: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    marginTop: 4,
+    minWidth: 180,
+    outlineStyle: 'none',
+    padding: 4,
+    position: 'absolute',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
+    },
+    '[data-state=open]': {
+      display: 'block',
+    },
+  },
+});
 
 export const menubarClasses = [style.attrs(menubarStyles.root).class ?? ''] as const;
 export const menubarItemClasses = [style.attrs(menubarStyles.item).class ?? ''] as const;

@@ -14,52 +14,48 @@ export interface AlertProps {
   variant?: AlertVariant;
 }
 
-const base = style.create(
-  {
-    root: {
-      alignItems: 'start',
-      borderRadius: uiTheme.radius.lg,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'grid',
-      fontSize: 14,
-      gap: 4,
-      lineHeight: 1.45,
-      paddingBlock: 12,
-      paddingInline: 16,
-    },
-    title: {
-      fontWeight: 600,
-      letterSpacing: '-0.006em',
-      lineHeight: 1.3,
-    },
+const base = style.create({
+  root: {
+    alignItems: 'start',
+    borderRadius: uiTheme.radius.lg,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'grid',
+    fontSize: 14,
+    gap: 4,
+    lineHeight: 1.45,
+    paddingBlock: 12,
+    paddingInline: 16,
   },
-);
+  title: {
+    fontWeight: 600,
+    letterSpacing: '-0.006em',
+    lineHeight: 1.3,
+  },
+});
 
-const variants = style.create(
-  {
-    danger: {
-      backgroundColor: uiTheme.color.danger.background,
-      borderColor: uiTheme.color.danger.border,
-      color: uiTheme.color.danger.foreground,
-    },
-    info: {
-      backgroundColor: uiTheme.color.info.background,
-      borderColor: uiTheme.color.info.border,
-      color: uiTheme.color.info.foreground,
-    },
-    success: {
-      backgroundColor: uiTheme.color.success.background,
-      borderColor: uiTheme.color.success.border,
-      color: uiTheme.color.success.foreground,
-    },
-    warning: {
-      backgroundColor: uiTheme.color.warning.background,
-      borderColor: uiTheme.color.warning.border,
-      color: uiTheme.color.warning.foreground,
-    },
+const variants = style.create({
+  danger: {
+    backgroundColor: uiTheme.color.danger.background,
+    borderColor: uiTheme.color.danger.border,
+    color: uiTheme.color.danger.foreground,
   },
-);
+  info: {
+    backgroundColor: uiTheme.color.info.background,
+    borderColor: uiTheme.color.info.border,
+    color: uiTheme.color.info.foreground,
+  },
+  success: {
+    backgroundColor: uiTheme.color.success.background,
+    borderColor: uiTheme.color.success.border,
+    color: uiTheme.color.success.foreground,
+  },
+  warning: {
+    backgroundColor: uiTheme.color.warning.background,
+    borderColor: uiTheme.color.warning.border,
+    color: uiTheme.color.warning.foreground,
+  },
+});
 
 export const alertStyles = {
   base,

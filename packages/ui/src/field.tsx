@@ -155,91 +155,89 @@ const nativeControlStyle = {
   },
 } as const;
 
-export const fieldStyles = style.create(
-  {
-    control: {
-      ...nativeControlStyle,
-      height: 36,
-      paddingBlock: 4,
-      paddingInline: 12,
+export const fieldStyles = style.create({
+  control: {
+    ...nativeControlStyle,
+    height: 36,
+    paddingBlock: 4,
+    paddingInline: 12,
+  },
+  description: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+  },
+  error: {
+    color: uiTheme.color.danger.border,
+    fontSize: 14,
+    fontWeight: 500,
+  },
+  fieldset: {
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    padding: 16,
+    rowGap: 12,
+    '[data-disabled]': {
+      opacity: 0.5,
     },
-    description: {
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-    },
-    error: {
-      color: uiTheme.color.danger.border,
-      fontSize: 14,
-      fontWeight: 500,
-    },
-    fieldset: {
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      padding: 16,
-      rowGap: 12,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        borderColor: uiTheme.color.danger.border,
-      },
-    },
-    fieldsetLegend: {
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      fontWeight: 500,
-      paddingInline: 4,
-    },
-    label: {
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      fontWeight: 500,
-      lineHeight: 1,
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-        opacity: 0.7,
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
-      '[data-required]': {
-        fontWeight: 500,
-      },
-    },
-    select: {
-      ...nativeControlStyle,
-      height: 36,
-      paddingBlock: 4,
-      paddingInline: 12,
-    },
-    selectOption: {
-      color: uiTheme.color.foreground,
-      ':disabled': {
-        color: uiTheme.color.foregroundMuted,
-      },
-    },
-    textarea: {
-      ...nativeControlStyle,
-      minHeight: 96,
-      paddingBlock: 8,
-      paddingInline: 12,
+    '[data-invalid]': {
+      borderColor: uiTheme.color.danger.border,
     },
   },
-);
+  fieldsetLegend: {
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    fontWeight: 500,
+    paddingInline: 4,
+  },
+  label: {
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    fontWeight: 500,
+    lineHeight: 1,
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.7,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+    '[data-required]': {
+      fontWeight: 500,
+    },
+  },
+  select: {
+    ...nativeControlStyle,
+    height: 36,
+    paddingBlock: 4,
+    paddingInline: 12,
+  },
+  selectOption: {
+    color: uiTheme.color.foreground,
+    ':disabled': {
+      color: uiTheme.color.foregroundMuted,
+    },
+  },
+  textarea: {
+    ...nativeControlStyle,
+    minHeight: 96,
+    paddingBlock: 8,
+    paddingInline: 12,
+  },
+});
 
 export const fieldClasses = [style.attrs(fieldStyles.root).class ?? ''] as const;
 export const fieldLabelClasses = [style.attrs(fieldStyles.label).class ?? ''] as const;

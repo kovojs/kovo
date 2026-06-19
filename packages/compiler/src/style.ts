@@ -755,9 +755,7 @@ function styleCreateProvenanceReplacement(
   if (existingOptions.namespace && existingOptions.source) return null;
 
   const properties = [
-    ...(existingOptions.namespace
-      ? []
-      : [`namespace: ${JSON.stringify(identity.namespace)}`]),
+    ...(existingOptions.namespace ? [] : [`namespace: ${JSON.stringify(identity.namespace)}`]),
     ...(existingOptions.source ? [] : [`source: ${JSON.stringify(identity.source)}`]),
   ];
   const [, optionsArgument] = call.arguments;

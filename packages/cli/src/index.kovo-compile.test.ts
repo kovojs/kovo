@@ -119,7 +119,9 @@ export const CartBadge = component({
 
       expect(stderr).not.toHaveBeenCalled();
       expect(readFileSync(outPath, 'utf8')).toContain('export const CartBadge = component({');
-      await expect(readPersistentCompileCacheManifest(persistentCompileCacheDir(root))).resolves.toEqual({
+      await expect(
+        readPersistentCompileCacheManifest(persistentCompileCacheDir(root)),
+      ).resolves.toEqual({
         entries: {},
         version: 'kovo-compile-cache/v1',
       });

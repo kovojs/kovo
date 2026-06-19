@@ -161,7 +161,7 @@ export const CartBadge = component({
     expect(clientSource).toContain('kovoEscapeHtml(read(["name"]))');
     expect(clientSource).not.toContain('html.replace');
     expect(clientSource).toContain(
-      'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });',
+      'return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });',
     );
     expect(registrySource).toContain(`export interface QueryUpdatePlans {
   'CartBadge:cart': readonly ['cart.count', 'cart.empty', 'cart.items', 'cart.total'];
@@ -248,7 +248,7 @@ export const CartBadge = component({
       'export const CartBadge$isEmpty = derive(["cart"], (cart) => cart.count === 0);',
     );
     expect(clientSource).toContain(
-      'derives: [{ name: "CartBadge$isEmpty", selector: "[data-derive=\\"cart.CartBadge$isEmpty\\"]", select(value) { return CartBadge$isEmpty.run(value); } }]',
+      'derives: [{ name: "CartBadge$isEmpty", selector: "[data-derive=\\"cart.CartBadge$isEmpty\\"]", select(value, root, context) { return CartBadge$isEmpty.run(value); } }]',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });

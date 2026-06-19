@@ -152,7 +152,10 @@ export async function exportSiteStaticApp({
   // outside the manifest; copy it alongside the replayed documents.
   await cp(publicDir, outDir, { recursive: true });
   await mkdir(path.join(outDir, 'assets'), { recursive: true });
-  await cp(path.join(siteRoot, 'src/generated/kovo-ui.css'), path.join(outDir, 'assets/kovo-ui.css'));
+  await cp(
+    path.join(siteRoot, 'src/generated/kovo-ui.css'),
+    path.join(outDir, 'assets/kovo-ui.css'),
+  );
 
   // Agent/static-host surface (search index, llms.txt, raw .md mirrors, 404)
   // and the embedded example apps the iframes point at.

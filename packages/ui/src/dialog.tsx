@@ -53,100 +53,98 @@ export interface DialogCloseProps extends DialogStateProps {
   styles?: DialogStyleOverrides;
 }
 
-export const dialogStyles = style.create(
-  {
-    close: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 32,
-      justifyContent: 'center',
-      paddingInline: 10,
-      transitionProperty: 'background-color',
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+export const dialogStyles = style.create({
+  close: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 32,
+    justifyContent: 'center',
+    paddingInline: 10,
+    transitionProperty: 'background-color',
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
     },
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.lg,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.25), 0 8px 10px -6px rgb(0 0 0 / 0.25)',
-      color: uiTheme.color.foreground,
-      left: '50%',
-      maxWidth: 512,
-      padding: 24,
-      position: 'fixed',
-      top: '50%',
-      transform: 'translate(-50%, -50%)',
-      width: 'calc(100% - 2rem)',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '::backdrop': {
-        backgroundColor: 'rgb(0 0 0 / 0.3)',
-      },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'contents',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      justifyContent: 'center',
-      paddingInline: 12,
-      transitionProperty: 'background-color',
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
     },
   },
-);
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.lg,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.25), 0 8px 10px -6px rgb(0 0 0 / 0.25)',
+    color: uiTheme.color.foreground,
+    left: '50%',
+    maxWidth: 512,
+    padding: 24,
+    position: 'fixed',
+    top: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: 'calc(100% - 2rem)',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
+    },
+    '::backdrop': {
+      backgroundColor: 'rgb(0 0 0 / 0.3)',
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'contents',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  trigger: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    justifyContent: 'center',
+    paddingInline: 12,
+    transitionProperty: 'background-color',
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+});
 
 export const dialogClasses = [style.attrs(dialogStyles.root).class ?? ''] as const;
 export const dialogTriggerClasses = [style.attrs(dialogStyles.trigger).class ?? ''] as const;

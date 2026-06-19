@@ -24,8 +24,9 @@ interface FixtureCssAsset extends ComponentCssAsset {
 }
 
 export function kovoFixtureCompilerPlugin(
-  compile: (options: Parameters<typeof compileComponentModule>[0]) => CompileResult =
-    compileComponentModule,
+  compile: (
+    options: Parameters<typeof compileComponentModule>[0],
+  ) => CompileResult = compileComponentModule,
 ): Plugin {
   let root = process.cwd();
   const cssAssets = new Map<string, FixtureCssAsset>();

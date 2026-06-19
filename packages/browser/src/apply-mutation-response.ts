@@ -295,7 +295,7 @@ function mergeAppliedMutationResponses(
   const merged: AppliedMutationResponse | AppliedMutationResponseWithRoot = {
     fragments: [...current.fragments, ...next.fragments],
     queries: [...current.queries, ...next.queries],
-    ...(('appliedFragments' in current || 'appliedFragments' in next)
+    ...('appliedFragments' in current || 'appliedFragments' in next
       ? {
           appliedFragments: [
             ...('appliedFragments' in current ? current.appliedFragments : []),
@@ -303,10 +303,10 @@ function mergeAppliedMutationResponses(
           ],
         }
       : {}),
-    ...((current.streams || next.streams)
+    ...(current.streams || next.streams
       ? { streams: [...(current.streams ?? []), ...(next.streams ?? [])] }
       : {}),
-    ...((current.texts || next.texts)
+    ...(current.texts || next.texts
       ? { texts: [...(current.texts ?? []), ...(next.texts ?? [])] }
       : {}),
   };
@@ -316,5 +316,7 @@ function mergeAppliedMutationResponses(
 function emptyAppliedMutationResponse(
   root: MorphRoot | undefined,
 ): AppliedMutationResponse | AppliedMutationResponseWithRoot {
-  return root ? { appliedFragments: [], fragments: [], queries: [] } : { fragments: [], queries: [] };
+  return root
+    ? { appliedFragments: [], fragments: [], queries: [] }
+    : { fragments: [], queries: [] };
 }

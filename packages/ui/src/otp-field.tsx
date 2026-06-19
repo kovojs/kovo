@@ -53,73 +53,71 @@ export interface OtpFieldInputProps extends OtpFieldStateProps {
   styles?: OtpFieldStyleOverrides;
 }
 
-export const otpFieldStyles = style.create(
-  {
-    group: {
-      alignItems: 'center',
-      columnGap: 8,
-      display: 'flex',
+export const otpFieldStyles = style.create({
+  group: {
+    alignItems: 'center',
+    columnGap: 8,
+    display: 'flex',
+  },
+  hiddenInput: {
+    borderWidth: 0,
+    clip: 'rect(0, 0, 0, 0)',
+    height: 1,
+    margin: -1,
+    overflow: 'hidden',
+    padding: 0,
+    position: 'absolute',
+    whiteSpace: 'nowrap',
+    width: 1,
+  },
+  input: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    fontSize: 16,
+    fontWeight: 500,
+    height: 40,
+    textAlign: 'center',
+    transitionProperty: 'border-color, color, box-shadow',
+    width: 36,
+    '[data-filled]': {
+      borderColor: uiTheme.color.borderStrong,
     },
-    hiddenInput: {
-      borderWidth: 0,
-      clip: 'rect(0, 0, 0, 0)',
-      height: 1,
-      margin: -1,
-      overflow: 'hidden',
-      padding: 0,
-      position: 'absolute',
-      whiteSpace: 'nowrap',
-      width: 1,
+    '[data-invalid]': {
+      borderColor: uiTheme.color.danger.border,
     },
-    input: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      fontSize: 16,
-      fontWeight: 500,
-      height: 40,
-      textAlign: 'center',
-      transitionProperty: 'border-color, color, box-shadow',
-      width: 36,
-      '[data-filled]': {
-        borderColor: uiTheme.color.borderStrong,
-      },
-      '[data-invalid]': {
-        borderColor: uiTheme.color.danger.border,
-      },
-      ':disabled': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foregroundMuted,
-        cursor: 'not-allowed',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      '[data-invalid]:focus-visible': {
-        outlineColor: uiTheme.color.danger.border,
-      },
+    ':disabled': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foregroundMuted,
+      cursor: 'not-allowed',
     },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    '[data-invalid]:focus-visible': {
+      outlineColor: uiTheme.color.danger.border,
     },
   },
-);
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+  },
+});
 
 export const otpFieldClasses = [style.attrs(otpFieldStyles.root).class ?? ''] as const;
 export const otpFieldGroupClasses = [style.attrs(otpFieldStyles.group).class ?? ''] as const;

@@ -7,11 +7,7 @@ import {
 } from './apply-mutation-response.js';
 import { createQueryStore } from './client.js';
 import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
-import {
-  applyStreamTextChunks,
-  StreamTextBuffer,
-  type StreamTextRoot,
-} from './stream-text.js';
+import { applyStreamTextChunks, StreamTextBuffer, type StreamTextRoot } from './stream-text.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 describe('decoded mutation response apply', () => {
@@ -279,9 +275,7 @@ describe('decoded mutation response apply', () => {
             '<kovo-fragment target="messages" mode="append"><article data-stream-text="assistant:a1"></article></kovo-fragment>',
           ),
         );
-        controller.enqueue(
-          encoder.encode('<kovo-text target="assistant:a1">Hel'),
-        );
+        controller.enqueue(encoder.encode('<kovo-text target="assistant:a1">Hel'));
         controller.enqueue(
           encoder.encode('lo</kovo-text><kovo-query name="chat">{"count":1}</kovo-query>'),
         );
@@ -374,7 +368,9 @@ describe('decoded mutation response apply', () => {
     await applyStreamingMutationResponseBodyToRuntime({
       body: new ReadableStream<Uint8Array>({
         start(controller) {
-          controller.enqueue(new TextEncoder().encode('<kovo-text target="assistant:a1">Hi</kovo-text>'));
+          controller.enqueue(
+            new TextEncoder().encode('<kovo-text target="assistant:a1">Hi</kovo-text>'),
+          );
           controller.close();
         },
       }),

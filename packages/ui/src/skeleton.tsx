@@ -16,18 +16,16 @@ const pulse = style.keyframes(
   { namespace: 'skeletonPulse', source: 'skeleton.tsx' },
 );
 
-export const skeletonStyles = style.create(
-  {
-    root: {
-      animationDuration: '2s',
-      animationIterationCount: 'infinite',
-      animationName: pulse,
-      animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderRadius: uiTheme.radius.md,
-    },
+export const skeletonStyles = style.create({
+  root: {
+    animationDuration: '2s',
+    animationIterationCount: 'infinite',
+    animationName: pulse,
+    animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderRadius: uiTheme.radius.md,
   },
-);
+});
 
 export const skeletonClasses = [style.attrs(skeletonStyles.root).class ?? ''] as const;
 

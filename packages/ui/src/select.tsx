@@ -85,122 +85,120 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-export const selectStyles = style.create(
-  {
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      marginTop: 4,
-      maxHeight: 224,
-      minWidth: 180,
-      outlineStyle: 'none',
-      overflow: 'auto',
-      padding: 4,
-      position: 'absolute',
-      width: '100%',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '[data-state=open]': {
-        display: 'block',
-      },
+export const selectStyles = style.create({
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    marginTop: 4,
+    maxHeight: 224,
+    minWidth: 180,
+    outlineStyle: 'none',
+    overflow: 'auto',
+    padding: 4,
+    position: 'absolute',
+    width: '100%',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
     },
-    hiddenInput: {},
-    item: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.sm,
-      color: uiTheme.color.foreground,
-      cursor: 'default',
-      display: 'flex',
-      fontSize: 14,
-      outlineStyle: 'none',
-      paddingBlock: 6,
-      paddingInline: 8,
-      paddingLeft: 28,
-      position: 'relative',
-      '[data-disabled]': {
-        color: uiTheme.color.foregroundMuted,
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-      '[data-state=checked]': {
-        fontWeight: 500,
-      },
-      '[data-state=checked]::before': {
-        content: '"\\2713"',
-        left: 8,
-        position: 'absolute',
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      position: 'relative',
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
-    },
-    trigger: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      height: 36,
-      outlineStyle: 'none',
-      paddingInline: 12,
-      transitionProperty: 'background-color, border-color, color, box-shadow',
-      width: '100%',
-      '[data-placeholder]': {
-        color: uiTheme.color.foregroundMuted,
-      },
-      '[aria-invalid=true]': {
-        borderColor: uiTheme.color.danger.border,
-      },
-      ':disabled': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foregroundMuted,
-        cursor: 'not-allowed',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-    },
-    value: {
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      '[data-placeholder]': {
-        color: uiTheme.color.foregroundMuted,
-      },
+    '[data-state=open]': {
+      display: 'block',
     },
   },
-);
+  hiddenInput: {},
+  item: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foreground,
+    cursor: 'default',
+    display: 'flex',
+    fontSize: 14,
+    outlineStyle: 'none',
+    paddingBlock: 6,
+    paddingInline: 8,
+    paddingLeft: 28,
+    position: 'relative',
+    '[data-disabled]': {
+      color: uiTheme.color.foregroundMuted,
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    '[data-highlighted]': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+    '[data-state=checked]': {
+      fontWeight: 500,
+    },
+    '[data-state=checked]::before': {
+      content: '"\\2713"',
+      left: 8,
+      position: 'absolute',
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    position: 'relative',
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+  },
+  trigger: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    height: 36,
+    outlineStyle: 'none',
+    paddingInline: 12,
+    transitionProperty: 'background-color, border-color, color, box-shadow',
+    width: '100%',
+    '[data-placeholder]': {
+      color: uiTheme.color.foregroundMuted,
+    },
+    '[aria-invalid=true]': {
+      borderColor: uiTheme.color.danger.border,
+    },
+    ':disabled': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foregroundMuted,
+      cursor: 'not-allowed',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+  value: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    '[data-placeholder]': {
+      color: uiTheme.color.foregroundMuted,
+    },
+  },
+});
 
 export const selectClasses = [style.attrs(selectStyles.root).class ?? ''] as const;
 export const selectTriggerClasses = [style.attrs(selectStyles.trigger).class ?? ''] as const;

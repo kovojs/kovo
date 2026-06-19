@@ -13,27 +13,23 @@ export interface SeparatorProps {
   style?: style.StyleInput;
 }
 
-const base = style.create(
-  {
-    root: {
-      backgroundColor: uiTheme.color.border,
-      flexShrink: 0,
-    },
+const base = style.create({
+  root: {
+    backgroundColor: uiTheme.color.border,
+    flexShrink: 0,
   },
-);
+});
 
-const orientations = style.create(
-  {
-    horizontal: {
-      height: 1,
-      width: '100%',
-    },
-    vertical: {
-      height: '100%',
-      width: 1,
-    },
+const orientations = style.create({
+  horizontal: {
+    height: 1,
+    width: '100%',
   },
-);
+  vertical: {
+    height: '100%',
+    width: 1,
+  },
+});
 
 export const separatorStyles = {
   base,

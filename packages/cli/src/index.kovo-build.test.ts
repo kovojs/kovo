@@ -1367,8 +1367,7 @@ function routeCssSignature(document: string): {
   critical: readonly { css: string; href: string }[];
   links: readonly string[];
 } {
-  const isSplitChunk = (href: string) =>
-    /^\/assets\/(?:base-|routes\/|fragments\/)/.test(href);
+  const isSplitChunk = (href: string) => /^\/assets\/(?:base-|routes\/|fragments\/)/.test(href);
   return {
     critical: [
       ...document.matchAll(/<style data-kovo-critical-href="([^"]+)"[^>]*>([\s\S]*?)<\/style>/g),

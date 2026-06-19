@@ -43,59 +43,57 @@ export interface HoverCardContentProps extends HoverCardStateProps {
   styles?: HoverCardStyleOverrides;
 }
 
-export const hoverCardStyles = style.create(
-  {
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      marginTop: 4,
-      padding: 12,
-      position: 'absolute',
-      width: 288,
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+export const hoverCardStyles = style.create({
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    marginTop: 4,
+    padding: 12,
+    position: 'absolute',
+    width: 288,
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
     },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'inline-block',
-      fontSize: 14,
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.md,
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      textDecorationLine: 'none',
-      textUnderlineOffset: 4,
-      '[data-state=open]': {
-        textDecorationLine: 'underline',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        textDecorationLine: 'underline',
-      },
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'inline-block',
+    fontSize: 14,
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
     },
   },
-);
+  trigger: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.md,
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    textDecorationLine: 'none',
+    textUnderlineOffset: 4,
+    '[data-state=open]': {
+      textDecorationLine: 'underline',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      textDecorationLine: 'underline',
+    },
+  },
+});
 
 export const hoverCardClasses = [style.attrs(hoverCardStyles.root).class ?? ''] as const;
 export const hoverCardTriggerClasses = [style.attrs(hoverCardStyles.trigger).class ?? ''] as const;

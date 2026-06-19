@@ -276,41 +276,46 @@ export function renderSource() {
   });
 
   it('serves project-relative client modules when Vite passes absolute ids', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-absolute-id-'));
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];
-    plugin.configureServer?.({
-      config: { root: '/workspace/app' },
-      middlewares: {
-        use(handler) {
-          middlewares.push(handler);
+    try {
+      plugin.configureServer?.({
+        config: { root },
+        middlewares: {
+          use(handler) {
+            middlewares.push(handler);
+          },
         },
-      },
-    });
+      });
 
-    const transformed = await plugin.transform?.(
-      cartBadgeSource,
-      '/workspace/app/src/components/cart/cart-badge.tsx',
-    );
-    const clientRef = transformed?.code.match(
-      /\/c\/__v\/[0-9a-f]{8}\/src\/components\/cart\/cart-badge\.client\.js/,
-    )?.[0];
-    expect(clientRef).toBeDefined();
-    expect(transformed?.code).not.toContain('/c/workspace/app/');
+      const transformed = await plugin.transform?.(
+        cartBadgeSource,
+        join(root, 'src/components/cart/cart-badge.tsx'),
+      );
+      const clientRef = transformed?.code.match(
+        /\/c\/__v\/[0-9a-f]{8}\/src\/components\/cart\/cart-badge\.client\.js/,
+      )?.[0];
+      expect(clientRef).toBeDefined();
+      expect(transformed?.code).not.toContain(root);
 
-    const res = {
-      body: '',
-      headers: {} as Record<string, string>,
-      setHeader(name: string, value: string) {
-        this.headers[name] = value;
-      },
-      end(body: string) {
-        this.body = body;
-      },
-    };
+      const res = {
+        body: '',
+        headers: {} as Record<string, string>,
+        setHeader(name: string, value: string) {
+          this.headers[name] = value;
+        },
+        end(body: string) {
+          this.body = body;
+        },
+      };
 
-    middlewares[0]?.({ url: clientRef ?? '' }, res, vi.fn());
+      middlewares[0]?.({ url: clientRef ?? '' }, res, vi.fn());
 
-    expect(res.body).toContain('export const CartBadge$button_click');
+      expect(res.body).toContain('export const CartBadge$button_click');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('feeds discovered package prefix facts into the Vite transform', async () => {

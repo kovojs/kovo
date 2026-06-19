@@ -2637,7 +2637,11 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
           { split: { routes: appRouteTargets.routeTargets } },
         );
   if (appSplitManifest)
-    assertKovoBuildCssDelivery(appSplitManifest, appRouteTargets.routeTargets, cssRouteDeliveryGate);
+    assertKovoBuildCssDelivery(
+      appSplitManifest,
+      appRouteTargets.routeTargets,
+      cssRouteDeliveryGate,
+    );
   const appSplitAssets = stylesheetAssetsFromCssSplitChunks(appSplitManifest?.chunks);
 
   if (!packageResult.css && !appResult.css)
@@ -2657,9 +2661,7 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
 }
 
 function assertKovoBuildCssDelivery(
-  manifest: Parameters<
-    (typeof import('@kovojs/compiler/internal'))['cssRouteDeliveryGate']
-  >[0],
+  manifest: Parameters<(typeof import('@kovojs/compiler/internal'))['cssRouteDeliveryGate']>[0],
   routeTargets: readonly Parameters<
     (typeof import('@kovojs/compiler/internal'))['cssRouteDeliveryGate']
   >[1][],

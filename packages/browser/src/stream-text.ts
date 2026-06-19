@@ -115,10 +115,10 @@ export class StreamTextBuffer {
   }
 
   async flush(reason: 'completion' | 'error' = 'completion'): Promise<void> {
-    await Promise.all([...this.pendingFlushes]);
+    await Promise.all(this.pendingFlushes);
     const targets = [...this.states.keys()];
     await Promise.all(targets.map((target) => this.flushTarget(target, reason)));
-    await Promise.all([...this.pendingFlushes]);
+    await Promise.all(this.pendingFlushes);
   }
 
   async fail(error: unknown): Promise<void> {
@@ -160,10 +160,7 @@ export class StreamTextBuffer {
     await this.render(state.target, state.accumulated);
   }
 
-  private scheduleFlush(
-    targetName: string,
-    reason: 'checkpoint' | 'threshold' | 'timer',
-  ): void {
+  private scheduleFlush(targetName: string, reason: 'checkpoint' | 'threshold' | 'timer'): void {
     const flush = this.flushTarget(targetName, reason).finally(() => {
       this.pendingFlushes.delete(flush);
     });

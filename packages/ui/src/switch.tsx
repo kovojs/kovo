@@ -28,82 +28,80 @@ export interface SwitchProps {
   value?: string;
 }
 
-export const switchStyles = style.create(
-  {
-    // Native checkbox kept for a11y/form state; visually hidden but still the
-    // click/focus target (stretched over the track via absolute positioning).
-    input: {
-      cursor: 'pointer',
-      height: '100%',
-      left: 0,
-      margin: 0,
-      opacity: 0,
-      position: 'absolute',
-      top: 0,
-      width: '100%',
-      ':disabled': {
-        cursor: 'not-allowed',
-      },
-    },
-    root: {
-      alignItems: 'center',
-      color: uiTheme.color.foreground,
-      columnGap: 8,
-      cursor: 'pointer',
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      lineHeight: 1,
-      userSelect: 'none',
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-    },
-    // The visible pill. Carries data-state so it tracks the checked color.
-    track: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderColor: 'transparent',
-      borderRadius: uiTheme.radius.full,
-      borderStyle: 'solid',
-      borderWidth: 2,
-      boxSizing: 'border-box',
-      display: 'inline-flex',
-      flexShrink: 0,
-      height: 24,
-      position: 'relative',
-      transitionDuration: '0.15s',
-      transitionProperty: 'background-color, border-color, box-shadow',
-      width: 44,
-      '[data-state=checked]': {
-        backgroundColor: uiTheme.color.accent,
-      },
-      ':focus-within': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-    },
-    // The sliding knob. Slides via translateX keyed on its own data-state.
-    thumb: {
-      backgroundColor: uiTheme.color.background,
-      borderRadius: uiTheme.radius.full,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.2)',
-      display: 'block',
-      height: 16,
-      pointerEvents: 'none',
-      transform: 'translateX(2px)',
-      transitionDuration: '0.15s',
-      transitionProperty: 'transform',
-      width: 16,
-      '[data-state=checked]': {
-        transform: 'translateX(22px)',
-      },
+export const switchStyles = style.create({
+  // Native checkbox kept for a11y/form state; visually hidden but still the
+  // click/focus target (stretched over the track via absolute positioning).
+  input: {
+    cursor: 'pointer',
+    height: '100%',
+    left: 0,
+    margin: 0,
+    opacity: 0,
+    position: 'absolute',
+    top: 0,
+    width: '100%',
+    ':disabled': {
+      cursor: 'not-allowed',
     },
   },
-);
+  root: {
+    alignItems: 'center',
+    color: uiTheme.color.foreground,
+    columnGap: 8,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    lineHeight: 1,
+    userSelect: 'none',
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
+    },
+  },
+  // The visible pill. Carries data-state so it tracks the checked color.
+  track: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderColor: 'transparent',
+    borderRadius: uiTheme.radius.full,
+    borderStyle: 'solid',
+    borderWidth: 2,
+    boxSizing: 'border-box',
+    display: 'inline-flex',
+    flexShrink: 0,
+    height: 24,
+    position: 'relative',
+    transitionDuration: '0.15s',
+    transitionProperty: 'background-color, border-color, box-shadow',
+    width: 44,
+    '[data-state=checked]': {
+      backgroundColor: uiTheme.color.accent,
+    },
+    ':focus-within': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+  // The sliding knob. Slides via translateX keyed on its own data-state.
+  thumb: {
+    backgroundColor: uiTheme.color.background,
+    borderRadius: uiTheme.radius.full,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.2)',
+    display: 'block',
+    height: 16,
+    pointerEvents: 'none',
+    transform: 'translateX(2px)',
+    transitionDuration: '0.15s',
+    transitionProperty: 'transform',
+    width: 16,
+    '[data-state=checked]': {
+      transform: 'translateX(22px)',
+    },
+  },
+});
 
 export const switchClasses = [style.attrs(switchStyles.root).class ?? ''] as const;
 export const switchInputClasses = [style.attrs(switchStyles.input).class ?? ''] as const;

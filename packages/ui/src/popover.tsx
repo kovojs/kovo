@@ -41,70 +41,68 @@ export interface PopoverContentProps extends PopoverStateProps {
   styles?: PopoverStyleOverrides;
 }
 
-export const popoverStyles = style.create(
-  {
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      marginTop: 4,
-      padding: 12,
-      position: 'absolute',
-      width: 256,
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+export const popoverStyles = style.create({
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    marginTop: 4,
+    padding: 12,
+    position: 'absolute',
+    width: 256,
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
     },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'inline-block',
-      fontSize: 14,
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      justifyContent: 'center',
-      paddingInline: 12,
-      transitionProperty: 'background-color',
-      '[data-state=open]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'inline-block',
+    fontSize: 14,
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
     },
   },
-);
+  trigger: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    justifyContent: 'center',
+    paddingInline: 12,
+    transitionProperty: 'background-color',
+    '[data-state=open]': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+});
 
 export const popoverClasses = [style.attrs(popoverStyles.root).class ?? ''] as const;
 export const popoverTriggerClasses = [style.attrs(popoverStyles.trigger).class ?? ''] as const;

@@ -68,63 +68,61 @@ export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
   styles?: CheckboxGroupStyleOverrides;
 }
 
-export const checkboxGroupStyles = style.create(
-  {
-    control: {
-      accentColor: uiTheme.color.accent,
-      borderColor: uiTheme.color.border,
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foreground,
-      height: 16,
-      width: 16,
-      ':disabled': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
+export const checkboxGroupStyles = style.create({
+  control: {
+    accentColor: uiTheme.color.accent,
+    borderColor: uiTheme.color.border,
+    borderRadius: 4,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foreground,
+    height: 16,
+    width: 16,
+    ':disabled': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
     },
-    item: {
-      alignItems: 'center',
-      columnGap: 8,
-      display: 'inline-flex',
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-    },
-    label: {
-      lineHeight: 1,
-      userSelect: 'none',
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
-      '[data-orientation=horizontal]': {
-        alignItems: 'center',
-        display: 'flex',
-        flexWrap: 'wrap',
-      },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
   },
-);
+  item: {
+    alignItems: 'center',
+    columnGap: 8,
+    display: 'inline-flex',
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
+    },
+  },
+  label: {
+    lineHeight: 1,
+    userSelect: 'none',
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+    '[data-orientation=horizontal]': {
+      alignItems: 'center',
+      display: 'flex',
+      flexWrap: 'wrap',
+    },
+  },
+});
 
 export const checkboxGroupClasses = [style.attrs(checkboxGroupStyles.root).class ?? ''] as const;
 export const checkboxGroupItemClasses = [

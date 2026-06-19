@@ -79,130 +79,126 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-export const sheetStyles = style.create(
-  {
-    body: {
-      fontSize: 14,
+export const sheetStyles = style.create({
+  body: {
+    fontSize: 14,
+  },
+  close: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 32,
+    justifyContent: 'center',
+    paddingInline: 10,
+    transitionProperty: 'background-color',
+    width: 'fit-content',
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
     },
-    close: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 32,
-      justifyContent: 'center',
-      paddingInline: 10,
-      transitionProperty: 'background-color',
-      width: 'fit-content',
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
-    },
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderStyle: 'solid',
-      borderWidth: 0,
-      boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.25), 0 8px 10px -6px rgb(0 0 0 / 0.25)',
-      color: uiTheme.color.foreground,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 16,
-      maxWidth: '100vw',
-      padding: 24,
-      position: 'fixed',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-    },
-    description: {
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-    },
-    header: {
-      display: 'grid',
-      gap: 4,
-    },
-    root: {
-      display: 'contents',
-    },
-    title: {
-      fontSize: 16,
-      fontWeight: 600,
-    },
-    trigger: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      justifyContent: 'center',
-      paddingInline: 12,
-      transitionProperty: 'background-color',
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
     },
   },
-);
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderStyle: 'solid',
+    borderWidth: 0,
+    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.25), 0 8px 10px -6px rgb(0 0 0 / 0.25)',
+    color: uiTheme.color.foreground,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 16,
+    maxWidth: '100vw',
+    padding: 24,
+    position: 'fixed',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
+    },
+  },
+  description: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+  },
+  header: {
+    display: 'grid',
+    gap: 4,
+  },
+  root: {
+    display: 'contents',
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: 600,
+  },
+  trigger: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    justifyContent: 'center',
+    paddingInline: 12,
+    transitionProperty: 'background-color',
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+});
 
-export const sheetSideStyles = style.create(
-  {
-    bottom: {
-      borderTopWidth: 1,
-      bottom: 0,
-      left: 0,
-      maxHeight: '85vh',
-      right: 0,
-    },
-    left: {
-      borderRightWidth: 1,
-      bottom: 0,
-      left: 0,
-      maxWidth: 384,
-      top: 0,
-      width: '100%',
-    },
-    right: {
-      borderLeftWidth: 1,
-      bottom: 0,
-      maxWidth: 384,
-      right: 0,
-      top: 0,
-      width: '100%',
-    },
-    top: {
-      borderBottomWidth: 1,
-      left: 0,
-      maxHeight: '85vh',
-      right: 0,
-      top: 0,
-    },
+export const sheetSideStyles = style.create({
+  bottom: {
+    borderTopWidth: 1,
+    bottom: 0,
+    left: 0,
+    maxHeight: '85vh',
+    right: 0,
   },
-);
+  left: {
+    borderRightWidth: 1,
+    bottom: 0,
+    left: 0,
+    maxWidth: 384,
+    top: 0,
+    width: '100%',
+  },
+  right: {
+    borderLeftWidth: 1,
+    bottom: 0,
+    maxWidth: 384,
+    right: 0,
+    top: 0,
+    width: '100%',
+  },
+  top: {
+    borderBottomWidth: 1,
+    left: 0,
+    maxHeight: '85vh',
+    right: 0,
+    top: 0,
+  },
+});
 
 export const sheetClasses = [style.attrs(sheetStyles.root).class ?? ''] as const;
 export const sheetTriggerClasses = [style.attrs(sheetStyles.trigger).class ?? ''] as const;

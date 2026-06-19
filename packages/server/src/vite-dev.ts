@@ -296,17 +296,15 @@ export function kovoAppShellViteDevPlugin(
     server.middlewares.use((request, response, next) => {
       Promise.resolve(server.ssrLoadModule(moduleId))
         .then((module) => {
-          const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets);
+          const stylesheetAssets = readKovoAppShellViteDevStylesheetAssets(
+            options.stylesheetAssets,
+          );
           const stylesheetResponse = renderKovoAppShellViteDevStylesheetAsset(
             request,
             stylesheetAssets,
           );
           if (stylesheetResponse) {
-            return writeWebResponseToNode(
-              stylesheetResponse,
-              response,
-              request.method ?? 'GET',
-            );
+            return writeWebResponseToNode(stylesheetResponse, response, request.method ?? 'GET');
           }
           const app = appWithDevStylesheetAssets(
             readKovoAppShellViteDevApp(module, appExportName, moduleId),

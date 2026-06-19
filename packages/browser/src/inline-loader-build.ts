@@ -482,8 +482,82 @@ function installInlineKovoLoader(im) {
       }
     }
     applyInlineMutationResponseChunks(chunks, { findFragmentTarget: ft });
+    at(chunks.texts);
   };
   globalThis.__kovo_a = ab;
+  const sq = (value) => value.replace(/[\n\r\f"\\]/g, (char) => {
+    if (char === '\n') return '\\a ';
+    if (char === '\r') return '\\d ';
+    if (char === '\f') return '\\c ';
+    return '\\' + char;
+  });
+  const st = {};
+  const se = {};
+  const sft = (target) => {
+    try {
+      return doc.querySelector('[data-stream-text="' + sq(target) + '"]');
+    } catch {
+      return;
+    }
+  };
+  const sr = async (el, source) => {
+    const ref = el.getAttribute?.('data-stream-renderer');
+    const hi = ref?.lastIndexOf('#') ?? -1;
+    if (hi <= 0 || hi === ref.length - 1) return;
+    const mod = await im(ref.slice(0, hi));
+    const render = mod[ref.slice(hi + 1)];
+    if (typeof render === 'function') await render(el, source, {});
+  };
+  const at = (texts) => {
+    for (const x of texts || []) {
+      const el = sft(x.target);
+      if (!el) continue;
+      const text = unescapeHtml(x.text);
+      const source = x.mode === 'checkpoint' ? text : (st[x.target] ?? el.textContent ?? '') + text;
+      st[x.target] = source;
+      se[x.target] = el;
+      el.textContent = source;
+      el.setAttribute?.('data-stream-state', 'streaming');
+      void sr(el, source).catch(() => {});
+    }
+  };
+  const sfail = () => {
+    for (const key in se) se[key].setAttribute?.('data-stream-state', 'error');
+  };
+  const cp = (body) => {
+    const chunks = readMutationResponseElementChunks(body);
+    const dones = readElementChunks(body, 'kovo-done');
+    let end = 0;
+    for (const group of [chunks.queries, chunks.fragments, chunks.texts, dones]) {
+      for (const x of group) if (x.end > end) end = x.end;
+    }
+    if (!end) return body;
+    ab(body.slice(0, end));
+    for (const x of dones) {
+      const reason = readAttribute(x.attrs, 'reason');
+      if (reason && reason !== 'complete') sfail();
+    }
+    return body.slice(end);
+  };
+  const asr = async (body) => {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let pending = '';
+    try {
+      while (true) {
+        const read = await reader.read();
+        if (read.done) break;
+        pending = cp(pending + decoder.decode(read.value, { stream: true }));
+      }
+      pending += decoder.decode();
+      if (pending) ab(pending);
+    } catch (error) {
+      sfail();
+      throw error;
+    } finally {
+      reader.releaseLock?.();
+    }
+  };
   const fsb = (form) => {
     if (typeof form.submit === 'function') {
       form.submit();
@@ -494,21 +568,28 @@ function installInlineKovoLoader(im) {
   };
   const sef = (event, form) => {
     event.preventDefault();
+    const streaming = form.getAttribute?.('data-mutation-stream') !== null;
     fetch(form.action, {
       body: new FormData(form, event.submitter),
       headers: {
-        Accept: 'text/vnd.kovo.fragment+html',
+        Accept: streaming
+          ? 'text/vnd.kovo.fragment+html; stream=1'
+          : 'text/vnd.kovo.fragment+html',
         'Kovo-Form-Target': targetIdentity(form),
         'Kovo-Fragment': 'true',
         'Kovo-Idem': ci(),
         'Kovo-Live-Targets': rlt().join('; '),
+        ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
         'Kovo-Targets': rt().join('; '),
       },
-      keepalive: true,
+      keepalive: !streaming,
       method: (form.method || 'post').toUpperCase(),
     })
-      .then((response) => response.text())
-      .then(ab)
+      .then((response) =>
+        streaming && response.body
+          ? asr(response.body)
+          : response.text().then(ab),
+      )
       .catch(() => fsb(form));
   };
   const rp = (el) =>

@@ -91,152 +91,150 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-export const navigationMenuStyles = style.create(
-  {
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      marginTop: 4,
-      minWidth: 180,
-      outlineStyle: 'none',
-      padding: 12,
-      position: 'absolute',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '[data-state=open]': {
-        display: 'block',
-      },
+export const navigationMenuStyles = style.create({
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    marginTop: 4,
+    minWidth: 180,
+    outlineStyle: 'none',
+    padding: 12,
+    position: 'absolute',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
     },
-    indicator: {
-      backgroundColor: uiTheme.color.foreground,
-      borderRadius: uiTheme.radius.full,
-      height: 4,
-      width: 32,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-    },
-    item: {
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    link: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.sm,
-      color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      outlineStyle: 'none',
-      paddingInline: 12,
-      transitionProperty: 'background-color, color',
-      '[data-disabled]': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-    },
-    list: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      display: 'flex',
-      gap: 4,
-      listStyle: 'none',
-      padding: 4,
-      '[data-orientation=vertical]': {
-        alignItems: 'stretch',
-        flexDirection: 'column',
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-orientation=vertical]': {
-        width: '100%',
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.sm,
-      color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      outlineStyle: 'none',
-      paddingInline: 12,
-      transitionProperty: 'background-color, color',
-      '[data-disabled]': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-      '[data-state=open]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-    },
-    viewport: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      marginTop: 4,
-      minWidth: 180,
-      position: 'absolute',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '[data-state=open]': {
-        display: 'block',
-      },
+    '[data-state=open]': {
+      display: 'block',
     },
   },
-);
+  indicator: {
+    backgroundColor: uiTheme.color.foreground,
+    borderRadius: uiTheme.radius.full,
+    height: 4,
+    width: 32,
+    '[data-state=closed]': {
+      display: 'none',
+    },
+  },
+  item: {
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  link: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    outlineStyle: 'none',
+    paddingInline: 12,
+    transitionProperty: 'background-color, color',
+    '[data-disabled]': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    '[data-highlighted]': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+  },
+  list: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    display: 'flex',
+    gap: 4,
+    listStyle: 'none',
+    padding: 4,
+    '[data-orientation=vertical]': {
+      alignItems: 'stretch',
+      flexDirection: 'column',
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-orientation=vertical]': {
+      width: '100%',
+    },
+  },
+  trigger: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    outlineStyle: 'none',
+    paddingInline: 12,
+    transitionProperty: 'background-color, color',
+    '[data-disabled]': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    '[data-highlighted]': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+    '[data-state=open]': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+  },
+  viewport: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    marginTop: 4,
+    minWidth: 180,
+    position: 'absolute',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
+    },
+    '[data-state=open]': {
+      display: 'block',
+    },
+  },
+});
 
 export const navigationMenuClasses = [style.attrs(navigationMenuStyles.root).class ?? ''] as const;
 export const navigationMenuListClasses = [

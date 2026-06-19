@@ -9,20 +9,18 @@ export interface CardProps {
   style?: style.StyleInput;
 }
 
-export const cardStyles = style.create(
-  {
-    root: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.lg,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      padding: 16,
-    },
+export const cardStyles = style.create({
+  root: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.lg,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    padding: 16,
   },
-);
+});
 
 export const cardClasses = [style.attrs(cardStyles.root).class ?? ''] as const;
 

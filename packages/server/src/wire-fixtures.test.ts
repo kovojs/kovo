@@ -82,27 +82,29 @@ describe('server wire fixture contracts', () => {
       version: 7,
     });
 
-    const response = expectBufferedWireResponse(await renderMutationResponse(addToCart, {
-      idem: 'idem_01HX',
-      liveTargetDescriptors: [
-        {
-          component: 'components/cart/badge',
-          props: {},
-          target: 'cart-badge',
-        },
-      ],
-      liveTargetRenderers: [
-        {
-          component: 'components/cart/badge',
-          queries: ['cart'],
-          render: () => cartBadgeFragmentHtml,
-        },
-      ],
-      liveTargets: [{ deps: ['cart'], target: 'cart-badge' }],
-      rawInput: { productId: 'p1', quantity: 1 },
-      request: {},
-      targets: ['cart-badge'],
-    }));
+    const response = expectBufferedWireResponse(
+      await renderMutationResponse(addToCart, {
+        idem: 'idem_01HX',
+        liveTargetDescriptors: [
+          {
+            component: 'components/cart/badge',
+            props: {},
+            target: 'cart-badge',
+          },
+        ],
+        liveTargetRenderers: [
+          {
+            component: 'components/cart/badge',
+            queries: ['cart'],
+            render: () => cartBadgeFragmentHtml,
+          },
+        ],
+        liveTargets: [{ deps: ['cart'], target: 'cart-badge' }],
+        rawInput: { productId: 'p1', quantity: 1 },
+        request: {},
+        targets: ['cart-badge'],
+      }),
+    );
     const fixture = await readFile(
       new URL('../../../fixtures/wire/enhanced-mutation.http', import.meta.url),
       'utf8',
@@ -143,42 +145,45 @@ describe('server wire fixture contracts', () => {
       try {
         await routeWireFixtureRequest(request, response, {
           enhancedAddToCart: async (headers, rawInput) =>
-            expectBufferedWireResponse(await renderMutationEndpointResponse(addToCart, {
-              failureTarget: 'product-form:p1',
-              headers,
-              liveTargetRenderers: [
-                {
-                  component: 'components/cart/badge',
-                  queries: ['cart'],
-                  render: () => cartBadgeFragmentHtml,
-                },
-              ],
-              rawInput,
-              renderFailureFragment: (failure, failedRawInput) => {
-                const input = Object.fromEntries((failedRawInput as FormData).entries()) as Record<
-                  string,
-                  string
-                >;
-                const data = failure.error.payload as { availableQuantity: number };
+            expectBufferedWireResponse(
+              await renderMutationEndpointResponse(addToCart, {
+                failureTarget: 'product-form:p1',
+                headers,
+                liveTargetRenderers: [
+                  {
+                    component: 'components/cart/badge',
+                    queries: ['cart'],
+                    render: () => cartBadgeFragmentHtml,
+                  },
+                ],
+                rawInput,
+                renderFailureFragment: (failure, failedRawInput) => {
+                  const input = Object.fromEntries(
+                    (failedRawInput as FormData).entries(),
+                  ) as Record<string, string>;
+                  const data = failure.error.payload as { availableQuantity: number };
 
-                return [
-                  '<form kovo-c="product-form" aria-invalid="true">',
-                  `<output role="alert" data-error-code="${failure.error.code}">Only ${data.availableQuantity} left.</output>`,
-                  `<input name="productId" value="${input.productId}">`,
-                  `<input name="quantity" value="${input.quantity}">`,
-                  '</form>',
-                ].join('');
-              },
-              request: {},
-              redirectTo: '/cart',
-            })),
+                  return [
+                    '<form kovo-c="product-form" aria-invalid="true">',
+                    `<output role="alert" data-error-code="${failure.error.code}">Only ${data.availableQuantity} left.</output>`,
+                    `<input name="productId" value="${input.productId}">`,
+                    `<input name="quantity" value="${input.quantity}">`,
+                    '</form>',
+                  ].join('');
+                },
+                request: {},
+                redirectTo: '/cart',
+              }),
+            ),
           noJsAddToCart: async (headers, rawInput) =>
-            expectBufferedWireResponse(await renderMutationEndpointResponse(addToCart, {
-              headers,
-              rawInput,
-              redirectTo: '/cart',
-              request: {},
-            })),
+            expectBufferedWireResponse(
+              await renderMutationEndpointResponse(addToCart, {
+                headers,
+                rawInput,
+                redirectTo: '/cart',
+                request: {},
+              }),
+            ),
           product: async (search) =>
             renderQueryEndpointResponse(productQuery, {
               request: {},
@@ -259,25 +264,27 @@ describe('server wire fixture contracts', () => {
       },
     });
 
-    const response = expectBufferedWireResponse(await renderMutationResponse(addToCart, {
-      failureTarget: 'product-form:p1',
-      idem: 'idem_01HY',
-      rawInput: { productId: 'p1', quantity: 99 },
-      renderFailureFragment: (failure, rawInput) => {
-        const input = rawInput as { productId: string; quantity: number };
-        const data = failure.error.payload as { availableQuantity: number };
+    const response = expectBufferedWireResponse(
+      await renderMutationResponse(addToCart, {
+        failureTarget: 'product-form:p1',
+        idem: 'idem_01HY',
+        rawInput: { productId: 'p1', quantity: 99 },
+        renderFailureFragment: (failure, rawInput) => {
+          const input = rawInput as { productId: string; quantity: number };
+          const data = failure.error.payload as { availableQuantity: number };
 
-        return [
-          '<form kovo-c="product-form" aria-invalid="true">',
-          `<output role="alert" data-error-code="${failure.error.code}">Only ${data.availableQuantity} left.</output>`,
-          `<input name="productId" value="${input.productId}">`,
-          `<input name="quantity" value="${input.quantity}">`,
-          '</form>',
-        ].join('');
-      },
-      request: {},
-      targets: ['product-form:p1'],
-    }));
+          return [
+            '<form kovo-c="product-form" aria-invalid="true">',
+            `<output role="alert" data-error-code="${failure.error.code}">Only ${data.availableQuantity} left.</output>`,
+            `<input name="productId" value="${input.productId}">`,
+            `<input name="quantity" value="${input.quantity}">`,
+            '</form>',
+          ].join('');
+        },
+        request: {},
+        targets: ['product-form:p1'],
+      }),
+    );
     const fixture = await readFile(
       new URL('../../../fixtures/wire/validation-422-fragment.http', import.meta.url),
       'utf8',

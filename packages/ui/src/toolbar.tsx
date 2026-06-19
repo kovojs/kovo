@@ -50,70 +50,68 @@ export interface ToolbarButtonProps extends ToolbarItemProps {
   pressed?: boolean;
 }
 
-export const toolbarStyles = style.create(
-  {
-    button: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.sm,
-      color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 32,
-      justifyContent: 'center',
-      minWidth: 32,
-      paddingInline: 10,
-      transitionProperty: 'background-color, color, box-shadow',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-pressed=true]': {
-        backgroundColor: uiTheme.color.backgroundInverse,
-        boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-        color: uiTheme.color.foregroundInverse,
-      },
-      ':disabled': {
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
+export const toolbarStyles = style.create({
+  button: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 32,
+    justifyContent: 'center',
+    minWidth: 32,
+    paddingInline: 10,
+    transitionProperty: 'background-color, color, box-shadow',
+    '[data-disabled]': {
+      opacity: 0.5,
     },
-    item: {
-      display: 'inline-flex',
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-    },
-    root: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
+    '[data-pressed=true]': {
+      backgroundColor: uiTheme.color.backgroundInverse,
       boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      columnGap: 4,
-      display: 'inline-flex',
-      padding: 4,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-orientation=vertical]': {
-        flexDirection: 'column',
-        rowGap: 4,
-      },
+      color: uiTheme.color.foregroundInverse,
+    },
+    ':disabled': {
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
     },
   },
-);
+  item: {
+    display: 'inline-flex',
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
+    },
+  },
+  root: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    columnGap: 4,
+    display: 'inline-flex',
+    padding: 4,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-orientation=vertical]': {
+      flexDirection: 'column',
+      rowGap: 4,
+    },
+  },
+});
 
 export const toolbarClasses = [style.attrs(toolbarStyles.root).class ?? ''] as const;
 export const toolbarItemClasses = [style.attrs(toolbarStyles.item).class ?? ''] as const;

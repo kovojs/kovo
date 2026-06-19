@@ -59,92 +59,90 @@ export interface AccordionContentProps extends AccordionItemProps {
   triggerId?: string;
 }
 
-export const accordionStyles = style.create(
-  {
-    content: {
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      paddingBottom: 12,
-      paddingInline: 12,
-      paddingTop: 4,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-    },
-    header: {
-      fontSize: 14,
-      fontWeight: 500,
-      margin: 0,
-    },
-    item: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      rowGap: 8,
-      width: '100%',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.md,
-      color: uiTheme.color.foreground,
-      display: 'flex',
-      fontSize: 14,
-      fontWeight: 500,
-      justifyContent: 'space-between',
-      paddingBlock: 8,
-      paddingInline: 12,
-      textAlign: 'left',
-      transitionProperty: 'background-color, color',
-      width: '100%',
-      '::after': {
-        borderColor: uiTheme.color.foregroundMuted,
-        borderStyle: 'solid',
-        borderWidth: '0 2px 2px 0',
-        content: '""',
-        flexShrink: 0,
-        height: 8,
-        marginLeft: 8,
-        transform: 'rotate(45deg)',
-        transitionProperty: 'transform',
-        width: 8,
-      },
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-state=open]': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
-      '[data-state=open]::after': {
-        transform: 'rotate(-135deg)',
-      },
-      ':disabled': {
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+export const accordionStyles = style.create({
+  content: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    paddingBottom: 12,
+    paddingInline: 12,
+    paddingTop: 4,
+    '[data-state=closed]': {
+      display: 'none',
     },
   },
-);
+  header: {
+    fontSize: 14,
+    fontWeight: 500,
+    margin: 0,
+  },
+  item: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    rowGap: 8,
+    width: '100%',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  trigger: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.md,
+    color: uiTheme.color.foreground,
+    display: 'flex',
+    fontSize: 14,
+    fontWeight: 500,
+    justifyContent: 'space-between',
+    paddingBlock: 8,
+    paddingInline: 12,
+    textAlign: 'left',
+    transitionProperty: 'background-color, color',
+    width: '100%',
+    '::after': {
+      borderColor: uiTheme.color.foregroundMuted,
+      borderStyle: 'solid',
+      borderWidth: '0 2px 2px 0',
+      content: '""',
+      flexShrink: 0,
+      height: 8,
+      marginLeft: 8,
+      transform: 'rotate(45deg)',
+      transitionProperty: 'transform',
+      width: 8,
+    },
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-state=open]': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+    '[data-state=open]::after': {
+      transform: 'rotate(-135deg)',
+    },
+    ':disabled': {
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+});
 
 export const accordionClasses = [style.attrs(accordionStyles.root).class ?? ''] as const;
 export const accordionItemClasses = [style.attrs(accordionStyles.item).class ?? ''] as const;

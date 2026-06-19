@@ -215,14 +215,14 @@ async function runStripeWebhookSpike(
     };
     options.state.changes.push(change);
 
-    const response: MutationWireResponse = {
+    const response = {
       body: 'ok',
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Kovo-Changes': JSON.stringify([change]),
         'Kovo-Idem': event.id,
       },
-      status: 200,
+      status: 200 as const,
     };
     reservation.commit(response);
     return response;

@@ -253,7 +253,7 @@ function routePageFactsWithFragmentTargets(
     return {
       ...fact,
       css: {
-        ...(fact.css ?? {}),
+        ...fact.css,
         fragmentTargets,
       },
     };

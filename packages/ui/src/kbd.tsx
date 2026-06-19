@@ -9,30 +9,28 @@ export interface KbdProps {
   style?: style.StyleInput;
 }
 
-export const kbdStyles = style.create(
-  {
-    root: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.backgroundRaised,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.sm,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      fontFamily:
-        'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-      fontSize: 11,
-      fontWeight: 500,
-      height: 20,
-      justifyContent: 'center',
-      lineHeight: 1,
-      minWidth: 20,
-      paddingInline: 4,
-    },
+export const kbdStyles = style.create({
+  root: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.backgroundRaised,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.sm,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    fontFamily:
+      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+    fontSize: 11,
+    fontWeight: 500,
+    height: 20,
+    justifyContent: 'center',
+    lineHeight: 1,
+    minWidth: 20,
+    paddingInline: 4,
   },
-);
+});
 
 export const kbdClasses = [style.attrs(kbdStyles.root).class ?? ''] as const;
 

@@ -1,6 +1,10 @@
 import { compilerBuildId } from './cache-identity.js';
 import { factHash } from './fact-hash.js';
-import type { CompileComponentOptions, CompileDependencyFootprint, RegistryFacts } from './types.js';
+import type {
+  CompileComponentOptions,
+  CompileDependencyFootprint,
+  RegistryFacts,
+} from './types.js';
 
 /** @internal Per-module compiler cache key input. */
 export interface CompileCacheKeyInput {
@@ -108,14 +112,17 @@ export class CompileCache<Result> {
       this.#setEntryKey(compileCacheKey({ ...input, dependencyFootprint: syncFootprint }), entry);
       this.#indexEntry(entry, syncFootprint);
     } else {
-      Promise.resolve(result).then((resolved) => {
-        entry.value = resolved;
-        const footprint = resolvedDependencyFootprint(resolved);
-        if (footprint) {
-          this.#setEntryKey(compileCacheKey({ ...input, dependencyFootprint: footprint }), entry);
-          this.#indexEntry(entry, footprint);
-        }
-      });
+      void Promise.resolve(result).then(
+        (resolved) => {
+          entry.value = resolved;
+          const footprint = resolvedDependencyFootprint(resolved);
+          if (footprint) {
+            this.#setEntryKey(compileCacheKey({ ...input, dependencyFootprint: footprint }), entry);
+            this.#indexEntry(entry, footprint);
+          }
+        },
+        () => {},
+      );
     }
     return result;
   }
@@ -152,19 +159,17 @@ export class CompileCache<Result> {
 
 /** @internal Stable cache key. When a dependency footprint is present, unrelated facts are omitted. */
 export function compileCacheKey(input: CompileCacheKeyInput): string {
-  const compileContext =
-    input.dependencyFootprint ??
-    {
-      ...(input.packageComponentPrefixes === undefined
-        ? {}
-        : { packageComponentPrefixes: input.packageComponentPrefixes }),
-      ...(input.previousRegistryFacts === undefined
-        ? {}
-        : { previousRegistryFacts: input.previousRegistryFacts }),
-      ...(input.queryShapeFacts === undefined ? {} : { queryShapeFacts: input.queryShapeFacts }),
-      ...(input.queryShapes === undefined ? {} : { queryShapes: input.queryShapes }),
-      ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
-    };
+  const compileContext = input.dependencyFootprint ?? {
+    ...(input.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: input.packageComponentPrefixes }),
+    ...(input.previousRegistryFacts === undefined
+      ? {}
+      : { previousRegistryFacts: input.previousRegistryFacts }),
+    ...(input.queryShapeFacts === undefined ? {} : { queryShapeFacts: input.queryShapeFacts }),
+    ...(input.queryShapes === undefined ? {} : { queryShapes: input.queryShapes }),
+    ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
+  };
 
   return stableJson({
     compileContext,

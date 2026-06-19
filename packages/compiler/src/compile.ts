@@ -422,8 +422,8 @@ function referencedMutationInputKeys(usage: CompileDependencyFootprintUsage): Se
 
 function previousRegistryComponentDomLeaves(usage: CompileDependencyFootprintUsage): Set<string> {
   return new Set(
-    usage.model.components.map((component) =>
-      deriveComponentNames(usage.fileName, component).domName,
+    usage.model.components.map(
+      (component) => deriveComponentNames(usage.fileName, component).domName,
     ),
   );
 }

@@ -41,80 +41,78 @@ export interface DisclosureContentProps extends DisclosureStateProps {
   styles?: DisclosureStyleOverrides;
 }
 
-export const disclosureStyles = style.create(
-  {
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      padding: 12,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      justifyContent: 'center',
-      paddingInline: 12,
-      transitionProperty: 'background-color',
-      width: 'fit-content',
-      '::after': {
-        borderColor: uiTheme.color.foregroundMuted,
-        borderStyle: 'solid',
-        borderWidth: '0 2px 2px 0',
-        content: '""',
-        flexShrink: 0,
-        height: 8,
-        marginLeft: 8,
-        transform: 'rotate(45deg)',
-        transitionProperty: 'transform',
-        width: 8,
-      },
-      '[data-state=open]': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
-      '[data-state=open]::after': {
-        transform: 'rotate(-135deg)',
-      },
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+export const disclosureStyles = style.create({
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    padding: 12,
+    '[data-state=closed]': {
+      display: 'none',
     },
   },
-);
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  trigger: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    justifyContent: 'center',
+    paddingInline: 12,
+    transitionProperty: 'background-color',
+    width: 'fit-content',
+    '::after': {
+      borderColor: uiTheme.color.foregroundMuted,
+      borderStyle: 'solid',
+      borderWidth: '0 2px 2px 0',
+      content: '""',
+      flexShrink: 0,
+      height: 8,
+      marginLeft: 8,
+      transform: 'rotate(45deg)',
+      transitionProperty: 'transform',
+      width: 8,
+    },
+    '[data-state=open]': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+    '[data-state=open]::after': {
+      transform: 'rotate(-135deg)',
+    },
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+});
 
 export const disclosureClasses = [style.attrs(disclosureStyles.root).class ?? ''] as const;
 export const disclosureTriggerClasses = [

@@ -138,18 +138,14 @@ export type MutationStreamChunk =
   | MutationStreamTextChunk;
 
 /** Context passed to a streaming mutation author function after the mutation succeeds. */
-export interface MutationStreamContext<
-  Value = unknown,
-  Input = unknown,
-  Request = unknown,
-> {
+export interface MutationStreamContext<Value = unknown, Input = unknown, Request = unknown> {
   input: Input;
   request: Request;
   result: MutationSuccess<Value, Input>;
 }
 
 /** Iterable chunk source returned by a streaming mutation author function. */
-export type MutationStreamSource<Value, Input, Request> =
+export type MutationStreamSource<_Value, _Input, _Request> =
   | AsyncIterable<MutationStreamChunk>
   | Iterable<MutationStreamChunk>;
 
@@ -870,6 +866,10 @@ function renderStreamingMutationWireResponse(
         try {
           for await (const chunk of source) {
             controller.enqueue(encoder.encode(`${renderMutationStreamChunk(chunk)}\n`));
+            if (chunk.kind === 'done') {
+              controller.close();
+              return;
+            }
           }
           if (finalResponse.body) controller.enqueue(encoder.encode(`${finalResponse.body}\n`));
           controller.enqueue(encoder.encode(`${renderDoneWireHtml()}\n`));
@@ -916,8 +916,7 @@ export async function* coalesceMutationStreamChunks(
         ? new Promise<'flush'>((resolve) => setTimeout(() => resolve('flush'), maxDelayMs))
         : undefined;
 
-    const next =
-      timer === undefined ? await pendingRead : await Promise.race([pendingRead, timer]);
+    const next = timer === undefined ? await pendingRead : await Promise.race([pendingRead, timer]);
     if (next === 'flush') {
       yield* flush();
       continue;

@@ -116,8 +116,9 @@ describe('commerce example', () => {
     const routeCssFiles = [
       readBuiltCssAsset((href) => /^assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href)),
     ];
-    expect(routeCssFiles[0].css).toContain('.kv-auth-form-');
-    expect(routeCssFiles[0].css).not.toContain('.kv-product-grid-');
+    const [loginCss] = routeCssFiles;
+    expect(loginCss?.css).toContain('.kv-auth-form-');
+    expect(loginCss?.css).not.toContain('.kv-product-grid-');
 
     const serverModule = (await import(
       `${pathToFileURL(path.join(commerceRoot, 'dist', 'server', 'server.mjs')).href}?t=${Date.now()}`

@@ -31,51 +31,49 @@ const indeterminateSlide = style.keyframes(
   { namespace: 'progressSlide' },
 );
 
-export const progressStyles = style.create(
-  {
-    // Custom indicator filled by value ratio (set inline). Slides when
-    // indeterminate (no resolved value).
-    indicator: {
-      backgroundColor: uiTheme.color.accent,
-      borderRadius: uiTheme.radius.full,
-      display: 'block',
-      height: '100%',
-      transitionDuration: '0.3s',
-      transitionProperty: 'width, transform',
-      width: '100%',
-      '[data-state=complete]': {
-        backgroundColor: uiTheme.color.success.border,
-      },
-      '[data-state=indeterminate]': {
-        animationDuration: '1.5s',
-        animationIterationCount: 'infinite',
-        animationName: indeterminateSlide,
-        animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
-        width: '40%',
-      },
+export const progressStyles = style.create({
+  // Custom indicator filled by value ratio (set inline). Slides when
+  // indeterminate (no resolved value).
+  indicator: {
+    backgroundColor: uiTheme.color.accent,
+    borderRadius: uiTheme.radius.full,
+    display: 'block',
+    height: '100%',
+    transitionDuration: '0.3s',
+    transitionProperty: 'width, transform',
+    width: '100%',
+    '[data-state=complete]': {
+      backgroundColor: uiTheme.color.success.border,
     },
-    // Native <progress> kept for semantics but visually removed from layout.
-    native: {
-      borderStyle: 'none',
-      height: 1,
-      margin: -1,
-      overflow: 'hidden',
-      padding: 0,
-      position: 'absolute',
-      width: 1,
-    },
-    // Visible track.
-    root: {
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderRadius: uiTheme.radius.full,
-      display: 'block',
-      height: 8,
-      overflow: 'hidden',
-      position: 'relative',
-      width: '100%',
+    '[data-state=indeterminate]': {
+      animationDuration: '1.5s',
+      animationIterationCount: 'infinite',
+      animationName: indeterminateSlide,
+      animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
+      width: '40%',
     },
   },
-);
+  // Native <progress> kept for semantics but visually removed from layout.
+  native: {
+    borderStyle: 'none',
+    height: 1,
+    margin: -1,
+    overflow: 'hidden',
+    padding: 0,
+    position: 'absolute',
+    width: 1,
+  },
+  // Visible track.
+  root: {
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderRadius: uiTheme.radius.full,
+    display: 'block',
+    height: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+  },
+});
 
 export const progressClasses = [style.attrs(progressStyles.root).class ?? ''] as const;
 /** CSS class tuple for the visual progress indicator slot. */

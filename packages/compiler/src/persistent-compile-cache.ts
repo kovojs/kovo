@@ -41,7 +41,9 @@ export async function readPersistentCompileCacheManifest(
 async function readManifestFile(cacheDir: string): Promise<PersistentCompileCacheManifest> {
   try {
     const parsed = JSON.parse(await readFile(manifestPath(cacheDir), 'utf8')) as unknown;
-    return isPersistentCompileCacheManifest(parsed) ? parsed : emptyPersistentCompileCacheManifest();
+    return isPersistentCompileCacheManifest(parsed)
+      ? parsed
+      : emptyPersistentCompileCacheManifest();
   } catch {
     return emptyPersistentCompileCacheManifest();
   }

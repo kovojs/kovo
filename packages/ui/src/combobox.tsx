@@ -76,116 +76,114 @@ function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
-export const comboboxStyles = style.create(
-  {
-    input: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      height: 36,
-      outlineStyle: 'none',
-      paddingInline: 12,
-      transitionProperty: 'background-color, border-color, color, box-shadow',
-      width: '100%',
-      '[data-placeholder]': {
-        color: uiTheme.color.foregroundMuted,
-      },
-      '[aria-invalid=true]': {
-        borderColor: uiTheme.color.danger.border,
-      },
-      ':disabled': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foregroundMuted,
-        cursor: 'not-allowed',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-    },
-    listbox: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      marginTop: 4,
-      maxHeight: 224,
-      minWidth: 180,
-      overflow: 'auto',
-      padding: 4,
-      position: 'absolute',
-      width: '100%',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '[data-state=open]': {
-        display: 'block',
-      },
-    },
-    option: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.sm,
+export const comboboxStyles = style.create({
+  input: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    height: 36,
+    outlineStyle: 'none',
+    paddingInline: 12,
+    transitionProperty: 'background-color, border-color, color, box-shadow',
+    width: '100%',
+    '[data-placeholder]': {
       color: uiTheme.color.foregroundMuted,
-      columnGap: 8,
-      cursor: 'default',
-      display: 'flex',
-      fontSize: 14,
-      paddingBlock: 6,
-      paddingInline: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-      '[aria-selected=true]': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-        fontWeight: 500,
-      },
-      '[data-state=checked]': {
-        color: uiTheme.color.foreground,
-        fontWeight: 500,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
     },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      position: 'relative',
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
+    '[aria-invalid=true]': {
+      borderColor: uiTheme.color.danger.border,
     },
-    value: {
+    ':disabled': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
       color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      '[data-placeholder]': {
-        color: uiTheme.color.foregroundMuted,
-      },
+      cursor: 'not-allowed',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
   },
-);
+  listbox: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    marginTop: 4,
+    maxHeight: 224,
+    minWidth: 180,
+    overflow: 'auto',
+    padding: 4,
+    position: 'absolute',
+    width: '100%',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
+    },
+    '[data-state=open]': {
+      display: 'block',
+    },
+  },
+  option: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foregroundMuted,
+    columnGap: 8,
+    cursor: 'default',
+    display: 'flex',
+    fontSize: 14,
+    paddingBlock: 6,
+    paddingInline: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    '[data-highlighted]': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+    '[aria-selected=true]': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+      fontWeight: 500,
+    },
+    '[data-state=checked]': {
+      color: uiTheme.color.foreground,
+      fontWeight: 500,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    position: 'relative',
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+  },
+  value: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    '[data-placeholder]': {
+      color: uiTheme.color.foregroundMuted,
+    },
+  },
+});
 
 export const comboboxClasses = [style.attrs(comboboxStyles.root).class ?? ''] as const;
 export const comboboxInputClasses = [style.attrs(comboboxStyles.input).class ?? ''] as const;

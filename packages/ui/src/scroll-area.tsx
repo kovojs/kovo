@@ -67,86 +67,84 @@ export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
   visible?: boolean;
 }
 
-export const scrollAreaStyles = style.create(
-  {
-    corner: {
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      bottom: 0,
-      height: 10,
-      position: 'absolute',
-      right: 0,
-      width: 10,
-      '[data-state=hidden]': {
-        display: 'none',
-      },
-    },
-    root: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      overflow: 'hidden',
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    scrollbar: {
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      display: 'flex',
-      padding: 2,
-      position: 'absolute',
-      touchAction: 'none',
-      transitionProperty: 'background-color, opacity',
-      userSelect: 'none',
-      '[data-orientation=horizontal]': {
-        bottom: 0,
-        height: 10,
-        left: 0,
-        right: 0,
-      },
-      '[data-orientation=vertical]': {
-        bottom: 0,
-        right: 0,
-        top: 0,
-        width: 10,
-      },
-      '[data-state=hidden]': {
-        opacity: 0,
-      },
-    },
-    thumb: {
-      backgroundColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.full,
-      flex: 1,
-      position: 'relative',
-      '[data-orientation=horizontal]': {
-        minWidth: 32,
-      },
-      '[data-orientation=vertical]': {
-        minHeight: 32,
-      },
-      '[data-state=hidden]': {
-        opacity: 0,
-      },
-    },
-    viewport: {
-      maxHeight: 224,
-      outlineStyle: 'none',
-      overflow: 'auto',
-      padding: 16,
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-      },
-      ':focus-visible': {
-        boxShadow: uiTheme.shadow.focusRingInset,
-      },
+export const scrollAreaStyles = style.create({
+  corner: {
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    bottom: 0,
+    height: 10,
+    position: 'absolute',
+    right: 0,
+    width: 10,
+    '[data-state=hidden]': {
+      display: 'none',
     },
   },
-);
+  root: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  scrollbar: {
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    display: 'flex',
+    padding: 2,
+    position: 'absolute',
+    touchAction: 'none',
+    transitionProperty: 'background-color, opacity',
+    userSelect: 'none',
+    '[data-orientation=horizontal]': {
+      bottom: 0,
+      height: 10,
+      left: 0,
+      right: 0,
+    },
+    '[data-orientation=vertical]': {
+      bottom: 0,
+      right: 0,
+      top: 0,
+      width: 10,
+    },
+    '[data-state=hidden]': {
+      opacity: 0,
+    },
+  },
+  thumb: {
+    backgroundColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.full,
+    flex: 1,
+    position: 'relative',
+    '[data-orientation=horizontal]': {
+      minWidth: 32,
+    },
+    '[data-orientation=vertical]': {
+      minHeight: 32,
+    },
+    '[data-state=hidden]': {
+      opacity: 0,
+    },
+  },
+  viewport: {
+    maxHeight: 224,
+    outlineStyle: 'none',
+    overflow: 'auto',
+    padding: 16,
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+    },
+    ':focus-visible': {
+      boxShadow: uiTheme.shadow.focusRingInset,
+    },
+  },
+});
 
 export const scrollAreaClasses = [style.attrs(scrollAreaStyles.root).class ?? ''] as const;
 export const scrollAreaViewportClasses = [

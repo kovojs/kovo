@@ -76,8 +76,8 @@ export const ClientPayloadCard = component({
       import { applyCompiledQueryUpdatePlan } from '@kovojs/browser/generated';
 
       export const ClientPayloadCard$queryUpdatePlans = {
-        "product"(root, value) {
-          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] });
+        "product"(root, value, context = {}) {
+          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };",
         "clientText": {
@@ -184,8 +184,8 @@ export const PayloadCard = component({
       export const PayloadCard$article_title_derive = derive(["product"], (product) => product.name);
 
       export const PayloadCard$queryUpdatePlans = {
-        "product"(root, value) {
-          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind:title=\\"product.PayloadCard$article_title_derive\\"]", select(value) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] });
+        "product"(root, value, context = {}) {
+          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "aria-description", selector: "[data-bind:aria-description=\\"product.PayloadCard$article_aria_description_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_description_derive.run(value); } }, { attr: "aria-label", selector: "[data-bind:aria-label=\\"product.PayloadCard$article_aria_label_derive\\"]", select(value, root, context) { return PayloadCard$article_aria_label_derive.run(value); } }, { attr: "title", selector: "[data-bind:title=\\"product.PayloadCard$article_title_derive\\"]", select(value, root, context) { return PayloadCard$article_title_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };",
         "clientText": "<img src=x onerror=alert(1)> & "quoted"",
@@ -465,8 +465,8 @@ export const DynamicUrlPayloads = component({
       export const DynamicUrlPayloads$img_src_derive = derive(["product"], (product) => product.image);
 
       export const DynamicUrlPayloads$queryUpdatePlans = {
-        "product"(root, value) {
-          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", select(value) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] });
+        "product"(root, value, context = {}) {
+          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "href", selector: "[data-derive=\\"product.DynamicUrlPayloads$a_href_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$a_href_derive.run(value); } }, { attr: "src", selector: "[data-derive=\\"product.DynamicUrlPayloads$img_src_derive\\"]", select(value, root, context) { return DynamicUrlPayloads$img_src_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };",
         "diagnostics": [],
@@ -538,12 +538,12 @@ export const TemplatePayloads = component({
       import { applyCompiledQueryUpdatePlan, kovoEscapeHtml } from '@kovojs/browser/generated';
 
       export const TemplatePayloads$queryUpdatePlans = {
-        "cart"(root, value) {
+        "cart"(root, value, context = {}) {
           return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [{ key: "sku", list: "items", selector: "[data-bind-list=\\"cart.items\\"]", render(item) {
             const record = item && typeof item === "object" ? item : {};
             const read = (path) => path.reduce((value, key) => value && typeof value === "object" ? value[key] : undefined, record);
             return ["<li><span data-bind=\\".qty\\">", kovoEscapeHtml(read(["qty"])), "</span> x <span data-bind=\\".name\\">", kovoEscapeHtml(read(["name"])), "</span></li>"].join("");
-          } }] });
+          } }] }, { queryStore: context.queryStore });
         },
       };",
         "diagnostics": [],

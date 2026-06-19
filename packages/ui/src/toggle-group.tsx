@@ -57,66 +57,64 @@ export interface ToggleGroupButtonProps extends ToggleGroupStateProps {
   styles?: ToggleGroupStyleOverrides;
 }
 
-export const toggleGroupStyles = style.create(
-  {
-    button: {
-      alignItems: 'center',
-      borderRadius: 4,
-      color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 32,
-      justifyContent: 'center',
-      minWidth: 32,
-      paddingInline: 10,
-      transitionProperty: 'background-color, color, box-shadow',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-state=pressed]': {
-        backgroundColor: uiTheme.color.background,
-        boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-        color: uiTheme.color.foreground,
-      },
-      ':disabled': {
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
+export const toggleGroupStyles = style.create({
+  button: {
+    alignItems: 'center',
+    borderRadius: 4,
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 32,
+    justifyContent: 'center',
+    minWidth: 32,
+    paddingInline: 10,
+    transitionProperty: 'background-color, color, box-shadow',
+    '[data-disabled]': {
+      opacity: 0.5,
     },
-    item: {
-      display: 'inline-flex',
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-    },
-    root: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.backgroundSubtle,
-      borderColor: uiTheme.color.border,
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
+    '[data-state=pressed]': {
+      backgroundColor: uiTheme.color.background,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
       color: uiTheme.color.foreground,
-      columnGap: 4,
-      display: 'inline-flex',
-      padding: 4,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-orientation=vertical]': {
-        flexDirection: 'column',
-        rowGap: 4,
-      },
+    },
+    ':disabled': {
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
   },
-);
+  item: {
+    display: 'inline-flex',
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
+    },
+  },
+  root: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.backgroundSubtle,
+    borderColor: uiTheme.color.border,
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foreground,
+    columnGap: 4,
+    display: 'inline-flex',
+    padding: 4,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-orientation=vertical]': {
+      flexDirection: 'column',
+      rowGap: 4,
+    },
+  },
+});
 
 export const toggleGroupClasses = [style.attrs(toggleGroupStyles.root).class ?? ''] as const;
 export const toggleGroupItemClasses = [style.attrs(toggleGroupStyles.item).class ?? ''] as const;

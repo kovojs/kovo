@@ -33,7 +33,7 @@ function walk(dir) {
       const fileName = join(dir, entry);
       return statSync(fileName).isDirectory() ? walk(fileName) : [fileName];
     })
-    .sort();
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function sha256(value) {

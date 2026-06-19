@@ -101,7 +101,7 @@ describe('compiler performance gates', () => {
 
     for (const file of files) {
       const options = compileOptions(file);
-      cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
+      void cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
         actualCompileCount += 1;
         return compileComponentModule(options);
       });
@@ -113,7 +113,7 @@ describe('compiler performance gates', () => {
     );
     for (const file of editedFiles) {
       const options = compileOptions(file);
-      cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
+      void cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
         actualCompileCount += 1;
         return compileComponentModule(options);
       });
@@ -165,7 +165,7 @@ function measureWarmCompile(files: readonly CompilerPerfFile[]): CompilerPerfRun
 
   for (const file of files) {
     const options = compileOptions(file);
-    cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
+    void cache.getOrCreate(compileComponentCacheKeyInput(options), () => {
       actualCompileCount += 1;
       return compileComponentModule(options);
     });

@@ -138,14 +138,19 @@ describe('CompileCache', () => {
   });
 
   it('reuses a compiled entry when only facts outside the learned footprint change', () => {
-    const cache = new CompileCache<{ dependencyFootprint: CompileDependencyFootprint; value: number }>();
-    const compile = vi.fn((): { dependencyFootprint: CompileDependencyFootprint; value: number } => ({
-      dependencyFootprint: {
-        queryShapes: { cart: { count: 'number' } },
-        reads: { queryShapeNames: ['cart'] },
-      },
-      value: 1,
-    }));
+    const cache = new CompileCache<{
+      dependencyFootprint: CompileDependencyFootprint;
+      value: number;
+    }>();
+    const compile = vi.fn(
+      (): { dependencyFootprint: CompileDependencyFootprint; value: number } => ({
+        dependencyFootprint: {
+          queryShapes: { cart: { count: 'number' } },
+          reads: { queryShapeNames: ['cart'] },
+        },
+        value: 1,
+      }),
+    );
 
     const first = cache.getOrCreate(
       compileComponentCacheKeyInput({
@@ -169,14 +174,19 @@ describe('CompileCache', () => {
   });
 
   it('invalidates only modules indexed to changed dependency facts', () => {
-    const cache = new CompileCache<{ dependencyFootprint: CompileDependencyFootprint; value: string }>();
-    const compileCart = vi.fn((): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
-      dependencyFootprint: {
-        queryShapes: { cart: { count: 'number' } },
-        reads: { queryShapeNames: ['cart'] },
-      },
-      value: `cart-${compileCart.mock.calls.length}`,
-    }));
+    const cache = new CompileCache<{
+      dependencyFootprint: CompileDependencyFootprint;
+      value: string;
+    }>();
+    const compileCart = vi.fn(
+      (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
+        dependencyFootprint: {
+          queryShapes: { cart: { count: 'number' } },
+          reads: { queryShapeNames: ['cart'] },
+        },
+        value: `cart-${compileCart.mock.calls.length}`,
+      }),
+    );
     const compileProduct = vi.fn(
       (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
         dependencyFootprint: {
@@ -210,27 +220,32 @@ describe('CompileCache', () => {
   });
 
   it('feeds registry fact diffs into the inverse index', () => {
-    const cache = new CompileCache<{ dependencyFootprint: CompileDependencyFootprint; value: string }>();
-    const compileCart = vi.fn((): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
-      dependencyFootprint: {
-        reads: { mutationInputKeys: ['cart/add'] },
-        registryFacts: {
-          mutationInputs: {
-            'cart/add': [
-              {
-                coercion: 'number',
-                defaulted: false,
-                name: 'quantity',
-                optional: false,
-                provenance: 'registry',
-                required: true,
-              },
-            ],
+    const cache = new CompileCache<{
+      dependencyFootprint: CompileDependencyFootprint;
+      value: string;
+    }>();
+    const compileCart = vi.fn(
+      (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
+        dependencyFootprint: {
+          reads: { mutationInputKeys: ['cart/add'] },
+          registryFacts: {
+            mutationInputs: {
+              'cart/add': [
+                {
+                  coercion: 'number',
+                  defaulted: false,
+                  name: 'quantity',
+                  optional: false,
+                  provenance: 'registry',
+                  required: true,
+                },
+              ],
+            },
           },
         },
-      },
-      value: `cart-${compileCart.mock.calls.length}`,
-    }));
+        value: `cart-${compileCart.mock.calls.length}`,
+      }),
+    );
     const compileProduct = vi.fn(
       (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
         dependencyFootprint: {

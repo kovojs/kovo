@@ -221,13 +221,14 @@ export async function submitEnhancedMutation(
 }
 
 export function isStreamingEnhancedMutationForm(form: EnhancedFormLike): boolean {
-  const getAttribute = form.getAttribute;
+  const getAttribute = form.getAttribute?.bind(form);
   if (!getAttribute) return false;
 
   return (
-    getAttribute.call(form, 'stream') !== null ||
-    getAttribute.call(form, 'data-stream') !== null ||
-    getAttribute.call(form, 'data-kovo-stream') !== null
+    getAttribute('stream') !== null ||
+    getAttribute('data-mutation-stream') !== null ||
+    getAttribute('data-stream') !== null ||
+    getAttribute('data-kovo-stream') !== null
   );
 }
 

@@ -27,7 +27,10 @@ execFileSync('corepack', ['pnpm', '--dir', siteRoot, 'run', 'build:css'], {
 const buildMs = Math.round(performance.now() - buildStart);
 
 mkdirSync(path.join(distCssRoot, 'assets'), { recursive: true });
-copyFileSync(path.join(siteRoot, 'src/generated/kovo-ui.css'), path.join(distCssRoot, 'assets/kovo-ui.css'));
+copyFileSync(
+  path.join(siteRoot, 'src/generated/kovo-ui.css'),
+  path.join(distCssRoot, 'assets/kovo-ui.css'),
+);
 
 const cssFiles = [
   path.join(distCssRoot, 'assets/site.css'),

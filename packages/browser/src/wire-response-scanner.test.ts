@@ -92,6 +92,7 @@ describe('wire response scanner', () => {
           start: expect.any(Number),
         },
       ],
+      texts: [],
     });
     expect(malformedQuery).toHaveBeenCalledWith('missing closing tag');
     expect(malformedFragment).toHaveBeenCalledWith('missing closing tag');

@@ -379,7 +379,7 @@ describe('server app shell Vite dev seam', () => {
   it('serves build-owned stylesheet chunks through the default dev handler', async () => {
     const ShellLayout = layout({
       render(_queries, _state, { children }) {
-        return `<section data-shell="true">${children}</section>`;
+        return `<section data-shell="true">${String(children)}</section>`;
       },
     });
     const app = createApp({

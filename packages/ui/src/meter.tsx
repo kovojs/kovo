@@ -27,47 +27,45 @@ export interface MeterProps {
   valueText?: string;
 }
 
-export const meterStyles = style.create(
-  {
-    // Custom indicator filled by value ratio (set inline). Color tracks the
-    // optimum/suboptimum/even-less-good state.
-    indicator: {
-      backgroundColor: uiTheme.color.success.border,
-      borderRadius: uiTheme.radius.full,
-      display: 'block',
-      height: '100%',
-      transitionDuration: '0.3s',
-      transitionProperty: 'width, background-color',
-      width: '100%',
-      '[data-state=suboptimum]': {
-        backgroundColor: uiTheme.color.warning.border,
-      },
-      '[data-state=even-less-good]': {
-        backgroundColor: uiTheme.color.danger.border,
-      },
+export const meterStyles = style.create({
+  // Custom indicator filled by value ratio (set inline). Color tracks the
+  // optimum/suboptimum/even-less-good state.
+  indicator: {
+    backgroundColor: uiTheme.color.success.border,
+    borderRadius: uiTheme.radius.full,
+    display: 'block',
+    height: '100%',
+    transitionDuration: '0.3s',
+    transitionProperty: 'width, background-color',
+    width: '100%',
+    '[data-state=suboptimum]': {
+      backgroundColor: uiTheme.color.warning.border,
     },
-    // Native <meter> kept for semantics but visually removed from layout.
-    native: {
-      borderStyle: 'none',
-      height: 1,
-      margin: -1,
-      overflow: 'hidden',
-      padding: 0,
-      position: 'absolute',
-      width: 1,
-    },
-    // Visible track.
-    root: {
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderRadius: uiTheme.radius.full,
-      display: 'block',
-      height: 8,
-      overflow: 'hidden',
-      position: 'relative',
-      width: '100%',
+    '[data-state=even-less-good]': {
+      backgroundColor: uiTheme.color.danger.border,
     },
   },
-);
+  // Native <meter> kept for semantics but visually removed from layout.
+  native: {
+    borderStyle: 'none',
+    height: 1,
+    margin: -1,
+    overflow: 'hidden',
+    padding: 0,
+    position: 'absolute',
+    width: 1,
+  },
+  // Visible track.
+  root: {
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderRadius: uiTheme.radius.full,
+    display: 'block',
+    height: 8,
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+  },
+});
 
 export const meterClasses = [style.attrs(meterStyles.root).class ?? ''] as const;
 /** CSS class tuple for the visual meter indicator slot. */

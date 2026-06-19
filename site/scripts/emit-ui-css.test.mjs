@@ -104,8 +104,6 @@ describe('export-static served stylesheet guard', () => {
     ).not.toThrow();
     expect(() =>
       assertServedUiStylesheetContent('.kv-site-chrome-a{}', '/assets/kovo-ui.css'),
-    ).toThrow(
-      /missing required component atoms \(kv-button-, kv-switch-, kv-dialog-\)/,
-    );
+    ).toThrow(/missing required component atoms \(kv-button-, kv-switch-, kv-dialog-\)/);
   });
 });

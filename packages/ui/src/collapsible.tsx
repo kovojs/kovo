@@ -41,75 +41,73 @@ export interface CollapsibleContentProps extends CollapsibleStateProps {
   styles?: CollapsibleStyleOverrides;
 }
 
-export const collapsibleStyles = style.create(
-  {
-    content: {
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      paddingBottom: 12,
-      paddingInline: 12,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-    },
-    root: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      color: uiTheme.color.foreground,
-      cursor: 'pointer',
-      display: 'flex',
-      fontWeight: 500,
-      justifyContent: 'space-between',
-      listStyle: 'none',
-      outlineStyle: 'none',
-      paddingBlock: 8,
-      paddingInline: 12,
-      width: '100%',
-      '::after': {
-        borderColor: uiTheme.color.foregroundMuted,
-        borderStyle: 'solid',
-        borderWidth: '0 2px 2px 0',
-        content: '""',
-        flexShrink: 0,
-        height: 8,
-        marginLeft: 8,
-        transform: 'rotate(45deg)',
-        transitionProperty: 'transform',
-        width: 8,
-      },
-      '::-webkit-details-marker': {
-        display: 'none',
-      },
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-      '[data-state=open]': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
-      '[data-state=open]::after': {
-        transform: 'rotate(-135deg)',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
+export const collapsibleStyles = style.create({
+  content: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    paddingBottom: 12,
+    paddingInline: 12,
+    '[data-state=closed]': {
+      display: 'none',
     },
   },
-);
+  root: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  trigger: {
+    alignItems: 'center',
+    color: uiTheme.color.foreground,
+    cursor: 'pointer',
+    display: 'flex',
+    fontWeight: 500,
+    justifyContent: 'space-between',
+    listStyle: 'none',
+    outlineStyle: 'none',
+    paddingBlock: 8,
+    paddingInline: 12,
+    width: '100%',
+    '::after': {
+      borderColor: uiTheme.color.foregroundMuted,
+      borderStyle: 'solid',
+      borderWidth: '0 2px 2px 0',
+      content: '""',
+      flexShrink: 0,
+      height: 8,
+      marginLeft: 8,
+      transform: 'rotate(45deg)',
+      transitionProperty: 'transform',
+      width: 8,
+    },
+    '::-webkit-details-marker': {
+      display: 'none',
+    },
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
+    },
+    '[data-state=open]': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+    '[data-state=open]::after': {
+      transform: 'rotate(-135deg)',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+});
 
 export const collapsibleClasses = [style.attrs(collapsibleStyles.root).class ?? ''] as const;
 export const collapsibleTriggerClasses = [

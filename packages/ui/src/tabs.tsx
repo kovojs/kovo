@@ -66,90 +66,88 @@ export interface TabsPanelProps extends TabsStateProps {
   triggerId?: string;
 }
 
-export const tabsStyles = style.create(
-  {
-    list: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      columnGap: 4,
-      display: 'inline-flex',
-      height: 40,
-      padding: 4,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-orientation=vertical]': {
-        flexDirection: 'column',
-        height: 'auto',
-        rowGap: 4,
-      },
+export const tabsStyles = style.create({
+  list: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    columnGap: 4,
+    display: 'inline-flex',
+    height: 40,
+    padding: 4,
+    '[data-disabled]': {
+      opacity: 0.5,
     },
-    panel: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      marginTop: 12,
-      padding: 16,
-      '[data-state=inactive]': {
-        display: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      width: '100%',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    trigger: {
-      alignItems: 'center',
-      appearance: 'none',
-      backgroundColor: 'transparent',
-      borderRadius: uiTheme.radius.sm,
-      borderStyle: 'none',
-      color: uiTheme.color.foregroundMuted,
-      cursor: 'pointer',
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 32,
-      justifyContent: 'center',
-      paddingInline: 12,
-      transitionProperty: 'background-color, color, box-shadow',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-state=active]': {
-        backgroundColor: uiTheme.color.background,
-        boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-        color: uiTheme.color.foreground,
-      },
-      ':disabled': {
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
+    '[data-orientation=vertical]': {
+      flexDirection: 'column',
+      height: 'auto',
+      rowGap: 4,
     },
   },
-);
+  panel: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    marginTop: 12,
+    padding: 16,
+    '[data-state=inactive]': {
+      display: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    width: '100%',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  trigger: {
+    alignItems: 'center',
+    appearance: 'none',
+    backgroundColor: 'transparent',
+    borderRadius: uiTheme.radius.sm,
+    borderStyle: 'none',
+    color: uiTheme.color.foregroundMuted,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 32,
+    justifyContent: 'center',
+    paddingInline: 12,
+    transitionProperty: 'background-color, color, box-shadow',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-state=active]': {
+      backgroundColor: uiTheme.color.background,
+      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+      color: uiTheme.color.foreground,
+    },
+    ':disabled': {
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+});
 
 export const tabsClasses = [style.attrs(tabsStyles.root).class ?? ''] as const;
 export const tabsListClasses = [style.attrs(tabsStyles.list).class ?? ''] as const;

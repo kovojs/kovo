@@ -21,110 +21,104 @@ export interface ButtonProps {
   variant?: ButtonVariant;
 }
 
-const base = style.create(
-  {
-    root: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      justifyContent: 'center',
-      transitionProperty: 'background-color, border-color, color, box-shadow',
-      ':focus-visible': {
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-        outlineOffset: 2,
-      },
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
+const base = style.create({
+  root: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    justifyContent: 'center',
+    transitionProperty: 'background-color, border-color, color, box-shadow',
+    ':focus-visible': {
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+      outlineOffset: 2,
+    },
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
     },
   },
-);
+});
 
-const sizes = style.create(
-  {
-    sm: {
-      columnGap: 6,
-      height: 32,
-      paddingInline: 10,
-    },
-    md: {
-      columnGap: 8,
-      height: 36,
-      paddingInline: 12,
-    },
+const sizes = style.create({
+  sm: {
+    columnGap: 6,
+    height: 32,
+    paddingInline: 10,
   },
-);
+  md: {
+    columnGap: 8,
+    height: 36,
+    paddingInline: 12,
+  },
+});
 
-const variants = style.create(
-  {
-    destructive: {
-      backgroundColor: uiTheme.color.danger.border,
-      borderColor: uiTheme.color.danger.border,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foregroundInverse,
-      ':focus-visible': {
-        outlineColor: uiTheme.color.danger.border,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.danger.background,
-        borderColor: uiTheme.color.danger.background,
-        color: uiTheme.color.danger.foreground,
-      },
+const variants = style.create({
+  destructive: {
+    backgroundColor: uiTheme.color.danger.border,
+    borderColor: uiTheme.color.danger.border,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foregroundInverse,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.danger.border,
     },
-    ghost: {
-      backgroundColor: 'transparent',
-      borderColor: 'transparent',
-      color: uiTheme.color.foreground,
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-      },
-    },
-    outline: {
-      backgroundColor: 'transparent',
-      borderColor: uiTheme.color.border,
-      color: uiTheme.color.foreground,
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-      },
-    },
-    primary: {
-      backgroundColor: uiTheme.color.accent,
-      borderColor: uiTheme.color.accentBorder,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.accentForeground,
-      ':focus-visible': {
-        outlineColor: uiTheme.color.accentBorder,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.accentHover,
-      },
-    },
-    secondary: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+    ':hover': {
+      backgroundColor: uiTheme.color.danger.background,
+      borderColor: uiTheme.color.danger.background,
+      color: uiTheme.color.danger.foreground,
     },
   },
-);
+  ghost: {
+    backgroundColor: 'transparent',
+    borderColor: 'transparent',
+    color: uiTheme.color.foreground,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+    },
+  },
+  outline: {
+    backgroundColor: 'transparent',
+    borderColor: uiTheme.color.border,
+    color: uiTheme.color.foreground,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+    },
+  },
+  primary: {
+    backgroundColor: uiTheme.color.accent,
+    borderColor: uiTheme.color.accentBorder,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.accentForeground,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.accentBorder,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.accentHover,
+    },
+  },
+  secondary: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+});
 
 export const buttonStyles = {
   base,

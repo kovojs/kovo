@@ -33,48 +33,46 @@ export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
   href?: string;
 }
 
-export const breadcrumbStyles = style.create(
-  {
-    current: {
+export const breadcrumbStyles = style.create({
+  current: {
+    color: uiTheme.color.foreground,
+    fontWeight: 500,
+  },
+  item: {
+    alignItems: 'center',
+    columnGap: 6,
+    display: 'inline-flex',
+  },
+  link: {
+    color: uiTheme.color.foregroundMuted,
+    fontWeight: 500,
+    transitionProperty: 'color',
+    ':hover': {
       color: uiTheme.color.foreground,
-      fontWeight: 500,
-    },
-    item: {
-      alignItems: 'center',
-      columnGap: 6,
-      display: 'inline-flex',
-    },
-    link: {
-      color: uiTheme.color.foregroundMuted,
-      fontWeight: 500,
-      transitionProperty: 'color',
-      ':hover': {
-        color: uiTheme.color.foreground,
-      },
-    },
-    list: {
-      alignItems: 'center',
-      columnGap: 6,
-      display: 'flex',
-      flexWrap: 'wrap',
-    },
-    root: {
-      alignItems: 'center',
-      color: uiTheme.color.foregroundMuted,
-      columnGap: 6,
-      display: 'flex',
-      flexWrap: 'wrap',
-      fontSize: 14,
-    },
-    separator: {
-      alignItems: 'center',
-      color: uiTheme.color.borderStrong,
-      display: 'inline-flex',
-      fontSize: 14,
-      userSelect: 'none',
     },
   },
-);
+  list: {
+    alignItems: 'center',
+    columnGap: 6,
+    display: 'flex',
+    flexWrap: 'wrap',
+  },
+  root: {
+    alignItems: 'center',
+    color: uiTheme.color.foregroundMuted,
+    columnGap: 6,
+    display: 'flex',
+    flexWrap: 'wrap',
+    fontSize: 14,
+  },
+  separator: {
+    alignItems: 'center',
+    color: uiTheme.color.borderStrong,
+    display: 'inline-flex',
+    fontSize: 14,
+    userSelect: 'none',
+  },
+});
 
 export const breadcrumbClasses = [
   style.attrs(breadcrumbStyles.root).class ?? '',

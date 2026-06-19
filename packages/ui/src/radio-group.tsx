@@ -68,92 +68,90 @@ export interface RadioGroupLabelProps extends RadioGroupStateProps {
   styles?: RadioGroupStyleOverrides;
 }
 
-export const radioGroupStyles = style.create(
-  {
-    item: {
-      alignItems: 'center',
-      columnGap: 8,
-      display: 'inline-flex',
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-    },
-    label: {
-      lineHeight: 1,
-      userSelect: 'none',
-      '[data-disabled]': {
-        cursor: 'not-allowed',
-      },
-    },
-    // Native radio kept for a11y/form state; visually hidden, stretched over
-    // the custom circle so it stays the click/focus target.
-    radio: {
-      cursor: 'pointer',
-      height: '100%',
-      left: 0,
-      margin: 0,
-      opacity: 0,
-      position: 'absolute',
-      top: 0,
-      width: '100%',
-      ':disabled': {
-        cursor: 'not-allowed',
-      },
-    },
-    // Custom circle. Carries data-state to paint the selected center dot.
-    radioControl: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.full,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxSizing: 'border-box',
-      display: 'inline-flex',
-      flexShrink: 0,
-      height: 18,
-      justifyContent: 'center',
-      position: 'relative',
-      transitionDuration: '0.15s',
-      transitionProperty: 'border-color, box-shadow',
-      width: 18,
-      '[data-state=checked]': {
-        borderColor: uiTheme.color.accent,
-      },
-      '[data-state=checked]::after': {
-        backgroundColor: uiTheme.color.accent,
-        borderRadius: uiTheme.radius.full,
-        content: '""',
-        height: 9,
-        width: 9,
-      },
-      ':focus-within': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
-      '[data-orientation=horizontal]': {
-        alignItems: 'center',
-        display: 'flex',
-        flexWrap: 'wrap',
-      },
+export const radioGroupStyles = style.create({
+  item: {
+    alignItems: 'center',
+    columnGap: 8,
+    display: 'inline-flex',
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
     },
   },
-);
+  label: {
+    lineHeight: 1,
+    userSelect: 'none',
+    '[data-disabled]': {
+      cursor: 'not-allowed',
+    },
+  },
+  // Native radio kept for a11y/form state; visually hidden, stretched over
+  // the custom circle so it stays the click/focus target.
+  radio: {
+    cursor: 'pointer',
+    height: '100%',
+    left: 0,
+    margin: 0,
+    opacity: 0,
+    position: 'absolute',
+    top: 0,
+    width: '100%',
+    ':disabled': {
+      cursor: 'not-allowed',
+    },
+  },
+  // Custom circle. Carries data-state to paint the selected center dot.
+  radioControl: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.full,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxSizing: 'border-box',
+    display: 'inline-flex',
+    flexShrink: 0,
+    height: 18,
+    justifyContent: 'center',
+    position: 'relative',
+    transitionDuration: '0.15s',
+    transitionProperty: 'border-color, box-shadow',
+    width: 18,
+    '[data-state=checked]': {
+      borderColor: uiTheme.color.accent,
+    },
+    '[data-state=checked]::after': {
+      backgroundColor: uiTheme.color.accent,
+      borderRadius: uiTheme.radius.full,
+      content: '""',
+      height: 9,
+      width: 9,
+    },
+    ':focus-within': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+    '[data-orientation=horizontal]': {
+      alignItems: 'center',
+      display: 'flex',
+      flexWrap: 'wrap',
+    },
+  },
+});
 
 export const radioGroupClasses = [style.attrs(radioGroupStyles.root).class ?? ''] as const;
 export const radioGroupItemClasses = [style.attrs(radioGroupStyles.item).class ?? ''] as const;

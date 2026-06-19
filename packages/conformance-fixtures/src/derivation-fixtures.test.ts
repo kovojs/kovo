@@ -75,12 +75,13 @@ describe('derivation contract fixtures', () => {
       ) as (
         t: () => JsonValue,
         n: () => JsonValue,
-      ) => (current: JsonValue, input: JsonValue) => JsonValue;
+      ) => (current: JsonValue, input: JsonValue) => void;
       const transform = factory(
         () => '__tempId__',
         () => 0,
       );
-      const generated = transform(structuredClone(fixture.before), fixture.input);
+      const generated = structuredClone(fixture.before);
+      expect(transform(generated, fixture.input)).toBeUndefined();
       const interpreted = applyPatchProgram(fixture.before, fixture.input, fixture.program, {
         now: () => 0,
         tempId: () => '__tempId__',

@@ -114,6 +114,7 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
                 reportRuntimeContextError(options.onError, error, { phase: 'mutation-broadcast' });
               }
             : undefined,
+          importModule: options.enhancedMutations.importModule ?? options.importModule,
         }),
         onAppliedQueries: rememberAppliedQueries,
       })

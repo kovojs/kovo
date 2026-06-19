@@ -288,7 +288,7 @@ describe('api-ref generator', () => {
       '@kovojs/drizzle': 4,
       '@kovojs/browser': 90,
       '@kovojs/server': 160,
-      '@kovojs/style': 39,
+      '@kovojs/style': 35,
       '@kovojs/better-auth': 13,
       '@kovojs/compiler': 12,
       '@kovojs/cli': 12,

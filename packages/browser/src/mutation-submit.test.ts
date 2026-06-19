@@ -329,7 +329,7 @@ describe('enhanced mutation submit', () => {
       form: {
         action: '/_m/chat/send',
         getAttribute(name: string) {
-          return name === 'data-stream' ? '' : null;
+          return name === 'data-mutation-stream' ? 'true' : null;
         },
         method: 'post',
       },

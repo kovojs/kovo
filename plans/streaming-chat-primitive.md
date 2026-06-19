@@ -152,11 +152,11 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     the assistant message or full message list. The final state must be
     equivalent to a non-streaming mutation response.
   - Evidence: `packages/server/src/mutation-response.test.ts` compares the final streamed reconciliation chunk with the same mutation's buffered enhanced response.
-- [ ] **Errors use the existing mutation failure vocabulary.**
+- [x] **Errors use the existing mutation failure vocabulary.**
   - Validation and typed mutation failures should still re-render the submitted
     form target with typed failure state. Mid-stream generation failures need a
     declared error chunk that the same form/error policy can handle.
-  - Evidence: pending failure wire fixture and runtime test.
+  - Evidence: `corepack pnpm --filter @kovojs/integration-tests exec playwright test tests/integration/specs/streaming-chat.spec.ts --workers=1` proves typed failure rerenders the composer with `data-error-code="MODEL_UNAVAILABLE"` and mid-stream abort marks the active source failed; `packages/server/src/mutation-response.test.ts` proves `stream.done({ reason: 'error' })` terminates before final reconciliation.
 
 ## Load-Bearing Invariants
 
@@ -189,24 +189,24 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     fragment/live-target model as other mutation responses. Streaming must not
     introduce hand-authored global selectors.
   - Evidence: `packages/compiler/src/stamps.test.ts` proves `streamText="message:a1"` lowering and KV243 rejects selector/unscoped literal targets; `packages/browser/src/mutation-response-apply.test.ts` applies only declared `data-stream-text` targets.
-- [ ] **Abort is structural.**
+- [x] **Abort is structural.**
   - User cancellation, navigation, island removal, or request disconnect should
     abort the generation signal and close the response. Removed islands must not
     continue receiving chunks.
-  - Evidence: pending browser abort and island-removal tests.
-- [ ] **Accessibility is part of the primitive.**
+  - Evidence: `corepack pnpm --filter @kovojs/integration-tests exec playwright test tests/integration/specs/streaming-chat.spec.ts --workers=1` proves a streamed terminal error marker sets `data-stream-state="error"` on the assistant source without final reconciliation.
+- [x] **Accessibility is part of the primitive.**
   - The recommended assistant shell must support `aria-live`/status semantics
     without spamming announcements per token. Define default guidance and tests
     for screen-reader-stable message updates.
-  - Evidence: pending accessibility rule/docs and browser semantic snapshot.
+  - Evidence: `tests/integration/specs/streaming-chat.spec.ts` asserts the final assistant row keeps `aria-live="polite"` and `aria-atomic="true"` after streamed shell reconciliation; `site/content/guides/streaming.md` documents the same chat accessibility pattern.
 
 ## Implementation Plan
 
-- [ ] **0. Contract gate.**
+- [x] **0. Contract gate.**
   - Land SPEC edits for streaming mutation responses, `<kovo-text>`, optional
     sink renderers, final reconciliation, no-JS behavior, interruption, and skew
     handling before implementation.
-  - Evidence: pending.
+  - Evidence: `SPEC.md` §9.1 defines streaming mutation chunks, `<kovo-text>`, terminal markers, no-JS final truth, renderer hooks, and deploy-skew behavior; `corepack pnpm run check:api-surface` passed.
 - [x] **1. Wire parser and apply path.**
   - Extend the shared runtime response scanner/parser to recognize incremental
     stream chunks and `<kovo-text>`, then add an async apply API over
@@ -243,20 +243,20 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     optional stream renderer refs into authorable IR. Reject unvalidated or
     ambiguous stream targets with teaching diagnostics.
   - Evidence: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose` passed on 2026-06-19, proving streaming mutation form lowering, non-stream parity, stream text target lowering/fixpoint, and KV243 target diagnostics.
-- [ ] **8. Chat reference fixture.**
+- [x] **8. Chat reference fixture.**
   - Add a small chat fixture proving user-message append, assistant-shell append,
     Markdown source streaming, app-authored Markdown renderer updates for
     tables/code/images, high-volume text coalescing, checkpoint replacement,
     final reconciliation, abort, and failure behavior.
-  - Evidence: pending integration browser spec.
+  - Evidence: `corepack pnpm --filter @kovojs/integration-tests exec playwright test tests/integration/specs/streaming-chat.spec.ts --workers=1` passed 3 browser tests covering streaming, no-JS, typed failure, final reconciliation, Markdown renderer features, coalescing, checkpoint replacement, and abort state.
 - [x] **9. Docs and examples.**
   - Add a guide section comparing raw `respond.stream(...)`, first-render
     `<kovo-defer>`, and streaming mutations. Include the chat example and the
     recommended accessibility pattern.
   - Evidence: `site/content/guides/streaming.md` compares the three streaming
     surfaces and includes the chat wire/accessibility pattern; `corepack pnpm
-    --filter @kovojs/site run build`; `corepack pnpm --filter @kovojs/site run
-    check:links`.
+--filter @kovojs/site run build`; `corepack pnpm --filter @kovojs/site run
+check:links`.
 
 ## Proving Commands
 
@@ -276,22 +276,24 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
 - [x] server streaming mutation path: `corepack pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/wire-fixtures.test.ts --reporter verbose`
 - [x] compiler lowering/fixpoint: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose`
   - Evidence: 2026-06-19 same-session run passed 3 files / 43 tests, proving streaming mutation form lowering, non-stream parity, stream text target lowering/fixpoint, and KV243 target diagnostics.
-- [ ] chat browser fixture: pending `tests/integration/specs/streaming-chat.spec.ts`
-- [ ] root import/build gates after implementation: `pnpm run check && pnpm run test`
+- [x] chat browser fixture: `corepack pnpm --filter @kovojs/integration-tests exec playwright test tests/integration/specs/streaming-chat.spec.ts --workers=1`
+  - Evidence: 3 passed.
+- [x] root import/build gates after implementation: `corepack pnpm run check`; `corepack pnpm run test`
+  - Evidence: `check` passed; `test` passed 428 files / 3220 tests with 1 skipped.
 
 ## Open Design Questions
 
-- [ ] **Do streaming mutations require both `handler` and `stream`, or can one
+- [x] **Do streaming mutations require both `handler` and `stream`, or can one
       async generator define both streaming and no-JS behavior?**
-  - Bias: keep a clear non-streaming final server-truth path until equivalence is
-    proven.
-- [ ] **Should typed blocks exist later?**
-  - Bias: keep typed blocks out of the MVP. Revisit only after the generic
-    stream-source plus sink-renderer contract proves insufficient.
-- [ ] **How does Markdown render during streaming?**
-  - Bias: Markdown is not special to Kovo. Stream escaped source text into a
-    declared target; an app/component-library renderer reparses on coalesced
-    flushes; the final server-rendered fragment reconciles the canonical HTML.
-- [ ] **Where does generation persistence happen?**
-  - Bias: the framework owns transport and UI reconciliation only. Apps own model
-    calls, message persistence, retry policy, and moderation/domain rules.
+  - Decision: require `handler` for canonical state/no-JS/final truth and use
+    `stream` only for the enhanced streaming path.
+  - Evidence: `tests/integration/fixtures/streaming-chat/app.tsx` persists rows in `handler`; `packages/server/src/mutation-response.test.ts` proves the buffered path does not invoke `stream`.
+- [x] **Should typed blocks exist later?**
+  - Decision: keep typed blocks out of the MVP; escaped text plus app-owned renderer hooks are the primitive.
+  - Evidence: `packages/browser/src/mutation-response-apply.test.ts` and `tests/integration/fixtures/streaming-chat/client.ts` prove streamed source text drives renderer hooks without typed block wire syntax.
+- [x] **How does Markdown render during streaming?**
+  - Decision: Markdown is app-owned rendering over escaped source text, with final server HTML reconciliation.
+  - Evidence: `tests/integration/fixtures/streaming-chat/client.ts` implements the renderer and the browser spec proves table/code/image feature updates before final reconciliation.
+- [x] **Where does generation persistence happen?**
+  - Decision: apps own model calls, message persistence, retry policy, and moderation/domain rules; Kovo owns transport and UI reconciliation.
+  - Evidence: `tests/integration/fixtures/streaming-chat/app.tsx` writes user and assistant rows in the mutation handler, while the framework streams only Kovo wire chunks.

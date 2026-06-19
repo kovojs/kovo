@@ -75,105 +75,103 @@ export interface ContextMenuSeparatorProps {
   styles?: ContextMenuStyleOverrides;
 }
 
-export const contextMenuStyles = style.create(
-  {
-    content: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      marginTop: 4,
-      minWidth: 180,
-      outlineStyle: 'none',
-      padding: 4,
-      position: 'absolute',
-      zIndex: 50,
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '[data-state=open]': {
-        display: 'block',
-      },
+export const contextMenuStyles = style.create({
+  content: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    marginTop: 4,
+    minWidth: 180,
+    outlineStyle: 'none',
+    padding: 4,
+    position: 'absolute',
+    zIndex: 50,
+    '[data-state=closed]': {
+      display: 'none',
     },
-    group: {
-      display: 'grid',
-      gap: 4,
-      paddingBlock: 4,
-      paddingInline: 4,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    item: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.sm,
-      color: uiTheme.color.foregroundMuted,
-      columnGap: 8,
-      cursor: 'default',
-      display: 'flex',
-      fontSize: 14,
-      outlineStyle: 'none',
-      paddingBlock: 6,
-      paddingInline: 8,
-      textAlign: 'left',
-      width: '100%',
-      '[data-disabled]': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      '[data-highlighted]': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtle,
-        color: uiTheme.color.foreground,
-      },
-    },
-    root: {
-      color: uiTheme.color.foreground,
-      fontSize: 14,
-      position: 'relative',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-    },
-    separator: {
-      backgroundColor: uiTheme.color.border,
-      height: 1,
-      marginBlock: 4,
-    },
-    trigger: {
-      backgroundColor: uiTheme.color.backgroundRaised,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'dashed',
-      borderWidth: 1,
-      color: uiTheme.color.foregroundMuted,
-      fontSize: 14,
-      outlineStyle: 'none',
-      paddingBlock: 12,
-      paddingInline: 16,
-      '[data-disabled]': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      '[data-state=open]': {
-        borderColor: uiTheme.color.borderStrong,
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
+    '[data-state=open]': {
+      display: 'block',
     },
   },
-);
+  group: {
+    display: 'grid',
+    gap: 4,
+    paddingBlock: 4,
+    paddingInline: 4,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  item: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.sm,
+    color: uiTheme.color.foregroundMuted,
+    columnGap: 8,
+    cursor: 'default',
+    display: 'flex',
+    fontSize: 14,
+    outlineStyle: 'none',
+    paddingBlock: 6,
+    paddingInline: 8,
+    textAlign: 'left',
+    width: '100%',
+    '[data-disabled]': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    '[data-highlighted]': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      color: uiTheme.color.foreground,
+    },
+  },
+  root: {
+    color: uiTheme.color.foreground,
+    fontSize: 14,
+    position: 'relative',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+  },
+  separator: {
+    backgroundColor: uiTheme.color.border,
+    height: 1,
+    marginBlock: 4,
+  },
+  trigger: {
+    backgroundColor: uiTheme.color.backgroundRaised,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'dashed',
+    borderWidth: 1,
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    outlineStyle: 'none',
+    paddingBlock: 12,
+    paddingInline: 16,
+    '[data-disabled]': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    '[data-state=open]': {
+      borderColor: uiTheme.color.borderStrong,
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+  },
+});
 
 export const contextMenuClasses = [style.attrs(contextMenuStyles.root).class ?? ''] as const;
 export const contextMenuTriggerClasses = [

@@ -78,10 +78,7 @@ describe('compileComponentModule', () => {
   it('records the consumed compile dependency footprint for incremental cache invalidation', () => {
     const packageComponentPrefixes = [{ packageName: '@acme/widgets', prefix: 'acme-' }];
     const previousRegistryFacts = {
-      components: [
-        'components/legacy-card/legacy-card',
-        'components/previous-cart/cart-badge',
-      ],
+      components: ['components/legacy-card/legacy-card', 'components/previous-cart/cart-badge'],
     };
     const queryShapeFacts = [
       {

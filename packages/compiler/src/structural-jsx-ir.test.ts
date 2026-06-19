@@ -186,8 +186,8 @@ export const ImportOrder = component({
       export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
 
       export const ImportOrder$queryUpdatePlans = {
-        "product"(root, value) {
-          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "style", selector: "[data-derive=\\"product.ImportOrder$img_style_derive\\"]", select(value) { return ImportOrder$img_style_derive.run(value); } }], templateStamps: [] });
+        "product"(root, value, context = {}) {
+          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "style", selector: "[data-derive=\\"product.ImportOrder$img_style_derive\\"]", select(value, root, context) { return ImportOrder$img_style_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };
       ",

@@ -840,8 +840,7 @@ describe('server mutation primitives', () => {
     const response = await renderMutationEndpointResponse(sendMessage, {
       fragmentRenderers: [
         {
-          render: () =>
-            '<article data-role="assistant"><p>Hello server truth:a1</p></article>',
+          render: () => '<article data-role="assistant"><p>Hello server truth:a1</p></article>',
           target: 'messages',
         },
       ],
@@ -873,8 +872,7 @@ describe('server mutation primitives', () => {
     const bufferedResponse = await renderMutationEndpointResponse(sendMessage, {
       fragmentRenderers: [
         {
-          render: () =>
-            '<article data-role="assistant"><p>Hello server truth:a1</p></article>',
+          render: () => '<article data-role="assistant"><p>Hello server truth:a1</p></article>',
           target: 'messages',
         },
       ],
@@ -928,6 +926,41 @@ describe('server mutation primitives', () => {
     });
     expect(response.body).not.toBeInstanceOf(ReadableStream);
     expect(streamSpy).not.toHaveBeenCalled();
+  });
+
+  it('lets stream.done terminate a streaming mutation before final reconciliation', async () => {
+    const sendMessage = mutation('chat/send-done', {
+      input: s.object({ body: s.string() }),
+      handler(input) {
+        return { body: input.body };
+      },
+      *stream() {
+        yield stream.text('assistant:a1', 'partial');
+        yield stream.done({ reason: 'error' });
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      fragmentRenderers: [
+        {
+          render: () => '<article>final truth</article>',
+          target: 'messages',
+        },
+      ],
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Stream': 'true',
+        'Kovo-Targets': 'messages=chat',
+      },
+      rawInput: { body: 'Hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    await expect(readResponseBody(response.body)).resolves.toBe(
+      '<kovo-text target="assistant:a1">partial</kovo-text>\n<kovo-done reason="error"></kovo-done>\n',
+    );
   });
 
   it('does not invoke mutation streams for CSRF failures', async () => {

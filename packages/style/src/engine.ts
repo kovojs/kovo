@@ -211,7 +211,7 @@ function styleStackCallSite(): { column: number; filePath: string; line: number 
   for (const line of stack.split('\n')) {
     const rawFrame = line.trim().replace(/^at\s+/, '');
     const frame = rawFrame.includes('(')
-      ? (rawFrame.slice(rawFrame.lastIndexOf('(') + 1, rawFrame.endsWith(')') ? -1 : undefined))
+      ? rawFrame.slice(rawFrame.lastIndexOf('(') + 1, rawFrame.endsWith(')') ? -1 : undefined)
       : rawFrame;
     const match =
       /\(?((?:file:\/\/)?\/[^():]+):(\d+):(\d+)\)?$/.exec(frame) ??

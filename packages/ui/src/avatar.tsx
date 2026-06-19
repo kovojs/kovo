@@ -46,44 +46,42 @@ export interface AvatarFallbackProps extends AvatarStateProps {
   styles?: AvatarStyleOverrides;
 }
 
-export const avatarStyles = style.create(
-  {
-    fallback: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderRadius: uiTheme.radius.full,
-      display: 'flex',
-      height: '100%',
-      justifyContent: 'center',
-      width: '100%',
-      '[data-state=loaded]': {
-        display: 'none',
-      },
-    },
-    image: {
-      aspectRatio: '1 / 1',
-      height: '100%',
-      objectFit: 'cover',
-      width: '100%',
-      '[data-state=error]': {
-        display: 'none',
-      },
-    },
-    root: {
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderRadius: uiTheme.radius.full,
-      color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      flexShrink: 0,
-      fontSize: 14,
-      fontWeight: 500,
-      height: 40,
-      overflow: 'hidden',
-      position: 'relative',
-      width: 40,
+export const avatarStyles = style.create({
+  fallback: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderRadius: uiTheme.radius.full,
+    display: 'flex',
+    height: '100%',
+    justifyContent: 'center',
+    width: '100%',
+    '[data-state=loaded]': {
+      display: 'none',
     },
   },
-);
+  image: {
+    aspectRatio: '1 / 1',
+    height: '100%',
+    objectFit: 'cover',
+    width: '100%',
+    '[data-state=error]': {
+      display: 'none',
+    },
+  },
+  root: {
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderRadius: uiTheme.radius.full,
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    flexShrink: 0,
+    fontSize: 14,
+    fontWeight: 500,
+    height: 40,
+    overflow: 'hidden',
+    position: 'relative',
+    width: 40,
+  },
+});
 
 export const avatarClasses = [style.attrs(avatarStyles.root).class ?? ''] as const;
 export const avatarImageClasses = [style.attrs(avatarStyles.image).class ?? ''] as const;

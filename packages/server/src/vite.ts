@@ -260,9 +260,7 @@ function isAuthoredAppSourceFile(fileName: string, app: string, root: string): b
   return normalized === relativeAppDir || normalized.startsWith(`${relativeAppDir}/`);
 }
 
-function stylesheetAssetsFromCssSplitChunks(
-  chunks: CssSplitChunks | undefined,
-):
+function stylesheetAssetsFromCssSplitChunks(chunks: CssSplitChunks | undefined):
   | {
       app: readonly StylesheetAsset[];
       fragments: Readonly<Record<string, readonly StylesheetAsset[]>>;

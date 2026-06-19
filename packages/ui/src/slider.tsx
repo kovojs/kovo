@@ -65,106 +65,104 @@ export interface SliderThumbProps extends SliderPartProps {
   valueText?: string;
 }
 
-export const sliderStyles = style.create(
-  {
-    // Native range kept for keyboard/form/validation; visually hidden but
-    // stretched over the track so it stays the pointer/focus target.
-    input: {
-      cursor: 'pointer',
-      height: '100%',
-      left: 0,
-      margin: 0,
-      opacity: 0,
-      position: 'absolute',
-      top: 0,
-      width: '100%',
-      zIndex: 2,
-      ':disabled': {
-        cursor: 'not-allowed',
-      },
-    },
-    // Filled portion. Width/height set inline from the value ratio.
-    range: {
-      backgroundColor: uiTheme.color.accent,
-      borderRadius: uiTheme.radius.full,
-      display: 'block',
-      height: '100%',
-      left: 0,
-      position: 'absolute',
-      top: 0,
-      '[data-orientation=vertical]': {
-        bottom: 0,
-        height: 'auto',
-        top: 'auto',
-        width: '100%',
-      },
-    },
-    // Anchor box: positions the track + overlaid input + thumb on one line.
-    root: {
-      alignItems: 'center',
-      color: uiTheme.color.foreground,
-      display: 'flex',
-      fontSize: 14,
-      minHeight: 20,
-      position: 'relative',
-      touchAction: 'none',
-      width: '100%',
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-invalid]': {
-        color: uiTheme.color.danger.foreground,
-      },
-      '[data-orientation=vertical]': {
-        display: 'inline-flex',
-        height: 160,
-        minHeight: 0,
-        width: 20,
-      },
-    },
-    // Knob. left/top set inline from the value ratio.
-    thumb: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.accent,
-      borderRadius: uiTheme.radius.full,
-      borderStyle: 'solid',
-      borderWidth: 2,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.2)',
-      boxSizing: 'border-box',
-      display: 'block',
-      height: 16,
-      marginLeft: -8,
-      pointerEvents: 'none',
-      position: 'absolute',
-      top: '50%',
-      transform: 'translateY(-50%)',
-      width: 16,
-      zIndex: 3,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-orientation=vertical]': {
-        left: '50%',
-        marginLeft: 0,
-        marginTop: -8,
-        top: 'auto',
-        transform: 'translateX(-50%)',
-      },
-    },
-    track: {
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      borderRadius: uiTheme.radius.full,
-      height: 6,
-      overflow: 'hidden',
-      position: 'relative',
-      width: '100%',
-      '[data-orientation=vertical]': {
-        height: '100%',
-        width: 6,
-      },
+export const sliderStyles = style.create({
+  // Native range kept for keyboard/form/validation; visually hidden but
+  // stretched over the track so it stays the pointer/focus target.
+  input: {
+    cursor: 'pointer',
+    height: '100%',
+    left: 0,
+    margin: 0,
+    opacity: 0,
+    position: 'absolute',
+    top: 0,
+    width: '100%',
+    zIndex: 2,
+    ':disabled': {
+      cursor: 'not-allowed',
     },
   },
-);
+  // Filled portion. Width/height set inline from the value ratio.
+  range: {
+    backgroundColor: uiTheme.color.accent,
+    borderRadius: uiTheme.radius.full,
+    display: 'block',
+    height: '100%',
+    left: 0,
+    position: 'absolute',
+    top: 0,
+    '[data-orientation=vertical]': {
+      bottom: 0,
+      height: 'auto',
+      top: 'auto',
+      width: '100%',
+    },
+  },
+  // Anchor box: positions the track + overlaid input + thumb on one line.
+  root: {
+    alignItems: 'center',
+    color: uiTheme.color.foreground,
+    display: 'flex',
+    fontSize: 14,
+    minHeight: 20,
+    position: 'relative',
+    touchAction: 'none',
+    width: '100%',
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-invalid]': {
+      color: uiTheme.color.danger.foreground,
+    },
+    '[data-orientation=vertical]': {
+      display: 'inline-flex',
+      height: 160,
+      minHeight: 0,
+      width: 20,
+    },
+  },
+  // Knob. left/top set inline from the value ratio.
+  thumb: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.accent,
+    borderRadius: uiTheme.radius.full,
+    borderStyle: 'solid',
+    borderWidth: 2,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.2)',
+    boxSizing: 'border-box',
+    display: 'block',
+    height: 16,
+    marginLeft: -8,
+    pointerEvents: 'none',
+    position: 'absolute',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    width: 16,
+    zIndex: 3,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-orientation=vertical]': {
+      left: '50%',
+      marginLeft: 0,
+      marginTop: -8,
+      top: 'auto',
+      transform: 'translateX(-50%)',
+    },
+  },
+  track: {
+    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    borderRadius: uiTheme.radius.full,
+    height: 6,
+    overflow: 'hidden',
+    position: 'relative',
+    width: '100%',
+    '[data-orientation=vertical]': {
+      height: '100%',
+      width: 6,
+    },
+  },
+});
 
 function valuePercent(ratio: string | undefined): string {
   const parsed = Number(ratio);

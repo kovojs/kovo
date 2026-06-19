@@ -66,142 +66,140 @@ export interface ToastActionProps {
 
 export type ToastCloseProps = ToastActionProps;
 
-export const toastStyles = style.create(
-  {
-    action: {
-      alignItems: 'center',
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.borderStrong,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: uiTheme.color.foreground,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 32,
-      justifyContent: 'center',
-      paddingInline: 12,
-      transitionProperty: 'background-color, color',
-      ':disabled': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
+export const toastStyles = style.create({
+  action: {
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    color: uiTheme.color.foreground,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 32,
+    justifyContent: 'center',
+    paddingInline: 12,
+    transitionProperty: 'background-color, color',
+    ':disabled': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
     },
-    close: {
-      alignItems: 'center',
-      borderRadius: uiTheme.radius.md,
-      color: uiTheme.color.foregroundMuted,
-      display: 'inline-flex',
-      height: 32,
-      justifyContent: 'center',
-      transitionProperty: 'background-color, color',
-      width: 32,
-      ':disabled': {
-        cursor: 'not-allowed',
-        opacity: 0.5,
-      },
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-        color: uiTheme.color.foreground,
-      },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
-    description: {
-      color: uiTheme.color.foregroundMuted,
-    },
-    root: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      borderRadius: uiTheme.radius.md,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-      color: uiTheme.color.foreground,
-      display: 'grid',
-      fontSize: 14,
-      padding: 16,
-      rowGap: 8,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-state=closed]': {
-        display: 'none',
-      },
-      '[data-variant=error]': {
-        backgroundColor: uiTheme.color.danger.background,
-        borderColor: uiTheme.color.danger.border,
-      },
-      '[data-variant=info]': {
-        backgroundColor: uiTheme.color.info.background,
-        borderColor: uiTheme.color.info.border,
-      },
-      '[data-variant=success]': {
-        backgroundColor: uiTheme.color.success.background,
-        borderColor: uiTheme.color.success.border,
-      },
-      '[data-variant=warning]': {
-        backgroundColor: uiTheme.color.warning.background,
-        borderColor: uiTheme.color.warning.border,
-      },
-    },
-    title: {
-      color: uiTheme.color.foreground,
-      fontWeight: 500,
-    },
-    viewport: {
-      display: 'grid',
-      maxWidth: 384,
-      outlineStyle: 'none',
-      padding: 16,
-      position: 'fixed',
-      rowGap: 8,
-      width: '100%',
-      zIndex: 50,
-      '[data-disabled]': {
-        opacity: 0.5,
-      },
-      '[data-placement=bottom-center]': {
-        bottom: 0,
-        left: '50%',
-      },
-      '[data-placement=bottom-end]': {
-        bottom: 0,
-        right: 0,
-      },
-      '[data-placement=bottom-start]': {
-        bottom: 0,
-        left: 0,
-      },
-      '[data-placement=top-center]': {
-        left: '50%',
-        top: 0,
-      },
-      '[data-placement=top-end]': {
-        right: 0,
-        top: 0,
-      },
-      '[data-placement=top-start]': {
-        left: 0,
-        top: 0,
-      },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
     },
   },
-);
+  close: {
+    alignItems: 'center',
+    borderRadius: uiTheme.radius.md,
+    color: uiTheme.color.foregroundMuted,
+    display: 'inline-flex',
+    height: 32,
+    justifyContent: 'center',
+    transitionProperty: 'background-color, color',
+    width: 32,
+    ':disabled': {
+      cursor: 'not-allowed',
+      opacity: 0.5,
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      color: uiTheme.color.foreground,
+    },
+  },
+  description: {
+    color: uiTheme.color.foregroundMuted,
+  },
+  root: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    color: uiTheme.color.foreground,
+    display: 'grid',
+    fontSize: 14,
+    padding: 16,
+    rowGap: 8,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-state=closed]': {
+      display: 'none',
+    },
+    '[data-variant=error]': {
+      backgroundColor: uiTheme.color.danger.background,
+      borderColor: uiTheme.color.danger.border,
+    },
+    '[data-variant=info]': {
+      backgroundColor: uiTheme.color.info.background,
+      borderColor: uiTheme.color.info.border,
+    },
+    '[data-variant=success]': {
+      backgroundColor: uiTheme.color.success.background,
+      borderColor: uiTheme.color.success.border,
+    },
+    '[data-variant=warning]': {
+      backgroundColor: uiTheme.color.warning.background,
+      borderColor: uiTheme.color.warning.border,
+    },
+  },
+  title: {
+    color: uiTheme.color.foreground,
+    fontWeight: 500,
+  },
+  viewport: {
+    display: 'grid',
+    maxWidth: 384,
+    outlineStyle: 'none',
+    padding: 16,
+    position: 'fixed',
+    rowGap: 8,
+    width: '100%',
+    zIndex: 50,
+    '[data-disabled]': {
+      opacity: 0.5,
+    },
+    '[data-placement=bottom-center]': {
+      bottom: 0,
+      left: '50%',
+    },
+    '[data-placement=bottom-end]': {
+      bottom: 0,
+      right: 0,
+    },
+    '[data-placement=bottom-start]': {
+      bottom: 0,
+      left: 0,
+    },
+    '[data-placement=top-center]': {
+      left: '50%',
+      top: 0,
+    },
+    '[data-placement=top-end]': {
+      right: 0,
+      top: 0,
+    },
+    '[data-placement=top-start]': {
+      left: 0,
+      top: 0,
+    },
+  },
+});
 
 export const toastViewportClasses = [style.attrs(toastStyles.viewport).class ?? ''] as const;
 export const toastClasses = [style.attrs(toastStyles.root).class ?? ''] as const;

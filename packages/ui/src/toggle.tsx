@@ -17,64 +17,60 @@ export interface ToggleProps {
   variant?: ToggleVariant;
 }
 
-const base = style.create(
-  {
-    root: {
-      alignItems: 'center',
-      borderRadius: 6,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'inline-flex',
-      fontSize: 14,
-      fontWeight: 500,
-      height: 36,
-      justifyContent: 'center',
-      paddingInline: 12,
-      transitionProperty: 'background-color, border-color, color',
-      ':disabled': {
-        opacity: 0.5,
-        pointerEvents: 'none',
-      },
-      ':focus-visible': {
-        outlineOffset: 2,
-        outlineStyle: 'solid',
-        outlineWidth: 2,
-      },
-      '[data-state=pressed]': {
-        backgroundColor: uiTheme.color.accent,
-        color: uiTheme.color.accentForeground,
-      },
+const base = style.create({
+  root: {
+    alignItems: 'center',
+    borderRadius: 6,
+    borderStyle: 'solid',
+    borderWidth: 1,
+    display: 'inline-flex',
+    fontSize: 14,
+    fontWeight: 500,
+    height: 36,
+    justifyContent: 'center',
+    paddingInline: 12,
+    transitionProperty: 'background-color, border-color, color',
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    '[data-state=pressed]': {
+      backgroundColor: uiTheme.color.accent,
+      color: uiTheme.color.accentForeground,
     },
   },
-);
+});
 
-const variants = style.create(
-  {
-    outline: {
-      backgroundColor: uiTheme.color.background,
-      borderColor: uiTheme.color.border,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foreground,
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundRaised,
-      },
+const variants = style.create({
+  outline: {
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.border,
+    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    color: uiTheme.color.foreground,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
     },
-    subtle: {
-      backgroundColor: uiTheme.color.backgroundSubtle,
-      borderColor: 'transparent',
-      color: uiTheme.color.foreground,
-      ':focus-visible': {
-        outlineColor: uiTheme.color.borderStrong,
-      },
-      ':hover': {
-        backgroundColor: uiTheme.color.backgroundSubtleHigh,
-      },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
     },
   },
-);
+  subtle: {
+    backgroundColor: uiTheme.color.backgroundSubtle,
+    borderColor: 'transparent',
+    color: uiTheme.color.foreground,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.borderStrong,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+  },
+});
 
 export const toggleStyles = {
   base,
