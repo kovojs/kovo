@@ -125,13 +125,18 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
     `scripts/commerce-graph.mjs` temp graph helper, and non-Vite temp emit flow as landed; this
     ledger now points Phase 1 cache wrapping at those same Vite, fixture-test, and CLI/temp compile
     funnels.
-- [ ] Determinism audit of `compileComponentModule` output: enumerate every nondeterminism source
+- [x] Determinism audit of `compileComponentModule` output: enumerate every nondeterminism source
       (iteration order over `Map`/`Set`/object keys in `internal-graph.ts`, `registry.ts`, `css.ts`,
       `style.ts`; any `Date`/clock; absolute path / `process.cwd()` leakage into emitted source or
       registry facts; env-dependent branches). Fix each so output is a pure function of declared
       inputs.
-  - Evidence target: a test compiling the same corpus twice in two processes yields byte-identical
-    `files[]` + `registryFacts` for all 125 perf-corpus files.
+  - Evidence 2026-06-19:
+    `rg -n "Date\\(|Date\\.now|Math\\.random|randomUUID|process\\.cwd\\(|Object\\.keys|Object\\.entries|\\.values\\(\\)|new Map|new Set" packages/compiler/src -g '!*.test.ts' -g '!*.test.tsx' -g '!gallery-merge-fixtures-oracle.tsx' -S`
+    audited source-order and object/key iteration, clock/random, and cwd-sensitive sites; the
+    output-sensitive paths either sort, preserve declared input/source order, or use explicit
+    compile roots. `corepack pnpm exec vitest --run tests/compiler-determinism.test.ts` proves two
+    fresh processes emit byte-identical `files[]`, graph/fact arrays, CSS assets, and input
+    `registryFacts` signatures for all 125 perf-corpus files.
 - [x] Define `compilerBuildId` — a stable identity for the compiler+deps that, when changed, must
       bust every cache entry (package version + a content hash of `packages/compiler/dist` or the
       source tree in dev). Single exported helper consumed by the key builder.

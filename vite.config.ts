@@ -80,6 +80,7 @@ export default defineConfig({
         input: [
           { auto: true },
           { pattern: 'tests/compiler-perf.test.ts', base: 'workspace' },
+          { pattern: 'tests/compiler-perf-corpora.ts', base: 'workspace' },
           { pattern: 'tests/compiler-perf.budgets.json', base: 'workspace' },
           { pattern: 'packages/compiler/src/**/*.ts', base: 'workspace' },
         ],
@@ -168,7 +169,10 @@ export default defineConfig({
           { pattern: 'tests/kovo-check.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
+          { pattern: 'tests/compiler-determinism.test.ts', base: 'workspace' },
+          { pattern: 'tests/compiler-determinism-worker.mjs', base: 'workspace' },
           { pattern: 'tests/compiler-perf.test.ts', base: 'workspace' },
+          { pattern: 'tests/compiler-perf-corpora.ts', base: 'workspace' },
           { pattern: 'tests/compiler-perf.budgets.json', base: 'workspace' },
           { pattern: 'vite.config.ts', base: 'workspace' },
           { pattern: 'vitest.browser.config.ts', base: 'workspace' },
