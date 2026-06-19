@@ -1,30 +1,20 @@
-import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
+import { registerHooks } from 'node:module';
 
 import { createKovoVitePlugin } from './vite.ts';
-import type {
-  KovoViteDevServer,
-  KovoVitePlugin,
-  KovoVitePluginOptions,
-  KovoViteHotUpdateContext,
-} from './vite.ts';
+import type { KovoVitePlugin, KovoVitePluginOptions } from './vite.ts';
 
-const compileModuleId = fileURLToPath(new URL('./compile.ts', import.meta.url));
+const compileModuleUrl = new URL('./compile.ts', import.meta.url).href;
+let sourceResolutionHooksRegistered = false;
 
 /**
  * Config-safe Kovo Vite plugin entry. It keeps compiler internals out of Vite config startup and
- * asks Vite's module runner to load the TS compiler graph when component transforms actually run.
+ * loads the TS compiler graph lazily when component transforms actually run.
  */
 export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlugin {
-  let loadModule: KovoViteDevServer['ssrLoadModule'] | undefined;
-
   const plugin = createKovoVitePlugin(async (compileOptions) => {
-    if (!loadModule) {
-      throw new Error(
-        'kovoVitePlugin() requires Vite dev/test module loading before transforming components.',
-      );
-    }
-
-    const compiler = await loadModule(compileModuleId);
+    registerSourceResolutionHooks();
+    const compiler = await import(compileModuleUrl);
     if (typeof compiler.compileComponentModule !== 'function') {
       throw new Error('Kovo compiler module must export compileComponentModule.');
     }
@@ -34,15 +24,21 @@ export function kovoVitePlugin(options: KovoVitePluginOptions = {}): KovoVitePlu
     >;
   }, options);
 
-  return {
-    ...plugin,
-    configureServer(server) {
-      loadModule = server.ssrLoadModule?.bind(server);
-      return plugin.configureServer?.(server);
+  return plugin;
+}
+
+function registerSourceResolutionHooks(): void {
+  if (sourceResolutionHooksRegistered) return;
+  sourceResolutionHooksRegistered = true;
+
+  registerHooks({
+    resolve(specifier, context, nextResolve) {
+      if (specifier.startsWith('.') && specifier.endsWith('.js') && context.parentURL) {
+        const tsUrl = new URL(specifier.replace(/\.js$/, '.ts'), context.parentURL);
+        if (existsSync(tsUrl)) return nextResolve(tsUrl.href, context);
+      }
+
+      return nextResolve(specifier, context);
     },
-    async handleHotUpdate(context: KovoViteHotUpdateContext) {
-      loadModule = context.server.ssrLoadModule?.bind(context.server) ?? loadModule;
-      return plugin.handleHotUpdate?.(context) ?? [];
-    },
-  };
+  });
 }

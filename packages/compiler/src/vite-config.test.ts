@@ -1,17 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { kovoVitePlugin } from './vite-config.js';
 import type { KovoViteMiddleware } from './vite.js';
 
 describe('config-safe kovoVitePlugin', () => {
-  it('loads the compiler through Vite ssrLoadModule when transforming', async () => {
-    const compileComponentModule = vi.fn(() => ({
-      files: [
-        { kind: 'server', source: 'export function renderSource() {}' },
-        { kind: 'client', source: 'export const CartBadge$button_click = () => null;' },
-      ],
-    }));
-    const ssrLoadModule = vi.fn(async () => ({ compileComponentModule }));
+  it('loads the compiler lazily when transforming', async () => {
     const middlewares: KovoViteMiddleware[] = [];
     const plugin = kovoVitePlugin({ include: ['src/components'] });
 
@@ -22,24 +15,23 @@ describe('config-safe kovoVitePlugin', () => {
           middlewares.push(handler);
         },
       },
-      ssrLoadModule,
     });
 
     const transformed = await plugin.transform(
-      'import { component } from "@kovojs/core"; export const CartBadge = component({});',
+      `
+import { component } from '@kovojs/core';
+
+export const CartBadge = component({
+  render: () => <button>Cart</button>,
+});
+`,
       '/workspace/app/src/components/cart-badge.tsx',
     );
 
-    expect(transformed).toEqual({
-      code: 'export function renderSource() {}',
+    expect(transformed).toMatchObject({
+      code: expect.stringContaining('export const CartBadge = component({'),
       map: null,
     });
-    expect(ssrLoadModule).toHaveBeenCalledWith(
-      expect.stringContaining('/packages/compiler/src/compile.ts'),
-    );
-    expect(compileComponentModule).toHaveBeenCalledWith(
-      expect.objectContaining({ fileName: 'src/components/cart-badge.tsx' }),
-    );
     expect(middlewares).toHaveLength(1);
   });
 });

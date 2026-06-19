@@ -1,4 +1,5 @@
 import { isAbsolute, relative } from 'node:path';
+import { runInNewContext } from 'node:vm';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import type {
@@ -282,9 +283,31 @@ function transformViteCompileResult(
   recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
 
   return {
-    code: result.files.find((file) => file.kind === 'server')?.source ?? source,
+    code:
+      executableViteServerSource(result.files.find((file) => file.kind === 'server')?.source) ??
+      source,
     map: null,
   };
+}
+
+function executableViteServerSource(serverSource: string | undefined): string | undefined {
+  if (serverSource === undefined) return undefined;
+  const executableWrapper = serverSource.replace(
+    /^\s*export\s+function\s+renderSource\s*\(/m,
+    'function renderSource(',
+  );
+  if (executableWrapper === serverSource) return serverSource;
+
+  try {
+    const rendered = runInNewContext(
+      `${executableWrapper}\n;renderSource();`,
+      {},
+      { timeout: 1000 },
+    );
+    return typeof rendered === 'string' && rendered.length > 0 ? rendered : serverSource;
+  } catch {
+    return serverSource;
+  }
 }
 
 function isPromiseLike<T>(value: MaybePromise<T>): value is Promise<T> {

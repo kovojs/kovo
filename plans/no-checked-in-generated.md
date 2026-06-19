@@ -127,14 +127,16 @@ committed `graph.json`).
     `vitest.browser.config.ts`.
   - Verify a test importing an authored component sees lowered HTML (kovo stamps:
     `kovo-c`, `kovo-deps`, `data-bind`, `on:click`).
+  - Commerce slice evidence: `examples/commerce/vite.config.ts` now installs the pre-transform
+    compiler plugin; `pnpm --filter @kovojs/example-commerce test` passes against authored
+    component imports and validates stamped add-to-cart forms/fragments. Gap: root/browser/other
+    example activation remains open.
 - [x] Expose a config-safe compiler plugin entry for Vite/Vitest config loading.
-  - Evidence: `@kovojs/compiler/vite` (`packages/compiler/src/vite-config.ts`) loads without
-    pulling compiler internals into config startup and uses Vite `ssrLoadModule` for transforms;
+  - Evidence: `@kovojs/compiler/vite` (`packages/compiler/src/vite-config.ts`) keeps compiler
+    internals out of config startup, lazily imports the compiler through native TS source
+    resolution hooks, and unwraps generated `renderSource()` server artifacts for Vite execution;
     `pnpm --filter @kovojs/compiler exec vitest run src/vite.test.ts src/vite-config.test.ts`
-    covers config-safe loading and scoped transforms.
-  - Gap: root/example config activation remains open because Vite SSR currently exposes
-    `typescript` as a frozen empty namespace when loading compiler internals through
-    `ssrLoadModule`; app migrations still need per-example activation checks.
+    covers config-safe loading, artifact unwrapping, and scoped transforms.
 - [ ] Make registry/graph facts available to the plugin at test time **without** a committed
       `graph.json` (derive from authored route/mutation/query declarations, or emit to a temp
       cache during a pretest step). Document how `packageComponentPrefixes`/mutation-input facts
@@ -156,6 +158,11 @@ authored components/routes, and convert or relocate artifact tests.
       components; fold `app.generated-artifacts.test.ts` into compile-on-the-fly assertions or a
       compiler/package test. Derive `live-targets` at build, not via a committed module the app
       imports.
+  - Progress evidence: `examples/commerce/src/app.tsx` now runs its main Vitest suite through
+    authored components with the compiler plugin active, and the unauthenticated order-history
+    fallback no longer imports the compiler-pruned `renderOrderHistory` helper from the lowered
+    component module. Gap: `app.generated-fixtures.ts`, `app.generated-artifacts.test.ts`, and
+    generated live-target derivation remain.
 - [ ] **CRM** — same; reconcile `mutations.ts`/`optimistic-merge.ts` with non-committed optimistic
       plans (authored mutation exports own the runtime plan; generated optimistic is emit-only).
 - [ ] **StackOverflow** — same as Commerce.

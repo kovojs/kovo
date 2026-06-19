@@ -51,7 +51,28 @@ describe('kovoVitePlugin', () => {
 
     expect(plugin.name).toBe('kovo');
     expect(await plugin.transform?.(cartBadgeSource, 'cart-badge.tsx')).toMatchObject({
-      code: expect.stringContaining('export function renderSource()'),
+      code: expect.stringContaining('export const CartBadge = component({'),
+      map: null,
+    });
+  });
+
+  it('unwraps compiler source-generator server artifacts for Vite execution', async () => {
+    const plugin = createKovoVitePlugin(() => ({
+      files: [
+        {
+          kind: 'server',
+          source: `
+// @kovojs-ir
+export function renderSource() {
+  return \`export const lowered = true;\`;
+}
+`,
+        },
+      ],
+    }));
+
+    expect(await plugin.transform('component(', 'src/cart-badge.tsx')).toEqual({
+      code: 'export const lowered = true;',
       map: null,
     });
   });

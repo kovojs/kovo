@@ -31,11 +31,8 @@ import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 import { LoginForm, authFormStyleCss } from './components/auth-forms.js';
 import { CartBadge, cartBadgeStyleCss } from './components/cart-badge.js';
-import {
-  OrderHistory,
-  orderHistoryStyleCss,
-  renderOrderHistory,
-} from './components/order-history.js';
+import { OrderHistory, orderHistoryStyleCss } from './components/order-history.js';
+import { renderOrderHistory } from './components/order-history-view.js';
 import { ProductGrid, ProductGridError, productGridStyleCss } from './components/product-grid.js';
 import { commerceTheme } from './theme.js';
 
