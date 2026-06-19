@@ -376,6 +376,91 @@ describe('server app shell Vite dev seam', () => {
     }
   });
 
+  it('serves build-owned stylesheet chunks through the default dev handler', async () => {
+    const app = createApp({
+      routes: [
+        route('/', {
+          page() {
+            return '<main>styled dev app shell</main>';
+          },
+        }),
+        route('/login', {
+          page() {
+            return '<main>login</main>';
+          },
+        }),
+      ],
+    });
+    let middleware: KovoAppShellViteMiddleware | undefined;
+    const plugin = kovoAppShellViteDevPlugin({
+      earlyHints: false,
+      moduleId: '/src/app-shell.ts',
+      stylesheetAssets: () => ({
+        app: [{ criticalCss: '.base{display:block}', href: '/assets/base.css' }],
+        routes: {
+          '/': [{ criticalCss: '.home{color:teal}', href: '/assets/routes/index.css' }],
+          '/login': [{ criticalCss: '.login{color:purple}', href: '/assets/routes/login.css' }],
+        },
+      }),
+    });
+
+    plugin.configureServer({
+      middlewares: {
+        use(handler) {
+          middleware = handler;
+        },
+      },
+      async ssrLoadModule(id) {
+        expect(id).toBe('/src/app-shell.ts');
+        return { default: app };
+      },
+    });
+
+    expect(middleware).toBeDefined();
+    const server = createHttpServer((request, response) => {
+      middleware?.(request, response, (error) => {
+        if (error) {
+          const message = error instanceof Error ? error.message : 'Unknown app-shell dev error';
+          response.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          response.end(message);
+          return;
+        }
+
+        response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+        response.end('vite fallback');
+      });
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          server.off('error', reject);
+          resolve();
+        });
+      });
+
+      const address = server.address() as AddressInfo;
+      const origin = `http://127.0.0.1:${address.port}`;
+      const documentResponse = await fetch(`${origin}/`);
+      const documentBody = await documentResponse.text();
+
+      expect(documentResponse.status, documentBody).toBe(200);
+      expect(documentBody).toContain('data-kovo-critical-href="/assets/base.css"');
+      expect(documentBody).toContain('data-kovo-critical-href="/assets/routes/index.css"');
+      expect(documentBody).toContain('<link rel="stylesheet" href="/assets/base.css">');
+      expect(documentBody).toContain('<link rel="stylesheet" href="/assets/routes/index.css">');
+      expect(documentBody).not.toContain('/assets/routes/login.css');
+      expect(documentBody).toContain('.base{display:block}');
+      expect(documentBody).toContain('.home{color:teal}');
+      expect(documentBody).not.toContain('.login{color:purple}');
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+  });
+
   it('serves KV228 route-table diagnostics through the default dev handler', async () => {
     const app = createApp({
       routes: [

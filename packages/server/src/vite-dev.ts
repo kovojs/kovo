@@ -7,6 +7,7 @@ import {
   renderDiagnosticDocument,
   type DiagnosticDocumentDiagnostic,
 } from './document-diagnostics.js';
+import type { StylesheetAsset } from './hints.js';
 import {
   nodeRequestToWebRequest,
   toNodeHandler,
@@ -127,6 +128,21 @@ export interface KovoAppShellViteDevPluginOptions {
   nodeHandlerExportName?: string;
   order?: 'pre' | 'post';
   shouldHandleRequest?: (request: IncomingMessage, app: KovoApp) => boolean;
+  /**
+   * Build-owned stylesheet assets supplied by the compiler Vite plugin during dev.
+   * Structural on purpose: server dev stays independent of @kovojs/compiler while
+   * serving the same base/route/fragment stylesheet lists as build/export.
+   */
+  stylesheetAssets?:
+    | KovoAppShellViteDevStylesheetAssets
+    | (() => KovoAppShellViteDevStylesheetAssets | undefined);
+}
+
+/** @internal Structural CSS chunk assets accepted by app-shell Vite dev. */
+export interface KovoAppShellViteDevStylesheetAssets {
+  app?: readonly (string | StylesheetAsset)[];
+  fragments?: Readonly<Record<string, readonly (string | StylesheetAsset)[]>>;
+  routes?: Readonly<Record<string, readonly (string | StylesheetAsset)[]>>;
 }
 
 /**
@@ -280,7 +296,10 @@ export function kovoAppShellViteDevPlugin(
     server.middlewares.use((request, response, next) => {
       Promise.resolve(server.ssrLoadModule(moduleId))
         .then((module) => {
-          const app = readKovoAppShellViteDevApp(module, appExportName, moduleId);
+          const app = appWithDevStylesheetAssets(
+            readKovoAppShellViteDevApp(module, appExportName, moduleId),
+            readKovoAppShellViteDevStylesheetAssets(options.stylesheetAssets),
+          );
           const shouldHandle = shouldHandleKovoAppShellViteDevRequest(
             request,
             app,
@@ -1077,6 +1096,78 @@ function readKovoAppShellViteDevNodeHandler(
     options.earlyHints === undefined ? undefined : { earlyHints: options.earlyHints };
   const nodeHandler = toNodeHandler(createRequestHandler(app), nodeOptions);
   return (request, response) => nodeHandler(request, response);
+}
+
+function readKovoAppShellViteDevStylesheetAssets(
+  value: KovoAppShellViteDevPluginOptions['stylesheetAssets'],
+): KovoAppShellViteDevStylesheetAssets | undefined {
+  return typeof value === 'function' ? value() : value;
+}
+
+function appWithDevStylesheetAssets(
+  app: KovoApp,
+  assets: KovoAppShellViteDevStylesheetAssets | undefined,
+): KovoApp {
+  if (!assets) return app;
+  const appAssets = assets.app ?? [];
+  const routeAssets = assets.routes ?? {};
+  const fragmentAssets = assets.fragments ?? {};
+
+  if (
+    appAssets.length === 0 &&
+    Object.keys(routeAssets).length === 0 &&
+    Object.keys(fragmentAssets).length === 0
+  ) {
+    return app;
+  }
+
+  return {
+    ...app,
+    liveTargetRenderers: app.liveTargetRenderers.map((renderer) => {
+      const stylesheets = fragmentAssets[renderer.component] ?? [];
+      if (stylesheets.length === 0) return renderer;
+
+      return {
+        ...renderer,
+        stylesheets: mergeDevStylesheetAssets([...(renderer.stylesheets ?? []), ...stylesheets]),
+      };
+    }),
+    routes: app.routes.map((route) => {
+      const stylesheets = routeAssets[route.path] ?? [];
+      if (stylesheets.length === 0) return route;
+
+      return {
+        ...route,
+        stylesheets: mergeDevStylesheetAssets([...(route.stylesheets ?? []), ...stylesheets]),
+      };
+    }),
+    stylesheets: mergeDevStylesheetAssets([...app.stylesheets, ...appAssets]),
+  };
+}
+
+function mergeDevStylesheetAssets(
+  assets: readonly (string | StylesheetAsset)[],
+): (string | StylesheetAsset)[] {
+  const byHref = new Map<string, string[]>();
+  const hrefOrder: string[] = [];
+  for (const asset of assets) {
+    const href = typeof asset === 'string' ? asset : asset.href;
+    if (!byHref.has(href)) hrefOrder.push(href);
+    const chunks = byHref.get(href) ?? [];
+    if (typeof asset !== 'string' && asset.criticalCss) chunks.push(asset.criticalCss);
+    byHref.set(href, chunks);
+  }
+
+  return hrefOrder.map((href) => {
+    const criticalCss = (byHref.get(href) ?? [])
+      .map((chunk) => chunk.trim())
+      .filter(Boolean)
+      .join('\n');
+    return {
+      ...(criticalCss ? { criticalCss } : {}),
+      href,
+    };
+  });
 }
 
 function isKovoAppShellViteDevNodeHandler(value: unknown): value is NodeRequestHandler {

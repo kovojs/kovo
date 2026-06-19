@@ -287,12 +287,15 @@ routes/<route>.css]` (theme stays on `base`/app), using
       (`static-export-*`) emit identical chunking, so dev critical CSS and linked
       chunks match production byte-for-byte. - Evidence: a parity test comparing dev-served vs. built `<link>`/critical
       sets for one route.
+  - Progress 2026-06-19:
+    `corepack pnpm exec vitest --run packages/server/src/vite-dev.test.ts -t "serves build-owned stylesheet chunks|adapts the loaded app"`
+    proves the app-shell dev plugin can receive build-owned base/route
+    stylesheet assets and serve the active route with the same linked and
+    inline-critical chunk set.
   - Gap 2026-06-19:
-    `packages/server/src/vite-dev.ts` loads and serves the app directly through
-    `createRequestHandler(app)`, while `kovo build` patches the app with
-    build-owned base/route/fragment stylesheet assets in `packages/cli/src/index.ts`.
-    Dev parity needs a compiler-CSS-manifest handoff from the Vite compiler
-    plugin into the app-shell dev plugin.
+    A dev-served vs. built/static-export comparison test still needs to wire the
+    compiler Vite plugin manifest into this structural dev stylesheet handoff
+    and compare the resulting `<link>`/critical sets for the same route.
 
 ### Phase 6 — Migrate examples + site off the monolith
 
