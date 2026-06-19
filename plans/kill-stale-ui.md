@@ -188,13 +188,16 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
     invalidation edge or a teaching KV412/KV413; matview read forces
     `await-fragment`.
 
-- [ ] **T1-RENDERONCE — suppression hatches silence KV311 on positions a modeled
+- [x] **T1-RENDERONCE — suppression hatches silence KV311 on positions a modeled
       write actually invalidates.** `renderOnce` is the path-of-least-resistance
       KV311 silencer and §4.9's fix menu lures authors to it; declaring it on a
       mutated query path leaves the position permanently un-updatable. Sibling
       leaks: `disableServerRefresh` over a PUNTed position, an `isomorphic` render
       reading a module global, an `await-fragment` whose guard the actor's own
       mutation revokes.
+  - Evidence 2026-06-19: the child checks below cover modeled-write renderOnce
+    conflicts, isomorphic render-input validation, disabled-refresh
+    position-specific coverage, and missing await-fragment server truth.
   - [x] **X5 / KV314:** a `renderOnce`/'never' position may not read a query path
         in the union of any modeled write's invalidation set (intersect
         `UpdateCoverageFact.query` × touch-graph invalidation sets, §4.9 × §11.1);
