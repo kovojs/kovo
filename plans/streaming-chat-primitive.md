@@ -250,11 +250,14 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     tables/code/images, high-volume text coalescing, checkpoint replacement,
     final reconciliation, abort, and failure behavior.
   - Evidence: pending integration browser spec.
-- [ ] **9. Docs and examples.**
+- [x] **9. Docs and examples.**
   - Add a guide section comparing raw `respond.stream(...)`, first-render
     `<kovo-defer>`, and streaming mutations. Include the chat example and the
     recommended accessibility pattern.
-  - Evidence: pending docs build and link check.
+  - Evidence: `site/content/guides/streaming.md` compares the three streaming
+    surfaces and includes the chat wire/accessibility pattern; `corepack pnpm
+    --filter @kovojs/site run build`; `corepack pnpm --filter @kovojs/site run
+    check:links`.
 
 ## Proving Commands
 

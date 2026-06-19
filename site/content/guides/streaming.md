@@ -12,6 +12,14 @@ streams into the same response: the shell renders with a fallback, the real frag
 later chunk, and the morph layer patches it in. It reuses the fragment protocol within first render
 rather than adding a second mechanism.
 
+Kovo has three different streaming surfaces:
+
+- `respond.stream()` and raw `endpoint()` responses are app-owned protocols for downloads, exports,
+  webhooks, or custom integrations. They do not run the enhanced mutation apply path.
+- `<kovo-defer>` is first-render streaming. It replaces a fallback inside the document response.
+- Streaming mutations are post-submit streams. They keep the normal mutation lifecycle and stream
+  Kovo wire chunks back through the enhanced form response.
+
 ## The app shape
 
 From the commerce reference app, the app authors declare the route and the query-backed component.
@@ -138,12 +146,64 @@ seconds later with no client round-trip.
 - _Below-the-fold JS deferral._ That's `on:visible`, which defers executing JavaScript, not HTML.
 - _Data that updates after load._ That's a query with refetch or a mutation response. Defer is a
   first-render mechanism only.
+- _Chat token rendering._ That's a streaming mutation response: one enhanced form POST whose chunks
+  append fragments, append escaped text, and then reconcile to server truth.
 - _Navigation._ Pages are complete documents; defer streams within one response, it doesn't splice
   between pages.
 
 A reasonable default: render everything inline until a route's server time is dominated by one
 identifiable subtree, then defer exactly that subtree. The wire stays readable either way, and
 `kovo explain page` keeps listing the route's queries — deferred or not — as one surface.
+
+## Streaming mutation responses
+
+Use a streaming mutation when the user has submitted a real form and the response should render
+progressively, such as a chat assistant answer. It is not an SSE subscription and it is not
+`<kovo-defer>`; it is one enhanced mutation POST response. The server still runs CSRF, input schema
+validation, guards, replay/idempotency, and the mutation transaction before user-visible assistant
+chunks are emitted.
+
+The wire remains the mutation vocabulary plus one narrow text-source primitive:
+
+```html
+<kovo-fragment target="messages" mode="append">
+  <article class="message user">How do I ship this?</article>
+</kovo-fragment>
+
+<kovo-fragment target="messages" mode="append">
+  <article class="message assistant">
+    <div data-stream-text="assistant:a1" aria-live="polite" aria-atomic="true"></div>
+  </article>
+</kovo-fragment>
+
+<kovo-text target="assistant:a1">Start with the typed mutation path.</kovo-text>
+<kovo-text target="assistant:a1" mode="checkpoint">Start with the typed mutation path.</kovo-text>
+
+<kovo-fragment target="messages">
+  <section kovo-fragment-target="messages">...canonical server-rendered messages...</section>
+</kovo-fragment>
+```
+
+`<kovo-text>` appends escaped text to a declared `data-stream-text` source. HTML-looking model output
+stays text. If the UI wants Markdown, citations, tables, or code highlighting while the answer is
+arriving, declare a renderer for the source and let that app-owned renderer transform the accumulated
+text into presentation. Kovo still owns the source buffer and the final server-rendered fragment or
+query reconciliation.
+
+Use `mode="checkpoint"` on long streams when the server wants to replace the accumulated source text
+with canonical text so far. Use a final `<kovo-fragment>` or `<kovo-query>` update to reconcile the
+message or message list with server truth. A partial text stream is never the final authority.
+
+For accessible chat shells, put live-region semantics on the assistant message container or source
+element, not on each token. Prefer `aria-live="polite"` and a stable status/message element so screen
+readers receive coalesced updates instead of one announcement per token. Keep the submitted user
+message and assistant shell as ordinary fragments, so no-JS users still get the normal mutation
+fallback and the final page remains meaningful.
+
+If the stream aborts, validation fails, a guard/session check fails, a stream target is missing, or a
+deploy build token is stale, the runtime must recover to server truth: mark the submitted UI failed,
+refetch the affected target, or navigate through the normal form path. Do not leave a partial answer
+presented as confirmed.
 
 ## Degradation
 
@@ -155,16 +215,19 @@ the same reason the no-JS form path stays a real form.
 ## Next
 
 - [Styling with StyleX](/guides/styling/) — the stylesheet contract these chunks use.
+- [Mutations](/guides/mutations/) — the typed form lifecycle streaming mutations preserve.
 - [Queries & invalidation](/guides/queries/) — the query values deferred chunks deliver.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
 Defer as a first-render reuse of the fragment protocol, morph survival, the before-or-with ordering
-guarantee, and no-JS degradation: SPEC §8. The shared `<kovo-query>`/`<kovo-fragment>` wire vocabulary and
-`mode="append"`: SPEC §9.1. `on:visible` and inert-until-touched islands: SPEC §4.7. Projected
-children shipping in initial HTML: SPEC §4.5. Priority hinting and open stream-ordering areas:
-SPEC §13.3. Stylesheets for late fragments: SPEC §13.1. Defer vs. post-load data updates: SPEC §9.3.
-`kovo explain page` as one surface: SPEC §5.3.
+guarantee, and no-JS degradation: SPEC §8. The shared `<kovo-query>`/`<kovo-fragment>` wire vocabulary,
+`mode="append"`, streaming mutation responses, `<kovo-text>`, checkpoints, interruption behavior, and
+server-truth reconciliation: SPEC §9.1. `respond.stream()` as an app-owned escape hatch: SPEC §6.4.
+`on:visible` and inert-until-touched islands: SPEC §4.7. Projected children shipping in initial HTML:
+SPEC §4.5. Priority hinting and open stream-ordering areas: SPEC §13.3. Stylesheets for late
+fragments: SPEC §13.1. Defer vs. post-load data updates: SPEC §9.3. `kovo explain page` as one
+surface: SPEC §5.3.
 
 </details>
