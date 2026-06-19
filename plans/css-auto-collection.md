@@ -94,11 +94,15 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 
 ### Phase 0 — Decision & SPEC alignment
 
-- [ ] Record the target authoring surface above as normative for v1 styling and
+- [x] Record the target authoring surface above as normative for v1 styling and
       reconcile with `plans/open-design-areas.md` §13.1 (still open). Confirm no
       §5.2/KV235 conflict: the served sheet is an emitted artifact; app TSX only
-      writes `style.create` + `style={...}`. - Evidence: link this ledger from `plans/open-design-areas.md` §13.1; cite
-      `SPEC.md` §13.1 ("compiler **may** extract … into ordinary CSS assets").
+      writes `style.create` + `style={...}`.
+  - Evidence 2026-06-19:
+    `plans/open-design-areas.md` §13.1 links this ledger for app-side
+    auto-collection, and `SPEC.md` §13.1 authorizes extracting static
+    `style.create(...)`, `defineVars`, and `createTheme` into ordinary emitted CSS
+    assets while §5.2 keeps that CSS out of app-authored source.
 
 ### Phase 1 — App-source CSS collection in the build (core)
 
@@ -171,6 +175,5 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 
 ## Latest verification
 
-- _(none yet — plan created 2026-06-18)_. Per-checkbox proving commands are noted
-  inline; run the narrowest first (focused build test for Phase 1), broaden to
-  root `tsc` + API-surface + `git diff --check` before each checkpoint commit.
+- 2026-06-19 Phase 0 ledger review:
+  `rg -n "13\\.1|CSS|style|stylesheet|auto-collection|open design" plans/open-design-areas.md SPEC.md`.
