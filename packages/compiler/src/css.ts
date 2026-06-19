@@ -8,6 +8,7 @@ import {
 } from './scan/parse.js';
 import { cssIrHeader } from './ir.js';
 import { escapeAttribute, indent } from './shared.js';
+import type { RoutePageFact } from './types.js';
 
 /**
  * @internal A scoped-CSS asset reference produced by the compiler (href, optional critical
@@ -229,6 +230,25 @@ export function createCssAssetResolver(manifest: CssAssetManifest): CssAssetReso
   };
 }
 
+/** @internal Convert compiler route facts into splitter route targets. */
+export function cssRouteSplitTargetsFromRouteFacts(
+  routePageFacts: readonly RoutePageFact[],
+): CssRouteSplitTarget[] {
+  return routePageFacts.flatMap((fact) => {
+    const sourceFileNames = uniqueSorted(fact.css?.sourceFileNames ?? []);
+    const fragmentTargets = uniqueSorted(fact.css?.fragmentTargets ?? []);
+    if (sourceFileNames.length === 0 && fragmentTargets.length === 0) return [];
+
+    return [
+      {
+        ...(fragmentTargets.length === 0 ? {} : { fragmentTargets }),
+        route: fact.route,
+        ...(sourceFileNames.length === 0 ? {} : { sourceFileNames }),
+      },
+    ];
+  });
+}
+
 function computeCssSplitChunks(
   manifest: Pick<CssAssetManifest, 'byFileName' | 'stylesheets'>,
   options: CssAssetManifestOptions,
@@ -392,6 +412,10 @@ function dedupeComponentCssAssets(assets: readonly ComponentCssAsset[]): Compone
     seen.add(asset.sourceFileName);
     return true;
   });
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function dedupeStyleRuleUsages(usages: readonly StyleRuleUsage[]): StyleRuleUsage[] {

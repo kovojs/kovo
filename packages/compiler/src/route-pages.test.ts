@@ -28,6 +28,9 @@ export const home = route('/', {
             serializedPropsExpression: 'JSON.stringify({})',
           },
         ],
+        css: {
+          sourceFileNames: ['src/components/question-list.css'],
+        },
         fileName: 'src/routes.tsx',
         navigationSegments: [
           {
@@ -48,7 +51,7 @@ export const home = route('/', {
       "import { defineCompiledRoutePage as __kovoDefineCompiledRoutePage } from '@kovojs/server/internal/route';",
     );
     expect(result.files[0]?.source).toContain(
-      `page: __kovoDefineCompiledRoutePage({"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"src/routes.tsx","navigationSegments":[{"components":["QuestionListRegion"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, () => <QuestionListRegion />)`,
+      `page: __kovoDefineCompiledRoutePage({"css":{"sourceFileNames":["src/components/question-list.css"]},"components":[{"localName":"QuestionListRegion","props":[],"propsExpression":"{}","serializedPropsExpression":"JSON.stringify({})"}],"fileName":"src/routes.tsx","navigationSegments":[{"components":["QuestionListRegion"],"id":"page:/","kind":"page","localName":"page"}],"route":"/"}, () => <QuestionListRegion />)`,
     );
   });
 

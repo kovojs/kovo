@@ -160,15 +160,24 @@ mutation pulls `fragments/cart.css` if not already present.
 
 ### Phase 1 — Emit route→component→CSS facts (Seam B; shared with css-auto-collection)
 
-- [ ] Have `compileRouteModule` (`route-pages.ts`) emit, per route, the set of
-      reachable component source file names and fragment targets, surfaced on the
-      route metadata and the route graph (`graph.json`) so the build can read it
-      without re-deriving the component tree. - Evidence: `graph.json` for a two-route example shows disjoint
-      `sourceFileNames`/`fragmentTargets` per route; a unit test on
-      `compileRouteModule` output.
-- [ ] Map those facts to `CssRouteSplitTarget` shape (`route`, `sourceFileNames`,
-      `hrefs`, `fragmentTargets`) — the exact input `selectRouteCssAssets`
-      (`css.ts:301`) already consumes.
+- [x] Have `compileRouteModule` (`route-pages.ts`) emit, per route, reachable
+      component CSS source file names surfaced on route metadata and generated
+      route IR so the build can read it without re-deriving the component tree.
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/css.test.ts`
+    proves `routePageFacts[].css.sourceFileNames` is derived from component
+    imports and serialized into route IR.
+- [ ] Enrich route CSS facts with reachable fragment targets.
+  - Gap:
+    fragment targets are emitted on `ComponentGraphFact.fragments`; the join
+    from route component local names to component graph registry names is still
+    pending.
+- [x] Map route CSS facts to `CssRouteSplitTarget` shape (`route`,
+      `sourceFileNames`, `fragmentTargets`) — the exact input
+      `selectRouteCssAssets` (`css.ts:301`) already consumes.
+  - Evidence 2026-06-19:
+    `packages/compiler/src/css.test.ts` covers
+    `cssRouteSplitTargetsFromRouteFacts()` deduping and sorting route CSS facts.
 
 ### Phase 2 — Feed the splitter in the real build (Seam D)
 

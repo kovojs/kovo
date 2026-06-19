@@ -23,6 +23,7 @@ export type {
 export {
   collectCssAssetManifest,
   createCssAssetResolver,
+  cssRouteSplitTargetsFromRouteFacts,
   dedupeCss,
   scopeComponentCss,
   selectCssAssets,

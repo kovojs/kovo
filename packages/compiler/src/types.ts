@@ -192,11 +192,18 @@ export interface CompileRouteModuleResult {
 
 /** Compiler-derived facts for one JSX-authored `route().page`. */
 export interface RoutePageFact {
+  css?: RoutePageCssFact;
   components: readonly RoutePageComponentFact[];
   fileName: string;
   layouts?: readonly RoutePageLayoutFact[];
   navigationSegments?: readonly RouteNavigationSegmentFact[];
   route: string;
+}
+
+/** CSS reachability facts derived from a JSX-authored route page. */
+export interface RoutePageCssFact {
+  fragmentTargets?: readonly string[];
+  sourceFileNames?: readonly string[];
 }
 
 /** One layout segment in the compiler-derived route layout chain. */

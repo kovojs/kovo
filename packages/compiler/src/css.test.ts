@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   collectCssAssetManifest,
   createCssAssetResolver,
+  cssRouteSplitTargetsFromRouteFacts,
   dedupeCss,
   scopeComponentCss,
   selectCssAssets,
@@ -519,6 +520,33 @@ export const Reviews = component({
         href: '/assets/components/reviews.css',
         preload: false,
         sourceFileName: './components/reviews.css',
+      },
+    ]);
+  });
+
+  it('maps route page CSS facts to splitter targets', () => {
+    expect(
+      cssRouteSplitTargetsFromRouteFacts([
+        {
+          components: [],
+          css: {
+            fragmentTargets: ['cart-fragment', 'cart-fragment'],
+            sourceFileNames: ['components/cart.css', 'components/shell.css', 'components/cart.css'],
+          },
+          fileName: 'src/routes.tsx',
+          route: '/cart',
+        },
+        {
+          components: [],
+          fileName: 'src/routes.tsx',
+          route: '/plain',
+        },
+      ]),
+    ).toEqual([
+      {
+        fragmentTargets: ['cart-fragment'],
+        route: '/cart',
+        sourceFileNames: ['components/cart.css', 'components/shell.css'],
       },
     ]);
   });

@@ -9,6 +9,7 @@ import type {
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
   RoutePageComponentFact,
+  RoutePageCssFact,
   RoutePageComponentPropFact,
   RoutePageFact,
   RoutePageLayoutFact,
@@ -16,6 +17,7 @@ import type {
 } from './types.js';
 import type { StaticLiteralValue } from './scan/object.js';
 import { applySourceReplacements, replaceExtension, type SourceReplacement } from './shared.js';
+import { compileArtifactFileNames } from './types.js';
 
 const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))
@@ -62,6 +64,7 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   );
   const routePages: CompiledRoutePage[] = [];
   const layouts = routeLayoutModels(sourceFile);
+  const componentImports = componentImportSourceFiles(options.fileName, sourceFile);
   const diagnostics: CompilerDiagnostic[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -71,6 +74,7 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
       sourceFile,
       node,
       layouts,
+      componentImports,
       diagnostics,
     );
     if (routePage) routePages.push(routePage);
@@ -113,6 +117,7 @@ function routePageFromCall(
   sourceFile: ts.SourceFile,
   node: ts.Node,
   layouts: ReadonlyMap<string, RouteLayoutModel>,
+  componentImports: ReadonlyMap<string, string>,
   diagnostics: CompilerDiagnostic[],
 ): CompiledRoutePage | null {
   if (!ts.isCallExpression(node)) return null;
@@ -142,7 +147,9 @@ function routePageFromCall(
     diagnostics,
   );
   const navigationSegments = routeNavigationSegments(pathArg.text, components, routeLayouts);
+  const css = routePageCssFact(components, componentImports);
   const fact = {
+    ...(css === undefined ? {} : { css }),
     components,
     fileName,
     ...(routeLayouts.length > 0 ? { layouts: routeLayouts } : {}),
@@ -158,6 +165,20 @@ function routePageFromCall(
       start: pageHandler.replacementStart,
     },
   };
+}
+
+function routePageCssFact(
+  components: readonly RoutePageComponentFact[],
+  componentImports: ReadonlyMap<string, string>,
+): RoutePageCssFact | undefined {
+  const sourceFileNames = uniqueSorted(
+    components.flatMap((component) => {
+      const sourceFileName = componentImports.get(component.localName);
+      return sourceFileName ? [compileArtifactFileNames(sourceFileName).css] : [];
+    }),
+  );
+
+  return sourceFileNames.length === 0 ? undefined : { sourceFileNames };
 }
 
 function routeNavigationSegments(
@@ -179,6 +200,55 @@ function routeNavigationSegments(
       localName: 'page',
     },
   ];
+}
+
+function componentImportSourceFiles(
+  routeFileName: string,
+  sourceFile: ts.SourceFile,
+): ReadonlyMap<string, string> {
+  const imports = new Map<string, string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    const sourceFileName = componentImportSourceFileName(
+      routeFileName,
+      statement.moduleSpecifier.text,
+    );
+    if (!sourceFileName) continue;
+
+    const importClause = statement.importClause;
+    if (!importClause) continue;
+    if (importClause.name) imports.set(importClause.name.text, sourceFileName);
+    const namedBindings = importClause.namedBindings;
+    if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
+    for (const element of namedBindings.elements) {
+      imports.set(element.name.text, sourceFileName);
+    }
+  }
+
+  return imports;
+}
+
+function componentImportSourceFileName(routeFileName: string, specifier: string): string | null {
+  if (!specifier.startsWith('.')) return null;
+
+  const absolute = resolve(dirname(routeFileName), specifier);
+  return normalizeRouteFileName(sourceSpecifierToTsx(absolute));
+}
+
+function sourceSpecifierToTsx(fileName: string): string {
+  if (fileName.endsWith('.jsx')) return replaceExtension(fileName, '.tsx');
+  if (fileName.endsWith('.js')) return replaceExtension(fileName, '.tsx');
+  return fileName;
+}
+
+function normalizeRouteFileName(fileName: string): string {
+  return relative('', fileName).replaceAll('\\', '/');
+}
+
+function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function routeLayoutModels(sourceFile: ts.SourceFile): ReadonlyMap<string, RouteLayoutModel> {
