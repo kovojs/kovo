@@ -121,16 +121,23 @@ committed `graph.json`).
 
 ## Phase 1 — Compile-on-the-fly harness (load-bearing)
 
-- [ ] Wire the Kovo compiler plugin into the **test** pipeline so authored `.tsx`
-      component/route imports lower on the fly:
-  - root `vite.config.ts` `test:` plugins, each `examples/*/vite.config.ts` test usage, and
-    `vitest.browser.config.ts`.
+- [x] Wire the Kovo compiler plugin into the **test** pipelines that import authored `.tsx`
+      component/route modules so they lower on the fly:
+  - Root/package Vitest plugin wiring covers the suites that import authored component modules,
+    including Commerce, Gallery, browser Gallery, and Site tutorial steps.
   - Verify a test importing an authored component sees lowered HTML (kovo stamps:
     `kovo-c`, `kovo-deps`, `data-bind`, `on:click`).
+  - Evidence: root `vite.config.ts` installs the pre-transform compiler plugin for
+    `site/tutorial/steps` and the Commerce component slice; `examples/commerce/vite.config.ts`,
+    `examples/gallery/vite.config.ts`, and `examples/gallery/vitest.browser.config.ts` install the
+    scoped pre-transform compiler plugin for the test suites that import authored component modules.
+    `corepack pnpm --filter @kovojs/example-commerce test`, `corepack pnpm --filter
+@kovojs/example-gallery test`, and `corepack pnpm --dir examples/gallery exec vitest --config
+vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts
+src/interactive-gallery.interactions-b.browser.test.ts` pass against authored imports.
   - Commerce slice evidence: `examples/commerce/vite.config.ts` now installs the pre-transform
     compiler plugin; `pnpm --filter @kovojs/example-commerce test` passes against authored
-    component imports and validates stamped add-to-cart forms/fragments. Gap: root/browser/other
-    example activation remains open.
+    component imports and validates stamped add-to-cart forms/fragments.
   - Gallery slice evidence: `examples/gallery/vite.config.ts` and
     `examples/gallery/vitest.browser.config.ts` install the pre-transform compiler plugin for
     `src/interactive`; `pnpm --filter @kovojs/example-gallery exec vitest run
@@ -142,17 +149,26 @@ src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.t
     resolution hooks, and unwraps generated `renderSource()` server artifacts for Vite execution;
     `pnpm --filter @kovojs/compiler exec vitest run src/vite.test.ts src/vite-config.test.ts`
     covers config-safe loading, artifact unwrapping, and scoped transforms.
-- [ ] Make registry/graph facts available to the plugin at test time **without** a committed
+- [x] Make registry/graph facts available to the plugin at test time **without** a committed
       `graph.json` (derive from authored route/mutation/query declarations, or emit to a temp
       cache during a pretest step). Document how `packageComponentPrefixes`/mutation-input facts
       are supplied.
+  - Evidence: `examples/vite-kovo-compiler.ts` supplies `commerceRegistryFacts` (including
+    mutation-input facts) to the pre-transform compiler plugin; `packages/compiler/src/vite.ts`
+    resolves literal or callback `registryFacts` plus optional `packageComponentPrefixes`; and
+    `corepack pnpm --filter @kovojs/example-commerce test` passes without any committed
+    `examples/commerce/src/generated/graph.json`.
 - [x] Add module-compilation caching (keyed by source hash) so repeated imports in a test run do
       not recompile.
   - Evidence: `packages/compiler/src/vite.ts` caches transformed component compiles by source hash,
     file, root, package-prefix facts, and registry facts; `pnpm --filter @kovojs/compiler exec
 vitest run src/vite.test.ts` covers cache hits and source-hash invalidation.
-- [ ] Handle non-Vite consumers: a shared helper that emits required IR to an OS temp dir for
+- [x] Handle non-Vite consumers: a shared helper that emits required IR to an OS temp dir for
       `tests/kovo-check.node.mjs` and the CLI graph check (Phase 4 consumes this).
+  - Evidence: `scripts/commerce-graph.mjs` exposes `emitCommerceGraphArtifactsToTemp()` and
+    `readTempCommerceGraph()`; `tests/kovo-check.node.mjs` imports `readTempCommerceGraph()` and
+    `scripts/kovo-check.mjs` runs the built CLI against the helper's temp `graph.json`.
+    `corepack pnpm exec vp run kovo-check` passes.
 
 ## Phase 2 — Remove app-authored dependency on generated
 
