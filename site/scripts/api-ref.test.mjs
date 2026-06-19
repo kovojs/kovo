@@ -50,6 +50,19 @@ function coreExportNames() {
     .map((symbol) => symbol.name);
 }
 
+/** Manifest-derived public import subpaths for a documented package, so subpath
+ * expectations track `public-packages.json` (the api-surface source of truth)
+ * instead of re-hardcoding lists that drift when the surface is narrowed. */
+function manifestSubpaths(packageName) {
+  const pkg = documentedApiEntries().find((entry) => entry.name === packageName);
+  if (!pkg) throw new Error(`no documented entry for ${packageName}`);
+  return pkg.entries.map((entry) =>
+    entry.entryPath === '.'
+      ? packageName
+      : `${packageName}/${entry.entryPath.replace(/^\.\//, '')}`,
+  );
+}
+
 function packageManifest(overrides = {}) {
   return {
     apiRef: {
@@ -94,8 +107,11 @@ describe('api-ref generator', () => {
     expect(result.packages.find((pkg) => pkg.name === '@kovojs/server').subpaths).toContain(
       '@kovojs/server/build',
     );
-    expect(result.packages.find((pkg) => pkg.name === '@kovojs/test').subpaths).toContain(
-      '@kovojs/test/verifier-sql',
+    // @kovojs/test renders exactly its manifest-declared public subpaths (the
+    // old verifier/page/sql-observer subpaths were internalized in the public-API
+    // cleanup, so they must not appear here).
+    expect(new Set(result.packages.find((pkg) => pkg.name === '@kovojs/test').subpaths)).toEqual(
+      new Set(manifestSubpaths('@kovojs/test')),
     );
     for (const pkg of result.packages) expect(pkg.exports).toBeGreaterThan(0);
   });
@@ -242,11 +258,10 @@ describe('api-ref generator', () => {
     expect(new Set(manifestNames)).toEqual(new Set(core.names));
 
     const testManifest = JSON.parse(await readFile(path.join(outDir, 'test.sidebar.json'), 'utf8'));
-    expect(testManifest.subpaths.map((subpath) => subpath.importPath)).toContain(
-      '@kovojs/test/assertions',
-    );
-    expect(testManifest.subpaths.map((subpath) => subpath.importPath)).toContain(
-      '@kovojs/test/verifier-sql',
+    // The sidebar groups by subpath, one group per manifest-declared public
+    // subpath of @kovojs/test (no internalized verifier/page/sql-observer groups).
+    expect(new Set(testManifest.subpaths.map((subpath) => subpath.importPath))).toEqual(
+      new Set(manifestSubpaths('@kovojs/test')),
     );
   });
 
@@ -264,17 +279,20 @@ describe('api-ref generator', () => {
   });
 
   it('documents the app-facing export tier across packages', () => {
-    // Coverage must be meaningful, not the historical "0 documented".
+    // Coverage must be meaningful, not the historical "0 documented". Floors are
+    // the regenerated documented counts after the public-API cleanup narrowed the
+    // surface (e.g. @kovojs/test dropped its internalized verifier subpaths and
+    // @kovojs/style grew its documented exports); they must not silently regress.
     const expected = {
-      '@kovojs/core': 40,
+      '@kovojs/core': 71,
       '@kovojs/drizzle': 4,
-      '@kovojs/runtime': 15,
-      '@kovojs/server': 70,
-      '@kovojs/style': 20,
+      '@kovojs/runtime': 90,
+      '@kovojs/server': 160,
+      '@kovojs/style': 39,
       '@kovojs/better-auth': 13,
       '@kovojs/compiler': 12,
-      '@kovojs/cli': 8,
-      '@kovojs/test': 12,
+      '@kovojs/cli': 12,
+      '@kovojs/test': 43,
     };
     for (const pkg of result.packages) {
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);

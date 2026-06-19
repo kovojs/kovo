@@ -3090,29 +3090,6 @@ function isNodeErrorCode(error: unknown, code: string): boolean {
 }
 
 /**
- * Verifier graph accepted by the public `kovoCheck` entry.
- *
- * This is the committed verifier graph produced by Kovo's compiler/tooling
- * pipeline (SPEC.md §11.4). It is the public `@kovojs/cli` verifier contract; the
- * lower-level graph declarations it mirrors live under
- * `@kovojs/core/internal/graph`. KNOWN LIMITATION: the nested member types are
- * still the `@internal` core graph declarations, so this only names the top-level
- * input publicly. The complete fix (an opaque runtime-validated input so app code
- * never names the IR graph) is tracked as a design item; both `kovoCheck` and
- * `kovoExplain` already runtime-validate their input via `validateKovoExplainInput`.
- */
-export interface KovoCheckInput extends CoreGraph.KovoCheckInput {}
-
-/**
- * Verifier graph accepted by the public `kovoExplain` entry.
- *
- * Extends the `kovoCheck` graph with explain-only metadata used to render verifier
- * reports in-process (SPEC.md §11.4). Same known limitation as `KovoCheckInput`:
- * nested member types remain the `@internal` core graph declarations.
- */
-export interface KovoExplainInput extends CoreGraph.KovoExplainInput {}
-
-/**
  * The kind of graph subject a targeted `kovo explain` describes — a component,
  * request context, mutation, query, or page (SPEC.md §5.3).
  */
@@ -3180,7 +3157,10 @@ export interface KovoUnscopedExplainOptions {
  * code that is non-zero only when an audit ran with `failOnFindings` and findings
  * were present.
  */
-export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions): KovoCheckResult {
+export function kovoExplain(
+  input: CoreGraph.KovoExplainInput,
+  options: KovoExplainOptions,
+): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0)
     return invalidGraphInputResult(explainOutputVersion, validationErrors);
@@ -3494,7 +3474,7 @@ export function kovoAudit(
  * any error-severity finding is present (SPEC.md §1.1 proof claims).
  */
 export function kovoCheck(
-  input: KovoCheckInput,
+  input: CoreGraph.KovoCheckInput,
   options: { family?: KovoCheckFamily } = {},
 ): KovoCheckResult {
   const validationErrors = validateKovoExplainInput(input);

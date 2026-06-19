@@ -1,5 +1,3 @@
-export const kovoHeadlessUiPrefix = 'kovo-' as const;
-
 export {
   checkedState,
   cn,
