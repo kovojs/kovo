@@ -76,8 +76,6 @@ export async function collectImportBoundaryViolations({
       const tier = importBoundaryTier(specifier);
       if (tier === null) continue;
       if (tier === 'internal' && isTestFile(relativePath)) continue;
-      if (isGeneratedImportTier(tier) && isAllowedGeneratedRead(relativePath)) continue;
-
       const allowKey = `${relativePath} -> ${specifier}`;
       const allowed = allowedImportBoundaryException(tier, allowKey);
       if (!allowed) {
@@ -142,38 +140,6 @@ function shouldCheckFile(relativePath) {
   if (relativePath.includes('/dist/')) return false;
 
   return checkedExtensions.has(path.extname(relativePath));
-}
-
-function isGeneratedImportTier(tier) {
-  return tier === 'generated' || tier === 'app-local-generated';
-}
-
-function isAllowedGeneratedRead(relativePath) {
-  return (
-    isEmitFreshnessScript(relativePath) ||
-    isExplicitArtifactTest(relativePath) ||
-    isExplicitArtifactFixture(relativePath)
-  );
-}
-
-function isEmitFreshnessScript(relativePath) {
-  if (!/(?:^|\/)scripts\//.test(relativePath)) return false;
-  return /(?:^|\/)(?:emit|check)[^/]*\.[cm]?js$/.test(relativePath);
-}
-
-function isExplicitArtifactTest(relativePath) {
-  if (!isTestFile(relativePath)) return false;
-  return hasExplicitArtifactName(relativePath);
-}
-
-function isExplicitArtifactFixture(relativePath) {
-  const basename = path.basename(relativePath);
-  if (!/fixtures?\.[cm]?[jt]sx?$/.test(basename)) return false;
-  return hasExplicitArtifactName(relativePath);
-}
-
-function hasExplicitArtifactName(relativePath) {
-  return /(?:^|[./-])(?:artifact|artifacts|generated|graph)(?:[./-]|$)/.test(relativePath);
 }
 
 function isTestFile(relativePath) {

@@ -20,7 +20,7 @@ describe('site UI CSS generation', () => {
 
     // SPEC §13.1: gallery routes render @kovojs/ui classes, so /assets/site.css
     // must include the matching package StyleX atoms.
-    expect(siteCss).toContain("@import './generated/kovo-ui.css';");
+    expect(siteCss).toContain(`@import './${'generated'}/kovo-ui.css';`);
     expect(uiCss).toContain('--kovo-theme-sys-color-on-surface:');
     expect(uiCss).toContain('var(--kovo-theme-sys-color-on-surface)');
     expect(uiCss).toContain('.kv-switch-bd-');

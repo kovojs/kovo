@@ -7,6 +7,7 @@ coverage/
 *.tsbuildinfo
 test-results/
 .playwright/
+.tmp-kovo-build-cli-*/
 
 # Kovo app-local generated artifacts are reproducible and must not be committed.
 examples/commerce/src/generated/

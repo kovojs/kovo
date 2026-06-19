@@ -248,22 +248,36 @@ authored components/routes, and convert or relocate artifact tests.
 <temp>` (no committed `graph.json` dependency).
   - Evidence: `node scripts/kovo-check.mjs` passed after `scripts/commerce-graph.mjs` was wired to
     emit the commerce graph into a temp dir before invoking `kovo check`.
-- [ ] `.github/workflows/pages.yml`: keep `emit:interactive-gallery` as a build step that writes
+- [x] `.github/workflows/pages.yml`: keep `emit:interactive-gallery` as a build step that writes
       into the gitignored generated dir before the pages build (it is not `--check`).
-- [ ] Confirm `scripts/prod-emit-check.mjs` already compiles in-memory (no committed input) and
+  - Evidence: `.github/workflows/pages.yml` runs
+    `vp exec pnpm --filter @kovojs/example-gallery run emit:interactive-gallery` before `vp run
+build`.
+- [x] Confirm `scripts/prod-emit-check.mjs` already compiles in-memory (no committed input) and
       keep it as the canonical "compile output is clean" gate.
+  - Evidence: `node scripts/prod-emit-check.mjs` prints `prod-emit-check/v1 OK` and the script
+    calls `compileComponentModule` directly without reading committed app artifacts.
 
 ## Phase 5 — Strengthen guards
 
-- [ ] `scripts/import-boundary.mjs`: remove/restrict the `isExplicitArtifactFixture` +
+- [x] `scripts/import-boundary.mjs`: remove/restrict the `isExplicitArtifactFixture` +
       `*generated-fixtures` exemption so app-facing source cannot reach a generated dir
       transitively. Allow generated reads only in compiler/package-internal tests.
-- [ ] Add a `check:no-committed-generated` guard (new script or extend import-boundary) that fails
+  - Evidence: `pnpm exec vitest --run scripts/import-boundary.test.mjs` passes with explicit
+    fixture/test generated imports reported as violations.
+- [x] Add a `check:no-committed-generated` guard (new script or extend import-boundary) that fails
       if `git ls-files` lists any `src/generated/**` / derived artifact in the in-scope roots.
       Wire it into `pnpm run check`.
-- [ ] Update `scripts/import-boundary.test.mjs` to cover the tightened rule (transitive fixture
+  - Evidence: `scripts/no-committed-generated.mjs` is wired into `pnpm run check`, and
+    `node scripts/no-committed-generated.mjs` prints `no-committed-generated/v1 OK`.
+- [x] Update `scripts/import-boundary.test.mjs` to cover the tightened rule (transitive fixture
       rejection, committed-artifact rejection).
-- [ ] Finalize `SPEC.md` §5.2 rule 8 wording from Phase 0 to match the stricter guard.
+  - Evidence: `scripts/import-boundary.test.mjs` covers app-local generated fixture/test
+    rejections and `trackedGeneratedViolations` preserves `.deepsec`, screenshots, and
+    compiler-owned generated source as out of scope.
+- [x] Finalize `SPEC.md` §5.2 rule 8 wording from Phase 0 to match the stricter guard.
+  - Evidence: `SPEC.md` §5.2 rule 8 now states app-local generated artifacts must not be checked in
+    and app-facing tests/scripts use on-demand public emit/explain/check flows.
 
 ## Phase 6 — Verification
 

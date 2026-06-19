@@ -10,6 +10,7 @@ import {
   importSpecifiers,
   nonPublicKovoImportTier,
 } from './import-boundary.mjs';
+import { trackedGeneratedViolations } from './no-committed-generated.mjs';
 
 describe('import-boundary check', () => {
   it('extracts static imports, re-exports, and string-literal dynamic imports', () => {
@@ -45,7 +46,7 @@ const runtime = () => import('@kovojs/runtime/generated');
     expect(appLocalGeneratedImportTier('./components/cart.js')).toBeNull();
   });
 
-  it('fails app-facing authored code but allows explicit artifact tests and fixtures', async () => {
+  it('fails app-facing generated imports even in explicit artifact tests and fixtures', async () => {
     const rootDir = await fixtureRoot();
     await writeFixture(
       rootDir,
@@ -115,8 +116,23 @@ const runtime = () => import('@kovojs/runtime/generated');
       }),
     ).resolves.toEqual([
       {
+        fileName: 'examples/demo/scripts/emit-demo.mjs',
+        specifier: '../src/generated/app.kovo-route.js',
+        tier: 'app-local-generated',
+      },
+      {
         fileName: 'examples/demo/src/app-browser-fixtures.ts',
         specifier: './generated/app.client.js',
+        tier: 'app-local-generated',
+      },
+      {
+        fileName: 'examples/demo/src/app.generated-browser-fixtures.ts',
+        specifier: './generated/app.client.js',
+        tier: 'app-local-generated',
+      },
+      {
+        fileName: 'examples/demo/src/app.generated.browser.test.ts',
+        specifier: './generated/app.kovo-route.js',
         tier: 'app-local-generated',
       },
       {
@@ -149,6 +165,25 @@ const runtime = () => import('@kovojs/runtime/generated');
         specifier: '@kovojs/compiler/graph',
         tier: 'internal',
       },
+    ]);
+  });
+
+  it('detects committed generated artifacts in app-local roots only', () => {
+    expect(
+      trackedGeneratedViolations([
+        'examples/commerce/src/generated/graph.json',
+        'site/src/generated/kovo-ui.css',
+        'site/tutorial/steps/02-islands/src/generated/product-actions.tsx',
+        'packages/create-kovo/templates/graph.json',
+        '.deepsec/examples/commerce/src/generated/graph.json',
+        'packages/compiler/src/generated/primitive-reactive-attrs.ts',
+        'examples/devtool/__screenshots__/generated.png',
+      ]),
+    ).toEqual([
+      'examples/commerce/src/generated/graph.json',
+      'site/src/generated/kovo-ui.css',
+      'site/tutorial/steps/02-islands/src/generated/product-actions.tsx',
+      'packages/create-kovo/templates/graph.json',
     ]);
   });
 });
