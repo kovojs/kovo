@@ -636,7 +636,11 @@ function isKovoComponent(value: unknown): value is KovoJsxComponent {
 }
 
 function isQueryDefinition(value: unknown): value is QueryDefinition {
-  return isRecord(value) && typeof value.key === 'string' && Array.isArray(value.reads);
+  return (
+    isRecord(value) &&
+    typeof value.key === 'string' &&
+    (value.reads === undefined || Array.isArray(value.reads))
+  );
 }
 
 function isQueryArgsBinding(

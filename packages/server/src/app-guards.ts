@@ -171,8 +171,8 @@ function isQueryDeclarations(value: unknown): value is KovoApp['queries'] {
       (query) =>
         isRecord(query) &&
         typeof query.key === 'string' &&
-        Array.isArray(query.reads) &&
-        query.reads.every(isDomainLike) &&
+        (query.reads === undefined ||
+          (Array.isArray(query.reads) && query.reads.every(isDomainLike))) &&
         (query.args === undefined || isSchemaLike(query.args)) &&
         isOptionalFunction(query.guard) &&
         (query.instanceKey === undefined ||

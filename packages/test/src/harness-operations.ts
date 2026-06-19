@@ -97,7 +97,7 @@ export async function executeHarnessQuery<Db>(
     ? await verifier.capture(load).then((captured) => {
         verifier.assertReadsCoveredOperations(
           captured.observed,
-          query.reads.map((domain) => domain.key),
+          (query.reads ?? []).map((domain) => domain.key),
         );
         return captured.result;
       })

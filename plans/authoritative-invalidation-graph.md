@@ -14,15 +14,15 @@ local sites) / #5 (server truth, never-stale UI).
 
 Traced against implementation, not SPEC claims.
 
-| Question                                                | Answer                                 | Evidence                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Is AST extraction implemented?                          | **Yes**, for writes and reads          | `packages/drizzle/src/static.ts` `extractTouchGraphFromProject`; CLI `kovo compile drizzle-static` (`packages/cli/src/index.ts`); generated `examples/*/src/generated/touch-graph.ts` carry `site:` provenance (e.g. `crm/.../mutations.ts:143`).                                                                                                                     |
-| Query `reads`: derived or hand-declared?                | **Hand-declared, required field**      | `packages/server/src/query.ts:77` (`reads: readonly Domain[]`, non-optional); doc comment "The read set is the entire invalidation declaration — nothing else registers anywhere." Examples hand-write `reads: [contact]` (`examples/crm/src/queries.ts`).                                                                                                            |
-| Mutation `touches`: derived or hand-declared?           | **Hand-declared at runtime**           | `packages/server/src/change-record.ts:60-72`: runtime uses `registry.touches`, else `registry.inferredTouches`. Compiler does **not** populate `inferredTouches` (no reference in `packages/compiler/src`); examples hand-author it inline (`examples/commerce/src/domain.ts:211`) or use explicit `touches` (`examples/crm/src/mutations.ts:159`).                   |
-| Is the generated touch-graph wired into the runtime?    | **No**                                 | The generated `touch-graph.ts` feeds `kovo explain`/devtools/conformance only; example `graph.ts` imports the `TouchGraph` _type_, not the runtime invalidation path.                                                                                                                                                                                                 |
-| Is there a mismatch cross-check?                        | **Yes, but test-instrumentation only** | `packages/test/src/verifier.ts` `assertObservedReadsCovered` (KV407 "Query read from undeclared domain") / `assertObservedWritesCovered` (KV404/KV406/KV408). Proven by `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts` — `/_q/readset-bad` → HTTP 500 + KV407. The verifier lives in `@kovojs/test`; `@kovojs/server` (prod) does **not** run it. |
-| Static / compile-time enforcement of read-set coverage? | **No**                                 | No KV407/readset check in `packages/compiler/src`. KV411 (`Query read set includes an exempt table`) checks declared `reads` against _exempt_ tables only (`packages/drizzle/src/static.ts:86`), not against the `load` AST.                                                                                                                                          |
-| Roadmap status                                          | v1.5 cross-check **open**              | `plans/data-layer-roadmap.md`: v1 floor + blessed adapter `[x]`; "v1.5 verification layer. Runtime instrumentation as CI cross-check for KV402-KV409" `[ ]`.                                                                                                                                                                                                          |
+| Question                                                | Answer                                               | Evidence                                                                                                                                                                                                                                                                                                                                                              |
+| ------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Is AST extraction implemented?                          | **Yes**, for writes and reads                        | `packages/drizzle/src/static.ts` `extractTouchGraphFromProject`; CLI `kovo compile drizzle-static` (`packages/cli/src/index.ts`); generated `examples/*/src/generated/touch-graph.ts` carry `site:` provenance (e.g. `crm/.../mutations.ts:143`).                                                                                                                     |
+| Query `reads`: derived or hand-declared?                | **Hand-declared fallback; optional at author sites** | `packages/server/src/query.ts` defaults omitted `reads` to `[]` and structural app guards accept missing `reads`; compiler derivation is not wired yet. Examples still hand-write `reads: [contact]` (`examples/crm/src/queries.ts`).                                                                                                                                 |
+| Mutation `touches`: derived or hand-declared?           | **Hand-declared at runtime**                         | `packages/server/src/change-record.ts:60-72`: runtime uses `registry.touches`, else `registry.inferredTouches`. Compiler does **not** populate `inferredTouches` (no reference in `packages/compiler/src`); examples hand-author it inline (`examples/commerce/src/domain.ts:211`) or use explicit `touches` (`examples/crm/src/mutations.ts:159`).                   |
+| Is the generated touch-graph wired into the runtime?    | **No**                                               | The generated `touch-graph.ts` feeds `kovo explain`/devtools/conformance only; example `graph.ts` imports the `TouchGraph` _type_, not the runtime invalidation path.                                                                                                                                                                                                 |
+| Is there a mismatch cross-check?                        | **Yes, but test-instrumentation only**               | `packages/test/src/verifier.ts` `assertObservedReadsCovered` (KV407 "Query read from undeclared domain") / `assertObservedWritesCovered` (KV404/KV406/KV408). Proven by `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts` — `/_q/readset-bad` → HTTP 500 + KV407. The verifier lives in `@kovojs/test`; `@kovojs/server` (prod) does **not** run it. |
+| Static / compile-time enforcement of read-set coverage? | **No**                                               | No KV407/readset check in `packages/compiler/src`. KV411 (`Query read set includes an exempt table`) checks declared `reads` against _exempt_ tables only (`packages/drizzle/src/static.ts:86`), not against the `load` AST.                                                                                                                                          |
+| Roadmap status                                          | v1.5 cross-check **open**                            | `plans/data-layer-roadmap.md`: v1 floor + blessed adapter `[x]`; "v1.5 verification layer. Runtime instrumentation as CI cross-check for KV402-KV409" `[ ]`.                                                                                                                                                                                                          |
 
 **Bottom line:** Not a fully silent prod staleness hole — derivation + a runtime
 verifier both exist, and test coverage catches most drift. But the guarantee is weaker
@@ -63,6 +63,13 @@ packages/server/src/mutation.test.ts` passed 25 tests; the regression test
 packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
     derived `mutationTouchRegistry` CLI output and generated
     `mutationInferredTouches` source.
+- [x] **Server query authoring accepts omitted reads.** `query()` now defaults
+      missing `reads` to `[]`, app-shell guards accept declarations without `reads`,
+      and verifier reads coverage treats the omitted declaration as an empty
+      derived-read placeholder.
+  - Evidence: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/mutation.test.ts`
+    passed 49 tests; `pnpm exec vp check --fix` passed formatting, lint, and
+    typecheck after the optional-read authoring change.
 
 ## Open work
 
@@ -76,7 +83,7 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
       no longer hand-lists touches.
 - [ ] **Compiler derives query `reads` from the `load` AST.** Extract the read-set
       (FROM/JOIN domains) from each `query()` `load` body via the same `static.ts`
-      machinery; make authored `reads` optional, deriving when omitted. Hand-declared
+      machinery and populate omitted `reads` from compiler facts. Hand-declared
       `reads` becomes a checked override, not the default. Evidence target: a query
       with a multi-domain JOIN and no authored `reads` invalidates from every joined
       domain's mutation in an integration test.
@@ -127,6 +134,9 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
     and Drizzle static registry source changes.
 - [x] `pnpm exec vitest --run packages/drizzle/src/index.serialization.test.ts packages/cli/src/index.kovo-compile.test.ts`
   - Evidence: passed 21 Drizzle static serialization / CLI facade tests.
+- [x] `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/mutation.test.ts`
+  - Evidence: passed 49 server query/app/invalidation tests after query `reads`
+    became optional at authoring sites.
 - [ ] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
       currently has no package `test` script, so use explicit Vitest file globs.
 - [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`

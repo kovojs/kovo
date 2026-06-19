@@ -647,6 +647,7 @@ describe('server app-shell public API barrels', () => {
         mutations: [{ handler: () => ({ ok: true }), key: 'cart/add' }],
       }),
     ).toBe(false);
+    expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart' }] })).toBe(true);
     expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart', reads: [{}] }] })).toBe(false);
     expect(publicApi.isKovoApp({ ...app, routes: [{ page: () => '<main>Cart</main>' }] })).toBe(
       false,

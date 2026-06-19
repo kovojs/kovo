@@ -10,6 +10,19 @@ import {
 import { s, type Schema } from './schema.js';
 
 describe('query endpoints', () => {
+  it('defaults omitted query reads to an empty derived-read placeholder', async () => {
+    const productQuery = query('product', {
+      load: () => ({ id: 'p1' }),
+    });
+
+    expect(productQuery.reads).toEqual([]);
+    await expect(runQuery(productQuery, undefined, {})).resolves.toEqual({
+      input: undefined,
+      ok: true,
+      value: { id: 'p1' },
+    });
+  });
+
   it('runs query endpoints through args schemas, guards, and request context', async () => {
     type ProductQueryInput = { id: string; max: number };
     type ProductQueryRequest = { session?: { userId?: string } | null };

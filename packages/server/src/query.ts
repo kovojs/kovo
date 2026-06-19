@@ -78,7 +78,7 @@ export interface QueryDefinition<
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   key: Key;
   output?: Schema<Value>;
-  reads: readonly Domain[];
+  reads?: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
 
@@ -107,7 +107,7 @@ interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Reque
   key?: Key;
   load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
   output?: Schema<Value>;
-  reads: readonly Domain[];
+  reads?: readonly Domain[];
   version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
 
@@ -140,7 +140,7 @@ export interface RegisteredQueryDefinition {
   key: string;
   load?: BivariantQueryLoad;
   output?: Schema<unknown>;
-  reads: readonly Domain[];
+  reads?: readonly Domain[];
   version?: BivariantQueryVersion | number | string;
 }
 
@@ -166,13 +166,13 @@ export interface QueryFactory<Request = unknown> {
   >(
     key: Key,
     definition: Definition,
-  ): QueryWithArgsBinding<Definition, Input> & { key: Key };
+  ): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] };
   <const Key extends string, const Definition extends QueryDeclarationDefinition<Request>>(
     key: Key,
     definition: Definition,
   ): Definition extends { args: Schema<infer Input> }
-    ? QueryWithArgsBinding<Definition, Input> & { key: Key }
-    : Definition & { key: Key };
+    ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
+    : Definition & { key: Key; reads: readonly Domain[] };
 }
 
 /**
@@ -201,7 +201,10 @@ export function query<
   Request,
   Value,
   const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
->(key: Key, definition: Definition): QueryWithArgsBinding<Definition, Input> & { key: Key };
+>(
+  key: Key,
+  definition: Definition,
+): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] };
 export function query<
   const Key extends string,
   const Definition extends Omit<RegisteredQueryDefinition, 'key'>,
@@ -209,8 +212,8 @@ export function query<
   key: Key,
   definition: Definition,
 ): Definition extends { args: Schema<infer Input> }
-  ? QueryWithArgsBinding<Definition, Input> & { key: Key }
-  : Definition & { key: Key };
+  ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
+  : Definition & { key: Key; reads: readonly Domain[] };
 export function query<const Key extends string>(
   key: Key,
   definition: Omit<RegisteredQueryDefinition, 'key'>,
@@ -218,6 +221,7 @@ export function query<const Key extends string>(
   const queryDefinition = {
     ...definition,
     key,
+    reads: definition.reads ?? [],
   };
   if (!definition.args) return queryDefinition;
 

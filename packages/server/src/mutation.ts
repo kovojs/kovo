@@ -976,7 +976,7 @@ function queryTouchedByChange(
   change: ChangeRecord,
   input: unknown,
 ): boolean {
-  if (!queryDefinition.reads.some((read) => read.key === change.domain)) return false;
+  if (!(queryDefinition.reads ?? []).some((read) => read.key === change.domain)) return false;
 
   const instanceKey = readQueryInstanceKey(queryDefinition, input);
   if (instanceKey === undefined) return true;

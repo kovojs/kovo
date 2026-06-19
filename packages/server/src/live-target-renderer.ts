@@ -152,7 +152,11 @@ function isQueryArgsBinding<Request>(value: unknown): value is {
 function isQueryDefinition<Request>(
   value: unknown,
 ): value is QueryDefinition<string, unknown, unknown, Request> {
-  return isRecord(value) && typeof value.key === 'string' && Array.isArray(value.reads);
+  return (
+    isRecord(value) &&
+    typeof value.key === 'string' &&
+    (value.reads === undefined || Array.isArray(value.reads))
+  );
 }
 
 async function loadLiveTargetQueries<Request>(
