@@ -592,6 +592,21 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails when verifier coverage leaves a query unobserved', () => {
+    expect(
+      kovoCheck({
+        verificationCoverage: [
+          { key: 'cart/add', kind: 'mutation', observed: true, site: 'cart.domain.ts:12' },
+          { key: 'productGrid', kind: 'query', observed: false, site: 'cart.queries.ts:7' },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR VERIFY cart.queries.ts:7 query productGrid has no verifier coverage.\n',
+    });
+  });
+
   it('fails when a query reads a domain no mutation can invalidate', () => {
     expect(
       kovoCheck({

@@ -97,6 +97,13 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
     passed 53 tests, including fixtures where declared `contactList` reads omit a
     derived `deal` read and declared `createDeal` domains omit a derived `contact`
     touch.
+- [x] **Verifier coverage gaps are a `kovo check` gate.** `kovo check` now accepts
+      `verificationCoverage` graph facts and fails unobserved query/mutation
+      verifier targets, so read/write cross-check coverage can be reported even
+      when a target produced no concrete KV402-KV410 diagnostic.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/graph.test.ts`
+    passed 54 tests, including an uncovered `productGrid` query producing
+    `ERROR VERIFY ... has no verifier coverage`.
 
 ## Open work
 
@@ -114,12 +121,6 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
       Hand-declared `reads` becomes a checked override, not the default. Evidence
       target: a query with a multi-domain JOIN and no authored `reads` invalidates
       from every joined domain's mutation in an integration test.
-- [ ] **Promote the read/write cross-check off the test-only path.** Surface
-      `assertObservedReadsCovered` / `assertObservedWritesCovered` as a CI gate in
-      `kovo check` (the v1.5 "verification layer" roadmap item) so coverage of the
-      verifier is reported and gaps are visible, independent of whether an app's own
-      tests exercise the path. Evidence target: `kovo check` reports readset/touch
-      verification coverage; a deliberately-uncovered query is flagged.
 - [ ] **Migrate examples + docs to the derived-default model.** Remove hand-authored
       `reads`/`touches`/`inferredTouches` from commerce/crm/stackoverflow where the
       writes/reads are statically analyzable; align `site/content/guides/queries.md`
@@ -173,6 +174,9 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
 - [x] `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/graph.test.ts`
   - Evidence: passed 53 CLI/core graph tests after adding
     `derivedQueries`/`derivedMutations` static superset failures.
+- [x] `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/graph.test.ts`
+  - Evidence: passed 54 CLI/core graph tests after adding
+    `verificationCoverage` failure reporting for unobserved verifier targets.
 - [ ] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
       currently has no package `test` script, so use explicit Vitest file globs.
 - [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`

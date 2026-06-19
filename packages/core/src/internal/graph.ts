@@ -36,6 +36,7 @@ export type {
   TriggerExplain,
   UnresolvedWriteSite,
   UpdateCoverageFact,
+  VerificationCoverageFact,
   VerificationDiagnosticFact,
 } from '../graph.js';
 export { validateKovoExplainInput } from '../graph.js';

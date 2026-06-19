@@ -61,6 +61,7 @@ export interface KovoCheckInput {
   scopeAudits?: readonly ScopeAuditFact[];
   touchGraph?: TouchGraph;
   updateCoverage?: readonly UpdateCoverageFact[];
+  verificationCoverage?: readonly VerificationCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
 }
 
@@ -355,6 +356,14 @@ export interface StaticDiagnosticFact {
 }
 
 /** @internal */
+export interface VerificationCoverageFact {
+  key: string;
+  kind: 'mutation' | 'query';
+  observed: boolean;
+  site?: string;
+}
+
+/** @internal */
 export interface SourcePosition {
   column: number;
   line: number;
@@ -386,6 +395,7 @@ const arrayFields = [
   'renderEquivalenceChecks',
   'scopeAudits',
   'updateCoverage',
+  'verificationCoverage',
   'verificationDiagnostics',
 ] as const;
 

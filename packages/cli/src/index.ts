@@ -3537,6 +3537,10 @@ export function kovoCheck(
         diagnosticSeverity(diagnostic) === 'error',
       );
     }
+
+    for (const coverage of graph.verificationCoverage ?? []) {
+      if (!coverage.observed) pushFinding(verificationCoverageGapLine(coverage), true);
+    }
   }
 
   if (includeAll || family === 'optimistic') {
@@ -3831,6 +3835,11 @@ function verificationDiagnosticLine(diagnostic: CoreGraph.VerificationDiagnostic
   const suffix = details.length > 0 ? ` ${details.join(' ')}` : '';
 
   return `${severity.toUpperCase()} ${diagnostic.code} ${site} ${diagnostic.message ?? definition.message}${suffix}`;
+}
+
+function verificationCoverageGapLine(coverage: CoreGraph.VerificationCoverageFact): string {
+  const site = coverage.site ? `${coverage.site} ` : '';
+  return `ERROR VERIFY ${site}${coverage.kind} ${coverage.key} has no verifier coverage.`;
 }
 
 function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): string {
