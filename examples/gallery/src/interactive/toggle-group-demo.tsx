@@ -37,8 +37,11 @@ export const GalleryToggleGroupDemo = component({
     const italicState = { ...groupState, itemValue: 'italic' };
 
     return (
-      <section class="grid gap-2 text-sm text-neutral-950" data-gallery-interactive="toggle-group">
-        <h3 id="gallery-toggle-group-label" class="text-sm font-medium">
+      <section
+        style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
+        data-gallery-interactive="toggle-group"
+      >
+        <h3 id="gallery-toggle-group-label" style="font-size:0.875rem;font-weight:500">
           Text style
         </h3>
         <ToggleGroup
@@ -141,7 +144,10 @@ export const GalleryToggleGroupDemo = component({
             </ToggleGroupButton>
           </ToggleGroupItem>
         </ToggleGroup>
-        <output class="text-xs text-neutral-500" data-demo-state="toggle-group-value">
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="toggle-group-value"
+        >
           {state.value || 'none'}
         </output>
       </section>

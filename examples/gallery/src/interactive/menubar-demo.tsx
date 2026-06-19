@@ -41,7 +41,7 @@ export const GalleryMenubarDemo = component({
 
     return (
       <section
-        class="grid gap-2"
+        style="display:grid;gap:0.5rem"
         data-gallery-interactive="menubar"
         data-open={state.openValue || 'none'}
         onKeyDown={() => {

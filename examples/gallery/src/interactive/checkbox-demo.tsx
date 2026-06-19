@@ -26,8 +26,11 @@ export const GalleryCheckboxDemo = component({
       }}
       value="enabled"
     >
-      <span class="select-none leading-none">Email summary</span>
-      <output class="text-xs text-neutral-500" data-demo-state="checked">
+      <span style="user-select:none;line-height:1">Email summary</span>
+      <output
+        style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+        data-demo-state="checked"
+      >
         {String(state.checked)}
       </output>
     </Checkbox>

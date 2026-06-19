@@ -44,10 +44,10 @@ export const GalleryCheckboxGroupDemo = component({
         labelledBy="gallery-checkbox-group-label"
       >
         <form id="gallery-checkbox-group-form" data-gallery-form="checkbox-group" />
-        <h3 id="gallery-checkbox-group-label" class="text-sm font-medium">
+        <h3 id="gallery-checkbox-group-label" style="font-size:0.875rem;font-weight:500">
           Notifications
         </h3>
-        <label class="inline-flex items-center gap-2">
+        <label style="display:inline-flex;align-items:center;gap:0.5rem">
           <input
             aria-checked={
               state.value === 'updates,billing' ? 'true' : state.value === '' ? 'false' : 'mixed'
@@ -158,7 +158,10 @@ export const GalleryCheckboxGroupDemo = component({
             Billing notices
           </CheckboxGroupLabel>
         </CheckboxGroupItem>
-        <output class="text-xs text-neutral-500" data-demo-state="checkbox-group-value">
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="checkbox-group-value"
+        >
           {state.value || 'none'}
         </output>
       </CheckboxGroup>

@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@kovojs/ui/select';
 
-const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';
+const LABEL_STYLE = 'font-size:0.875rem;font-weight:500;line-height:1;color:#171717';
 
 export interface GallerySelectDemoState {
   highlightedValue: string;
@@ -47,7 +47,7 @@ export const GallerySelectDemo = component({
     return (
       <Select {...selectState} data-gallery-interactive="select" id="gallery-select-root">
         <form id="gallery-select-form" data-gallery-form="select" />
-        <label id="gallery-select-label" for="gallery-select-trigger" class={LABEL_CLASS}>
+        <label id="gallery-select-label" for="gallery-select-trigger" style={LABEL_STYLE}>
           Shipping speed
         </label>
         <SelectHiddenInput {...selectState} id="gallery-select-control" value={state.value} />

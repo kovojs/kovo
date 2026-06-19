@@ -140,7 +140,10 @@ export const GalleryAccordionDemo = component({
             Billing contacts receive invoice updates.
           </AccordionContent>
         </AccordionItem>
-        <output class="text-xs text-neutral-500" data-demo-state="accordion-value">
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="accordion-value"
+        >
           {state.value || 'none'}
         </output>
       </Accordion>

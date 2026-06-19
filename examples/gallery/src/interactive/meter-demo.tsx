@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
 import { Meter, meterValueState as _meterValueState, type MeterDataState } from '@kovojs/ui/meter';
 
-const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
+const ROOT_STYLE = 'display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a';
 
 export interface GalleryMeterDemoState {
   dataState: MeterDataState;
@@ -26,7 +26,7 @@ export const GalleryMeterDemo = component({
     };
 
     return (
-      <section class={ROOT_CLASS} data-gallery-interactive="meter">
+      <section style={ROOT_STYLE} data-gallery-interactive="meter">
         <label for="gallery-meter-value">Storage capacity</label>
         <Meter
           aria-valuetext={`${state.value} percent capacity`}
@@ -60,7 +60,12 @@ export const GalleryMeterDemo = component({
         >
           Optimize capacity
         </Button>
-        <output data-demo-state="meter-value">{String(state.value)}</output>
+        <output
+          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          data-demo-state="meter-value"
+        >
+          {String(state.value)}
+        </output>
       </section>
     );
   },

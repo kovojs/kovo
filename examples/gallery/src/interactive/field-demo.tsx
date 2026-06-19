@@ -13,7 +13,7 @@ import {
   FieldTextarea,
 } from '@kovojs/ui/field';
 
-const OUTPUT_CLASS = 'text-xs text-neutral-500';
+const OUTPUT_STYLE = 'font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block';
 
 export interface GalleryFieldDemoState {
   email: string;
@@ -42,7 +42,11 @@ export const GalleryFieldDemo = component({
     };
 
     return (
-      <form data-gallery-interactive="field" id="gallery-interactive-field-form" class="grid gap-4">
+      <form
+        data-gallery-interactive="field"
+        id="gallery-interactive-field-form"
+        style="display:grid;gap:1rem"
+      >
         <Field
           {...emailFieldState}
           data-invalid={state.invalid ? '' : null}
@@ -93,7 +97,7 @@ export const GalleryFieldDemo = component({
           >
             Enter a complete email address.
           </UiFieldError>
-          <output data-demo-state="field-email" class={OUTPUT_CLASS}>
+          <output data-demo-state="field-email" style={OUTPUT_STYLE}>
             {state.email}
           </output>
         </Field>
@@ -147,7 +151,7 @@ export const GalleryFieldDemo = component({
           <FieldDescription id="gallery-interactive-field-plan-description">
             Native select remains the submitted control.
           </FieldDescription>
-          <output data-demo-state="field-plan" class={OUTPUT_CLASS}>
+          <output data-demo-state="field-plan" style={OUTPUT_STYLE}>
             {state.plan}
           </output>
         </Field>
@@ -163,7 +167,7 @@ export const GalleryFieldDemo = component({
         >
           <FieldsetLegend id="gallery-interactive-fieldset-legend" required={true}>
             Shipping options
-            <label class="ml-2 inline-flex items-center gap-1 text-sm font-normal text-neutral-700">
+            <label style="margin-left:0.5rem;display:inline-flex;align-items:center;gap:0.25rem;font-size:0.875rem;font-weight:400;color:#404040">
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
@@ -180,7 +184,7 @@ export const GalleryFieldDemo = component({
           <FieldDescription id="gallery-interactive-fieldset-description">
             Grouped controls inherit native fieldset disabled behavior.
           </FieldDescription>
-          <label class="grid gap-2 text-sm font-medium leading-none text-neutral-900">
+          <label style="display:grid;gap:0.5rem;font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
             <FieldControl
               form="gallery-interactive-field-form"
               name="gallery-seat"
