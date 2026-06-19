@@ -1,5 +1,5 @@
 import { form, type FormInput } from '@kovojs/core';
-import type { OptimisticFor } from '@kovojs/browser';
+import type { OptimisticPlan } from '@kovojs/browser';
 import { mutation, route, s, type MutationFail } from '@kovojs/server';
 
 import './registries.js';
@@ -11,7 +11,8 @@ import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
 // Tutorial step 05 (chapter 5): the mutation declares what it touches, the
 // framework derives which queries to re-run (SPEC.md sections 10.3, 11.1),
 // and optimism is keyed to queries — one transform per (mutation ×
-// invalidated query), exhaustiveness-checked in tsc (sections 10.4, 10.6).
+// invalidated query), coverage-checked by the registry plus kovo check
+// (sections 10.4, 10.6).
 
 export type { ShopRequest } from './db.js';
 
@@ -73,6 +74,22 @@ export const addToCart = mutation('cart/add', {
     inferredTouches: addToCartTouches,
     queries: [cartQuery, productsQuery],
   },
+  // snippet:optimistic
+  // SPEC.md section 10.4: optimism is keyed to queries, never islands. The
+  // cart count is predictable from the input alone — a pure draft transform.
+  // The product list depends on server truth (stock math lives in the handler),
+  // so it explicitly accepts the 1-RTT fragment: 'await-fragment' is a recorded
+  // decision, not an omission. Registry typing checks keys against the
+  // invalidated queries (section 10.6), while derivation can fill omitted
+  // derivable keys.
+  queue: 'cart',
+  optimistic: {
+    cart(draft, input) {
+      draft.count = (draft.count ?? 0) + input.quantity;
+    },
+    products: 'await-fragment',
+  },
+  // /snippet
   transaction(request: ShopRequest, run) {
     return request.db.transaction((db) => run({ ...request, db }));
   },
@@ -96,25 +113,7 @@ export const addToCart = mutation('cart/add', {
 });
 // /snippet
 
-// snippet:optimistic
-// SPEC.md section 10.4: optimism is keyed to queries, never islands. The
-// cart count is predictable from the input alone — a pure transform. The
-// product list depends on server truth (stock math lives in the handler), so
-// it explicitly accepts the 1-RTT fragment: 'await-fragment' is a recorded
-// decision, not an omission. tsc requires an entry per invalidated query
-// (section 10.6) — delete one and this satisfies clause turns red.
-export const addToCartOptimistic = {
-  queue: 'cart',
-  transforms: {
-    cart(current, input) {
-      return {
-        count: (current?.count ?? 0) + input.quantity,
-      };
-    },
-    products: 'await-fragment',
-  },
-} satisfies OptimisticFor<typeof addToCartForm>;
-// /snippet
+export const addToCartOptimistic = optimisticPlan<AddToCartInput>(addToCart);
 
 export function renderShopPage(
   db: ShopDb = createShopDb(),
@@ -134,3 +133,13 @@ export const homeRoute = route('/', {
     return renderShopPage();
   },
 });
+
+function optimisticPlan<Input>(definition: {
+  optimistic?: Record<string, unknown>;
+  queue?: string;
+}): OptimisticPlan<Input> {
+  return {
+    ...(definition.queue ? { queue: definition.queue } : {}),
+    transforms: (definition.optimistic ?? {}) as OptimisticPlan<Input>['transforms'],
+  };
+}

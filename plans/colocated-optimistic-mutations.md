@@ -139,9 +139,14 @@ export const addContact = mutation('addContact', {
     covers CRM inline draft-style optimistic behavior and `kovo check` graph status;
     `find examples/commerce examples/crm -path '*generated/optimistic*' -type f -print`
     returned no checked-in files; `corepack pnpm exec vp check` passed.
-- [ ] **Docs.** Update `site/content/guides/mutations.md` (and optimistic guide) to teach
+- [x] **Docs.** Update `site/content/guides/mutations.md` (and optimistic guide) to teach
       the inline field as the default; keep standalone `OptimisticFor` documented as the
       escape hatch for the rare case a transform cannot be inlined.
+  - Evidence 2026-06-19:
+    `site/content/guides/mutations.md` and `site/content/guides/optimistic.md`
+    teach inline `mutation.optimistic` and draft transforms;
+    `npx vitest --run site/tutorial/steps/05-optimistic/src/app.test.ts` passed for the updated
+    tutorial snippets; `corepack pnpm exec vp check` passed.
 
 ## Risks / notes
 
@@ -164,6 +169,11 @@ export const addContact = mutation('addContact', {
 ## Latest verification
 
 2026-06-19 latest slice:
+`npx vitest --run site/tutorial/steps/05-optimistic/src/app.test.ts`;
+`corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
+`git diff --check`.
+
+2026-06-19 previous slice:
 `npx vitest --run examples/crm/src/optimistic.test.ts examples/crm/src/graph.test.ts packages/server/src/mutation.test.ts`;
 `corepack pnpm exec tsc --noEmit --pretty false`; `corepack pnpm exec vp check`;
 `git diff --check`.

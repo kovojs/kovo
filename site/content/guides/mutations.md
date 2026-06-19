@@ -34,6 +34,13 @@ export const addToCart = mutation('cart/add', {
     guards.authed<CommerceRequest>(),
     guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
   ),
+  queue: 'cart',
+  optimistic: {
+    cart(draft, input) {
+      draft.count = (draft.count ?? 0) + input.quantity;
+    },
+    productGrid: 'await-fragment',
+  },
   transaction(request: CommerceRequest, run) {
     return request.db.transaction((db) => run({ ...request, db }));
   },
@@ -59,6 +66,9 @@ You declare each part once, and the framework derives the rest from it:
 - **`guard`** composes from combinators. `authed` refines `req.session` so the user is non-null
   inside the handler, and every mutation shows up in the `kovo explain --unguarded` audit — the
   report of everything reachable without authentication.
+- **`optimistic`** is query-keyed prediction for the same write. Each transform mutates a cloned
+  query draft; `'await-fragment'` records that this query should wait for server truth. `queue`
+  names the FIFO lane for submissions that must stay ordered.
 
 ## Render the form
 

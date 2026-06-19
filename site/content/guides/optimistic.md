@@ -14,33 +14,30 @@ forget a transform.
 
 ## Declare transforms
 
-A transform is a pure `(current, input)` function over a query's result type. You declare one per
-query the mutation invalidates. Here is the commerce app's cart transform:
+A transform is a pure `(draft, input) => void` function over a query's result type. Put the
+optimistic map on the mutation, next to the write it predicts:
 
 ```ts
-import { form } from '@kovojs/core';
-import type { OptimisticFor } from '@kovojs/browser';
-
-export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
-
-export const addToCartOptimistic = {
+export const addToCart = mutation('cart/add', {
+  input: addToCartInput,
   queue: 'cart',
-  transforms: {
-    cart(current, input) {
-      return { count: (current?.count ?? 0) + input.quantity };
+  optimistic: {
+    cart(draft, input) {
+      draft.count = (draft.count ?? 0) + input.quantity;
     },
     orderHistory: 'await-fragment',
     productGrid: 'await-fragment',
   },
-} satisfies OptimisticFor<typeof addToCartForm>;
+  handler: addToCartHandler,
+});
 ```
 
 Three things to notice:
 
 - **The keys are query names**, and the required set is the mutation's derived invalidation set. The
-  compiler emits each mutation's invalidated-query keys into the registries, so
-  `OptimisticFor<typeof addToCartForm>` demands an entry per invalidated query under plain `tsc`.
-  Add a write that touches a new domain and this object goes red.
+  compiler emits each mutation's invalidated-query keys into the registries, so the inline
+  `optimistic` object is typed from `InvalidationSets['cart/add']` and the query result registry.
+  Add a write that touches a new domain and `kovo check optimistic` reports the uncovered query.
 - **`'await-fragment'` is a real answer.** It says "considered; the 1-RTT latency is fine here" — the
   product grid re-renders from the server fragment instead of being predicted. A deliberate deferral
   and a forgotten transform are different states, and only the second one is a diagnostic.
@@ -49,17 +46,21 @@ Three things to notice:
   two quick "add" clicks can't land out of order or race to a wrong predicted count. Mutations with
   different queue names (or none) stay concurrent.
 
-Transforms are typed against the query's inferred result, so a column rename breaks the transform in
-the editor instead of in production.
+Transforms receive a cloned draft of the query's inferred result, so mutate the draft and return
+nothing. A column rename breaks the transform in the editor instead of in production.
+
+The standalone `OptimisticFor<typeof form>` shape still exists as an escape hatch for rare cases
+where a transform must live outside the mutation module. The default path is inline on
+`mutation()`.
 
 ## Catch a missing transform
 
 Coverage is the invalidated-query set checked against the declared status, per mutation. The valid
-v1 statuses are `hand-written` and `await-fragment`; anything else is a diagnostic. The check runs at
-two altitudes off the same derived set: as a type error in the editor, and as `kovo check` in CI.
+v1 statuses are `hand-written`, `derived`, and `await-fragment`; anything else is a diagnostic. The
+check runs from the same derived set in `kovo check` and in editor-visible registry typing.
 
-Here is the failure, from running `kovo check` against the commerce graph with the hand-written `cart`
-transform deleted:
+Here is the failure, from running `kovo check` against the commerce graph with the `cart` transform
+uncovered:
 
 ```txt
 kovo-check/v1
@@ -74,11 +75,11 @@ OPTIMISTIC productGrid await-fragment
 OPTIMISTIC orderHistory await-fragment
 OPTIMISTIC cart UNHANDLED
   -> hand-write in the mutation module, or declare 'await-fragment'
-OPTIMISTIC-SUMMARY total=3 hand-written=0 await-fragment=2 UNHANDLED=1
+OPTIMISTIC-SUMMARY total=3 derived=0 hand-written=0 await-fragment=2 UNHANDLED=1 PUNTED=0
 ```
 
-With the transform in place, the same command reports clean coverage —
-`OPTIMISTIC-SUMMARY … UNHANDLED=0`, with one `OPTIMISTIC` line per invalidated query. The full
+With the transform in place, the same command reports clean coverage:
+`OPTIMISTIC-SUMMARY ... UNHANDLED=0`, with one `OPTIMISTIC` line per invalidated query. The full
 annotated artifact lives in [reading kovo check & kovo explain](/guides/kovo-explain/#read-the-output).
 
 A forgotten optimistic update is a visible, suppressible diagnostic with the suppression recorded in
@@ -114,7 +115,7 @@ Fragment-only responses are allowed; silent inconsistency is not.
 
 Each query keeps a pending-transform log. When server truth arrives while other mutations are still
 in flight, the runtime morphs the authoritative value in, then re-applies the still-pending
-transforms in order. This rebase is safe because transforms are pure `(data, input)` functions:
+transforms in order. This rebase is safe because transforms are pure draft mutations:
 
 ```ts
 // Conceptually, the loader keeps a per-query pending-transform log.
@@ -128,12 +129,12 @@ dies with the document, so stale optimism can't outlive its mutation.
 
 ## Test the prediction
 
-A transform is a pure function, so you can unit-test it directly:
+A transform is a pure draft mutation, so you can unit-test it by cloning before apply:
 
 ```ts
-expect(addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 })).toEqual(
-  { count: 3 },
-);
+const draft = structuredClone({ count: 1 });
+addToCart.optimistic.cart(draft, { productId: 'p1', quantity: 2 });
+expect(draft).toEqual({ count: 3 });
 ```
 
 Beyond a point check, you can property-test that the prediction is _contained in eventual truth_ over

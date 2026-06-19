@@ -22,7 +22,7 @@ import { createShopDb } from './db.js';
 
 // Tutorial step 05: invalidation is derived from declared touches, server
 // truth rides the same wire as fragments, and every optimistic prediction is
-// a pure transform that can be property-tested against the real handler
+// a pure draft transform that can be property-tested against the real handler
 // (SPEC.md sections 10.3-10.6, 11.4).
 
 function shopRequest(db = createShopDb()): ShopRequest {
@@ -154,7 +154,11 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
   it('predicts the cart count with the hand-written transform', () => {
     expect(addToCartOptimistic.queue).toBe('cart');
     expect(
-      addToCartOptimistic.transforms.cart({ count: 1 }, { productId: 'p1', quantity: 2 }),
+      applyOptimisticTransform(
+        addToCartOptimistic.transforms.cart,
+        { count: 1 },
+        { productId: 'p1', quantity: 2 },
+      ),
     ).toEqual({ count: 3 });
     // Every invalidated query has an explicit status (SPEC.md §10.6).
     expect(Object.keys(addToCartOptimistic.transforms).sort()).toEqual(['cart', 'products']);
@@ -171,7 +175,11 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
         },
         cases: propertyCases(),
         predict(state, input) {
-          return addToCartOptimistic.transforms.cart(shapeCartQuery(state), input);
+          return applyOptimisticTransform(
+            addToCartOptimistic.transforms.cart,
+            shapeCartQuery(state),
+            input,
+          );
         },
         shape(state) {
           return shapeCartQuery(state);
@@ -188,3 +196,15 @@ describe('tutorial step 05 — invalidation & optimistic updates', () => {
     ]);
   });
 });
+
+function applyOptimisticTransform<Value, Input>(
+  transform: unknown,
+  current: Value,
+  input: Input,
+): Value {
+  if (typeof transform !== 'function') return current;
+
+  const draft = structuredClone(current);
+  const returned = (transform as (draft: Value, input: Input) => unknown)(draft, input);
+  return returned === undefined ? draft : (returned as Value);
+}

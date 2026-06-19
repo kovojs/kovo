@@ -61,9 +61,9 @@ Exhaustiveness is the point. The step declares its invalidation sets in the regi
 
 {{snippet:05-optimistic/src/registries.ts#registries}}
 
-Because of that declaration, `OptimisticFor<typeof addToCartForm>` requires an entry per
-invalidated query. Delete the `products` line and `tsc` goes red — a forgotten optimistic update
-is a compile error, never a silently stale badge.
+Because of that declaration, the inline `mutation.optimistic` map is typed from the invalidated
+queries and their result shapes. Delete the `products` line and `kovo check optimistic` reports
+KV310 — a forgotten optimistic update is never a silently stale badge.
 
 {{snippet:05-optimistic/src/app.test.ts#transform-test}}
 
