@@ -284,6 +284,99 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('keeps writes visible through approved iteration callbacks and KV406s opaque callbacks', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'delete(table: unknown): { where(value: unknown): Promise<void> };',
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            '',
+            'function saveItem(writer: PgDatabase, productId: string) {',
+            '  return writer.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export async function addItems(db: PgDatabase, productIds: string[]) {',
+            '  await Promise.all(productIds.map(async (productId) => db.insert(cartItems).values({ productId })));',
+            '  productIds.forEach((productId) => db.update(cartItems).set({ productId }));',
+            '  await db.transaction(async (tx) => {',
+            '    await Promise.all(productIds.map(async (productId) => tx.delete(cartItems).where(eq(cartItems.productId, productId))));',
+            '  });',
+            '  productIds.map((productId) => saveItem(db, productId));',
+            '  withRetry(async () => db.insert(cartItems).values({ productId: "opaque" }));',
+            '  withRetry(async () => saveItem(db, "opaque-helper"));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      addItems: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:10',
+            via: 'cart_items',
+          },
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:11',
+            via: 'cart_items',
+          },
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+          {
+            domain: 'cart',
+            keys: null,
+            predicate: 'non-eq',
+            site: 'cart.domain.ts:13',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [
+          {
+            code: 'KV406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:16',
+          },
+          {
+            code: 'KV406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:17',
+          },
+        ],
+      },
+      saveItem: {
+        reads: [],
+        touches: [
+          {
+            domain: 'cart',
+            keys: null,
+            site: 'cart.domain.ts:6',
+            via: 'cart_items',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('uses typed receiver origins inside project domain write callbacks', () => {
     const graph = extractTouchGraphFromProject({
       files: [

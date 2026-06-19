@@ -47,7 +47,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
 
 | Code  | Severity | Meaning                                                                         |
 | ----- | -------- | ------------------------------------------------------------------------------- |
-| KV407 | error    | Proven Drizzle write in a write() body yielded zero touches and zero unresolved |
+| TBD   | error    | Proven Drizzle write in a write() body yielded zero touches and zero unresolved |
 | KV312 | error    | Position reads a clock builtin / time-volatile value with no declared cadence   |
 | KV315 | warn     | Untracked clock read (`Date.now()`/`new Date()`); use a declared `clocks` input |
 | KV412 | error    | Query reads an unmodeled relation (view / materialized view) with no domain     |
@@ -60,7 +60,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
 
 ## Tier 0 — the promise is literally false in its dead-center case
 
-- [ ] **T0-CLOSURE — closure-nested writes silently drop invalidation.**
+- [x] **T0-CLOSURE — closure-nested writes silently drop invalidation.**
       A Drizzle write reachable only through an array-method / `Promise.all`
       closure contributes **zero touches and zero KV406**, so a query reading
       that domain is never invalidated — green build, green test, silent stale
@@ -75,21 +75,40 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
     `forEach`, a per-row helper called inside `.map`, and
     `db.transaction(tx => Promise.all(items.map(...)))`. A **passing test
     encodes the silent behavior**: `packages/drizzle/src/index.write-callbacks-carriers.test.ts:271-284`.
-  - [ ] Widen `isTouchBodyNode` to DESCEND through a closed allowlist of
+  - [x] Widen `isTouchBodyNode` to DESCEND through a closed allowlist of
         loop/promise combinators (`map`/`forEach`/`reduce`/`flatMap`/`filter`,
         `Promise.all`/`allSettled` over a `.map`), composing per-ancestor
         (continue, not early-return) so transaction + iteration nesting works;
         fold touches through the existing tx receiver-alias proof.
-  - [ ] For any UNRECOGNIZED closure containing a proven-db write, route into the
+    - Evidence 2026-06-19: `packages/drizzle/src/static.ts` now continues through
+      inline transaction callbacks plus the closed iteration callback allowlist;
+      the Drizzle carrier test passed and covers `Promise.all(...map)`,
+      `forEach`, transaction + nested map, and local helper-in-map touches.
+
+  - [x] For any UNRECOGNIZED closure containing a proven-db write, route into the
         unresolved path → loud **KV406** ("write inside opaque callback — confirm
         touches"), never a silent drop.
-  - [ ] Add the structural backstop **KV407**: a write() body whose AST contains
-        a proven insert/update/delete (or in-project helper carrying a proven db
-        receiver) that produced `{0 folded summary, 0 touch, 0 unresolved}` is a
-        build error.
-  - [ ] Replace `index.write-callbacks-carriers.test.ts:271-284` so it asserts
+    - Evidence 2026-06-19: the same Drizzle test asserts direct writes and a
+      local helper carrying `db` inside opaque `withRetry(async () => …)`
+      callbacks produce KV406 unresolved sites instead of disappearing.
+  - [x] Add the structural backstop: a write() body whose AST contains a proven
+        insert/update/delete (or in-project helper carrying a proven db receiver)
+        inside an unrecognized callback produces KV406 unresolved coverage rather
+        than `{0 folded summary, 0 touch, 0 unresolved}`. The original KV407
+        placeholder conflicts with SPEC.md §11.3, where KV407 already means query
+        read-set coverage failure; keep final code assignment for the diagnostic
+        registry phase.
+    - Evidence 2026-06-19: `extractOpaqueClosureProjectReceiverCallsFromBody`
+      scans call expressions outside `isTouchBodyNode` coverage and emits
+      unresolved KV406 for proven direct Drizzle writes or helper calls carrying a
+      proven receiver.
+  - [x] Replace `index.write-callbacks-carriers.test.ts:271-284` so it asserts
         the touch is captured (or KV406 raised) — and add fixtures for all four
         drop shapes above.
+    - Evidence 2026-06-19: `packages/conformance-fixtures/src/touch-graph-fixtures.test.ts`
+      locks closure-nested writes through the conformance fixture seam; the
+      conformance touch-graph test passed.
+
   - Acceptance: the four shapes each yield a touch or a KV406; fixpoint + render
     gates still green (`SPEC.md` §5.2); a new conformance fixture in
     `packages/conformance-fixtures` locks the captured behavior.

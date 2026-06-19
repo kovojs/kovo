@@ -123,6 +123,13 @@ const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
 const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
 const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
+const TOUCH_BODY_ITERATION_CALLBACK_METHODS = new Set([
+  'filter',
+  'flatMap',
+  'forEach',
+  'map',
+  'reduce',
+]);
 
 /** @internal */
 export type QueryShape =
@@ -1467,9 +1474,81 @@ function extractProjectUnresolvedCalls(
       localFunctionsByKey,
       (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
     ),
+    ...extractOpaqueClosureProjectReceiverCallsFromBody(body, receivers, carrierSymbolKeys),
     ...extractProjectUnclassifiedDrizzleReceiverCalls(body, receivers),
     ...extractProjectDrizzleReceiverContainerCalls(body),
   ];
+}
+
+function extractOpaqueClosureProjectReceiverCallsFromBody(
+  body: Node,
+  receivers: ProjectDrizzleReceivers,
+  carrierSymbolKeys: ReadonlySet<string>,
+  bodyOffset = bodySourceStart(body),
+): ExternalDbArgumentCall[] {
+  const calls: ExternalDbArgumentCall[] = [];
+
+  for (const call of callExpressionsInNode(body)) {
+    if (isTouchBodyNode(call, body)) continue;
+    const opaqueClosure = opaqueTouchClosureAncestor(call, body);
+    if (!opaqueClosure) continue;
+
+    const directWrite = isDrizzleWriteCall(call)
+      ? directDrizzleReceiverCallSurface(call)
+      : undefined;
+    const hasDirectWrite =
+      directWrite !== undefined &&
+      isProjectDrizzleReceiverIdentifier(directWrite.receiver, receivers);
+    const helper = externalHelperCallSurface(call);
+    const helperName = helper?.name;
+    const helperCarriesReceiver =
+      helper !== undefined &&
+      !IGNORED_LOCAL_CALL_NAMES.has(helper.name) &&
+      call
+        .getArguments()
+        .some((argument) =>
+          projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
+        );
+
+    if (!hasDirectWrite && !helperCarriesReceiver) continue;
+
+    const index = call.getStart() - bodyOffset;
+    if (index >= 0) {
+      calls.push({
+        index,
+        name: directWrite?.name ?? helperName ?? 'callback',
+      });
+    }
+  }
+
+  return uniqueExternalDbArgumentCalls(calls);
+}
+
+function opaqueTouchClosureAncestor(node: Node, body: Node): Node | undefined {
+  for (const ancestor of node.getAncestors()) {
+    if (ancestor === body) return undefined;
+    if (!isFunctionLikeNode(ancestor)) continue;
+    if (isInlineTransactionCallback(ancestor) || isInlineIterationCallback(ancestor)) continue;
+    return ancestor;
+  }
+
+  return undefined;
+}
+
+function uniqueExternalDbArgumentCalls(
+  calls: readonly ExternalDbArgumentCall[],
+): ExternalDbArgumentCall[] {
+  const seen = new Set<string>();
+  const unique: ExternalDbArgumentCall[] = [];
+
+  for (const call of calls) {
+    const key = `${call.index}:${call.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(call);
+  }
+
+  return unique;
 }
 
 function extractProjectExternalDbArgumentCalls(
@@ -1675,7 +1754,9 @@ function isTouchBodyNode(node: Node, body: Node): boolean {
   for (const ancestor of node.getAncestors()) {
     if (ancestor === body) return true;
     if (!isFunctionLikeNode(ancestor)) continue;
-    if (!isInlineTransactionCallback(ancestor)) return false;
+    if (isInlineTransactionCallback(ancestor)) continue;
+    if (isInlineIterationCallback(ancestor)) continue;
+    return false;
   }
 
   return true;
@@ -1695,6 +1776,15 @@ function isInlineTransactionCallback(callback: Node): boolean {
   if (!parent.getArguments().includes(callback)) return false;
 
   return staticAccessName(parent.getExpression()) === 'transaction';
+}
+
+function isInlineIterationCallback(callback: Node): boolean {
+  const parent = callback.getParent();
+  if (!Node.isCallExpression(parent)) return false;
+  if (!parent.getArguments().includes(callback)) return false;
+
+  const method = staticAccessName(parent.getExpression());
+  return method ? TOUCH_BODY_ITERATION_CALLBACK_METHODS.has(method) : false;
 }
 
 function isProjectDrizzleReceiverIdentifier(

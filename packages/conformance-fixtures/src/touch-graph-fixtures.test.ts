@@ -2,6 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { SourceFileInput } from '@kovojs/drizzle/internal/static';
+import { extractTouchGraphFromProject } from '@kovojs/drizzle/internal/static';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -12,7 +14,82 @@ import {
   touchGraphSummaryFacts,
 } from './touch-graph-fixtures.js';
 
+function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
+  return {
+    fileName: 'drizzle-types.d.ts',
+    source: [
+      'declare module "drizzle-orm/pg-core" {',
+      '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      ...methods.map((method) => `    ${method}`),
+      '  }',
+      '}',
+      'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+    ].join('\n'),
+  };
+}
+
 describe('@kovojs/test touch graph fixture seam', () => {
+  it('locks closure-nested Drizzle writes as captured touches or KV406 surfaces', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'delete(table: unknown): { where(value: unknown): Promise<void> };',
+          'insert(table: unknown): { values(value: unknown): Promise<void> };',
+          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+          'update(table: unknown): { set(value: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
+            '',
+            'function saveItem(writer: PgDatabase, productId: string) {',
+            '  return writer.insert(cartItems).values({ productId });',
+            '}',
+            '',
+            'export async function addItems(db: PgDatabase, productIds: string[]) {',
+            '  await Promise.all(productIds.map(async (productId) => db.insert(cartItems).values({ productId })));',
+            '  productIds.forEach((productId) => db.update(cartItems).set({ productId }));',
+            '  await db.transaction(async (tx) => {',
+            '    await Promise.all(productIds.map(async (productId) => tx.delete(cartItems).where(eq(cartItems.productId, productId))));',
+            '  });',
+            '  productIds.map((productId) => saveItem(db, productId));',
+            '  withRetry(async () => db.insert(cartItems).values({ productId: "opaque" }));',
+            '  withRetry(async () => saveItem(db, "opaque-helper"));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.addItems?.touches).toEqual([
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:10', via: 'cart_items' },
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:11', via: 'cart_items' },
+      { domain: 'cart', keys: null, site: 'cart.domain.ts:6', via: 'cart_items' },
+      {
+        domain: 'cart',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'cart.domain.ts:13',
+        via: 'cart_items',
+      },
+    ]);
+    expect(graph.addItems?.unresolved).toEqual([
+      {
+        code: 'KV406',
+        message: 'Statically un-analyzable write site; manual touches required.',
+        site: 'cart.domain.ts:16',
+      },
+      {
+        code: 'KV406',
+        message: 'Statically un-analyzable write site; manual touches required.',
+        site: 'cart.domain.ts:17',
+      },
+    ]);
+  });
+
   it('summarizes touch-graph source provenance against resolved source lines', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-test-touch-graph-'));
     const touchGraph = {
