@@ -312,6 +312,20 @@ routes/<route>.css]` (theme stays on `base`/app), using
       than the Phase 0 baseline; update `graph.json`,
       `app.rendering.test.ts` (`examples/commerce/src/app.rendering.test.ts`),
       and `route-kit.test.ts` expectations with byte evidence.
+  - Progress 2026-06-19:
+    `corepack pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS|links only reachable build CSS chunks"`
+    proves split app CSS is no longer duplicated into the declared
+    `/assets/styles.css` sink for build fixtures.
+    `corepack pnpm exec vitest --run examples/commerce/src/app.rendering.test.ts -t "keeps authored global CSS"`
+    boots the emitted commerce node server and proves `/`, `/cart`, and `/login`
+    each serve linked+inline CSS below the Phase 0 commerce route total
+    (129,747 bytes).
+    `node examples/commerce/scripts/measure-style-size.mjs --json` records built
+    commerce route totals: `/` 111,988 linked + 11,001 inline, `/cart` 111,988
+    linked + 11,001 inline, `/login` 113,560 linked + 12,572 inline.
+  - Gap:
+    CRM, Stack Overflow, create-kovo starter, and site still need comparable
+    route-byte proof before this checkbox can close.
 
 ### Phase 7 — Overship regression gate
 

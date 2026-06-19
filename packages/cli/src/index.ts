@@ -2604,11 +2604,12 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
   if (!packageResult.css && !appResult.css)
     return { assets: emptyKovoBuildStylesheetAssets(), stylesheetCss: [] };
   const tokenCss = kovoUiTokenSheetCss.replace(/@theme[^{]*\{[\s\S]*?\n\}/, '').trim();
+  const monolithAppCss = appSplitManifest ? null : appResult.css;
   return {
     assets: appSplitAssets,
     stylesheetCss: [
       {
-        css: [tokenCss, packageResult.css, appResult.css].filter(Boolean).join('\n'),
+        css: [tokenCss, packageResult.css, monolithAppCss].filter(Boolean).join('\n'),
         href: '/assets/styles.css',
       },
       ...stylesheetCssFromBuildStylesheetAssets(appSplitAssets),
@@ -2807,12 +2808,13 @@ async function buildKovoClientManifest(
     ),
   );
   const splitStylesheetAssets = stylesheetAssetsFromCssSplitChunks(cssAssetManifest?.chunks);
+  const monolithAppCss = cssAssetManifest?.chunks ? null : appCss;
 
   return {
     assets: splitStylesheetAssets,
     manifestFile: join(outDir, '.vite/manifest.json'),
     stylesheetCss: [
-      ...(appCss ? [{ css: appCss, href: '/assets/styles.css' }] : []),
+      ...(monolithAppCss ? [{ css: monolithAppCss, href: '/assets/styles.css' }] : []),
       ...stylesheetCssFromBuildStylesheetAssets(splitStylesheetAssets),
     ],
   };

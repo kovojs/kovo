@@ -41,6 +41,7 @@ const viteServer = await createServer({
 
 const routes = options.routes.length > 0 ? options.routes : ['/', '/cart', '/login'];
 const routeResults = [];
+const builtRouteResults = [];
 try {
   const appModule = await viteServer.ssrLoadModule('/src/app.tsx');
   const app = appModule.default ?? appModule.commerceApp?.app;
@@ -60,7 +61,26 @@ try {
   await viteServer.close();
 }
 
+const serverModule = await import(
+  `${pathToFileURL(path.join(distRoot, 'server/server.mjs')).href}?t=${Date.now()}`
+);
+if (typeof serverModule.createKovoNodeServer === 'function') {
+  const server = serverModule.createKovoNodeServer();
+  await listen(server);
+  const origin = serverOrigin(server);
+  try {
+    for (const route of routes) {
+      const response = await fetch(new URL(route, origin));
+      const html = await response.text();
+      builtRouteResults.push(routeStyleSize(route, html, cssFiles, commerceRoot));
+    }
+  } finally {
+    await close(server);
+  }
+}
+
 const result = {
+  builtRoutes: builtRouteResults,
   buildMs,
   cssBytes,
   cssFiles: cssFiles.map((file) => relativeFile(file, commerceRoot)),
@@ -84,6 +104,13 @@ if (options.json) {
       `js-files=${result.jsFiles.join(',') || '-'}`,
       ...result.routes.flatMap((route) => [
         `route=${route.route}`,
+        `  html-bytes=${route.htmlBytes}`,
+        `  linked-css-bytes=${route.linkedCssBytes}`,
+        `  inlined-critical-css-bytes=${route.inlinedCriticalCssBytes}`,
+        `  linked-hrefs=${route.linkedHrefs.join(',') || '-'}`,
+      ]),
+      ...result.builtRoutes.flatMap((route) => [
+        `built-route=${route.route}`,
         `  html-bytes=${route.htmlBytes}`,
         `  linked-css-bytes=${route.linkedCssBytes}`,
         `  inlined-critical-css-bytes=${route.inlinedCriticalCssBytes}`,
@@ -199,4 +226,26 @@ function cssFileForHref(cssFiles, href, root) {
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+async function listen(server) {
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+}
+
+async function close(server) {
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+  });
+}
+
+function serverOrigin(server) {
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected TCP server address.');
+  return `http://127.0.0.1:${address.port}`;
 }
