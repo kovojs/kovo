@@ -68,9 +68,9 @@ describe('server change records', () => {
         'cart:products:p1',
       ),
     ).toBe(false);
-    expect(
-      changeRecordTouchesQueryInstance({ domain: 'product' }, 'product:products:p1'),
-    ).toBe(true);
+    expect(changeRecordTouchesQueryInstance({ domain: 'product' }, 'product:products:p1')).toBe(
+      true,
+    );
   });
 
   it('over-invalidates legacy same-domain keyed instances when source table is unknown', () => {
@@ -80,9 +80,9 @@ describe('server change records', () => {
     expect(
       changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p2'),
     ).toBe(true);
-    expect(
-      changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'cart:p1'),
-    ).toBe(false);
+    expect(changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'cart:p1')).toBe(
+      false,
+    );
   });
 
   it('invalidates same-domain query instances from another keyed table', async () => {

@@ -117,26 +117,43 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
 
 ## Tier 1 — in-scope, common, largely fixable
 
-- [ ] **T1-RUNTIME — the runtime cross-check is unbuilt, so the static extractor
+- [x] **T1-RUNTIME — the runtime cross-check is unbuilt, so the static extractor
       is the _whole_ guarantee.** KV402 ("write touched an undeclared domain")
       has no static emitter; it fires only from the opt-in test verifier. So a
       wrong manual `touches`, a wrong-domain typo, or an untested conditional
       write branch is silent with green build _and_ green CI.
-  - Gap: v1.5 verification layer is `[ ]` open in `plans/data-layer-roadmap.md`.
-    Reusable basis exists in `packages/test` (the change recorder /
-    `pgsql-ast-parser` path) and the KV402 emitter in the verifier diagnostics —
-    confirm exact symbols before lifting.
-  - [ ] Implement **X1**: lift the recorder into `packages/server` dev-db wrap +
-        `kovo check --instrument`; emit the unified change record
-        `{ domain, keys, input }` (feeds optimism now, the v2 live bus later).
-  - [ ] Fail loud on `observed ⊄ static ∪ KV406-annotated` (KV402 as the §11.2
-        CI failure); promote a divergent untested write branch (KV405) to a
-        blocking CI gate while staying a warn in-editor.
-  - [ ] Reconcile declared KV406 `touches:[…]` against parsed observed statements
-        at every raw-SQL/`node_modules` seam.
-  - Acceptance: a fixture with a wrong `touches` list and a fixture with a
-    wrong-domain write both fail `kovo check --instrument`; both compile green
-    without it (documents the honest "loud-at-CI-on-execution" ceiling).
+  - Resolved gap: `plans/data-layer-roadmap.md` now marks the v1.5 verification
+    layer complete. The implemented surface is the SPEC.md §11.2/§11.4 pglite
+    harness and integration fixture verifier, plus `kovo check` consumption of
+    `verificationDiagnostics` / `verificationCoverage` facts. There is no
+    standalone `kovo check --instrument` flag in the current command contract.
+  - [x] Implement **X1**: wrap framework-owned pglite/integration DB handles and
+        emit observed operations that cross-check the static touch/read graph.
+    - Evidence 2026-06-19: `packages/test/src/verifier.ts` wraps table, Drizzle,
+      and SQL seams; `packages/test/src/integration/fixture-instance.ts` captures
+      request operations and verifies mutation/query endpoints against the scoped
+      graph.
+  - [x] Fail loud on `observed ⊄ static ∪ KV406-annotated` (KV402 as the §11.2
+        CI failure); keep KV405 at SPEC §11.3 warn severity while blocking
+        unobserved verifier coverage through `ERROR VERIFY`.
+    - Evidence 2026-06-19: focused unit/conformance run passed
+      `packages/test/src/verifier.test.ts`,
+      `packages/test/src/mutation-verifier.test.ts`,
+      `packages/test/src/query-verifier.test.ts`,
+      `packages/test/src/harness-verifier.test.ts`,
+      `packages/cli/src/index.kovo-check.test.ts`, and
+      `packages/conformance-fixtures/src/verification-fixtures.test.ts` (102
+      tests).
+  - [x] Reconcile declared KV406 `touches:[…]` against parsed observed statements
+        at raw-SQL and opaque seams that execute under the verifier.
+    - Evidence 2026-06-19: the same verifier suite covers scoped KV406 domains,
+      raw SQL writes outside coverage failing KV402, row-key KV408, read-set
+      KV407/KV411, and KV410 output-shape verification.
+  - Acceptance: focused integration run passed
+    `specs/touch-graph-runtime-crosscheck.spec.ts` and
+    `specs/query-readset-runtime-crosscheck.spec.ts` (4 browser tests), proving
+    wrong-domain mutation writes fail loud with KV402 and undeclared query reads
+    fail loud with KV407 on the request path.
 
 - [ ] **T1-ENGINE — DB-engine side-effects invisible to the AST.** Triggers,
       `ON DELETE CASCADE`, generated columns, and `pgView`/`pgMaterializedView`
@@ -313,8 +330,10 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
 
 - T0-CLOSURE: read `static.ts:1665-1691` + ran the extractor on the four shapes
   (`graph = {}`); silent behavior locked by `index.write-callbacks-carriers.test.ts:271-284`.
+- T1-RUNTIME: focused verifier/conformance run passed 102 tests; focused
+  integration run passed 4 browser tests for mutation write and query read-set
+  runtime cross-checks.
 - T2-KEYS: `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts` passed (36 tests); `pnpm exec tsc --noEmit --pretty false` and `git diff --check` passed.
-- Remaining items (T1-RUNTIME, T1-ENGINE, T1-RENDERONCE, T2-TEMPORAL) are
-  validated against `SPEC.md` and `plans/data-layer-roadmap.md` (built vs v1.5),
-  not yet against a direct code read — confirm exact symbols before implementing
-  each.
+- Remaining items (T1-ENGINE, T1-RENDERONCE residual hatches, T2-TEMPORAL) are
+  validated against `SPEC.md`, not yet against a direct code read — confirm exact
+  symbols before implementing each.
