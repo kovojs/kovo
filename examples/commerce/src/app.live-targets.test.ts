@@ -8,10 +8,10 @@ import {
 } from '@kovojs/test/html-fragment';
 
 import { createCommerceScenarioClient } from './app-test-helpers.js';
-import { createCommerceApp } from './app.generated-fixtures.js';
+import { createCommerceApp } from './app.js';
 
-describe('commerce generated app artifacts', () => {
-  it('stamps generated live-target hooks into the rendered cart document', async () => {
+describe('commerce authored live-target artifacts', () => {
+  it('stamps live-target hooks into the rendered cart document', async () => {
     const client = createCommerceScenarioClient(createCommerceApp());
     const response = await client.get('/cart');
     const html = await response.text();
@@ -22,7 +22,7 @@ describe('commerce generated app artifacts', () => {
     ).toHaveLength(1);
   });
 
-  it('render generated live-target UI fragments for enhanced addToCart success', async () => {
+  it('renders live-target UI fragments for enhanced addToCart success', async () => {
     const client = createCommerceScenarioClient(createCommerceApp());
     const login = await client.signIn({ remoteAddress: '203.0.113.171' });
     expect(login.status).toBe(303);
@@ -39,7 +39,7 @@ describe('commerce generated app artifacts', () => {
     expect(htmlTextContent(body)).toContain('Only 1 left');
   });
 
-  it('renders generated live-target failure fragments with form helpers', async () => {
+  it('renders live-target failure fragments with form helpers', async () => {
     const client = createCommerceScenarioClient(createCommerceApp());
     const login = await client.signIn({ remoteAddress: '203.0.113.174' });
     expect(login.status).toBe(303);

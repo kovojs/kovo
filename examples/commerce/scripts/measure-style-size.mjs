@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,7 +20,10 @@ execFileSync('corepack', ['pnpm', '--dir', commerceRoot, 'run', 'build'], {
 });
 const buildMs = Math.round(performance.now() - buildStart);
 
-const assetFiles = listFiles(path.join(distRoot, 'assets'));
+const assetFiles = [
+  ...listFilesIfExists(path.join(distRoot, 'assets')),
+  ...listFilesIfExists(path.join(distRoot, '.kovo-client/assets')),
+];
 const cssFiles = assetFiles.filter((file) => file.endsWith('.css'));
 const jsFiles = assetFiles.filter((file) => file.endsWith('.js'));
 const cssBytes = sumBytes(cssFiles);
@@ -36,16 +39,14 @@ const viteServer = await createServer({
 
 let html;
 try {
-  const appModule = await viteServer.ssrLoadModule('/src/generated/app.kovo-route.tsx');
+  const appModule = await viteServer.ssrLoadModule('/src/app.tsx');
   const app = appModule.default ?? appModule.commerceApp?.app;
   const requestHandler =
     typeof appModule.createCommerceApp === 'function'
       ? appModule.createCommerceApp().requestHandler
       : undefined;
   if (!requestHandler || !app) {
-    throw new Error(
-      '/src/generated/app.kovo-route.tsx must export createCommerceApp and default app.',
-    );
+    throw new Error('/src/app.tsx must export createCommerceApp and default app.');
   }
   const response = await requestHandler(new Request('https://commerce.test/cart'));
   html = await response.text();
@@ -120,6 +121,10 @@ function listFiles(root) {
     else if (stats.isFile()) entries.push(file);
   }
   return entries.sort((left, right) => left.localeCompare(right));
+}
+
+function listFilesIfExists(root) {
+  return existsSync(root) ? listFiles(root) : [];
 }
 
 function relativeFile(file, from) {

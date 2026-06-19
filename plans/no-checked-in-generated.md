@@ -154,15 +154,14 @@ vitest run src/vite.test.ts` covers cache hits and source-hash invalidation.
 Per area: delete the `*generated-fixtures.ts` wrapper, repoint app entries/helpers/tests to
 authored components/routes, and convert or relocate artifact tests.
 
-- [ ] **Commerce** — drop `app.generated-fixtures.ts`; `app.tsx`/helpers reference authored
+- [x] **Commerce** — drop `app.generated-fixtures.ts`; `app.tsx`/helpers reference authored
       components; fold `app.generated-artifacts.test.ts` into compile-on-the-fly assertions or a
       compiler/package test. Derive `live-targets` at build, not via a committed module the app
       imports.
-  - Progress evidence: `examples/commerce/src/app.tsx` now runs its main Vitest suite through
-    authored components with the compiler plugin active, and the unauthenticated order-history
-    fallback no longer imports the compiler-pruned `renderOrderHistory` helper from the lowered
-    component module. Gap: `app.generated-fixtures.ts`, `app.generated-artifacts.test.ts`, and
-    generated live-target derivation remain.
+  - Evidence: `examples/commerce/src/app.live-targets.test.ts` imports `./app.js`, the fixture
+    wrapper was deleted, `rg -n "generated-fixtures|app\\.generated|/src/generated/app\\.kovo-route|generated/app\\.kovo-route|from './generated" examples/commerce --glob '!src/generated/**'`
+    finds only emit-script references, and `pnpm --filter @kovojs/example-commerce test` passes
+    with the compiler plugin active.
 - [ ] **CRM** — same; reconcile `mutations.ts`/`optimistic-merge.ts` with non-committed optimistic
       plans (authored mutation exports own the runtime plan; generated optimistic is emit-only).
 - [ ] **StackOverflow** — same as Commerce.
