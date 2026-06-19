@@ -285,4 +285,86 @@ describe('enhanced mutation submit', () => {
     expect(result.appliedFragments).toEqual(['cart-form']);
     expect(channel.messages).toEqual([]);
   });
+
+  it('streams opted-in enhanced submits from a readable response body', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      { 'data-stream-text': 'assistant:a1' },
+      { textContent: '' },
+    );
+    root.targets.set('messages', new FakeMorphTarget());
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const text = vi.fn(async () => {
+      throw new Error('streaming submit should not buffer text()');
+    });
+    const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(
+            encoder.encode(
+              '<kovo-fragment target="messages" mode="append"><article data-stream-text="assistant:a1"></article></kovo-fragment>',
+            ),
+          );
+          controller.enqueue(
+            encoder.encode(
+              '<kovo-text target="assistant:a1">Hello</kovo-text><kovo-query name="chat">{"count":1}</kovo-query>',
+            ),
+          );
+          controller.close();
+        },
+      }),
+      headers: {
+        get(name: string) {
+          return name === 'Kovo-Changes' ? '[{"domain":"chat"}]' : null;
+        },
+      },
+      text,
+    }));
+
+    const result = await submitEnhancedMutation({
+      fetch,
+      form: {
+        action: '/_m/chat/send',
+        getAttribute(name: string) {
+          return name === 'data-stream' ? '' : null;
+        },
+        method: 'post',
+      },
+      formData: new FormData(),
+      idem: 'idem_stream_01',
+      root,
+      store,
+    });
+
+    expect(fetch).toHaveBeenCalledWith('/_m/chat/send', {
+      body: expect.any(FormData),
+      headers: {
+        Accept: 'text/vnd.kovo.fragment+html; stream=1',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_stream_01',
+        'Kovo-Live-Targets': '',
+        'Kovo-Stream': 'true',
+        'Kovo-Targets': '',
+      },
+      keepalive: false,
+      method: 'POST',
+    });
+    expect(text).not.toHaveBeenCalled();
+    expect(root.targets.get('messages')?.html).toBe(
+      '<article data-stream-text="assistant:a1"></article>',
+    );
+    expect(streamTarget.textContent).toBe('Hello');
+    expect(store.get('chat')).toEqual({ count: 1 });
+    expect(result).toMatchObject({
+      appliedFragments: ['messages'],
+      changes: [{ domain: 'chat' }],
+      idem: 'idem_stream_01',
+      queries: ['chat'],
+      streams: ['assistant:a1'],
+      targets: [],
+    });
+  });
 });

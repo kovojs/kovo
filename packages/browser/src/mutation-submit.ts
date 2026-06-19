@@ -19,6 +19,7 @@ import {
   type EnhancedFormElementLike,
 } from './mutation-form.js';
 import {
+  applyStreamingFetchedEnhancedMutationResponseToRuntime,
   applyFetchedEnhancedMutationResponseToRuntime,
   type EnhancedMutationAppliedResult,
 } from './mutation-apply.js';
@@ -29,6 +30,7 @@ import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import { readDeps, stampPendingQueries } from './pending.js';
 import type { PendingRoot } from './pending.js';
+import type { ImportHandlerModule } from './handlers.js';
 
 export type {
   EnhancedFormLike,
@@ -46,6 +48,7 @@ export interface EnhancedMutationLoaderOptions {
   fetch: EnhancedMutationFetch;
   formData?: (form: EnhancedFormElementLike, event: DelegatedEvent) => unknown;
   idem?: () => string;
+  importModule?: ImportHandlerModule;
   morph?: MorphFragment;
   /**
    * Handles enhanced form submit failures after preventDefault. When present,
@@ -99,6 +102,7 @@ export async function dispatchEnhancedFormSubmit(
         applyQuery: options.applyQuery,
         broadcast: options.broadcast,
         idem: options.idem?.(),
+        importModule: options.importModule,
         morph: options.morph,
         pendingQueries: options.pendingRoot ? readDeps(form.getAttribute('kovo-deps')) : undefined,
         pendingRoot: options.pendingRoot,
@@ -153,6 +157,7 @@ export interface EnhancedMutationSubmitOptions {
   form: EnhancedFormLike;
   formData: unknown;
   idem?: string;
+  importModule?: ImportHandlerModule;
   islandSignalScope?: IslandSignalScope;
   morph?: MorphFragment;
   /**
@@ -181,12 +186,25 @@ export async function submitEnhancedMutation(
   stampEnhancedMutationPending(options, true);
 
   try {
-    const fetched = await fetchEnhancedMutation(options);
+    const fetched = await fetchEnhancedMutation({
+      ...options,
+      streaming: isStreamingEnhancedMutationForm(options.form),
+    });
     // SPEC §9.1.1: default the build token (from the page meta) and the
     // refetch-full handler so the production submit path validates delta bases
     // and recovers on a miss/skew. Both stay injectable for tests.
     const expectedBuildToken = options.expectedBuildToken ?? readPageBuildToken();
     const onDeltaMiss = options.onDeltaMiss ?? defaultDeltaMissRefetcher(options);
+    if (fetched.streamBody) {
+      return applyStreamingFetchedEnhancedMutationResponseToRuntime(
+        {
+          ...options,
+          ...definedProps({ expectedBuildToken, onDeltaMiss }),
+        },
+        { ...fetched, streamBody: fetched.streamBody },
+      );
+    }
+
     return applyFetchedEnhancedMutationResponseToRuntime(
       {
         ...options,
@@ -200,6 +218,17 @@ export async function submitEnhancedMutation(
   } finally {
     stampEnhancedMutationPending(options, false);
   }
+}
+
+export function isStreamingEnhancedMutationForm(form: EnhancedFormLike): boolean {
+  const getAttribute = form.getAttribute;
+  if (!getAttribute) return false;
+
+  return (
+    getAttribute.call(form, 'stream') !== null ||
+    getAttribute.call(form, 'data-stream') !== null ||
+    getAttribute.call(form, 'data-kovo-stream') !== null
+  );
 }
 
 function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDeltaMiss {

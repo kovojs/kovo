@@ -1,5 +1,6 @@
 import {
   applyMutationResponseBodyToRuntime,
+  applyStreamingMutationResponseBodyToRuntime,
   type AppliedMutationResponse,
 } from './apply-mutation-response.js';
 import { definedProps } from './defined-props.js';
@@ -12,6 +13,7 @@ import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { OnDeltaMiss, QueryApplyInterposition } from './query-apply.js';
 import type { QueryStore } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
+import type { ImportHandlerModule } from './handlers.js';
 
 /** @internal Inputs for applying a fetched enhanced mutation response to the runtime (SPEC §9.1). */
 export interface EnhancedMutationRuntimeApplyOptions {
@@ -20,6 +22,7 @@ export interface EnhancedMutationRuntimeApplyOptions {
   /** The page-level build token (SPEC §9.1.1); deltas only apply when it matches the response's. */
   expectedBuildToken?: string;
   islandSignalScope?: IslandSignalScope;
+  importModule?: ImportHandlerModule;
   morph?: MorphFragment;
   /** Refetch-full handler invoked for delta chunks with a missing/stale base (SPEC §9.1.1). */
   onDeltaMiss?: OnDeltaMiss;
@@ -72,6 +75,38 @@ export function applyFetchedEnhancedMutationResponseToRuntime(
     store: options.store,
   });
   publishSuccessfulMutation(options, fetched);
+
+  return {
+    ...applied,
+    changes: fetched.changes,
+    idem: fetched.idem,
+    targets: fetched.targets,
+  };
+}
+
+/** @internal Apply a streaming fetched enhanced mutation response and broadcast only confirmed buffered bodies. */
+export async function applyStreamingFetchedEnhancedMutationResponseToRuntime(
+  options: EnhancedMutationRuntimeApplyOptions,
+  fetched: FetchedEnhancedMutation & { streamBody: ReadableStream<Uint8Array> },
+  hooks: MutationRuntimeApplyHooks = {},
+): Promise<EnhancedMutationAppliedResult> {
+  const applied = await applyStreamingMutationResponseBodyToRuntime({
+    ...definedProps({
+      applyQuery: hooks.applyQuery ?? options.applyQuery,
+      beforeApplyQueries: hooks.beforeApplyQueries,
+      expectedBuildToken: options.expectedBuildToken,
+      importModule: options.importModule,
+      islandSignalScope: options.islandSignalScope,
+      morph: options.morph,
+      onDeltaMiss: options.onDeltaMiss,
+      onError: options.onError,
+      queryPlans: options.queryPlans,
+      responseBuildToken: fetched.buildToken,
+    }),
+    body: fetched.streamBody,
+    root: options.root,
+    store: options.store,
+  });
 
   return {
     ...applied,

@@ -213,22 +213,22 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
     stream chunks and `<kovo-text>`, then add an async apply API over
     `ReadableStream<Uint8Array>` that applies chunks as they arrive.
   - Evidence: `corepack pnpm exec vitest --run packages/browser/src/wire-parser.test.ts packages/browser/src/mutation-response-apply.test.ts --reporter verbose`; `corepack pnpm exec tsc --noEmit --pretty false`.
-- [ ] **2. Runtime text buffering and checkpoints.**
+- [x] **2. Runtime text buffering and checkpoints.**
   - Maintain per-stream-source text buffers, coalesce appends, flush with
     fake-timer testability, and support checkpoint replace semantics for long
     streams.
-  - Evidence: pending runtime batching/checkpoint tests.
-- [ ] **3. Runtime sink renderer hook.**
+  - Evidence: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose` covers buffered appends, threshold flush, fake-timer flush, completion flush, and checkpoint replacement.
+- [x] **3. Runtime sink renderer hook.**
   - When a stream source declares a renderer, call the referenced client module
     with the target element, accumulated source text, and abort signal on
     coalesced flushes. Renderer failures must surface through the same streaming
     error policy and must not corrupt the source buffer.
-  - Evidence: pending renderer hook tests.
-- [ ] **4. Runtime enhanced submit integration.**
+  - Evidence: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose` covers `data-stream-renderer` import, accumulated source delivery, and renderer failure through `onError` while preserving source text.
+- [x] **4. Runtime enhanced submit integration.**
   - Add a streaming submit path for opted-in forms. It should set streaming
     accept headers, read `response.body`, apply chunks incrementally, publish
     query events, preserve pending/error behavior, and fall back cleanly.
-  - Evidence: pending runtime submit tests and browser fixture.
+  - Evidence: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose` covers `data-stream` submit opt-in, streaming request headers, readable body application, query application, and fallback to buffered submit for non-opted forms.
 - [ ] **5. Server streaming mutation response.**
   - Add server support for async chunk emission from mutations after CSRF,
     schema, guard, idempotency, and replay checks. Preserve the existing
@@ -265,9 +265,14 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
   - Evidence: passed with `api-surface/v1 public-exports-needing-attention=1571 (baseline=1571)`.
 - [x] runtime parser/apply: `corepack pnpm exec vitest --run packages/browser/src/wire-parser.test.ts packages/browser/src/mutation-response-apply.test.ts --reporter verbose`
   - Evidence: 2 files / 32 tests passed.
-- [ ] runtime text batching/checkpoints: pending targeted `packages/browser` test file
-- [ ] runtime sink renderer hook: pending targeted `packages/browser` test file
-- [ ] runtime streaming submit: pending targeted `packages/browser` test file
+- [x] runtime text batching/checkpoints: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose`
+  - Evidence: 2 files / 18 tests passed.
+- [x] runtime sink renderer hook: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose`
+  - Evidence: 2 files / 18 tests passed.
+- [x] runtime streaming submit: `corepack pnpm exec vitest --run packages/browser/src/mutation-response-apply.test.ts packages/browser/src/mutation-submit.test.ts --reporter verbose`
+  - Evidence: 2 files / 18 tests passed.
+- [x] browser typecheck: `corepack pnpm exec tsc --noEmit --pretty false`
+  - Evidence: passed.
 - [ ] server text coalescing: pending targeted `packages/server` test file
 - [ ] server streaming mutation path: pending targeted `packages/server` test file
 - [x] compiler lowering/fixpoint: `corepack pnpm exec vitest --run packages/compiler/src/stamps.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/core/src/diagnostics.test.ts --reporter verbose`

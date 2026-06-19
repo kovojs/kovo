@@ -15,7 +15,17 @@ import {
 } from './wire-parser.js';
 import type { FragmentChunk, StreamTextChunk } from './wire-response-scanner.js';
 import type { IslandSignalScope } from './handler-context.js';
-import { applyStreamTextChunks, type StreamTextRoot } from './stream-text.js';
+import {
+  applyStreamTextChunks,
+  StreamTextBuffer,
+  type StreamTextBufferOptions,
+  type StreamTextRoot,
+} from './stream-text.js';
+import type { ImportHandlerModule } from './handlers.js';
+
+type RuntimeStreamTextOptions = StreamTextBufferOptions & {
+  buffer?: StreamTextBuffer;
+};
 
 /** @generated Facts about an applied mutation response: the `fragments` and `queries` it touched (SPEC §9.1). */
 export interface AppliedMutationResponse {
@@ -29,6 +39,7 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
   applyQuery?: QueryApplyInterposition;
   beforeApplyQueries?: (queries: readonly QueryChunk[]) => void;
   islandSignalScope?: IslandSignalScope;
+  importModule?: ImportHandlerModule;
   morph?: MorphFragment;
   /** Invoked for each delta chunk whose base is missing or stale (SPEC §9.1.1). */
   onDeltaMiss?: OnDeltaMiss;
@@ -43,6 +54,7 @@ export interface ApplyMutationResponseChunksToRuntimeOptions {
   expectedBuildToken?: string;
   root?: MorphRoot | undefined;
   store: QueryStore;
+  streamText?: RuntimeStreamTextOptions;
 }
 
 export type ApplyMutationResponseBodyToRuntimeOptions =
@@ -102,12 +114,17 @@ export function applyMutationResponseChunksToRuntime(
         missedQueries.push(q);
       }
     }
-    effectiveChunks = { fragments: chunks.fragments, queries: missedQueries };
+    effectiveChunks = {
+      fragments: chunks.fragments,
+      queries: missedQueries,
+      ...(chunks.texts === undefined ? {} : { texts: chunks.texts }),
+    };
   } else if (buildTokenMismatch) {
     // No onDeltaMiss, but still skip applying deltas (drop them silently).
     effectiveChunks = {
       fragments: chunks.fragments,
       queries: chunks.queries.filter((q) => !q.delta),
+      ...(chunks.texts === undefined ? {} : { texts: chunks.texts }),
     };
   }
 
@@ -131,7 +148,7 @@ export function applyMutationResponseChunksToRuntime(
   const streams = applyStreamTextChunks(
     options.root as StreamTextRoot | undefined,
     effectiveChunks.texts,
-    definedProps({ onError: options.onError }),
+    definedProps({ buffer: options.streamText?.buffer, onError: options.onError }),
   );
   if (streams.length > 0) applied.streams = streams;
 
@@ -185,6 +202,20 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   const { body, ...applyOptions } = options;
   const reader = body.getReader();
   const decoder = new TextDecoder();
+  const streamAbortController =
+    options.streamText?.signal === undefined ? new AbortController() : undefined;
+  const streamTextBuffer =
+    options.root && !options.streamText?.buffer
+      ? new StreamTextBuffer({
+          ...definedProps({
+            flushDelayMs: options.streamText?.flushDelayMs,
+            flushThreshold: options.streamText?.flushThreshold,
+            importModule: options.importModule ?? options.streamText?.importModule,
+            onError: options.onError ?? options.streamText?.onError,
+            signal: options.streamText?.signal ?? streamAbortController?.signal,
+          }),
+        })
+      : options.streamText?.buffer;
   let pending = '';
   let aggregate: AppliedMutationResponse | AppliedMutationResponseWithRoot | undefined;
 
@@ -193,7 +224,10 @@ export async function applyStreamingMutationResponseBodyToRuntime(
       const read = await reader.read();
       if (read.done) break;
       pending += decoder.decode(read.value, { stream: true });
-      const result = flushCompleteMutationResponsePrefix(pending, applyOptions);
+      const result = flushCompleteMutationResponsePrefix(
+        pending,
+        applyOptionsWithStreamTextBuffer(applyOptions, streamTextBuffer),
+      );
       pending = result.pending;
       aggregate = mergeAppliedMutationResponses(aggregate, result.applied);
     }
@@ -204,15 +238,35 @@ export async function applyStreamingMutationResponseBodyToRuntime(
         aggregate,
         applyMutationResponseChunksToRuntime(
           readMutationResponseBodyChunks(pending, options.onError),
-          applyOptions,
+          applyOptionsWithStreamTextBuffer(applyOptions, streamTextBuffer),
         ),
       );
     }
+    await streamTextBuffer?.flush('completion');
+  } catch (error) {
+    streamAbortController?.abort();
+    await streamTextBuffer?.fail(error);
+    throw error;
   } finally {
     reader.releaseLock();
   }
 
   return aggregate ?? emptyAppliedMutationResponse(options.root);
+}
+
+function applyOptionsWithStreamTextBuffer(
+  options: ApplyMutationResponseChunksToRuntimeOptions,
+  buffer: StreamTextBuffer | undefined,
+): ApplyMutationResponseChunksToRuntimeOptions {
+  return {
+    ...options,
+    ...definedProps({
+      streamText: {
+        ...options.streamText,
+        ...definedProps({ buffer }),
+      },
+    }),
+  };
 }
 
 function flushCompleteMutationResponsePrefix(

@@ -7,6 +7,11 @@ import {
 } from './apply-mutation-response.js';
 import { createQueryStore } from './client.js';
 import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
+import {
+  applyStreamTextChunks,
+  StreamTextBuffer,
+  type StreamTextRoot,
+} from './stream-text.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 
 describe('decoded mutation response apply', () => {
@@ -304,5 +309,126 @@ describe('decoded mutation response apply', () => {
     ]);
     expect(applied.queries).toEqual(['chat']);
     expect(applied.streams).toEqual(['assistant:a1']);
+  });
+
+  it('buffers stream text until threshold, checkpoint, timer, or completion flushes it', async () => {
+    vi.useFakeTimers();
+    try {
+      const root = new FakeMorphRoot();
+      const streamTarget = new FakeQueryBindingElement(
+        { 'data-stream-text': 'assistant:a1' },
+        { textContent: '' },
+      );
+      root.querySelectorAll = (selector: string) =>
+        selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+      const streamRoot = root as unknown as StreamTextRoot;
+      const buffer = new StreamTextBuffer({ flushDelayMs: 50, flushThreshold: 6 });
+
+      applyStreamTextChunks(
+        streamRoot,
+        [
+          { target: 'assistant:a1', text: 'Hel' },
+          { target: 'assistant:a1', text: 'lo' },
+        ],
+        { buffer },
+      );
+      expect(streamTarget.textContent).toBe('');
+
+      await vi.advanceTimersByTimeAsync(50);
+      expect(streamTarget.textContent).toBe('Hello');
+
+      applyStreamTextChunks(streamRoot, [{ target: 'assistant:a1', text: ' world' }], { buffer });
+      expect(streamTarget.textContent).toBe('Hello world');
+
+      applyStreamTextChunks(
+        streamRoot,
+        [{ mode: 'checkpoint', target: 'assistant:a1', text: 'Server' }],
+        { buffer },
+      );
+      await buffer.flush('completion');
+      expect(streamTarget.textContent).toBe('Server');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('runs declared stream renderers with accumulated source without corrupting text on failure', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      {
+        'data-stream-renderer': '/c/markdown.client.js#renderMarkdownStream',
+        'data-stream-text': 'assistant:a1',
+      },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const renderError = new Error('markdown failed');
+    const renderer = vi.fn(() => {
+      streamTarget.setAttribute('data-rendered-source', streamTarget.textContent ?? '');
+      throw renderError;
+    });
+    const onError = vi.fn();
+
+    await applyStreamingMutationResponseBodyToRuntime({
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('<kovo-text target="assistant:a1">Hi</kovo-text>'));
+          controller.close();
+        },
+      }),
+      importModule: vi.fn(async () => ({ renderMarkdownStream: renderer })),
+      onError,
+      root,
+      store,
+    });
+
+    expect(renderer).toHaveBeenCalledWith(streamTarget, 'Hi', {
+      signal: expect.any(AbortSignal),
+    });
+    expect(onError).toHaveBeenCalledWith(renderError);
+    expect(streamTarget.textContent).toBe('Hi');
+    expect(streamTarget.getAttribute('data-rendered-source')).toBe('Hi');
+  });
+
+  it('flushes buffered text and marks the stream target failed when a stream read errors', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      { 'data-stream-text': 'assistant:a1' },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const readError = new Error('stream disconnected');
+    const onError = vi.fn();
+
+    await expect(
+      applyStreamingMutationResponseBodyToRuntime({
+        body: new ReadableStream<Uint8Array>({
+          pull: (() => {
+            let pulled = false;
+            return (controller) => {
+              if (pulled) {
+                controller.error(readError);
+                return;
+              }
+              pulled = true;
+              controller.enqueue(
+                new TextEncoder().encode('<kovo-text target="assistant:a1">Partial</kovo-text>'),
+              );
+            };
+          })(),
+        }),
+        onError,
+        root,
+        store,
+      }),
+    ).rejects.toBe(readError);
+
+    expect(streamTarget.textContent).toBe('Partial');
+    expect(streamTarget.getAttribute('data-stream-state')).toBe('error');
+    expect(onError).toHaveBeenCalledWith(readError);
   });
 });

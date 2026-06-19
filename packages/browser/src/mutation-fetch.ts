@@ -30,6 +30,7 @@ export interface UploadProgress {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface EnhancedMutationResponseLike {
+  body?: ReadableStream<Uint8Array> | null;
   headers?: {
     get(name: string): string | null;
   };
@@ -52,6 +53,7 @@ export interface FetchEnhancedMutationOptions {
   onError?: RuntimeErrorReporter;
   onUploadProgress?: (progress: UploadProgress) => void;
   root: TargetCollectorRoot;
+  streaming?: boolean;
 }
 
 export interface FetchedEnhancedMutation {
@@ -61,6 +63,7 @@ export interface FetchedEnhancedMutation {
   changes: MutationChangeRecord[];
   idem: string;
   response: EnhancedMutationResponseLike;
+  streamBody?: ReadableStream<Uint8Array> | undefined;
   targets: string[];
 }
 
@@ -73,14 +76,17 @@ export async function fetchEnhancedMutation(
   const response = await options.fetch(options.form.action, {
     body: options.formData,
     headers: {
-      Accept: 'text/vnd.kovo.fragment+html',
+      Accept: options.streaming
+        ? 'text/vnd.kovo.fragment+html; stream=1'
+        : 'text/vnd.kovo.fragment+html',
       'Kovo-Fragment': 'true',
       ...definedProps({ 'Kovo-Form-Target': submittedFormTarget }),
       'Kovo-Idem': idem,
       'Kovo-Live-Targets': targetSnapshot.liveHeader,
+      ...definedProps(options.streaming ? { 'Kovo-Stream': 'true' } : {}),
       'Kovo-Targets': targetSnapshot.header,
     },
-    keepalive: true,
+    keepalive: !options.streaming,
     method: (options.form.method ?? 'post').toUpperCase(),
     ...definedProps({ onUploadProgress: options.onUploadProgress }),
   });
@@ -90,11 +96,12 @@ export async function fetchEnhancedMutation(
     response.headers?.get('Kovo-Build') ?? response.headers?.get('kovo-build') ?? undefined;
 
   return {
-    body: await response.text(),
+    body: options.streaming && response.body ? '' : await response.text(),
     buildToken,
     changes,
     idem,
     response,
+    ...(options.streaming && response.body ? { streamBody: response.body } : {}),
     targets: targetSnapshot.targets,
   };
 }
