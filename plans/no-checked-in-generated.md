@@ -134,7 +134,7 @@ committed `graph.json`).
   - Gallery slice evidence: `examples/gallery/vite.config.ts` and
     `examples/gallery/vitest.browser.config.ts` install the pre-transform compiler plugin for
     `src/interactive`; `pnpm --filter @kovojs/example-gallery exec vitest run
-    src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts` passes.
+src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts` passes.
     Gap: generated gallery fixtures/tests still need repointing to authored imports.
 - [x] Expose a config-safe compiler plugin entry for Vite/Vitest config loading.
   - Evidence: `@kovojs/compiler/vite` (`packages/compiler/src/vite-config.ts`) keeps compiler
@@ -184,6 +184,11 @@ authored components/routes, and convert or relocate artifact tests.
 - [ ] **Gallery** — `interactive-docs.tsx` and browser fixtures import authored
       `src/interactive/*.tsx`; lower via the test plugin (Phase 1). Retire
       `interactive-docs.generated-fixtures.tsx` and `*.generated-browser-fixtures.ts`.
+  - Progress evidence: `interactive-docs.tsx` now imports authored demos from
+    `interactive-docs-demos.tsx`, `interactive-docs.generated-fixtures.tsx` was removed, the
+    Gallery app shell compiles authored demo client modules in memory, and
+    `pnpm --filter @kovojs/example-gallery exec vitest run src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts`
+    passes. Gap: generated browser fixtures/tests still import `src/generated/interactive`.
 - [ ] **Site** — `site/src/app.ts` exports the authored app/route entry; drop
       `app.generated-fixtures.ts`, `src/generated/app.kovo-route.tsx`, `app.routes.tsx`.
 - [ ] **Tutorial steps 02–07** — each `app.ts` imports authored `components/*.tsx`; drop every

@@ -1,11 +1,11 @@
 /** @jsxImportSource @kovojs/server */
-import { interactiveGalleryDemos } from './interactive-docs.generated-fixtures.js';
+import { interactiveGalleryDemos } from './interactive-docs-demos.js';
 
 export {
   interactiveGalleryDemos,
   type InteractiveGalleryDemo,
   type InteractiveGalleryDemoName,
-} from './interactive-docs.generated-fixtures.js';
+} from './interactive-docs-demos.js';
 
 export async function renderInteractiveGalleryRoute(): Promise<string> {
   const renderedDemos = await Promise.all(

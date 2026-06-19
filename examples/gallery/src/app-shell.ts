@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
 import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
@@ -13,7 +14,6 @@ import ts from 'typescript';
 
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 
-const galleryGeneratedRoot = fileURLToPath(new URL('./generated/interactive/', import.meta.url));
 const headlessUiSourceRoot = fileURLToPath(
   new URL('../../../packages/headless-ui/src/', import.meta.url),
 );
@@ -93,12 +93,10 @@ export const galleryInteractiveNodeHandler = galleryInteractiveAppShell.nodeHand
 export default galleryInteractiveAppShell.app;
 
 function registerGalleryInteractiveClientModule(demoName: string): string {
-  const modulePath = `/c/examples/gallery/src/generated/interactive/${demoName}.client.js`;
-  const generatedServerTsx = readGeneratedInteractiveArtifact(`${demoName}.tsx`);
-  const generatedClientSource = rewriteGalleryClientImports(
-    readGeneratedInteractiveArtifact(`${demoName}.client.js`),
-  );
-  const version = generatedClientModuleVersion(generatedServerTsx, modulePath, demoName);
+  const modulePath = `/c/src/interactive/${demoName}.client.js`;
+  const rawClientSource = compileGalleryInteractiveClientModule(demoName);
+  const generatedClientSource = rewriteGalleryClientImports(rawClientSource);
+  const version = galleryClientModuleVersion(rawClientSource);
   const href = galleryInteractiveClientModules.put({
     path: modulePath,
     source: generatedClientSource,
@@ -110,6 +108,18 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
   }
 
   return href;
+}
+
+function compileGalleryInteractiveClientModule(demoName: string): string {
+  const fileName = `src/interactive/${demoName}.tsx`;
+  const source = readFileSync(new URL(`./interactive/${demoName}.tsx`, import.meta.url), 'utf8');
+  const result = compileComponentModule({ fileName, source });
+  const clientSource = result.files.find((file) => file.kind === 'client')?.source;
+  if (clientSource === undefined) {
+    throw new Error(`Gallery interactive demo ${demoName} produced no client module.`);
+  }
+
+  return clientSource;
 }
 
 function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
@@ -155,10 +165,6 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
   return hrefs;
 }
 
-function readGeneratedInteractiveArtifact(fileName: string): string {
-  return readFileSync(new URL(fileName, `file://${galleryGeneratedRoot}`), 'utf8');
-}
-
 // SPEC.md §4.4: rewrite bare specifiers to served module URLs so the browser can resolve the
 // generated client module graph without an import map.
 function rewriteGalleryClientImports(source: string): string {
@@ -179,40 +185,18 @@ function rewriteGalleryClientImports(source: string): string {
     );
 }
 
-function generatedClientModuleVersion(
-  source: string,
-  modulePath: string,
-  demoName: string,
-): string {
-  const escapedModulePath = escapeRegExp(modulePath);
-  const versionPattern = new RegExp(`/c/__v/([0-9a-f]{8})/${escapedModulePath.slice(3)}#`, 'g');
-  const versions = new Set<string>();
-  let match: RegExpExecArray | null;
-
-  while ((match = versionPattern.exec(source)) !== null) {
-    versions.add(String(match[1]));
+function galleryClientModuleVersion(source: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index++) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
   }
 
-  if (versions.size !== 1) {
-    throw new Error(
-      `Expected one generated client version for ${demoName}, found ${versions.size}.`,
-    );
-  }
-
-  const version = versions.values().next().value;
-  if (version === undefined) {
-    throw new Error(`Missing generated client version for ${demoName}.`);
-  }
-
-  return version;
+  return hash.toString(16).padStart(8, '0');
 }
 
 function routeValueToHtml(value: unknown): string {
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return '';
   return JSON.stringify(value);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
