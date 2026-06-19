@@ -1,6 +1,11 @@
-import ts from 'typescript';
+import { createRequire } from 'node:module';
+import * as ts from 'typescript';
 
 import type { StaticLiteralValue } from './object.js';
+
+const mutableTs = ts as unknown as Record<string, unknown>;
+if (!('ScriptTarget' in mutableTs))
+  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
 export interface ComponentOptionEntry {
   end: number;

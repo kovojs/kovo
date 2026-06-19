@@ -1,5 +1,7 @@
+import { createRequire } from 'node:module';
+import * as ts from 'typescript';
+
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
-import ts from 'typescript';
 import { componentCssAssetForFile, dedupeCss, emitCssModule } from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { emitClientModule } from './emit/client.js';
@@ -64,6 +66,10 @@ import type {
   StateDeriveReferenceFact,
 } from './types.js';
 import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
+
+const mutableTs = ts as unknown as Record<string, unknown>;
+if (!('ScriptTarget' in mutableTs))
+  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
 /**
  * Compile a single authored component module (TSX/JSX source) into its lowered-IR

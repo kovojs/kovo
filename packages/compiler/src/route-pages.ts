@@ -1,6 +1,8 @@
+import { createRequire } from 'node:module';
 import { dirname, relative, resolve } from 'node:path';
+import * as ts from 'typescript';
+
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import ts from 'typescript';
 
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type {
@@ -14,6 +16,10 @@ import type {
 } from './types.js';
 import type { StaticLiteralValue } from './scan/object.js';
 import { applySourceReplacements, replaceExtension, type SourceReplacement } from './shared.js';
+
+const mutableTs = ts as unknown as Record<string, unknown>;
+if (!('ScriptTarget' in mutableTs))
+  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
 interface CompiledRoutePage {
   fact: RoutePageFact;

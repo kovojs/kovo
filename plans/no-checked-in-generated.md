@@ -127,10 +127,13 @@ committed `graph.json`).
     `vitest.browser.config.ts`.
   - Verify a test importing an authored component sees lowered HTML (kovo stamps:
     `kovo-c`, `kovo-deps`, `data-bind`, `on:click`).
-- [ ] Expose a config-safe compiler plugin entry for Vite/Vitest config loading.
-  - Gap: static root/example config wiring through `@kovojs/compiler` or direct
-    `packages/compiler/src/index.ts` currently fails during Vite config startup because Node sees
-    unresolved source `.js` specifiers before Vitest's TS module runner is active.
+- [x] Expose a config-safe compiler plugin entry for Vite/Vitest config loading.
+  - Evidence: `@kovojs/compiler/vite` (`packages/compiler/src/vite-config.ts`) loads without
+    pulling compiler internals into config startup and uses Vite `ssrLoadModule` for transforms;
+    `pnpm --filter @kovojs/compiler exec vitest run src/vite.test.ts src/vite-config.test.ts`
+    covers config-safe loading and scoped transforms.
+  - Gap: root/example config activation remains open because Commerce still imports authored
+    component internals that disappear after lowering (for example `OrderHistory.definition`).
 - [ ] Make registry/graph facts available to the plugin at test time **without** a committed
       `graph.json` (derive from authored route/mutation/query declarations, or emit to a temp
       cache during a pretest step). Document how `packageComponentPrefixes`/mutation-input facts

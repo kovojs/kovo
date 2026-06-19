@@ -1,3 +1,6 @@
+import { createRequire } from 'node:module';
+import * as ts from 'typescript';
+
 import {
   attrs,
   createTheme,
@@ -11,7 +14,6 @@ import {
 } from '@kovojs/style';
 import { createAtomicStyles } from '@kovojs/style/internal';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import ts from 'typescript';
 
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import type { StyleRuleUsage } from './css.js';
@@ -25,6 +27,10 @@ import type {
   QueryUpdatePlanFact,
   StateDeriveFact,
 } from './types.js';
+
+const mutableTs = ts as unknown as Record<string, unknown>;
+if (!('ScriptTarget' in mutableTs))
+  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
 /**
  * @internal Result of the conservative StyleX extraction pass. The pass handles

@@ -1,6 +1,8 @@
+import { createRequire } from 'node:module';
+import * as ts from 'typescript';
+
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import ts from 'typescript';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
@@ -24,6 +26,10 @@ import type {
   RoutePageFact,
 } from './types.js';
 import type { StyleRuleUsage } from './css.js';
+
+const mutableTs = ts as unknown as Record<string, unknown>;
+if (!('ScriptTarget' in mutableTs))
+  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
 /**
  * Derive an app-level component/registry graph from the per-component facts produced by

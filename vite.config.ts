@@ -192,6 +192,7 @@ export default defineConfig({
     entry: [
       'packages/*/src/index.ts',
       'packages/compiler/src/internal.ts',
+      'packages/compiler/src/vite-config.ts',
       'packages/core/src/generated.ts',
       'packages/core/src/internal/component-render.ts',
       'packages/core/src/internal/derivation.ts',

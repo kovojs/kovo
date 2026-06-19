@@ -46,17 +46,17 @@ function createMiddlewareResponse(): {
 }
 
 describe('kovoVitePlugin', () => {
-  it('exposes a Vite transform hook for component modules', () => {
+  it('exposes a Vite transform hook for component modules', async () => {
     const plugin = kovoVitePlugin();
 
     expect(plugin.name).toBe('kovo');
-    expect(plugin.transform?.(cartBadgeSource, 'cart-badge.tsx')).toMatchObject({
+    expect(await plugin.transform?.(cartBadgeSource, 'cart-badge.tsx')).toMatchObject({
       code: expect.stringContaining('export function renderSource()'),
       map: null,
     });
   });
 
-  it('throws registry-error diagnostics from the Vite transform with teaching text', () => {
+  it('throws registry-error diagnostics from the Vite transform with teaching text', async () => {
     const onModuleDiagnostics = vi.fn();
     const plugin = createKovoVitePlugin(
       () => ({
@@ -81,7 +81,7 @@ describe('kovoVitePlugin', () => {
 
     let thrown: unknown;
     try {
-      plugin.transform('component(', 'src/bad.tsx');
+      await plugin.transform('component(', 'src/bad.tsx');
     } catch (error) {
       thrown = error;
     }
@@ -113,7 +113,7 @@ describe('kovoVitePlugin', () => {
     });
   });
 
-  it('reports warn, lint, and notice diagnostics without blocking the Vite transform', () => {
+  it('reports warn, lint, and notice diagnostics without blocking the Vite transform', async () => {
     const onDiagnostic = vi.fn();
     const plugin = createKovoVitePlugin(
       () => ({
@@ -122,21 +122,21 @@ describe('kovoVitePlugin', () => {
             code: 'KV311',
             fileName: 'src/diagnostics.tsx',
             message: 'Query/state-dependent DOM position has no update status.',
-            severity: 'error',
+            severity: 'warn',
             start: { line: 4, column: 9 },
           },
           {
             code: 'KV210',
             fileName: 'src/diagnostics.tsx',
             message: kv210.message,
-            severity: 'error',
+            severity: 'lint',
             start: { line: 5, column: 11 },
           },
           {
             code: 'KV409',
             fileName: 'src/diagnostics.tsx',
             message: 'Non-eq predicate degraded to table-level invalidation.',
-            severity: 'error',
+            severity: 'notice',
             start: { line: 6, column: 13 },
           },
         ],
@@ -148,7 +148,7 @@ describe('kovoVitePlugin', () => {
       { onDiagnostic },
     );
 
-    expect(plugin.transform('component(', 'src/diagnostics.tsx')).toEqual({
+    expect(await plugin.transform('component(', 'src/diagnostics.tsx')).toEqual({
       code: 'export function renderSource() {}',
       map: null,
     });
@@ -160,7 +160,7 @@ describe('kovoVitePlugin', () => {
     ]);
   });
 
-  it('serves emitted client modules from Vite dev middleware', () => {
+  it('serves emitted client modules from Vite dev middleware', async () => {
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];
     plugin.configureServer?.({
@@ -171,7 +171,7 @@ describe('kovoVitePlugin', () => {
       },
     });
 
-    const transformed = plugin.transform?.(cartBadgeSource, 'components/cart/cart-badge.tsx');
+    const transformed = await plugin.transform?.(cartBadgeSource, 'components/cart/cart-badge.tsx');
     const clientRef = transformed?.code.match(
       /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
@@ -196,7 +196,7 @@ describe('kovoVitePlugin', () => {
     expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
   });
 
-  it('serves project-relative client modules when Vite passes absolute ids', () => {
+  it('serves project-relative client modules when Vite passes absolute ids', async () => {
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];
     plugin.configureServer?.({
@@ -208,7 +208,7 @@ describe('kovoVitePlugin', () => {
       },
     });
 
-    const transformed = plugin.transform?.(
+    const transformed = await plugin.transform?.(
       cartBadgeSource,
       '/workspace/app/src/components/cart/cart-badge.tsx',
     );
@@ -234,7 +234,7 @@ describe('kovoVitePlugin', () => {
     expect(res.body).toContain('export const CartBadge$button_click');
   });
 
-  it('feeds discovered package prefix facts into the Vite transform', () => {
+  it('feeds discovered package prefix facts into the Vite transform', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-vite-prefix-'));
 
     try {
@@ -255,9 +255,10 @@ describe('kovoVitePlugin', () => {
         },
       });
 
-      expect(() =>
-        plugin.transform?.(
-          `
+      await expect(
+        Promise.resolve().then(() =>
+          plugin.transform?.(
+            `
 import { component } from '@kovojs/core';
 import '@acme/primitives';
 import '@other/widgets/menu';
@@ -266,9 +267,10 @@ export const Shell = component({
   render: () => <section></section>,
 });
 `,
-          join(root, 'src/shell.tsx'),
+            join(root, 'src/shell.tsx'),
+          ),
         ),
-      ).toThrow(
+      ).rejects.toThrow(
         'Package component prefix registration conflict or reservation violation. Effective package prefix "dupe-" is claimed by @acme/primitives and @other/widgets.',
       );
     } finally {
@@ -276,7 +278,7 @@ export const Shell = component({
     }
   });
 
-  it('retains old versioned client modules after a newer transform', () => {
+  it('retains old versioned client modules after a newer transform', async () => {
     const plugin = kovoVitePlugin();
     const middlewares: KovoViteMiddleware[] = [];
     const source = (handler: string) => `
@@ -295,11 +297,11 @@ export const CartBadge = component({
       },
     });
 
-    const first = plugin.transform?.(source('removeItem'), 'components/cart/cart-badge.tsx');
+    const first = await plugin.transform?.(source('removeItem'), 'components/cart/cart-badge.tsx');
     const oldClientRef = first?.code.match(
       /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
-    const second = plugin.transform?.(source('clearCart'), 'components/cart/cart-badge.tsx');
+    const second = await plugin.transform?.(source('clearCart'), 'components/cart/cart-badge.tsx');
     const newClientRef = second?.code.match(
       /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
@@ -339,7 +341,7 @@ export const CartBadge = component({
     expect(res.end).not.toHaveBeenCalled();
   });
 
-  it('scopes transforms with include and exclude filters', () => {
+  it('scopes transforms with include and exclude filters', async () => {
     const compileComponentModule = vi.fn(() => ({
       files: [{ kind: 'server', source: 'export function renderSource() {}' }],
     }));
@@ -348,16 +350,16 @@ export const CartBadge = component({
       include: ['src/components'],
     });
 
-    expect(plugin.transform('component(', 'src/fixtures/fake.tsx')).toBeNull();
-    expect(plugin.transform('component(', 'src/components/private/secret.tsx')).toBeNull();
-    expect(plugin.transform('component(', 'src/components/cart-badge.tsx')).toEqual({
+    expect(await plugin.transform('component(', 'src/fixtures/fake.tsx')).toBeNull();
+    expect(await plugin.transform('component(', 'src/components/private/secret.tsx')).toBeNull();
+    expect(await plugin.transform('component(', 'src/components/cart-badge.tsx')).toEqual({
       code: 'export function renderSource() {}',
       map: null,
     });
     expect(compileComponentModule).toHaveBeenCalledTimes(1);
   });
 
-  it('passes registry facts to the compile step', () => {
+  it('passes registry facts to the compile step', async () => {
     const compileComponentModule = vi.fn(() => ({
       files: [{ kind: 'server', source: 'export function renderSource() {}' }],
     }));
@@ -378,24 +380,24 @@ export const CartBadge = component({
     };
     const plugin = createKovoVitePlugin(compileComponentModule, { registryFacts });
 
-    plugin.transform('component(', 'src/cart-badge.tsx');
+    await plugin.transform('component(', 'src/cart-badge.tsx');
 
     expect(compileComponentModule).toHaveBeenCalledWith(expect.objectContaining({ registryFacts }));
   });
 
-  it('caches repeated transforms by source hash and compile context', () => {
+  it('caches repeated transforms by source hash and compile context', async () => {
     const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
       files: [{ kind: 'server', source: `export const sourceLength = ${source.length};` }],
     }));
     const plugin = createKovoVitePlugin(compileComponentModule);
 
-    expect(plugin.transform('component(', 'src/cart-badge.tsx')?.code).toBe(
+    expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
       'export const sourceLength = 10;',
     );
-    expect(plugin.transform('component(', 'src/cart-badge.tsx')?.code).toBe(
+    expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
       'export const sourceLength = 10;',
     );
-    expect(plugin.transform('component(1)', 'src/cart-badge.tsx')?.code).toBe(
+    expect((await plugin.transform('component(1)', 'src/cart-badge.tsx'))?.code).toBe(
       'export const sourceLength = 12;',
     );
     expect(compileComponentModule).toHaveBeenCalledTimes(2);
@@ -423,7 +425,7 @@ export const CartBadge = component({
       ws,
     });
 
-    plugin.transform('component(', '/workspace/app/src/counter.tsx');
+    await plugin.transform('component(', '/workspace/app/src/counter.tsx');
     const modules = await plugin.handleHotUpdate?.({
       file: '/workspace/app/src/counter.tsx',
       modules: ['vite-module'],
@@ -480,7 +482,7 @@ export const CartBadge = component({
     };
     plugin.configureServer?.(server);
 
-    plugin.transform('component(', '/workspace/app/src/counter.tsx');
+    await plugin.transform('component(', '/workspace/app/src/counter.tsx');
     const modules = await plugin.handleHotUpdate?.({
       file: '/workspace/app/src/counter.tsx',
       modules: ['vite-module'],

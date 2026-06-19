@@ -790,7 +790,7 @@ function kovoSourceEditFixturePlugin(options: { onModuleDiagnostics: OnModuleDia
     transform(source, id) {
       if (!/\.[cm]?tsx?$/.test(id) || !source.includes('component(')) return null;
 
-      hmrTransport.transform(source, id);
+      void hmrTransport.transform(source, id);
       const result = compileComponentModule({
         fileName: fixtureComponentFileName(id, root),
         packagePrefixDiscoveryRoot: root,

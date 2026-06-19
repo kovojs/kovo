@@ -1,13 +1,10 @@
 import { isAbsolute, relative } from 'node:path';
 
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-
 import type { CompilerDiagnostic } from './diagnostics.js';
-import { classifyHmrImpact } from './hmr-impact.js';
-import { clientModuleUrl, clientModuleVersion } from './lower/handlers.js';
 import type {
   HmrImpactClassification,
   HmrImpactMetadata,
+  HmrImpactReason,
   PackageComponentPrefixFact,
   RegistryFacts,
 } from './types.js';
@@ -25,10 +22,13 @@ export interface KovoVitePlugin {
   transform: (
     source: string,
     id: string,
-  ) => null | {
-    code: string;
-    map: null;
-  };
+  ) =>
+    | null
+    | Promise<null | { code: string; map: null }>
+    | {
+        code: string;
+        map: null;
+      };
 }
 
 /** @internal Callback the Vite plugin invokes per non-error compiler diagnostic. */
@@ -83,6 +83,7 @@ export interface KovoViteDevServer {
   middlewares: {
     use(handler: KovoViteMiddleware): void;
   };
+  ssrLoadModule?: (id: string) => Promise<Record<string, unknown>>;
   ws?: KovoViteWebSocket;
 }
 
@@ -159,6 +160,8 @@ interface ViteCompileResult {
   hmrImpact?: HmrImpactMetadata | null;
 }
 
+type MaybePromise<T> = Promise<T> | T;
+
 /**
  * Build a KovoVitePlugin bound to a given component-compile function, lowering authored
  * component modules through the compiler on `transform` and serving emitted client islands
@@ -167,10 +170,10 @@ interface ViteCompileResult {
  * substituted in tests (SPEC.md §5.2). Public plugin factory.
  */
 export function createKovoVitePlugin(
-  compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
+  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
   options: KovoVitePluginOptions = {},
 ): KovoVitePlugin {
-  const compileCache = new Map<string, ViteCompileResult>();
+  const compileCache = new Map<string, MaybePromise<ViteCompileResult>>();
   const clientModules = new Map<string, string>();
   const hmrImpacts = new Map<string, HmrImpactMetadata>();
   let root = process.cwd();
@@ -204,15 +207,27 @@ export function createKovoVitePlugin(
         fileName,
         source,
       );
-      const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
-      if (errorDiagnostics.length > 0)
-        throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
-      recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
+      if (isPromiseLike(result)) {
+        return result.then((resolvedResult) =>
+          transformViteCompileResult(
+            clientModules,
+            hmrImpacts,
+            options,
+            fileName,
+            source,
+            resolvedResult,
+          ),
+        );
+      }
 
-      return {
-        code: result.files.find((file) => file.kind === 'server')?.source ?? source,
-        map: null,
-      };
+      return transformViteCompileResult(
+        clientModules,
+        hmrImpacts,
+        options,
+        fileName,
+        source,
+        result,
+      );
     },
     async handleHotUpdate(context) {
       const source = await context.read();
@@ -221,7 +236,7 @@ export function createKovoVitePlugin(
         return context.modules ?? [];
 
       const previous = hmrImpacts.get(fileName) ?? null;
-      const result = compileCachedViteComponentModule(
+      const result = await compileCachedViteComponentModule(
         compileComponentModule,
         compileCache,
         options,
@@ -242,7 +257,7 @@ export function createKovoVitePlugin(
       }
 
       recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
-      const classification = classifyHmrImpact(previous, next);
+      const classification = classifyViteHmrImpact(previous, next);
       const event = eventForHmrClassification(classification);
       sendKovoHmrEvent(context.server, event, previous, next, classification);
       if (classification.impact !== 'componentRefresh') {
@@ -252,6 +267,28 @@ export function createKovoVitePlugin(
       return [];
     },
   };
+}
+
+function transformViteCompileResult(
+  clientModules: Map<string, string>,
+  hmrImpacts: Map<string, HmrImpactMetadata>,
+  options: KovoVitePluginOptions,
+  fileName: string,
+  source: string,
+  result: ViteCompileResult,
+): { code: string; map: null } {
+  const errorDiagnostics = reportViteDiagnostics(result, options, fileName, source);
+  if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
+  recordViteCompileResult(clientModules, hmrImpacts, fileName, result);
+
+  return {
+    code: result.files.find((file) => file.kind === 'server')?.source ?? source,
+    map: null,
+  };
+}
+
+function isPromiseLike<T>(value: MaybePromise<T>): value is Promise<T> {
+  return typeof (value as { then?: unknown }).then === 'function';
 }
 
 function shouldTransformViteComponentSource(
@@ -288,13 +325,13 @@ function matchesViteFilter(
 }
 
 function compileCachedViteComponentModule(
-  compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
-  cache: Map<string, ViteCompileResult>,
+  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
+  cache: Map<string, MaybePromise<ViteCompileResult>>,
   options: KovoVitePluginOptions,
   root: string,
   fileName: string,
   source: string,
-): ViteCompileResult {
+): MaybePromise<ViteCompileResult> {
   const cacheKey = viteCompileCacheKey(options, root, fileName, source);
   const cached = cache.get(cacheKey);
   if (cached) return cached;
@@ -311,12 +348,12 @@ function compileCachedViteComponentModule(
 }
 
 function compileViteComponentModule(
-  compileComponentModule: (options: ViteCompileOptions) => ViteCompileResult,
+  compileComponentModule: (options: ViteCompileOptions) => MaybePromise<ViteCompileResult>,
   options: KovoVitePluginOptions,
   root: string,
   fileName: string,
   source: string,
-): ViteCompileResult {
+): MaybePromise<ViteCompileResult> {
   const registryFacts = resolveViteRegistryFacts(options, fileName);
   return compileComponentModule({
     fileName,
@@ -340,7 +377,7 @@ function viteCompileCacheKey(
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
     registryFacts: resolveViteRegistryFacts(options, fileName) ?? null,
     root,
-    sourceHash: clientModuleVersion(source),
+    sourceHash: viteClientModuleVersion(source),
   });
 }
 
@@ -391,12 +428,66 @@ function recordViteCompileResult(
 ): void {
   for (const file of result.files) {
     if (file.kind === 'client') {
-      clientModules.set(clientModuleUrl(fileName, clientModuleVersion(file.source)), file.source);
+      clientModules.set(
+        viteClientModuleUrl(fileName, viteClientModuleVersion(file.source)),
+        file.source,
+      );
     }
   }
 
   if (result.hmrImpact) hmrImpacts.set(fileName, result.hmrImpact);
   else hmrImpacts.delete(fileName);
+}
+
+function classifyViteHmrImpact(
+  previous: HmrImpactMetadata | null | undefined,
+  next: HmrImpactMetadata | null | undefined,
+): HmrImpactClassification {
+  if (!previous || !next) return viteFullReload('missing-facts');
+  if (next.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
+    return { impact: 'diagnosticError', reasons: ['diagnostics'] };
+  }
+  if (previous.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
+    return viteFullReload('diagnostics');
+  }
+  if (previous.sourceFileName !== next.sourceFileName) return viteFullReload('topology');
+  if (previous.sourceKind !== next.sourceKind) return viteFullReload('topology');
+  if (next.sourceKind === 'route-shell')
+    return { impact: 'routeRefresh', reasons: ['route-shell'] };
+  if (!previous.component || !next.component) return viteFullReload('missing-facts');
+  if (
+    previous.component.registryKey !== next.component.registryKey ||
+    previous.component.domLeaf !== next.component.domLeaf
+  ) {
+    return viteFullReload('topology');
+  }
+
+  const reasons: HmrImpactReason[] = [];
+  if (previous.queryUpdatePlanHash !== next.queryUpdatePlanHash) reasons.push('query-plan');
+  if (previous.stylesheetAssetsHash !== next.stylesheetAssetsHash) reasons.push('style');
+  if (reasons.length > 0) return { impact: 'routeRefresh', reasons };
+  if (previous.liveTargetFactsHash !== next.liveTargetFactsHash) {
+    return viteFullReload('live-target');
+  }
+
+  const hasRefreshableTarget = next.liveTargetFacts.length > 0;
+  if (previous.renderOutputHash !== next.renderOutputHash) {
+    return hasRefreshableTarget
+      ? { impact: 'componentRefresh', reasons: ['render-output'] }
+      : viteFullReload('missing-facts');
+  }
+  if (previous.clientHref !== next.clientHref) {
+    return hasRefreshableTarget
+      ? { impact: 'componentRefresh', reasons: ['handler-only'] }
+      : viteFullReload('missing-facts');
+  }
+  if (previous.factHash !== next.factHash) return viteFullReload('topology');
+
+  return { impact: 'componentRefresh', reasons: [] };
+}
+
+function viteFullReload(reason: HmrImpactReason): HmrImpactClassification {
+  return { impact: 'fullReload', reasons: [reason] };
 }
 
 function eventForHmrClassification(classification: HmrImpactClassification): KovoHmrEventName {
@@ -433,7 +524,7 @@ function sendKovoHmrEvent(
 }
 
 function diagnosticSeverity(diagnostic: CompilerDiagnostic): CompilerDiagnostic['severity'] {
-  return diagnosticDefinitions[diagnostic.code].severity;
+  return diagnostic.severity;
 }
 
 function viteDiagnosticErrorMessage(diagnostics: readonly CompilerDiagnostic[]): string {
@@ -489,4 +580,25 @@ function devClientModuleKey(url: string | undefined): string | null {
   if (!parsed.pathname.startsWith('/c/') || !version) return null;
 
   return `${parsed.pathname}?v=${version}`;
+}
+
+function viteClientModuleUrl(fileName: string, version?: string): string {
+  const href = `/c/${replaceViteExtension(fileName, '.client.js').replace(/^\/+/, '')}`;
+  if (!version) return href;
+
+  return `/c/__v/${encodeURIComponent(version)}/${href.slice('/c/'.length)}`;
+}
+
+function replaceViteExtension(fileName: string, extension: string): string {
+  return fileName.replace(/\.[cm]?[jt]sx?$/, extension);
+}
+
+function viteClientModuleVersion(source: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+
+  return hash.toString(16).padStart(8, '0');
 }
