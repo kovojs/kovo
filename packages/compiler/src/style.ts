@@ -61,6 +61,7 @@ interface StyleBinding {
 
 interface StyleEnvironment {
   readonly diagnostics: readonly CompilerDiagnostic[];
+  readonly provenanceReplacements: readonly SourceReplacement[];
   readonly rules: readonly AtomicRule[];
   readonly usages: readonly StyleRuleUsage[];
   readonly bindings: ReadonlyMap<string, StyleBinding>;
@@ -196,7 +197,7 @@ export function extractKovoStyles(
         ]
       : [],
     queryUpdatePlans: lowered.dynamic.flatMap((entry) => entry.queryPlan ?? []),
-    replacements: lowered.replacements,
+    replacements: [...environment.provenanceReplacements, ...lowered.replacements],
     ruleUsages: environment.usages,
     stateDerives: lowered.dynamic.flatMap((entry) => entry.stateDerive ?? []),
     updateCoverage: lowered.dynamic.flatMap((entry) => entry.coverage),
@@ -267,6 +268,7 @@ function collectStyleEnvironment(
   );
   const bindings = new Map<string, StyleBinding>();
   const diagnostics: CompilerDiagnostic[] = [];
+  const provenanceReplacements: SourceReplacement[] = [];
   const rules: AtomicRule[] = [];
   const usages: StyleRuleUsage[] = [];
   const staticValues = new Map<string, unknown>(importedStaticValues);
@@ -322,10 +324,20 @@ function collectStyleEnvironment(
 
       const created = styleCreateCall(node.initializer, styleImports, localObjects, staticValues);
       if (created) {
-        const result = createAtomicStylesWithIdentity(created.styles, {
+        const identity = {
           namespace: created.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
           source: created.options.source ?? fileName,
+        };
+        const result = createAtomicStylesWithIdentity(created.styles, {
+          namespace: identity.namespace,
+          source: identity.source,
         });
+        const provenanceReplacement = styleCreateProvenanceReplacement(
+          created.call,
+          created.options,
+          identity,
+        );
+        if (provenanceReplacement) provenanceReplacements.push(provenanceReplacement);
         rules.push(...result.rules);
 
         for (const [styleKey, style] of Object.entries(result.styles)) {
@@ -346,7 +358,7 @@ function collectStyleEnvironment(
     }
   }
 
-  return { bindings, diagnostics, rules, usages };
+  return { bindings, diagnostics, provenanceReplacements, rules, usages };
 }
 
 function collectImportedStaticValues(
@@ -540,7 +552,11 @@ function styleCreateCall(
   styleImports: StyleImports,
   localObjects: LocalObjectLiterals,
   staticValues: ReadonlyMap<string, unknown>,
-): { readonly options: StyleIdentityOptions; readonly styles: Record<string, StyleObject> } | null {
+): {
+  readonly call: ts.CallExpression;
+  readonly options: StyleIdentityOptions;
+  readonly styles: Record<string, StyleObject>;
+} | null {
   if (!isStyleCreateCall(initializer, styleImports.namespaces)) return null;
 
   const [stylesArgument, optionsArgument] = initializer.arguments;
@@ -555,6 +571,7 @@ function styleCreateCall(
   if (!styles) return null;
 
   return {
+    call: initializer,
     options: styleIdentityOptionsFromObject(optionsArgument),
     styles,
   };
@@ -733,6 +750,41 @@ function styleIdentityOptionsFromObject(node: ts.Expression | undefined): StyleI
   }
 
   return options;
+}
+
+function styleCreateProvenanceReplacement(
+  call: ts.CallExpression,
+  existingOptions: StyleIdentityOptions,
+  identity: Required<StyleIdentityOptions>,
+): SourceReplacement | null {
+  if (existingOptions.namespace && existingOptions.source) return null;
+
+  const properties = [
+    ...(existingOptions.namespace
+      ? []
+      : [`namespace: ${JSON.stringify(identity.namespace)}`]),
+    ...(existingOptions.source ? [] : [`source: ${JSON.stringify(identity.source)}`]),
+  ];
+  const [, optionsArgument] = call.arguments;
+
+  if (!optionsArgument) {
+    const stylesArgument = call.arguments[0];
+    if (!stylesArgument) return null;
+    const position = stylesArgument.getEnd();
+    return {
+      end: position,
+      replacement: `, { ${properties.join(', ')} }`,
+      start: position,
+    };
+  }
+
+  if (!ts.isObjectLiteralExpression(optionsArgument)) return null;
+  const position = optionsArgument.getEnd() - 1;
+  return {
+    end: position,
+    replacement: `${optionsArgument.properties.length > 0 ? ', ' : ''}${properties.join(', ')}`,
+    start: position,
+  };
 }
 
 function styleAttributeReplacements(

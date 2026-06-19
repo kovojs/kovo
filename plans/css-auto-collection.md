@@ -222,11 +222,17 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 - [ ] Inject `style.create` provenance (`namespace`/`source`) from the compiler
       call site so authors stop hand-typing
       `{ namespace: 'button', source: 'button.tsx' }` (`packages/ui/src/*.tsx`).
+  - Progress 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/style.test.ts packages/compiler/src/package-styles.test.ts -t "lowers static style.create references|extractPackageComponentCss over @kovojs/ui|extractAppComponentCss"`
+    proves static extracted `style.create(...)` calls without an explicit
+    identity are rewritten with the compiler-derived `{ namespace, source }`
+    and remain fixpoint-stable.
   - Gap:
     `packages/ui` components currently need the runtime `style.attrs` class names
     to match package CSS extracted outside a component transform. Removing the
-    hand-authored identities requires a design that injects provenance for both
-    extracted CSS and runtime SSR classes.
+    hand-authored identities from raw package source still requires a package
+    execution/transform decision because current `packages/ui` Vitest coverage
+    imports and renders those modules directly.
 
 ## Out of scope
 

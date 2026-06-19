@@ -31,6 +31,9 @@ export const Button = component({
     expect(serverSource).toContain('class="kv-button-bg-');
     expect(serverSource).toContain('data-style-src="components/button.tsx#root"');
     expect(serverSource).not.toContain('style={base.root}');
+    expect(result.loweredSource).toContain(
+      '{ namespace: "button", source: "components/button.tsx" }',
+    );
     expect(cssSource).toContain('@layer kovo-style-3000');
     expect(cssSource).toContain('.kv-button-bg-');
     expect(cssSource).toContain('background-color:black');
