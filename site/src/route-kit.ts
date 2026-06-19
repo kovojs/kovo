@@ -7,6 +7,7 @@ import { galleryStyleCss } from './components/gallery.js';
 import { landingStyleCss } from './components/landing.js';
 import type { DocPage, NavLink } from './content.js';
 import { searchDialogStyleCss } from './document-template.js';
+import { siteThemeCss } from './theme.js';
 
 // Shared route data helpers. Route declarations are emitted as literal TSX in
 // src/generated/app.routes.tsx so @kovojs/compiler can derive route/page
@@ -15,6 +16,7 @@ import { searchDialogStyleCss } from './document-template.js';
 export const siteStylesheets = [
   stylesheet('./styles.css', {
     criticalCss: [
+      siteThemeCss,
       chromeStyleCss,
       docsLayoutStyleCss,
       exampleSplitStyleCss,
