@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
+import {
+  registeredGeneratedMutationTouches,
+  registerGeneratedMutationTouchRegistry,
+} from './generated-mutation-registry.js';
 import { renderMutationEndpointResponse } from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
@@ -115,6 +119,60 @@ describe('server mutation endpoint routing', () => {
       }),
     ).resolves.toMatchObject({
       body: '<kovo-query name="productDetail" key="product:p1">{"id":"p1","stock":0}</kovo-query>',
+      status: 200,
+    });
+  });
+
+  it('uses compiler-registered mutation touch sites for direct enhanced responses', async () => {
+    const cart = domain('generated-direct-cart-fallback');
+    const product = domain('generated-direct-product');
+    const productP1 = query('generatedProductDetail', {
+      instanceKey: 'generated-direct-product:p1',
+      load: () => ({ id: 'p1', stock: 0 }),
+      reads: [product],
+    });
+    const productP2 = query('generatedProductDetail', {
+      instanceKey: 'generated-direct-product:p2',
+      load: () => ({ id: 'p2', stock: 10 }),
+      reads: [product],
+    });
+    const reserveProduct = mutation('generated/product/reserve-direct', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [productP1, productP2],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    registerGeneratedMutationTouchRegistry({
+      'generated/product/reserve-direct': [
+        { domain: 'generated-direct-product', keys: 'arg:productId' },
+      ],
+    });
+    expect(registeredGeneratedMutationTouches('generated/product/reserve-direct')).toEqual([
+      { domain: 'generated-direct-product', keys: 'arg:productId' },
+    ]);
+
+    const response = await renderMutationEndpointResponse(reserveProduct, {
+      fragmentRenderers: [],
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'product-card:p1=generated-direct-product:p1',
+      },
+      rawInput: { productId: 'p1' },
+      redirectTo: '/products/p1',
+      request: {},
+    });
+
+    expect(response).toEqual({
+      body: '',
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+        'Kovo-Changes': '[{"domain":"generated-direct-product","keys":["p1"]}]',
+      },
       status: 200,
     });
   });

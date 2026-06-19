@@ -2,6 +2,7 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest } from './app-request.js';
 import { routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
+import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
@@ -34,6 +35,7 @@ import type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
   AppLifecycleRequest,
+  AppMutationDeclaration,
   CreateAppOptions,
   KovoApp,
   RequestHandler,
@@ -79,7 +81,9 @@ export function createApp<
     liveTargetRendererQueries(liveTargetRenderers),
     routeLayoutQueries(routes),
   );
-  const mutations = resolveAppAuthoringDeclarations(options.mutations, authoringContext);
+  const mutations = resolveAppAuthoringDeclarations(options.mutations, authoringContext).map(
+    withGeneratedMutationTouches,
+  );
 
   return {
     clientModules: options.clientModules ?? createMemoryVersionedClientModuleRegistry(),
@@ -101,6 +105,21 @@ export function createApp<
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+  };
+}
+
+function withGeneratedMutationTouches<Mutation extends AppMutationDeclaration<any>>(
+  definition: Mutation,
+): Mutation {
+  const inferredTouches = registeredGeneratedMutationTouches(definition.key);
+  if (inferredTouches.length === 0) return definition;
+
+  return {
+    ...definition,
+    registry: {
+      ...definition.registry,
+      inferredTouches,
+    },
   };
 }
 

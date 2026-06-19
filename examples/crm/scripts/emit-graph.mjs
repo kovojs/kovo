@@ -256,9 +256,11 @@ const crmGraph = createCrmGraph(crmTouchGraph, optimisticEntries, crmQueryDomain
 const graph = deriveGraphViaCli({ graph: crmGraph });
 
 const crmInvalidationSource = staticGraphArtifacts.invalidationRegistrySource;
+const crmMutationTouchRegistrySource = staticGraphArtifacts.mutationTouchRegistrySource;
 
 const touchGraphSource = formatSource(
-  `import type {
+  `import { registerGeneratedMutationTouchRegistry } from '@kovojs/server/internal/execution';
+import type {
   ContactDealCountResult,
   ContactListResult,
   DealListResult,
@@ -271,6 +273,9 @@ export const crmTouchGraph = ${formatJson(crmTouchGraph)} as const;
 export const crmQueryDomains = ${formatJson(crmQueryDomains)} as const;
 
 ${crmInvalidationSource}
+${crmMutationTouchRegistrySource}
+registerGeneratedMutationTouchRegistry(mutationInferredTouches);
+
 declare module '@kovojs/core' {
   interface QueryRegistry {
     contactList: ContactListResult;

@@ -4,6 +4,7 @@ import { createApp, createRequestHandler } from './app.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { domain } from './domain.js';
 import { endpoint } from './endpoint.js';
+import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { guards } from './guards.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
@@ -100,6 +101,36 @@ describe('server createApp request shell', () => {
     });
 
     expect(app.queries).toEqual([explicitCartQuery, productQuery, profileQuery]);
+  });
+
+  it('injects compiler-registered mutation touch sites into app mutations', () => {
+    const cart = domain('generated-cart-fallback');
+    const addToCart = mutation('generated/cart/add-app', {
+      input: s.object({ productId: s.string() }),
+      registry: { touches: [cart] },
+      handler: (input) => input,
+    });
+
+    registerGeneratedMutationTouchRegistry({
+      'generated/cart/add-app': [{ domain: 'generated-product', keys: 'arg:productId' }],
+    });
+
+    const app = createApp({ mutations: [addToCart] });
+
+    expect(app.mutations[0]?.registry).toMatchObject({
+      inferredTouches: [{ domain: 'generated-product', keys: 'arg:productId' }],
+      touches: [cart],
+    });
+  });
+
+  it('rejects malformed compiler-registered mutation touch sites', () => {
+    expect(() =>
+      registerGeneratedMutationTouchRegistry({
+        'generated/cart/bad': [{ domain: 'cart', keys: 1 }] as unknown as [
+          { domain: string; keys: string },
+        ],
+      }),
+    ).toThrow('Generated mutation touch registry received an invalid registry.');
   });
 
   it('rejects malformed compatibility shells before request dispatch', () => {

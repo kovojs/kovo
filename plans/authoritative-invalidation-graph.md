@@ -70,17 +70,27 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
   - Evidence: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/mutation.test.ts`
     passed 49 tests; `pnpm exec vp check --fix` passed formatting, lint, and
     typecheck after the optional-read authoring change.
+- [x] **Generated mutation touch registries are runtime-consumed.** Compiler-owned
+      graph modules now emit `mutationInferredTouches` and call
+      `registerGeneratedMutationTouchRegistry`; `createApp()` and direct mutation
+      endpoint rendering merge registered `inferredTouches` by mutation key so
+      `change-record.ts` sees compiler-derived touch sites ahead of manual
+      fallbacks.
+  - Evidence: `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/change-record.test.ts`
+    passed 54 tests; `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
+    passed 27 tests, including generated Commerce `mutationInferredTouches` and
+    registration source.
 
 ## Open work
 
-- [ ] **Compiler injects `inferredTouches` into the mutation registry.** Wire
-      `extractTouchGraphFromProject` output into the generated mutation registry so
-      `inferredTouches` is compiler-populated, not hand-authored. App code stops
-      writing `registry: { touches }` / `inferredTouches` for statically-analyzable
-      writes (KV406 sites keep manual `touches` as the declared escape hatch).
-      Evidence target: a generated registry artifact carrying `inferredTouches` with
-      `site:` provenance, consumed by `change-record.ts`; commerce/crm `domain.ts`
-      no longer hand-lists touches.
+- [ ] **Migrate mutation definitions to generated touches.** Remove hand-authored
+      `registry: { touches }` / `inferredTouches` from statically-analyzable
+      commerce/crm/stackoverflow writes once their generated graph modules are
+      loaded in the same app/runtime path (KV406 sites keep manual `touches` as the
+      declared escape hatch). Evidence target: commerce/crm/stackoverflow mutation
+      source no longer hand-lists touches for analyzable writes, generated graph
+      artifacts still carry touch sites from `site:`-provenanced touch graph facts,
+      and app mutation integration tests pass through `change-record.ts`.
 - [ ] **Compiler derives query `reads` from the `load` AST.** Extract the read-set
       (FROM/JOIN domains) from each `query()` `load` body via the same `static.ts`
       machinery and populate omitted `reads` from compiler facts. Hand-declared
@@ -137,6 +147,12 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
 - [x] `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/api/app.test.ts packages/server/src/app.test.ts packages/server/src/mutation.test.ts`
   - Evidence: passed 49 server query/app/invalidation tests after query `reads`
     became optional at authoring sites.
+- [x] `pnpm exec vitest --run packages/server/src/app.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/change-record.test.ts`
+  - Evidence: passed 54 server tests after generated mutation touch registration
+    was merged into `createApp()` and direct endpoint rendering.
+- [x] `pnpm exec vitest --run packages/compiler/src/compiler-conformance.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/index.serialization.test.ts`
+  - Evidence: passed 27 compiler/CLI/Drizzle tests after generated graph modules
+    started emitting `mutationInferredTouches` registration source.
 - [ ] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
       currently has no package `test` script, so use explicit Vitest file globs.
 - [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`

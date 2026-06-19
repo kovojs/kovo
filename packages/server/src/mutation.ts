@@ -19,6 +19,7 @@ import {
   type Guard,
   type RequestLifecycleOptions,
 } from './guards.js';
+import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 import {
@@ -716,7 +717,7 @@ export async function renderMutationEndpointResponse<
 ): Promise<MutationEndpointResponse> {
   const liveTargetRenderers =
     endpointRequest.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers<Request>();
-  const endpointDefinition = mutationWithLiveTargetQueries(definition, liveTargetRenderers);
+  const endpointDefinition = mutationWithGeneratedRegistryFacts(definition, liveTargetRenderers);
   const wireRequest = mutationWireRequestFromHeaders({
     ...endpointRequest,
     liveTargetRenderers,
@@ -740,7 +741,7 @@ export async function renderMutationEndpointResponse<
   });
 }
 
-function mutationWithLiveTargetQueries<
+function mutationWithGeneratedRegistryFacts<
   const Key extends string,
   InputSchema extends Schema<unknown>,
   Errors extends Record<string, Schema<unknown>>,
@@ -752,24 +753,28 @@ function mutationWithLiveTargetQueries<
   renderers: readonly LiveTargetRenderer<Request>[],
 ): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> {
   const queries = renderers.flatMap((renderer) => renderer.queryDefinitions ?? []);
-  if (queries.length === 0) return definition;
+  const inferredTouches = registeredGeneratedMutationTouches(definition.key);
+  if (queries.length === 0 && inferredTouches.length === 0) return definition;
 
   return {
     ...definition,
-    registry: mergeMutationRegistryQueries(definition.registry, queries),
+    registry: mergeMutationRegistryFacts(definition.registry, { inferredTouches, queries }),
   };
 }
 
-function mergeMutationRegistryQueries(
+function mergeMutationRegistryFacts(
   registry: MutationRegistry | undefined,
-  queries: readonly RegisteredQueryDefinition[],
+  facts: {
+    inferredTouches: readonly MutationTouchSite[];
+    queries: readonly RegisteredQueryDefinition[];
+  },
 ): MutationRegistry {
   const queriesByKey = new Map<string, RegisteredQueryDefinition>();
 
   for (const queryDefinition of registry?.queries ?? []) {
     queriesByKey.set(queryDefinition.key, queryDefinition);
   }
-  for (const queryDefinition of queries) {
+  for (const queryDefinition of facts.queries) {
     if (!queriesByKey.has(queryDefinition.key)) {
       queriesByKey.set(queryDefinition.key, queryDefinition);
     }
@@ -777,6 +782,7 @@ function mergeMutationRegistryQueries(
 
   return {
     ...registry,
+    ...(facts.inferredTouches.length === 0 ? {} : { inferredTouches: facts.inferredTouches }),
     queries: [...queriesByKey.values()],
   };
 }

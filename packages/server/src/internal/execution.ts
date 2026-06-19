@@ -8,6 +8,10 @@ export {
 } from '../mutation.js';
 export { invalidate, type MutationTouchSite } from '../change-record.js';
 export {
+  registerGeneratedMutationTouchRegistry,
+  type GeneratedMutationTouchRegistry,
+} from '../generated-mutation-registry.js';
+export {
   createMemoryMutationReplayStore,
   type MutationReplayReservation,
   type MutationReplayStore,
