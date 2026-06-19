@@ -197,8 +197,15 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
     registry component names with matching DOM leaves, and only mutation input schemas referenced
     by rendered mutation forms while retaining app-wide registry slices that generated registry
     artifacts still read. `corepack pnpm exec tsc --noEmit --pretty false` passed.
-- [ ] Narrow the Phase 1 key from "all facts" to `hash(footprint slice)`, so a change to an
+- [x] Narrow the Phase 1 key from "all facts" to `hash(footprint slice)`, so a change to an
       unrelated module's facts does not invalidate this module.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/compile-component.test.ts -t "CompileCache|dependency footprint|footprint slice|learned footprint"`
+    proves `CompileCache` reuses a prior compiled result when only facts outside the learned
+    dependency footprint change, while changing a selected query shape invalidates the key.
+    `corepack pnpm exec vitest --run tests/compiler-cache-transparency.test.ts packages/compiler/src/vite.test.ts packages/test/src/integration/fixture-compiler-plugin.test.ts -t "cache|caches repeated transforms|fixture plugin|compiles"`
+    proves cache-on output remains transparent across the compiler corpus and the Vite/test plugin
+    cache paths still hit repeated transforms.
 - [ ] Build the inverse index (fact → dependent modules) so when the whole-program graph changes,
       only modules whose footprint touched the changed facts are recompiled.
   - Evidence target: edit module A's mutation input; assert only A and the modules whose footprint

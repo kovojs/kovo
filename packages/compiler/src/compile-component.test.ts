@@ -114,6 +114,11 @@ describe('compileComponentModule', () => {
       previousRegistryFacts: { components: ['components/previous-cart/cart-badge'] },
       queryShapeFacts,
       queryShapes: { cart: { count: 'number' } },
+      reads: {
+        fragmentTargets: ['components/cart/cart-badge/cart-badge'],
+        previousRegistryComponentDomLeaves: ['cart-badge'],
+        queryShapeNames: ['cart'],
+      },
       registryFacts: {
         queries: { cart: 'CartQuery' },
         routes: ['/cart'],
@@ -173,6 +178,7 @@ export const AddToCartForm = component({
         'product/save': 'typeof saveProduct',
       },
     });
+    expect(formResult.dependencyFootprint.reads?.mutationInputKeys).toEqual(['cart/add']);
   });
 
   it('removes adjacent client-only named imports without overlapping server cleanup edits', () => {

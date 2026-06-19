@@ -357,9 +357,18 @@ function compileDependencyFootprint(
   if (!usage) return conservativeCompileDependencyFootprint(options);
 
   const queryNames = referencedQueryNames(usage);
+  const mutationInputKeys = referencedMutationInputKeys(usage);
+  const previousDomLeaves = previousRegistryComponentDomLeaves(usage);
+  const reads = compileDependencyReads({
+    fragmentTargets: usage.fragmentTargets,
+    mutationInputKeys,
+    previousRegistryComponentDomLeaves: previousDomLeaves,
+    queryShapeNames: [...queryNames],
+    viewTransitions: usage.viewTransitionNames,
+  });
   const previousRegistryFacts = slicePreviousRegistryFacts(options.previousRegistryFacts, usage);
   const queryShapes = sliceRecord(options.queryShapes, queryNames);
-  const registryFacts = sliceRegistryFacts(options.registryFacts, usage);
+  const registryFacts = sliceRegistryFacts(options.registryFacts, usage, mutationInputKeys);
 
   return {
     ...(options.packageComponentPrefixes === undefined
@@ -371,6 +380,7 @@ function compileDependencyFootprint(
     ...(previousRegistryFacts === undefined ? {} : { previousRegistryFacts }),
     ...(options.queryShapeFacts === undefined ? {} : { queryShapeFacts: options.queryShapeFacts }),
     ...(queryShapes === undefined ? {} : { queryShapes }),
+    ...(reads === undefined ? {} : { reads }),
     ...(registryFacts === undefined ? {} : { registryFacts }),
   };
 }
@@ -406,6 +416,44 @@ function referencedQueryNames(usage: CompileDependencyFootprintUsage): Set<strin
   return names;
 }
 
+function referencedMutationInputKeys(usage: CompileDependencyFootprintUsage): Set<string> {
+  return new Set(usage.mutationForms.map((form) => form.mutation));
+}
+
+function previousRegistryComponentDomLeaves(usage: CompileDependencyFootprintUsage): Set<string> {
+  return new Set(
+    usage.model.components.map((component) =>
+      deriveComponentNames(usage.fileName, component).domName,
+    ),
+  );
+}
+
+function compileDependencyReads(reads: {
+  fragmentTargets: readonly string[];
+  mutationInputKeys: ReadonlySet<string>;
+  previousRegistryComponentDomLeaves: ReadonlySet<string>;
+  queryShapeNames: readonly string[];
+  viewTransitions: readonly string[];
+}): CompileDependencyFootprint['reads'] | undefined {
+  const fragmentTargets = sortedUnique(reads.fragmentTargets);
+  const mutationInputKeys = sortedUnique([...reads.mutationInputKeys]);
+  const previousRegistryComponentDomLeaves = sortedUnique([
+    ...reads.previousRegistryComponentDomLeaves,
+  ]);
+  const queryShapeNames = sortedUnique(reads.queryShapeNames);
+  const viewTransitions = sortedUnique(reads.viewTransitions);
+  const footprint: NonNullable<CompileDependencyFootprint['reads']> = {
+    ...(fragmentTargets.length === 0 ? {} : { fragmentTargets }),
+    ...(mutationInputKeys.length === 0 ? {} : { mutationInputKeys }),
+    ...(previousRegistryComponentDomLeaves.length === 0
+      ? {}
+      : { previousRegistryComponentDomLeaves }),
+    ...(queryShapeNames.length === 0 ? {} : { queryShapeNames }),
+    ...(viewTransitions.length === 0 ? {} : { viewTransitions }),
+  };
+  return Object.keys(footprint).length === 0 ? undefined : footprint;
+}
+
 function slicePreviousRegistryFacts(
   facts: RegistryFacts | undefined,
   usage: CompileDependencyFootprintUsage,
@@ -413,11 +461,7 @@ function slicePreviousRegistryFacts(
   const previousComponents = facts?.components;
   if (!previousComponents) return undefined;
 
-  const domLeaves = new Set(
-    usage.model.components.map((component) =>
-      deriveComponentNames(usage.fileName, component).domName,
-    ),
-  );
+  const domLeaves = previousRegistryComponentDomLeaves(usage);
   const components = previousComponents.filter((name) => domLeaves.has(registryNameLeaf(name)));
   return components.length === 0 ? undefined : { components };
 }
@@ -425,10 +469,10 @@ function slicePreviousRegistryFacts(
 function sliceRegistryFacts(
   facts: RegistryFacts | undefined,
   usage: CompileDependencyFootprintUsage,
+  mutationKeys = referencedMutationInputKeys(usage),
 ): RegistryFacts | undefined {
   if (!facts) return undefined;
 
-  const mutationKeys = new Set(usage.mutationForms.map((form) => form.mutation));
   const mutationInputs = sliceRecord(facts.mutationInputs, mutationKeys);
   const fragmentTargets = sliceArray(facts.fragmentTargets, new Set(usage.fragmentTargets));
   const viewTransitions = sliceArray(facts.viewTransitions, new Set(usage.viewTransitionNames));
@@ -466,6 +510,10 @@ function sliceArray<T>(items: readonly T[] | undefined, keys: ReadonlySet<T>): T
 
 function registryNameLeaf(registryName: string): string {
   return registryName.split('/').at(-1) ?? registryName;
+}
+
+function sortedUnique(items: readonly string[]): string[] {
+  return [...new Set(items)].sort((left, right) => left.localeCompare(right));
 }
 
 function collectClockUpdatePlans(

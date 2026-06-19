@@ -138,7 +138,17 @@ export interface CompileDependencyFootprint {
   previousRegistryFacts?: RegistryFacts;
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
+  reads?: CompileDependencyReads;
   registryFacts?: RegistryFacts;
+}
+
+/** @internal Fact keys read even when the current fact value is absent. */
+export interface CompileDependencyReads {
+  fragmentTargets?: readonly string[];
+  mutationInputKeys?: readonly string[];
+  previousRegistryComponentDomLeaves?: readonly string[];
+  queryShapeNames?: readonly string[];
+  viewTransitions?: readonly string[];
 }
 
 /**
