@@ -285,7 +285,26 @@ describe('kovo build', () => {
       const origin = await listen(server);
 
       try {
-        const mutationResponse = await fetch(`${origin}/_m/home/touch`, {
+        const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
+          body: new URLSearchParams(),
+          headers: {
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': 'home-panel#home-panel/home-panel:{}',
+            'Kovo-Targets': 'home-panel=home',
+            Referer: `${origin}/login`,
+          },
+          method: 'POST',
+        });
+        const loginMutationBody = await loginMutationResponse.text();
+        expect(loginMutationResponse.status, loginMutationBody).toBe(200);
+        expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
+        expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${loginCss.href}">`);
+        expect(loginMutationBody).toContain(
+          `<link rel="stylesheet" href="${homeFragmentCss.href}">`,
+        );
+        expect(loginMutationBody).not.toContain(homeCss.href);
+
+        const homeMutationResponse = await fetch(`${origin}/_m/home/touch`, {
           body: new URLSearchParams(),
           headers: {
             'Kovo-Fragment': 'true',
@@ -295,14 +314,12 @@ describe('kovo build', () => {
           },
           method: 'POST',
         });
-        const mutationBody = await mutationResponse.text();
-        expect(mutationResponse.status, mutationBody).toBe(200);
-        expect(mutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
-        expect(mutationBody).toContain(`<link rel="stylesheet" href="${homeCss.href}">`);
-        expect(mutationBody).toContain(
-          `<link rel="stylesheet" href="${homeFragmentCss.href}">`,
-        );
-        expect(mutationBody).not.toContain(loginCss.href);
+        const homeMutationBody = await homeMutationResponse.text();
+        expect(homeMutationResponse.status, homeMutationBody).toBe(200);
+        expect(homeMutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
+        expect(homeMutationBody).toContain(`<link rel="stylesheet" href="${homeCss.href}">`);
+        expect(homeMutationBody).not.toContain(homeFragmentCss.href);
+        expect(homeMutationBody).not.toContain(loginCss.href);
       } finally {
         await close(server);
       }

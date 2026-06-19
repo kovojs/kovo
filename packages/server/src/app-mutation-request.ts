@@ -172,8 +172,26 @@ function mergedStylesheets<Stylesheet extends KovoApp['stylesheets'][number]>(
   inheritedStylesheets: readonly Stylesheet[],
   ownStylesheets: readonly Stylesheet[] | undefined,
 ): readonly Stylesheet[] | undefined {
-  const merged = [...inheritedStylesheets, ...(ownStylesheets ?? [])];
+  const inheritedCriticalCss = inheritedStylesheets.flatMap((stylesheet) =>
+    typeof stylesheet !== 'string' && stylesheet.criticalCss ? [stylesheet.criticalCss] : [],
+  );
+  const merged = [
+    ...inheritedStylesheets,
+    ...(ownStylesheets ?? []).filter(
+      (stylesheet) => !stylesheetCriticalCssIsAlreadyLoaded(stylesheet, inheritedCriticalCss),
+    ),
+  ];
   return merged.length === 0 ? undefined : merged;
+}
+
+function stylesheetCriticalCssIsAlreadyLoaded(
+  stylesheet: KovoApp['stylesheets'][number],
+  inheritedCriticalCss: readonly string[],
+): boolean {
+  if (typeof stylesheet === 'string') return false;
+  const criticalCss = stylesheet.criticalCss?.trim();
+  if (!criticalCss) return false;
+  return inheritedCriticalCss.some((candidate) => candidate.includes(criticalCss));
 }
 
 async function resolveAppMutationResponsePolicy(

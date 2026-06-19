@@ -251,10 +251,13 @@ routes/<route>.css]` (theme stays on `base`/app), using
     proves the built node server's enhanced mutation live-target response links
     base, source-route, and `fragments/home-panel-home-panel-*.css` chunks while
     excluding the unrelated `/login` route chunk.
-- [ ] Skip fragment atoms already present in `base`/the current route chunk
-      (no double-ship, no FOUC). Evidence: a mutation target already covered by
-      `base` pulls no extra fragment chunk; cross-check morph survival
-      (`SPEC.md` §4.4 / §7.5).
+- [x] Skip fragment atoms already present in `base`/the current route chunk
+      (no double-ship, no FOUC).
+  - Evidence 2026-06-19:
+    `npx vitest --run packages/cli/src/index.kovo-build.test.ts -t "references build fragment CSS chunks"`
+    proves a `/login` mutation response pulls the `home-panel` fragment chunk
+    while the same target from `/` omits it because the route chunk already
+    contains that critical CSS.
 - [ ] Client navigation: when a client-side route change swaps to a route whose
       chunk is not yet loaded, load it before/with the swap. Confirm against how
       Kovo navigations actually transfer (full nav vs. fragment) and document the
