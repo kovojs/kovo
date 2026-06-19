@@ -27,21 +27,21 @@ export const GalleryDisclosureDemo = component({
     <Disclosure
       data-gallery-interactive="disclosure"
       open={state.open}
-      data-bind:open="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$Disclosure_open_derive"
+      data-bind:open="/c/__v/b526a532/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$Disclosure_open_derive"
       kovo-state='{"open":false}'
     >
       <DisclosureTrigger
         contentId="gallery-interactive-disclosure-panel"
-        on:click="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_click"
+        on:click="/c/__v/b526a532/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_click"
         open={state.open}
-        data-bind:open="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_open_derive"
+        data-bind:open="/c/__v/b526a532/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureTrigger_open_derive"
       >
         Shipping rules
       </DisclosureTrigger>
       <DisclosureContent
         contentId="gallery-interactive-disclosure-panel"
         open={state.open}
-        data-bind:open="/c/__v/7a0d11dc/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_open_derive"
+        data-bind:open="/c/__v/b526a532/examples/gallery/src/generated/interactive/disclosure-demo.client.js#GalleryDisclosureDemo$DisclosureContent_open_derive"
       >
         Orders over $50 ship free.
       </DisclosureContent>

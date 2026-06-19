@@ -30,16 +30,16 @@ export const GalleryToggleDemo = component({
     >
       <Toggle
         aria-label="Toggle gallery density"
-        on:click="/c/__v/3df9eaef/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_click"
+        on:click="/c/__v/92a9effd/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_click"
         pressed={state.pressed}
-        data-bind:pressed="/c/__v/3df9eaef/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_pressed_derive"
+        data-bind:pressed="/c/__v/92a9effd/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$Toggle_pressed_derive"
       >
         Dense rows
       </Toggle>
       <output
         class="text-xs text-neutral-500"
         data-demo-state="pressed"
-        data-bind="/c/__v/3df9eaef/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$output_text_derive"
+        data-bind="/c/__v/92a9effd/examples/gallery/src/generated/interactive/toggle-demo.client.js#GalleryToggleDemo$output_text_derive"
       >
         {state.pressed ? 'pressed' : 'off'}
       </output>

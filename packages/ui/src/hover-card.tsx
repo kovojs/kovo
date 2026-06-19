@@ -178,5 +178,3 @@ export const HoverCardContent = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/hover-card';

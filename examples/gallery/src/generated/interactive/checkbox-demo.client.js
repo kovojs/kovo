@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/ui/checkbox';
+import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
 
 export const GalleryCheckboxDemo$Checkbox_click = handler((event, ctx) => {
   const result = _checkboxTriggerClick(Object(event), { checked: ctx.state.checked });

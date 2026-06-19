@@ -1,18 +1,16 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import type { MenubarItem as GalleryMenubarItem } from '@kovojs/headless-ui/menubar';
 import {
   menubarFocusElement as _menubarFocusElement,
-  Menubar,
-  MenubarItem,
   menubarItemClick as _menubarItemClick,
   menubarItemKeyDown as _menubarItemKeyDown,
   menubarKeyDown as _menubarKeyDown,
   menubarMove as _menubarMove,
-  MenubarSubmenu,
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
-} from '@kovojs/ui/menubar';
+  type MenubarItem as GalleryMenubarItem,
+} from '@kovojs/headless-ui/menubar';
+import { Menubar, MenubarItem, MenubarSubmenu } from '@kovojs/ui/menubar';
 
 export interface GalleryMenubarDemoState {
   activeValue: string;

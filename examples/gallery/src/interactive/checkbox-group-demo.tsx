@@ -1,12 +1,12 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/ui/checkbox';
+import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
+import { checkboxGroupItemClick as _checkboxGroupItemClick } from '@kovojs/headless-ui/checkbox-group';
 import {
   CheckboxGroup,
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
-  checkboxGroupItemClick as _checkboxGroupItemClick,
 } from '@kovojs/ui/checkbox-group';
 
 export interface GalleryCheckboxGroupDemoState {

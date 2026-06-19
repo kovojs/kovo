@@ -1,12 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  ToggleGroup,
-  ToggleGroupButton,
-  ToggleGroupItem,
   toggleGroupItemClick as _toggleGroupItemClick,
   toggleGroupKeyDown as _toggleGroupKeyDown,
-} from '@kovojs/ui/toggle-group';
+} from '@kovojs/headless-ui/toggle-group';
+import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from '@kovojs/ui/toggle-group';
 
 export interface GalleryToggleGroupDemoState {
   activeValue: string;

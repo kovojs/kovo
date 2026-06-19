@@ -565,5 +565,3 @@ export const FieldsetLegend = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/field';

@@ -1,12 +1,14 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  radioGroupItemClick as _radioGroupItemClick,
+  radioGroupKeyDown as _radioGroupKeyDown,
+} from '@kovojs/headless-ui/radio-group';
+import {
   RadioGroup,
   RadioGroupItem,
   RadioGroupLabel,
   RadioGroupRadio,
-  radioGroupItemClick as _radioGroupItemClick,
-  radioGroupKeyDown as _radioGroupKeyDown,
 } from '@kovojs/ui/radio-group';
 
 export interface GalleryRadioGroupDemoState {

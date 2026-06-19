@@ -542,5 +542,3 @@ function toCommandState(props: CommandStateProps & { id?: string }) {
     ...(props.value === undefined ? {} : { value: props.value }),
   };
 }
-
-export * from '@kovojs/headless-ui/command';

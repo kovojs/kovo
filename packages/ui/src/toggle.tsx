@@ -111,5 +111,3 @@ export const Toggle = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/toggle';

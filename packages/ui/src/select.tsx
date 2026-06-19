@@ -384,5 +384,3 @@ export const SelectValue = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/select';

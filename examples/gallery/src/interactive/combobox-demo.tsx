@@ -1,16 +1,18 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  Combobox,
   comboboxFilteredItems as _comboboxFilteredItems,
   comboboxInput as _comboboxInput,
-  ComboboxInput,
   comboboxKeyDown as _comboboxKeyDown,
+  comboboxOptionClick as _comboboxOptionClick,
+  type ComboboxItem,
+} from '@kovojs/headless-ui/combobox';
+import {
+  Combobox,
+  ComboboxInput,
   ComboboxListbox,
   ComboboxOption,
-  comboboxOptionClick as _comboboxOptionClick,
   ComboboxValue,
-  type ComboboxItem,
 } from '@kovojs/ui/combobox';
 
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';

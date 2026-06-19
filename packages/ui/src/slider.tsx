@@ -356,5 +356,3 @@ export const SliderThumb = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/slider';

@@ -4,7 +4,7 @@ import { derive, handler } from '@kovojs/runtime/generated';
 import {
   accordionKeyDown as _accordionKeyDown,
   accordionTriggerClick as _accordionTriggerClick,
-} from '@kovojs/ui/accordion';
+} from '@kovojs/headless-ui/accordion';
 
 export const GalleryAccordionDemo$Accordion_keydown = handler((event, ctx) => {
   const result = _accordionKeyDown(Object(event), {

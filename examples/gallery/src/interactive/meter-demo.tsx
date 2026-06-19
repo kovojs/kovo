@@ -1,7 +1,11 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { Button } from '@kovojs/ui/button';
-import { Meter, meterValueState as _meterValueState, type MeterDataState } from '@kovojs/ui/meter';
+import {
+  meterValueState as _meterValueState,
+  type MeterDataState,
+} from '@kovojs/headless-ui/meter';
+import { Meter } from '@kovojs/ui/meter';
 
 const ROOT_CLASS = 'grid gap-2 text-sm text-neutral-950';
 

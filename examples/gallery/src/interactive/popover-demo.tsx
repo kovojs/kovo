@@ -1,11 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  popoverBeforeToggle as _popoverBeforeToggle,
-} from '@kovojs/ui/popover';
+import { popoverBeforeToggle as _popoverBeforeToggle } from '@kovojs/headless-ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@kovojs/ui/popover';
 
 export interface GalleryPopoverDemoState {
   open: boolean;

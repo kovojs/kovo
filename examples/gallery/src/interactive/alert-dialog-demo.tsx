@@ -1,15 +1,17 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  alertDialogActionClick as _alertDialogActionClick,
+  alertDialogCancel as _alertDialogCancel,
+  alertDialogCancelClick as _alertDialogCancelClick,
+  alertDialogTriggerClick as _alertDialogTriggerClick,
+} from '@kovojs/headless-ui/alert-dialog';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogTrigger,
-  alertDialogActionClick as _alertDialogActionClick,
-  alertDialogCancel as _alertDialogCancel,
-  alertDialogCancelClick as _alertDialogCancelClick,
-  alertDialogTriggerClick as _alertDialogTriggerClick,
 } from '@kovojs/ui/alert-dialog';
 
 const TITLE_CLASS = 'text-base font-semibold';

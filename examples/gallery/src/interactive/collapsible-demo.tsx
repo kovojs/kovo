@@ -1,11 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-  collapsibleTriggerClick as _collapsibleTriggerClick,
-} from '@kovojs/ui/collapsible';
+import { collapsibleTriggerClick as _collapsibleTriggerClick } from '@kovojs/headless-ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@kovojs/ui/collapsible';
 
 export interface GalleryCollapsibleDemoState {
   open: boolean;

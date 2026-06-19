@@ -10,7 +10,7 @@ import {
   navigationMenuTriggerFocus as _navigationMenuTriggerFocus,
   navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
   navigationMenuTypeahead as _navigationMenuTypeahead,
-} from '@kovojs/ui/navigation-menu';
+} from '@kovojs/headless-ui/navigation-menu';
 
 export const GalleryNavigationMenuDemo$NavigationMenu_keydown = handler((event, ctx) => {
   const keyResult = _navigationMenuKeyDown(Object(event), {

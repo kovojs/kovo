@@ -64,20 +64,20 @@ export const GalleryDrawerDemo = component({
         data-gallery-interactive="drawer"
         data-side="bottom"
         data-state={state.open ? 'open' : 'closed'}
-        data-bind:data-state="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerRoot_data_state_derive"
+        data-bind:data-state="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerRoot_data_state_derive"
         open={state.open}
-        data-bind:open="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerRoot_open_derive"
+        data-bind:open="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerRoot_open_derive"
         kovo-state='{"open":false}'
       >
         <DrawerTrigger
           contentId={contentId}
-          on:click="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_click"
+          on:click="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_click"
           aria-expanded={state.open ? 'true' : 'false'}
-          data-bind:aria-expanded="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_aria_expanded_derive"
+          data-bind:aria-expanded="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_aria_expanded_derive"
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_data_state_derive"
+          data-bind:data-state="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_data_state_derive"
           open={state.open}
-          data-bind:open="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_open_derive"
+          data-bind:open="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerTrigger_open_derive"
         >
           Open drawer
         </DrawerTrigger>
@@ -85,13 +85,13 @@ export const GalleryDrawerDemo = component({
           contentId={contentId}
           data-side="bottom"
           descriptionId={descriptionId}
-          on:cancel="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerContent_cancel"
+          on:cancel="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerContent_cancel"
           side="bottom"
           titleId={titleId}
           data-state={state.open ? 'open' : 'closed'}
-          data-bind:data-state="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerContent_data_state_derive"
+          data-bind:data-state="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerContent_data_state_derive"
           open={state.open}
-          data-bind:open="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerContent_open_derive"
+          data-bind:open="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerContent_open_derive"
         >
           <DrawerHandle />
           <DrawerHeader>
@@ -103,18 +103,18 @@ export const GalleryDrawerDemo = component({
           </DrawerHeader>
           <DrawerClose
             contentId={contentId}
-            on:click="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerClose_click"
+            on:click="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerClose_click"
             data-state={state.open ? 'open' : 'closed'}
-            data-bind:data-state="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerClose_data_state_derive"
+            data-bind:data-state="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerClose_data_state_derive"
             open={state.open}
-            data-bind:open="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerClose_open_derive"
+            data-bind:open="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$DrawerClose_open_derive"
           >
             Close drawer
           </DrawerClose>
         </DrawerContent>
         <output
           data-demo-state="drawer-open"
-          data-bind="/c/__v/eb6dbc68/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$output_text_derive"
+          data-bind="/c/__v/bfcb5fc2/examples/gallery/src/generated/interactive/drawer-demo.client.js#GalleryDrawerDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

@@ -25,18 +25,18 @@ export const GallerySwitchDemo = component({
       data-gallery-interactive="switch"
       form="gallery-switch-form"
       name="gallery-notifications"
-      on:click="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_click"
-      on:keydown="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_keydown"
+      on:click="/c/__v/fc8a0880/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_click"
+      on:keydown="/c/__v/fc8a0880/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_keydown"
       value="enabled"
       checked={state.checked}
-      data-bind:checked="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_checked_derive"
+      data-bind:checked="/c/__v/fc8a0880/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$Switch_checked_derive"
       kovo-state='{"checked":false}'
     >
       <span class="select-none leading-none">Notifications</span>
       <output
         class="text-xs text-neutral-500"
         data-demo-state="checked"
-        data-bind="/c/__v/96f3406e/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$output_text_derive"
+        data-bind="/c/__v/fc8a0880/examples/gallery/src/generated/interactive/switch-demo.client.js#GallerySwitchDemo$output_text_derive"
       >
         {state.checked ? 'on' : 'off'}
       </output>

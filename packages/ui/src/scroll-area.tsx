@@ -311,5 +311,3 @@ export const ScrollAreaCorner = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/scroll-area';

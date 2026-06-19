@@ -41,24 +41,24 @@ export const GalleryDialogDemo = component({
       <Dialog
         data-gallery-interactive="dialog"
         open={state.open}
-        data-bind:open="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$Dialog_open_derive"
+        data-bind:open="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$Dialog_open_derive"
         kovo-state='{"open":false}'
       >
         <DialogTrigger
           contentId={contentId}
-          on:click="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_click"
+          on:click="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_click"
           open={state.open}
-          data-bind:open="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_open_derive"
+          data-bind:open="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogTrigger_open_derive"
         >
           Review cart
         </DialogTrigger>
         <DialogContent
           contentId={contentId}
           descriptionId={descriptionId}
-          on:cancel="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_cancel"
+          on:cancel="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_cancel"
           titleId={titleId}
           open={state.open}
-          data-bind:open="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_open_derive"
+          data-bind:open="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogContent_open_derive"
         >
           <h2 class={TITLE_CLASS} id={titleId}>
             Cart review
@@ -68,16 +68,16 @@ export const GalleryDialogDemo = component({
           </p>
           <DialogClose
             contentId={contentId}
-            on:click="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_click"
+            on:click="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_click"
             open={state.open}
-            data-bind:open="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_open_derive"
+            data-bind:open="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$DialogClose_open_derive"
           >
             Close review
           </DialogClose>
         </DialogContent>
         <output
           data-demo-state="open"
-          data-bind="/c/__v/7864ad3b/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$output_text_derive"
+          data-bind="/c/__v/591c8301/examples/gallery/src/generated/interactive/dialog-demo.client.js#GalleryDialogDemo$output_text_derive"
         >
           {state.open ? 'open' : 'closed'}
         </output>

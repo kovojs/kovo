@@ -10,7 +10,8 @@ export const GalleryCheckboxDemo$output_text_derive = derive(['state'], (state: 
 );
 
 import { component } from '@kovojs/core';
-import { Checkbox, type CheckboxCheckedState } from '@kovojs/ui/checkbox';
+import { type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
+import { Checkbox } from '@kovojs/ui/checkbox';
 
 export interface GalleryCheckboxDemoState {
   checked: CheckboxCheckedState;
@@ -24,17 +25,17 @@ export const GalleryCheckboxDemo = component({
     <Checkbox
       data-gallery-interactive="checkbox"
       name="gallery-email-summary"
-      on:click="/c/__v/817caa85/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_click"
+      on:click="/c/__v/e384cb9b/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_click"
       value="enabled"
       checked={state.checked}
-      data-bind:checked="/c/__v/817caa85/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_checked_derive"
+      data-bind:checked="/c/__v/e384cb9b/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$Checkbox_checked_derive"
       kovo-state='{"checked":"indeterminate"}'
     >
       <span class="select-none leading-none">Email summary</span>
       <output
         class="text-xs text-neutral-500"
         data-demo-state="checked"
-        data-bind="/c/__v/817caa85/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$output_text_derive"
+        data-bind="/c/__v/e384cb9b/examples/gallery/src/generated/interactive/checkbox-demo.client.js#GalleryCheckboxDemo$output_text_derive"
       >
         {String(state.checked)}
       </output>

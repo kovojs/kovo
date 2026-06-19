@@ -221,5 +221,3 @@ export const ToolbarButton = component({
     );
   },
 });
-
-export * from '@kovojs/headless-ui/toolbar';

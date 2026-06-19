@@ -1,10 +1,10 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
-  Checkbox,
   checkboxTriggerClick as _checkboxTriggerClick,
   type CheckboxCheckedState,
-} from '@kovojs/ui/checkbox';
+} from '@kovojs/headless-ui/checkbox';
+import { Checkbox } from '@kovojs/ui/checkbox';
 
 export interface GalleryCheckboxDemoState {
   checked: CheckboxCheckedState;

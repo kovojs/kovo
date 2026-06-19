@@ -1,7 +1,7 @@
 // @kovojs-ir
 import { derive, handler } from '@kovojs/runtime/generated';
 
-import { switchTriggerClick as _switchTriggerClick } from '@kovojs/ui/switch';
+import { switchTriggerClick as _switchTriggerClick } from '@kovojs/headless-ui/switch';
 
 export const GallerySwitchDemo$Switch_click = handler((event, ctx) => {
   const result = _switchTriggerClick(Object(event), { checked: ctx.state.checked });

@@ -1,11 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import {
-  Disclosure,
-  DisclosureContent,
-  DisclosureTrigger,
-  disclosureTriggerClick as _disclosureTriggerClick,
-} from '@kovojs/ui/disclosure';
+import { disclosureTriggerClick as _disclosureTriggerClick } from '@kovojs/headless-ui/disclosure';
+import { Disclosure, DisclosureContent, DisclosureTrigger } from '@kovojs/ui/disclosure';
 
 export interface GalleryDisclosureDemoState {
   open: boolean;
