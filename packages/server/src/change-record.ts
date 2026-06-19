@@ -9,6 +9,7 @@ export interface ChangeRecord<DomainKey extends string = string, Input = unknown
   input?: Input;
   manual?: true;
   reason?: string;
+  via?: string;
 }
 
 /** Options for `invalidate`/`context.invalidate`: row keys, input echo, and a reason. */
@@ -25,6 +26,7 @@ export interface InvalidateOptions<Input = unknown> {
 export interface MutationTouchSite {
   domain: string;
   keys: null | string;
+  via?: string;
 }
 
 interface MutationChangeRecordRegistry {
@@ -66,6 +68,7 @@ export function mutationRegistryChangeRecords<Input>(
       domain: touch.domain,
       input,
       ...touchKeyRecord(touch.keys, input),
+      ...(touch.via === undefined ? {} : { via: touch.via }),
     }));
   }
 
@@ -77,9 +80,11 @@ export function changeRecordTouchesQueryInstance(
   instanceKey: string,
 ): boolean {
   if ((change.keys?.length ?? 0) === 0) return true;
-  return (
-    change.keys?.some((key) => instanceKey === queryInstanceKeyForChangeKey(change, key)) ?? false
-  );
+  if (change.keys?.some((key) => instanceKey === queryInstanceKeyForChangeKey(change, key))) {
+    return true;
+  }
+
+  return queryInstanceKeyReadsChangeDomain(change, instanceKey);
 }
 
 function changeRecordsFor<Input>(
@@ -92,8 +97,25 @@ function changeRecordsFor<Input>(
   }));
 }
 
-function queryInstanceKeyForChangeKey(change: Pick<ChangeRecord, 'domain'>, key: string): string {
-  return `${change.domain}:${key}`;
+function queryInstanceKeyForChangeKey(
+  change: Pick<ChangeRecord, 'domain' | 'via'>,
+  key: string,
+): string {
+  return change.via === undefined
+    ? `${change.domain}:${key}`
+    : `${change.domain}:${change.via}:${key}`;
+}
+
+function queryInstanceKeyReadsChangeDomain(
+  change: Pick<ChangeRecord, 'domain' | 'via'>,
+  instanceKey: string,
+): boolean {
+  if (!instanceKey.startsWith(`${change.domain}:`)) return false;
+
+  // SPEC §10.1: the domain is the cache currency. When source-table identity is
+  // missing or differs, row keys are not comparable, so over-invalidate.
+  if (change.via === undefined) return true;
+  return !instanceKey.startsWith(`${change.domain}:${change.via}:`);
 }
 
 function dedupeTouchSites(touches: readonly MutationTouchSite[]): MutationTouchSite[] {
@@ -101,7 +123,7 @@ function dedupeTouchSites(touches: readonly MutationTouchSite[]): MutationTouchS
   const deduped: MutationTouchSite[] = [];
 
   for (const touch of touches) {
-    const key = `${touch.domain}\0${touch.keys ?? ''}`;
+    const key = `${touch.domain}\0${touch.via ?? ''}\0${touch.keys ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(touch);

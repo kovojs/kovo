@@ -244,26 +244,29 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
     KV312 absent a cadence; `clocks: { … }` (client) or `.refresh({ … })` (server)
     clears it; `renderOnce` is an accepted, recorded suppression.
 
-- [ ] **T2-KEYS — cross-table key collision under a shared domain.** Two
+- [x] **T2-KEYS — cross-table key collision under a shared domain.** Two
       row-key-annotated tables in one domain + a mutation that writes only one →
       the other's query instances are silently skipped (under-invalidation),
       violating "any write to D invalidates any query reading D."
-  - Confirmed gap (this session, by direct read): instance routing compares
-    `${domain}:${keyValue}` with the source table stripped —
-    `changeRecordTouchesQueryInstance` / `queryInstanceKeyForChangeKey`
-    (`packages/server/src/change-record.ts:75-97`); `via` discarded at
-    `packages/drizzle/src/invalidation.ts:151-157` (`rowKeyForDomain`) and
-    `:134-149`. Safe fallback (whole-domain) only when BOTH tables are written
-    (`invalidation.ts:155-156`); the single-table-write case mis-keys. No
-    guardrail (KV408 is per-table) and no test exercises two keyed tables in one
-    domain.
-  - [ ] Thread source-table identity into routing (compare `domain:via:key`),
-        OR reject/over-invalidate multi-keyed-single-domain configs at
-        schema-registration time with a teaching diagnostic.
-  - [ ] Add the missing conformance fixture: two keyed tables sharing a domain,
+  - Resolved gap: keyed routing no longer treats source-less row keys as
+    comparable across every same-domain query instance. Server change records can
+    carry optional source-table identity (`via`) for `domain:via:key` precision;
+    when `via` is absent or differs, same-domain keyed instances over-invalidate
+    instead of silently skipping, preserving SPEC.md §10.1's domain currency.
+  - [x] Thread source-table identity into routing (`domain:via:key`) and over-invalidate
+        same-domain instances when source-table identity is missing or differs.
+    - Evidence: `packages/server/src/change-record.ts` carries optional `via`
+      through inferred touch records; `changeRecordTouchesQueryInstance` preserves
+      same-table row narrowing and over-invalidates cross-table/legacy same-domain
+      keys per SPEC.md §10.1.
+  - [x] Add the missing fixture coverage: two keyed tables sharing a domain,
         mutation writes one, assert the other's instance still invalidates.
-  - Acceptance: the new fixture is green; the safe over-invalidation path is
-    preserved when both tables are written.
+    - Evidence: `packages/server/src/change-record.test.ts` covers
+      table-scoped routing plus fragment rendering for same-domain cross-table
+      invalidation; focused run `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts` passed (36 tests).
+  - Acceptance: focused server fixture is green; source-less same-domain keyed
+    changes now over-invalidate instead of silently skipping, preserving the safe
+    whole-domain fallback.
 
 > **Out of scope — cross-session / multi-user freshness (deferred 2026-06-18).**
 > User A's write refreshing only A's tab is a real gap, but the v1 floor already
@@ -310,8 +313,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
 
 - T0-CLOSURE: read `static.ts:1665-1691` + ran the extractor on the four shapes
   (`graph = {}`); silent behavior locked by `index.write-callbacks-carriers.test.ts:271-284`.
-- T2-KEYS: read `change-record.ts:75-97` + `invalidation.ts:134-157`; `via`
-  stripped, no guardrail, no two-keyed-tables-one-domain test.
+- T2-KEYS: `pnpm exec vitest --run packages/server/src/change-record.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts` passed (36 tests); `pnpm exec tsc --noEmit --pretty false` and `git diff --check` passed.
 - Remaining items (T1-RUNTIME, T1-ENGINE, T1-RENDERONCE, T2-TEMPORAL) are
   validated against `SPEC.md` and `plans/data-layer-roadmap.md` (built vs v1.5),
   not yet against a direct code read — confirm exact symbols before implementing

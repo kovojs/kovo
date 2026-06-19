@@ -460,14 +460,20 @@ describe('server mutation lifecycle', () => {
 
   it('narrows post-commit rerun query instances by row keys', async () => {
     const product = domain('product');
-    const productP1 = query('productDetail', { instanceKey: 'product:p1', reads: [product] });
-    const productP2 = query('productDetail', { instanceKey: 'product:p2', reads: [product] });
+    const productP1 = query('productDetail', {
+      instanceKey: 'product:products:p1',
+      reads: [product],
+    });
+    const productP2 = query('productDetail', {
+      instanceKey: 'product:products:p2',
+      reads: [product],
+    });
     const reserveProduct = mutation('product/reserve', {
       input: s.object({
         productId: s.string(),
       }),
       registry: {
-        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId', via: 'products' }],
         queries: [productP1, productP2],
       },
       handler(input) {
@@ -481,11 +487,12 @@ describe('server mutation lifecycle', () => {
           domain: 'product',
           input: { productId: 'p1' },
           keys: ['p1'],
+          via: 'products',
         },
       ],
       ok: true,
       rerunQueries: ['productDetail'],
-      rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
+      rerunQueryInstances: [{ instanceKey: 'product:products:p1', key: 'productDetail' }],
       value: 'p1',
     });
   });

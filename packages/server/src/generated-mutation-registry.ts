@@ -47,7 +47,9 @@ function isGeneratedMutationTouchRegistry(value: unknown): value is GeneratedMut
           !Array.isArray(touch) &&
           typeof (touch as MutationTouchSite).domain === 'string' &&
           ((touch as MutationTouchSite).keys === null ||
-            typeof (touch as MutationTouchSite).keys === 'string'),
+            typeof (touch as MutationTouchSite).keys === 'string') &&
+          ((touch as MutationTouchSite).via === undefined ||
+            typeof (touch as MutationTouchSite).via === 'string'),
       ),
   );
 }

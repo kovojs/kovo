@@ -26,8 +26,8 @@ describe('server change records', () => {
       mutationRegistryChangeRecords(
         {
           inferredTouches: [
-            { domain: 'product', keys: 'arg:item.id' },
-            { domain: 'product', keys: 'arg:item.id' },
+            { domain: 'product', keys: 'arg:item.id', via: 'products' },
+            { domain: 'product', keys: 'arg:item.id', via: 'products' },
             { domain: 'variant', keys: 'arg:item.variantIds' },
             { domain: 'cart', keys: null },
             { domain: 'ignored', keys: 'literal' },
@@ -36,24 +36,137 @@ describe('server change records', () => {
         input,
       ),
     ).toEqual([
-      { domain: 'product', input, keys: ['p1'] },
+      { domain: 'product', input, keys: ['p1'], via: 'products' },
       { domain: 'variant', input, keys: ['v1', '2', 'true'] },
       { domain: 'cart', input },
       { domain: 'ignored', input },
     ]);
   });
 
-  it('matches change records against domain-scoped query instance keys', () => {
+  it('matches change records against table-scoped query instance keys', () => {
+    expect(
+      changeRecordTouchesQueryInstance(
+        { domain: 'product', keys: ['p1'], via: 'products' },
+        'product:products:p1',
+      ),
+    ).toBe(true);
+    expect(
+      changeRecordTouchesQueryInstance(
+        { domain: 'product', keys: ['p1'], via: 'products' },
+        'product:products:p2',
+      ),
+    ).toBe(false);
+    expect(
+      changeRecordTouchesQueryInstance(
+        { domain: 'product', keys: ['p1'], via: 'products' },
+        'product:prices:p2',
+      ),
+    ).toBe(true);
+    expect(
+      changeRecordTouchesQueryInstance(
+        { domain: 'product', keys: ['p1'], via: 'products' },
+        'cart:products:p1',
+      ),
+    ).toBe(false);
+    expect(
+      changeRecordTouchesQueryInstance({ domain: 'product' }, 'product:products:p1'),
+    ).toBe(true);
+  });
+
+  it('over-invalidates legacy same-domain keyed instances when source table is unknown', () => {
     expect(
       changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p1'),
     ).toBe(true);
     expect(
       changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p2'),
+    ).toBe(true);
+    expect(
+      changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'cart:p1'),
     ).toBe(false);
-    expect(changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'cart:p1')).toBe(
-      false,
+  });
+
+  it('invalidates same-domain query instances from another keyed table', async () => {
+    const catalog = domain('catalog');
+    const productP1 = query('productDetail', {
+      instanceKey: 'catalog:products:p1',
+      reads: [catalog],
+    });
+    const productP2 = query('productDetail', {
+      instanceKey: 'catalog:products:p2',
+      reads: [catalog],
+    });
+    const priceP2 = query('priceDetail', {
+      instanceKey: 'catalog:prices:p2',
+      reads: [catalog],
+    });
+    const updateProduct = mutation('catalog/product/update', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        inferredTouches: [{ domain: 'catalog', keys: 'arg:productId', via: 'products' }],
+        queries: [productP1, productP2, priceP2],
+      },
+      handler(input) {
+        return input.productId;
+      },
+    });
+
+    await expect(runMutation(updateProduct, { productId: 'p1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'catalog',
+          input: { productId: 'p1' },
+          keys: ['p1'],
+          via: 'products',
+        },
+      ],
+      ok: true,
+      rerunQueries: ['productDetail', 'priceDetail'],
+      rerunQueryInstances: [
+        { instanceKey: 'catalog:products:p1', key: 'productDetail' },
+        { instanceKey: 'catalog:prices:p2', key: 'priceDetail' },
+      ],
+      value: 'p1',
+    });
+  });
+
+  it('renders same-domain query instances from another keyed table after one table mutates', async () => {
+    const catalog = domain('catalog');
+    const productP2 = query('productDetail', {
+      instanceKey: 'catalog:products:p2',
+      load: () => ({ id: 'p2', title: 'Catalog p2' }),
+      reads: [catalog],
+    });
+    const priceP2 = query('priceDetail', {
+      instanceKey: 'catalog:prices:p2',
+      load: () => ({ id: 'p2', amount: 25 }),
+      reads: [catalog],
+    });
+    const updateProduct = mutation('catalog/product/render-update', {
+      input: s.object({
+        productId: s.string(),
+      }),
+      registry: {
+        inferredTouches: [{ domain: 'catalog', keys: 'arg:productId', via: 'products' }],
+        queries: [productP2, priceP2],
+      },
+      handler(input) {
+        return input.productId;
+      },
+    });
+
+    const response = await renderMutationResponse(updateProduct, {
+      fragment: true,
+      rawInput: { productId: 'p1' },
+      request: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).not.toContain('name="productDetail"');
+    expect(response.body).toContain(
+      '<kovo-query name="priceDetail" key="catalog:prices:p2">{"id":"p2","amount":25}</kovo-query>',
     );
-    expect(changeRecordTouchesQueryInstance({ domain: 'product' }, 'product:p1')).toBe(true);
   });
 
   it('emits manual invalidate escape-hatch records from mutation context', async () => {
