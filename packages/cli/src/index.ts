@@ -1936,6 +1936,7 @@ async function runCompileDrizzleOptimisticCommand(
   const { serializeDerivedOptimistic } = await import('@kovojs/drizzle/internal/derive-codegen');
   const input = readJsonFile(options.inputPath) as DrizzleOptimisticCommandInput;
   const derivedEntries: Parameters<typeof serializeDerivedOptimistic>[0]['entries'][number][] = [];
+  const awaitFragmentQueries: string[] = [];
   const facts: {
     derivation?: { reason?: unknown; status: 'PUNTED' | 'derived' };
     query: string;
@@ -1944,6 +1945,15 @@ async function runCompileDrizzleOptimisticCommand(
 
   for (const entry of input.entries) {
     const status = entry.status ?? 'derived';
+    if (status === 'await-fragment') {
+      awaitFragmentQueries.push(entry.query);
+      facts.push({
+        query: entry.query,
+        status,
+      });
+      continue;
+    }
+
     const result = deriveOptimistic(
       input.effects as Parameters<typeof deriveOptimistic>[0],
       entry.shape as Parameters<typeof deriveOptimistic>[1],
@@ -1972,9 +1982,13 @@ async function runCompileDrizzleOptimisticCommand(
   const overrideQueries =
     input.overrides ??
     input.entries
-      .filter((entry) => (entry.status ?? 'derived') !== 'derived')
+      .filter((entry) => {
+        const status = entry.status ?? 'derived';
+        return status !== 'derived' && status !== 'await-fragment';
+      })
       .map((entry) => entry.query);
   const source = serializeDerivedOptimistic({
+    ...(awaitFragmentQueries.length === 0 ? {} : { awaitFragments: awaitFragmentQueries }),
     complete: input.complete ?? overrideQueries.length === 0,
     constName: input.constName,
     entries: derivedEntries,

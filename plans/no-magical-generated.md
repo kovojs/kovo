@@ -325,9 +325,7 @@ src/interactive-app.test.ts src/interactive-app.generated-artifacts.test.ts`
 -- --check` passed after refreshing generated route artifacts. Gallery's
     equivalent `pnpm --filter @kovojs/example-gallery run
 emit:interactive-gallery -- --check` also passed.
-- [ ] Run `pnpm run check` and `git diff --check` before closing the plan.
-  - Latest attempt: `git diff --check` passed, but `pnpm run check` failed at
-    `vp check` formatting discovery only for unrelated untracked
-    `examples/devtool/data/*` and `plans/browser-rename.md`. Keep this item
-    open until those worktree-local files are resolved, formatted with user
-    approval, or explicitly scoped out.
+- [x] Run `pnpm run check` and `git diff --check` before closing the plan.
+  - Evidence: `pnpm run check` passed, including `check:inline-loader`,
+    `check:imports`, `vp check`, and `vp run typecheck-examples`; `git diff
+--check` passed.

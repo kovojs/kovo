@@ -59,12 +59,12 @@ export const GalleryContextMenuDemo$output_text_derive = derive(['state'], (stat
 );
 
 import { component } from '@kovojs/core';
+import type { ContextMenuItem as GalleryContextMenuItem } from '@kovojs/headless-ui/context-menu';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  type ContextMenuItem as GalleryContextMenuItem,
   type ContextMenuPoint,
 } from '@kovojs/ui/context-menu';
 

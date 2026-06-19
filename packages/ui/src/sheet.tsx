@@ -327,7 +327,7 @@ export const SheetRoot = component({
   render(props: SheetRootProps) {
     const attrs = dialogRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
     });
     const styleAttrs = style.attrs(sheetStyles.root, props.styles?.root);
 
@@ -350,7 +350,7 @@ export const SheetTrigger = component({
     const attrs = dialogTriggerAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       contentId: props.contentId,
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
     });
     const styleAttrs = style.attrs(sheetStyles.trigger, props.styles?.trigger);
 
@@ -381,7 +381,7 @@ export const SheetContent = component({
     const attrs = dialogContentAttributes({
       contentId: props.contentId,
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
       titleId: props.titleId,
     });
     const styleAttrs = style.attrs(
@@ -445,7 +445,7 @@ export const SheetClose = component({
     const attrs = dialogCloseAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       contentId: props.contentId,
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
     });
     const styleAttrs = style.attrs(sheetStyles.close, props.styles?.close);
 

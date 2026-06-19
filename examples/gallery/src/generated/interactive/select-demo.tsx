@@ -54,6 +54,7 @@ export const GallerySelectDemo$span_text_derive = derive(['state'], (state: any)
 );
 
 import { component } from '@kovojs/core';
+import type { SelectItem as GallerySelectItem } from '@kovojs/headless-ui/select';
 import {
   Select,
   SelectContent,
@@ -61,7 +62,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  type SelectItem as GallerySelectItem,
 } from '@kovojs/ui/select';
 
 const LABEL_CLASS = 'text-sm font-medium leading-none text-neutral-900';

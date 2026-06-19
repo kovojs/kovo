@@ -139,6 +139,7 @@ export const GalleryCommandDemo$output_text_derive_2 = derive(['state'], (state:
 );
 
 import { component } from '@kovojs/core';
+import type { CommandItem as GalleryCommandItem } from '@kovojs/headless-ui/command';
 import {
   Command,
   CommandClose,
@@ -148,7 +149,6 @@ import {
   CommandItem,
   CommandListbox,
   CommandTrigger,
-  type CommandItem as GalleryCommandItem,
 } from '@kovojs/ui/command';
 
 export interface GalleryCommandDemoState {

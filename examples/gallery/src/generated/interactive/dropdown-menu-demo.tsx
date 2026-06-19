@@ -51,12 +51,12 @@ export const GalleryDropdownMenuDemo$output_text_derive = derive(['state'], (sta
 );
 
 import { component } from '@kovojs/core';
+import type { DropdownMenuItem as GalleryDropdownMenuItem } from '@kovojs/headless-ui/dropdown-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  type DropdownMenuItem as GalleryDropdownMenuItem,
 } from '@kovojs/ui/dropdown-menu';
 
 export interface GalleryDropdownMenuDemoState {

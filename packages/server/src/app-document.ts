@@ -115,7 +115,7 @@ export async function renderAppErrorDocumentResponse(
   // SPEC §9.2/§9.5: error shells are app config, but unexpected failures
   // still fall back to a stable no-internals document.
   return renderErrorDocument({
-    hints: app.stylesheets.length > 0 ? { stylesheets: app.stylesheets } : undefined,
+    ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     status,
     ...(app.document.template === undefined ? {} : { template: app.document.template }),

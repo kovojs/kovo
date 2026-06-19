@@ -155,9 +155,18 @@ const shapeByQuery = new Map(shapes.map((shape) => [shape.query, shape]));
 // ── Invalidation: which queries each mutation invalidates (domain overlap) ─────
 const soQueryDomains = queryDomainsFromFacts(queryFacts);
 const invalidatedQueriesByMutation = {
-  postQuestion: ['questionList'],
-  postAnswer: ['questionList', 'answerList'],
-  voteUp: ['questionList', 'questionScore'],
+  postQuestion: [{ query: 'questionList' }, { query: 'questionDetail', status: 'await-fragment' }],
+  postAnswer: [
+    { query: 'questionList' },
+    { query: 'answerList' },
+    { query: 'questionAnswers', status: 'await-fragment' },
+    { query: 'questionDetail', status: 'await-fragment' },
+  ],
+  voteUp: [
+    { query: 'questionList' },
+    { query: 'questionScore' },
+    { query: 'questionDetail', status: 'await-fragment' },
+  ],
 };
 
 // ── Build optimistic derivation inputs per mutation ────────────────────────────
@@ -166,10 +175,11 @@ for (const mutationKey of MUTATION_KEYS) {
   const effects = effectsByMutation.get(mutationKey);
   assert.ok(effects, `expected extracted effects for ${mutationKey}`);
   const entries = [];
-  for (const query of invalidatedQueriesByMutation[mutationKey]) {
+  for (const entry of invalidatedQueriesByMutation[mutationKey]) {
+    const { query, status } = entry;
     const shape = shapeByQuery.get(query);
-    assert.ok(shape, `expected an extracted shape for ${query}`);
-    entries.push({ query, shape });
+    assert.ok(status === 'await-fragment' || shape, `expected an extracted shape for ${query}`);
+    entries.push({ query, shape: shape ?? {}, ...(status === undefined ? {} : { status }) });
   }
   optimisticByMutation.set(mutationKey, { effects, entries });
 }
@@ -248,7 +258,6 @@ for (const mutationKey of MUTATION_KEYS) {
   const path = optimisticFileName(mutationKey);
   const tempPath = resolve(tempRoot, `${mutationKey}.optimistic.ts`);
   compileDrizzleOptimistic({
-    complete: true,
     constName: CONST_BY_MUTATION[mutationKey],
     ...optimisticByMutation.get(mutationKey),
     formImport: FORM_BY_MUTATION[mutationKey],

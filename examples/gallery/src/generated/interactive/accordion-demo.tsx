@@ -2,10 +2,6 @@
 /** @jsxImportSource @kovojs/server */
 import { derive } from '@kovojs/runtime/generated';
 
-export const GalleryAccordionDemo$Accordion_value_derive = derive(
-  ['state'],
-  (state: any) => state.value || undefined,
-);
 export const GalleryAccordionDemo$AccordionItem_value_derive = derive(
   ['state'],
   (state: any) => state.value || undefined,
@@ -80,12 +76,9 @@ export const GalleryAccordionDemo = component({
 
     return (
       <Accordion
-        collapsible
+        {...rootState}
         data-gallery-interactive="accordion"
-        on:keydown="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$Accordion_keydown"
-        type="single"
-        value={state.value || undefined}
-        data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$Accordion_value_derive"
+        on:keydown="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$Accordion_keydown"
         kovo-state='{"activeValue":"shipping","value":"shipping"}'
       >
         <AccordionItem
@@ -93,7 +86,7 @@ export const GalleryAccordionDemo = component({
           itemValue="shipping"
           type="single"
           value={state.value || undefined}
-          data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionItem_value_derive"
+          data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionItem_value_derive"
         >
           <AccordionHeader
             collapsible
@@ -101,19 +94,19 @@ export const GalleryAccordionDemo = component({
             level={3}
             type="single"
             value={state.value || undefined}
-            data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionHeader_value_derive"
+            data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionHeader_value_derive"
           >
             <AccordionTrigger
               collapsible
               contentId="gallery-accordion-shipping-content"
               itemValue="shipping"
-              on:click="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_click"
+              on:click="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_click"
               triggerId="gallery-accordion-shipping-trigger"
               type="single"
               tabIndex={state.activeValue === 'shipping' ? 0 : -1}
-              data-bind:tabIndex="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_tabIndex_derive"
+              data-bind:tabIndex="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_tabIndex_derive"
               value={state.value || undefined}
-              data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_value_derive"
+              data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_value_derive"
             >
               Shipping
             </AccordionTrigger>
@@ -125,7 +118,7 @@ export const GalleryAccordionDemo = component({
             triggerId="gallery-accordion-shipping-trigger"
             type="single"
             value={state.value || undefined}
-            data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionContent_value_derive"
+            data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionContent_value_derive"
           >
             Shipping windows are selected during checkout.
           </AccordionContent>
@@ -135,7 +128,7 @@ export const GalleryAccordionDemo = component({
           itemValue="billing"
           type="single"
           value={state.value || undefined}
-          data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionItem_value_derive_2"
+          data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionItem_value_derive_2"
         >
           <AccordionHeader
             collapsible
@@ -143,19 +136,19 @@ export const GalleryAccordionDemo = component({
             level={3}
             type="single"
             value={state.value || undefined}
-            data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionHeader_value_derive_2"
+            data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionHeader_value_derive_2"
           >
             <AccordionTrigger
               collapsible
               contentId="gallery-accordion-billing-content"
               itemValue="billing"
-              on:click="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_click_2"
+              on:click="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_click_2"
               triggerId="gallery-accordion-billing-trigger"
               type="single"
               tabIndex={state.activeValue === 'billing' ? 0 : -1}
-              data-bind:tabIndex="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_tabIndex_derive_2"
+              data-bind:tabIndex="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_tabIndex_derive_2"
               value={state.value || undefined}
-              data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_value_derive_2"
+              data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionTrigger_value_derive_2"
             >
               Billing
             </AccordionTrigger>
@@ -167,7 +160,7 @@ export const GalleryAccordionDemo = component({
             triggerId="gallery-accordion-billing-trigger"
             type="single"
             value={state.value || undefined}
-            data-bind:value="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionContent_value_derive_2"
+            data-bind:value="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$AccordionContent_value_derive_2"
           >
             Billing contacts receive invoice updates.
           </AccordionContent>
@@ -175,7 +168,7 @@ export const GalleryAccordionDemo = component({
         <output
           class="text-xs text-neutral-500"
           data-demo-state="accordion-value"
-          data-bind="/c/__v/509fd267/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$output_text_derive"
+          data-bind="/c/__v/8b3a810b/examples/gallery/src/generated/interactive/accordion-demo.client.js#GalleryAccordionDemo$output_text_derive"
         >
           {state.value || 'none'}
         </output>

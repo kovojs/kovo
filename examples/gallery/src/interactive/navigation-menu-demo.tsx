@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { NavigationMenuItem as GalleryNavigationMenuItem } from '@kovojs/headless-ui/navigation-menu';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -16,7 +17,6 @@ import {
   navigationMenuTriggerPointerEnter as _navigationMenuTriggerPointerEnter,
   navigationMenuTypeahead as _navigationMenuTypeahead,
   NavigationMenuViewport,
-  type NavigationMenuItem as GalleryNavigationMenuItem,
 } from '@kovojs/ui/navigation-menu';
 
 export interface GalleryNavigationMenuDemoState {

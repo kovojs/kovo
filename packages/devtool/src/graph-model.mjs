@@ -208,8 +208,8 @@ function buildIndex(nodes, edges, byId) {
 // stable/diffable/legible output, so BM25 (reproducible, matched-terms auditable)
 // fits where an embedding model would not.
 
-export function buildBm25(nodes, byId, index) {
-  const docs = nodes.map((n) => ({ id: n.id, terms: tokenize(cardText(n, byId, index)) }));
+export function buildBm25(nodes) {
+  const docs = nodes.map((n) => ({ id: n.id, terms: tokenize(cardText(n)) }));
   const N = docs.length;
   const df = new Map();
   for (const d of docs) for (const t of new Set(d.terms)) df.set(t, (df.get(t) ?? 0) + 1);
@@ -241,7 +241,7 @@ export function buildBm25(nodes, byId, index) {
 }
 
 /** Render a node to the retrievable "card" text — its traced neighborhood. */
-function cardText(n, byId, index) {
+function cardText(n) {
   const parts = [n.kind, n.name, n.label];
   const d = n.data;
   if (n.kind === 'component') {

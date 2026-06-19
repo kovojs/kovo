@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { CommandItem as GalleryCommandItem } from '@kovojs/headless-ui/command';
 import {
   Command,
   CommandClose,
@@ -15,7 +16,6 @@ import {
   CommandListbox,
   CommandTrigger,
   commandTriggerClick as _commandTriggerClick,
-  type CommandItem as GalleryCommandItem,
 } from '@kovojs/ui/command';
 
 export interface GalleryCommandDemoState {

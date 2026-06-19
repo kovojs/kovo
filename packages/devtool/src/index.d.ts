@@ -63,11 +63,7 @@ export interface KindMeta {
 }
 
 export function buildDataflowGraph(graph: GraphJson): DataflowGraph;
-export function buildBm25(
-  nodes: DataflowNode[],
-  byId: Record<string, DataflowNode>,
-  index: unknown,
-): (query: string, limit?: number) => Bm25Hit[];
+export function buildBm25(nodes: DataflowNode[]): (query: string, limit?: number) => Bm25Hit[];
 export const KIND_META: Record<string, KindMeta>;
 export const LANES: string[];
 

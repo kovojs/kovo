@@ -19,6 +19,8 @@ export interface SerializeDerivedOptimisticOptions {
   /** True when every invalidated query of the mutation is derived (no overrides) ⇒ emit `satisfies`. */
   complete: boolean;
   entries: readonly DerivedTransformEntry[];
+  /** Query names that are covered by waiting for the server fragment. */
+  awaitFragments?: readonly string[];
   /** Type-only import of the mutation form, e.g. `{ name: 'addToCartForm', path: '../../app.js' }`. */
   formImport: { name: string; path: string };
   /** Optional named FIFO serialization queue (mirrors the hand-written plan). */
@@ -43,6 +45,7 @@ const DO_NOT_EDIT = [
  */
 export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOptions): string {
   const sorted = [...options.entries].sort((left, right) => left.query.localeCompare(right.query));
+  const awaitFragments = [...(options.awaitFragments ?? [])].sort();
   const usesTempId = sorted.some((entry) => programUses(entry.program, 'tempId'));
   const usesNow = sorted.some((entry) => programUses(entry.program, 'now'));
 
@@ -54,8 +57,11 @@ export function serializeDerivedOptimistic(options: SerializeDerivedOptimisticOp
       ? `import { ${runtimeValueImports.join(', ')}, type OptimisticFor } from '@kovojs/runtime';`
       : `import type { OptimisticFor } from '@kovojs/runtime';`;
 
-  const transforms = sorted
-    .map((entry) => indent(`${propertyKey(entry.query)}: ${lowerTransform(entry.program)},`, 4))
+  const transforms = [
+    ...sorted.map((entry) => `${propertyKey(entry.query)}: ${lowerTransform(entry.program)},`),
+    ...awaitFragments.map((query) => `${propertyKey(query)}: 'await-fragment',`),
+  ]
+    .map((line) => indent(line, 4))
     .join('\n');
 
   const planBody = [

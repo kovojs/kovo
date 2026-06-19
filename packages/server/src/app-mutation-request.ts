@@ -144,10 +144,13 @@ function inheritFragmentRendererStylesheets(
 ): readonly FragmentRenderer[] {
   if (inheritedStylesheets.length === 0) return renderers;
 
-  return renderers.map((renderer) => ({
-    ...renderer,
-    stylesheets: mergedStylesheets(inheritedStylesheets, renderer.stylesheets),
-  }));
+  return renderers.map((renderer) => {
+    const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
+    return {
+      ...renderer,
+      ...(stylesheets === undefined ? {} : { stylesheets }),
+    };
+  });
 }
 
 function inheritLiveTargetRendererStylesheets<Request>(
@@ -156,10 +159,13 @@ function inheritLiveTargetRendererStylesheets<Request>(
 ): readonly LiveTargetRenderer<Request>[] {
   if (inheritedStylesheets.length === 0) return renderers;
 
-  return renderers.map((renderer) => ({
-    ...renderer,
-    stylesheets: mergedStylesheets(inheritedStylesheets, renderer.stylesheets),
-  }));
+  return renderers.map((renderer) => {
+    const stylesheets = mergedStylesheets(inheritedStylesheets, renderer.stylesheets);
+    return {
+      ...renderer,
+      ...(stylesheets === undefined ? {} : { stylesheets }),
+    };
+  });
 }
 
 function mergedStylesheets<Stylesheet extends KovoApp['stylesheets'][number]>(

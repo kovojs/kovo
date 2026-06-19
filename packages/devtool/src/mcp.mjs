@@ -12,7 +12,7 @@ export function createMcpServer({ bundles }) {
   const apps = new Map();
   for (const bundle of bundles) {
     const byId = Object.fromEntries(bundle.nodes.map((n) => [n.id, n]));
-    apps.set(bundle.app, { bundle, byId, search: buildBm25(bundle.nodes, byId, null) });
+    apps.set(bundle.app, { bundle, byId, search: buildBm25(bundle.nodes) });
   }
   const appIds = [...apps.keys()];
   const DEFAULT_APP = appIds[0];

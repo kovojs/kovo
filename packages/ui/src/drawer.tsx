@@ -336,7 +336,7 @@ export const DrawerRoot = component({
   render(props: DrawerRootProps) {
     const attrs = dialogRootAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
     });
     const styleAttrs = style.attrs(drawerStyles.root, props.styles?.root);
 
@@ -359,7 +359,7 @@ export const DrawerTrigger = component({
     const attrs = dialogTriggerAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       contentId: props.contentId,
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
     });
     const styleAttrs = style.attrs(drawerStyles.trigger, props.styles?.trigger);
 
@@ -390,7 +390,7 @@ export const DrawerContent = component({
     const attrs = dialogContentAttributes({
       contentId: props.contentId,
       ...(props.descriptionId === undefined ? {} : { descriptionId: props.descriptionId }),
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
       titleId: props.titleId,
     });
     const styleAttrs = style.attrs(
@@ -461,7 +461,7 @@ export const DrawerClose = component({
     const attrs = dialogCloseAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),
       contentId: props.contentId,
-      ...(props.open === undefined ? {} : { open: props.open }),
+      open: props.open === true,
     });
     const styleAttrs = style.attrs(drawerStyles.close, props.styles?.close);
 

@@ -72,6 +72,7 @@ export const GalleryNavigationMenuDemo$output_text_derive = derive(
 );
 
 import { component } from '@kovojs/core';
+import type { NavigationMenuItem as GalleryNavigationMenuItem } from '@kovojs/headless-ui/navigation-menu';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -80,7 +81,6 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   NavigationMenuViewport,
-  type NavigationMenuItem as GalleryNavigationMenuItem,
 } from '@kovojs/ui/navigation-menu';
 
 export interface GalleryNavigationMenuDemoState {

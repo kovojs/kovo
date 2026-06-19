@@ -42,10 +42,6 @@ export const GalleryAccordionDemo$AccordionTrigger_click_2 = handler((event, ctx
   ctx.state.value = result.value?.toString() ?? '';
 });
 
-export const GalleryAccordionDemo$Accordion_value_derive = derive(
-  ['state'],
-  (state) => state.value || undefined,
-);
 export const GalleryAccordionDemo$AccordionItem_value_derive = derive(
   ['state'],
   (state) => state.value || undefined,

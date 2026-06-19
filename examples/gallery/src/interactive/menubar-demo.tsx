@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { MenubarItem as GalleryMenubarItem } from '@kovojs/headless-ui/menubar';
 import {
   menubarFocusElement as _menubarFocusElement,
   Menubar,
@@ -11,7 +12,6 @@ import {
   MenubarSubmenu,
   menubarSubmenuTriggerClick as _menubarSubmenuTriggerClick,
   menubarTypeahead as _menubarTypeahead,
-  type MenubarItem as GalleryMenubarItem,
 } from '@kovojs/ui/menubar';
 
 export interface GalleryMenubarDemoState {

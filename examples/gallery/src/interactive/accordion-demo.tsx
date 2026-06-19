@@ -30,7 +30,7 @@ export const GalleryAccordionDemo = component({
 
     return (
       <Accordion
-        collapsible
+        {...rootState}
         data-gallery-interactive="accordion"
         onKeyDown={() => {
           const result = _accordionKeyDown(Object(event), {
@@ -45,8 +45,6 @@ export const GalleryAccordionDemo = component({
           const next = Object(root)?.querySelector?.(`#gallery-accordion-${result.value}-trigger`);
           Object(next)['focus']?.call(next);
         }}
-        type="single"
-        value={state.value || undefined}
       >
         <AccordionItem
           collapsible

@@ -21,7 +21,7 @@ export function devtoolMountPlugin(base, { handlerModuleId, name = 'kovo-devtool
         const url = req.url ?? '/';
         if (url === base || url.startsWith(`${base}/`) || url.startsWith(`${base}?`)) {
           const rest = url.slice(base.length);
-          req.url = rest.startsWith('/') ? rest : `/${rest}` || '/';
+          req.url = rest.startsWith('/') ? rest : `/${rest || ''}`;
           Promise.resolve(nodeHandler(req, res)).catch(() => next());
           return;
         }

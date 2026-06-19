@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import type { ContextMenuItem as GalleryContextMenuItem } from '@kovojs/headless-ui/context-menu';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -13,7 +14,6 @@ import {
   contextMenuTriggerContextMenu as _contextMenuTriggerContextMenu,
   contextMenuTriggerKeyDown as _contextMenuTriggerKeyDown,
   contextMenuTypeahead as _contextMenuTypeahead,
-  type ContextMenuItem as GalleryContextMenuItem,
   type ContextMenuPoint,
 } from '@kovojs/ui/context-menu';
 

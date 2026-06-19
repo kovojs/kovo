@@ -15,7 +15,7 @@ import type { PageHintOptions } from './hints.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { MutationFail } from './mutation.js';
-import { runQuery, type QueryDefinition } from './query.js';
+import { runQuery, type QueryDefinition, type RegisteredQueryDefinition } from './query.js';
 import {
   htmlServerErrorResponse,
   retryAfterHeaders,
@@ -277,9 +277,9 @@ function fallbackRoutePageMetadata<Path extends string>(
           id,
           kind: 'layout' as const,
           localName: id,
-          queries: Object.values(layoutDeclaration.queries ?? {}).map(
-            (queryDefinition) => queryDefinition.key,
-          ),
+          queries: (
+            Object.values(layoutDeclaration.queries ?? {}) as RegisteredQueryDefinition[]
+          ).map((queryDefinition) => queryDefinition.key),
         };
       }),
       {

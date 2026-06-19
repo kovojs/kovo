@@ -126,7 +126,7 @@ export function renderPage(opts) {
   let results = '';
   let hits = new Set();
   if (q && q.trim()) {
-    const search = buildBm25(bundle.nodes, Object.fromEntries(byId), null);
+    const search = buildBm25(bundle.nodes);
     const ranked = search(q, 6);
     hits = new Set(ranked.map((r) => r.id));
     results =

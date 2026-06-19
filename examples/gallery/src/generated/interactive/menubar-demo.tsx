@@ -51,12 +51,8 @@ export const GalleryMenubarDemo$output_text_derive = derive(
 );
 
 import { component } from '@kovojs/core';
-import {
-  Menubar,
-  MenubarItem,
-  MenubarSubmenu,
-  type MenubarItem as GalleryMenubarItem,
-} from '@kovojs/ui/menubar';
+import type { MenubarItem as GalleryMenubarItem } from '@kovojs/headless-ui/menubar';
+import { Menubar, MenubarItem, MenubarSubmenu } from '@kovojs/ui/menubar';
 
 export interface GalleryMenubarDemoState {
   activeValue: string;

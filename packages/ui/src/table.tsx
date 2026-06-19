@@ -2,8 +2,6 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
-import { passThroughProps } from './pass-through.js';
-
 import { uiTheme } from './theme.js';
 
 export interface TableStyleOverrides {

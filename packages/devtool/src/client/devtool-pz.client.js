@@ -78,13 +78,11 @@ export function Devtool$init(_event, ctx) {
     sx = 0,
     sy = 0,
     stx = 0,
-    sty = 0,
-    moved = false;
+    sty = 0;
   on(wrap, 'pointerdown', (e) => {
     if (e.button !== 0) return;
     if (e.target.closest('.node, .zoom, button, a')) return;
     dragging = true;
-    moved = false;
     sx = e.clientX;
     sy = e.clientY;
     stx = tx;
@@ -98,7 +96,6 @@ export function Devtool$init(_event, ctx) {
     if (!dragging) return;
     tx = stx + (e.clientX - sx);
     ty = sty + (e.clientY - sy);
-    if (Math.abs(e.clientX - sx) + Math.abs(e.clientY - sy) > 3) moved = true;
     apply();
   });
   const endDrag = () => {

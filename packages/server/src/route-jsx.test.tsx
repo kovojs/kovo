@@ -221,13 +221,15 @@ describe('route JSX pages', () => {
 
     const home = await renderRoutePageResponse(homeRoute, {}, {});
     const cart = await renderRoutePageResponse(cartRoute, {}, {});
-    const homeLayoutSegment = /kovo-nav-segment="(layout:[^"]+)"/.exec(home.body)?.[1];
-    const cartLayoutSegment = /kovo-nav-segment="(layout:[^"]+)"/.exec(cart.body)?.[1];
+    const homeBody = home.body as string;
+    const cartBody = cart.body as string;
+    const homeLayoutSegment = /kovo-nav-segment="(layout:[^"]+)"/.exec(homeBody)?.[1];
+    const cartLayoutSegment = /kovo-nav-segment="(layout:[^"]+)"/.exec(cartBody)?.[1];
 
     expect(homeLayoutSegment).toBeTruthy();
     expect(cartLayoutSegment).toBe(homeLayoutSegment);
-    expect(home.body).toContain('kovo-nav-segment="page:/"');
-    expect(cart.body).toContain('kovo-nav-segment="page:/cart"');
+    expect(homeBody).toContain('kovo-nav-segment="page:/"');
+    expect(cartBody).toContain('kovo-nav-segment="page:/cart"');
   });
 
   it('stamps compiler-derived navigation metadata from page functions when route WeakMap metadata is absent', async () => {

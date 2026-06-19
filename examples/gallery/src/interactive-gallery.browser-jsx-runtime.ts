@@ -71,12 +71,13 @@ function renderJsxAttributes(props: JsxProps, jsxKey?: unknown): string {
   const key = props['kovo-key'] === undefined ? (props.key ?? jsxKey) : undefined;
 
   if (key !== false && key !== null && key !== undefined) {
-    rendered += ` kovo-key="${escapeAttribute(String(key))}"`;
+    rendered += ` kovo-key="${escapeAttribute(serializeAttributeValue(key))}"`;
   }
 
   for (const [name, value] of Object.entries(props)) {
     if (name === 'children' || name === 'key' || value === false || value == null) continue;
-    rendered += value === true ? ` ${name}` : ` ${name}="${escapeAttribute(String(value))}"`;
+    rendered +=
+      value === true ? ` ${name}` : ` ${name}="${escapeAttribute(serializeAttributeValue(value))}"`;
   }
 
   return rendered;
@@ -105,8 +106,19 @@ function isKovoComponent(value: unknown): value is KovoJsxComponent {
   );
 }
 
-function isPromiseLike<Value>(value: MaybePromise<Value>): value is Promise<Value> {
-  return typeof value === 'object' && value !== null && typeof value.then === 'function';
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
+function serializeAttributeValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean')
+    return String(value);
+  return JSON.stringify(value);
 }
 
 function escapeAttribute(value: string): string {
