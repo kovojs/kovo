@@ -8,7 +8,6 @@ import { createServer } from 'vite-plus';
 
 import { runContentPipeline } from './content-pipeline.mjs';
 import { emitSiteUiCss } from './emit-ui-css.mjs';
-import { emitSiteRoutes } from './emit-routes.mjs';
 
 // SPEC §9.5: the docs site's static export uses the command facade for route
 // replay, /c/ client modules, and Vite manifest assets. This script only owns
@@ -92,7 +91,6 @@ export async function exportSiteStaticApp({
   skipPipeline = false,
 } = {}) {
   if (!skipPipeline) await runContentPipeline();
-  await emitSiteRoutes({ skipPipeline: true });
   // The export owns the whole static-host directory; clear stale routes/assets
   // so removed pages cannot linger (the W9 link gate would otherwise pass on
   // orphaned files). dist-css holds the Vite manifest and is left untouched.
@@ -124,7 +122,7 @@ export async function exportSiteStaticApp({
     const exportResult = await captureKovoCommandOutput(() =>
       runKovoCommand([
         'export',
-        '/src/generated/app.kovo-route.tsx',
+        '/src/app.tsx',
         '--vite',
         '--root',
         siteRoot,

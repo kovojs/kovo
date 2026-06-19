@@ -197,6 +197,11 @@ authored components/routes, and convert or relocate artifact tests.
     finds no app-authored Gallery source dependencies on generated interactive artifacts.
 - [ ] **Site** — `site/src/app.ts` exports the authored app/route entry; drop
       `app.generated-fixtures.ts`, `src/generated/app.kovo-route.tsx`, `app.routes.tsx`.
+  - Progress evidence: `site/src/app.tsx` now builds the docs app shell from authored route data,
+    `app.generated-fixtures.ts` was removed, dev/export load `/src/app.tsx`, and
+    `pnpm --filter @kovojs/site test` plus `pnpm --filter @kovojs/site build` pass. Gap:
+    `site/scripts/emit-routes.mjs` and tracked `site/src/generated/app.{routes,kovo-route}.tsx`
+    remain for the generated-artifact deletion/replacement phases.
 - [ ] **Tutorial steps 02–07** — each `app.ts` imports authored `components/*.tsx`; drop every
       `generated-fixtures.ts` and `src/generated/*`. Update `site/tutorial/run-steps.mjs` to emit
       to a temp/gitignored dir for any check it performs.

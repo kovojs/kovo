@@ -89,7 +89,7 @@ export function emitSiteUiCss() {
           'package-css',
           '@kovojs/ui',
           '--entry',
-          resolve(siteRoot, 'src/generated/app.routes.tsx'),
+          resolve(siteRoot, 'src/app.tsx'),
           '--out',
           componentCssPath,
         ],

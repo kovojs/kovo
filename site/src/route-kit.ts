@@ -9,9 +9,7 @@ import type { DocPage, NavLink } from './content.js';
 import { searchDialogStyleCss } from './document-template.js';
 import { siteThemeCss } from './theme.js';
 
-// Shared route data helpers. Route declarations are emitted as literal TSX in
-// src/generated/app.routes.tsx so @kovojs/compiler can derive route/page
-// navigation metadata (SPEC §4.5).
+// Shared route data helpers used by the authored docs app shell and content builders.
 
 export const siteStylesheets = [
   stylesheet('./styles.css', {

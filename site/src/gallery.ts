@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { compileComponentModule } from '../../packages/compiler/src/compile.ts';
 import ts from 'typescript';
 import { createServer } from 'vite-plus';
 
@@ -26,12 +27,10 @@ const gallerySummaries = new Map<string, string>(
 // compiled interactive demo into each component page, and registering the
 // interactive demos' client modules into the passed registry (so the export
 // replay serves them; SPEC §4.4 — no load-bearing import maps, rewrite bare
-// specifiers to versioned /c/ URLs). The route declarations themselves are
-// emitted as literal TSX in src/generated/app.routes.tsx.
+// specifiers to versioned /c/ URLs).
 
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const headlessUiSourceRoot = path.join(repoRoot, 'packages/headless-ui/src');
-const galleryGeneratedDir = path.join(repoRoot, 'examples/gallery/src/generated/interactive');
 
 export interface GalleryDeps {
   // The same registry passed to createApp(); register interactive demo modules here.
@@ -165,32 +164,41 @@ function registerGalleryInteractiveSupportClientModules(
 }
 
 /** Register the compiled interactive-gallery client modules with the same path +
- * version the folded component pages reference (the version lives in the generated
- * server markup's on:click href). SPEC §4.4 makes load-bearing import maps a
- * non-goal, so rewrite generated bare package imports to registered /c/ URLs.
- * Ports scripts/app-shell.mjs registerGalleryInteractiveClientModules. */
+ * version the folded component pages reference. SPEC §4.4 makes load-bearing import maps a
+ * non-goal, so rewrite emitted bare package imports to registered /c/ URLs. Mirrors
+ * examples/gallery/src/app-shell.ts registerGalleryInteractiveClientModule. */
 function registerGalleryInteractiveClientModules(
   clientModules: GalleryDeps['clientModules'],
   support: SupportRegistration,
+  demos: readonly InteractiveDemo[],
 ): void {
-  if (!existsSync(galleryGeneratedDir)) return;
-
-  for (const entry of sortedDirectoryEntries(galleryGeneratedDir)) {
-    if (!entry.endsWith('.client.js')) continue;
-
-    const name = entry.replace(/\.client\.js$/, '');
-    const source = rewriteGalleryClientImports(
-      readFileSync(path.join(galleryGeneratedDir, entry), 'utf8'),
-      support,
-    );
-    const serverTsx = readFileSync(path.join(galleryGeneratedDir, `${name}.tsx`), 'utf8');
-    const pathName = `/c/examples/gallery/src/generated/interactive/${name}.client.js`;
+  for (const demo of demos) {
+    const rawClientSource = compileGalleryInteractiveClientModule(demo.name);
+    const source = rewriteGalleryClientImports(rawClientSource, support);
+    const pathName = `/c/src/interactive/${demo.name}.client.js`;
     clientModules.put({
       path: pathName,
       source,
-      version: galleryInteractiveClientModuleVersion(serverTsx, pathName, name),
+      version: galleryInteractiveClientModuleVersion(rawClientSource),
     });
   }
+}
+
+function compileGalleryInteractiveClientModule(demoName: string): string {
+  const fileName = `src/interactive/${demoName}.tsx`;
+  const source = readFileSync(
+    path.join(repoRoot, 'examples/gallery/src/interactive', `${demoName}.tsx`),
+    'utf8',
+  );
+  const result = compileComponentModule({ fileName, source });
+  const clientSource = result.files.find((file) => file.kind === 'client')?.source;
+  if (clientSource === undefined) {
+    throw new Error(
+      `site app shell: gallery interactive demo ${demoName} produced no client module.`,
+    );
+  }
+
+  return clientSource;
 }
 
 function rewriteGalleryClientImports(source: string, support: SupportRegistration): string {
@@ -213,23 +221,14 @@ function rewriteGalleryClientImports(source: string, support: SupportRegistratio
     );
 }
 
-function galleryInteractiveClientModuleVersion(
-  serverTsx: string,
-  modulePath: string,
-  name: string,
-): string {
-  const escaped = modulePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`/c/__v/([0-9a-f]{8})/${escaped.slice(3)}#`, 'g');
-  const versions = new Set<string>();
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(serverTsx)) !== null) versions.add(String(match[1]));
-
-  if (versions.size !== 1) {
-    throw new Error(
-      `site app shell: expected one generated client version for ${name}, found ${versions.size}.`,
-    );
+function galleryInteractiveClientModuleVersion(source: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < source.length; index++) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return [...versions][0]!;
+
+  return hash.toString(16).padStart(8, '0');
 }
 
 function sortedDirectoryEntries(directory: string): string[] {
@@ -275,7 +274,7 @@ export async function buildGalleryRoutePages({
   // (else KV229). Support modules (runtime shim + primitives) first, then the
   // per-demo compiled handlers.
   const support = registerGalleryInteractiveSupportClientModules(clientModules);
-  registerGalleryInteractiveClientModules(clientModules, support);
+  registerGalleryInteractiveClientModules(clientModules, support, interactiveDemos);
 
   // Map gallery component → its compiled interactive demo. Demo names are the
   // component plus a `-demo` suffix; client-module hrefs are index-aligned with

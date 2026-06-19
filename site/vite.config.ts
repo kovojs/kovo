@@ -2,10 +2,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { defineConfig } from 'vite-plus';
 
-// The docs site is a real Kovo app emitted as generated TSX routes. Vite builds the document CSS
-// (with a manifest) into dist-css/; the app-shell export bridge replays the
-// declared route documents into dist/. The dev plugin serves the same app live
-// through its node handler so `serve` matches export byte-for-byte (SPEC §9.5).
+// The docs site is a real Kovo app authored in src/app.tsx. Vite builds the document CSS (with a
+// manifest) into dist-css/; the app-shell export bridge replays the declared route documents into
+// dist/. The dev plugin serves the same app live through its node handler so `serve` matches export
+// byte-for-byte (SPEC §9.5).
 export default defineConfig({
   build: {
     manifest: true,
@@ -111,7 +111,7 @@ export function siteSharedAppShellDevPlugin(): SiteDevPlugin {
       }
 
       const integration = createDevIntegration({
-        moduleId: '/src/generated/app.kovo-route.tsx',
+        moduleId: '/src/app.tsx',
         name: 'kovo-site-app-shell-dev',
         nodeHandlerExportName: 'siteNodeHandler',
         order: 'post',

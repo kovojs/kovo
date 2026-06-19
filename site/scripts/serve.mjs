@@ -4,12 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite-plus';
 
 import { runContentPipeline } from './content-pipeline.mjs';
-import { emitSiteRoutes } from './emit-routes.mjs';
 
 // Live dev server for the docs app. The app-shell dev plugin (vite.config.ts)
-// serves the same src/app.ts through its node handler, so what you see in dev is
+// serves the same src/app.tsx through its node handler, so what you see in dev is
 // what static export emits (SPEC §9.5). The content pre-pass runs first so the
-// app's generated inputs (gen/*) exist before the app module loads.
+// app's generated content inputs (gen/*) exist before the app module loads.
 
 const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -19,7 +18,6 @@ export async function createSiteServeServer({
   strictPort = false,
 } = {}) {
   await runContentPipeline();
-  await emitSiteRoutes({ skipPipeline: true });
 
   const vite = await createViteServer({
     appType: 'custom',

@@ -21,8 +21,8 @@ import { renderMarkdown } from '../scripts/md.mjs';
 //  - buildExampleRoutePages: the route-page data for /examples/ plus one
 //    /examples/<name>/ split page per example (a sandboxed iframe when the app
 //    is static-exportable or a live service URL is configured + a CSS-only
-//    tabbed source viewer of the authored TSX). The route declarations
-//    themselves are emitted as literal TSX in src/generated/app.routes.tsx.
+//    tabbed source viewer of the authored TSX). The authored app shell turns
+//    this route-page data into route declarations at module load.
 //  - exportExampleApps: a build-time hook (called by scripts/export-static.mjs
 //    after the main replay) that statically exports only L0/L1-safe examples
 //    into <outDir>/examples/<name>/app/ with refs re-rooted (SPEC §9.5). Dynamic
