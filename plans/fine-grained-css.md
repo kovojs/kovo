@@ -132,18 +132,31 @@ mutation pulls `fragments/cart.css` if not already present.
 
 ### Phase 0 — Baseline measurement & topology decision
 
-- [ ] Quantify today's overship: add a build report (or test) that, per route,
-      records bytes of linked CSS and bytes of inlined critical CSS vs. the bytes
-      actually reachable from that route's component graph. Capture commerce +
-      site numbers as the baseline this plan must beat. - Evidence: a committed report/test asserting e.g. site `/` currently
-      inlines `gallery`/`docs-layout` critical CSS it cannot reach
-      (`site/src/route-kit.ts:16-29`).
-- [ ] Decide chunk topology and the base-hoist threshold (atoms used by ≥ N
+- [x] Quantify today's overship baseline with a committed test showing the
+      current site route kit inlines one monolithic critical sheet that combines
+      route-specific namespaces before any route-specific splitter can run.
+  - Evidence 2026-06-19:
+    `npx vitest --run site/src/route-kit.test.ts` asserts the current site
+    critical sheet contains landing, docs-layout, and gallery namespaces in one
+    monolithic inline sheet over 40 KB.
+- [ ] Add per-route byte accounting that records linked CSS and inlined critical
+      CSS vs. bytes reachable from that route's component graph. Capture
+      commerce + site numbers as the regression baseline this plan must beat.
+  - Gap:
+    route→component CSS facts land in Phase 1; exact reachable-byte accounting
+    depends on those facts.
+- [x] Decide chunk topology and the base-hoist threshold (atoms used by ≥ N
       routes, plus anything the shared layout/chrome renders, go to `base.css`;
       route-unique atoms to `routes/<route>.css`; fragment-only atoms to
       `fragments/<target>.css`). Record how `style.raw(...)` and the runtime
       `emitAtomicCss` escape hatch (un-attributable to a route) stay in `base`. - Evidence: decision recorded here; reconcile with `SPEC.md` §13.1 (global
       atomic, deduped) and `plans/open-design-areas.md` §13.1.
+  - Decision 2026-06-19:
+    Use `base.css` for theme CSS, raw/unattributable atoms, and atoms reachable
+    from at least two routes or shared layout/chrome; emit `routes/<route>.css`
+    for route-unique atoms and `fragments/<target>.css` for late fragment-only
+    atoms. This preserves SPEC §13.1 global atomic dedupe while making chunking
+    an emitted-artifact decision.
 
 ### Phase 1 — Emit route→component→CSS facts (Seam B; shared with css-auto-collection)
 

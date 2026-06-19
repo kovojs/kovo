@@ -11,4 +11,13 @@ describe('site route stylesheet hints', () => {
     expect(siteStylesheet?.criticalCss).toContain('--kovo-theme-sys-color-on-surface:');
     expect(siteStylesheet?.criticalCss).toContain('html.dark');
   });
+
+  it('records the current monolithic critical CSS overship baseline', () => {
+    const criticalCss = siteStylesheets[0]?.criticalCss ?? '';
+
+    expect(criticalCss).toContain('kv-site-landing');
+    expect(criticalCss).toContain('kv-site-docs-layout');
+    expect(criticalCss).toContain('kv-site-gallery');
+    expect(Buffer.byteLength(criticalCss, 'utf8')).toBeGreaterThan(40_000);
+  });
 });
