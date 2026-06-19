@@ -1,17 +1,19 @@
 import { kovoVitePlugin } from '../packages/compiler/src/vite-config.ts';
 import type { KovoVitePlugin } from '../packages/compiler/src/vite.ts';
+import type { KovoVitePluginOptions } from '../packages/compiler/src/vite.ts';
 import type { RegistryFacts } from '../packages/compiler/src/types.ts';
 
 type KovoVitePrePlugin = KovoVitePlugin & { enforce: 'pre' };
 
+export function exampleKovoCompilerPlugin(options: KovoVitePluginOptions): KovoVitePrePlugin {
+  return Object.assign(kovoVitePlugin(options), { enforce: 'pre' as const });
+}
+
 export function commerceKovoCompilerPlugin(): KovoVitePrePlugin {
-  return Object.assign(
-    kovoVitePlugin({
-      include: ['src/components'],
-      registryFacts: commerceRegistryFacts,
-    }),
-    { enforce: 'pre' as const },
-  );
+  return exampleKovoCompilerPlugin({
+    include: ['src/components'],
+    registryFacts: commerceRegistryFacts,
+  });
 }
 
 function requiredString(name: string) {

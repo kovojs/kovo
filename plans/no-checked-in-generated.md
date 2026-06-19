@@ -131,6 +131,11 @@ committed `graph.json`).
     compiler plugin; `pnpm --filter @kovojs/example-commerce test` passes against authored
     component imports and validates stamped add-to-cart forms/fragments. Gap: root/browser/other
     example activation remains open.
+  - Gallery slice evidence: `examples/gallery/vite.config.ts` and
+    `examples/gallery/vitest.browser.config.ts` install the pre-transform compiler plugin for
+    `src/interactive`; `pnpm --filter @kovojs/example-gallery exec vitest run
+    src/interactive-gallery.artifacts.test.ts src/interactive-gallery.compile.test.ts` passes.
+    Gap: generated gallery fixtures/tests still need repointing to authored imports.
 - [x] Expose a config-safe compiler plugin entry for Vite/Vitest config loading.
   - Evidence: `@kovojs/compiler/vite` (`packages/compiler/src/vite-config.ts`) keeps compiler
     internals out of config startup, lazily imports the compiler through native TS source

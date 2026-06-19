@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite-plus';
 
+import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
+
 export default defineConfig({
+  plugins: [exampleKovoCompilerPlugin({ include: ['src/interactive'] })],
   run: {
     tasks: {
       export: {
