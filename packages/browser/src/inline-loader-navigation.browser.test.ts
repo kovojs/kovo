@@ -169,6 +169,7 @@ describe('browser inline loader enhanced navigation', () => {
           '<meta name="kovo-build" content="build-a">',
           '<title>Cart</title>',
           '<meta name="description" content="Cart">',
+          '<link rel="stylesheet" href="/cart.css">',
           '<link rel="modulepreload" href="/cart.client.js">',
           '<script type="speculationrules">{"prefetch":[{"source":"list","urls":["/checkout"]}]}</script>',
           '</head><body data-route="cart" data-shell="checkout">',
@@ -197,7 +198,9 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
       'Cart',
     );
-    expect(document.querySelector('link[rel="stylesheet"]')).toBeNull();
+    expect(document.querySelector('link[rel="stylesheet"]')?.getAttribute('href')).toBe(
+      '/cart.css',
+    );
     expect(document.querySelector('link[rel="modulepreload"]')?.getAttribute('href')).toBe(
       '/cart.client.js',
     );

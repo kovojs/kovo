@@ -258,10 +258,16 @@ routes/<route>.css]` (theme stays on `base`/app), using
     proves a `/login` mutation response pulls the `home-panel` fragment chunk
     while the same target from `/` omits it because the route chunk already
     contains that critical CSS.
-- [ ] Client navigation: when a client-side route change swaps to a route whose
+- [x] Client navigation: when a client-side route change swaps to a route whose
       chunk is not yet loaded, load it before/with the swap. Confirm against how
       Kovo navigations actually transfer (full nav vs. fragment) and document the
       chosen mechanism.
+  - Evidence 2026-06-19:
+    `npx vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-navigation.browser.test.ts -t "updates head, html, and body shell fields"`
+    proves enhanced navigation fetches the full target document and replaces the
+    head, including the target route stylesheet link. `SPEC.md` §8 confirms
+    enhanced navigation is not a client router and uses the full target document
+    as its oracle.
 
 ### Phase 5 — Dev/prod/static-export parity
 
