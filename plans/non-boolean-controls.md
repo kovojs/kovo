@@ -46,11 +46,9 @@ examples/gallery/src/interactive/radio-group-demo.tsx`.
 
 ## Open Verification
 
-- [ ] **Browser interaction probe target 51/51 remains unproven.**
-      `corepack pnpm --dir examples/gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.generated-interactions-a.browser.test.ts src/interactive-gallery.generated-interactions-b.browser.test.ts`
-      fails before component-specific assertions in the checked-in harness
-      (`Missing interactive gallery browser fixture element`). A local harness
-      experiment that removed unconditional async rendering let tests mount, but
-      then exposed broader existing browser-test expectation failures such as
-      versioned `/c/__v/<hash>/...` client-module URLs. Do not record the live
-      Playwright probe as passed until that harness/probe is fixed separately.
+- [x] **Browser interaction probe passes for the current gallery interaction suites.**
+      Evidence: `corepack pnpm --dir examples/gallery exec vitest --config vitest.browser.config.ts --run src/interactive-gallery.interactions-a.browser.test.ts src/interactive-gallery.interactions-b.browser.test.ts`
+      passes 33/33 browser interaction tests. The prior
+      `interactive-gallery.generated-interactions-*.browser.test.ts` command was
+      superseded when the checked-in generated fixtures were removed and the
+      suites were renamed to authored interaction probes.
