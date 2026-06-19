@@ -347,10 +347,16 @@ routes/<route>.css]` (theme stays on `base`/app), using
 
 ### Phase 7 — Overship regression gate
 
-- [ ] Add a conformance check that fails the build if a route links or inlines an
+- [x] Add a conformance check that fails the build if a route links or inlines an
       atom unreachable from that route's component/fragment graph, and emits the
       bytes-per-route number from Phase 0 as an artifact so regressions are
       visible. Wire into `rules/v1-acceptance.md` CSS/assets gate if appropriate. - Evidence: the gate flags a deliberately over-listed route in a fixture.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/css.test.ts packages/cli/src/index.kovo-build.test.ts -t "flags StyleX atoms|auto-collects compiled component CSS|links only reachable build CSS chunks|serves byte-identical route CSS hints"`
+    proves `cssRouteDeliveryGate()` reports a deliberately delivered `/login`
+    StyleX atom on `/`, returns the route byte-accounting artifact, and the
+    `kovo build` app-source and Vite split paths call the gate before emitting
+    build-owned CSS chunks.
 
 ## Risks & open questions
 
@@ -386,4 +392,7 @@ routes/<route>.css]` (theme stays on `base`/app), using
 
 - 2026-06-19 parity slice:
   `corepack pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "auto-collects compiled component CSS|links only reachable build CSS chunks|serves byte-identical route CSS hints|references build fragment CSS chunks"`;
+  `corepack pnpm exec tsc --noEmit --pretty false`; `git diff --check`.
+- 2026-06-19 overship gate slice:
+  `corepack pnpm exec vitest --run packages/compiler/src/css.test.ts packages/cli/src/index.kovo-build.test.ts -t "flags StyleX atoms|auto-collects compiled component CSS|links only reachable build CSS chunks|serves byte-identical route CSS hints"`;
   `corepack pnpm exec tsc --noEmit --pretty false`; `git diff --check`.

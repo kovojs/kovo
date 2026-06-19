@@ -6,6 +6,7 @@ import {
   collectCssAssetManifest,
   createCssAssetResolver,
   cssRouteByteAccounting,
+  cssRouteDeliveryGate,
   cssRouteSplitTargetsFromRouteFacts,
   dedupeCss,
   scopeComponentCss,
@@ -551,6 +552,53 @@ export const Recommendations = component({
     });
   });
 
+  it('flags StyleX atoms delivered to routes that cannot reach them', () => {
+    const sharedCss = '.shared-card{display:grid}';
+    const homeCss = '.home-panel{color:teal}';
+    const loginCss = '.login-panel{color:purple}';
+    const homeRoute = {
+      route: '/',
+      sourceFileNames: ['components/shared.css', 'routes/home.css'],
+    };
+    const loginRoute = {
+      route: '/login',
+      sourceFileNames: ['components/shared.css', 'routes/login.css'],
+    };
+    const manifest = collectCssAssetManifest(
+      {
+        cssAssets: [
+          cssAccountingAsset('components/shared.css', 'shared-card', sharedCss, true),
+          cssAccountingAsset('routes/home.css', 'home-panel', homeCss, true),
+          cssAccountingAsset('routes/login.css', 'login-panel', loginCss, true),
+        ],
+      },
+      { split: { routes: [homeRoute, loginRoute] } },
+    );
+    const deliveredToHome = [
+      ...(manifest.chunks?.base ?? []),
+      ...(manifest.chunks?.routes['/'] ?? []),
+      ...(manifest.chunks?.routes['/login'] ?? []),
+    ];
+
+    expect(cssRouteDeliveryGate(manifest, homeRoute).diagnostics).toEqual([]);
+    expect(cssRouteDeliveryGate(manifest, homeRoute, deliveredToHome)).toEqual({
+      accounting: expect.objectContaining({
+        linkedCssBytes: Buffer.byteLength(sharedCss, 'utf8') + Buffer.byteLength(homeCss, 'utf8'),
+        route: '/',
+      }),
+      diagnostics: [
+        {
+          className: 'login-panel',
+          href: expect.stringMatching(/^\/assets\/routes\/login-[a-f0-9]{8}\.css$/),
+          moduleFileName: 'routes/login.tsx',
+          route: '/',
+          source: 'routes/login.tsx#root',
+          styleRef: 'styles.root',
+        },
+      ],
+    });
+  });
+
   it('carries preload policy for late fragment stylesheet delivery', () => {
     const result = compileComponentModule({
       fileName: './components/reviews.tsx',
@@ -609,12 +657,26 @@ function cssAccountingAsset(
   sourceFileName: string,
   componentName: string,
   criticalCss: string,
+  withUsage = false,
 ): ComponentCssAsset {
+  const moduleFileName = sourceFileName.replace(/\.css$/, '.tsx');
   return {
     componentName,
     criticalCss,
     fragmentTargets: [],
     href: `/assets/${sourceFileName}`,
     sourceFileName,
+    ...(withUsage
+      ? {
+          styleRuleUsages: [
+            {
+              className: componentName,
+              moduleFileName,
+              source: `${moduleFileName}#root`,
+              styleRef: 'styles.root',
+            },
+          ],
+        }
+      : {}),
   };
 }

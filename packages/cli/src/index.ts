@@ -2577,7 +2577,7 @@ function buildPresetOutDir(outDir: string, preset: KovoBuildPresetName): string 
 async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildStylesheetBuild> {
   const [
     { extractAppComponentCss, extractAppRouteCssTargets, extractPackageComponentCss },
-    { collectCssAssetManifest },
+    { collectCssAssetManifest, cssRouteDeliveryGate },
     { kovoUiTokenSheetCss },
   ] = await Promise.all([
     import('@kovojs/compiler/package-styles'),
@@ -2599,6 +2599,8 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
           { cssAssets: appResult.cssAssets },
           { split: { routes: appRouteTargets.routeTargets } },
         );
+  if (appSplitManifest)
+    assertKovoBuildCssDelivery(appSplitManifest, appRouteTargets.routeTargets, cssRouteDeliveryGate);
   const appSplitAssets = stylesheetAssetsFromCssSplitChunks(appSplitManifest?.chunks);
 
   if (!packageResult.css && !appResult.css)
@@ -2615,6 +2617,33 @@ async function kovoBuildStylesheetCss(appModulePath: string): Promise<KovoBuildS
       ...stylesheetCssFromBuildStylesheetAssets(appSplitAssets),
     ],
   };
+}
+
+function assertKovoBuildCssDelivery(
+  manifest: Parameters<
+    (typeof import('@kovojs/compiler/internal'))['cssRouteDeliveryGate']
+  >[0],
+  routeTargets: readonly Parameters<
+    (typeof import('@kovojs/compiler/internal'))['cssRouteDeliveryGate']
+  >[1][],
+  cssRouteDeliveryGate: (typeof import('@kovojs/compiler/internal'))['cssRouteDeliveryGate'],
+): void {
+  const diagnostics = routeTargets.flatMap(
+    (routeTarget) => cssRouteDeliveryGate(manifest, routeTarget).diagnostics,
+  );
+  if (diagnostics.length === 0) return;
+
+  const details = diagnostics
+    .slice(0, 10)
+    .map(
+      (diagnostic) =>
+        `${diagnostic.route} links ${diagnostic.href} atom ${diagnostic.className} ` +
+        `from ${diagnostic.source}`,
+    )
+    .join('\n');
+  const suffix =
+    diagnostics.length > 10 ? `\n... ${diagnostics.length - 10} more CSS overship diagnostics` : '';
+  throw new Error(`kovo build CSS overship gate failed:\n${details}${suffix}`);
 }
 
 function selectedKovoBuildPreset(
@@ -2773,13 +2802,17 @@ async function buildKovoClientManifest(
   root: string,
   appModulePath: string,
 ): Promise<KovoClientManifestBuild> {
-  const [{ kovoVitePlugin }, { dedupeCss }, { extractAppRouteCssTargets }, { build }] =
-    await Promise.all([
-      import('@kovojs/compiler'),
-      import('@kovojs/compiler/internal'),
-      import('@kovojs/compiler/package-styles'),
-      import('vite-plus'),
-    ]);
+  const [
+    { kovoVitePlugin },
+    { cssRouteDeliveryGate, dedupeCss },
+    { extractAppRouteCssTargets },
+    { build },
+  ] = await Promise.all([
+    import('@kovojs/compiler'),
+    import('@kovojs/compiler/internal'),
+    import('@kovojs/compiler/package-styles'),
+    import('vite-plus'),
+  ]);
   const kovoPlugin = kovoVitePlugin();
   const routeTargets = extractAppRouteCssTargets({
     fileName: appModulePath,
@@ -2802,6 +2835,8 @@ async function buildKovoClientManifest(
   const cssAssetManifest = kovoPlugin.getCssAssetManifest?.(
     routeTargets.length === 0 ? undefined : { split: { routes: routeTargets } },
   );
+  if (cssAssetManifest?.chunks)
+    assertKovoBuildCssDelivery(cssAssetManifest, routeTargets, cssRouteDeliveryGate);
   const appCss = dedupeCss(
     (cssAssetManifest?.stylesheets ?? []).flatMap((asset) =>
       asset.criticalCss ? [asset.criticalCss] : [],

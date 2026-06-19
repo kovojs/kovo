@@ -99,6 +99,22 @@ export interface CssRouteByteAccounting {
   route: string;
 }
 
+/** @internal Atom-level overship diagnostic for route CSS delivery gates. */
+export interface CssRouteOvershipDiagnostic {
+  className: string;
+  href: string;
+  moduleFileName: string;
+  route: string;
+  source: string;
+  styleRef: string;
+}
+
+/** @internal Route CSS conformance gate result with accounting artifact data. */
+export interface CssRouteDeliveryGateResult {
+  accounting: CssRouteByteAccounting;
+  diagnostics: readonly CssRouteOvershipDiagnostic[];
+}
+
 /**
  * @internal Render target passed to the stylesheet resolver. v1 may still resolve to a
  * single app-wide asset, but callers use this shape so future route/fragment splitting
@@ -289,6 +305,44 @@ export function cssRouteByteAccounting(
   };
 }
 
+/**
+ * @internal Flag StyleX atoms delivered to a route but not reachable from that
+ * route's component/fragment graph. Callers fail the build when diagnostics are
+ * non-empty and persist `accounting` as the bytes-per-route artifact
+ * (SPEC.md §13.1).
+ */
+export function cssRouteDeliveryGate(
+  manifest: CssAssetManifest,
+  route: CssRouteSplitTarget,
+  deliveredAssets: readonly ComponentCssAsset[] = defaultDeliveredRouteCssAssets(manifest, route),
+): CssRouteDeliveryGateResult {
+  const reachableUsages = new Set(
+    selectRouteCssAssets(manifest, route)
+      .flatMap((asset) => asset.styleRuleUsages ?? [])
+      .map(styleRuleUsageKey),
+  );
+  const diagnostics: CssRouteOvershipDiagnostic[] = [];
+
+  for (const asset of deliveredAssets) {
+    for (const usage of asset.styleRuleUsages ?? []) {
+      if (reachableUsages.has(styleRuleUsageKey(usage))) continue;
+      diagnostics.push({
+        className: usage.className,
+        href: asset.href,
+        moduleFileName: usage.moduleFileName,
+        route: route.route,
+        source: usage.source,
+        styleRef: usage.styleRef,
+      });
+    }
+  }
+
+  return {
+    accounting: cssRouteByteAccounting(manifest, route),
+    diagnostics,
+  };
+}
+
 function computeCssSplitChunks(
   manifest: Pick<CssAssetManifest, 'byFileName' | 'stylesheets'>,
   options: CssAssetManifestOptions,
@@ -356,6 +410,21 @@ function computeCssSplitChunks(
   }
 
   return { base, fragments, routes };
+}
+
+function defaultDeliveredRouteCssAssets(
+  manifest: CssAssetManifest,
+  route: CssRouteSplitTarget,
+): ComponentCssAsset[] {
+  if (!manifest.chunks) return selectRouteCssAssets(manifest, route);
+  return dedupeComponentCssAssets([
+    ...manifest.chunks.base,
+    ...(manifest.chunks.routes[route.route] ?? []),
+  ]);
+}
+
+function styleRuleUsageKey(usage: StyleRuleUsage): string {
+  return `${usage.moduleFileName}\0${usage.styleRef}\0${usage.source}\0${usage.className}`;
 }
 
 function selectRouteCssAssets(
