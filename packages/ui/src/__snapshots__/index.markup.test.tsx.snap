@@ -9,7 +9,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-alert-dialog-fg-1xoz2m kv-alert-dialog-d-1578mh kv-alert-dialog-opacity-1wmp2v",
   ],
   "alertDialogContentClasses": [
-    "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-jllngq kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-5bneq7 kv-alert-dialog-fg-1xoz2m kv-alert-dialog-m-17m6m7 kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-d-1que9w kv-alert-dialog-bg-hvkiv5",
+    "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-jllngq kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-yxqv5r kv-alert-dialog-fg-1xoz2m kv-alert-dialog-left-1dkzcg kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-position-qymjrz kv-alert-dialog-top-145aer kv-alert-dialog-transform-1c0eiv kv-alert-dialog-w-l5ey9h kv-alert-dialog-z-1ag0ds kv-alert-dialog-d-1que9w kv-alert-dialog-bg-hvkiv5",
   ],
   "autocompleteClasses": [
     "kv-autocomplete-fg-ndg53x kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-row-1m16zq kv-autocomplete-opacity-1wmp2v kv-autocomplete-fg-1j04p9",
@@ -39,7 +39,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-dialog-fg-1f1he7 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v",
   ],
   "dialogContentClasses": [
-    "kv-dialog-bg-1noq3u kv-dialog-bd-jllngq kv-dialog-bd-1o6h6q kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-5bneq7 kv-dialog-fg-1f1he7 kv-dialog-m-17m6m7 kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-d-1que9w kv-dialog-bg-qyhm2q",
+    "kv-dialog-bg-1noq3u kv-dialog-bd-jllngq kv-dialog-bd-1o6h6q kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-yxqv5r kv-dialog-fg-1f1he7 kv-dialog-left-1dkzcg kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-position-qymjrz kv-dialog-top-145aer kv-dialog-transform-1c0eiv kv-dialog-w-l5ey9h kv-dialog-z-1ag0ds kv-dialog-d-1que9w kv-dialog-bg-qyhm2q",
   ],
   "dropdownMenuClasses": [
     "kv-dropdown-menu-fg-16p8sm kv-dropdown-menu-d-14glvo kv-dropdown-menu-font-1cumtw kv-dropdown-menu-position-ojetho kv-dropdown-menu-opacity-1ctby9",
