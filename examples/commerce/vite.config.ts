@@ -1,8 +1,16 @@
 import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
+import { fileURLToPath } from 'node:url';
 
 import { commerceKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 import { kovoExampleServeTask } from '../vite-plus-tasks.js';
+
+const exampleGeneratedGraphsGlobalSetup = fileURLToPath(
+  new URL('../../tests/example-generated-graphs.global-setup.ts', import.meta.url),
+);
+const exampleGeneratedGraphsSetup = fileURLToPath(
+  new URL('../../tests/example-generated-graphs.setup.ts', import.meta.url),
+);
 
 export const commerceViteConfig = defineConfig({
   build: {
@@ -27,7 +35,9 @@ export const commerceViteConfig = defineConfig({
   // real vite builds and a dev server) run well past Vitest's 5s default,
   // especially under the suite's parallelism. Give them room.
   test: {
+    globalSetup: [exampleGeneratedGraphsGlobalSetup],
     hookTimeout: 60_000,
+    setupFiles: [exampleGeneratedGraphsSetup],
     testTimeout: 60_000,
   },
   run: {

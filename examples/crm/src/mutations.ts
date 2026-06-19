@@ -4,8 +4,6 @@ import type { OptimisticFor } from '@kovojs/browser';
 
 import type { CrmDb } from './db.js';
 import {
-  contact,
-  deal,
   addContactForm,
   closeDealForm,
   createDealForm,
@@ -166,7 +164,6 @@ export const addContact = mutation('addContact', {
     email: s.string(),
     ownerId: s.string(),
   }),
-  registry: { touches: [contact] },
   handler: addContactHandler,
 });
 
@@ -195,7 +192,6 @@ export const createDeal = mutation('createDeal', {
     amount: s.number().int().min(0),
     ownerId: s.string(),
   }),
-  registry: { touches: [contact, deal] },
   handler: createDealHandler,
 });
 
@@ -236,7 +232,6 @@ export const moveDeal = mutation('moveDeal', {
     dealId: s.string(),
     stage: s.string(),
   }),
-  registry: { touches: [deal] },
   handler: moveDealHandler,
 });
 
@@ -288,7 +283,6 @@ export const closeDeal = mutation('closeDeal', {
   input: s.object({
     dealId: s.string(),
   }),
-  registry: { touches: [deal] },
   handler: closeDealHandler,
 });
 

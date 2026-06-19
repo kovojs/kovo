@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./app-shell/static-export": "./src/api/app-shell/static-export.ts",
     "./build": "./src/build.ts",
+    "./generated": "./src/generated.ts",
     "./vite": "./src/vite.ts",
     "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
     "./internal/build": "./src/internal/build.ts",
@@ -35,6 +36,10 @@
       "./build": {
         "types": "./dist/build.d.mts",
         "default": "./dist/build.mjs"
+      },
+      "./generated": {
+        "types": "./dist/generated.d.mts",
+        "default": "./dist/generated.mjs"
       },
       "./vite": {
         "types": "./dist/vite.d.mts",
@@ -87,7 +92,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/api/app-shell/static-export.ts src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/execution.ts src/internal/html.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/api/app-shell/static-export.ts src/build.ts src/generated.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/execution.ts src/internal/html.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

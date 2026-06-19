@@ -259,7 +259,7 @@ const crmInvalidationSource = staticGraphArtifacts.invalidationRegistrySource;
 const crmMutationTouchRegistrySource = staticGraphArtifacts.mutationTouchRegistrySource;
 
 const touchGraphSource = formatSource(
-  `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';
+  `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/generated';
 import type {
   ContactDealCountResult,
   ContactListResult,

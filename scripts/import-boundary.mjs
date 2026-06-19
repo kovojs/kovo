@@ -51,6 +51,9 @@ const explicitlyAllowedInternalImports = new Set([
 // `./client` facade-shrink; SPEC §§4.4, 9.1).
 const explicitlyAllowedGeneratedImports = new Set([
   'packages/create-kovo/templates/src/client.ts -> @kovojs/browser/generated',
+  'examples/commerce/scripts/emit-graph.mjs -> @kovojs/server/generated',
+  'examples/crm/scripts/emit-graph.mjs -> @kovojs/server/generated',
+  'examples/stackoverflow/scripts/emit-graph.mjs -> @kovojs/server/generated',
   'site/content/guides/streaming.md -> @kovojs/browser/generated',
 ]);
 

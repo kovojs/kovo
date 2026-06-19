@@ -107,7 +107,7 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
 
 ## Open work
 
-- [ ] **Migrate mutation definitions to generated touches.** Remove hand-authored
+- [x] **Migrate mutation definitions to generated touches.** Remove hand-authored
       `registry: { touches }` / `inferredTouches` from statically-analyzable
       commerce/crm/stackoverflow writes once their generated graph modules are
       loaded in the same app/runtime path (KV406 sites keep manual `touches` as the
@@ -115,18 +115,31 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
       source no longer hand-lists touches for analyzable writes, generated graph
       artifacts still carry touch sites from `site:`-provenanced touch graph facts,
       and app mutation integration tests pass through `change-record.ts`.
-- [ ] **Migrate query definitions to generated reads.** Remove hand-authored
+  - Evidence: `rg -n "reads:|touches:|inferredTouches" examples/commerce/src examples/crm/src examples/stackoverflow/src --glob '!**/generated/**'`
+    prints no matches; `corepack pnpm --filter @kovojs/example-commerce test`,
+    `corepack pnpm --filter @kovojs/example-crm test`, and
+    `corepack pnpm --filter @kovojs/example-stackoverflow test` pass after the
+    Vitest setup emits/imports generated graph registries.
+- [x] **Migrate query definitions to generated reads.** Remove hand-authored
       `reads` from statically-analyzable commerce/crm/stackoverflow queries once
       their generated graph modules are loaded in the same app/runtime path.
       Hand-declared `reads` becomes a checked override, not the default. Evidence
       target: a query with a multi-domain JOIN and no authored `reads` invalidates
       from every joined domain's mutation in an integration test.
-- [ ] **Migrate examples + docs to the derived-default model.** Remove hand-authored
+  - Evidence: `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+    `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`, and
+    `corepack pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`
+    pass; `corepack pnpm exec playwright test --config tests/integration/playwright.config.ts tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
+    passes 2/2 readset verifier cases.
+- [x] **Migrate examples + docs to the derived-default model.** Remove hand-authored
       `reads`/`touches`/`inferredTouches` from commerce/crm/stackoverflow where the
       writes/reads are statically analyzable; align `site/content/guides/queries.md`
       so the taught model is "declare the JOIN, the dependency is derived." Evidence
       target: examples compile + pass invalidation integration tests with no
       hand-listed domains except at KV406 sites.
+  - Evidence: the generated-domain scan above prints no example source matches,
+    `site/content/guides/queries.md` now teaches Drizzle-derived query reads and
+    on-demand graph inspection, and `corepack pnpm exec vp check --fix` passes.
 - [ ] **Update SPEC cross-references + roadmap.** Reconcile §10.2/§10.3 wording with
       the override-and-gate model (derived authoritative; manual = checked escape
       hatch); flip `plans/data-layer-roadmap.md` v1.5 once the CI gate lands.
@@ -177,9 +190,19 @@ packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
 - [x] `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/core/src/graph.test.ts`
   - Evidence: passed 54 CLI/core graph tests after adding
     `verificationCoverage` failure reporting for unobserved verifier targets.
-- [ ] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
+- [x] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
       currently has no package `test` script, so use explicit Vitest file globs.
-- [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
+  - Evidence: `corepack pnpm exec vitest --run packages/drizzle/src/*.test.ts`
+    passes 16 files / 252 tests; `corepack pnpm --filter @kovojs/drizzle exec vitest run src/index`
+    passes 13 files / 234 tests from a package cwd.
+- [x] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
       plus a static-gate fixture for read/write coverage promotion.
-- [ ] `kovo check` on migrated examples.
+  - Evidence: `corepack pnpm exec playwright test --config tests/integration/playwright.config.ts tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
+    passes 2/2 readset runtime cross-check cases; `corepack pnpm exec vp run
+kovo-check` passes 50/50 with `kovo-check/v1 OK`.
+- [x] `kovo check` on migrated examples.
+  - Evidence: `corepack pnpm --filter @kovojs/example-commerce run emit-graph -- --check`,
+    `corepack pnpm --filter @kovojs/example-crm run emit-graph -- --check`,
+    `corepack pnpm --filter @kovojs/example-stackoverflow run emit-graph -- --check`,
+    and `corepack pnpm exec vp run kovo-check` pass.
 - [ ] `pnpm run acceptance` before flipping the roadmap checkbox.

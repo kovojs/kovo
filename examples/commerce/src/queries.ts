@@ -53,7 +53,6 @@ export const cartQuery = query('cart', {
     const rows = await db.select({ value: sum(cartItems.qty) }).from(cartItems);
     return { count: Number(rows[0]?.value ?? 0) };
   },
-  reads: [cart],
 });
 
 export const productGridQuery = query('productGrid', {
@@ -81,7 +80,6 @@ export const productGridQuery = query('productGrid', {
     const nextCursor = more.length > 0 ? (last?.id ?? null) : null;
     return { items: items, nextCursor: nextCursor };
   },
-  reads: [product],
 });
 
 export const orderHistoryQuery = query('orderHistory', {
@@ -113,7 +111,6 @@ export const orderHistoryQuery = query('orderHistory', {
   // (Compiler-derived delta meta is the deferred zero-config piece; this
   // declares it explicitly today.)
   delta: [{ domain: 'order', key: 'id', path: 'items' }],
-  reads: [order],
 });
 
 export async function loadCartQuery(db: CommerceDb): Promise<CartQueryResult> {

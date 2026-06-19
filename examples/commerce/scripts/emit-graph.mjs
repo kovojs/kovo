@@ -298,7 +298,7 @@ const staticGraphArtifacts = compileDrizzleStatic({
 const graphJson = `${formatJson(graph)}\n`;
 const commerceInvalidationRegistrySource = staticGraphArtifacts.invalidationRegistrySource;
 const commerceMutationTouchRegistrySource = staticGraphArtifacts.mutationTouchRegistrySource;
-const touchGraphSource = `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';
+const touchGraphSource = `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/generated';
 import type { CartQueryResult, OrderHistoryResult, ProductGridResult } from '../domain.js';
 
 export const commerceTouchGraph = ${formatJson(commerceTouchGraph)} as const;

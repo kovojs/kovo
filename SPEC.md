@@ -1105,8 +1105,10 @@ For each write() body (ts-morph over the program):
 ```
 
 Output is **reproducible on demand** through `kovo emit` / `kovo explain` and mechanically proven
-by fixpoint plus render-equivalence gates. Invalidation-graph changes are inspected through those
-commands and CI evidence, not by committing app-local generated files:
+by fixpoint plus render-equivalence gates. The emitted graph is also the runtime authority for
+derived query reads and mutation touches; manual `reads` / `touches` are checked overrides for
+opaque sites, not the default authoring model. Invalidation-graph changes are inspected through
+those commands and CI evidence, not by committing app-local generated files:
 
 ```ts
 // emitted generated/touch-graph.ts — DO NOT EDIT
@@ -1164,12 +1166,12 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV311 | warn       | Query/state-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)                                                                          |
 | KV320 | lint       | Event payload overlaps query data — use a transform                                                                                                                            |
 | KV330 | lint       | Direct db access in a mutation handler — route through domain                                                                                                                  |
-| KV402 | error      | Write touched an undeclared domain (silent stale UI)                                                                                                                           |
+| KV402 | error      | Write touched a domain not covered by the derived or declared mutation touch set (silent stale UI)                                                                             |
 | KV403 | warn       | Declared domain never observed written (stale claim / untested branch)                                                                                                         |
 | KV404 | error      | Write to unmapped table (map it or mark `exempt`, e.g. append-only logs — write-side only, §10.1)                                                                              |
 | KV405 | warn       | Conditional writes on branches never executed under instrumentation                                                                                                            |
 | KV406 | warn/error | Statically un-analyzable write site — manual `touches` required, runtime-verified                                                                                              |
-| KV407 | error      | Query read from undeclared domain (missed invalidations)                                                                                                                       |
+| KV407 | error      | Query read from a domain not covered by the derived or declared query read set (missed invalidations)                                                                          |
 | KV408 | error      | Declared row key ≠ observed row predicate                                                                                                                                      |
 | KV409 | notice     | Non-eq predicate — degraded to table-level invalidation                                                                                                                        |
 | KV410 | error      | Opaque query projection (`sql<T>`, raw SQL) — declared output schema required, shape runtime-verified (§10.2)                                                                  |

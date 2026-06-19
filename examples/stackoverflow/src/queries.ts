@@ -2,18 +2,11 @@ import { query, s, type QueryLoadContext } from '@kovojs/server';
 import { asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
-import {
-  answer,
-  question,
-  vote,
-  type QuestionAnswersResult,
-  type QuestionDetailResult,
-  type SoRequest,
-} from './model.js';
+import { type QuestionAnswersResult, type QuestionDetailResult, type SoRequest } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
-// Typed reads for the demo. The Drizzle selects stay inline so the generated
-// StackOverflow artifacts can inspect the query shapes.
+// Drizzle selects stay inline so the generated StackOverflow artifacts can
+// inspect query shapes and register derived query-read domains.
 
 type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
 
@@ -39,7 +32,6 @@ export const questionList = query('questionList', {
     // Keep the explicit property for the artifact generator.
     return { items: items };
   },
-  reads: [question],
 });
 
 // All answers, ordered by stable id.
@@ -57,7 +49,6 @@ export const answerList = query('answerList', {
       .orderBy(answers.id);
     return { items: items };
   },
-  reads: [answer],
 });
 
 export const questionDetail = query('questionDetail', {
@@ -84,7 +75,6 @@ export const questionDetail = query('questionDetail', {
       .limit(1);
     return row ?? null;
   },
-  reads: [question],
 });
 
 export const questionAnswers = query('questionAnswers', {
@@ -109,7 +99,6 @@ export const questionAnswers = query('questionAnswers', {
       .where(eq(answers.questionId, input.questionId))
       .orderBy(asc(answers.id));
   },
-  reads: [answer],
 });
 
 // Total score across all question votes.
@@ -119,7 +108,6 @@ export const questionScore = query('questionScore', {
     const rows = await db.select({ value: sum(votes.value) }).from(votes);
     return { score: Number(rows[0]?.value ?? 0) };
   },
-  reads: [vote],
 });
 
 function requireSoQueryDb(context?: SoQueryLoadContext): SoDb {

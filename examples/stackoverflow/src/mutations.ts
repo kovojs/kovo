@@ -1,7 +1,7 @@
 import { mutation, s, type MutationContext } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
 
-import { answer, question, vote, type SoRequest } from './model.js';
+import { type SoRequest } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Top-level mutation handlers for the demo. Drizzle writes stay inline so the
@@ -95,7 +95,6 @@ export const postQuestionMutation = mutation('postQuestion', {
   errors: {
     DUPLICATE_TITLE: duplicateTitleError,
   },
-  registry: { touches: [question] },
   handler: postQuestion,
 });
 
@@ -107,7 +106,6 @@ export const postAnswerMutation = mutation('postAnswer', {
     authorId: s.string(),
   }),
   csrf: soCsrf,
-  registry: { touches: [answer, question] },
   handler: postAnswer,
 });
 
@@ -118,6 +116,5 @@ export const voteUpMutation = mutation('voteUp', {
     userId: s.string(),
   }),
   csrf: soCsrf,
-  registry: { touches: [vote, question] },
   handler: voteUp,
 });

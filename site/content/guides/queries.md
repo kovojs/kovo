@@ -1,6 +1,6 @@
 ---
 title: Queries & invalidation
-description: Declare what a component reads, and the framework figures out which writes refresh it — no invalidate() calls, no client cache.
+description: Declare query loaders and writes; Kovo derives which domains refresh which components — no invalidate() calls, no client cache.
 order: 1
 ---
 
@@ -16,28 +16,29 @@ and how to check it.
 
 ## Declare a query
 
-A query couples a name, a loader, and the domains it reads:
+A query couples a name and a loader. On the Drizzle path, the read domains come
+from the loader's query expression:
 
 ```ts
-import { domain, query } from '@kovojs/server';
-
-export const cart = domain('cart');
-export const product = domain('product');
+import { query } from '@kovojs/server';
 
 export const cartQuery = query('cart', {
-  load: (_input) => loadCart(db),
-  reads: [cart],
+  load: (_input, { request }) => request.db.select({ count: sum(cartItems.qty) }).from(cartItems),
 });
 
 export const productGridQuery = query('productGrid', {
-  load: (input) => loadProductGrid(db, input),
-  reads: [product],
+  load: (input, { request }) =>
+    request.db
+      .select()
+      .from(products)
+      .limit(input.limit ?? 20),
 });
 ```
 
-The `reads` list is the dependency declaration. Any committed write that touches the `cart` domain
-refreshes `cartQuery` — the server re-runs it after the write and sends the fresh value back in the
-same response. You don't list those writes anywhere.
+The `FROM` / `JOIN` graph is the dependency declaration. Any committed write that
+touches the derived `cart` domain refreshes `cartQuery` — the server re-runs it
+after the write and sends the fresh value back in the same response. You don't
+list those writes anywhere.
 
 ## Read it from a component
 
@@ -89,7 +90,7 @@ The chain is:
 ```
 write body          →  touched tables       (read from the insert/update/delete code)
 touched tables      →  domains              (a one-time annotation on each table)
-domains             →  invalidated queries  (each query's reads list)
+domains             →  invalidated queries  (read from each query's FROM/JOIN expression)
 invalidated queries →  components           (every element that declared that query)
 ```
 
@@ -139,11 +140,12 @@ export const products = pgTable(
 A table defaults to a same-named domain. The `key` annotation makes invalidation row-level, so a
 write to product `p1` refreshes `product:p1`, not every product on the site.
 
-On the Drizzle-on-Postgres path, the framework reads which tables a write touches straight from the
-write's code, and writes the result to a committed file you can review:
+On the Drizzle-on-Postgres path, the framework reads which tables a write
+touches straight from the write's code and emits an on-demand graph you can
+inspect:
 
 ```ts
-// generated/touch-graph.ts — generated, do not edit
+// touch-graph.ts — emitted by `kovo emit` / example graph scripts, do not edit
 export const touchGraph = {
   'cart.addItem': {
     touches: [
@@ -157,8 +159,9 @@ export const touchGraph = {
 Because the join _is_ the declaration, the classic staleness bug — forgetting that a query also
 reads a joined table — can't happen here. The read set comes from the query expression, not from
 memory. When the analyzer genuinely can't see through a write (raw SQL, a helper buried in
-`node_modules`), you declare the touches by hand at the write site, and a runtime check confirms
-they're complete.
+`node_modules`), you declare the touches by hand at the write site as a checked KV406 escape hatch.
+The verifier confirms observed reads/writes are covered by the static graph plus those declared
+opaque sites.
 
 ## Ask the graph instead of tracing the code
 
@@ -188,8 +191,8 @@ A parameterized query declares its arguments once:
 export const productQuery = query('product', {
   args: s.object({ id: s.string() }),
   guard: authed,
-  load: (input) => loadProduct(db, input.id),
-  reads: [product],
+  load: (input, { request }) =>
+    request.db.select().from(products).where(eq(products.id, input.id)).limit(1),
 });
 ```
 

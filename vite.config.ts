@@ -2,6 +2,25 @@ import { defineConfig } from 'vite-plus';
 
 import { commerceRegistryFacts, exampleKovoCompilerPlugin } from './examples/vite-kovo-compiler.js';
 
+const repoRoot = workspaceRootFromCwd();
+const exampleGeneratedGraphsGlobalSetup = repoRoot
+  ? `${repoRoot}/tests/example-generated-graphs.global-setup.ts`
+  : 'tests/example-generated-graphs.global-setup.ts';
+const exampleGeneratedGraphsSetup = repoRoot
+  ? `${repoRoot}/tests/example-generated-graphs.setup.ts`
+  : 'tests/example-generated-graphs.setup.ts';
+
+function workspaceRootFromCwd(): string {
+  if (typeof process === 'undefined') return '';
+  const cwd = process.cwd().replaceAll('\\', '/');
+  for (const marker of ['/packages/', '/examples/', '/conformance/']) {
+    const index = cwd.indexOf(marker);
+    if (index > 0) return cwd.slice(0, index);
+  }
+  if (cwd.endsWith('/site')) return cwd.slice(0, -'/site'.length);
+  return cwd;
+}
+
 export default defineConfig({
   plugins: [
     exampleKovoCompilerPlugin({ include: ['site/tutorial/steps'] }),
@@ -170,6 +189,8 @@ export default defineConfig({
     // (Per-test overrides still apply for the heaviest cold-build cases.)
     hookTimeout: 30_000,
     testTimeout: 30_000,
+    globalSetup: [exampleGeneratedGraphsGlobalSetup],
+    setupFiles: [exampleGeneratedGraphsSetup],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -205,6 +226,7 @@ export default defineConfig({
       'packages/browser/src/internal/inline-loader.ts',
       'packages/browser/src/internal/morph.ts',
       'packages/browser/src/internal/mutation.ts',
+      'packages/server/src/generated.ts',
       'packages/server/src/api/app-shell/*.ts',
       'packages/server/src/internal/execution.ts',
       'packages/server/src/internal/html.ts',

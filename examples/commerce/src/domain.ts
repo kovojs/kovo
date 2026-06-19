@@ -208,12 +208,6 @@ export { cart, order, product, cartQuery, orderHistoryQuery, productGridQuery };
 export const addToCartForm = form('cart/add');
 export type AddToCartInput = FormInput<typeof addToCartForm>;
 
-const addToCartInferredTouches = [
-  { domain: 'cart', keys: null },
-  { domain: 'order', keys: null },
-  { domain: 'product', keys: 'arg:productId' },
-] as const;
-
 export const addToCart = mutation('cart/add', {
   csrf: commerceCsrf,
   defaultRedirectTo: '/cart',
@@ -228,9 +222,6 @@ export const addToCart = mutation('cart/add', {
     betterAuthAuthed<CommerceRequest>(),
     guards.rateLimit<CommerceRequest>({ max: 10, per: 'session' }),
   ),
-  registry: {
-    inferredTouches: addToCartInferredTouches,
-  },
   transaction(request: CommerceRequest, run) {
     return request.db.transaction((tx) => run({ ...request, db: tx as unknown as CommerceDb }));
   },
