@@ -94,11 +94,7 @@ const productGridStyles = style.create(
       letterSpacing: 0,
       margin: 0,
     },
-  },
-  {
-    namespace: 'commerce-product-grid',
-    source: 'examples/commerce/src/components/product-grid.tsx',
-  },
+  }
 );
 
 export const productGridStyleCss = style.emitAtomicCss(

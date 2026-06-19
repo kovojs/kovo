@@ -17,7 +17,7 @@ const base = style.create({
     backgroundColor: 'black',
     color: 'white',
   },
-}, { namespace: 'button', source: 'button.tsx' });
+});
 
 export const Button = component({
   render: () => <button style={base.root}>Buy</button>,
@@ -29,7 +29,7 @@ export const Button = component({
     const cssSource = result.files.find((file) => file.kind === 'css')?.source;
 
     expect(serverSource).toContain('class="kv-button-bg-');
-    expect(serverSource).toContain('data-style-src="button.tsx#root"');
+    expect(serverSource).toContain('data-style-src="components/button.tsx#root"');
     expect(serverSource).not.toContain('style={base.root}');
     expect(cssSource).toContain('@layer kovo-style-3000');
     expect(cssSource).toContain('.kv-button-bg-');
@@ -38,7 +38,7 @@ export const Button = component({
       expect.arrayContaining([
         expect.objectContaining({
           moduleFileName: 'components/button.tsx',
-          source: 'button.tsx#root',
+          source: 'components/button.tsx#root',
           styleRef: 'base.root',
         }),
       ]),
@@ -47,7 +47,7 @@ export const Button = component({
       expect.arrayContaining([
         expect.objectContaining({
           className: expect.stringMatching(/^kv-button-bg-/),
-          source: 'button.tsx#root',
+          source: 'components/button.tsx#root',
           styleRef: 'base.root',
         }),
       ]),
@@ -56,7 +56,7 @@ export const Button = component({
       'export interface ComponentStyleRules',
     );
     expect(result.files.find((file) => file.kind === 'registry')?.source).toContain(
-      "source: 'button.tsx#root'; styleRef: 'base.root'; moduleFileName: 'components/button.tsx';",
+      "source: 'components/button.tsx#root'; styleRef: 'base.root'; moduleFileName: 'components/button.tsx';",
     );
     expect(() => assertFixpoint(result)).not.toThrow();
     expect(() => assertRenderEquivalence(result)).not.toThrow();
@@ -74,7 +74,7 @@ const badgeStyles = style.create({
     alignItems: 'center',
     display: 'inline-flex',
   },
-}, { namespace: 'cartBadge', source: 'cart-badge.tsx' });
+});
 
 export const CartBadge = component({
   queries: { cart: true },
@@ -88,8 +88,8 @@ export const CartBadge = component({
     });
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
-    expect(serverSource).toContain('class="kv-cart-badge-align-');
-    expect(serverSource).toContain('data-style-src="cart-badge.tsx#badge"');
+    expect(serverSource).toContain('class="kv-badge-align-');
+    expect(serverSource).toContain('data-style-src="components/cart-badge.tsx#badge"');
     expect(serverSource).toContain('data-bind="cart.count"');
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
@@ -106,13 +106,13 @@ const base = style.create({
     backgroundColor: 'black',
     color: 'white',
   },
-}, { namespace: 'button', source: 'button.tsx' });
+});
 
 const overrides = style.create({
   danger: {
     backgroundColor: 'red',
   },
-}, { namespace: 'buttonOverride', source: 'button.override.tsx' });
+});
 
 export const Button = component({
   render: () => <button style={[base.root, false, overrides.danger]}>Delete</button>,
@@ -123,9 +123,11 @@ export const Button = component({
     const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
 
     expect(serverSource).toContain('class="kv-button-fg-');
-    expect(serverSource).toContain('kv-button-override-bg-');
+    expect(serverSource).toContain('kv-button-overrides-bg-');
     expect(serverSource).not.toContain('kv-button-bg-');
-    expect(serverSource).toContain('data-style-src="button.tsx#root; button.override.tsx#danger"');
+    expect(serverSource).toContain(
+      'data-style-src="components/button.tsx#root; components/button.tsx#danger"',
+    );
   });
 
   it('extracts same-file defineVars and createTheme rules into CSS assets', () => {
@@ -138,12 +140,11 @@ import * as style from '@kovojs/style';
 const buttonVars = style.defineVars({
   accent: '#2563eb',
   onAccent: 'white',
-}, { namespace: 'button', source: 'button.vars.ts' });
+});
 
 const successTheme = style.createTheme(
   buttonVars,
   { accent: '#16a34a' },
-  { namespace: 'success', source: 'button.theme.ts' },
 );
 
 const base = style.create({
@@ -151,7 +152,7 @@ const base = style.create({
     backgroundColor: buttonVars.accent,
     color: buttonVars.onAccent,
   },
-}, { namespace: 'button', source: 'button.tsx' });
+});
 
 export const Button = component({
   render: () => <button style={base.root}>Buy</button>,
@@ -167,22 +168,22 @@ export const Button = component({
     expect(cssSource).toContain('--kovo-button-accent:#16a34a');
     expect(cssSource).toContain('background-color:var(--kovo-button-accent)');
     expect(cssSource).toContain('color:var(--kovo-button-on-accent)');
-    expect(serverSource).toContain('kv-button-bg-');
+    expect(serverSource).toContain('kv-themed-button-bg-');
     expect(result.cssAssets[0]?.styleRuleUsages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           moduleFileName: 'components/themed-button.tsx',
-          source: 'button.vars.ts#accent',
+          source: 'components/themed-button.tsx#accent',
           styleRef: 'buttonVars.accent',
         }),
         expect.objectContaining({
           moduleFileName: 'components/themed-button.tsx',
-          source: 'button.theme.ts#accent',
+          source: 'components/themed-button.tsx#accent',
           styleRef: 'successTheme.accent',
         }),
         expect.objectContaining({
           moduleFileName: 'components/themed-button.tsx',
-          source: 'button.tsx#root',
+          source: 'components/themed-button.tsx#root',
           styleRef: 'base.root',
         }),
       ]),
@@ -204,7 +205,7 @@ const base = style.create({
     borderRadius: tokens.sys.shape.cornerMedium,
     color: style.tokens.sys.color.onPrimary,
   },
-}, { namespace: 'tokenButton', source: 'token-button.tsx' });
+});
 
 export const Button = component({
   render: () => <button style={base.root}>Buy</button>,
@@ -232,7 +233,7 @@ const base = style.create({
     borderRadius: uiTheme.radius.md,
     color: uiTheme.color.accentForeground,
   },
-}, { namespace: 'button', source: 'button.tsx' });
+});
 
 export const Button = component({
   render: () => <button style={base.root}>Buy</button>,
@@ -277,7 +278,7 @@ const base = style.create({
   root: {
     backgroundColor: theme.color.primary,
   },
-}, { namespace: 'broken', source: 'broken-token.tsx' });
+});
 
 export const Button = component({
   render: () => <button style={base.root}>Buy</button>,
@@ -311,7 +312,7 @@ const base = style.create({
     backgroundColor: 'black',
     color: 'white',
   },
-}, { namespace: 'button', source: 'button.tsx' });
+});
 
 export const Button = component({
   render: () => <button class="manual" style={base.root}>Buy</button>,
@@ -329,10 +330,10 @@ export const Button = component({
           backgroundColor: 'black',
           color: 'white',
         },
-      }, { namespace: 'button', source: 'button.tsx' });
+      });
 
       export const Button = component({
-        render: () => <button class="manual kv-button-bg-e38gwa kv-button-fg-c5dqff" data-style-src="button.tsx#root">Buy</button>,
+        render: () => <button class="manual kv-button-bg-e38gwa kv-button-fg-c5dqff" data-style-src="components/button.tsx#root">Buy</button>,
       });
       Button.name = "components/button/button";
       "
@@ -351,7 +352,7 @@ const base = style.create({
   root: {
     backgroundColor: 'black',
   },
-}, { namespace: 'button', source: 'button.tsx' });
+});
 
 export const Button = component({
   render: ({ className }) => <button class={className} style={base.root}>Buy</button>,
@@ -393,13 +394,13 @@ const base = style.create({
     backgroundColor: 'black',
     color: 'white',
   },
-}, { namespace: 'badge', source: 'badge.tsx' });
+});
 
 const motion = style.create({
   bounce: {
     backgroundColor: 'red',
   },
-}, { namespace: 'badgeMotion', source: 'badge.motion.tsx' });
+});
 
 export const Badge = component({
   state: () => ({ bouncing: false }),
@@ -455,7 +456,7 @@ const buttonStates = style.create({
     backgroundColor: 'green',
     color: 'white',
   },
-}, { namespace: 'cartButton', source: 'cart-button.tsx' });
+});
 
 export const CartButton = component({
   queries: { cart: true },

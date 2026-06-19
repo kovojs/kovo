@@ -203,11 +203,7 @@ const detailStyles = style.create(
       textDecoration: 'none',
       ':hover': { color: '#0a95ff' },
     },
-  },
-  {
-    namespace: 'so-question-detail',
-    source: 'examples/stackoverflow/src/components/question-detail.tsx',
-  },
+  }
 );
 
 export const questionDetailStyleCss = style.emitAtomicCss(

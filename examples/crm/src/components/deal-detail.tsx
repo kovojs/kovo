@@ -125,8 +125,7 @@ const dealDetailStyles = style.create(
       fontVariantNumeric: 'tabular-nums',
       fontWeight: 600,
     },
-  },
-  { namespace: 'crm-deal-detail', source: 'examples/crm/src/components/deal-detail.tsx' },
+  }
 );
 
 export const dealDetailStyleCss = style.emitAtomicCss(

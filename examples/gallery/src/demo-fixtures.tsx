@@ -1606,8 +1606,7 @@ export function KbdDemo(): string {
       uppercase: {
         textTransform: 'uppercase',
       },
-    },
-    { namespace: 'galleryKbd', source: 'demo-fixtures.tsx' },
+    }
   );
 
   return (
@@ -2322,8 +2321,7 @@ export function SeparatorDemo(): string {
       short: {
         width: 256,
       },
-    },
-    { namespace: 'gallerySeparator', source: 'demo-fixtures.tsx' },
+    }
   );
 
   return (
@@ -2412,8 +2410,7 @@ export function SkeletonDemo(): string {
         height: 80,
         width: '100%',
       },
-    },
-    { namespace: 'gallerySkeleton', source: 'demo-fixtures.tsx' },
+    }
   );
 
   return (

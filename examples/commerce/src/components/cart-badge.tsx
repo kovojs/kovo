@@ -38,8 +38,7 @@ const cartBadgeStyles = style.create(
       minWidth: 20,
       paddingInline: 6,
     },
-  },
-  { namespace: 'commerce-cart-badge', source: 'examples/commerce/src/components/cart-badge.tsx' },
+  }
 );
 
 export const cartBadgeStyleCss = style.emitAtomicCss(

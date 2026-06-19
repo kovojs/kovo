@@ -1,0 +1,395 @@
+{
+  "app": "stackoverflow",
+  "label": "Stack Overflow",
+  "blurb": "questions · answers · votes",
+  "nodes": [
+    {
+      "id": "mutation:postQuestion",
+      "kind": "mutation",
+      "name": "postQuestion",
+      "label": "postQuestion",
+      "data": {
+        "guards": ["authed"],
+        "writes": ["question"],
+        "invalidates": ["question"],
+        "inputFields": ["id", "title", "body", "authorId"],
+        "session": "soSession",
+        "optimistic": [
+          {
+            "derivation": { "status": "derived" },
+            "mutation": "postQuestion",
+            "query": "questionList",
+            "status": "derived"
+          },
+          { "mutation": "postQuestion", "query": "questionDetail", "status": "await-fragment" }
+        ],
+        "touch": {
+          "reads": [
+            {
+              "domain": "question",
+              "keys": null,
+              "site": "examples/stackoverflow/.emit-0/src/mutations.ts:17",
+              "source": "select",
+              "via": "questions"
+            }
+          ],
+          "touches": [
+            {
+              "domain": "question",
+              "keys": null,
+              "site": "examples/stackoverflow/src/mutations.ts:22",
+              "via": "questions"
+            }
+          ],
+          "unresolved": []
+        }
+      },
+      "source": {
+        "file": "mutations.ts",
+        "startLine": 87,
+        "anchorLine": 87,
+        "endLine": 100,
+        "code": "export const postQuestionMutation = mutation('postQuestion', {\n  input: s.object({\n    id: s.string(),\n    title: s.string(),\n    body: s.string(),\n    authorId: s.string(),\n  }),\n  csrf: soCsrf,\n  errors: {\n    DUPLICATE_TITLE: duplicateTitleError,\n  },\n  registry: { touches: [question] },\n  handler: postQuestion,\n});",
+        "lang": "ts",
+        "touches": [
+          {
+            "domain": "question",
+            "keys": null,
+            "site": "examples/stackoverflow/src/mutations.ts:22",
+            "via": "questions"
+          }
+        ]
+      }
+    },
+    {
+      "id": "domain:question",
+      "kind": "domain",
+      "name": "question",
+      "label": "question",
+      "data": {},
+      "source": {
+        "file": "model.ts",
+        "startLine": 6,
+        "anchorLine": 8,
+        "endLine": 8,
+        "code": "// Shared demo facts: invalidation domains, typed mutation forms, and the small\n// request/result shapes consumed across the interactive example.\nexport const question = domain('question');",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "mutation:postAnswer",
+      "kind": "mutation",
+      "name": "postAnswer",
+      "label": "postAnswer",
+      "data": {
+        "guards": ["authed"],
+        "writes": ["answer", "question"],
+        "invalidates": ["answer", "question"],
+        "inputFields": ["id", "questionId", "body", "authorId"],
+        "session": "soSession",
+        "optimistic": [
+          {
+            "derivation": { "status": "derived" },
+            "mutation": "postAnswer",
+            "query": "answerList",
+            "status": "derived"
+          },
+          {
+            "derivation": { "status": "derived" },
+            "mutation": "postAnswer",
+            "query": "questionList",
+            "status": "derived"
+          },
+          { "mutation": "postAnswer", "query": "questionAnswers", "status": "await-fragment" },
+          { "mutation": "postAnswer", "query": "questionDetail", "status": "await-fragment" }
+        ],
+        "touch": {
+          "reads": [],
+          "touches": [
+            {
+              "domain": "answer",
+              "keys": null,
+              "site": "examples/stackoverflow/src/mutations.ts:47",
+              "via": "answers"
+            },
+            {
+              "domain": "question",
+              "keys": "arg:questionId",
+              "site": "examples/stackoverflow/src/mutations.ts:48",
+              "via": "questions"
+            }
+          ],
+          "unresolved": []
+        }
+      },
+      "source": {
+        "file": "mutations.ts",
+        "startLine": 102,
+        "anchorLine": 102,
+        "endLine": 112,
+        "code": "export const postAnswerMutation = mutation('postAnswer', {\n  input: s.object({\n    id: s.string(),\n    questionId: s.string(),\n    body: s.string(),\n    authorId: s.string(),\n  }),\n  csrf: soCsrf,\n  registry: { touches: [answer, question] },\n  handler: postAnswer,\n});",
+        "lang": "ts",
+        "touches": [
+          {
+            "domain": "answer",
+            "keys": null,
+            "site": "examples/stackoverflow/src/mutations.ts:47",
+            "via": "answers"
+          },
+          {
+            "domain": "question",
+            "keys": "arg:questionId",
+            "site": "examples/stackoverflow/src/mutations.ts:48",
+            "via": "questions"
+          }
+        ]
+      }
+    },
+    {
+      "id": "domain:answer",
+      "kind": "domain",
+      "name": "answer",
+      "label": "answer",
+      "data": {},
+      "source": {
+        "file": "model.ts",
+        "startLine": 9,
+        "anchorLine": 9,
+        "endLine": 9,
+        "code": "export const answer = domain('answer');",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "mutation:voteUp",
+      "kind": "mutation",
+      "name": "voteUp",
+      "label": "voteUp",
+      "data": {
+        "guards": ["authed"],
+        "writes": ["vote", "question"],
+        "invalidates": ["vote", "question"],
+        "inputFields": ["id", "targetId", "userId"],
+        "session": "soSession",
+        "optimistic": [
+          {
+            "derivation": { "status": "derived" },
+            "mutation": "voteUp",
+            "query": "questionList",
+            "status": "derived"
+          },
+          {
+            "derivation": { "status": "derived" },
+            "mutation": "voteUp",
+            "query": "questionScore",
+            "status": "derived"
+          },
+          { "mutation": "voteUp", "query": "questionDetail", "status": "await-fragment" }
+        ],
+        "touch": {
+          "reads": [],
+          "touches": [
+            {
+              "domain": "question",
+              "keys": "arg:targetId",
+              "site": "examples/stackoverflow/src/mutations.ts:62",
+              "via": "questions"
+            },
+            {
+              "domain": "vote",
+              "keys": null,
+              "site": "examples/stackoverflow/src/mutations.ts:61",
+              "via": "votes"
+            }
+          ],
+          "unresolved": []
+        }
+      },
+      "source": {
+        "file": "mutations.ts",
+        "startLine": 114,
+        "anchorLine": 114,
+        "endLine": 123,
+        "code": "export const voteUpMutation = mutation('voteUp', {\n  input: s.object({\n    id: s.string(),\n    targetId: s.string(),\n    userId: s.string(),\n  }),\n  csrf: soCsrf,\n  registry: { touches: [vote, question] },\n  handler: voteUp,\n});",
+        "lang": "ts",
+        "touches": [
+          {
+            "domain": "question",
+            "keys": "arg:targetId",
+            "site": "examples/stackoverflow/src/mutations.ts:62",
+            "via": "questions"
+          },
+          {
+            "domain": "vote",
+            "keys": null,
+            "site": "examples/stackoverflow/src/mutations.ts:61",
+            "via": "votes"
+          }
+        ]
+      }
+    },
+    {
+      "id": "domain:vote",
+      "kind": "domain",
+      "name": "vote",
+      "label": "vote",
+      "data": {},
+      "source": {
+        "file": "model.ts",
+        "startLine": 10,
+        "anchorLine": 10,
+        "endLine": 10,
+        "code": "export const vote = domain('vote');",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:questionList",
+      "kind": "query",
+      "name": "questionList",
+      "label": "questionList",
+      "data": { "domains": ["question"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 20,
+        "anchorLine": 22,
+        "endLine": 43,
+        "code": "// The list is ordered by stable id so a vote changes the score without reshuffling\n// rows while a fragment response is being applied.\nexport const questionList = query('questionList', {\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const items = await db\n      .select({\n        authorId: questions.authorId,\n        authorName: questions.authorName,\n        body: questions.body,\n        createdAt: questions.createdAt,\n        id: questions.id,\n        tags: questions.tags,\n        title: questions.title,\n        score: questions.score,\n        answerCount: questions.answerCount,\n      })\n      .from(questions)\n      .orderBy(questions.id);\n    // Keep the explicit property for the artifact generator.\n    return { items: items };\n  },\n  reads: [question],\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:answerList",
+      "kind": "query",
+      "name": "answerList",
+      "label": "answerList",
+      "data": { "domains": ["answer"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 45,
+        "anchorLine": 46,
+        "endLine": 61,
+        "code": "// All answers, ordered by stable id.\nexport const answerList = query('answerList', {\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const items = await db\n      .select({\n        id: answers.id,\n        questionId: answers.questionId,\n        body: answers.body,\n        score: answers.score,\n      })\n      .from(answers)\n      .orderBy(answers.id);\n    return { items: items };\n  },\n  reads: [answer],\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:questionDetail",
+      "kind": "query",
+      "name": "questionDetail",
+      "label": "questionDetail",
+      "data": { "domains": ["question"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 63,
+        "anchorLine": 63,
+        "endLine": 88,
+        "code": "export const questionDetail = query('questionDetail', {\n  args: s.object({ id: s.string() }),\n  load: async (\n    input: { id: string },\n    context?: SoQueryLoadContext,\n  ): Promise<QuestionDetailResult | null> => {\n    const db = requireSoQueryDb(context);\n    const [row] = await db\n      .select({\n        id: questions.id,\n        title: questions.title,\n        body: questions.body,\n        authorId: questions.authorId,\n        score: questions.score,\n        answerCount: questions.answerCount,\n        authorName: questions.authorName,\n        tags: questions.tags,\n        createdAt: questions.createdAt,\n      })\n      .from(questions)\n      .where(eq(questions.id, input.id))\n      .limit(1);\n    return row ?? null;\n  },\n  reads: [question],\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:questionAnswers",
+      "kind": "query",
+      "name": "questionAnswers",
+      "label": "questionAnswers",
+      "data": { "domains": ["answer"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 90,
+        "anchorLine": 90,
+        "endLine": 113,
+        "code": "export const questionAnswers = query('questionAnswers', {\n  args: s.object({ questionId: s.string() }),\n  load: async (\n    input: { questionId: string },\n    context?: SoQueryLoadContext,\n  ): Promise<QuestionAnswersResult> => {\n    const db = requireSoQueryDb(context);\n    return db\n      .select({\n        id: answers.id,\n        questionId: answers.questionId,\n        body: answers.body,\n        score: answers.score,\n        accepted: answers.accepted,\n        authorId: answers.authorId,\n        authorName: answers.authorName,\n        createdAt: answers.createdAt,\n      })\n      .from(answers)\n      .where(eq(answers.questionId, input.questionId))\n      .orderBy(asc(answers.id));\n  },\n  reads: [answer],\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:questionScore",
+      "kind": "query",
+      "name": "questionScore",
+      "label": "questionScore",
+      "data": { "domains": ["vote"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 115,
+        "anchorLine": 116,
+        "endLine": 123,
+        "code": "// Total score across all question votes.\nexport const questionScore = query('questionScore', {\n  load: async (_input: unknown, context?: SoQueryLoadContext) => {\n    const db = requireSoQueryDb(context);\n    const rows = await db.select({ value: sum(votes.value) }).from(votes);\n    return { score: Number(rows[0]?.value ?? 0) };\n  },\n  reads: [vote],\n});",
+        "lang": "ts"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "mutation:postQuestion->domain:question:writes",
+      "from": "mutation:postQuestion",
+      "to": "domain:question",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:postAnswer->domain:answer:writes",
+      "from": "mutation:postAnswer",
+      "to": "domain:answer",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:postAnswer->domain:question:writes",
+      "from": "mutation:postAnswer",
+      "to": "domain:question",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:voteUp->domain:vote:writes",
+      "from": "mutation:voteUp",
+      "to": "domain:vote",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:voteUp->domain:question:writes",
+      "from": "mutation:voteUp",
+      "to": "domain:question",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "domain:question->query:questionList:backs",
+      "from": "domain:question",
+      "to": "query:questionList",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:answer->query:answerList:backs",
+      "from": "domain:answer",
+      "to": "query:answerList",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:question->query:questionDetail:backs",
+      "from": "domain:question",
+      "to": "query:questionDetail",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:answer->query:questionAnswers:backs",
+      "from": "domain:answer",
+      "to": "query:questionAnswers",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:vote->query:questionScore:backs",
+      "from": "domain:vote",
+      "to": "query:questionScore",
+      "kind": "backs",
+      "data": {}
+    }
+  ],
+  "counts": { "mutation": 3, "domain": 3, "query": 5 }
+}

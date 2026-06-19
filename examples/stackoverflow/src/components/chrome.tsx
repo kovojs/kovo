@@ -313,8 +313,7 @@ const chromeStyles = style.create(
       fontWeight: 600,
       lineHeight: 1.2,
     },
-  },
-  { namespace: 'stackoverflow-chrome', source: 'examples/stackoverflow/src/components/chrome.tsx' },
+  }
 );
 
 export const soChromeStyleCss = style.emitAtomicCss(

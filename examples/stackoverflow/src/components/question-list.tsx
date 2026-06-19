@@ -281,8 +281,7 @@ const listStyles = style.create(
       color: '#c22e32',
       fontSize: 13,
     },
-  },
-  { namespace: 'so-question-list', source: 'examples/stackoverflow/src/components/question-list.tsx' },
+  }
 );
 
 export const questionListStyleCss = style.emitAtomicCss(

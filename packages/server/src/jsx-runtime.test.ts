@@ -94,12 +94,11 @@ describe('server jsx runtime', () => {
         inline: {
           marginTop: 4,
         },
-      },
-      { namespace: 'server-test', source: 'server-test.tsx' },
+      }
     );
 
     expect(jsx('button', { style: styles.root, children: 'Buy' })).toMatch(
-      /^<button class="kv-server-test-bg-[^ ]+ kv-server-test-fg-[^"]+" data-style-src="server-test\.tsx#root">Buy<\/button>$/,
+      /^<button class="kv-style-bg-[^ ]+ kv-style-fg-[^"]+">Buy<\/button>$/,
     );
     expect(
       jsx('button', {
@@ -108,7 +107,7 @@ describe('server jsx runtime', () => {
         children: 'Buy',
       }),
     ).toMatch(
-      /^<button class="manual kv-server-test-bg-[^ ]+ kv-server-test-fg-[^ ]+ kv-server-test-m-[^"]+" data-style-src="server-test\.tsx#root; server-test\.tsx#inline" style="opacity:0.8">Buy<\/button>$/,
+      /^<button class="manual kv-style-bg-[^ ]+ kv-style-fg-[^ ]+ kv-style-m-[^"]+" style="opacity:0.8">Buy<\/button>$/,
     );
   });
 

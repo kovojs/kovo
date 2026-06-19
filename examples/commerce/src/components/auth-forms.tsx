@@ -60,8 +60,7 @@ const authFormStyles = style.create(
       fontWeight: 500,
       textDecoration: 'none',
     },
-  },
-  { namespace: 'commerce-auth', source: 'examples/commerce/src/components/auth-forms.tsx' },
+  }
 );
 
 export const authFormStyleCss = style.emitAtomicCss(

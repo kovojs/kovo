@@ -144,7 +144,7 @@ const styles = style.create({
     backgroundColor: 'black',
     color: 'white',
   },
-}, { namespace: 'facts', source: 'facts.tsx' });
+});
 
 export const StyleOutputContextFacts = component({
   state: () => ({ value: 50 }),

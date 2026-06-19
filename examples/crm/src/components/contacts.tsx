@@ -97,8 +97,7 @@ const contactStyles = style.create(
       fontVariantNumeric: 'tabular-nums',
       fontWeight: 600,
     },
-  },
-  { namespace: 'crm-contacts', source: 'examples/crm/src/components/contacts.tsx' },
+  }
 );
 
 export const contactStyleCss = style.emitAtomicCss(

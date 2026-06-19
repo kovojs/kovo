@@ -26,22 +26,20 @@ describe('@kovojs/style phase 1 runtime fork', () => {
           backgroundColor: 'black',
           color: 'white',
         },
-      },
-      { namespace: 'button', source: 'button.tsx' },
+      }
     );
     const override = create(
       {
         root: {
           backgroundColor: 'tomato',
         },
-      },
-      { namespace: 'buttonOverride', source: 'button.override.tsx' },
+      }
     );
 
     const result = attrs(base.root, override.root);
 
-    expect(result.class).toMatch(/^kv-button-fg-[a-z0-9]+ kv-button-override-bg-[a-z0-9]+$/);
-    expect(result['data-style-src']).toBe('button.tsx#root; button.override.tsx#root');
+    expect(result.class).toMatch(/^kv-style-fg-[a-z0-9]+ kv-style-bg-[a-z0-9]+$/);
+    expect(result['data-style-src']).toBeUndefined();
   });
 
   it('flattens arrays and serializes the explicit raw inline escape hatch', () => {
@@ -49,13 +47,12 @@ describe('@kovojs/style phase 1 runtime fork', () => {
       {
         root: { display: 'inline-flex', opacity: 1 },
         muted: { opacity: 0.7 },
-      },
-      { namespace: 'badge' },
+      }
     );
 
     const result = attrs([styles.root, false, [styles.muted, raw({ '--progress': '60%' })]]);
 
-    expect(result.class).toMatch(/^kv-badge-d-[a-z0-9]+ kv-badge-opacity-[a-z0-9]+$/);
+    expect(result.class).toMatch(/^kv-style-d-[a-z0-9]+ kv-style-opacity-[a-z0-9]+$/);
     expect(result.style).toBe('--progress:60%');
   });
 
@@ -69,16 +66,15 @@ describe('@kovojs/style phase 1 runtime fork', () => {
           ':hover': { backgroundColor: 'black' },
           '@media (min-width: 40rem)': { width: 52 },
         },
-      },
-      { namespace: 'button', source: 'button.tsx' },
+      }
     );
 
     expect(compiled.styles.root.__rules).toHaveLength(5);
     expect(compiled.css).toContain('@layer kovo-style-1000');
     expect(compiled.css).toContain('@layer kovo-style-2000');
     expect(compiled.css).toContain('@layer kovo-style-4000');
-    expect(compiled.css).toContain('.kv-button-pad-');
-    expect(compiled.css).toContain('.kv-button-bg-');
+    expect(compiled.css).toContain('.kv-style-pad-');
+    expect(compiled.css).toContain('.kv-style-bg-');
     expect(compiled.css).toContain(':hover');
     expect(compiled.css).toContain('@media (min-width: 40rem)');
   });
@@ -98,8 +94,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
           height: '100vh',
           flex: '1 1 0%',
         },
-      },
-      { namespace: 'units', source: 'units.tsx' },
+      }
     );
 
     // Bare-number lengths gain `px` so the served declaration is valid CSS.
@@ -129,18 +124,17 @@ describe('@kovojs/style phase 1 runtime fork', () => {
             color: 'black',
           },
         },
-      },
-      { namespace: 'tabs', source: 'tabs.tsx' },
+      }
     );
 
     expect(compiled.styles.root.__rules).toHaveLength(2);
-    expect(compiled.css).toContain('.kv-tabs-fg-');
+    expect(compiled.css).toContain('.kv-style-fg-');
     expect(compiled.css).toContain('[data-state=active]{color:black}');
   });
 
   it('keeps priority buckets independent of file/link order', () => {
-    const firstFile = createAtomicStyles({ root: { paddingInline: 12 } }, { namespace: 'a' });
-    const secondFile = createAtomicStyles({ root: { padding: 8 } }, { namespace: 'b' });
+    const firstFile = createAtomicStyles({ root: { paddingInline: 12 } });
+    const secondFile = createAtomicStyles({ root: { padding: 8 } });
     const css = emitAtomicCss([
       ...(secondFile.styles.root.__rules ?? []),
       ...(firstFile.styles.root.__rules ?? []),
@@ -169,19 +163,17 @@ describe('@kovojs/style phase 1 runtime fork', () => {
       {
         accent: '#2563eb',
         onAccent: 'white',
-      },
-      { namespace: 'ui', source: 'button.tokens.ts' },
+      }
     );
-    const theme = createTheme(tokens, { accent: '#16a34a' }, { namespace: 'success' });
+    const theme = createTheme(tokens, { accent: '#16a34a' });
     const styles = create(
-      { root: { backgroundColor: tokens.accent, color: tokens.onAccent } },
-      { namespace: 'button' },
+      { root: { backgroundColor: tokens.accent, color: tokens.onAccent } }
     );
 
-    expect(tokens.accent).toBe('var(--kovo-ui-accent)');
-    expect(theme.className).toMatch(/^kv-success-theme-[a-z0-9]+$/);
-    expect(theme.__rules?.[0]?.rule).toContain('--kovo-ui-accent:#16a34a');
-    expect(props(styles.root).className).toMatch(/^kv-button-bg-[a-z0-9]+ kv-button-fg-[a-z0-9]+$/);
+    expect(tokens.accent).toBe('var(--kovo-tokens-accent)');
+    expect(theme.className).toMatch(/^kv-theme-theme-[a-z0-9]+$/);
+    expect(theme.__rules?.[0]?.rule).toContain('--kovo-tokens-accent:#16a34a');
+    expect(props(styles.root).className).toMatch(/^kv-style-bg-[a-z0-9]+ kv-style-fg-[a-z0-9]+$/);
   });
 
   it('defines typed constants that can feed static style objects', () => {
@@ -195,13 +187,12 @@ describe('@kovojs/style phase 1 runtime fork', () => {
           height: spacing.buttonHeight,
           paddingInline: spacing.buttonPadding,
         },
-      },
-      { namespace: 'button' },
+      }
     );
 
     expect(spacing.buttonHeight).toBe(36);
     expect(Object.isFrozen(spacing)).toBe(true);
-    expect(attrs(styles.root).class).toMatch(/^kv-button-h-[a-z0-9]+ kv-button-pad-[a-z0-9]+$/);
+    expect(attrs(styles.root).class).toMatch(/^kv-style-h-[a-z0-9]+ kv-style-pad-[a-z0-9]+$/);
   });
 
   it('generates a deterministic Material theme from one seed color', () => {
@@ -239,8 +230,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
           borderRadius: tokens.sys.shape.cornerMedium,
           color: tokens.sys.color.onPrimary,
         },
-      },
-      { namespace: 'themed-button' },
+      }
     );
 
     expect(tokens.sys.color.primary).toBe('var(--kovo-theme-sys-color-primary)');

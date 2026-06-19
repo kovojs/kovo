@@ -1,0 +1,458 @@
+{
+  "app": "crm",
+  "label": "CRM",
+  "blurb": "contacts · deals · pipeline",
+  "nodes": [
+    {
+      "id": "mutation:addContact",
+      "kind": "mutation",
+      "name": "addContact",
+      "label": "addContact",
+      "data": {
+        "guards": ["authed"],
+        "writes": ["contact"],
+        "invalidates": ["contact"],
+        "inputFields": ["id", "name", "email", "ownerId"],
+        "session": "crmSession",
+        "optimistic": [
+          {
+            "mutation": "addContact",
+            "query": "contactList",
+            "status": "derived",
+            "derivation": { "status": "derived" }
+          }
+        ],
+        "touch": {
+          "reads": [
+            {
+              "domain": "contact",
+              "keys": null,
+              "site": "examples/crm/src/mutations.ts:60",
+              "source": "select",
+              "via": "contacts"
+            }
+          ],
+          "touches": [
+            {
+              "domain": "contact",
+              "keys": null,
+              "site": "examples/crm/src/mutations.ts:65",
+              "via": "contacts"
+            }
+          ],
+          "unresolved": []
+        }
+      },
+      "source": {
+        "file": "mutations.ts",
+        "startLine": 70,
+        "anchorLine": 70,
+        "endLine": 84,
+        "code": "export const addContact = mutation('addContact', {\n  csrf: crmCsrf,\n  errors: {\n    DUPLICATE_EMAIL: duplicateEmailError,\n  },\n  guard: authed,\n  input: s.object({\n    id: s.string(),\n    name: s.string(),\n    email: s.string(),\n    ownerId: s.string(),\n  }),\n  registry: { touches: [contact] },\n  handler: addContactHandler,\n});",
+        "lang": "ts",
+        "touches": [
+          {
+            "domain": "contact",
+            "keys": null,
+            "site": "examples/crm/src/mutations.ts:65",
+            "via": "contacts"
+          }
+        ]
+      }
+    },
+    {
+      "id": "domain:contact",
+      "kind": "domain",
+      "name": "contact",
+      "label": "contact",
+      "data": {},
+      "source": {
+        "file": "model.ts",
+        "startLine": 4,
+        "anchorLine": 6,
+        "endLine": 6,
+        "code": "// Small shared authoring facts for the CRM demo: invalidation domains plus the\n// typed form handles reused by components, mutations, and optimistic patches.\nexport const contact = domain('contact');",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "mutation:createDeal",
+      "kind": "mutation",
+      "name": "createDeal",
+      "label": "createDeal",
+      "data": {
+        "guards": ["authed"],
+        "writes": ["contact", "deal"],
+        "invalidates": ["contact", "deal"],
+        "inputFields": ["id", "contactId", "stage", "amount", "ownerId"],
+        "session": "crmSession",
+        "optimistic": [
+          {
+            "mutation": "createDeal",
+            "query": "contactDealCount",
+            "status": "derived",
+            "derivation": { "status": "derived" }
+          },
+          { "mutation": "createDeal", "query": "contactList", "status": "hand-written" },
+          {
+            "mutation": "createDeal",
+            "query": "dealList",
+            "status": "derived",
+            "derivation": { "status": "derived" }
+          },
+          {
+            "mutation": "createDeal",
+            "query": "openDeals",
+            "status": "derived",
+            "derivation": { "status": "derived" }
+          },
+          {
+            "mutation": "createDeal",
+            "query": "pipelineByStage",
+            "status": "hand-written",
+            "derivation": {
+              "status": "PUNTED",
+              "reason": { "code": "opaque-shape", "shape": "group-by-having" }
+            }
+          }
+        ],
+        "touch": {
+          "reads": [],
+          "touches": [
+            {
+              "domain": "contact",
+              "keys": "arg:contactId",
+              "site": "examples/crm/src/mutations.ts:93",
+              "via": "contacts"
+            },
+            {
+              "domain": "deal",
+              "keys": null,
+              "site": "examples/crm/src/mutations.ts:92",
+              "via": "deals"
+            }
+          ],
+          "unresolved": []
+        }
+      },
+      "source": {
+        "file": "mutations.ts",
+        "startLine": 101,
+        "anchorLine": 101,
+        "endLine": 113,
+        "code": "export const createDeal = mutation('createDeal', {\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    id: s.string(),\n    contactId: s.string(),\n    stage: s.string(),\n    amount: s.number().int().min(0),\n    ownerId: s.string(),\n  }),\n  registry: { touches: [contact, deal] },\n  handler: createDealHandler,\n});",
+        "lang": "ts",
+        "touches": [
+          {
+            "domain": "contact",
+            "keys": "arg:contactId",
+            "site": "examples/crm/src/mutations.ts:93",
+            "via": "contacts"
+          },
+          {
+            "domain": "deal",
+            "keys": null,
+            "site": "examples/crm/src/mutations.ts:92",
+            "via": "deals"
+          }
+        ]
+      }
+    },
+    {
+      "id": "domain:deal",
+      "kind": "domain",
+      "name": "deal",
+      "label": "deal",
+      "data": {},
+      "source": {
+        "file": "model.ts",
+        "startLine": 7,
+        "anchorLine": 7,
+        "endLine": 7,
+        "code": "export const deal = domain('deal');",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "mutation:moveDeal",
+      "kind": "mutation",
+      "name": "moveDeal",
+      "label": "moveDeal",
+      "data": {
+        "guards": ["authed"],
+        "writes": ["deal"],
+        "invalidates": ["deal"],
+        "inputFields": ["dealId", "stage"],
+        "session": "crmSession",
+        "optimistic": [
+          {
+            "mutation": "moveDeal",
+            "query": "contactDealCount",
+            "status": "derived",
+            "derivation": { "status": "derived" }
+          },
+          {
+            "mutation": "moveDeal",
+            "query": "dealList",
+            "status": "derived",
+            "derivation": { "status": "derived" }
+          },
+          {
+            "mutation": "moveDeal",
+            "query": "openDeals",
+            "status": "await-fragment",
+            "derivation": {
+              "status": "PUNTED",
+              "reason": { "code": "membership-entry", "field": "stage" }
+            }
+          },
+          {
+            "mutation": "moveDeal",
+            "query": "pipelineByStage",
+            "status": "await-fragment",
+            "derivation": {
+              "status": "PUNTED",
+              "reason": { "code": "opaque-shape", "shape": "group-by-having" }
+            }
+          }
+        ],
+        "touch": {
+          "reads": [],
+          "touches": [
+            {
+              "domain": "deal",
+              "keys": "arg:dealId",
+              "site": "examples/crm/src/mutations.ts:140",
+              "via": "deals"
+            }
+          ],
+          "unresolved": []
+        }
+      },
+      "source": {
+        "file": "mutations.ts",
+        "startLine": 145,
+        "anchorLine": 145,
+        "endLine": 154,
+        "code": "export const moveDeal = mutation('moveDeal', {\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    dealId: s.string(),\n    stage: s.string(),\n  }),\n  registry: { touches: [deal] },\n  handler: moveDealHandler,\n});",
+        "lang": "ts",
+        "touches": [
+          {
+            "domain": "deal",
+            "keys": "arg:dealId",
+            "site": "examples/crm/src/mutations.ts:140",
+            "via": "deals"
+          }
+        ]
+      }
+    },
+    {
+      "id": "mutation:closeDeal",
+      "kind": "mutation",
+      "name": "closeDeal",
+      "label": "closeDeal",
+      "data": {
+        "guards": ["authed"],
+        "writes": ["deal"],
+        "invalidates": ["deal"],
+        "inputFields": ["dealId"],
+        "session": "crmSession",
+        "optimistic": [
+          {
+            "mutation": "closeDeal",
+            "query": "contactDealCount",
+            "status": "derived",
+            "derivation": { "status": "derived" }
+          },
+          { "mutation": "closeDeal", "query": "dealList", "status": "await-fragment" },
+          { "mutation": "closeDeal", "query": "openDeals", "status": "hand-written" },
+          {
+            "mutation": "closeDeal",
+            "query": "pipelineByStage",
+            "status": "await-fragment",
+            "derivation": {
+              "status": "PUNTED",
+              "reason": { "code": "opaque-shape", "shape": "group-by-having" }
+            }
+          }
+        ],
+        "touch": {
+          "reads": [],
+          "touches": [
+            {
+              "domain": "deal",
+              "keys": "arg:dealId",
+              "site": "examples/crm/src/mutations.ts:190",
+              "via": "deals"
+            }
+          ],
+          "unresolved": []
+        }
+      },
+      "source": {
+        "file": "mutations.ts",
+        "startLine": 198,
+        "anchorLine": 198,
+        "endLine": 206,
+        "code": "export const closeDeal = mutation('closeDeal', {\n  csrf: crmCsrf,\n  guard: authed,\n  input: s.object({\n    dealId: s.string(),\n  }),\n  registry: { touches: [deal] },\n  handler: closeDealHandler,\n});",
+        "lang": "ts",
+        "touches": [
+          {
+            "domain": "deal",
+            "keys": "arg:dealId",
+            "site": "examples/crm/src/mutations.ts:190",
+            "via": "deals"
+          }
+        ]
+      }
+    },
+    {
+      "id": "query:contactList",
+      "kind": "query",
+      "name": "contactList",
+      "label": "contactList",
+      "data": { "domains": ["contact"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 89,
+        "anchorLine": 90,
+        "endLine": 105,
+        "code": "/** AGG(contacts) — the full contact book, ordered by id (a derivable rowset). */\nexport const contactListQuery = query('contactList', {\n  reads: [contact],\n  load: async (_input: unknown, db: CrmDb): Promise<ContactListResult> => {\n    const items = await db\n      .select({\n        id: contacts.id,\n        name: contacts.name,\n        email: contacts.email,\n        ownerId: contacts.ownerId,\n        dealCount: contacts.dealCount,\n      })\n      .from(contacts)\n      .orderBy(contacts.id);\n    return { items: items };\n  },\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:dealList",
+      "kind": "query",
+      "name": "dealList",
+      "label": "dealList",
+      "data": { "domains": ["deal"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 107,
+        "anchorLine": 108,
+        "endLine": 123,
+        "code": "/** AGG(deals) ordered by id — the full pipeline list (a derivable rowset). */\nexport const dealListQuery = query('dealList', {\n  reads: [deal],\n  load: async (_input: unknown, db: CrmDb): Promise<DealListResult> => {\n    const items = await db\n      .select({\n        id: deals.id,\n        contactId: deals.contactId,\n        stage: deals.stage,\n        amount: deals.amount,\n        ownerId: deals.ownerId,\n      })\n      .from(deals)\n      .orderBy(deals.id);\n    return { items: items };\n  },\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:contactDealCount",
+      "kind": "query",
+      "name": "contactDealCount",
+      "label": "contactDealCount",
+      "data": { "domains": ["deal"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 125,
+        "anchorLine": 126,
+        "endLine": 132,
+        "code": "/** COUNT(deals) — the scalar count of deals across the pipeline (derivable). */\nexport const contactDealCountQuery = query('contactDealCount', {\n  reads: [deal],\n  load: async (_input: unknown, db: CrmDb): Promise<ContactDealCountResult> => {\n    const rows = await db.select({ value: count() }).from(deals);\n    return { count: Number(rows[0]?.value ?? 0) };\n  },\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:openDeals",
+      "kind": "query",
+      "name": "openDeals",
+      "label": "openDeals",
+      "data": { "domains": ["deal"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 134,
+        "anchorLine": 135,
+        "endLine": 151,
+        "code": "/** AGG(deals WHERE stage = 'open') — the open pipeline (a filtered rowset). */\nexport const openDealsQuery = query('openDeals', {\n  reads: [deal],\n  load: async (_input: unknown, db: CrmDb): Promise<OpenDealsResult> => {\n    const items = await db\n      .select({\n        id: deals.id,\n        contactId: deals.contactId,\n        stage: deals.stage,\n        amount: deals.amount,\n        ownerId: deals.ownerId,\n      })\n      .from(deals)\n      .where(eq(deals.stage, 'open'))\n      .orderBy(deals.id);\n    return { items: items };\n  },\n});",
+        "lang": "ts"
+      }
+    },
+    {
+      "id": "query:pipelineByStage",
+      "kind": "query",
+      "name": "pipelineByStage",
+      "label": "pipelineByStage",
+      "data": { "domains": ["deal"], "guards": [] },
+      "source": {
+        "file": "queries.ts",
+        "startLine": 153,
+        "anchorLine": 156,
+        "endLine": 166,
+        "code": "/**\n * SUM(amount) GROUP BY stage — the pipeline value per stage.\n */\nexport const pipelineByStageQuery = query('pipelineByStage', {\n  reads: [deal],\n  load: async (_input: unknown, db: CrmDb): Promise<PipelineByStageResult> => {\n    const buckets = await db\n      .select({ stage: deals.stage, total: sql<number>`coalesce(sum(${deals.amount}), 0)::int` })\n      .from(deals)\n      .groupBy(deals.stage)\n      .orderBy(deals.stage);\n    return { buckets: buckets };\n  },\n});",
+        "lang": "ts"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "mutation:addContact->domain:contact:writes",
+      "from": "mutation:addContact",
+      "to": "domain:contact",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:createDeal->domain:contact:writes",
+      "from": "mutation:createDeal",
+      "to": "domain:contact",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:createDeal->domain:deal:writes",
+      "from": "mutation:createDeal",
+      "to": "domain:deal",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:moveDeal->domain:deal:writes",
+      "from": "mutation:moveDeal",
+      "to": "domain:deal",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "mutation:closeDeal->domain:deal:writes",
+      "from": "mutation:closeDeal",
+      "to": "domain:deal",
+      "kind": "writes",
+      "data": {}
+    },
+    {
+      "id": "domain:contact->query:contactList:backs",
+      "from": "domain:contact",
+      "to": "query:contactList",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:deal->query:dealList:backs",
+      "from": "domain:deal",
+      "to": "query:dealList",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:deal->query:contactDealCount:backs",
+      "from": "domain:deal",
+      "to": "query:contactDealCount",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:deal->query:openDeals:backs",
+      "from": "domain:deal",
+      "to": "query:openDeals",
+      "kind": "backs",
+      "data": {}
+    },
+    {
+      "id": "domain:deal->query:pipelineByStage:backs",
+      "from": "domain:deal",
+      "to": "query:pipelineByStage",
+      "kind": "backs",
+      "data": {}
+    }
+  ],
+  "counts": { "mutation": 4, "domain": 2, "query": 5 }
+}

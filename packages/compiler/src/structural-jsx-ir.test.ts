@@ -17,7 +17,7 @@ const styles = style.create({
     backgroundColor: 'black',
     color: 'white',
   },
-}, { namespace: 'productBadge', source: 'product-page.tsx' });
+});
 
 export const ProductPage = component({
   queries: { product: productQuery },
@@ -79,7 +79,7 @@ export const ProductPage = component({
       '<img data-derive="product.ProductPage$img_style_derive" data-derive-attr="style" src="/hero.png"',
     );
     expect(serverSource).toContain('data-style-src="product-page.tsx#badge"');
-    expect(serverSource).toMatch(/class="kv-product-badge-bg-[^"]+ kv-product-badge-fg-[^"]+"/);
+    expect(serverSource).toMatch(/class="kv-product-page-bg-[^"]+ kv-product-page-fg-[^"]+"/);
     expect(clientSource).toContain(
       "import { applyCompiledQueryUpdatePlan, derive, handler, kovoStyleProperty } from '@kovojs/runtime/generated';",
     );
@@ -107,7 +107,7 @@ export const ProductPage = component({
       }),
     ]);
     expect(cssSource).toContain('@layer kovo-style-3000');
-    expect(cssSource).toContain('.kv-product-badge-bg-');
+    expect(cssSource).toContain('.kv-product-page-bg-');
     expect(result.cssAssets[0]?.styleRuleUsages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

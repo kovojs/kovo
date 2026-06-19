@@ -220,8 +220,7 @@ const authStyles = style.create(
       fontSize: 14,
       fontWeight: 500,
     },
-  },
-  { namespace: 'starterAuth', source: 'src/auth.tsx' },
+  }
 );
 
 export const starterAuthStyleCss = style.emitAtomicCss(

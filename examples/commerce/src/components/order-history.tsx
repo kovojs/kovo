@@ -49,11 +49,7 @@ const orderHistoryStyles = style.create(
       letterSpacing: 0,
       margin: 0,
     },
-  },
-  {
-    namespace: 'commerce-order-history',
-    source: 'examples/commerce/src/components/order-history.tsx',
-  },
+  }
 );
 
 export const orderHistoryStyleCss = style.emitAtomicCss(

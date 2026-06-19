@@ -95,8 +95,7 @@ export interface AtomicRule {
   readonly source: string;
 }
 
-/** Options that control readable class provenance for `create`, `defineVars`, and themes. */
-export interface CreateOptions {
+interface StyleIdentityOptions {
   readonly namespace?: string;
   readonly source?: string;
 }
@@ -140,10 +139,17 @@ export interface Keyframes {
  */
 export function create<const Styles extends Record<string, StyleObject>>(
   styles: Styles,
-  options: CreateOptions = {},
+): StyleNamespaces<Styles>;
+export function create<const Styles extends Record<string, StyleObject>>(
+  styles: Styles,
+  identity: StyleIdentityOptions,
+): StyleNamespaces<Styles>;
+export function create<const Styles extends Record<string, StyleObject>>(
+  styles: Styles,
+  identity: StyleIdentityOptions = {},
 ): StyleNamespaces<Styles> {
   assertObjectInput(styles, 'style.create', 'styles');
-  return createAtomicStyles(styles, options).styles;
+  return createAtomicStylesInternal(styles, identity).styles;
 }
 
 /**
@@ -153,10 +159,24 @@ export function create<const Styles extends Record<string, StyleObject>>(
  */
 export function createAtomicStyles<const Styles extends Record<string, StyleObject>>(
   styles: Styles,
-  options: CreateOptions = {},
+): AtomicCssResult<Styles>;
+export function createAtomicStyles<const Styles extends Record<string, StyleObject>>(
+  styles: Styles,
+  identity: StyleIdentityOptions,
+): AtomicCssResult<Styles>;
+export function createAtomicStyles<const Styles extends Record<string, StyleObject>>(
+  styles: Styles,
+  identity: StyleIdentityOptions = {},
 ): AtomicCssResult<Styles> {
   assertObjectInput(styles, 'style.createAtomicStyles', 'styles');
-  const namespace = slug(options.namespace ?? options.source ?? 'style');
+  return createAtomicStylesInternal(styles, identity);
+}
+
+function createAtomicStylesInternal<const Styles extends Record<string, StyleObject>>(
+  styles: Styles,
+  identity: StyleIdentityOptions,
+): AtomicCssResult<Styles> {
+  const namespace = slug(identity.namespace ?? identity.source ?? 'style');
   const rulesByKey = new Map<string, AtomicRule>();
   const compiled: Record<string, CompiledStyle> = {};
 
@@ -168,10 +188,10 @@ export function createAtomicStyles<const Styles extends Record<string, StyleObje
       ruleEntries,
       rulesByKey,
       selectorSuffix: '',
-      source: `${options.source ?? namespace}#${styleKey}`,
+      source: `${identity.source ?? namespace}#${styleKey}`,
       styleKey,
     });
-    compiled[styleKey] = styleRecord(styleKey, styleRules, ruleEntries, options.source);
+    compiled[styleKey] = styleRecord(styleKey, styleRules, ruleEntries, identity.source);
   }
 
   const rules = [...rulesByKey.values()].sort(compareRules);
@@ -217,10 +237,17 @@ export function attrs(...styles: readonly StyleInput[]): AttrsResult {
  */
 export function defineVars<const Tokens extends Record<string, CssValue>>(
   tokens: Tokens,
-  options: CreateOptions = {},
+): Vars<Tokens>;
+export function defineVars<const Tokens extends Record<string, CssValue>>(
+  tokens: Tokens,
+  identity: StyleIdentityOptions,
+): Vars<Tokens>;
+export function defineVars<const Tokens extends Record<string, CssValue>>(
+  tokens: Tokens,
+  identity: StyleIdentityOptions = {},
 ): Vars<Tokens> {
   assertObjectInput(tokens, 'style.defineVars', 'tokens');
-  const namespace = slug(options.namespace ?? options.source ?? 'tokens');
+  const namespace = slug(identity.namespace ?? identity.source ?? 'tokens');
   const result: Record<string, string | true | readonly AtomicRule[]> = {
     [CSS_MARKER]: true,
     __vars: true,
@@ -239,7 +266,7 @@ export function defineVars<const Tokens extends Record<string, CssValue>>(
         priority: getPriority(cssProperty),
         rule: `:root{${cssProperty}:${String(value)}}`,
         selectorSuffix: '',
-        source: `${options.source ?? namespace}#${token}`,
+        source: `${identity.source ?? namespace}#${token}`,
         value,
       });
     }
@@ -268,11 +295,20 @@ export function defineConsts<const Constants extends Record<string, StylePrimiti
 export function createTheme<Tokens extends Record<string, CssValue>>(
   baseTokens: Vars<Tokens>,
   overrides: Partial<Record<keyof Tokens, CssValue>>,
-  options: CreateOptions = {},
+): Theme;
+export function createTheme<Tokens extends Record<string, CssValue>>(
+  baseTokens: Vars<Tokens>,
+  overrides: Partial<Record<keyof Tokens, CssValue>>,
+  identity: StyleIdentityOptions,
+): Theme;
+export function createTheme<Tokens extends Record<string, CssValue>>(
+  baseTokens: Vars<Tokens>,
+  overrides: Partial<Record<keyof Tokens, CssValue>>,
+  identity: StyleIdentityOptions = {},
 ): Theme {
   assertObjectInput(baseTokens, 'style.createTheme', 'baseTokens');
   assertObjectInput(overrides, 'style.createTheme', 'overrides');
-  const namespace = slug(options.namespace ?? options.source ?? 'theme');
+  const namespace = slug(identity.namespace ?? identity.source ?? 'theme');
   const className = `kv-${namespace}-theme-${hash(JSON.stringify(overrides))}`;
   const rules: AtomicRule[] = [];
 
@@ -289,7 +325,7 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
       priority: getPriority(cssProperty),
       rule: `.${className}{${cssProperty}:${String(value)}}`,
       selectorSuffix: '',
-      source: `${options.source ?? namespace}#${token}`,
+      source: `${identity.source ?? namespace}#${token}`,
       value,
     });
   }
@@ -306,7 +342,7 @@ export function createTheme<Tokens extends Record<string, CssValue>>(
     __theme: true,
     className,
   };
-  if (options.source) theme[STYLE_SRC] = options.source;
+  if (identity.source) theme[STYLE_SRC] = identity.source;
   return theme;
 }
 
@@ -329,9 +365,11 @@ export function firstThatWorks<T extends StylePrimitive>(...values: readonly T[]
 }
 
 /** Deterministic keyframes name placeholder for the compiler's later extraction pass. */
-export function keyframes(frames: Keyframes, options: CreateOptions = {}): string {
+export function keyframes(frames: Keyframes): string;
+export function keyframes(frames: Keyframes, identity: StyleIdentityOptions): string;
+export function keyframes(frames: Keyframes, identity: StyleIdentityOptions = {}): string {
   assertObjectInput(frames, 'style.keyframes', 'frames');
-  return `kv-${slug(options.namespace ?? options.source ?? 'keyframes')}-${hash(JSON.stringify(frames))}`;
+  return `kv-${slug(identity.namespace ?? identity.source ?? 'keyframes')}-${hash(JSON.stringify(frames))}`;
 }
 
 /** Emit atomic CSS in priority layers so split files do not depend on link order. */

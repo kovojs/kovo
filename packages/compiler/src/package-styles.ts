@@ -89,7 +89,7 @@ export function extractPackageComponentCss(
         fileName: relativeToPackage(resolved.packageDir, fileName),
         message:
           'style.create(...) present but no CSS was extracted; the component would render ' +
-          'unstyled. Ensure styles are static and pin explicit { namespace, source }.',
+          'unstyled. Ensure styles are static so identity can be derived from the binding and file.',
       });
     }
   }

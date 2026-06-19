@@ -240,7 +240,7 @@ const styles = style.create({
   root: {
     color: 'teal',
   },
-}, { namespace: 'cart', source: 'cart-badge.tsx' });
+});
 
 export const CartBadge = component({
   queries: { cart: cartQuery },
@@ -260,7 +260,7 @@ export const CartBadge = component({
           "sourceFileName": "components/cart/cart-badge.css",
           "styleRules": [
             {
-              "source": "cart-badge.tsx#root",
+              "source": "components/cart/cart-badge.tsx#root",
               "styleRef": "styles.root",
             },
           ],
@@ -285,7 +285,7 @@ const styles = style.create({
   root: {
     display: 'grid',
   },
-}, { namespace: 'shell', source: 'shell.tsx' });
+});
 
 export const AppShell = component({
   render: () => <main style={styles.root}>Shell</main>,
@@ -302,7 +302,7 @@ const styles = style.create({
   root: {
     color: 'teal',
   },
-}, { namespace: 'cart', source: 'cart-badge.tsx' });
+});
 
 export const CartBadge = component({
   render: () => <cart-badge style={styles.root}>1</cart-badge>,
@@ -319,7 +319,7 @@ const styles = style.create({
   root: {
     gap: '1rem',
   },
-}, { namespace: 'recommendations', source: 'recommendations.tsx' });
+});
 
 export const Recommendations = component({
   queries: { recommendations: recommendationsQuery },
@@ -357,11 +357,11 @@ export const Recommendations = component({
           "sourceFileName": "base.css",
           "styleRules": [
             {
-              "source": "shell.tsx#root",
+              "source": "components/app/shell.tsx#root",
               "styleRef": "styles.root",
             },
             {
-              "source": "cart-badge.tsx#root",
+              "source": "components/cart/cart-badge.tsx#root",
               "styleRef": "styles.root",
             },
           ],
@@ -383,11 +383,11 @@ export const Recommendations = component({
           "sourceFileName": "base.css",
           "styleRules": [
             {
-              "source": "shell.tsx#root",
+              "source": "components/app/shell.tsx#root",
               "styleRef": "styles.root",
             },
             {
-              "source": "cart-badge.tsx#root",
+              "source": "components/cart/cart-badge.tsx#root",
               "styleRef": "styles.root",
             },
           ],
@@ -409,11 +409,11 @@ export const Recommendations = component({
           "sourceFileName": "base.css",
           "styleRules": [
             {
-              "source": "shell.tsx#root",
+              "source": "components/app/shell.tsx#root",
               "styleRef": "styles.root",
             },
             {
-              "source": "cart-badge.tsx#root",
+              "source": "components/cart/cart-badge.tsx#root",
               "styleRef": "styles.root",
             },
           ],
@@ -432,7 +432,7 @@ export const Recommendations = component({
           "sourceFileName": "routes/products-id.css",
           "styleRules": [
             {
-              "source": "recommendations.tsx#root",
+              "source": "components/product/recommendations.tsx#root",
               "styleRef": "styles.root",
             },
           ],
@@ -460,11 +460,11 @@ export const Recommendations = component({
           "sourceFileName": "base.css",
           "styleRules": [
             {
-              "source": "shell.tsx#root",
+              "source": "components/app/shell.tsx#root",
               "styleRef": "styles.root",
             },
             {
-              "source": "cart-badge.tsx#root",
+              "source": "components/cart/cart-badge.tsx#root",
               "styleRef": "styles.root",
             },
           ],
@@ -483,7 +483,7 @@ export const Recommendations = component({
           "sourceFileName": "fragments/components-product-recommendations-recommendations.css",
           "styleRules": [
             {
-              "source": "recommendations.tsx#root",
+              "source": "components/product/recommendations.tsx#root",
               "styleRef": "styles.root",
             },
           ],

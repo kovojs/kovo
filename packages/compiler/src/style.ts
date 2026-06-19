@@ -7,7 +7,6 @@ import {
   tokens as publicThemeTokens,
   type AtomicRule,
   type CompiledStyle,
-  type CreateOptions,
   type CssValue,
   type StyleObject,
 } from '@kovojs/style';
@@ -57,6 +56,49 @@ interface StyleEnvironment {
   readonly rules: readonly AtomicRule[];
   readonly usages: readonly StyleRuleUsage[];
   readonly bindings: ReadonlyMap<string, StyleBinding>;
+}
+
+interface StyleIdentityOptions {
+  readonly namespace?: string;
+  readonly source?: string;
+}
+
+function createAtomicStylesWithIdentity(
+  styles: Record<string, StyleObject>,
+  identity: StyleIdentityOptions,
+): ReturnType<typeof createAtomicStyles<Record<string, StyleObject>>> {
+  return (
+    createAtomicStyles as (
+      styles: Record<string, StyleObject>,
+      identity: StyleIdentityOptions,
+    ) => ReturnType<typeof createAtomicStyles<Record<string, StyleObject>>>
+  )(styles, identity);
+}
+
+function defineVarsWithIdentity(
+  tokens: Record<string, CssValue>,
+  identity: StyleIdentityOptions,
+): ReturnType<typeof defineVars<Record<string, CssValue>>> {
+  return (
+    defineVars as (
+      tokens: Record<string, CssValue>,
+      identity: StyleIdentityOptions,
+    ) => ReturnType<typeof defineVars<Record<string, CssValue>>>
+  )(tokens, identity);
+}
+
+function createThemeWithIdentity<Tokens extends Record<string, CssValue>>(
+  baseTokens: Parameters<typeof createTheme<Tokens>>[0],
+  overrides: Parameters<typeof createTheme<Tokens>>[1],
+  identity: StyleIdentityOptions,
+): ReturnType<typeof createTheme<Tokens>> {
+  return (
+    createTheme as (
+      baseTokens: Parameters<typeof createTheme<Tokens>>[0],
+      overrides: Parameters<typeof createTheme<Tokens>>[1],
+      identity: StyleIdentityOptions,
+    ) => ReturnType<typeof createTheme<Tokens>>
+  )(baseTokens, overrides, identity);
 }
 
 interface ImportedStaticValue {
@@ -236,7 +278,10 @@ function collectStyleEnvironment(
           diagnostics.push(staticStyleDiagnostic(fileName, source, node, 'style.defineVars'));
           continue;
         }
-        const result = defineVars(tokens, vars.options);
+        const result = defineVarsWithIdentity(tokens, {
+          namespace: vars.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
+          source: vars.options.source ?? fileName,
+        });
         staticValues.set(node.name.text, result);
         rules.push(...(result.__rules ?? []));
         pushRuleUsages(usages, fileName, node.name.text, result.__rules ?? []);
@@ -253,10 +298,13 @@ function collectStyleEnvironment(
           diagnostics.push(staticStyleDiagnostic(fileName, source, node, 'style.createTheme'));
           continue;
         }
-        const result = createTheme(
+        const result = createThemeWithIdentity(
           baseTokens as Parameters<typeof createTheme>[0],
           overrides,
-          theme.options,
+          {
+            namespace: theme.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
+            source: theme.options.source ?? fileName,
+          },
         );
         staticValues.set(node.name.text, result);
         rules.push(...(result.__rules ?? []));
@@ -266,8 +314,8 @@ function collectStyleEnvironment(
 
       const created = styleCreateCall(node.initializer, styleImports, localObjects, staticValues);
       if (created) {
-        const result = createAtomicStyles(created.styles, {
-          namespace: created.options.namespace ?? node.name.text,
+        const result = createAtomicStylesWithIdentity(created.styles, {
+          namespace: created.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
           source: created.options.source ?? fileName,
         });
         rules.push(...result.rules);
@@ -331,6 +379,39 @@ function collectImportedStaticValues(
     }
   }
   return result;
+}
+
+function derivedStyleNamespace(fileName: string, bindingName: string): string {
+  const binding = toKebabCase(bindingName);
+  const stripped = binding.replace(/-(styles|vars|theme)$/, '');
+  if (stripped !== binding && stripped.length > 0) return stripped;
+
+  const fileBase = fileName
+    .split(/[\\/]/)
+    .filter(Boolean)
+    .at(-1)
+    ?.replace(/\.[cm]?[tj]sx?$/, '');
+  const fileNamespace = fileBase && fileBase.length > 0 ? fileBase : binding;
+
+  if (binding === 'style' || binding === 'styles' || binding === 'base') return fileNamespace;
+  if (
+    binding === 'motion' ||
+    binding === 'orientations' ||
+    binding === 'overrides' ||
+    binding === 'sizes' ||
+    binding === 'variants'
+  ) {
+    return `${fileNamespace}-${binding}`;
+  }
+
+  return binding;
+}
+
+function toKebabCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[_\s]+/g, '-')
+    .toLowerCase();
 }
 
 function importedStaticValueRequests(sourceFile: ts.SourceFile): ImportedStaticValue[] {
@@ -451,7 +532,7 @@ function styleCreateCall(
   styleImports: StyleImports,
   localObjects: LocalObjectLiterals,
   staticValues: ReadonlyMap<string, unknown>,
-): { readonly options: CreateOptions; readonly styles: Record<string, StyleObject> } | null {
+): { readonly options: StyleIdentityOptions; readonly styles: Record<string, StyleObject> } | null {
   if (!isStyleCreateCall(initializer, styleImports.namespaces)) return null;
 
   const [stylesArgument, optionsArgument] = initializer.arguments;
@@ -466,7 +547,7 @@ function styleCreateCall(
   if (!styles) return null;
 
   return {
-    options: createOptionsFromObject(optionsArgument),
+    options: styleIdentityOptionsFromObject(optionsArgument),
     styles,
   };
 }
@@ -486,7 +567,7 @@ function styleDefineVarsCall(
   initializer: ts.Expression | undefined,
   styleNamespaces: ReadonlySet<string>,
 ): {
-  readonly options: CreateOptions;
+  readonly options: StyleIdentityOptions;
   readonly tokens: ts.ObjectLiteralExpression;
 } | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
@@ -496,7 +577,7 @@ function styleDefineVarsCall(
   if (!styleNamespaces.has(initializer.expression.expression.text)) return null;
   const [tokensArgument, optionsArgument] = initializer.arguments;
   if (!tokensArgument || !ts.isObjectLiteralExpression(tokensArgument)) return null;
-  return { options: createOptionsFromObject(optionsArgument), tokens: tokensArgument };
+  return { options: styleIdentityOptionsFromObject(optionsArgument), tokens: tokensArgument };
 }
 
 function styleCreateThemeCall(
@@ -504,7 +585,7 @@ function styleCreateThemeCall(
   styleNamespaces: ReadonlySet<string>,
 ): {
   readonly baseTokens: ts.Expression;
-  readonly options: CreateOptions;
+  readonly options: StyleIdentityOptions;
   readonly overrides: ts.ObjectLiteralExpression;
 } | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
@@ -518,7 +599,7 @@ function styleCreateThemeCall(
   }
   return {
     baseTokens,
-    options: createOptionsFromObject(optionsArgument),
+    options: styleIdentityOptionsFromObject(optionsArgument),
     overrides: overridesArgument,
   };
 }
@@ -631,7 +712,7 @@ function unwrapObjectLiteral(node: ts.Expression): ts.ObjectLiteralExpression | 
   return ts.isObjectLiteralExpression(current) ? current : null;
 }
 
-function createOptionsFromObject(node: ts.Expression | undefined): CreateOptions {
+function styleIdentityOptionsFromObject(node: ts.Expression | undefined): StyleIdentityOptions {
   if (!node || !ts.isObjectLiteralExpression(node)) return {};
   const options: { namespace?: string; source?: string } = {};
 

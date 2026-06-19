@@ -58,8 +58,7 @@ const appStyles = style.create(
       display: 'flex',
       flexWrap: 'wrap',
     },
-  },
-  { namespace: 'starterApp', source: 'src/app.tsx' },
+  }
 );
 
 export const starterAppStyleCss = style.emitAtomicCss(

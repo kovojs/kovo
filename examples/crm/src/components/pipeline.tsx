@@ -125,8 +125,7 @@ const pipelineStyles = style.create(
       fontVariantNumeric: 'tabular-nums',
       fontWeight: 600,
     },
-  },
-  { namespace: 'crm-pipeline', source: 'examples/crm/src/components/pipeline.tsx' },
+  }
 );
 
 export const pipelineStyleCss = style.emitAtomicCss(

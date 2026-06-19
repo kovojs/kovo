@@ -88,8 +88,7 @@ const chromeStyles = style.create(
     stageText: {
       textTransform: 'capitalize',
     },
-  },
-  { namespace: 'crm-chrome', source: 'examples/crm/src/components/chrome.tsx' },
+  }
 );
 
 export const crmChromeStyleCss = style.emitAtomicCss(
