@@ -133,12 +133,13 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
     `npx vitest --run packages/compiler/src/vite.test.ts -t "resolved Vite root|CSS asset manifest"`
     proves build-time Vite root resolution keeps CSS asset source names
     app-relative for route split matching.
-- [ ] Inline route-critical CSS from the collected manifest during document
+- [x] Inline route-critical CSS from the collected manifest during document
       rendering.
-  - Gap:
-    route-scoped critical selection is tracked by `plans/fine-grained-css.md`;
-    this phase currently emits a served stylesheet sink, not route-specific
-    `<style>` inlining.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/css.test.ts packages/cli/src/index.kovo-build.test.ts -t "serializes route page CSS facts|maps route page CSS facts|links only reachable build CSS chunks"`
+    proves the collected manifest is split by route facts and each built route
+    document inlines only its reachable `data-kovo-critical-href` base/route
+    critical CSS, excluding unrelated route CSS.
 
 ### Phase 2 — Route-scoped critical CSS (optional, builds on existing splitter)
 
@@ -147,11 +148,16 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
 > below is the shared prerequisite; check this item off with a pointer to that
 > ledger when fine-grained-css Phases 1–3 land.
 
-- [ ] Have `compileRouteModule` emit route→component CSS facts so the build can
+- [x] Have `compileRouteModule` emit route→component CSS facts so the build can
       feed `CssRouteSplitTarget` and use `createCssAssetResolver`
       (`css.ts:202`) to inline only the active route's critical CSS while the
       full sheet loads lazily. (Seam B) - Evidence: two routes with disjoint components inline disjoint critical CSS;
       shared atoms dedupe into the base chunk.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/css.test.ts packages/cli/src/index.kovo-build.test.ts -t "serializes route page CSS facts|maps route page CSS facts|links only reachable build CSS chunks"`
+    proves `compileRouteModule` serializes `routePageFacts[].css`, the facts map
+    to `CssRouteSplitTarget`, and two built routes inline/link disjoint route
+    chunks plus shared base CSS.
 
 ### Phase 3 — Migrate examples, starter, docs off the manual surface
 
