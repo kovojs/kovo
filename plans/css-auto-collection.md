@@ -163,10 +163,18 @@ route('/', { page, layout, stylesheets: [stylesheet('./styles.css', { theme: com
     returns no hits; `npx vitest --run examples/commerce/src/app.rendering.test.ts examples/commerce/src/app.test.ts`
     and `npx vitest --run examples/crm/src/interactive-app.test.ts examples/stackoverflow/src/interactive-app.test.ts`
     pass.
-- [ ] Remove `export const *StyleCss = style.emitAtomicCss(... __rules ...)` and
+- [x] Remove `export const *StyleCss = style.emitAtomicCss(... __rules ...)` and
       the `criticalCss: [...]` lists from `site/tutorial/steps/*` and the
       `create-kovo` starter; routes keep only
       `stylesheet('./styles.css', { theme })`.
+  - Evidence 2026-06-19:
+    `rg -n "emitAtomicCss|__rules|StyleCss|criticalCss" packages/create-kovo/templates site/src site/content site/tutorial -g'*.ts' -g'*.tsx' -g'*.md' -g'!*test.ts'`
+    returns no hits; `npx vitest --run packages/create-kovo/src/index.test.ts site/src/route-kit.test.ts`
+    and `corepack pnpm --filter @kovojs/site run build:css` pass.
+  - Caveat:
+    `corepack pnpm --filter @kovojs/site run build` is blocked by the existing
+    tutorial snippet extractor error `05-optimistic/src/app.ts:77`, after CSS
+    generation succeeds.
 - [ ] Update styling docs (`docs/`, starter README, `kovo explain`) to teach the
       one-import + no-export surface.
 

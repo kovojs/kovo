@@ -74,6 +74,12 @@ html.dark {
   color-scheme: dark;
 }
 
+@keyframes landing-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--ink);

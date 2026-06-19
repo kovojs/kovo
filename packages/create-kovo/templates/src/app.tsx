@@ -59,10 +59,6 @@ const appStyles = style.create({
   },
 });
 
-export const starterAppStyleCss = style.emitAtomicCss(
-  Object.values(appStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export const App = component({
   props: { cartCount: Number },
   state: () => ({ clicks: 0 }),

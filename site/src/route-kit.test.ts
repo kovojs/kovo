@@ -12,12 +12,12 @@ describe('site route stylesheet hints', () => {
     expect(siteStylesheet?.criticalCss).toContain('html.dark');
   });
 
-  it('records the current monolithic critical CSS overship baseline', () => {
+  it('keeps collected component atoms out of route-kit critical CSS', () => {
     const criticalCss = siteStylesheets[0]?.criticalCss ?? '';
 
-    expect(criticalCss).toContain('kv-site-landing');
-    expect(criticalCss).toContain('kv-site-docs-layout');
-    expect(criticalCss).toContain('kv-site-gallery');
-    expect(Buffer.byteLength(criticalCss, 'utf8')).toBeGreaterThan(40_000);
+    expect(criticalCss).not.toContain('kv-site-landing');
+    expect(criticalCss).not.toContain('kv-site-docs-layout');
+    expect(criticalCss).not.toContain('kv-site-gallery');
+    expect(Buffer.byteLength(criticalCss, 'utf8')).toBeLessThan(40_000);
   });
 });

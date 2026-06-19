@@ -139,9 +139,15 @@ the same hints serve full-page renders, mutation fragments, and deferred fragmen
 declares its stylesheet on the route:
 
 ```tsx
-import { route } from '@kovojs/server';
+import { route, stylesheet } from '@kovojs/server';
+import { siteThemeCss } from './theme.js';
 
-export const siteStylesheets = ['/assets/site.css'] as const;
+export const siteStylesheets = [
+  stylesheet('./styles.css', {
+    href: '/assets/site.css',
+    theme: siteThemeCss,
+  }),
+] as const;
 
 export const cartPage = route('/cart', {
   meta: siteMeta,
@@ -150,8 +156,9 @@ export const cartPage = route('/cart', {
 });
 ```
 
-Each stylesheet entry can carry `preload` and `criticalCss`, and the app shell dedupes assets in page
-order.
+App-authored `style.create(...)` rules stay in TSX. `kovo build` collects those component atoms into
+the emitted stylesheet, so app code does not export CSS strings or read private rule metadata by
+hand.
 
 ## Declare stylesheets for fragments and streams
 

@@ -186,10 +186,6 @@ const docsLayoutStyles = style.create(
   { namespace: 'site-docs-layout', source: 'site/src/components/docs-layout.tsx' },
 );
 
-export const docsLayoutStyleCss = style.emitAtomicCss(
-  Object.values(docsLayoutStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export type { DocsRouteContent, DocsRoutePageData, SectionIndexInput };
 
 /** TSX route page for docs-chrome pages. Markdown/API prose remains the single

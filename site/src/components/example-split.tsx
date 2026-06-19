@@ -141,10 +141,6 @@ const exampleSplitStyles = style.create(
   { namespace: 'site-example-split', source: 'site/src/components/example-split.tsx' },
 );
 
-export const exampleSplitStyleCss = style.emitAtomicCss(
-  Object.values(exampleSplitStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export interface ExampleSourceFile {
   /** Pre-rendered code-window HTML for this source file. */
   html: string;

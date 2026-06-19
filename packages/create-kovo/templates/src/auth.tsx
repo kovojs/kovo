@@ -221,10 +221,6 @@ const authStyles = style.create({
   },
 });
 
-export const starterAuthStyleCss = style.emitAtomicCss(
-  Object.values(authStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 // SPEC.md section 6.3 and section 9.1: the auth recipe keeps credential flows
 // as ordinary mutation forms. Browsers without JS post directly to /_m/*; the
 // `enhance` attribute only upgrades the same form to the fragment wire.

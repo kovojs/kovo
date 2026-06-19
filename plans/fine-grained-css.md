@@ -132,13 +132,15 @@ mutation pulls `fragments/cart.css` if not already present.
 
 ### Phase 0 — Baseline measurement & topology decision
 
-- [x] Quantify today's overship baseline with a committed test showing the
-      current site route kit inlines one monolithic critical sheet that combines
-      route-specific namespaces before any route-specific splitter can run.
+- [x] Quantify the pre-migration overship baseline with a committed test showing
+      the site route kit inlined one monolithic critical sheet that combined
+      route-specific namespaces before any route-specific splitter could run.
   - Evidence 2026-06-19:
-    `npx vitest --run site/src/route-kit.test.ts` asserts the current site
-    critical sheet contains landing, docs-layout, and gallery namespaces in one
-    monolithic inline sheet over 40 KB.
+    `git show a557efdb:site/src/route-kit.test.ts` records the baseline test
+    that asserted landing, docs-layout, and gallery namespaces in one monolithic
+    inline sheet over 40 KB. Current `site/src/route-kit.test.ts` now asserts
+    those component atoms are not manually listed in critical CSS after
+    `plans/css-auto-collection.md` Phase 3.
 - [ ] Add per-route byte accounting that records linked CSS and inlined critical
       CSS vs. bytes reachable from that route's component graph. Capture
       commerce + site numbers as the regression baseline this plan must beat.

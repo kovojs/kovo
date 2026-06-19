@@ -219,7 +219,9 @@ describe('create-kovo starter', () => {
       expect(appSource).toContain("import * as style from '@kovojs/style';");
       expect(appSource).toContain('style.create(');
       expect(appSource).toContain('style.attrs(appStyles.root)');
-      expect(appSource).toContain('starterAppStyleCss');
+      expect(appSource).not.toContain('starterAppStyleCss');
+      expect(appSource).not.toContain('emitAtomicCss');
+      expect(appSource).not.toContain('__rules');
       expect(appSource).toContain('props: { cartCount: Number }');
       expect(appSource).toContain('Starter cart count: {cartCount}');
       expect(appSource).toContain('<main');
@@ -238,9 +240,14 @@ describe('create-kovo starter', () => {
       expect(appShellSource).toContain('createRequestHandler');
       expect(appShellSource).toContain('layout');
       expect(appShellSource).toContain('route');
+      expect(appShellSource).toContain('stylesheet');
       expect(appShellSource).not.toContain('@kovojs/server/app-shell/core');
       expect(appShellSource).not.toContain('@kovojs/server/app-shell/client-modules');
-      expect(appShellSource).toContain('criticalCss: starterCriticalCss');
+      expect(appShellSource).toContain(
+        'stylesheets: [stylesheet({ href: starterStylesheetHref, theme: starterThemeCss })]',
+      );
+      expect(appShellSource).not.toContain('criticalCss');
+      expect(appShellSource).not.toContain('starterCriticalCss');
       expect(appShellSource).toContain('export const starterLayout = layout<StarterRequest>');
       expect(appShellSource).toContain('data-session="${request.session?.user.id ?? \'guest\'}"');
       expect(appShellSource).toContain('db: () => starterDb');
@@ -268,7 +275,9 @@ describe('create-kovo starter', () => {
       expect(authSource).toContain("import * as style from '@kovojs/style';");
       expect(authSource).toContain('style.create(');
       expect(authSource).toContain('style.attrs(authStyles.form)');
-      expect(authSource).toContain('starterAuthStyleCss');
+      expect(authSource).not.toContain('starterAuthStyleCss');
+      expect(authSource).not.toContain('emitAtomicCss');
+      expect(authSource).not.toContain('__rules');
       expect(authSource).toContain('betterAuthSession');
       expect(authSource).toContain('betterAuthSignInEmailMutation');
       expect(authSource).toContain('betterAuthSignOutMutation');

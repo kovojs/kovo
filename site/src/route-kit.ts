@@ -1,28 +1,14 @@
 import { stylesheet } from '@kovojs/server';
 
-import { chromeStyleCss } from './components/chrome.js';
-import { docsLayoutStyleCss } from './components/docs-layout.js';
-import { exampleSplitStyleCss } from './components/example-split.js';
-import { galleryStyleCss } from './components/gallery.js';
-import { landingStyleCss } from './components/landing.js';
 import type { DocPage, NavLink } from './content.js';
-import { searchDialogStyleCss } from './document-template.js';
 import { siteThemeCss } from './theme.js';
 
 // Shared route data helpers used by the authored docs app shell and content builders.
 
 export const siteStylesheets = [
   stylesheet('./styles.css', {
-    criticalCss: [
-      siteThemeCss,
-      chromeStyleCss,
-      docsLayoutStyleCss,
-      exampleSplitStyleCss,
-      galleryStyleCss,
-      landingStyleCss,
-      searchDialogStyleCss,
-    ],
     href: '/assets/site.css',
+    theme: siteThemeCss,
   }),
 ] as const;
 

@@ -140,10 +140,6 @@ const searchStyles = style.create(
   { namespace: 'site-search-dialog', source: 'site/src/document-template.ts' },
 );
 
-export const searchDialogStyleCss = style.emitAtomicCss(
-  Object.values(searchStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 const searchDialogClass = style.attrs(searchStyles.dialog).class ?? '';
 const searchInputClass = style.attrs(searchStyles.input).class ?? '';
 const searchResultsClass = style.attrs(searchStyles.results).class ?? '';

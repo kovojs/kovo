@@ -680,11 +680,6 @@ const landingStyles = style.create(
   { namespace: 'site-landing', source: 'site/src/components/landing.tsx' },
 );
 
-export const landingStyleCss = `${style.emitAtomicCss(
-  Object.values(landingStyles).flatMap((entry) => entry.__rules ?? []),
-)}
-@keyframes landing-blink{50%{opacity:0}}`;
-
 export interface LandingPageProps {
   clients: ClientHrefs;
   loaderGzipBytes: number;

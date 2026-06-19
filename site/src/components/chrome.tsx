@@ -427,10 +427,6 @@ const chromeStyles = style.create(
   { namespace: 'site-chrome', source: 'site/src/components/chrome.tsx' },
 );
 
-export const chromeStyleCss = style.emitAtomicCss(
-  Object.values(chromeStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export interface SiteHeaderProps {
   activePath?: string;
   clients: ClientHrefs;

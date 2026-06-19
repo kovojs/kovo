@@ -113,10 +113,6 @@ const galleryStyles = style.create(
   { namespace: 'site-gallery', source: 'site/src/components/gallery.tsx' },
 );
 
-export const galleryStyleCss = style.emitAtomicCss(
-  Object.values(galleryStyles).flatMap((entry) => entry.__rules ?? []),
-);
-
 export interface GalleryRouteView {
   /** Route path under /gallery, e.g. `/components/button`. */
   path: string;
