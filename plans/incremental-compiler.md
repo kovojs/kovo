@@ -179,10 +179,18 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
 
 ## Phase 2 — Cross-module dependency tracking (correctness core)
 
-- [ ] Make `compileComponentModule` **record the footprint** of cross-module facts it actually
-      consumed (which package prefixes resolved, which mutation inputs referenced, which registry
-      facts read) and return it on `CompileResult` (internal field). This is the per-file
-      "referenced signatures" of the `.tsbuildinfo` analogue.
+- [x] Make `compileComponentModule` return an internal dependency footprint on `CompileResult`.
+      Start conservatively with the whole declared cross-module input set so cache invalidation is
+      correct before it is precise.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t "dependency footprint|emits one server file"`
+    proves `CompileResult.dependencyFootprint` records effective package prefixes, registry facts,
+    previous registry facts, query-shape inputs, and compile roots; `corepack pnpm exec vitest --run tests/compiler-determinism.test.ts`
+    proves the new internal field remains byte-stable across two fresh processes.
+- [ ] Narrow `CompileResult.dependencyFootprint` from the whole declared fact set to the
+      cross-module facts actually consumed (which package prefixes resolved, which mutation inputs
+      referenced, which registry facts read). This is the per-file "referenced signatures" of the
+      `.tsbuildinfo` analogue.
 - [ ] Narrow the Phase 1 key from "all facts" to `hash(footprint slice)`, so a change to an
       unrelated module's facts does not invalidate this module.
 - [ ] Build the inverse index (fact → dependent modules) so when the whole-program graph changes,

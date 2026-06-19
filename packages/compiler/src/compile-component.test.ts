@@ -75,6 +75,44 @@ describe('compileComponentModule', () => {
     expect(() => assertRenderEquivalence(result)).not.toThrow();
   });
 
+  it('records a conservative compile dependency footprint for incremental cache invalidation', () => {
+    const packageComponentPrefixes = [{ packageName: '@acme/widgets', prefix: 'acme-' }];
+    const previousRegistryFacts = { components: ['components/legacy-card/legacy-card'] };
+    const queryShapeFacts = [
+      {
+        query: 'cart',
+        shape: { count: 'number' },
+        source: 'generated/queries/cart.shape.ts',
+      },
+    ] as const;
+    const queryShapes = { cart: { count: 'number' } } as const;
+    const registryFacts = {
+      mutationInputs: { 'cart/add': [] },
+      queries: { cart: 'CartQuery' },
+      routes: ['/cart'],
+    };
+
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-badge.tsx',
+      packageComponentPrefixes,
+      packagePrefixDiscoveryRoot: '/workspace/app',
+      previousRegistryFacts,
+      queryShapeFacts,
+      queryShapes,
+      registryFacts,
+      source: cartBadgeSource,
+    });
+
+    expect(result.dependencyFootprint).toEqual({
+      packageComponentPrefixes,
+      packagePrefixDiscoveryRoot: '/workspace/app',
+      previousRegistryFacts,
+      queryShapeFacts,
+      queryShapes,
+      registryFacts,
+    });
+  });
+
   it('removes adjacent client-only named imports without overlapping server cleanup edits', () => {
     const result = compileComponentModule({
       fileName: 'components/gallery/meter-demo.tsx',

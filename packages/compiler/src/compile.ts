@@ -62,6 +62,7 @@ import type {
   CompileComponentOptions,
   CompileResult,
   ClockUpdatePlanFact,
+  CompileDependencyFootprint,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   StateDeriveFact,
@@ -88,6 +89,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     const authoringSurfaceDiagnostics = validateAuthoringSurface(options);
     return {
       ...createEmptyCompileResult(),
+      dependencyFootprint: compileDependencyFootprint(options),
       diagnostics: authoringSurfaceDiagnostics,
       files: [
         {
@@ -284,6 +286,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
 
   return {
     componentGraphFacts,
+    dependencyFootprint: compileDependencyFootprint(compileOptions),
     diagnostics,
     files: [
       { fileName: fileNames.server, kind: 'server', source: serverModule.source },
@@ -326,6 +329,23 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     renderEquivalenceChecks,
     updateCoverage,
     viewTransitions: structuralLowering.viewTransitionStamps,
+  };
+}
+
+function compileDependencyFootprint(options: CompileComponentOptions): CompileDependencyFootprint {
+  return {
+    ...(options.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: options.packageComponentPrefixes }),
+    ...(options.packagePrefixDiscoveryRoot === undefined
+      ? {}
+      : { packagePrefixDiscoveryRoot: options.packagePrefixDiscoveryRoot }),
+    ...(options.previousRegistryFacts === undefined
+      ? {}
+      : { previousRegistryFacts: options.previousRegistryFacts }),
+    ...(options.queryShapeFacts === undefined ? {} : { queryShapeFacts: options.queryShapeFacts }),
+    ...(options.queryShapes === undefined ? {} : { queryShapes: options.queryShapes }),
+    ...(options.registryFacts === undefined ? {} : { registryFacts: options.registryFacts }),
   };
 }
 

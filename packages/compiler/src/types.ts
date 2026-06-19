@@ -128,6 +128,20 @@ export type RegistryMutationInputFacts = Readonly<
 >;
 
 /**
+ * @internal Conservative cross-module dependency footprint for one component compile. Phase 2 of
+ * the incremental compiler narrows this from whole declared fact sets to the exact slices read by
+ * lowering; until then it is intentionally over-broad and correctness-preserving.
+ */
+export interface CompileDependencyFootprint {
+  packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
+  packagePrefixDiscoveryRoot?: string;
+  previousRegistryFacts?: RegistryFacts;
+  queryShapeFacts?: readonly QueryShapeFact[];
+  queryShapes?: Record<string, QueryShape>;
+  registryFacts?: RegistryFacts;
+}
+
+/**
  * @internal The graph slice {@link deriveRegistryFactsFromGraph} reads from a Kovo explain
  * input. Lowered-IR shape; in-repo use only (SPEC.md §5.2).
  */
@@ -270,6 +284,7 @@ export interface CompileResult {
   clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
   cssAssets: readonly ComponentCssAsset[];
+  dependencyFootprint: CompileDependencyFootprint;
   diagnostics: readonly CompilerDiagnostic[];
   files: readonly EmittedFile[];
   handlerExports: readonly string[];
@@ -440,6 +455,7 @@ export function createEmptyCompileResult(): CompileResult {
     clientExports: [],
     componentGraphFacts: [],
     cssAssets: [],
+    dependencyFootprint: {},
     diagnostics: [],
     files: [],
     handlerExports: [],

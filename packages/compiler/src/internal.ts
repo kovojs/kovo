@@ -39,6 +39,7 @@ export type { GeneratedOutputWriteFact, OutputContext } from './output-context-f
 export type {
   CompileArtifactFileNames,
   CompileComponentOptions,
+  CompileDependencyFootprint,
   CompileResult,
   ComponentGraphFact,
   EmittedFile,

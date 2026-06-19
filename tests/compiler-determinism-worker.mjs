@@ -42,6 +42,7 @@ try {
         componentGraphFacts: result.componentGraphFacts,
         corpus: corpus.name,
         cssAssets: result.cssAssets,
+        dependencyFootprint: result.dependencyFootprint,
         fileName: file.fileName,
         files: result.files,
         handlerExports: result.handlerExports,

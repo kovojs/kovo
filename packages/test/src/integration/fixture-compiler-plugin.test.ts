@@ -8,6 +8,7 @@ function compileResult(source: string): CompileResult {
     componentGraphFacts: [],
     clientExports: [],
     cssAssets: [],
+    dependencyFootprint: {},
     diagnostics: [],
     files: [],
     handlerExports: [],
