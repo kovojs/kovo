@@ -48,7 +48,10 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
     // SPEC.md §9.1: Kovo-Targets is read from the live DOM so patched-in
     // fragment targets participate in the stateless enhanced mutation request.
     const target =
-      element.getAttribute('kovo-fragment-target') ?? element.id ?? element.getAttribute('kovo-c');
+      element.getAttribute('kovo-fragment-target') ??
+      element.getAttribute('id') ??
+      (typeof element.id === 'string' ? element.id : null) ??
+      element.getAttribute('kovo-c');
     const deps = readDeps(element.getAttribute('kovo-deps'));
     if (!target) continue;
 

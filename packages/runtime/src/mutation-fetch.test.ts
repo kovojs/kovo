@@ -146,6 +146,43 @@ describe('enhanced mutation fetch', () => {
     });
   });
 
+  it('reads submitted form targets from attributes before shadowable DOM properties', async () => {
+    const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
+      async text() {
+        return '<kovo-fragment target="your-answer"><form></form></kovo-fragment>';
+      },
+    }));
+
+    await fetchEnhancedMutation({
+      fetch,
+      form: {
+        action: '/_m/postAnswer',
+        getAttribute(name: string) {
+          if (name === 'id') return 'your-answer';
+          return null;
+        },
+        id: { toString: () => '[object HTMLInputElement]' },
+      },
+      formData: new FormData(),
+      idem: 'idem_shadowed_id',
+      root: new FakeTargetRoot([]),
+    });
+
+    expect(fetch).toHaveBeenCalledWith('/_m/postAnswer', {
+      body: expect.any(FormData),
+      headers: {
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Form-Target': 'your-answer',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_shadowed_id',
+        'Kovo-Live-Targets': '',
+        'Kovo-Targets': '',
+      },
+      keepalive: true,
+      method: 'POST',
+    });
+  });
+
   it('defaults to POST and omits upload progress when no progress hook is configured', async () => {
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       async text() {

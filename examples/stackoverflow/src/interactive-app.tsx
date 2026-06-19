@@ -9,6 +9,7 @@ import {
   stylesheet,
   type RequestHandler,
 } from '@kovojs/server';
+import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 import { QuestionDetailRegion, questionDetailStyleCss } from './components/question-detail.js';
 import { QuestionListRegion, questionListStyleCss } from './components/question-list.js';
@@ -51,6 +52,76 @@ const soStaticQuestionPaths = [
 const SoLayout = layout({
   render: (_queries, _state, { children }) => <SoShell>{children}</SoShell>,
 });
+
+// SPEC.md §4.2: the source-served route still needs the same derived component
+// identities as lowered components so runtime root stamps advertise morphable
+// live targets in the full GET document.
+QuestionDetailRegion.name = 'components/question-detail/question-detail-region';
+QuestionListRegion.name = 'components/question-list/question-list-region';
+
+const sourceLiveTargetRenderers = [
+  stampSourceLiveTargetRenderer(
+    componentLiveTargetRenderer({
+      component: QuestionListRegion,
+      componentId: QuestionListRegion.name,
+    }),
+    { deps: 'questionList questionScore', target: 'question-list-region' },
+  ),
+  stampSourceLiveTargetRenderer(
+    componentLiveTargetRenderer({
+      component: QuestionDetailRegion,
+      componentId: QuestionDetailRegion.name,
+    }),
+    { deps: 'answers question', target: 'question-detail-region' },
+  ),
+] as const;
+
+function stampSourceLiveTargetRenderer<Request>(
+  renderer: LiveTargetRenderer<Request>,
+  attrs: { deps: string; target: string },
+): LiveTargetRenderer<Request> {
+  return {
+    ...renderer,
+    async render(context) {
+      const html = await renderer.render(context);
+      const props =
+        Object.keys(context.props).length === 0 ? undefined : JSON.stringify(context.props);
+      return stampSourceRegionRoot(html, {
+        component: renderer.component,
+        deps: attrs.deps,
+        ...(props === undefined ? {} : { props }),
+        target: attrs.target,
+      });
+    },
+  };
+}
+
+function stampSourceRegionRoot(
+  html: string,
+  attrs: { component: string; deps: string; props?: string; target: string },
+): string {
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
+  if (!opening) return html;
+  const renderedAttrs = [
+    `kovo-c="${attrs.target}"`,
+    `kovo-deps="${attrs.deps}"`,
+    `kovo-fragment-target="${attrs.target}"`,
+    `kovo-live-component="${attrs.component}"`,
+    attrs.props === undefined ? '' : `kovo-props="${escapeSourceAttribute(attrs.props)}"`,
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  return `<${opening[1]} ${renderedAttrs}${opening[2]}>${html.slice(opening[0].length)}`;
+}
+
+function escapeSourceAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
 
 export interface SoInteractiveApp {
   app: ReturnType<typeof createApp>;
@@ -97,6 +168,7 @@ export async function buildSoInteractiveApp(
     clientModules: createMemoryVersionedClientModuleRegistry(),
     db: () => database,
     document: { lang: 'en-US' },
+    liveTargetRenderers: sourceLiveTargetRenderers,
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
     queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],
     routes: [

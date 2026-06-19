@@ -40,7 +40,7 @@ export class DomMorphTarget implements MorphTarget {
   replaceWithHtml(html: string): void {
     const template = document.createElement('template');
     template.innerHTML = html.trim();
-    const next = template.content.firstElementChild;
+    const next = firstMorphElement(template.content);
     const activeState = captureActiveDomState(this.element);
     const scrollStates = captureDomScrollStates(this.element);
 
@@ -53,6 +53,23 @@ export class DomMorphTarget implements MorphTarget {
     restoreActiveDomState(activeState);
     restoreDomScrollStates(scrollStates);
   }
+}
+
+function firstMorphElement(content: DocumentFragment): Element | null {
+  for (const child of content.children) {
+    if (isFragmentResourceHint(child)) continue;
+    return child;
+  }
+  return null;
+}
+
+function isFragmentResourceHint(element: Element): boolean {
+  return (
+    element.tagName === 'LINK' &&
+    (element.getAttribute('rel') ?? '')
+      .split(/\s+/)
+      .some((token) => token.toLowerCase() === 'stylesheet')
+  );
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */

@@ -112,4 +112,22 @@ describe('mutation targets', () => {
     expect(Object.hasOwn(mutationTargetsModule, 'serializeLiveTargetEntries')).toBe(false);
     expect(Object.hasOwn(mutationTargetsModule, 'liveTargetHeaderSeparator')).toBe(false);
   });
+
+  it('prefers the id attribute over shadowable DOM id properties', () => {
+    const root = new FakeTargetRoot([
+      Object.assign(
+        new FakeTargetElement({
+          id: 'your-answer',
+          'kovo-deps': 'answers question',
+        }),
+        { id: { toString: () => '[object HTMLInputElement]' } },
+      ) as unknown as FakeTargetElement,
+    ]);
+
+    expect(readLiveTargetSnapshot(root)).toMatchObject({
+      header: 'your-answer=answers question',
+      liveHeader: 'your-answer#your-answer:{}',
+      targets: ['your-answer=answers question'],
+    });
+  });
 });

@@ -478,7 +478,78 @@ async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps)
     slots: ComponentRenderSlots,
   ) => unknown;
   const rendered = render({ ...props, ...queries }, state, slots) as JsxNode;
-  return renderJsxChildren(rendered);
+  const html = await renderJsxChildren(rendered);
+  return stampKovoComponentRoot(component, props, html);
+}
+
+function stampKovoComponentRoot(
+  component: KovoJsxComponent,
+  props: JsxProps,
+  html: string,
+): string {
+  const metadata = componentRootStampMetadata(component, props);
+  if (!metadata) return html;
+
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
+  if (!opening) return html;
+
+  const tagName = opening[1];
+  if (tagName === undefined) return html;
+  let attrs = opening[2] ?? '';
+  if (attributeValue(attrs, 'kovo-c') === undefined) {
+    attrs = setOrAppendAttribute(attrs, 'kovo-c', metadata.domName);
+  }
+  attrs = setOrAppendAttribute(
+    attrs,
+    'kovo-deps',
+    mergeAttributeTokens(attributeValue(attrs, 'kovo-deps'), metadata.deps).join(' '),
+  );
+  attrs = setOrAppendAttribute(attrs, 'kovo-fragment-target', metadata.domName);
+  attrs = setOrAppendAttribute(attrs, 'kovo-live-component', metadata.componentName);
+  if (metadata.props !== undefined) {
+    attrs = setOrAppendAttribute(attrs, 'kovo-props', JSON.stringify(metadata.props));
+  }
+
+  return `<${tagName}${attrs}>${html.slice(opening[0].length)}`;
+}
+
+function componentRootStampMetadata(
+  component: KovoJsxComponent,
+  props: JsxProps,
+): {
+  componentName: string;
+  deps: string[];
+  domName: string;
+  props?: Record<string, unknown>;
+} | null {
+  if (component.definition.disableServerRefresh) return null;
+  if (typeof component.name !== 'string' || component.name.length === 0) return null;
+  if (!isRecord(component.definition.queries)) return null;
+
+  const deps = Object.keys(component.definition.queries);
+  if (deps.length === 0) return null;
+
+  const domName = component.name.split('/').filter(Boolean).at(-1);
+  if (!domName) return null;
+
+  const propKeys = componentPropKeys(component);
+  const stampedProps =
+    propKeys.length === 0
+      ? undefined
+      : Object.fromEntries(propKeys.map((key) => [key, props[key]]));
+
+  return {
+    componentName: component.name,
+    deps,
+    domName,
+    ...(stampedProps === undefined ? {} : { props: stampedProps }),
+  };
+}
+
+function componentPropKeys(component: KovoJsxComponent): string[] {
+  const propDefinitions = (component.definition as { props?: unknown }).props;
+  if (!isRecord(propDefinitions)) return [];
+  return Object.keys(propDefinitions);
 }
 
 async function loadComponentQueries(
@@ -565,6 +636,58 @@ function isQueryArgsBinding(
   value: unknown,
 ): value is { args: (props: JsxProps) => unknown; query: QueryDefinition } {
   return isRecord(value) && typeof value.args === 'function' && isQueryDefinition(value.query);
+}
+
+function mergeAttributeTokens(
+  existing: string | undefined,
+  additions: readonly string[],
+): string[] {
+  return [
+    ...new Set([
+      ...(existing ?? '')
+        .split(/[\s,]+/)
+        .map((token) => token.trim())
+        .filter(Boolean),
+      ...additions,
+    ]),
+  ];
+}
+
+function attributeValue(attrs: string, name: string): string | undefined {
+  const match = attributePattern(name).exec(attrs);
+  return match ? unescapeAttribute(match[1] ?? match[2] ?? match[3] ?? '') : undefined;
+}
+
+function setOrAppendAttribute(attrs: string, name: string, value: string): string {
+  const rendered = `${name}="${escapeAttribute(value)}"`;
+  const pattern = attributePattern(name);
+  if (pattern.test(attrs)) {
+    return attrs.replace(pattern, (match) => `${match.startsWith(' ') ? ' ' : ''}${rendered}`);
+  }
+  return `${attrs} ${rendered}`;
+}
+
+function attributePattern(name: string): RegExp {
+  return new RegExp(
+    `(?:^|\\s)${escapeRegExp(name)}(?:\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>` +
+      '`' +
+      `]+)))?(?=\\s|$|/|>)`,
+    'i',
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function unescapeAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&apos;', "'")
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

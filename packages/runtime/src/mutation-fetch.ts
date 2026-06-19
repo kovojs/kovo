@@ -9,7 +9,7 @@ import { definedProps } from './defined-props.js';
 export interface EnhancedFormLike {
   action: string;
   getAttribute?(name: string): string | null;
-  id?: string | undefined;
+  id?: string | { toString(): string } | undefined;
   method?: string | undefined;
 }
 
@@ -102,7 +102,8 @@ export async function fetchEnhancedMutation(
 function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {
   const target =
     form.getAttribute?.('kovo-fragment-target') ??
-    form.id ??
+    form.getAttribute?.('id') ??
+    (typeof form.id === 'string' ? form.id : undefined) ??
     form.getAttribute?.('kovo-c') ??
     undefined;
 
