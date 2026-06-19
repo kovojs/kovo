@@ -36,6 +36,7 @@ export type DiagnosticCode =
   | 'KV310'
   | 'KV311'
   | 'KV314'
+  | 'KV315'
   | 'KV320'
   | 'KV330'
   | 'KV402'
@@ -152,6 +153,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV310: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV311: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV314: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
+  KV315: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
@@ -525,6 +527,18 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'renderOnce position reads a query invalidated by a modeled write.',
+  },
+  KV315: {
+    code: 'KV315',
+    help: [
+      'Would lower to: a derive that re-runs from an explicit clocks input such as now.ago.',
+      'Blocked reason: Date.now() and new Date() read the wall clock without a declared cadence, so the update plan can freeze time-derived UI.',
+      'Fixes: declare a component clocks entry and pass now.<name> into the derive, or mark the clock renderOnce when freezing the value is intentional.',
+      'SPEC §4.8 and §4.9 require derive inputs to name every fact that can change rendered output.',
+      'Escape: renderOnce is the documented suppression for intentionally immutable clock output.',
+    ].join('\n'),
+    severity: 'warn',
+    message: 'Untracked clock read in derive; use a declared clocks input.',
   },
   KV320: {
     code: 'KV320',

@@ -31,6 +31,7 @@ import {
 import { validateLiteralHrefs } from './navigation.js';
 import { validateOutputContexts } from '../security/output-context.js';
 import { queryShapeFactDiagnostics } from '../types.js';
+import { validateUntrackedClockReadsInDerives } from './temporal.js';
 
 interface ValidatorContext {
   componentName: string;
@@ -66,6 +67,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateStampExpressionDrift(options.source, originalModel, options),
   ({ model, options, source }) => validateEventPayloads(source, model, options),
   ({ model, options, source }) => validateDirectDbAccess(source, model, options.fileName),
+  ({ model, options, source }) =>
+    validateUntrackedClockReadsInDerives(source, model, options.fileName),
   ({ options, originalModel }) =>
     validateIdrefs(
       options.source,

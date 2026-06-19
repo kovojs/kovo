@@ -41,6 +41,12 @@ export interface PropertyAccessPathModel {
   terminalName: string;
 }
 
+export interface TemporalReadModel {
+  end: number;
+  kind: 'Date.now' | 'new Date';
+  start: number;
+}
+
 export interface IdentifierReferenceModel {
   end: number;
   name: string;
@@ -61,6 +67,7 @@ export interface CallExpressionModel {
   argumentSpans: readonly SourceSpan[];
   argumentStringLiteralArrayValues: readonly (readonly string[] | null)[];
   argumentStaticValues: readonly (StaticLiteralValue | undefined)[];
+  argumentTemporalReads: readonly (readonly TemporalReadModel[])[];
   end: number;
   exportedConstName?: string;
   name: string;
@@ -86,6 +93,7 @@ export interface JsxExpressionModel {
   references: readonly string[];
   solePropertyAccessPath?: string;
   start: number;
+  temporalReads: readonly TemporalReadModel[];
 }
 
 export interface JsxCommentModel {
@@ -1484,6 +1492,9 @@ function callExpressionModel(
       stringLiteralArrayValuesFromExpression(argument),
     ),
     argumentStaticValues: node.arguments.map((argument) => staticLiteralValue(argument)),
+    argumentTemporalReads: node.arguments.map((argument) =>
+      temporalReadModels(sourceFile, argument),
+    ),
     end: node.getEnd(),
     ...exportedConstInitializerName(node),
     name: node.expression.getText(sourceFile),
@@ -1524,6 +1535,7 @@ function jsxExpressionModel(
     references: referenceIdentifiers(expression),
     ...(solePath ? { solePropertyAccessPath: solePath } : {}),
     start,
+    temporalReads: temporalReadModels(sourceFile, expression),
   };
 }
 
@@ -1637,6 +1649,52 @@ function jsxAttributeExpressionStaticValue(
 function solePropertyAccessPathFromExpression(expression: ts.Expression): string | null {
   const unwrapped = unwrapExpression(expression);
   return ts.isPropertyAccessExpression(unwrapped) ? propertyAccessPath(unwrapped) : null;
+}
+
+function temporalReadModels(sourceFile: ts.SourceFile, node: ts.Node): TemporalReadModel[] {
+  const reads: TemporalReadModel[] = [];
+
+  const visit = (current: ts.Node): void => {
+    if (isDateNowCall(current)) {
+      reads.push({
+        end: current.getEnd(),
+        kind: 'Date.now',
+        start: current.getStart(sourceFile),
+      });
+    } else if (isZeroArgNewDate(current)) {
+      reads.push({
+        end: current.getEnd(),
+        kind: 'new Date',
+        start: current.getStart(sourceFile),
+      });
+    }
+
+    ts.forEachChild(current, visit);
+  };
+
+  visit(node);
+  return reads;
+}
+
+function isDateNowCall(node: ts.Node): node is ts.CallExpression {
+  return (
+    ts.isCallExpression(node) &&
+    node.arguments.length === 0 &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    ts.isIdentifier(node.expression.expression) &&
+    node.expression.expression.text === 'Date' &&
+    node.expression.name.text === 'now'
+  );
+}
+
+function isZeroArgNewDate(node: ts.Node): node is ts.NewExpression {
+  return (
+    ts.isNewExpression(node) &&
+    node.arguments !== undefined &&
+    node.arguments.length === 0 &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'Date'
+  );
 }
 
 function zeroArgArrowModel(

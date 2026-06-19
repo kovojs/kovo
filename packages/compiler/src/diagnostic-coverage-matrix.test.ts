@@ -862,6 +862,32 @@ export const CoverageBad = component({
       }).diagnostics,
   },
   {
+    code: 'KV315',
+    spec: 'SPEC.md §4.8/§4.9',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'clock-derive-ok.tsx',
+        source: `
+export const ClockDeriveOk$label = derive(['cart'], (cart) => cart.count);
+
+export const ClockDeriveOk = component({
+  render: () => <output data-derive="cart.ClockDeriveOk$label">0</output>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'clock-derive-bad.tsx',
+        source: `
+export const ClockDeriveBad$label = derive(['cart'], (cart) => Date.now() - new Date().getTime());
+
+export const ClockDeriveBad = component({
+  render: () => <output data-derive="cart.ClockDeriveBad$label">0</output>,
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV320',
     spec: 'SPEC.md §6.4',
     positive: () =>
@@ -1151,6 +1177,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "negativeCount": 1,
           "positiveCount": 0,
           "spec": "SPEC.md §4.9",
+        },
+        {
+          "code": "KV315",
+          "negativeCount": 2,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.8/§4.9",
         },
         {
           "code": "KV320",
@@ -1655,6 +1687,22 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 44,
             "line": 5,
+          },
+        },
+        {
+          "code": "KV315",
+          "fileName": "clock-derive-bad.tsx",
+          "help": "Would lower to: a derive that re-runs from an explicit clocks input such as now.ago.
+      Blocked reason: Date.now() and new Date() read the wall clock without a declared cadence, so the update plan can freeze time-derived UI.
+      Fixes: declare a component clocks entry and pass now.<name> into the derive, or mark the clock renderOnce when freezing the value is intentional.
+      SPEC §4.8 and §4.9 require derive inputs to name every fact that can change rendered output.
+      Escape: renderOnce is the documented suppression for intentionally immutable clock output.",
+          "length": 10,
+          "message": "Untracked clock read in derive; use a declared clocks input. Date.now in ClockDeriveBad$label",
+          "severity": "warn",
+          "start": {
+            "column": 64,
+            "line": 2,
           },
         },
         {

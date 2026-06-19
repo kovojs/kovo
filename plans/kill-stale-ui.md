@@ -276,8 +276,15 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   - [ ] Extend KV410 with the `volatile:'time'` output facet for raw-SQL `now()`
         projections (`req.now`); extend the §11.1/§10.2 read-set deriver to flag
         time-predicate WHEREs (`expiresAt > req.now`) as time-volatile rowsets.
-  - [ ] **KV315 (warn):** a raw `Date.now()`/`new Date()` read in a derive is an
+  - [x] **KV315 (warn):** a raw `Date.now()`/`new Date()` read in a derive is an
         untracked clock; teaching message redirects to a declared `clocks` input.
+    - Evidence 2026-06-19: `packages/compiler/src/scan/parse.ts` emits typed
+      temporal-read facts for `Date.now()` / zero-arg `new Date()` and
+      `packages/compiler/src/validate/temporal.ts` emits warning KV315 for those
+      facts in exported `derive()` bodies; focused tests passed
+      `packages/compiler/src/scan/parse.test.ts`,
+      `packages/compiler/src/query-coverage.test.ts`, and
+      `packages/core/src/diagnostics.test.ts`.
   - Acceptance: relative-timestamp / countdown / `isOpen` fixtures each raise
     KV312 absent a cadence; `clocks: { … }` (client) or `.refresh({ … })` (server)
     clears it; `renderOnce` is an accepted, recorded suppression.

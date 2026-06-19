@@ -42,6 +42,7 @@ describe('diagnostic registry', () => {
       'KV310',
       'KV311',
       'KV314',
+      'KV315',
       'KV320',
       'KV330',
       'KV402',
@@ -360,6 +361,16 @@ describe('diagnostic registry', () => {
       SPEC §4.9 requires write -> invalidated query -> rendered position coverage to be checked edge by edge.",
           "message": "renderOnce position reads a query invalidated by a modeled write.",
           "severity": "error",
+        },
+        "KV315": {
+          "code": "KV315",
+          "help": "Would lower to: a derive that re-runs from an explicit clocks input such as now.ago.
+      Blocked reason: Date.now() and new Date() read the wall clock without a declared cadence, so the update plan can freeze time-derived UI.
+      Fixes: declare a component clocks entry and pass now.<name> into the derive, or mark the clock renderOnce when freezing the value is intentional.
+      SPEC §4.8 and §4.9 require derive inputs to name every fact that can change rendered output.
+      Escape: renderOnce is the documented suppression for intentionally immutable clock output.",
+          "message": "Untracked clock read in derive; use a declared clocks input.",
+          "severity": "warn",
         },
         "KV320": {
           "code": "KV320",

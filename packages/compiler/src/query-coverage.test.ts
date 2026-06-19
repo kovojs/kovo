@@ -3,6 +3,43 @@ import { describe, expect, it } from 'vitest';
 import { assertFixpoint, compileComponentModule, emitQueryPlanBootstrapModule } from './index.js';
 
 describe('compiler query coverage', () => {
+  it('warns when a derive reads the wall clock without a declared clock input', () => {
+    const result = compileComponentModule({
+      fileName: 'message-row.tsx',
+      source: `
+export const MessageRow$age = derive(['messages'], (messages) =>
+  Date.now() - new Date().getTime() - new Date(messages.createdAt).getTime(),
+);
+
+export const MessageRow = component({
+  queries: { messages: {} },
+  render: () => (
+    <message-row>
+      <time data-derive="messages.MessageRow$age">0</time>
+    </message-row>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV315')).toEqual([
+      expect.objectContaining({
+        code: 'KV315',
+        message:
+          'Untracked clock read in derive; use a declared clocks input. Date.now in MessageRow$age',
+        severity: 'warn',
+        start: { column: 3, line: 3 },
+      }),
+      expect.objectContaining({
+        code: 'KV315',
+        message:
+          'Untracked clock read in derive; use a declared clocks input. new Date in MessageRow$age',
+        severity: 'warn',
+        start: { column: 16, line: 3 },
+      }),
+    ]);
+  });
+
   it('lowers inline attribute expressions into compiled query update stamps', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',

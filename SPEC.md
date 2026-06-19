@@ -1164,6 +1164,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed (`
 | KV304 | error      | Reserved query name such as `state` is not allowed (§4.8 binding roots)                                                                                                        |
 | KV310 | warn       | Invalidated query lacks optimistic transform (write/defer/derive)                                                                                                              |
 | KV311 | warn       | Query/state-dependent DOM position with no update status — plan/isomorphic/fragment/renderOnce (§4.9)                                                                          |
+| KV315 | warn       | Raw `Date.now()`/`new Date()` read in a derive has no declared clock cadence; use a declared `clocks` input (§4.8/§4.9)                                                        |
 | KV320 | lint       | Event payload overlaps query data — use a transform                                                                                                                            |
 | KV330 | lint       | Direct db access in a mutation handler — route through domain                                                                                                                  |
 | KV402 | error      | Write touched a domain not covered by the derived or declared mutation touch set (silent stale UI)                                                                             |

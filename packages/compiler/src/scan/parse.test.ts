@@ -642,7 +642,7 @@ export const ProductCard = component({
 export const CartBadge = component({
   render: () => <span>{renderOnce(format(cart.count), "cart.discount", product.name, { product: { unitPrice: product.unitPrice }, clientOnly })}</span>,
 });
-export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count === 0);
+export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count === 0 && Date.now() > new Date().getTime());
 `;
     const renderOnce = callExpressions(parseComponentModule('cart-badge.tsx', source)).find(
       (call) => call.name === 'renderOnce',
@@ -676,7 +676,11 @@ export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count ===
     expect(derive?.argumentStaticValues).toEqual([undefined, undefined]);
     expect(derive?.argumentArrowFunctionParts).toEqual([
       null,
-      { expression: 'cart.count === 0', param: 'cart' },
+      { expression: 'cart.count === 0 && Date.now() > new Date().getTime()', param: 'cart' },
+    ]);
+    expect(derive?.argumentTemporalReads.map((reads) => reads.map((read) => read.kind))).toEqual([
+      [],
+      ['Date.now', 'new Date'],
     ]);
   });
 
