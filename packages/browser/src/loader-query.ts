@@ -2,16 +2,19 @@ import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
 import type { LoaderRoot } from './loader-lifecycle.js';
+import { installClockUpdatePlans, type ClockUpdatePlan } from './clock-tick-bus.js';
 import { installInlineQueryEventHydration } from './query-events.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
 import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
+import type { QueryBindingRoot } from './query-bindings.js';
 import { installQueryVisibleReturnRefetch } from './query-visible-return.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
 import type { QueryStore } from './query-store.js';
 
 export interface InstallLoaderQueryRuntimeOptions {
   applyQuery?: QueryApplyInterposition;
+  clockUpdatePlans?: readonly ClockUpdatePlan[];
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
   queryEventTarget?: QueryEventHydrationTarget;
   queryPlans?: CompiledQueryUpdatePlans;
@@ -50,6 +53,16 @@ export function installLoaderQueryRuntime(
   disposers.push(() => {
     queryVisibleReturn.dispose();
   });
+
+  if (
+    options.clockUpdatePlans &&
+    options.clockUpdatePlans.length > 0 &&
+    typeof options.root.querySelectorAll === 'function'
+  ) {
+    disposers.push(
+      installClockUpdatePlans(options.root as QueryBindingRoot, options.clockUpdatePlans),
+    );
+  }
 
   if (options.queryStore) {
     disposers.push(

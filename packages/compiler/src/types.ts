@@ -589,6 +589,18 @@ export interface QueryUpdateCoverageFact {
   status: 'UNHANDLED' | 'fragment' | 'isomorphic' | 'plan' | 'renderOnce';
 }
 
+/** @internal Declared client clock cadence emitted for browser tick-bus wiring. */
+export interface ClockUpdatePlanFact {
+  clocks: readonly ClockUpdatePlanClockFact[];
+  componentName: string;
+}
+
+/** @internal One named component clock spec source preserved for generated runtime code. */
+export interface ClockUpdatePlanClockFact {
+  name: string;
+  spec: string;
+}
+
 /**
  * @internal One render-equivalence check result (artifact name, expected vs actual render,
  * pass flag) consumed by {@link assertRenderEquivalence}. Lowered-IR fact; in-repo use only

@@ -1,5 +1,6 @@
 import type { BrowserKovoRoot } from './browser-root.js';
 import { withDefaultMutationBroadcast } from './broadcast.js';
+import type { ClockUpdatePlan } from './clock-tick-bus.js';
 import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
@@ -42,6 +43,7 @@ export interface KovoLoaderOptions {
   importModule: ImportHandlerModule;
   onError?: (error: unknown, context: RuntimeErrorContext) => void;
   applyQuery?: QueryApplyInterposition;
+  clockUpdatePlans?: readonly ClockUpdatePlan[];
   queryEventTarget?: QueryEventHydrationTarget;
   queryPlans?: CompiledQueryUpdatePlans;
   queryRefetch?: QueryRefetchOptions;
@@ -138,6 +140,7 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
     root: options.root,
     ...definedProps({
       applyQuery: options.applyQuery,
+      clockUpdatePlans: options.clockUpdatePlans,
       onError: options.onError,
       queryEventTarget: options.queryEventTarget,
       queryPlans: options.queryPlans ?? options.enhancedMutations?.queryPlans,

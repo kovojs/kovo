@@ -287,7 +287,7 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
         covers undeclared `now.ago` emitting KV312, declared `clocks.ago`
         clearing it, event-handler exclusion, and `renderOnce` suppression.
     - [x] Server `volatile:'time'` query-field reads and the per-binding
-          `.refresh({ every | at | until })` classifier remain open.
+          `.refresh({ every | at | until })` classifier.
       - Evidence 2026-06-19:
         `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/registry.test.ts packages/drizzle/src/index.query-shapes.test.ts`
         covers volatile-time query fields emitting KV312 unless the component
@@ -302,6 +302,18 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   - [ ] Ship one shared coalesced rAF/interval tick-bus (mirroring the §4.7
         shared IntersectionObserver) driving every `clocks` derive on the page;
         lint-gated and budget-printed in `kovo explain` (clock inputs + cadences).
+    - [x] Bounded delivery slice: declared component `clocks` with `every`
+          coalesce through one browser tick-bus and drive generated
+          `derive(['now'], …)` update plans; `renderOnce` clocks stay frozen.
+      - Evidence 2026-06-19:
+        `corepack pnpm exec vitest --run packages/browser/src/clock-tick-bus.test.ts packages/compiler/src/query-coverage.test.ts`
+        covers shared interval/rAF coalescing, generated clock plan exports, and
+        bootstrap wiring; `corepack pnpm exec tsc --noEmit --pretty false` and
+        `git diff --check` passed.
+    - [ ] Remaining delivery contract: mixed `now.<clock>` + query/state render
+          expressions need a multi-input/store-backed compiled derive path before
+          every declared clock read can be tick-driven; `kovo explain` cadence
+          budget output and any lint gate also remain open.
   - [ ] Extend KV410 with the `volatile:'time'` output facet for raw-SQL `now()`
         projections (`req.now`); extend the §11.1/§10.2 read-set deriver to flag
         time-predicate WHEREs (`expiresAt > req.now`) as time-volatile rowsets.

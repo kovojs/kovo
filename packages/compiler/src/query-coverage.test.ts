@@ -165,6 +165,38 @@ export const MessageRow = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV312' }));
   });
 
+  it('emits declared every clocks as shared browser tick-bus plans for now derives', () => {
+    const result = compileComponentModule({
+      fileName: 'clock-label.tsx',
+      source: `
+export const ClockLabel$value = derive(['now'], (now) => now.ago.toISOString());
+
+export const ClockLabel = component({
+  clocks: { ago: { every: '1s' }, pub: { renderOnce: true } },
+  render: () => <time data-derive="now.ClockLabel$value">initial</time>,
+});
+`,
+    });
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.queryUpdatePlans).toEqual([
+      expect.objectContaining({
+        componentName: 'ClockLabel',
+        derives: [expect.objectContaining({ input: 'now', name: 'ClockLabel$value' })],
+        query: 'now',
+      }),
+    ]);
+    expect(clientSource).toContain(
+      "import { applyCompiledQueryUpdatePlan, derive, installClockUpdatePlans } from '@kovojs/browser/generated';",
+    );
+    expect(clientSource).toContain('export const ClockLabel$clockUpdatePlans = [{');
+    expect(clientSource).toContain('clocks: { "ago": { every: \'1s\' } }');
+    expect(clientSource).not.toContain('"pub"');
+    expect(clientSource).toContain('return ClockLabel$queryUpdatePlans.now(root, now);');
+    expect(clientSource).toContain('export function installClockLabelClockUpdates(root)');
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('lowers inline attribute expressions into compiled query update stamps', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
@@ -908,6 +940,7 @@ export const CartBadge = component({
   it('emits an app bootstrap that wires compiled query plans into the loader', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
       {
+        clockExportName: 'CartBadge$clockUpdatePlans',
         exportName: 'CartBadge$queryUpdatePlans',
         importPath: '../components/cart/cart-badge.client.js',
       },
@@ -922,7 +955,7 @@ export const CartBadge = component({
       "import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/generated';",
     );
     expect(bootstrap.source).toContain(
-      'import { CartBadge$queryUpdatePlans } from "../components/cart/cart-badge.client.js";',
+      'import { CartBadge$queryUpdatePlans, CartBadge$clockUpdatePlans } from "../components/cart/cart-badge.client.js";',
     );
     expect(bootstrap.source).toContain(
       'import { CartPanel$queryUpdatePlans } from "../components/cart/cart-panel.client.js";',
@@ -930,7 +963,10 @@ export const CartBadge = component({
     expect(bootstrap.source).toContain('const queryPlans = {');
     expect(bootstrap.source).toContain('...CartBadge$queryUpdatePlans,');
     expect(bootstrap.source).toContain('...CartPanel$queryUpdatePlans,');
+    expect(bootstrap.source).toContain('const clockUpdatePlans = [');
+    expect(bootstrap.source).toContain('...CartBadge$clockUpdatePlans,');
     expect(bootstrap.source).toContain('installKovoLoader({');
+    expect(bootstrap.source).toContain('clockUpdatePlans,');
     expect(bootstrap.source).toContain('queryStore: store');
     expect(bootstrap.source).toContain('enhancedMutations: {');
     expect(bootstrap.source).toContain('queryPlans,');

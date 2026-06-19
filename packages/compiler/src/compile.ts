@@ -33,6 +33,7 @@ import {
   jsxElements,
   parseComponentModule as parseComponentModuleModel,
   firstComponentModel,
+  componentOptionObjectEntries,
   type ComponentModuleModel,
   type SourceSpan,
 } from './scan/parse.js';
@@ -60,6 +61,7 @@ import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type {
   CompileComponentOptions,
   CompileResult,
+  ClockUpdatePlanFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   StateDeriveFact,
@@ -148,6 +150,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ...collectQueryUpdatePlans(model, componentName),
     ...styleExtraction.queryUpdatePlans,
   ]);
+  const clockUpdatePlans = collectClockUpdatePlans(model, componentName, queryUpdatePlans);
   const updateCoverage = mergeStyleUpdateCoverage(
     collectQueryUpdateCoverage(model, compileOptions, componentName),
     styleExtraction.updateCoverage,
@@ -171,7 +174,13 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const fileNames = compileArtifactFileNames(options.fileName);
   const stateDerives = [...structuralLowering.stateDerives, ...styleExtraction.stateDerives];
 
-  const clientSource = emitClientModule(handlers, queryUpdatePlans, stateDerives, componentName);
+  const clientSource = emitClientModule(
+    handlers,
+    queryUpdatePlans,
+    stateDerives,
+    componentName,
+    clockUpdatePlans,
+  );
   const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),
@@ -318,6 +327,20 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     updateCoverage,
     viewTransitions: structuralLowering.viewTransitionStamps,
   };
+}
+
+function collectClockUpdatePlans(
+  model: ComponentModuleModel,
+  componentName: string,
+  queryUpdatePlans: readonly QueryUpdatePlanFact[],
+): ClockUpdatePlanFact[] {
+  if (!queryUpdatePlans.some((plan) => plan.query === 'now')) return [];
+
+  const clocks = componentOptionObjectEntries(model, 'clocks')
+    .filter((entry) => entry.value && !/\brenderOnce\s*:\s*true\b/.test(entry.value))
+    .map((entry) => ({ name: entry.key, spec: entry.value! }));
+
+  return clocks.length > 0 ? [{ clocks, componentName }] : [];
 }
 
 function componentDescriptorNameAssignments(

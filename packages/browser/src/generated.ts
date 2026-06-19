@@ -6,6 +6,8 @@ export type {
 } from './apply-deferred-stream.js';
 export { handler } from './handlers.js';
 export type { ClientHandler, ImportHandlerModule } from './handlers.js';
+export { installClockUpdatePlans } from './clock-tick-bus.js';
+export type { ClockUpdatePlan, ClockUpdateSpec } from './clock-tick-bus.js';
 export { installKovoLoader } from './loader.js';
 export type { KovoLoader, KovoLoaderOptions } from './loader.js';
 export { applyCompiledQueryUpdatePlan } from './query-bindings.js';

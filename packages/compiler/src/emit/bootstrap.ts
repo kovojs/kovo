@@ -8,6 +8,7 @@ const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
  * Public input shape for emitQueryPlanBootstrapModule (SPEC.md §5.2).
  */
 export interface QueryPlanBootstrapInput {
+  clockExportName?: string;
   exportName: string;
   importPath: string;
 }
@@ -39,12 +40,22 @@ export function emitQueryPlanBootstrapModule(
 ): BootstrapEmittedFile {
   const fileName = options.fileName ?? 'generated/app.client.js';
   const imports = inputs
-    .map((input) => `import { ${input.exportName} } from ${JSON.stringify(input.importPath)};`)
+    .map((input) => {
+      const specifiers = [
+        input.exportName,
+        ...(input.clockExportName ? [input.clockExportName] : []),
+      ];
+      return `import { ${specifiers.join(', ')} } from ${JSON.stringify(input.importPath)};`;
+    })
     .join('\n');
   const spreads =
     inputs.length > 0
       ? inputs.map((input) => `  ...${input.exportName},`).join('\n')
       : '  // no compiled query update plans';
+  const clockSpreads = inputs
+    .filter((input) => input.clockExportName)
+    .map((input) => `  ...${input.clockExportName},`)
+    .join('\n');
 
   return {
     fileName,
@@ -56,10 +67,14 @@ const store = createQueryStore();
 const queryPlans = {
 ${spreads}
 };
+const clockUpdatePlans = [
+${clockSpreads || '  // no compiled clock update plans'}
+];
 
 installKovoLoader({
   importModule: (specifier) => import(specifier),
   root: document,
+  clockUpdatePlans,
   queryStore: store,
   enhancedMutations: {
     fetch: (url, options) => fetch(url, options),

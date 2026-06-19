@@ -11,6 +11,7 @@ import type {
   ElementParam,
   HandlerArrowBody,
   HandlerLowering,
+  ClockUpdatePlanFact,
   QueryDeriveFact,
   QueryStampFact,
   QueryTemplateStampFact,
@@ -25,6 +26,7 @@ export function emitClientModule(
   queryUpdatePlans: readonly QueryUpdatePlanFact[],
   stateDerives: readonly StateDeriveFact[],
   componentName: string,
+  clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
 ): string {
   const imports = [
     ...(queryUpdatePlans.length > 0 ? ['applyCompiledQueryUpdatePlan'] : []),
@@ -39,6 +41,7 @@ export function emitClientModule(
       : []),
     ...runtimeOutputHelperImports([...queryUpdatePlans], stateDerives),
     ...(handlers.length > 0 ? ['handler'] : []),
+    ...(clockUpdatePlans.length > 0 ? ['installClockUpdatePlans'] : []),
   ].sort();
   const importLine =
     imports.length > 0
@@ -53,13 +56,39 @@ export function emitClientModule(
   const handlerExports = handlers.length ? handlers.map(emitHandlerExport).join('\n') : '';
   const stateDeriveExports = stateDerives.map(emitStateDeriveExport).join('\n');
   const queryPlanExport = emitQueryUpdatePlanExport(componentName, queryUpdatePlans);
-  const exports = [handlerExports, stateDeriveExports, queryPlanExport]
+  const clockPlanExport = emitClockUpdatePlanExport(componentName, clockUpdatePlans);
+  const exports = [handlerExports, stateDeriveExports, queryPlanExport, clockPlanExport]
     .filter(Boolean)
     .join('\n\n');
 
   return `${compilerIrHeader}
 ${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// no client handlers emitted'}
 `;
+}
+
+function emitClockUpdatePlanExport(
+  componentName: string,
+  clockUpdatePlans: readonly ClockUpdatePlanFact[],
+): string {
+  if (clockUpdatePlans.length === 0) return '';
+
+  const plan = clockUpdatePlans[0];
+  if (!plan) return '';
+
+  const clocks = plan.clocks
+    .map((clock) => `${JSON.stringify(clock.name)}: ${clock.spec}`)
+    .join(', ');
+
+  return `export const ${componentName}$clockUpdatePlans = [{
+  clocks: { ${clocks} },
+  update(root, now) {
+    return ${componentName}$queryUpdatePlans.now(root, now);
+  },
+}];
+
+export function install${componentName}ClockUpdates(root) {
+  return installClockUpdatePlans(root, ${componentName}$clockUpdatePlans);
+}`;
 }
 
 function emitClientImportDependencies(imports: readonly ClientImportDependency[]): string {
