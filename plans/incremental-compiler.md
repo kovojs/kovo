@@ -198,9 +198,13 @@ Relates to `plans/devtools.md` (HMR impact classification + `factHash` reuse) an
   - Evidence target: edit module A's mutation input; assert only A and the modules whose footprint
     referenced that mutation recompile, while a structurally-unrelated module B is a cache hit
     (compile-count assertion).
-- [ ] **Transparency gate:** a test compiling each perf corpus with cache enabled vs a fresh
+- [x] **Transparency gate:** a test compiling each perf corpus with cache enabled vs a fresh
       cache-disabled run asserts byte-identical artifacts — including after a targeted single-module
       edit (the incremental path must equal the from-scratch path).
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run tests/compiler-cache-transparency.test.ts` compiles all 125
+    perf-corpus files directly and through `CompileCache`, then repeats after editing one component
+    source, and asserts byte-identical emitted files/facts/signatures.
 
 ## Phase 3 — Persistent on-disk cache (the `.tsbuildinfo` equivalent)
 

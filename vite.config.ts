@@ -169,6 +169,7 @@ export default defineConfig({
           { pattern: 'tests/kovo-check.node.mjs', base: 'workspace' },
           { pattern: 'tests/browser-acceptance.mjs', base: 'workspace' },
           { pattern: 'tests/p10-perf.node.mjs', base: 'workspace' },
+          { pattern: 'tests/compiler-cache-transparency.test.ts', base: 'workspace' },
           { pattern: 'tests/compiler-determinism.test.ts', base: 'workspace' },
           { pattern: 'tests/compiler-determinism-worker.mjs', base: 'workspace' },
           { pattern: 'tests/compiler-perf.test.ts', base: 'workspace' },
