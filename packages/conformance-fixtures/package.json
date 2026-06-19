@@ -27,9 +27,9 @@
     "./wire-fixtures": "./src/wire-fixtures.ts"
   },
   "dependencies": {
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/drizzle": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/test": "workspace:*"
   },

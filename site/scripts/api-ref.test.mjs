@@ -97,7 +97,7 @@ describe('api-ref generator', () => {
     expect(result.packages.map((pkg) => pkg.file)).toEqual([
       'core.md',
       'server.md',
-      'runtime.md',
+      'browser.md',
       'test.md',
       'drizzle.md',
       'style.md',
@@ -286,7 +286,7 @@ describe('api-ref generator', () => {
     const expected = {
       '@kovojs/core': 68,
       '@kovojs/drizzle': 4,
-      '@kovojs/runtime': 90,
+      '@kovojs/browser': 90,
       '@kovojs/server': 160,
       '@kovojs/style': 39,
       '@kovojs/better-auth': 13,

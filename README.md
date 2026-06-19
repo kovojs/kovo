@@ -40,7 +40,7 @@ What it deliberately rejects (client routers, hydration, shadow DOM, custom elem
 | ---------------------- | ------------------------------------------------------------ |
 | `packages/core`        | Component model, diagnostics registry                        |
 | `packages/compiler`    | Lowering pipeline, registries, `kovo explain`                |
-| `packages/runtime`     | Loader, update plan, morph, optimistic protocol              |
+| `packages/browser`     | Loader, update plan, morph, optimistic protocol              |
 | `packages/server`      | Mutations, queries, guards, wire protocol                    |
 | `packages/drizzle`     | Touch-set extraction and schema-as-registry adapter          |
 | `packages/cli`         | The `kovo` command-line surface                              |

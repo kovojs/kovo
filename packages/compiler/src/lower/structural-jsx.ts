@@ -38,7 +38,7 @@ import { runtimeOutputHelpers, stylePropertyExpression } from '../security/outpu
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 
-const RUNTIME_GENERATED_IMPORT = '@kovojs/runtime/generated';
+const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,

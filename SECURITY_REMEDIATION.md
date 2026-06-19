@@ -13,7 +13,7 @@ This document covers C1 in depth. The complementary reactive-DOM XSS sinks ident
 The Kovo server JSX runtime renders component trees to HTML strings. `renderJsxChildren` (`packages/server/src/jsx-runtime.ts`) inserted text children **verbatim** (`String(children)`); only _attributes_ were escaped. The compiler — the framework's lowering/validation layer — never injected escaping for text interpolations either. So any app-authored `{data.field}` rendered as JSX text, and any `@kovojs/ui` scalar text prop (`title`, `description`, option `itemLabel`/`itemValue`, …), reached the browser unescaped:
 
 - in the **initial SSR document** the browser parses on load, and
-- in **fragment updates** re-injected via `innerHTML` / `insertAdjacentHTML` / morph (`packages/runtime/src/{response-fragment-apply,morph}.ts`), which execute `<img src=x onerror=…>` / `<svg onload=…>`.
+- in **fragment updates** re-injected via `innerHTML` / `insertAdjacentHTML` / morph (`packages/browser/src/{response-fragment-apply,morph}.ts`), which execute `<img src=x onerror=…>` / `<svg onload=…>`.
 
 There was **no escape hatch and no diagnostic**, so this was the framework default. It was proven end-to-end in the stackoverflow reference app (`postAnswer` body → `answers.body` → `{answer.body}`).
 
@@ -105,7 +105,7 @@ Library components escape the data-derived scalar props they render as children,
 The C1 analysis identified two further default-on XSS sinks on the _client_ codegen path; both were fixed alongside C1:
 
 - **H1 — reactive list-stamp (`packages/compiler/src/emit/client.ts`).** The compiled `render(item)` built an HTML string assigned via `innerHTML` from `String(read(...))` with no escaping. Now each value placeholder is wrapped in an inline `esc(...)` (escapes `& < > "`, covering both text and double-quoted-attribute positions in the stamp).
-- **H2 — reactive attribute binding (`packages/runtime/src/query-bindings.ts`).** `setBoundAttribute` applied live query/state values to attributes via raw `setAttribute`. For URL-bearing attributes (`href`, `src`, `formaction`, `srcdoc`, …) it now neutralizes non-allowlisted schemes (`javascript:`/`data:`/`vbscript:`, including control-char obfuscation) to `#`.
+- **H2 — reactive attribute binding (`packages/browser/src/query-bindings.ts`).** `setBoundAttribute` applied live query/state values to attributes via raw `setAttribute`. For URL-bearing attributes (`href`, `src`, `formaction`, `srcdoc`, …) it now neutralizes non-allowlisted schemes (`javascript:`/`data:`/`vbscript:`, including control-char obfuscation) to `#`.
 
 ---
 
@@ -115,7 +115,7 @@ The C1 analysis identified two further default-on XSS sinks on the _client_ code
 - `packages/server/src/api/rendering.ts` — export `escapeText`.
 - `packages/compiler/src/lower/inline-derives.ts` — `escapeStaticTextInterpolations` lowering + typed-fact import.
 - `packages/compiler/src/emit/client.ts` — H1 list-stamp `esc(...)`.
-- `packages/runtime/src/query-bindings.ts` — H2 URL-scheme guard in `setBoundAttribute`.
+- `packages/browser/src/query-bindings.ts` — H2 URL-scheme guard in `setBoundAttribute`.
 - `packages/ui/src/{autocomplete,combobox,command,select,menubar,drawer,sheet,table,navigation-menu}.tsx` — scalar text-prop escaping.
 - Tests: `packages/compiler/src/text-escaping.test.ts`, `packages/ui/src/xss-escaping.test.tsx`, plus expectation updates in `fragment-targets.test.ts`, `state-bindings.test.ts`, `query-coverage.test.ts`, `query-bindings.test.ts`, `tests/kovo-check.node.mjs`.
 - Regenerated: `examples/commerce/src/generated/*`, `site/tutorial/steps/*/src/generated/*`.
@@ -147,4 +147,4 @@ The C1 analysis identified two further default-on XSS sinks on the _client_ code
 | **M7** — no sign-in brute-force throttle                            | commerce + create-kovo template `guards.rateLimit`.                                                                                                            |
 | **M8** — unscoped receipt storage key                               | `examples/commerce/src/app.ts` — `receipts/${uuid}/${sanitized}` namespacing.                                                                                  |
 | **M9** — webhook write trust + CSV injection + unscoped order query | `examples/commerce/src/{app.ts,queries.ts}` — secret from env, productId/userId validation, formula-prefix neutralization, per-user scoping.                   |
-| **M10** — inline-loader selector injection                          | `packages/runtime/src/inline-loader-build.ts` — try/catch guard around fragment-target `querySelector`.                                                        |
+| **M10** — inline-loader selector injection                          | `packages/browser/src/inline-loader-build.ts` — try/catch guard around fragment-target `querySelector`.                                                        |

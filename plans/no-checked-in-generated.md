@@ -34,7 +34,7 @@ relocated the dependency behind `*generated-fixtures.ts` wrappers and kept the f
 - **In scope:** compiler-generated lowered IR and derived registries/graphs in `examples/*`,
   `site/*`, `site/tutorial/steps/*`, and `packages/create-kovo/templates`.
 - **Out of scope (NOT app-local generated artifacts):**
-  - `@kovojs/runtime/generated` / `packages/runtime/src/generated.ts` — a published compiler-ABI
+  - `@kovojs/browser/generated` / `packages/browser/src/generated.ts` — a published compiler-ABI
     package export (`SPEC.md` §5.2 rule 8), not an app-local artifact.
   - `packages/conformance-fixtures/src/generated-module-fixtures.ts` — hand-authored test fixtures
     that merely contain the word "generated".

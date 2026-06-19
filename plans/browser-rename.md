@@ -1,113 +1,87 @@
-# Browser Rename — `@kovojs/runtime` → `@kovojs/browser`
+# Browser Rename
 
-**Goal:** Rename the browser-side runtime package from `@kovojs/runtime` to `@kovojs/browser` for
-execution-environment clarity, pairing cleanly with `@kovojs/server`. Decision rationale: `runtime`
-is an overloaded token (Node/edge/`jsx-runtime`/run-time-vs-compile-time) that does not signal
-_where_ the code runs; `browser` has exactly one meaning and reads clearly for both humans and LLMs.
-Triad becomes `@kovojs/compiler` (produces) → `@kovojs/server` / `@kovojs/browser` (execute).
+**Goal:** Rename the browser-side runtime package to `@kovojs/browser` for execution-environment
+clarity, pairing cleanly with `@kovojs/server`.
 
-**Status:** Not started. Pre-release — **no back-compat window** for already-emitted modules is
-required (no published consumers); the rename can be a single atomic flip.
+**Status:** Complete. Pre-release, so no back-compat alias window was kept.
 
 **Behavior source of truth:** `SPEC.md`. The generated ABI subpath is compiler-owned and
-compiler↔package co-versioned (`SPEC.md` §6.6, §8); renaming the package renames that ABI specifier
-in lockstep, which is allowed precisely because the compiler and package ship together.
+compiler/package co-versioned (`SPEC.md` §6.6, §8), so the package specifier changed in lockstep with
+compiler emit.
 
-**Scope note (artifacts vs source):** Emitted/generated modules under `**/src/generated/**` and
-lowered IR are **artifacts** (`SPEC.md` §5.2 — hand-authored lowered IR is KV235). Do **not** hand-edit
-their `@kovojs/runtime*` imports; regenerate them from the renamed compiler emit and verify the diff.
-
-Mark `- [x]` only when this session verifies the cited proving command for the exact item
-(CLAUDE.md Progress Discipline). Nest proving evidence under the item when closed.
+**Artifact rule:** Lowered IR and generated modules are artifacts (`SPEC.md` §5.2). This session did
+not hand-edit tracked generated app modules; generated API/build output was regenerated as ignored
+verification output.
 
 ---
 
-## Open decisions
+## Decisions
 
-- [ ] **Rename the directory too?** Recommend `packages/runtime/` → `packages/browser/` so the
-      on-disk layout matches the package name (avoids a `dir: "browser"` / `name: "@kovojs/browser"`
-      mismatch in `public-packages.json`). If we keep the dir, this whole plan still works but leaves a
-      `packages/runtime` folder publishing `@kovojs/browser` — confusing. **Default: rename the dir.**
-- [ ] **Public docs slug.** `public-packages.json` uses slug `runtime` / `runtime-client` and the
-      generated reference page `site/gen/api/runtime.md`. Default: slug → `browser` / `browser-client`,
-      page → `browser.md`, and update guide cross-links.
-- [ ] **Internal identifiers (optional polish).** `RUNTIME_GENERATED_IMPORT`,
-      `galleryRuntimeModuleHref`, etc. are internal names, not the public specifier. Out of scope for the
-      rename itself; rename opportunistically only if it does not widen the diff materially.
-
----
-
-## Work items
-
-### 1. Package itself
-
-- [ ] Rename `packages/runtime/` → `packages/browser/` (git mv) and set `name` to `@kovojs/browser`
-      in its `package.json`. Subpaths stay (`./client`, `./generated`, `./internal/*`) → become
-      `@kovojs/browser/client`, `@kovojs/browser/generated`, etc.
-  - Touch points: `packages/runtime/package.json` (`name`), `build:dist`/`build:inline-loader`
-    scripts reference `src/*` paths only (no specifier change needed inside scripts).
-
-### 2. Compiler emit (the hardcoded ABI specifier — highest-leverage)
-
-- [ ] Flip the emitted import specifier `@kovojs/runtime/generated` → `@kovojs/browser/generated`
-      in the four `RUNTIME_GENERATED_IMPORT` constants:
-  - `packages/compiler/src/emit/bootstrap.ts:3`
-  - `packages/compiler/src/emit/client.ts:21`
-  - `packages/compiler/src/lower/structural-jsx.ts:41`
-  - `packages/compiler/src/lower/inline-derives.ts:23`
-- [ ] Update the emit↔barrel contract test asserts: `packages/compiler/src/emit/bootstrap-runtime-contract.test.ts`.
-
-### 3. Dependent workspace `package.json`s
-
-- [ ] Update every `@kovojs/runtime: "workspace:*"` dependency entry to `@kovojs/browser`.
-      Consumers: `@kovojs/server`, `@kovojs/compiler`, `@kovojs/drizzle`, `@kovojs/ui`, `@kovojs/test`,
-      `@kovojs/conformance-fixtures`, `@kovojs/cli`, `create-kovo`, plus the examples (gallery,
-      stackoverflow, crm) and `site`. Then `pnpm install` to relink the workspace.
-
-### 4. Hand-authored source imports
-
-- [ ] Update non-generated `.ts/.tsx` imports of `@kovojs/runtime`(`/client`,`/internal/*`) across
-      `packages/{server,compiler,drizzle,conformance-fixtures}/src`, example app source, and `site/src`.
-      (Excludes `**/src/generated/**` — see item 6.)
-
-### 5. Gallery runtime-href patching
-
-- [ ] Update the `.replaceAll` specifier patches and import in:
-  - `examples/gallery/src/app-shell.ts:166-167` (`@kovojs/runtime/generated`, `@kovojs/runtime`)
-  - `examples/gallery/src/interactive-gallery.generated-browser-fixtures.ts:2` (`@kovojs/runtime/client`)
-  - `examples/gallery/src/interactive-gallery.static-export.test.ts:28` (`not.toContain('@kovojs/runtime')` → `'@kovojs/browser'`)
-
-### 6. Regenerate emitted artifacts (do NOT hand-edit)
-
-- [ ] Regenerate generated modules so their imports point at `@kovojs/browser/*`:
-  - `examples/gallery/src/generated/interactive/**` (~35 files)
-  - `examples/stackoverflow/src/generated/optimistic/**` (~3 files)
-  - any other `**/src/generated/**` and integration `tests/integration/fixtures/**` stamps that pin
-    `@kovojs/runtime`.
-  - Proof: regenerate via the example `emit-graph`/compile path, then `git diff` shows only the
-    specifier change (no structural churn). Hand-edits here would violate `SPEC.md` §5.2.
-
-### 7. Manifests, spec, rules, docs
-
-- [ ] `public-packages.json`: `name`, `dir`, slugs, and description (drop "Client runtime:" wording
-      if reslugged) at lines ~73–99.
-- [ ] `SPEC.md` (§6.6, §8 + the `import { handler } from '@kovojs/runtime'` example).
-- [ ] `STABILITY.md`, `rules/api-surface.md` reference, `docs/integration-testing.md`.
-- [ ] `site/content/guides/{islands,streaming,optimistic}.md`, `site/content/docs/stability.md`, and
-      regenerate `site/gen/api/runtime.md` → `browser.md` (+ `site/dist/**` rebuild artifacts).
-- [ ] Cross-references in other `plans/*.md` (`api-cleanup.md`, `no-magical-generated.md`) — update
-      the specifier mention; do not rewrite their historical evidence.
+- [x] Rename the directory to `packages/browser/` so the on-disk layout matches the package name.
+  - Evidence: `git status --short packages/browser/package.json` reports the moved package file, and
+    `pnpm install --force` relinked workspace dependencies to `packages/browser`.
+- [x] Use `browser` / `browser-client` API reference slugs.
+  - Evidence: `public-packages.json` now declares `@kovojs/browser`, `dir: "browser"`, API slug
+    `browser`, and client entry slug `browser-client`; `pnpm --filter @kovojs/site run api:ref`
+    passed with `api-ref/v1 packages=8 exports=478 documented=412`.
+- [x] Keep unrelated historical evidence intact.
+  - Evidence: dated `plans/audit-api-20260618-*.md` entries intentionally preserve their historical
+    old package references and are excluded from the current-source stale-name scan.
 
 ---
 
-## Latest verification (fill on close)
+## Completed Work
 
-Run the narrowest-then-broaden gate set:
+- [x] Package rename and workspace relink.
+  - Evidence: `pnpm install --force` completed, `pnpm-lock.yaml` now links browser workspace
+    dependencies, and `pnpm exec vp run browser` passed 27 files / 144 browser tests.
+- [x] Compiler ABI specifier flip.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/emit/bootstrap-runtime-contract.test.ts`
+    passed as part of the targeted browser-rename suite, and `pnpm exec vp run build` emitted
+    `dist/browser/src/{client,generated,index}.mjs` followed by `prod-emit-check/v1 OK`.
+- [x] Dependent package manifests, starter templates, examples, docs, site, and package references now
+      consume `@kovojs/browser`.
+  - Evidence: `pnpm run check` passed, including import boundaries, no-committed-generated, formatting,
+    lint/typecheck, and example typechecks.
+- [x] Hand-authored imports and VM import-stripping helpers were renamed.
+  - Evidence: `pnpm exec vp test` passed 420 test files / 3102 tests with 1 skipped.
+- [x] Vite/conformance fixtures handle async transform output and local JSX runtime aliasing under the
+      renamed package layout.
+  - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/vite-fixtures.test.ts
+    packages/conformance-fixtures/src/generated-module-fixtures.test.ts` passed 32 tests, and
+    `pnpm exec vp run kovo-check` passed 50/50 with `kovo-check/v1 OK`.
+- [x] Public API manifest and generated docs were refreshed for the browser package.
+  - Evidence: `pnpm run check:api-surface` passed with
+    `public-exports-needing-attention=1571 (baseline=1571, fixed-this-run=0)`, and
+    `pnpm --filter @kovojs/site run api:ref` passed.
+- [x] No checked-in generated app artifacts were hand-edited for this rename.
+  - Evidence: `pnpm run check` passed `check:no-committed-generated` with `no-committed-generated/v1
+    OK`; ignored API/build outputs were regenerated for verification only.
+- [x] Current source and built artifacts have no stale package/directory/client-slug references, except
+      preserved historical audit reports.
+  - Evidence: current-source `rg` stale-name scan excluding `node_modules`, `dist`, and dated audit
+    reports returned zero matches; artifact `rg` stale-name scan over `dist` and `packages/server/dist`
+    returned zero matches.
 
-- [ ] `grep -rn "@kovojs/runtime" . --exclude-dir=node_modules` returns **zero** (no stragglers).
-- [ ] `pnpm install` relinks the workspace cleanly.
-- [ ] `tsc` / typecheck across touched packages passes.
-- [ ] `packages/compiler` emit + `bootstrap-runtime-contract.test.ts` green (ABI specifier flip).
-- [ ] api-surface gate (`scripts/api-surface-gate.mjs`) passes with the renamed manifest entry.
-- [ ] Integration suite (`tests/integration`) + gallery static-export test green.
-- [ ] `git diff --check` clean.
+---
+
+## Latest Verification
+
+- [x] `pnpm run check`
+  - Evidence: passed.
+- [x] `pnpm exec vp test`
+  - Evidence: 420 files passed; 3102 tests passed; 1 skipped.
+- [x] `pnpm exec vp run browser`
+  - Evidence: 27 files passed; 144 tests passed.
+- [x] `pnpm exec vp run integration`
+  - Evidence: 130 Playwright integration tests passed.
+- [x] `pnpm exec vp run kovo-check`
+  - Evidence: 50/50 tests passed; `kovo-check/v1 OK`.
+- [x] `pnpm exec vp run build`
+  - Evidence: build completed and `prod-emit-check/v1 OK`.
+- [x] `pnpm run check:api-surface`
+  - Evidence: baseline unchanged at 1571 exports needing attention.
+- [x] `pnpm --filter @kovojs/site run api:ref`
+  - Evidence: generated API reference reports 8 packages and 478 exports.
+- [x] `git diff --check`
+  - Evidence: passed with no whitespace errors.

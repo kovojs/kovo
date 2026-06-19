@@ -1,5 +1,5 @@
 import { form, type FormInput } from '@kovojs/core';
-import type { OptimisticFor } from '@kovojs/runtime';
+import type { OptimisticFor } from '@kovojs/browser';
 import { mutation, route, s, type MutationFail } from '@kovojs/server';
 
 import './registries.js';

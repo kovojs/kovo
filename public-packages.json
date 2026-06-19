@@ -66,8 +66,8 @@
       }
     },
     {
-      "name": "@kovojs/runtime",
-      "dir": "runtime",
+      "name": "@kovojs/browser",
+      "dir": "browser",
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
@@ -83,17 +83,17 @@
       },
       "apiRef": {
         "order": 3,
-        "slug": "runtime",
-        "description": "Client runtime: app-authored derives, handlers, trusted HTML, and optimistic authoring helpers.",
+        "slug": "browser",
+        "description": "Browser execution helpers: app-authored derives, handlers, trusted HTML, and optimistic authoring helpers.",
         "entries": [
           {
             "path": ".",
-            "slug": "runtime",
+            "slug": "browser",
             "description": "App-authored derives, handlers, trusted HTML, and optimistic authoring helpers."
           },
           {
             "path": "./client",
-            "slug": "runtime-client",
+            "slug": "browser-client",
             "description": "Browser bootstrap helpers for installing Kovo's client loader in app-owned entry files."
           }
         ]

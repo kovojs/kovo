@@ -18,7 +18,7 @@ import type {
   StateDeriveFact,
 } from '../types.js';
 
-const RUNTIME_GENERATED_IMPORT = '@kovojs/runtime/generated';
+const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 
 export function emitClientModule(
   handlers: HandlerLowering[],

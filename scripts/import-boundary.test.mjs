@@ -19,13 +19,13 @@ describe('import-boundary check', () => {
 import { component } from '@kovojs/core';
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 export { escapeHtml } from '@kovojs/server/internal/html';
-const runtime = () => import('@kovojs/runtime/generated');
+const runtime = () => import('@kovojs/browser/generated');
 `),
     ).toEqual([
       '@kovojs/core',
       '@kovojs/core/internal/graph',
       '@kovojs/server/internal/html',
-      '@kovojs/runtime/generated',
+      '@kovojs/browser/generated',
     ]);
   });
 
@@ -34,7 +34,7 @@ const runtime = () => import('@kovojs/runtime/generated');
     expect(nonPublicKovoImportTier('@kovojs/compiler/graph')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/compiler/package-styles')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/core/internal/graph')).toBe('internal');
-    expect(nonPublicKovoImportTier('@kovojs/runtime/generated')).toBe('generated');
+    expect(nonPublicKovoImportTier('@kovojs/browser/generated')).toBe('generated');
     expect(nonPublicKovoImportTier('@kovojs/cli/internal')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/core')).toBeNull();
     expect(appLocalGeneratedImportTier('./generated/app.kovo-route.js')).toBe(
@@ -61,7 +61,7 @@ const runtime = () => import('@kovojs/runtime/generated');
     await writeFixture(
       rootDir,
       'examples/demo/src/generated/app.client.js',
-      "import { handler } from '@kovojs/runtime/generated';\n",
+      "import { handler } from '@kovojs/browser/generated';\n",
     );
     await writeFixture(
       rootDir,
@@ -76,7 +76,7 @@ const runtime = () => import('@kovojs/runtime/generated');
     await writeFixture(
       rootDir,
       'examples/demo/src/runtime.test.ts',
-      "import { runtime } from '@kovojs/runtime/generated';\n",
+      "import { runtime } from '@kovojs/browser/generated';\n",
     );
     await writeFixture(
       rootDir,
@@ -101,7 +101,7 @@ const runtime = () => import('@kovojs/runtime/generated');
     await writeFixture(
       rootDir,
       'packages/create-kovo/templates/src/component.tsx',
-      "const runtime = () => import('@kovojs/runtime/generated');\n",
+      "const runtime = () => import('@kovojs/browser/generated');\n",
     );
     await writeFixture(
       rootDir,
@@ -152,12 +152,12 @@ const runtime = () => import('@kovojs/runtime/generated');
       },
       {
         fileName: 'examples/demo/src/runtime.test.ts',
-        specifier: '@kovojs/runtime/generated',
+        specifier: '@kovojs/browser/generated',
         tier: 'generated',
       },
       {
         fileName: 'packages/create-kovo/templates/src/component.tsx',
-        specifier: '@kovojs/runtime/generated',
+        specifier: '@kovojs/browser/generated',
         tier: 'generated',
       },
       {

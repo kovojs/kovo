@@ -13,8 +13,8 @@
     "test:mcp": "node scripts/emit-example-graphs.mjs && node scripts/test-mcp.mjs"
   },
   "dependencies": {
+    "@kovojs/browser": "workspace:*",
     "@kovojs/devtool": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*"
   },
   "devDependencies": {

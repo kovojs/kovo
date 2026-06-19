@@ -20,7 +20,7 @@ import { escapeAttribute, type SourceReplacement } from '../shared.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import type { CompileComponentOptions, StateDeriveFact } from '../types.js';
 
-const RUNTIME_GENERATED_IMPORT = '@kovojs/runtime/generated';
+const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 
 type InlineDeriveLoweringOptions = Pick<
   CompileComponentOptions,

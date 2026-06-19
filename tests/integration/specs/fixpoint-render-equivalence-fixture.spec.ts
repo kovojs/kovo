@@ -66,14 +66,14 @@ function renderLoweredComponent(loweredSource: string): string {
           },
         };
       }
-      if (specifier === '@kovojs/runtime') {
+      if (specifier === '@kovojs/browser') {
         return {
           derive(_inputs: unknown, compute: (state: unknown) => unknown) {
             return compute;
           },
         };
       }
-      if (specifier === '@kovojs/runtime/generated') {
+      if (specifier === '@kovojs/browser/generated') {
         return {
           derive(_inputs: unknown, compute: (state: unknown) => unknown) {
             return compute;

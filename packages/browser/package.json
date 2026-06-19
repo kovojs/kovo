@@ -1,5 +1,5 @@
 {
-  "name": "@kovojs/runtime",
+  "name": "@kovojs/browser",
   "version": "0.1.0",
   "files": [
     "dist"

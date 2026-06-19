@@ -81,7 +81,7 @@ export const ProductPage = component({
     expect(serverSource).toContain('data-style-src="product-page.tsx#badge"');
     expect(serverSource).toMatch(/class="kv-product-page-bg-[^"]+ kv-product-page-fg-[^"]+"/);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive, handler, kovoStyleProperty } from '@kovojs/runtime/generated';",
+      "import { applyCompiledQueryUpdatePlan, derive, handler, kovoStyleProperty } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain(
       'export const ProductPage$a_title_derive = derive(["product"], (product) => product.name.toUpperCase());',
@@ -179,7 +179,7 @@ export const ImportOrder = component({
     }).toMatchInlineSnapshot(`
       {
         "clientSource": "// @kovojs-ir
-      import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/runtime/generated';
+      import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/browser/generated';
 
       export const ImportOrder$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \`\${state.value}%\`)].filter(Boolean).join('; '));
 
@@ -195,7 +195,7 @@ export const ImportOrder = component({
         "serverSource": "// @kovojs-ir
       export function renderSource() {
         return \`import { escapeText } from '@kovojs/server/internal/html';
-      import { derive, kovoStyleProperty } from '@kovojs/runtime/generated';
+      import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
 
       export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
       export const ImportOrder$span_style_derive = derive(["state"], (state: any) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));

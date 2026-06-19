@@ -3,8 +3,8 @@ import {
   createQueryStore,
   defaultEnhancedFetch,
   installKovoLoader,
-} from '@kovojs/runtime/client';
-import { applyDeferredStreamResponseToRuntime } from '@kovojs/runtime/generated';
+} from '@kovojs/browser/client';
+import { applyDeferredStreamResponseToRuntime } from '@kovojs/browser/generated';
 
 const store = createQueryStore();
 const queryPlans = {};

@@ -31,7 +31,7 @@ export type ClientHandler<State = unknown, Params = Record<string, ElementParamV
  * @param fn - The handler implementation.
  * @returns The same handler, typed.
  * @example
- * import { handler } from '@kovojs/runtime';
+ * import { handler } from '@kovojs/browser';
  *
  * type CounterState = { count: number };
  *

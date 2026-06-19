@@ -851,7 +851,7 @@ export function renderSource() {
       source: `
 import { component } from '@kovojs/core';
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
-import { derive } from '@kovojs/runtime/generated';
+import { derive } from '@kovojs/browser/generated';
 import { main } from '@kovojs/cli/internal';
 
 export { escapeHtml } from '@kovojs/server/internal/html';
@@ -879,7 +879,7 @@ export const CartBadge = component({
         code: 'KV235',
         fileName: 'cart-badge.tsx',
         help: expect.stringContaining(
-          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/runtime/generated`.',
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/browser/generated`.',
         ),
         length: 27,
         message:
@@ -920,7 +920,7 @@ export const CartBadge = component({
       source: `
 import { component } from '@kovojs/core';
 
-const runtime = () => import('@kovojs/runtime/generated');
+const runtime = () => import('@kovojs/browser/generated');
 
 export const CartBadge = component({
   render: () => <cart-badge>{runtime.name}</cart-badge>,
@@ -933,7 +933,7 @@ export const CartBadge = component({
         code: 'KV235',
         fileName: 'cart-badge.tsx',
         help: expect.stringContaining(
-          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/runtime/generated`.',
+          'Blocked reason: app source imports non-public Kovo subpath `@kovojs/browser/generated`.',
         ),
         length: 27,
         message:
@@ -977,7 +977,7 @@ export const CartBadge = component({
     const result = compileComponentModule({
       fileName: 'cart-badge.client.js',
       source: [
-        "import { handler } from '@kovojs/runtime/generated';",
+        "import { handler } from '@kovojs/browser/generated';",
         'export const CartBadge$button_click = handler(() => null);',
         '',
       ].join('\n'),

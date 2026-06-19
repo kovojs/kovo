@@ -849,7 +849,7 @@ function writeProductionOnlyRuntimeNodeModules(runtimeDir: string): void {
   const packageRoot = join(runtimeDir, 'node_modules');
   for (const packageName of [
     '@kovojs/core',
-    '@kovojs/runtime',
+    '@kovojs/browser',
     '@kovojs/server',
     'vite',
     'vite-plus',

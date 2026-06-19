@@ -19,10 +19,10 @@
   },
   "devDependencies": {
     "@kovojs/better-auth": "workspace:*",
+    "@kovojs/browser": "workspace:*",
     "@kovojs/cli": "workspace:*",
     "@kovojs/compiler": "workspace:*",
     "@kovojs/core": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",
     "vite": "8.0.16",

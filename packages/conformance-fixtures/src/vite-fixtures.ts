@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { htmlElementFacts, type HtmlElementSelector } from '@kovojs/test/html-fragment';
 import {
   generatedHandlerReferenceFact,
   generatedHandlerReferenceSummaryFact,
-  generatedRenderedElementFactsFromSource,
 } from './generated-module-fixtures.ts';
 
 import type {
@@ -29,7 +29,14 @@ export interface VitePluginLike {
     middlewares: { use(handler: ViteMiddlewareLike): void };
   }) => void;
   name?: string;
-  transform?: (source: string, id: string) => ViteTransformResultLike | null | undefined;
+  transform?: (
+    source: string,
+    id: string,
+  ) =>
+    | Promise<ViteTransformResultLike | null | undefined>
+    | ViteTransformResultLike
+    | null
+    | undefined;
 }
 
 export type ViteMiddlewareLike = (
@@ -74,6 +81,7 @@ export interface ViteRedGreenBuildFixtureOptions {
   fixtureParent?: string;
   fixturePrefix?: string;
   greenSource: string;
+  jsxRuntimeAlias?: string;
   packageName?: string;
   projectRoot: string;
   redSource: string;
@@ -148,17 +156,50 @@ export function vitePluginMiddlewareFact(
   };
 }
 
+function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
+}
+
 export function viteTransformElementFact(
   plugin: VitePluginLike,
   options: { id: string; selector?: { tag?: string }; source: string },
 ): ViteTransformElementFact {
   const transformed = plugin.transform?.(options.source, options.id);
+  if (isPromiseLike(transformed)) {
+    throw new Error('Vite plugin transform returned a Promise; use viteTransformElementFactAsync.');
+  }
+  return viteTransformElementFactFromResult(transformed, options);
+}
+
+export async function viteTransformElementFactAsync(
+  plugin: VitePluginLike,
+  options: { id: string; selector?: { tag?: string }; source: string },
+): Promise<ViteTransformElementFact> {
+  const transformed = await plugin.transform?.(options.source, options.id);
+  return viteTransformElementFactFromResult(transformed, options);
+}
+
+function viteTransformElementFactFromResult(
+  transformed: Awaited<ReturnType<NonNullable<VitePluginLike['transform']>>>,
+  options: { selector?: HtmlElementSelector },
+): ViteTransformElementFact {
   if (!transformed) {
     throw new Error('Vite plugin transformed component source');
   }
 
   return {
-    elements: generatedRenderedElementFactsFromSource(transformed.code, options.selector),
+    elements: htmlElementFacts(transformed.code, options.selector).map(
+      ({ attrs, innerHtml, tag }) => ({
+        attrs,
+        innerHtml,
+        tag,
+      }),
+    ),
     mapIsNull: transformed.map === null,
   };
 }
@@ -174,6 +215,34 @@ export function viteHandlerTransformFact(
   },
 ): ViteHandlerTransformFact {
   const transformFact = viteTransformElementFact(plugin, options);
+  const expectedElementCount = options.expectedElementCount ?? 1;
+  if (transformFact.elements.length !== expectedElementCount) {
+    throw new Error(
+      `Expected ${expectedElementCount} generated element(s); found ${transformFact.elements.length}`,
+    );
+  }
+
+  const handlerAttribute = options.handlerAttribute ?? 'on:click';
+  const handlerRef = transformFact.elements[0]?.attrs[handlerAttribute] ?? '';
+
+  return {
+    ...transformFact,
+    handlerReference: generatedHandlerReferenceFact(handlerRef),
+    handlerSummary: generatedHandlerReferenceSummaryFact(handlerRef),
+  };
+}
+
+export async function viteHandlerTransformFactAsync(
+  plugin: VitePluginLike,
+  options: {
+    expectedElementCount?: number;
+    handlerAttribute?: string;
+    id: string;
+    selector?: { tag?: string };
+    source: string;
+  },
+): Promise<ViteHandlerTransformFact> {
+  const transformFact = await viteTransformElementFactAsync(plugin, options);
   const expectedElementCount = options.expectedElementCount ?? 1;
   if (transformFact.elements.length !== expectedElementCount) {
     throw new Error(
@@ -277,11 +346,18 @@ export async function viteRedGreenBuildFixtureFact(
       [
         `import { kovoVitePlugin } from ${JSON.stringify(options.vitePluginImportUrl)};`,
         '',
+        `const jsxRuntimeAlias = ${JSON.stringify(
+          options.jsxRuntimeAlias ??
+            join(options.projectRoot, 'packages/server/dist/jsx-runtime.mjs'),
+        )};`,
+        '',
         'export default {',
         "  plugins: [Object.assign(kovoVitePlugin(), { enforce: 'pre' })],",
         '  resolve: {',
         '    alias: {',
         `      '@kovojs/core': ${JSON.stringify(options.coreAlias)},`,
+        "      'react/jsx-dev-runtime': jsxRuntimeAlias,",
+        "      'react/jsx-runtime': jsxRuntimeAlias,",
         '    },',
         '  },',
         '};',
@@ -334,7 +410,7 @@ export async function viteProductionEmitContractFact(
         return `added:${String(id)}`;
       },
     } satisfies Record<string, unknown>);
-  const handlerTransform = viteHandlerTransformFact(plugin, {
+  const handlerTransform = await viteHandlerTransformFactAsync(plugin, {
     id: options.componentId ?? join(options.projectRoot, 'routes/products/product-card.tsx'),
     selector: { tag: 'button' },
     source: options.source ?? productCardSourceFixture,

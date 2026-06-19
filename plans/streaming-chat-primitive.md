@@ -40,7 +40,7 @@ state as the final UI.
     primitive; runtime programmatic apply currently consumes a completed string,
     while initial document streaming uses inline chunk scripts.
   - Evidence: pending docs/SPEC note citing `packages/server/src/deferred-stream.ts`
-    and `packages/runtime/src/apply-deferred-stream.ts`.
+    and `packages/browser/src/apply-deferred-stream.ts`.
 - [ ] **Keep SSE out of the MVP.**
   - `SPEC.md` mentions SSE live queries as L4/future transport, while
     `fixtures/wire/README.md` says the SSE fixture is intentionally absent.
@@ -199,7 +199,7 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
   - Extend the shared runtime response scanner/parser to recognize incremental
     stream chunks and `<kovo-text>`, then add an async apply API over
     `ReadableStream<Uint8Array>` that applies chunks as they arrive.
-  - Evidence: pending `packages/runtime` parser/apply tests.
+  - Evidence: pending `packages/browser` parser/apply tests.
 - [ ] **2. Runtime text buffering and checkpoints.**
   - Maintain per-stream-source text buffers, coalesce appends, flush with
     fake-timer testability, and support checkpoint replace semantics for long
@@ -246,10 +246,10 @@ mutation={sendMessage}>`, lowering to a real form plus a streaming-enhanced
 ## Proving Commands
 
 - [ ] SPEC/API contract: `pnpm run check:api-surface`
-- [ ] runtime parser/apply: `npx vitest --run packages/runtime/src/wire-parser.test.ts packages/runtime/src/apply-mutation-response.test.ts`
-- [ ] runtime text batching/checkpoints: pending targeted `packages/runtime` test file
-- [ ] runtime sink renderer hook: pending targeted `packages/runtime` test file
-- [ ] runtime streaming submit: pending targeted `packages/runtime` test file
+- [ ] runtime parser/apply: `npx vitest --run packages/browser/src/wire-parser.test.ts packages/browser/src/apply-mutation-response.test.ts`
+- [ ] runtime text batching/checkpoints: pending targeted `packages/browser` test file
+- [ ] runtime sink renderer hook: pending targeted `packages/browser` test file
+- [ ] runtime streaming submit: pending targeted `packages/browser` test file
 - [ ] server text coalescing: pending targeted `packages/server` test file
 - [ ] server streaming mutation path: pending targeted `packages/server` test file
 - [ ] compiler lowering/fixpoint: pending targeted `packages/compiler` test file

@@ -1,6 +1,6 @@
 import { compilerIrHeader } from '../ir.js';
 
-const RUNTIME_GENERATED_IMPORT = '@kovojs/runtime/generated';
+const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 
 /**
  * One compiled query-update-plan module to wire into the app bootstrap: the module's

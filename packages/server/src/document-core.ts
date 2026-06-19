@@ -1,4 +1,4 @@
-import { kovoLoaderSource } from '@kovojs/runtime/internal/inline-loader';
+import { kovoLoaderSource } from '@kovojs/browser/internal/inline-loader';
 import {
   cspHashAttribute,
   cspSha256,

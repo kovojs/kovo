@@ -4,13 +4,13 @@ import {
   type MorphRoot,
   type TargetCollectorRoot,
   installKovoLoader,
-} from '@kovojs/runtime/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
+} from '@kovojs/browser/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
 import {
   applyCompiledQueryUpdatePlan,
   OptimisticRebaser,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/runtime/internal/mutation';
+} from '@kovojs/browser/internal/mutation';
 
 type CartSummary = Record<string, unknown> & {
   count: number;

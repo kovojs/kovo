@@ -141,18 +141,18 @@ describe('@kovojs/test source fixture seam', () => {
   it('loads structured project file and package-directory facts for kovo-check gates', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-test-project-source-'));
     try {
-      await mkdir(join(root, 'packages/runtime/src'), { recursive: true });
-      await mkdir(join(root, 'packages/runtime/docs'), { recursive: true });
+      await mkdir(join(root, 'packages/browser/src'), { recursive: true });
+      await mkdir(join(root, 'packages/browser/docs'), { recursive: true });
       await mkdir(join(root, 'packages/compiler/src'), { recursive: true });
       await writeFile(join(root, 'packages/compiler/package.json'), '{}');
-      await writeFile(join(root, 'packages/runtime/package.json'), '{"name":"@kovojs/runtime"}');
-      await writeFile(join(root, 'packages/runtime/src/index.ts'), 'export const runtime = true;');
-      await writeFile(join(root, 'packages/runtime/docs/readme.md'), '# Runtime');
+      await writeFile(join(root, 'packages/browser/package.json'), '{"name":"@kovojs/browser"}');
+      await writeFile(join(root, 'packages/browser/src/index.ts'), 'export const runtime = true;');
+      await writeFile(join(root, 'packages/browser/docs/readme.md'), '# Runtime');
       await writeFile(join(root, 'packages/compiler/src/index.test.ts'), 'export {};');
 
       expect(await projectDirectoryNames({ rootPath: root, directory: 'packages' })).toEqual([
+        'packages/browser',
         'packages/compiler',
-        'packages/runtime',
       ]);
       expect(
         await projectFilePaths({
@@ -160,7 +160,7 @@ describe('@kovojs/test source fixture seam', () => {
           directory: 'packages',
           include: (path) => path.endsWith('.ts') && path.includes('/src/'),
         }),
-      ).toEqual(['packages/compiler/src/index.test.ts', 'packages/runtime/src/index.ts']);
+      ).toEqual(['packages/browser/src/index.ts', 'packages/compiler/src/index.test.ts']);
       expect(
         await projectFileSources({
           rootPath: root,
@@ -168,19 +168,19 @@ describe('@kovojs/test source fixture seam', () => {
           include: (path) => path.endsWith('.ts') && !path.endsWith('.test.ts'),
         }),
       ).toEqual([
-        { path: 'packages/runtime/src/index.ts', source: 'export const runtime = true;' },
+        { path: 'packages/browser/src/index.ts', source: 'export const runtime = true;' },
       ]);
-      expect(await projectJsonFile(root, 'packages/runtime/package.json')).toEqual({
-        name: '@kovojs/runtime',
+      expect(await projectJsonFile(root, 'packages/browser/package.json')).toEqual({
+        name: '@kovojs/browser',
       });
       expect(await projectPackageManifestFacts({ rootPath: root, directory: 'packages' })).toEqual([
         {
-          directory: 'compiler',
-          manifest: {},
+          directory: 'browser',
+          manifest: { name: '@kovojs/browser' },
         },
         {
-          directory: 'runtime',
-          manifest: { name: '@kovojs/runtime' },
+          directory: 'compiler',
+          manifest: {},
         },
       ]);
     } finally {
@@ -191,11 +191,11 @@ describe('@kovojs/test source fixture seam', () => {
   it('audits framework source for forbidden browser architecture through a project fixture', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-test-browser-architecture-'));
     try {
-      await mkdir(join(root, 'packages/runtime/src'), { recursive: true });
-      await mkdir(join(root, 'packages/runtime/test'), { recursive: true });
+      await mkdir(join(root, 'packages/browser/src'), { recursive: true });
+      await mkdir(join(root, 'packages/browser/test'), { recursive: true });
       await mkdir(join(root, 'packages/compiler/src'), { recursive: true });
       await writeFile(
-        join(root, 'packages/runtime/src/loader.ts'),
+        join(root, 'packages/browser/src/loader.ts'),
         [
           'customElements.define("cart-row", class extends HTMLElement {});',
           'window.addEventListener("unload", () => {});',
@@ -203,7 +203,7 @@ describe('@kovojs/test source fixture seam', () => {
         ].join('\n'),
       );
       await writeFile(
-        join(root, 'packages/runtime/src/loader.test.ts'),
+        join(root, 'packages/browser/src/loader.test.ts'),
         'customElements.define("allowed-test", class extends HTMLElement {});',
       );
       await writeFile(join(root, 'packages/compiler/src/index.ts'), 'export const ok = true;');
@@ -219,17 +219,17 @@ describe('@kovojs/test source fixture seam', () => {
         violations: [
           {
             column: 1,
-            fileName: 'packages/runtime/src/loader.ts',
+            fileName: 'packages/browser/src/loader.ts',
             label: 'customElements.define',
             line: 1,
-            site: 'packages/runtime/src/loader.ts:1:1',
+            site: 'packages/browser/src/loader.ts:1:1',
           },
           {
             column: 1,
-            fileName: 'packages/runtime/src/loader.ts',
+            fileName: 'packages/browser/src/loader.ts',
             label: 'addEventListener unload',
             line: 2,
-            site: 'packages/runtime/src/loader.ts:2:1',
+            site: 'packages/browser/src/loader.ts:2:1',
           },
         ],
       });
@@ -314,7 +314,7 @@ describe('@kovojs/test source fixture seam', () => {
   it('returns structured forbidden browser architecture facts from TSX source', () => {
     const facts = forbiddenBrowserArchitectureFacts(
       ts,
-      'packages/runtime/src/browser.tsx',
+      'packages/browser/src/browser.tsx',
       [
         'customElements.define("x-card", XCard);',
         'host.attachShadow({ mode: "open" });',
@@ -339,52 +339,52 @@ describe('@kovojs/test source fixture seam', () => {
     ).toEqual([
       {
         column: 1,
-        fileName: 'packages/runtime/src/browser.tsx',
+        fileName: 'packages/browser/src/browser.tsx',
         label: 'customElements.define',
         line: 1,
-        site: 'packages/runtime/src/browser.tsx:1:1',
+        site: 'packages/browser/src/browser.tsx:1:1',
       },
       {
         column: 1,
-        fileName: 'packages/runtime/src/browser.tsx',
+        fileName: 'packages/browser/src/browser.tsx',
         label: 'attachShadow',
         line: 2,
-        site: 'packages/runtime/src/browser.tsx:2:1',
+        site: 'packages/browser/src/browser.tsx:2:1',
       },
       {
         column: 1,
-        fileName: 'packages/runtime/src/browser.tsx',
+        fileName: 'packages/browser/src/browser.tsx',
         label: 'addEventListener unload',
         line: 3,
-        site: 'packages/runtime/src/browser.tsx:3:1',
+        site: 'packages/browser/src/browser.tsx:3:1',
       },
       {
         column: 10,
-        fileName: 'packages/runtime/src/browser.tsx',
+        fileName: 'packages/browser/src/browser.tsx',
         label: 'createBrowserRouter',
         line: 5,
-        site: 'packages/runtime/src/browser.tsx:5:10',
+        site: 'packages/browser/src/browser.tsx:5:10',
       },
       {
         column: 1,
-        fileName: 'packages/runtime/src/browser.tsx',
+        fileName: 'packages/browser/src/browser.tsx',
         label: 'hydrateRoot',
         line: 6,
-        site: 'packages/runtime/src/browser.tsx:6:1',
+        site: 'packages/browser/src/browser.tsx:6:1',
       },
       {
         column: 1,
-        fileName: 'packages/runtime/src/browser.tsx',
+        fileName: 'packages/browser/src/browser.tsx',
         label: 'onunload',
         line: 7,
-        site: 'packages/runtime/src/browser.tsx:7:1',
+        site: 'packages/browser/src/browser.tsx:7:1',
       },
       {
         column: 35,
-        fileName: 'packages/runtime/src/browser.tsx',
+        fileName: 'packages/browser/src/browser.tsx',
         label: 'importmap script',
         line: 8,
-        site: 'packages/runtime/src/browser.tsx:8:35',
+        site: 'packages/browser/src/browser.tsx:8:35',
       },
     ]);
   });

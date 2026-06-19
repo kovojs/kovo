@@ -1,5 +1,5 @@
 import type { Form, FormInput } from '@kovojs/core';
-import type { OptimisticEntry, OptimisticPlan } from '@kovojs/runtime';
+import type { OptimisticEntry, OptimisticPlan } from '@kovojs/browser';
 
 // SPEC.md §10.4 (the override path): a PARTIALLY-derived mutation ships a
 // generated plan covering only the pairs the deriver could lower, with the

@@ -4,14 +4,14 @@ import {
   type MorphRoot,
   type TargetCollectorRoot,
   installKovoLoader,
-} from '@kovojs/runtime/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
+} from '@kovojs/browser/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
 import {
   applyCompiledQueryUpdatePlan,
   OptimisticRebaser,
   stampPendingQueries,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/runtime/internal/mutation';
+} from '@kovojs/browser/internal/mutation';
 
 type NavCounter = Record<string, unknown> & {
   value: number;

@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@kovojs/browser": "workspace:*",
     "@kovojs/cli": "workspace:*",
     "@kovojs/core": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/test": "workspace:*",
     "axe-core": "4.12.1"

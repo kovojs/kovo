@@ -153,7 +153,7 @@ describe('@kovojs/test starter template fixtures', () => {
 
   it('executes the starter browser client template and records loader behavior', async () => {
     const fixture = await executeStarterClientTemplate(`
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/client';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/client';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -227,7 +227,7 @@ export function applyKovoDeferredStreamResponse(body) {
   it('projects starter browser client behavior into kovo-check facts', async () => {
     await expect(
       starterClientTemplateBehaviorFact(`
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/client';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/client';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -384,7 +384,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
     };
     const appSource = 'export const App = component({ render: () => <main /> });';
     const clientSource = `
-import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/runtime/client';
+import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/client';
 
 const store = createQueryStore();
 const queryPlans = {};
@@ -443,7 +443,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
       await writeFile(
         join(templateRoot, 'package.json'),
         JSON.stringify({
-          dependencies: { '@kovojs/core': 'workspace:*', '@kovojs/runtime': 'workspace:*' },
+          dependencies: { '@kovojs/core': 'workspace:*', '@kovojs/browser': 'workspace:*' },
           devDependencies: { '@kovojs/compiler': 'workspace:*', kovo: 'workspace:*' },
           scripts: { 'emit-graph': 'node scripts/emit-graph.mjs' },
         }),
@@ -560,7 +560,7 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
         graphAssertionsOutput: 'graph-assertions/v1\nOK\n',
         graphCheck: { exitCode: 0, issueCount: 0, status: 'ok', version: 'kovo-check/v1' },
         package: {
-          dependencies: ['@kovojs/core', '@kovojs/runtime'],
+          dependencies: ['@kovojs/browser', '@kovojs/core'],
           scripts: { emitGraph: 'node scripts/emit-graph.mjs' },
         },
         taskOutputs: [

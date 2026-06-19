@@ -203,8 +203,8 @@ function compileGalleryInteractiveClientModule(demoName: string): string {
 
 function rewriteGalleryClientImports(source: string, support: SupportRegistration): string {
   return source
-    .replaceAll("from '@kovojs/runtime/generated';", `from '${support.runtimeHref}';`)
-    .replaceAll("from '@kovojs/runtime';", `from '${support.runtimeHref}';`)
+    .replaceAll("from '@kovojs/browser/generated';", `from '${support.runtimeHref}';`)
+    .replaceAll("from '@kovojs/browser';", `from '${support.runtimeHref}';`)
     .replace(
       /from (["'])@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)\1;/g,
       (_match, _quote: string, family: string) => {

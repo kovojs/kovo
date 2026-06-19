@@ -18,9 +18,9 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
     "@kovojs/better-auth": "workspace:*",
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/drizzle": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",
     "@kovojs/test": "workspace:*",

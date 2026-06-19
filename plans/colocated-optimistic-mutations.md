@@ -19,7 +19,7 @@ no return value.
 - Transforms are a free-floating const keyed off the **form**, not the mutation:
   `const addContactDerivedOptimistic = { queue, transforms: {...} } satisfies OptimisticFor<typeof addContactForm>`
   (`examples/crm/src/mutations.ts:53-71`). `OptimisticFor` is defined at
-  `packages/runtime/src/optimism.ts:70-80`.
+  `packages/browser/src/optimism.ts:70-80`.
 - Partially-derived mutations need a bespoke contextual type to splice hand-written pairs
   into the generated plan: `CrmDerivedSubset<...>` (`examples/crm/src/optimistic-merge.ts`).
 - Derived transforms generate into `generated/optimistic/*` (e.g.
@@ -94,7 +94,7 @@ export const addContact = mutation('addContact', {
       target: type tests in `packages/server` proving `draft` (mutable, query-value typed)
       and `input` are correctly typed and a missing non-derivable key is a compile error.
 - [ ] **Draft-style apply in the optimism runtime.** Adjust the optimistic apply/rebase
-      loop (`packages/runtime/src/optimism.ts`) to hand each transform the
+      loop (`packages/browser/src/optimism.ts`) to hand each transform the
       already-cloned query value as a mutable draft and read the mutated draft back, rather
       than using a returned value. The snapshot/`structuredClone`, per-query pending log,
       rebase ordering, and reconcile are otherwise unchanged (§10.4). Evidence target:
@@ -148,7 +148,7 @@ export const addContact = mutation('addContact', {
 
 None yet — design/scoping pass. Per-slice proving commands to add:
 `pnpm --filter @kovojs/server test` (inline-field typing + KV310 type error),
-`pnpm --filter @kovojs/runtime test` (draft-style apply + wrong-prediction correction),
+`pnpm --filter @kovojs/browser test` (draft-style apply + wrong-prediction correction),
 `pnpm --filter @kovojs/compiler test` (lowering fixpoint fixture), then
 `kovo check optimistic` + the optimistic browser/integration tests on the migrated
 CRM/commerce examples, and `pnpm run acceptance` before updating the guides.

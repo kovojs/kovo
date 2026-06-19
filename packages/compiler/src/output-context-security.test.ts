@@ -108,13 +108,13 @@ export const ProductCard = component({
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     expect(serverSource).toContain(
-      `import { derive, kovoStyleProperty } from '@kovojs/runtime/generated';`,
+      `import { derive, kovoStyleProperty } from '@kovojs/browser/generated';`,
     );
     expect(serverSource).toContain(
       `derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));`,
     );
     expect(clientSource).toContain(
-      `import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/runtime/generated';`,
+      `import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/browser/generated';`,
     );
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
   });
@@ -144,7 +144,7 @@ export const SliderDemo = component({
     }).toMatchInlineSnapshot(`
       {
         "clientSource": "// @kovojs-ir
-      import { derive, kovoStyleProperty } from '@kovojs/runtime/generated';
+      import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
 
       export const SliderDemo$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \`\${state.value}%\`)].filter(Boolean).join('; '));
       export const SliderDemo$span_style_derive_2 = derive(["state"], (state) => [kovoStyleProperty("left", \`\${state.value}%\`), kovoStyleProperty("top", '50%'), kovoStyleProperty("transform", 'translate(-50%, -50%)')].filter(Boolean).join('; '));
@@ -152,7 +152,7 @@ export const SliderDemo = component({
         "diagnostics": [],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { derive, kovoStyleProperty } from '@kovojs/runtime/generated';
+        return \`import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
 
       export const SliderDemo$span_style_derive = derive(["state"], (state: any) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
       export const SliderDemo$span_style_derive_2 = derive(["state"], (state: any) => [kovoStyleProperty("left", \\\`\\\${state.value}%\\\`), kovoStyleProperty("top", '50%'), kovoStyleProperty("transform", 'translate(-50%, -50%)')].filter(Boolean).join('; '));
@@ -217,7 +217,7 @@ export const Promo = component({
     const safe = compileComponentModule({
       fileName: 'trusted-promo.tsx',
       source: `
-import { trustedHtml } from '@kovojs/runtime';
+import { trustedHtml } from '@kovojs/browser';
 
 export const TrustedPromo = component({
   render: ({ promo }) => <div dangerouslySetInnerHTML={trustedHtml("<b>safe</b>")} />,

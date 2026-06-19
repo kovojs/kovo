@@ -4,13 +4,13 @@ import {
   installKovoLoader,
   type MorphRoot,
   type TargetCollectorRoot,
-} from '@kovojs/runtime/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
+} from '@kovojs/browser/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
 import {
   type BroadcastLike,
   installMutationBroadcast,
   submitEnhancedMutation,
-} from '@kovojs/runtime/internal/mutation';
+} from '@kovojs/browser/internal/mutation';
 
 declare global {
   interface Window {

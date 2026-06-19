@@ -1,6 +1,6 @@
 import { guards, mutation, s, type MutationContext } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
-import type { OptimisticFor } from '@kovojs/runtime';
+import type { OptimisticFor } from '@kovojs/browser';
 
 import type { CrmDb } from './db.js';
 import {

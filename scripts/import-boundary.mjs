@@ -30,7 +30,7 @@ const explicitlyAllowedInternalImports = new Set([
   'examples/reference/src/app.ts -> @kovojs/core/internal/graph',
   'examples/stackoverflow/src/graph.ts -> @kovojs/core/internal/graph',
   'site/content/guides/components.md -> @kovojs/server/internal/html',
-  'site/scripts/capture.mjs -> @kovojs/runtime/internal/inline-loader',
+  'site/scripts/capture.mjs -> @kovojs/browser/internal/inline-loader',
   'site/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
   'site/src/components/chrome.tsx -> @kovojs/server/internal/html',
   'site/src/components/docs-layout.tsx -> @kovojs/server/internal/html',
@@ -47,11 +47,11 @@ const explicitlyAllowedInternalImports = new Set([
 // deferred `<kovo-defer>` streams via `applyDeferredStreamResponseToRuntime`, the
 // app-facing helper published on the runtime's compiler-ABI `./generated` subpath
 // (the same module emitted client bootstraps import). This is the one sanctioned
-// app-level read of `@kovojs/runtime/generated` (see plans/api-cleanup.md §runtime
+// app-level read of `@kovojs/browser/generated` (see plans/api-cleanup.md §runtime
 // `./client` facade-shrink; SPEC §§4.4, 9.1).
 const explicitlyAllowedGeneratedImports = new Set([
-  'packages/create-kovo/templates/src/client.ts -> @kovojs/runtime/generated',
-  'site/content/guides/streaming.md -> @kovojs/runtime/generated',
+  'packages/create-kovo/templates/src/client.ts -> @kovojs/browser/generated',
+  'site/content/guides/streaming.md -> @kovojs/browser/generated',
 ]);
 
 export async function collectImportBoundaryViolations({

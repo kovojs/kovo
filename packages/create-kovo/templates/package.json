@@ -16,8 +16,8 @@
   },
   "dependencies": {
     "@kovojs/better-auth": "workspace:*",
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*"
   },

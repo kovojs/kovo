@@ -25,7 +25,7 @@ describe('compiled interactive gallery static export', () => {
 
       const html = await readFile(join(outDir, 'gallery/interactive/index.html'), 'utf8');
       expect(html).not.toContain('type="importmap"');
-      expect(html).not.toContain('@kovojs/runtime');
+      expect(html).not.toContain('@kovojs/browser');
 
       server = await serveStaticExport(outDir);
       const address = server.address();

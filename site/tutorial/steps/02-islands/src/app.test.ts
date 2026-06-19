@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { dispatchDelegatedEvent, type EventElementLike } from '@kovojs/runtime/internal/delegation';
+import { dispatchDelegatedEvent, type EventElementLike } from '@kovojs/browser/internal/delegation';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 
 import { productRoute } from './app.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { trustedHtml } from '@kovojs/runtime';
+import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 

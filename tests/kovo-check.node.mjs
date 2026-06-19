@@ -36,14 +36,14 @@ import {
   queryShapesFromFacts,
 } from '../dist/compiler/src/internal.mjs';
 import { diagnosticDefinitions } from '../dist/core/src/internal/diagnostics.mjs';
-import { createQueryStore, installKovoLoader } from '../dist/runtime/src/client.mjs';
-import { derive } from '../dist/runtime/src/index.mjs';
+import { createQueryStore, installKovoLoader } from '../dist/browser/src/client.mjs';
+import { derive } from '../dist/browser/src/index.mjs';
 import {
   applyDeferredStreamResponseToRuntime,
   kovoEscapeHtml,
-} from '../dist/runtime/src/generated.mjs';
-import { refetchQueries, kovoLoaderSource } from '../dist/runtime/src/internal/inline-loader.mjs';
-import { DomMorphTarget, morphStructuralTree } from '../dist/runtime/src/internal/morph.mjs';
+} from '../dist/browser/src/generated.mjs';
+import { refetchQueries, kovoLoaderSource } from '../dist/browser/src/internal/inline-loader.mjs';
+import { DomMorphTarget, morphStructuralTree } from '../dist/browser/src/internal/morph.mjs';
 import {
   applyCompiledQueryUpdatePlan,
   installPagehideOptimismCleanup,
@@ -51,8 +51,8 @@ import {
   stampPendingQueries,
   submitEnhancedMutation,
   submitOptimisticEnhancedMutation,
-} from '../dist/runtime/src/internal/mutation.mjs';
-import { readElementParams } from '../dist/runtime/src/internal/delegation.mjs';
+} from '../dist/browser/src/internal/mutation.mjs';
+import { readElementParams } from '../dist/browser/src/internal/delegation.mjs';
 import { createKovoTestHarness } from '../dist/test/src/harness.mjs';
 import { createDbVerifier } from '../dist/test/src/verifier.mjs';
 import {
@@ -153,10 +153,10 @@ import {
   serverPageHintsBehaviorFact,
 } from '../packages/conformance-fixtures/src/server-fixtures.ts';
 import {
-  viteHandlerTransformFact,
+  viteHandlerTransformFactAsync,
   viteProductionEmitContractFact,
   viteRedGreenBuildFixtureFact,
-  viteTransformElementFact,
+  viteTransformElementFactAsync,
 } from '../packages/conformance-fixtures/src/vite-fixtures.ts';
 import {
   generatedWireResponseBodies,
@@ -666,7 +666,7 @@ void test('P10 v1 acceptance ledger tracks every freeze criterion', async () => 
   );
   assert.equal(
     fact.gateEvidenceArtifacts['16.6 Navigation typed'],
-    'Commerce route/link/redirect checks plus route-rename proof in packages/runtime/src/index.test.ts.',
+    'Commerce route/link/redirect checks plus route-rename proof in packages/browser/src/index.test.ts.',
   );
   assert.equal(
     fact.gateEvidenceArtifacts['16.8 Update coverage'],
@@ -2092,8 +2092,8 @@ void test('P10 starter wires graph assertions into CI', async () => {
   assert.deepEqual(starterAcceptance.package, {
     dependencies: [
       '@kovojs/better-auth',
+      '@kovojs/browser',
       '@kovojs/core',
-      '@kovojs/runtime',
       '@kovojs/server',
       '@kovojs/style',
     ],
@@ -2934,7 +2934,7 @@ export const DiagnosticCard = component({
   const expectedStaticExportCliError = expectedStaticExportError.replaceAll('\n', ' ');
 
   const plugin = kovoVitePlugin();
-  const greenTransform = viteTransformElementFact(plugin, {
+  const greenTransform = await viteTransformElementFactAsync(plugin, {
     id: componentId,
     selector: { tag: 'button' },
     source: greenSource,
@@ -2955,7 +2955,7 @@ export const DiagnosticCard = component({
   const lintPlugin = kovoVitePlugin({
     onDiagnostic: (diagnostic) => lintDiagnostics.push(diagnostic),
   });
-  const lintTransform = viteHandlerTransformFact(lintPlugin, {
+  const lintTransform = await viteHandlerTransformFactAsync(lintPlugin, {
     id: componentId,
     selector: { tag: 'button' },
     source: lintSource,
@@ -3998,14 +3998,14 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
     acceptance: {
       browsers: ['chromium', 'firefox', 'webkit'],
       headless: true,
-      include: ['packages/runtime/src/**/*.browser.test.ts'],
+      include: ['packages/browser/src/**/*.browser.test.ts'],
       providerPackage: '@vitest/browser-playwright',
     },
     inputFacts: [
       { auto: true },
       { base: 'workspace', pattern: 'vitest.browser.config.ts' },
       { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },
-      { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+      { base: 'workspace', pattern: 'packages/browser/src/**/*.browser.test.ts' },
     ],
     presentInAcceptance: true,
     presentInCi: true,

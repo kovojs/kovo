@@ -110,9 +110,9 @@ importers:
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../../packages/runtime
+        version: link:../../packages/browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -165,9 +165,9 @@ importers:
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../../packages/runtime
+        version: link:../../packages/browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -205,9 +205,9 @@ importers:
       '@kovojs/devtool':
         specifier: workspace:*
         version: link:../../packages/devtool
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../../packages/runtime
+        version: link:../../packages/browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -239,9 +239,9 @@ importers:
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../../packages/runtime
+        version: link:../../packages/browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -301,9 +301,9 @@ importers:
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../../packages/drizzle
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../../packages/runtime
+        version: link:../../packages/browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server
@@ -395,9 +395,9 @@ importers:
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../headless-ui
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../runtime
+        version: link:../browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
@@ -413,9 +413,9 @@ importers:
       '@kovojs/drizzle':
         specifier: workspace:*
         version: link:../drizzle
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../runtime
+        version: link:../browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
@@ -447,9 +447,9 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../runtime
+        version: link:../browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../server
@@ -502,7 +502,7 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
 
-  packages/runtime:
+  packages/browser:
     dependencies:
       '@kovojs/core':
         specifier: workspace:*
@@ -517,9 +517,9 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../core
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../runtime
+        version: link:../browser
       '@kovojs/style':
         specifier: workspace:*
         version: link:../style
@@ -596,9 +596,9 @@ importers:
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../packages/headless-ui
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../packages/runtime
+        version: link:../packages/browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../packages/server
@@ -636,9 +636,9 @@ importers:
       '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@kovojs/runtime':
+      '@kovojs/browser':
         specifier: workspace:*
-        version: link:../../packages/runtime
+        version: link:../../packages/browser
       '@kovojs/server':
         specifier: workspace:*
         version: link:../../packages/server

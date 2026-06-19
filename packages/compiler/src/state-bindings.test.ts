@@ -211,7 +211,7 @@ export const DisclosureDemo = component({
     expect(serverSource).not.toContain('data-derive=');
     expect(serverSource).toContain("aria-expanded={state.open ? 'true' : 'false'}");
     expect(serverSource).toContain('hidden={!state.open}');
-    expect(clientSource).toContain("import { derive } from '@kovojs/runtime/generated';");
+    expect(clientSource).toContain("import { derive } from '@kovojs/browser/generated';");
     expect(clientSource).toContain(
       `export const DisclosureDemo$button_aria_expanded_derive = derive(["state"], (state) => state.open ? 'true' : 'false');`,
     );

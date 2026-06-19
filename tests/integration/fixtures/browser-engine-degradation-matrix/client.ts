@@ -4,8 +4,8 @@ import {
   type EnhancedMutationFetch,
   type MorphRoot,
   type TargetCollectorRoot,
-} from '@kovojs/runtime/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
+} from '@kovojs/browser/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
 
 declare global {
   interface Window {

@@ -58,7 +58,7 @@ type InvalidatedQueryValues<Definition> = {
  *
  * @example
  * import { form } from '@kovojs/core';
- * import type { OptimisticFor } from '@kovojs/runtime';
+ * import type { OptimisticFor } from '@kovojs/browser';
  *
  * const addToCart = form('cart/add');
  *

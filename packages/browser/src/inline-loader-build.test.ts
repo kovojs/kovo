@@ -99,7 +99,7 @@ describe('inline loader build source', () => {
       'node --experimental-strip-types src/inline-loader-build.ts --check',
     );
     expect(rootManifest.scripts?.['check:inline-loader']).toBe(
-      'pnpm --filter @kovojs/runtime run check:inline-loader',
+      'pnpm --filter @kovojs/browser run check:inline-loader',
     );
     expect(rootManifest.scripts?.check).toContain('pnpm run check:inline-loader');
     expect(rootManifest.scripts?.['check:build']).toContain('pnpm run check:inline-loader');

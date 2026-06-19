@@ -19,9 +19,9 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",
     "@kovojs/ui": "workspace:*"

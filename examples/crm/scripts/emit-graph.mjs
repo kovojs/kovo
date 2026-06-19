@@ -346,7 +346,7 @@ function typeDerivedSubset(source, formName, derivedQueries) {
           .map((query) => JSON.stringify(query))
           .join(' | ');
   const withImport = source.replace(
-    "import type { OptimisticFor } from '@kovojs/runtime';\n",
+    "import type { OptimisticFor } from '@kovojs/browser';\n",
     "import type { CrmDerivedSubset } from '../../optimistic-merge.js';\n",
   );
   assert.notEqual(withImport, source, 'expected the OptimisticFor import to rewrite');

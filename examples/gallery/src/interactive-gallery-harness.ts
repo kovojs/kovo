@@ -177,7 +177,7 @@ export function evaluateClientModule(
   globals: Record<string, unknown> = {},
 ): ClientExports {
   const source = readCompiledArtifact(fileName)
-    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/runtime(?:\/generated)?["'];\n\n?/g, '')
+    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/browser(?:\/generated)?["'];\n\n?/g, '')
     .replace(/import \{[\s\S]*?\} from ["']@kovojs\/headless-ui\/[^"']+["'];\n\n?/g, '')
     .replace(/import \{[\s\S]*?\} from ["']@kovojs\/ui\/[^"']+["'];\n\n?/g, '')
     .replaceAll('export const ', 'exports.');

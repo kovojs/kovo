@@ -63,7 +63,7 @@ export const defaultEnhancedFetch: EnhancedMutationFetch = (url, options) => {
  *   createQueryStore,
  *   defaultEnhancedFetch,
  *   installKovoLoader,
- * } from '@kovojs/runtime/client';
+ * } from '@kovojs/browser/client';
  *
  * const store = createQueryStore();
  * const root = createBrowserKovoRoot();

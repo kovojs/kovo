@@ -179,7 +179,7 @@ function write() {
 
     pkgJson.files = ['dist'];
     // Use a dedicated `build:dist` script so we never clobber a package's existing
-    // `build` (e.g. @kovojs/runtime's `build` = inline-loader generation).
+    // `build` (e.g. @kovojs/browser's `build` = inline-loader generation).
     pkgJson.scripts = {
       ...pkgJson.scripts,
       'build:dist': buildCommand(plan),

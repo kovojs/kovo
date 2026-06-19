@@ -69,7 +69,7 @@ export const RawHtml${sink.replaceAll(/[^A-Za-z0-9_$]/g, '')} = component({
     const result = compileComponentModule({
       fileName: 'trusted-raw-html.tsx',
       source: `
-import { trustedHtml } from '@kovojs/runtime';
+import { trustedHtml } from '@kovojs/browser';
 
 const browserTrustedHtml = {
   [Symbol.toStringTag]: "TrustedHTML",
@@ -141,7 +141,7 @@ export const TrustedRawHtml = component({
         "serverSource": "// @kovojs-ir
       export function renderSource() {
         return \`
-      import { trustedHtml } from '@kovojs/runtime';
+      import { trustedHtml } from '@kovojs/browser';
 
       const browserTrustedHtml = {
         [Symbol.toStringTag]: "TrustedHTML",

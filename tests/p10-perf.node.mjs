@@ -11,7 +11,7 @@ const {
   toNodeHandler,
 } = await import('../dist/server/src/index.mjs');
 const { renderPageHints } = await import('../dist/server/src/internal/html.mjs');
-const { kovoLoaderSource } = await import('../dist/runtime/src/internal/inline-loader.mjs');
+const { kovoLoaderSource } = await import('../dist/browser/src/internal/inline-loader.mjs');
 
 export const p10PerfAcceptance = {
   browser: 'chromium',

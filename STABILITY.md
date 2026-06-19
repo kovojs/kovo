@@ -13,7 +13,7 @@ A symbol is part of the supported public API only if **both**:
    (not tagged `@internal`).
 
 Everything else — `private` packages, `@internal` exports, internal subpaths
-(`@kovojs/*/internal`, `@kovojs/runtime/loader`, …), and the raw `./src/**` of any
+(`@kovojs/*/internal`, `@kovojs/browser/loader`, …), and the raw `./src/**` of any
 package — is internal. It may change or disappear in any release with no notice. Do
 not import it; the api-surface gate (`scripts/api-surface-gate.mjs`) and the generated
 API reference exist to keep this line visible.

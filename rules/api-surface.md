@@ -47,7 +47,7 @@ public package, every `package.json` export subpath is classified by
   type. Either promote the supporting type to the same public surface, redesign
   the signature to use an existing public type, or move the original symbol behind
   an internal/generated subpath too.
-- Generated subpaths, such as `@kovojs/runtime/generated`, expose compiler-emitted
+- Generated subpaths, such as `@kovojs/browser/generated`, expose compiler-emitted
   ABI. They may export declarations tagged `@generated` plus documented public
   types needed to type that ABI. They must not export `@internal` declarations or
   untagged undocumented declarations.

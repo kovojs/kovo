@@ -52,8 +52,8 @@
     "typescript": "^6.0.3"
   },
   "devDependencies": {
+    "@kovojs/browser": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "vitest": "4.1.8"
   }

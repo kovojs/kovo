@@ -15,7 +15,7 @@ import { gzipSync } from 'node:zlib';
  */
 
 // SPEC §4.4 / S2 gate: the always-loaded bootstrap stays ≤8KB gzipped — the
-// same measurement packages/runtime/src/index.test.ts pins.
+// same measurement packages/browser/src/index.test.ts pins.
 const LOADER_BUDGET_BYTES = 8192;
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const siteRoot = resolve(scriptDir, '..');
@@ -144,7 +144,7 @@ export async function captureKovoExplain(_repoRoot) {
 
 /** The inline loader budget, measured from the artifact that actually ships. */
 export async function captureLoaderBudget() {
-  const { kovoLoaderSource } = await import('@kovojs/runtime/internal/inline-loader');
+  const { kovoLoaderSource } = await import('@kovojs/browser/internal/inline-loader');
   const rawBytes = Buffer.byteLength(kovoLoaderSource, 'utf8');
   const gzipBytes = gzipSync(kovoLoaderSource).byteLength;
   if (gzipBytes > LOADER_BUDGET_BYTES) {

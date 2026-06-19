@@ -19,7 +19,7 @@ query the mutation invalidates. Here is the commerce app's cart transform:
 
 ```ts
 import { form } from '@kovojs/core';
-import type { OptimisticFor } from '@kovojs/runtime';
+import type { OptimisticFor } from '@kovojs/browser';
 
 export const addToCartForm = form<'cart/add', AddToCartInput>('cart/add');
 

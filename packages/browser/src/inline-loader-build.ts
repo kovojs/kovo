@@ -1376,7 +1376,7 @@ export function emitInlineKovoLoaderModule(
     }
     if (changed) {
       throw new Error(
-        `Inline Kovo loader module is stale: ${targetPath}. Run pnpm --filter @kovojs/runtime run build:inline-loader.`,
+        `Inline Kovo loader module is stale: ${targetPath}. Run pnpm --filter @kovojs/browser run build:inline-loader.`,
       );
     }
     return { changed, source, targetPath };

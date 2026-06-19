@@ -14,7 +14,7 @@
  * keyboard navigation never enters the menu.
  *
  * To fix this at the root without coupling `@kovojs/headless-ui` to
- * `@kovojs/runtime`, the runtime publishes a POST-COMMIT scheduler on a
+ * `@kovojs/browser`, the runtime publishes a POST-COMMIT scheduler on a
  * well-known global while a delegated event is in flight. Primitives route
  * their deferred work through {@link scheduleDeferred}, which prefers that
  * runtime hook and falls back to `setTimeout(callback, 0)` when no runtime is

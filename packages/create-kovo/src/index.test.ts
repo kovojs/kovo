@@ -86,7 +86,7 @@ describe('create-kovo starter', () => {
       expect(packageJson.dependencies).toMatchObject({
         '@kovojs/better-auth': 'workspace:*',
         '@kovojs/core': 'workspace:*',
-        '@kovojs/runtime': 'workspace:*',
+        '@kovojs/browser': 'workspace:*',
         '@kovojs/server': 'workspace:*',
         '@kovojs/style': 'workspace:*',
       });
@@ -878,7 +878,7 @@ function linkStarterBuildDependencies(root: string): void {
     join(nodeModules, '@kovojs/better-auth'),
   );
   symlinkSync(resolveDependencyRoot('@kovojs/core'), join(nodeModules, '@kovojs/core'));
-  symlinkSync(resolveDependencyRoot('@kovojs/runtime'), join(nodeModules, '@kovojs/runtime'));
+  symlinkSync(resolveDependencyRoot('@kovojs/browser'), join(nodeModules, '@kovojs/browser'));
   symlinkSync(resolveDependencyRoot('@kovojs/server'), join(nodeModules, '@kovojs/server'));
   symlinkSync(resolveDependencyRoot('@kovojs/style'), join(nodeModules, '@kovojs/style'));
   symlinkSync(resolveDependencyRoot('@kovojs/cli'), join(nodeModules, '@kovojs/cli'));

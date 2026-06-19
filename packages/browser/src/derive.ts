@@ -13,7 +13,7 @@ export interface DeriveDefinition<Inputs extends readonly string[], Value> {
  * @param fn - Computes the derived value from the inputs' current values.
  * @returns A `DeriveDefinition`.
  * @example
- * import { derive } from '@kovojs/runtime';
+ * import { derive } from '@kovojs/browser';
  *
  * export const total = derive(['price', 'quantity'], (price, quantity) =>
  *   Number(price) * Number(quantity),

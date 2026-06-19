@@ -41,7 +41,7 @@ describe('serializeDerivedOptimistic', () => {
 
     expect(source).toContain('// DO NOT EDIT');
     expect(source).toContain("import type { addToCartForm } from '../../app.js';");
-    expect(source).toContain("import type { OptimisticFor } from '@kovojs/runtime';");
+    expect(source).toContain("import type { OptimisticFor } from '@kovojs/browser';");
     expect(source).toContain('export const cartAddDerivedOptimistic = {');
     expect(source).toContain("queue: 'cart',");
     expect(source).toContain('transforms: {');
@@ -57,7 +57,7 @@ describe('serializeDerivedOptimistic', () => {
       entries: [{ program: pushProgram, query: 'orderHistory' }],
       formImport: { name: 'addToCartForm', path: '../../app.js' },
     });
-    expect(source).toContain("import { tempId, type OptimisticFor } from '@kovojs/runtime';");
+    expect(source).toContain("import { tempId, type OptimisticFor } from '@kovojs/browser';");
     expect(source).toContain(
       'next.items.push({ id: tempId(), productId: $input.productId, total: 0 });',
     );

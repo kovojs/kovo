@@ -13,9 +13,9 @@
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/drizzle": "workspace:*",
-    "@kovojs/runtime": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",
     "@kovojs/ui": "workspace:*",

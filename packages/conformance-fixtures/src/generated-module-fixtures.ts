@@ -626,7 +626,7 @@ export function generatedHandlerReferenceSummaryFact(
 
 const rewriteGeneratedRuntimeImports = (source: string): string =>
   source.replace(
-    /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/runtime(?:\/generated)?['"];\n?/g,
+    /import\s+\{([^}]+)\}\s+from\s+['"]@kovojs\/browser(?:\/generated)?['"];\n?/g,
     (_match, names: string) => {
       const bindings = names
         .split(',')
@@ -678,10 +678,9 @@ export function executeGeneratedClientArtifact(
 
 export function executeGeneratedServerRenderSource(source: string): string {
   const exports = {} as { renderSource?: () => string };
-  const moduleSource = source.replace(
-    /export function ([A-Za-z_$][\w$]*)/g,
-    'exports.$1 = function $1',
-  );
+  const moduleSource = source
+    .replace(/import\s+[\s\S]*?\s+from\s+['"][^'"]+['"];\n?/g, '')
+    .replace(/export function ([A-Za-z_$][\w$]*)/g, 'exports.$1 = function $1');
 
   runInNewContext(moduleSource, { exports });
 

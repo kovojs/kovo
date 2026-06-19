@@ -4,32 +4,32 @@
   "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md.",
   "duplicates": [
     {
-      "packageName": "@kovojs/runtime",
+      "packageName": "@kovojs/browser",
       "symbol": "ImportHandlerModule",
       "homes": [
         {
-          "importPath": "@kovojs/runtime",
+          "importPath": "@kovojs/browser",
           "kind": "type",
           "subpath": "."
         },
         {
-          "importPath": "@kovojs/runtime/client",
+          "importPath": "@kovojs/browser/client",
           "kind": "type",
           "subpath": "./client"
         }
       ]
     },
     {
-      "packageName": "@kovojs/runtime",
+      "packageName": "@kovojs/browser",
       "symbol": "MutationChangeRecord",
       "homes": [
         {
-          "importPath": "@kovojs/runtime",
+          "importPath": "@kovojs/browser",
           "kind": "type",
           "subpath": "."
         },
         {
-          "importPath": "@kovojs/runtime/client",
+          "importPath": "@kovojs/browser/client",
           "kind": "type",
           "subpath": "./client"
         }

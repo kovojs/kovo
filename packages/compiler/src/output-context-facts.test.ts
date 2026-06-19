@@ -186,7 +186,7 @@ export const StyleOutputContextFacts = component({
     const result = compileComponentModule({
       fileName: 'trusted-output-context-facts.tsx',
       source: `
-import { trustedHtml } from '@kovojs/runtime';
+import { trustedHtml } from '@kovojs/browser';
 
 export const TrustedOutputContextFacts = component({
   render: () => <article dangerouslySetInnerHTML={trustedHtml("<b>safe</b>")} />,

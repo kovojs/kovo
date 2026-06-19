@@ -1,5 +1,5 @@
-import { createQueryStore, type CompiledQueryUpdatePlans } from '@kovojs/runtime/client';
-import { installInlineQueryEventHydration } from '@kovojs/runtime/internal/inline-loader';
+import { createQueryStore, type CompiledQueryUpdatePlans } from '@kovojs/browser/client';
+import { installInlineQueryEventHydration } from '@kovojs/browser/internal/inline-loader';
 
 interface BoardItem {
   id: string;

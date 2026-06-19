@@ -261,7 +261,7 @@ describe('@kovojs/test command fixtures', () => {
       acceptance: {
         browsers: ['chromium', 'firefox', 'webkit'],
         headless: true,
-        include: ['packages/runtime/src/**/*.browser.test.ts'],
+        include: ['packages/browser/src/**/*.browser.test.ts'],
         providerPackage: '@vitest/browser-playwright',
       },
       ciWorkflowSource: [
@@ -296,14 +296,14 @@ describe('@kovojs/test command fixtures', () => {
       acceptance: {
         browsers: ['chromium', 'firefox', 'webkit'],
         headless: true,
-        include: ['packages/runtime/src/**/*.browser.test.ts'],
+        include: ['packages/browser/src/**/*.browser.test.ts'],
         providerPackage: '@vitest/browser-playwright',
       },
       inputFacts: [
         { auto: true },
         { base: 'workspace', pattern: 'vitest.browser.config.ts' },
         { base: 'workspace', pattern: 'scripts/browser-acceptance.mjs' },
-        { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+        { base: 'workspace', pattern: 'packages/browser/src/**/*.browser.test.ts' },
       ],
       presentInAcceptance: true,
       presentInCi: true,
@@ -376,7 +376,7 @@ describe('@kovojs/test command fixtures', () => {
           'export const browserSuiteAcceptance = {',
           "  browsers: ['chromium', 'firefox', 'webkit'],",
           '  headless: true,',
-          "  include: ['packages/runtime/src/**/*.browser.test.ts'],",
+          "  include: ['packages/browser/src/**/*.browser.test.ts'],",
           "  providerPackage: '@vitest/browser-playwright',",
           '};',
         ].join('\n'),
@@ -386,14 +386,14 @@ describe('@kovojs/test command fixtures', () => {
         acceptance: {
           browsers: ['chromium', 'firefox', 'webkit'],
           headless: true,
-          include: ['packages/runtime/src/**/*.browser.test.ts'],
+          include: ['packages/browser/src/**/*.browser.test.ts'],
           providerPackage: '@vitest/browser-playwright',
         },
         inputFacts: [
           { auto: true },
           { base: 'workspace', pattern: 'vitest.browser.config.ts' },
           { base: 'workspace', pattern: 'tests/browser-acceptance.mjs' },
-          { base: 'workspace', pattern: 'packages/runtime/src/**/*.browser.test.ts' },
+          { base: 'workspace', pattern: 'packages/browser/src/**/*.browser.test.ts' },
         ],
         presentInAcceptance: true,
         presentInCi: true,
