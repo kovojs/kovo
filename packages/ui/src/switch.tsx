@@ -3,7 +3,7 @@ import { component } from '@kovojs/core';
 import { switchRootAttributes } from '@kovojs/headless-ui/switch';
 import * as style from '@kovojs/style';
 
-import { passThroughProps } from './pass-through.js';
+import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
@@ -133,10 +133,10 @@ export const Switch = component({
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
       >
-        <span {...trackStyleAttrs} data-state={attrs['data-state']}>
+        <span {...trackStyleAttrs} {...bindingProps(props, ['data-state'])} data-state={attrs['data-state']}>
           <input
             {...inputStyleAttrs}
-            {...passThroughProps(props)}
+            {...passThroughProps(props, { island: false })}
             aria-checked={attrs['aria-checked']}
             aria-describedby={props.describedBy}
             aria-labelledby={props.labelledBy}
@@ -152,7 +152,12 @@ export const Switch = component({
             type={attrs.type}
             value={attrs.value}
           />
-          <span {...thumbStyleAttrs} aria-hidden="true" data-state={attrs['data-state']} />
+          <span
+            {...thumbStyleAttrs}
+            {...bindingProps(props, ['data-state'])}
+            aria-hidden="true"
+            data-state={attrs['data-state']}
+          />
         </span>
         {props.children}
       </label>
