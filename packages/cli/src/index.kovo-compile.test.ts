@@ -4,6 +4,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  persistentCompileCacheDir,
+  readPersistentCompileCacheManifest,
+} from '@kovojs/compiler/internal';
+
 import { mainAsync } from './index.js';
 
 describe('kovo compile', () => {
@@ -13,8 +18,10 @@ describe('kovo compile', () => {
     const outPath = join(root, 'generated/cart-badge.tsx');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const previousCwd = process.cwd();
 
     try {
+      process.chdir(root);
       mkdirSync(root, { recursive: true });
       writeFileSync(
         sourcePath,
@@ -47,6 +54,9 @@ export const CartBadge = component({
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-compile/v1\n');
       expect(output).toContain(`WRITE component path=${JSON.stringify(outPath)}`);
+      const manifest = await readPersistentCompileCacheManifest(persistentCompileCacheDir(root));
+      expect(manifest.version).toBe('kovo-compile-cache/v1');
+      expect(Object.keys(manifest.entries).length).toBeGreaterThan(0);
 
       stdout.mockClear();
       await expect(
@@ -65,6 +75,7 @@ export const CartBadge = component({
         `CHECK component path=${JSON.stringify(outPath)} status=current`,
       );
     } finally {
+      process.chdir(previousCwd);
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { recursive: true, force: true });

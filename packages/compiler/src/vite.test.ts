@@ -466,20 +466,38 @@ export const CartBadge = component({
 
   it('caches repeated transforms by source hash and compile context', async () => {
     const compileComponentModule = vi.fn(({ source }: { source: string }) => ({
+      dependencyFootprint: {},
       files: [{ kind: 'server', source: `export const sourceLength = ${source.length};` }],
     }));
     const plugin = createKovoVitePlugin(compileComponentModule);
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-persistent-cache-'));
+    plugin.configResolved?.({ root } as never);
 
-    expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
-      'export const sourceLength = 10;',
-    );
-    expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
-      'export const sourceLength = 10;',
-    );
-    expect((await plugin.transform('component(1)', 'src/cart-badge.tsx'))?.code).toBe(
-      'export const sourceLength = 12;',
-    );
-    expect(compileComponentModule).toHaveBeenCalledTimes(2);
+    try {
+      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        'export const sourceLength = 10;',
+      );
+      expect((await plugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        'export const sourceLength = 10;',
+      );
+      expect((await plugin.transform('component(1)', 'src/cart-badge.tsx'))?.code).toBe(
+        'export const sourceLength = 12;',
+      );
+      expect(compileComponentModule).toHaveBeenCalledTimes(2);
+
+      const secondCompile = vi.fn(() => ({
+        dependencyFootprint: {},
+        files: [{ kind: 'server', source: 'export const sourceLength = -1;' }],
+      }));
+      const secondPlugin = createKovoVitePlugin(secondCompile);
+      secondPlugin.configResolved?.({ root } as never);
+      expect((await secondPlugin.transform('component(', 'src/cart-badge.tsx'))?.code).toBe(
+        'export const sourceLength = 10;',
+      );
+      expect(secondCompile).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it('sends a Kovo component-render HMR event for classified component refreshes', async () => {

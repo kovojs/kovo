@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   persistentCompileCacheDir,
+  readPersistentCompileCacheEntry,
   readPersistentCompileCacheManifest,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
@@ -45,6 +46,9 @@ describe('persistent compile cache format', () => {
     await expect(readFile(join(cacheDir, entry.artifactRefs.result), 'utf8')).resolves.toContain(
       'cart.server.js',
     );
+    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toEqual({
+      files: [{ fileName: 'cart.server.js', source: 'export {};' }],
+    });
   });
 
   it('treats a missing or corrupt manifest as an empty cache miss', async () => {

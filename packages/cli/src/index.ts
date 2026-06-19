@@ -13,7 +13,14 @@ import type {
   CompileRouteModuleOptions,
   RouteComponentImportRewrite,
 } from '@kovojs/compiler';
-import { CompileCache, compileComponentCacheKeyInput } from '@kovojs/compiler/internal';
+import {
+  CompileCache,
+  compileCacheKey,
+  compileComponentCacheKeyInput,
+  persistentCompileCacheDir,
+  readPersistentCompileCacheEntry,
+  writePersistentCompileCacheEntry,
+} from '@kovojs/compiler/internal';
 import type * as CompilerInternal from '@kovojs/compiler/internal';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -301,9 +308,21 @@ async function compileCachedComponentModule(
   options: CompileComponentOptions,
 ): Promise<CompileResult> {
   const { compileComponentModule } = await import('@kovojs/compiler');
-  return cliCompileComponentCache.getOrCreate(compileComponentCacheKeyInput(options), () =>
+  const cacheInput = compileComponentCacheKeyInput(options);
+  const cacheKey = compileCacheKey(cacheInput);
+  const cacheDir = persistentCompileCacheDir(options.packagePrefixDiscoveryRoot ?? process.cwd());
+  const persistent = await readPersistentCompileCacheEntry<CompileResult>(cacheDir, cacheKey);
+  if (persistent) return persistent;
+
+  const result = await cliCompileComponentCache.getOrCreate(cacheInput, () =>
     compileComponentModule(options),
   );
+  await writePersistentCompileCacheEntry(cacheDir, {
+    cacheKey,
+    footprint: result.dependencyFootprint,
+    result,
+  });
+  return result;
 }
 
 function compileComponentOptions(input: CompileComponentV1Input): CompileComponentOptions {

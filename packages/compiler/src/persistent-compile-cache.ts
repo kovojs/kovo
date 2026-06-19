@@ -40,6 +40,22 @@ export async function readPersistentCompileCacheManifest(
   }
 }
 
+/** @internal Read one cached result blob, returning null on miss, stale compiler id, or corruption. */
+export async function readPersistentCompileCacheEntry<Result>(
+  cacheDir: string,
+  cacheKey: string,
+): Promise<Result | null> {
+  const manifest = await readPersistentCompileCacheManifest(cacheDir);
+  const entry = manifest.entries[cacheKey];
+  if (!entry || entry.compilerBuildId !== compilerBuildId()) return null;
+
+  try {
+    return JSON.parse(await readFile(join(cacheDir, entry.artifactRefs.result), 'utf8')) as Result;
+  } catch {
+    return null;
+  }
+}
+
 /** @internal Atomically write/update one manifest entry and its content-addressed result blob. */
 export async function writePersistentCompileCacheEntry(
   cacheDir: string,

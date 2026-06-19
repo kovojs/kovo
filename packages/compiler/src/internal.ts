@@ -9,6 +9,7 @@ export {
 } from './compile-cache.js';
 export {
   persistentCompileCacheDir,
+  readPersistentCompileCacheEntry,
   readPersistentCompileCacheManifest,
   writePersistentCompileCacheEntry,
   type PersistentCompileCacheEntry,

@@ -235,8 +235,13 @@ compilerBuildId }`) + content-addressed artifact blobs under a gitignored `.kovo
     proves the compiler cache format writes a `kovo-compile-cache/v1` manifest under
     `.kovo/cache/compiler`, stores result blobs by content hash, writes through temp+rename, and
     treats missing/corrupt manifests as empty cache misses.
-- [ ] Persistence round-trip in Vite + CLI: warm-load the manifest at startup, write back new
+- [x] Persistence round-trip in Vite + CLI: warm-load the manifest at startup, write back new
       entries, so a _second_ process on unchanged source hits disk instead of recompiling.
+  - Evidence 2026-06-19:
+    `corepack pnpm exec vitest --run packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/vite.test.ts packages/cli/src/index.kovo-compile.test.ts -t "persistent compile cache|caches repeated transforms|writes and checks component artifacts"`
+    proves Vite writes a persistent compile entry and a fresh plugin instance over the same root
+    serves the same transform without calling the compile callback; the CLI component compile path
+    writes a non-empty `.kovo/cache/compiler` manifest under its compile root.
 - [ ] Concurrency safety for parallel vitest workers and parallel builds (per-entry atomic writes;
       no global lock that serializes compilation). Prune policy (size/LRU cap) so the cache can't
       grow unbounded.

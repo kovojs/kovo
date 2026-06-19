@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 
-import { CompileCache, compileComponentCacheKeyInput } from './compile-cache.js';
+import { CompileCache, compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   collectCssAssetManifest,
@@ -10,10 +10,16 @@ import {
   type CssAssetManifest,
   type CssAssetManifestOptions,
 } from './css.js';
+import {
+  persistentCompileCacheDir,
+  readPersistentCompileCacheEntry,
+  writePersistentCompileCacheEntry,
+} from './persistent-compile-cache.js';
 import type {
   HmrImpactClassification,
   HmrImpactMetadata,
   HmrImpactReason,
+  CompileDependencyFootprint,
   PackageComponentPrefixFact,
   RegistryFacts,
 } from './types.js';
@@ -172,6 +178,7 @@ interface ViteCompileOptions {
 
 interface ViteCompileResult {
   cssAssets?: readonly ComponentCssAsset[];
+  dependencyFootprint?: CompileDependencyFootprint;
   diagnostics?: readonly CompilerDiagnostic[];
   files: readonly {
     kind: string;
@@ -396,27 +403,42 @@ function compileCachedViteComponentModule(
   root: string,
   fileName: string,
   source: string,
-): MaybePromise<ViteCompileResult> {
+): Promise<ViteCompileResult> {
   const registryFacts = resolveViteRegistryFacts(options, fileName);
-  return cache.getOrCreate(
-    compileComponentCacheKeyInput({
-      fileName,
-      ...(options.packageComponentPrefixes === undefined
-        ? {}
-        : { packageComponentPrefixes: options.packageComponentPrefixes }),
-      packagePrefixDiscoveryRoot: root,
-      ...(registryFacts === undefined ? {} : { registryFacts }),
-      source,
-    }),
-    () =>
-      compileViteComponentModule(
-        compileComponentModule,
-        options,
-        root,
-        fileName,
-        source,
-        registryFacts,
-      ),
+  const compileOptions = {
+    fileName,
+    ...(options.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: options.packageComponentPrefixes }),
+    packagePrefixDiscoveryRoot: root,
+    ...(registryFacts === undefined ? {} : { registryFacts }),
+    source,
+  };
+  const cacheInput = compileComponentCacheKeyInput(compileOptions);
+  const cacheKey = compileCacheKey(cacheInput);
+  const cacheDir = persistentCompileCacheDir(root);
+  return readPersistentCompileCacheEntry<ViteCompileResult>(cacheDir, cacheKey).then(
+    async (persistent) => {
+      if (persistent) return persistent;
+      const result = await cache.getOrCreate(cacheInput, () =>
+        compileViteComponentModule(
+          compileComponentModule,
+          options,
+          root,
+          fileName,
+          source,
+          registryFacts,
+        ),
+      );
+      if (result.dependencyFootprint) {
+        await writePersistentCompileCacheEntry(cacheDir, {
+          cacheKey,
+          footprint: result.dependencyFootprint,
+          result,
+        });
+      }
+      return result;
+    },
   );
 }
 
