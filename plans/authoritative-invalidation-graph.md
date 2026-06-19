@@ -51,10 +51,18 @@ dependency is a compile error — not a latent prod bug or a hand-maintained lis
       `touches` remains the fallback for opaque/KV406 sites that have no derived
       entry.
   - Evidence: `pnpm exec vitest --run packages/server/src/change-record.test.ts
-    packages/server/src/mutation.test.ts` passed 25 tests; the regression test
+packages/server/src/mutation.test.ts` passed 25 tests; the regression test
     `keeps inferred touch sites authoritative over declared fallback touches`
     proves derived touch sites rerun the derived domain instead of the narrower
     declared fallback.
+- [x] **Drizzle static facade emits mutation touch registries.** The static graph
+      layer now derives a mutation-keyed `inferredTouches` registry from the
+      extracted touch graph and serializes it as TypeScript next to invalidation
+      sets; `kovo compile drizzle-static` includes both JSON facts and source.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.serialization.test.ts
+packages/cli/src/index.kovo-compile.test.ts` passed 21 tests, including the
+    derived `mutationTouchRegistry` CLI output and generated
+    `mutationInferredTouches` source.
 
 ## Open work
 
@@ -116,8 +124,11 @@ dependency is a compile error — not a latent prod bug or a hand-maintained lis
     change.
 - [x] `pnpm exec vp run kovo-check`
   - Evidence: passed 50/50 with `kovo-check/v1 OK` after the runtime precedence
-    change.
-- [ ] `pnpm --filter @kovojs/drizzle test` for extraction changes.
+    and Drizzle static registry source changes.
+- [x] `pnpm exec vitest --run packages/drizzle/src/index.serialization.test.ts packages/cli/src/index.kovo-compile.test.ts`
+  - Evidence: passed 21 Drizzle static serialization / CLI facade tests.
+- [ ] Full Drizzle extraction test sweep for extraction changes; `@kovojs/drizzle`
+      currently has no package `test` script, so use explicit Vitest file globs.
 - [ ] Targeted `tests/integration/specs/query-readset-runtime-crosscheck.spec.ts`
       plus a static-gate fixture for read/write coverage promotion.
 - [ ] `kovo check` on migrated examples.

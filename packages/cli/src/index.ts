@@ -1837,11 +1837,13 @@ async function runCompileDrizzleStaticCommand(
 ): Promise<CliCommandResult> {
   const {
     deriveInvalidationRegistry,
+    deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
     extractQueryFactsFromProject,
     extractSymbolicEffectsFromProject,
     extractTouchGraphFromProject,
     serializeInvalidationRegistry,
+    serializeMutationTouchRegistry,
     serializeTouchGraph,
   } = await import('@kovojs/drizzle/internal/static');
   const input = readJsonFile(options.inputPath) as DrizzleStaticCommandInput;
@@ -1883,11 +1885,19 @@ async function runCompileDrizzleStaticCommand(
       queries,
       touchGraph,
     });
+    const mutationTouchRegistry = deriveMutationTouchRegistry({
+      mutations: input.invalidation.mutations as Parameters<
+        typeof deriveMutationTouchRegistry
+      >[0]['mutations'],
+      touchGraph,
+    });
     output.invalidationRegistry = invalidationRegistry;
     output.invalidationRegistrySource = serializeInvalidationRegistry(invalidationRegistry, {
       constName: input.invalidation.constName ?? 'invalidationSets',
       typeName: input.invalidation.typeName ?? 'InvalidationSets',
     });
+    output.mutationTouchRegistry = mutationTouchRegistry;
+    output.mutationTouchRegistrySource = serializeMutationTouchRegistry(mutationTouchRegistry);
   }
 
   if (input.serializeTouchGraph !== undefined) {

@@ -464,6 +464,10 @@ export const addToCart = mutation('cart/add', {
       expect(facts.version).toBe('drizzle-static/v1');
       expect(facts.invalidationRegistrySource).toContain('export interface CartInvalidationSets');
       expect(facts.invalidationRegistrySource).toContain('cartInvalidationSets');
+      expect(facts.mutationTouchRegistry).toEqual({
+        'cart/add': [{ domain: 'cart', keys: null }],
+      });
+      expect(facts.mutationTouchRegistrySource).toContain('export const mutationInferredTouches');
       expect(facts.touchGraphSource).toContain('export const cartTouchGraph =');
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE drizzle-static path=${JSON.stringify(outPath)}`,

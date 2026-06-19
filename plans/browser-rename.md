@@ -48,7 +48,7 @@ verification output.
 - [x] Vite/conformance fixtures handle async transform output and local JSX runtime aliasing under the
       renamed package layout.
   - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/vite-fixtures.test.ts
-    packages/conformance-fixtures/src/generated-module-fixtures.test.ts` passed 32 tests, and
+packages/conformance-fixtures/src/generated-module-fixtures.test.ts` passed 32 tests, and
     `pnpm exec vp run kovo-check` passed 50/50 with `kovo-check/v1 OK`.
 - [x] Public API manifest and generated docs were refreshed for the browser package.
   - Evidence: `pnpm run check:api-surface` passed with
@@ -56,7 +56,7 @@ verification output.
     `pnpm --filter @kovojs/site run api:ref` passed.
 - [x] No checked-in generated app artifacts were hand-edited for this rename.
   - Evidence: `pnpm run check` passed `check:no-committed-generated` with `no-committed-generated/v1
-    OK`; ignored API/build outputs were regenerated for verification only.
+OK`; ignored API/build outputs were regenerated for verification only.
 - [x] Current source and built artifacts have no stale package/directory/client-slug references, except
       preserved historical audit reports.
   - Evidence: current-source `rg` stale-name scan excluding `node_modules`, `dist`, and dated audit

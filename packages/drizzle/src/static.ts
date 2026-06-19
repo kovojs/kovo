@@ -64,13 +64,20 @@ import {
 } from './drizzle-surface.js';
 /** @internal */
 export type {
+  InferredMutationTouchSite,
   InvalidationQueryInput,
   InvalidationRegistry,
   InvalidationRegistryEntry,
+  MutationTouchRegistry,
   MutationTouchInput,
 } from './invalidation.js';
 /** @internal */
-export { deriveInvalidationRegistry, serializeInvalidationRegistry } from './invalidation.js';
+export {
+  deriveInvalidationRegistry,
+  deriveMutationTouchRegistry,
+  serializeInvalidationRegistry,
+  serializeMutationTouchRegistry,
+} from './invalidation.js';
 
 const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',

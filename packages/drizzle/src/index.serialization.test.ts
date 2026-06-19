@@ -7,11 +7,13 @@ import { kovo } from '@kovojs/drizzle';
 import {
   createTouchGraphEntry,
   deriveInvalidationRegistry,
+  deriveMutationTouchRegistry,
   diagnosticsForTouchGraph,
   extractTouchGraphFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
   serializeInvalidationRegistry,
   serializeDomainRegistry,
+  serializeMutationTouchRegistry,
   serializeTouchGraph,
 } from '@kovojs/drizzle/internal/static';
 import { annotatedTable, pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
@@ -434,6 +436,52 @@ export const tableDomains = {
 
 export interface CommerceInvalidationSets {
   'cart/add': 'cart' | 'orderHistory' | 'productGrid';
+}
+`);
+  });
+
+  it('derives and serializes mutation inferred touches for generated registries', () => {
+    const registry = deriveMutationTouchRegistry({
+      mutations: [{ mutation: 'cart/add', touchGraphKey: 'cart.addItem' }],
+      touchGraph: {
+        'cart.addItem': createTouchGraphEntry({
+          writes: [
+            {
+              operation: 'insert',
+              site: 'cart.domain.ts:8',
+              table: annotatedTable('cart_items', kovo({ domain: 'cart', key: 'cartId' })),
+            },
+            {
+              operation: 'update',
+              site: 'cart.domain.ts:16',
+              table: annotatedTable('products', kovo({ domain: 'product', key: 'id' })),
+              writeKey: 'arg:productId',
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(registry).toEqual({
+      'cart/add': [
+        { domain: 'cart', keys: null },
+        { domain: 'product', keys: 'arg:productId' },
+      ],
+    });
+    expect(
+      serializeMutationTouchRegistry(registry, {
+        constName: 'commerceMutationTouches',
+        typeName: 'CommerceMutationTouches',
+      }),
+    ).toBe(`export const commerceMutationTouches = {
+  'cart/add': [
+    { domain: 'cart', keys: null },
+    { domain: 'product', keys: 'arg:productId' },
+  ],
+} as const;
+
+export interface CommerceMutationTouches {
+  'cart/add': typeof commerceMutationTouches['cart/add'];
 }
 `);
   });

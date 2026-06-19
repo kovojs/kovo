@@ -17,6 +17,12 @@ export interface MutationTouchInput {
 }
 
 /** @internal */
+export interface InferredMutationTouchSite {
+  domain: string;
+  keys: null | string;
+}
+
+/** @internal */
 export interface InvalidationRegistryEntry {
   domains: readonly string[];
   keys: Readonly<Record<string, string>> | null;
@@ -25,6 +31,9 @@ export interface InvalidationRegistryEntry {
 
 /** @internal */
 export type InvalidationRegistry = Readonly<Record<string, readonly InvalidationRegistryEntry[]>>;
+
+/** @internal */
+export type MutationTouchRegistry = Readonly<Record<string, readonly InferredMutationTouchSite[]>>;
 
 /** @internal */
 export function deriveInvalidationRegistry(input: {
@@ -58,6 +67,29 @@ export function deriveInvalidationRegistry(input: {
         left.query.localeCompare(right.query),
       );
     }
+  }
+
+  return registry;
+}
+
+/** @internal */
+export function deriveMutationTouchRegistry(input: {
+  mutations: readonly MutationTouchInput[];
+  touchGraph: TouchGraph;
+}): MutationTouchRegistry {
+  const registry: Record<string, InferredMutationTouchSite[]> = {};
+
+  for (const mutation of input.mutations) {
+    const touchEntry = input.touchGraph[mutation.touchGraphKey];
+    if (!touchEntry) continue;
+
+    const touches = dedupeMutationTouches(
+      touchEntry.touches.map((touch) => ({
+        domain: touch.domain,
+        keys: touch.keys,
+      })),
+    );
+    if (touches.length > 0) registry[mutation.mutation] = touches;
   }
 
   return registry;
@@ -112,8 +144,64 @@ export function serializeInvalidationRegistry(
   return `${lines.join('\n')}\n`;
 }
 
+/** @internal */
+export function serializeMutationTouchRegistry(
+  registry: MutationTouchRegistry,
+  options: { constName?: string; typeName?: string } = {},
+): string {
+  const constName = options.constName ?? 'mutationInferredTouches';
+  const typeName = options.typeName ?? 'MutationInferredTouches';
+  const lines = [`export const ${constName} = {`];
+
+  for (const [mutation, touches] of Object.entries(registry).sort(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    lines.push(`  ${tsStringLiteral(mutation)}: [`);
+    for (const touch of touches) {
+      lines.push(
+        `    { domain: ${tsStringLiteral(touch.domain)}, keys: ${tsNullableStringLiteral(
+          touch.keys,
+        )} },`,
+      );
+    }
+    lines.push('  ],');
+  }
+
+  lines.push('} as const;');
+  lines.push('');
+  lines.push(`export interface ${typeName} {`);
+  for (const mutation of Object.keys(registry).sort((left, right) => left.localeCompare(right))) {
+    lines.push(
+      `  ${tsStringLiteral(mutation)}: typeof ${constName}[${tsStringLiteral(mutation)}];`,
+    );
+  }
+  lines.push('}');
+
+  return `${lines.join('\n')}\n`;
+}
+
 function tsStringLiteral(value: string): string {
   return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+function tsNullableStringLiteral(value: null | string): string {
+  return value === null ? 'null' : tsStringLiteral(value);
+}
+
+function dedupeMutationTouches(
+  touches: readonly InferredMutationTouchSite[],
+): InferredMutationTouchSite[] {
+  const seen = new Set<string>();
+  const deduped: InferredMutationTouchSite[] = [];
+
+  for (const touch of touches) {
+    const key = `${touch.domain}\0${touch.keys ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(touch);
+  }
+
+  return deduped;
 }
 
 function touchDomains(touches: readonly TouchSite[]): Map<string, readonly TouchSite[]> {
