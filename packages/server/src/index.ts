@@ -9,6 +9,10 @@ export { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 export { toNodeHandler } from './node.js';
 export { exportStaticApp } from './static-export.js';
 export { StaticExportError } from './static-export-diagnostics.js';
+// SPEC.md §9.5: app authors wire the app shell into their Vite dev server from
+// vite.config.ts (the create-kovo starter template does exactly this). These stay
+// public at the root barrel and also remain on `@kovojs/server/internal/app-shell-vite`.
+export { createKovoAppShellViteDevIntegration, kovoAppShellViteDevPlugin } from './vite-dev.js';
 export type {
   AppDiagnostic,
   AppDocumentOptions,
@@ -41,6 +45,15 @@ export type {
   StaticExportOptions,
   StaticExportResult,
 } from './static-export-types.js';
+// SPEC.md §9.5: types named by the create-kovo starter template's vite.config.ts when it
+// constructs the dev integration/plugin. Public at the root barrel; also on
+// `@kovojs/server/internal/app-shell-vite`.
+export type {
+  KovoAppShellViteCompilerModuleDiagnosticReport,
+  KovoAppShellViteDevIntegration,
+  KovoAppShellViteDevPlugin,
+  KovoAppShellViteDevPluginOptions,
+} from './vite-dev.js';
 export * from './api/data.js';
 export * from './api/rendering.js';
 export * from './api/routing.js';

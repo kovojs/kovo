@@ -76,6 +76,7 @@
         "internal": [
           "./internal/delegation",
           "./internal/inline-loader",
+          "./internal/morph",
           "./internal/mutation",
           "./internal/output"
         ]

@@ -1,8 +1,5 @@
-import {
-  applyInlineQueryEventToRuntime,
-  createQueryStore,
-  type InlineQueryEvent,
-} from '@kovojs/runtime/client';
+import { createQueryStore, type InlineQueryEvent } from '@kovojs/runtime/client';
+import { applyInlineQueryEventToRuntime } from '@kovojs/runtime/internal/inline-loader';
 
 declare global {
   interface Window {

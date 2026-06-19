@@ -40,6 +40,7 @@ import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as viteApi from '../vite.js';
+import * as viteDevApi from '../vite-dev.js';
 import * as internalWireApi from '../internal/wire.js';
 import * as wireHtmlApi from '../wire-html.js';
 
@@ -357,11 +358,15 @@ describe('server app-shell public API barrels', () => {
     };
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
+      // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
+      // create-kovo starter template's vite.config.ts.
+      createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
       createMemoryVersionedClientModuleRegistry:
         internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
+      kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeSourceApi.toNodeHandler,
     });
@@ -391,8 +396,16 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
       internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
     );
-    expect(publicValues).not.toHaveProperty('createKovoAppShellViteDevIntegration');
-    expect(publicValues).not.toHaveProperty('kovoAppShellViteDevPlugin');
+    // SPEC.md §9.5: dev integration/plugin are public at the root barrel (create-kovo
+    // starter template vite.config.ts) and share the vite-dev source values.
+    expect(publicApi.createKovoAppShellViteDevIntegration).toBe(
+      viteDevApi.createKovoAppShellViteDevIntegration,
+    );
+    expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
+    expect(packageRootApi.createKovoAppShellViteDevIntegration).toBe(
+      viteDevApi.createKovoAppShellViteDevIntegration,
+    );
+    expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
     expect(publicValues).not.toHaveProperty('parseRouteRequest');

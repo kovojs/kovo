@@ -6,7 +6,6 @@ import {
   readElementParams,
   readElementState,
   readElementStateHost,
-  writeElementState,
 } from './handler-context.js';
 import type { EventElementLike } from './events.js';
 

@@ -11,7 +11,7 @@ interface KovoViteConfigureServer {
   configureServer(server: {
     middlewares: { use(handler: KovoAppShellViteMiddleware): void };
     ssrLoadModule(id: string): Promise<Record<string, unknown>>;
-  }): Promise<unknown> | unknown;
+  }): void | Promise<void>;
 }
 
 describe('public Kovo Vite plugin', () => {

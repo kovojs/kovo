@@ -95,6 +95,9 @@ export function createApp<
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.db === undefined ? {} : { db: options.db }),
     mutationResponses: options.mutationResponses ?? {},
+    ...(options.mutationReplayStore === undefined
+      ? {}
+      : { mutationReplayStore: options.mutationReplayStore }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),

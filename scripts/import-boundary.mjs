@@ -39,6 +39,17 @@ const explicitlyAllowedInternalImports = new Set([
   'site/tutorial/steps/07-verification/src/app.ts -> @kovojs/server/internal/wire',
 ]);
 
+// The create-kovo starter `client.ts` is the canonical app entry. It applies
+// deferred `<kovo-defer>` streams via `applyDeferredStreamResponseToRuntime`, the
+// app-facing helper published on the runtime's compiler-ABI `./generated` subpath
+// (the same module emitted client bootstraps import). This is the one sanctioned
+// app-level read of `@kovojs/runtime/generated` (see plans/api-cleanup.md §runtime
+// `./client` facade-shrink; SPEC §§4.4, 9.1).
+const explicitlyAllowedGeneratedImports = new Set([
+  'packages/create-kovo/templates/src/client.ts -> @kovojs/runtime/generated',
+  'site/content/guides/streaming.md -> @kovojs/runtime/generated',
+]);
+
 export async function collectImportBoundaryViolations({
   rootDir = repoRootFromScript(),
   roots = appFacingRoots,
@@ -102,7 +113,8 @@ function importBoundaryTier(specifier) {
 
 function allowedImportBoundaryException(tier, allowKey) {
   if (tier === 'internal') return explicitlyAllowedInternalImports.has(allowKey);
-  if (tier === 'generated' || tier === 'app-local-generated') return false;
+  if (tier === 'generated') return explicitlyAllowedGeneratedImports.has(allowKey);
+  if (tier === 'app-local-generated') return false;
   return false;
 }
 

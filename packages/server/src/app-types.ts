@@ -110,6 +110,9 @@ export interface CreateAppOptions<
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];
   mutationResponses?: AppMutationResponses;
   mutations?: AppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>;
+  // SPEC §9.1/§10.3: apps inject a replay store so duplicate Kovo-Idem mutation
+  // requests replay the stored response without re-executing the handler.
+  mutationReplayStore?: MutationReplayStore;
   onError?: ServerErrorHandler;
   queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;

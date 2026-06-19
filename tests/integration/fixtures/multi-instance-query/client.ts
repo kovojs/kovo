@@ -1,4 +1,5 @@
-import { createQueryStore, installInlineQueryEventHydration } from '@kovojs/runtime/client';
+import { createQueryStore } from '@kovojs/runtime/client';
+import { installInlineQueryEventHydration } from '@kovojs/runtime/internal/inline-loader';
 
 installInlineQueryEventHydration({
   root: document,

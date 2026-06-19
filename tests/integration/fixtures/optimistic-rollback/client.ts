@@ -1,15 +1,16 @@
 import {
-  applyCompiledQueryUpdatePlan,
   createQueryStore,
-  DomMorphRoot,
   type EnhancedMutationFetch,
   type MorphRoot,
   type TargetCollectorRoot,
   installKovoLoader,
-  keyedDomMorph,
+} from '@kovojs/runtime/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
+import {
+  applyCompiledQueryUpdatePlan,
   OptimisticRebaser,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/runtime/client';
+} from '@kovojs/runtime/internal/mutation';
 
 type CartSummary = Record<string, unknown> & {
   count: number;

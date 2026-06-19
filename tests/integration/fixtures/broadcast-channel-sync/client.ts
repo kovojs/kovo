@@ -1,15 +1,16 @@
 import {
   createQueryStore,
-  DomMorphRoot,
-  type BroadcastLike,
   type EnhancedMutationFetch,
   installKovoLoader,
-  installMutationBroadcast,
-  keyedDomMorph,
   type MorphRoot,
-  submitEnhancedMutation,
   type TargetCollectorRoot,
 } from '@kovojs/runtime/client';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/runtime/internal/morph';
+import {
+  type BroadcastLike,
+  installMutationBroadcast,
+  submitEnhancedMutation,
+} from '@kovojs/runtime/internal/mutation';
 
 declare global {
   interface Window {
