@@ -427,6 +427,42 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('uses declared materialized-view metadata as a query read domain', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const productStats = pgMaterializedView(
+            "product_stats",
+            { productId: text("product_id") },
+            kovo({ view: { of: "product", refresh: "async" } }),
+          );
+
+          export const statsQuery = query("stats", {
+            output: s.object({ productId: s.string() }),
+            load(_input, db: PgDatabase) {
+              return db.select({ productId: sql<string>\`product_id\` }).from(productStats);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'stats',
+        reads: ['product'],
+        shape: {
+          productId: 'string',
+        },
+        site: 'product.queries.ts:8',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not derive column nullability from comments or strings', () => {
     const files = [
       {

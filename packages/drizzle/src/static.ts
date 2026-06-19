@@ -62,6 +62,7 @@ import {
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
   type KovoTableAnnotation,
+  type KovoViewAnnotation,
 } from './drizzle-surface.js';
 /** @internal */
 export type {
@@ -106,17 +107,14 @@ const NUMBER_COLUMN_BUILDERS = new Set([
   'bigserial',
   'smallserial',
 ]);
-const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
-  '$count',
-  'execute',
-  'refreshMaterializedView',
-]);
+const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set(['$count', 'execute']);
 const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
 const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set(['pgMaterializedView', 'pgView']);
 const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   ...DRIZZLE_SELECT_QUERY_METHODS,
   'delete',
   'insert',
+  'refreshMaterializedView',
   'transaction',
   'update',
   'with',
@@ -181,10 +179,25 @@ export interface TouchGraphProjectOptions {
 
 type ExtractedTableAnnotation =
   | (KovoTableAnnotation & { name: string })
+  | (KovoDomainTableAnnotation & {
+      name: string;
+      relation: 'materialized-view' | 'view';
+      refresh?: KovoViewAnnotation['refresh'];
+    })
   | {
       name: string;
       unmapped: true;
     };
+
+/** @internal */
+export interface MaterializedViewRefreshFact {
+  domain: string;
+  mutation: string;
+  optimisticStatus: 'await-fragment';
+  refresh: 'async';
+  site: string;
+  view: string;
+}
 
 interface ExtractedTable {
   annotation: ExtractedTableAnnotation;
@@ -346,6 +359,37 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
   }
 }
 
+/** @internal */
+export function extractMaterializedViewRefreshFactsFromProject(
+  options: TouchGraphProjectOptions,
+): MaterializedViewRefreshFact[] {
+  const extraction = createProjectExtraction(options);
+  try {
+    const sourceContext = projectSourceModuleContext(extraction);
+    const contextFiles = projectContextFiles(extraction);
+    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+    const facts: MaterializedViewRefreshFact[] = [];
+
+    for (const file of contextFiles) {
+      const fileTables = tablesForFile(file, sourceContext);
+      for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
+        if (fn.summaryOnly) continue;
+        facts.push(...materializedViewRefreshFactsForFunction(fn, file, fileTables));
+      }
+    }
+
+    return facts.sort(
+      (left, right) =>
+        left.mutation.localeCompare(right.mutation) ||
+        left.view.localeCompare(right.view) ||
+        left.domain.localeCompare(right.domain) ||
+        left.site.localeCompare(right.site),
+    );
+  } finally {
+    extraction.dispose();
+  }
+}
+
 interface ProjectExtraction {
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>;
   conditionalTableTargetsBySyntheticName: ReadonlyMap<string, readonly string[]>;
@@ -473,6 +517,7 @@ function projectFunctionExtractionsByFileName(
           body,
           file,
           extraction.tableNamesBySymbol,
+          extraction.unmodeledRelationNamesBySymbol,
           namespaceTableNames,
           receivers,
           callbackParameterSymbolKeys(fn),
@@ -513,6 +558,7 @@ function projectFunctionExtractionsByFileName(
           body,
           file,
           extraction.tableNamesBySymbol,
+          extraction.unmodeledRelationNamesBySymbol,
           namespaceTableNames,
           receivers,
           callbackParameterSymbolKeys(callback),
@@ -550,6 +596,7 @@ function projectFunctionExtractionsByFileName(
           callback.body,
           file,
           extraction.tableNamesBySymbol,
+          extraction.unmodeledRelationNamesBySymbol,
           namespaceTableNames,
           receivers,
           callbackParameterSymbolKeys(callback.fn),
@@ -586,6 +633,7 @@ function projectFunctionExtractionsByFileName(
           callback.body,
           file,
           extraction.tableNamesBySymbol,
+          extraction.unmodeledRelationNamesBySymbol,
           namespaceTableNames,
           receivers,
           callbackParameterSymbolKeys(callback.fn),
@@ -1358,6 +1406,7 @@ function extractProjectDrizzleWriteCalls(
   body: Node,
   file: SourceFileInput,
   tableNamesBySymbol: ReadonlyMap<string, string>,
+  unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
   receivers: ProjectDrizzleReceivers,
   paramSymbolKeys: ReadonlySet<string>,
@@ -1379,6 +1428,7 @@ function extractProjectDrizzleWriteCalls(
     const chain = drizzleWriteChainRoot(call);
     const tableExpression =
       projectTableNameForNode(tableArgument, tableNamesBySymbol, namespaceTableNames) ??
+      projectUnmodeledRelationNameForNode(tableArgument, unmodeledRelationNamesBySymbol) ??
       UNRESOLVED_READ_SOURCE_EXPRESSION;
 
     calls.push({
@@ -2130,7 +2180,12 @@ function projectRelationalTableNamesByProperty(
 function isDrizzleWriteCall(call: CallExpression): boolean {
   const expression = call.getExpression();
   const name = staticAccessName(expression);
-  return name === 'delete' || name === 'insert' || name === 'update';
+  return (
+    name === 'delete' ||
+    name === 'insert' ||
+    name === 'refreshMaterializedView' ||
+    name === 'update'
+  );
 }
 
 function isDrizzleReceiver(receiver: Node): boolean {
@@ -5522,6 +5577,51 @@ function directSummaryForFunction(
   return { reads, unresolved, writes };
 }
 
+function materializedViewRefreshFactsForFunction(
+  fn: ExtractedFunction,
+  file: SourceFileInput,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): MaterializedViewRefreshFact[] {
+  const facts: MaterializedViewRefreshFact[] = [];
+
+  for (const call of fn.writeCalls) {
+    if (call.operation !== 'refreshMaterializedView') continue;
+
+    const site =
+      call.site ?? `${file.fileName}:${lineForIndex(file.source, fn.bodyStart + call.index)}`;
+    for (const table of tables.get(call.tableExpression) ?? []) {
+      const annotation = table.annotation;
+      if (!isAsyncMaterializedViewAnnotation(annotation)) continue;
+
+      facts.push({
+        domain: annotation.domain,
+        mutation: fn.name,
+        optimisticStatus: 'await-fragment',
+        refresh: 'async',
+        site,
+        view: annotation.name,
+      });
+    }
+  }
+
+  return facts;
+}
+
+function isAsyncMaterializedViewAnnotation(
+  annotation: ExtractedTableAnnotation,
+): annotation is KovoDomainTableAnnotation & {
+  name: string;
+  relation: 'materialized-view';
+  refresh: 'async';
+} {
+  return (
+    'domain' in annotation &&
+    'relation' in annotation &&
+    annotation.relation === 'materialized-view' &&
+    annotation.refresh === 'async'
+  );
+}
+
 function appendReadSourceSummaries(
   reads: ReadSummaryInput[],
   unresolved: UnresolvedSummaryInput[],
@@ -5805,6 +5905,42 @@ function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   };
 }
 
+function declaredRelationTableForInitializer(
+  initializer: Node | undefined,
+  relation: UnmodeledRelationFact,
+): ExtractedTable | null {
+  if (!initializer || !Node.isCallExpression(initializer)) return null;
+
+  const rootCall = rootCallExpression(initializer);
+  const annotationCall = rootCall.getArguments().find(isKovoAnnotationCall);
+  if (!annotationCall || !Node.isCallExpression(annotationCall)) return null;
+
+  const annotationObject = annotationCall.getArguments()[0];
+  const viewObject = objectPropertyFromObject(annotationObject, 'view');
+  if (!viewObject) return null;
+
+  const domain = stringPropertyFromObject(viewObject, 'of');
+  if (!domain) return null;
+
+  const refresh = stringPropertyFromObject(viewObject, 'refresh');
+  const annotation: KovoDomainTableAnnotation & {
+    name: string;
+    relation: UnmodeledRelationFact['kind'];
+    refresh?: KovoViewAnnotation['refresh'];
+  } = {
+    domain,
+    name: relation.name,
+    relation: relation.kind,
+    ...(refresh === 'async' || refresh === 'sync' ? { refresh } : {}),
+  };
+
+  return {
+    annotation,
+    columns: tableColumnShapes(rootCall, 'project'),
+    exported: false,
+  };
+}
+
 function defaultDomainForTableName(tableName: string): string {
   // SPEC §10.1: tables default to their same-name domain. Existing fixtures and plan ledger use
   // singular domain names for simple plural table names such as `carts` -> `cart`.
@@ -5854,6 +5990,23 @@ function booleanPropertyFromObject(object: Node, name: string): boolean | undefi
     if (!initializer) return undefined;
     if (initializer.getKind() === SyntaxKind.TrueKeyword) return true;
     if (initializer.getKind() === SyntaxKind.FalseKeyword) return false;
+  }
+
+  return undefined;
+}
+
+function objectPropertyFromObject(
+  object: Node | undefined,
+  name: string,
+): ObjectLiteralExpression | undefined {
+  if (!object || !Node.isObjectLiteralExpression(object)) return undefined;
+
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+
+    const initializer = property.getInitializer();
+    if (initializer && Node.isObjectLiteralExpression(initializer)) return initializer;
   }
 
   return undefined;
@@ -5987,6 +6140,7 @@ function projectSourceModuleContext(extraction: ProjectExtraction): SourceModule
   // SPEC §10-§11: project-mode table facts come from resolved ts-morph symbols, not rewritten
   // source text that is reparsed through source-mode table extraction.
   const tablesBySyntheticName = projectTablesBySyntheticName(extraction);
+  const declaredRelationTablesByExpression = projectDeclaredRelationTablesByExpression(extraction);
   const derivedRelationTablesByExpression = projectDerivedRelationTablesByExpression(
     extraction,
     tablesBySyntheticName,
@@ -6000,6 +6154,7 @@ function projectSourceModuleContext(extraction: ProjectExtraction): SourceModule
     const tables = new Map<string, ExtractedTable[]>();
     appendProjectDeclaredTables(tables, sourceFile, extraction, tablesBySyntheticName);
     appendProjectReferencedTables(tables, sourceFile, extraction, tablesBySyntheticName);
+    appendProjectDeclaredRelationTables(tables, declaredRelationTablesByExpression);
     appendProjectDerivedRelationTables(tables, derivedRelationTablesByExpression);
     appendProjectGlobalSyntheticTables(tables, tablesBySyntheticName, extraction);
     tablesByFileName.set(file.fileName, tables);
@@ -6071,6 +6226,29 @@ function projectTablesBySyntheticName(
   }
 
   return tables;
+}
+
+function projectDeclaredRelationTablesByExpression(
+  extraction: ProjectExtraction,
+): ReadonlyMap<string, readonly ExtractedTable[]> {
+  const relationTables = new Map<string, ExtractedTable[]>();
+
+  for (const sourceFile of extraction.sourceFiles) {
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const expression = extraction.unmodeledRelationNamesBySymbol.get(
+        resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
+      );
+      if (!expression) continue;
+
+      const relation = unmodeledRelationFromExpression(expression);
+      if (!relation) continue;
+
+      const table = declaredRelationTableForInitializer(declaration.getInitializer(), relation);
+      if (table) relationTables.set(expression, [table]);
+    }
+  }
+
+  return relationTables;
 }
 
 function projectDerivedRelationTablesByExpression(
@@ -6229,6 +6407,15 @@ function appendProjectDerivedRelationTables(
   derivedRelationTablesByExpression: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): void {
   for (const [expression, entries] of derivedRelationTablesByExpression) {
+    appendTableEntries(tables, expression, entries);
+  }
+}
+
+function appendProjectDeclaredRelationTables(
+  tables: Map<string, ExtractedTable[]>,
+  declaredRelationTablesByExpression: ReadonlyMap<string, readonly ExtractedTable[]>,
+): void {
+  for (const [expression, entries] of declaredRelationTablesByExpression) {
     appendTableEntries(tables, expression, entries);
   }
 }

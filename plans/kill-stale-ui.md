@@ -163,21 +163,21 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
   - Gap (per audit; verify against `static.ts` table-resolution + `§10.1`/`§10.2`):
     `§11.1` resolves `pgTable` identifiers only; `pgView`/`pgMaterializedView`
     resolve to empty read sets; FK/trigger effects are engine-side.
-  - [x] **X2 static derive (zero annotation):** cascade FK and normal `pgView`
-        read-set derivation. - Evidence 2026-06-19: `pnpm --filter @kovojs/drizzle exec vitest --run src/index.query-shapes.test.ts src/index.writes-receivers.test.ts`
-        covers project-mode `references(() => products.id, { onDelete:
-"cascade", onUpdate: "set null" })`; parent `delete(products)` and
-        `update(products)` now also touch the child `cart` domain. It also covers
-        a normal `pgView(...).as((qb) => qb.select(...).from(products))`
-        contributing the `product` read while an unmodeled materialized view still
-        emits KV412.
+  - [x] **X2 static derive:** cascade FK and normal `pgView` read-set derivation.
+    - Evidence 2026-06-19:
+      `pnpm --filter @kovojs/drizzle exec vitest --run src/index.query-shapes.test.ts src/index.writes-receivers.test.ts`
+      covers cascade FK fan-out and normal `pgView` read domains.
   - [ ] **X3 declared seam:** trigger fan-outs and matview refresh declarations.
     - [x] Trigger `fans` seam:
           `pnpm --filter @kovojs/drizzle exec vitest --run src/index.writes-receivers.test.ts src/index.serialization.test.ts`
-          covers `kovo({ fans: [...] })` fan-out touches and KV413 for a same-file
-          `CREATE TRIGGER ... ON products` write with no matching fan.
-    - [ ] Matview `kovo({ view:{ of, refresh } })` declaration and async-refresh
-          `await-fragment` status remain open.
+          covers fan-out touches and KV413 for an undeclared trigger.
+    - [ ] Matview declaration and async-refresh bridge.
+      - Partial evidence 2026-06-19:
+        `pnpm --filter @kovojs/drizzle exec vitest --run src/index.query-shapes.test.ts src/index.write-targets-predicates.test.ts`
+        covers declared matview read domains and internal `await-fragment`
+        refresh facts.
+      - Remaining gap: no automatic bridge yet feeds that refresh fact into
+        `kovo compile drizzle-optimistic` entries.
   - [x] **KV412** build error when a query's resolved `.from()`/join target is a
         view/matview with no derived or declared domain.
     - Evidence 2026-06-19: `packages/drizzle/src/static.ts` detects

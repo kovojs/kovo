@@ -15,6 +15,12 @@ export interface KovoFanAnnotation {
   when?: 'delete' | 'insert' | 'update';
 }
 
+/** Declares the backing invalidation domain and refresh mode for a Drizzle view relation. */
+export interface KovoViewAnnotation {
+  of: string;
+  refresh?: 'async' | 'sync';
+}
+
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
@@ -25,6 +31,13 @@ export type KovoTableAnnotation =
   | {
       exempt: true;
     };
+
+/** A Kovo annotation for a Drizzle view or materialized view declaration. */
+export interface KovoViewExtraConfigAnnotation {
+  view: KovoViewAnnotation;
+}
+
+export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation;
 
 /** The domain-bearing form of a table annotation: its `domain` and optional `key` column. */
 export interface KovoDomainTableAnnotation {
@@ -39,21 +52,30 @@ export type KovoTableExtraConfig = KovoDomainTableAnnotation &
     exempt?: true;
   };
 
+/** The value `kovo({ view })` returns for a Drizzle view/materialized-view declaration. */
+export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknown) => []);
+
 /**
- * Annotate a Drizzle table with the invalidation domain it belongs to (or mark
- * it `exempt`). Used in a table's extra-config callback so the compiler can
- * extract the touch graph from queries and writes against that table — the
- * Drizzle-blessed path to schema-as-domain-registry (SPEC §10.1).
+ * Annotate a Drizzle table with the invalidation domain it belongs to, mark it
+ * `exempt`, or declare a view/materialized-view backing domain. Used in a
+ * relation's extra-config callback so the compiler can extract touch/read graph
+ * facts from queries and writes — the Drizzle-blessed path to
+ * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key? }` binding, or `{ exempt: true }`.
- * @returns A `KovoTableExtraConfig` to return from the table's extra-config callback.
+ * @param annotation - A `{ domain, key? }` binding, `{ exempt: true }`, or
+ *   `{ view: { of, refresh? } }` binding.
+ * @returns A Drizzle extra-config callback carrying the Kovo annotation.
  * @example
  * import { kovo } from '@kovojs/drizzle';
  *
  * export const cartConfig = () => kovo({ domain: 'cart', key: 'id' });
  */
-export function kovo(annotation: KovoTableAnnotation): KovoTableExtraConfig {
-  return Object.assign((() => []) as (self: unknown) => [], annotation) as KovoTableExtraConfig;
+export function kovo(annotation: KovoViewExtraConfigAnnotation): KovoViewExtraConfig;
+export function kovo(annotation: KovoTableAnnotation): KovoTableExtraConfig;
+export function kovo(annotation: KovoAnnotation): KovoTableExtraConfig | KovoViewExtraConfig {
+  return Object.assign((() => []) as (self: unknown) => [], annotation) as
+    | KovoTableExtraConfig
+    | KovoViewExtraConfig;
 }
 
 export function isDrizzleDatabaseTypeName(name: string): boolean {

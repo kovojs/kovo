@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractTouchGraphFromProject } from '@kovojs/drizzle/internal/static';
+import {
+  extractMaterializedViewRefreshFactsFromProject,
+  extractTouchGraphFromProject,
+} from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle touch graph helpers', () => {
@@ -753,6 +756,55 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         ],
       },
     });
+  });
+
+  it('uses declared async materialized-view refreshes as await-fragment optimistic seams', () => {
+    const project = {
+      files: [
+        pgDatabaseTypes(['refreshMaterializedView(view: unknown): Promise<void>;']),
+        {
+          fileName: 'catalog.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const productSearch = pgMaterializedView(',
+            '  "product_search",',
+            '  { productId: text("product_id") },',
+            '  kovo({ view: { of: "product", refresh: "async" } }),',
+            ');',
+            '',
+            'export async function refreshCatalog(db: PgDatabase<any, any, any>) {',
+            '  await db.refreshMaterializedView(productSearch);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    };
+
+    expect(extractTouchGraphFromProject(project)).toEqual({
+      refreshCatalog: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'catalog.domain.ts:10',
+            via: 'product_search',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractMaterializedViewRefreshFactsFromProject(project)).toEqual([
+      {
+        domain: 'product',
+        mutation: 'refreshCatalog',
+        optimisticStatus: 'await-fragment',
+        refresh: 'async',
+        site: 'catalog.domain.ts:10',
+        view: 'product_search',
+      },
+    ]);
   });
 
   it('marks project unknown direct Drizzle receiver methods as KV406 instead of dropping them', () => {
