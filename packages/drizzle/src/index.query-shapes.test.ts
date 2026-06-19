@@ -710,6 +710,47 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('marks time-predicate rowsets as volatile-time query shapes', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'subscription.queries.ts',
+          source: `
+          export const subscriptions = pgTable("subscriptions", {
+            id: text("id").primaryKey(),
+            expiresAt: text("expires_at").notNull(),
+          }, kovo({ domain: "subscription", key: "id" }));
+
+          export const subscriptionQuery = query("subscription", {
+            output: s.object({ id: s.string() }),
+            async load(_input, db: PgDatabase) {
+              return db
+                .select({ id: subscriptions.id })
+                .from(subscriptions)
+                .where(gt(subscriptions.expiresAt, sql<string>\`now()\`));
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'subscription',
+        reads: ['subscription'],
+        shape: {
+          kind: 'volatile-time',
+          shape: {
+            id: 'string',
+          },
+        },
+        site: 'subscription.queries.ts:7',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('does not treat comments or strings as declared query output schemas', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -3391,10 +3391,40 @@ function selectShapeFromQueryBody(
 
   if (!Node.isObjectLiteralExpression(projection)) return null;
 
-  return queryShapeFromObjectLiteralNode(projection.compilerNode, {
+  const selection = queryShapeFromObjectLiteralNode(projection.compilerNode, {
     columnShapes,
     nullableTables: nullableJoinTables(body, receiverReferences, mode),
   });
+  return queryBodyHasTimeVolatileWhere(body, receiverReferences, mode)
+    ? { ...selection, shape: volatileTimeShape(selection.shape) }
+    : selection;
+}
+
+function queryBodyHasTimeVolatileWhere(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source',
+): boolean {
+  return queryBodyCallExpressions(body, mode, (call) => {
+    if (propertyAccessCallName(call) !== 'where') return [];
+    if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
+
+    const predicate = call.getArguments()[0];
+    return predicate && isTimeVolatileExpression(predicate) ? [true] : [];
+  }).some(Boolean);
+}
+
+function volatileTimeShape(shape: QueryShape): QueryShape {
+  if (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    'kind' in shape &&
+    shape.kind === 'volatile-time'
+  ) {
+    return shape;
+  }
+  return { kind: 'volatile-time', shape };
 }
 
 function selectProjectionArgument(call: CallExpression): Node | undefined {
@@ -4990,7 +5020,15 @@ function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
 }
 
 function isTimeVolatileSqlProjection(expression: ts.Expression): boolean {
-  const source = unwrappedTsExpression(expression).getText().toLowerCase();
+  return isTimeVolatileSource(unwrappedTsExpression(expression).getText());
+}
+
+function isTimeVolatileExpression(expression: Node): boolean {
+  return isTimeVolatileSource(unwrappedStaticExpressionNode(expression).getText());
+}
+
+function isTimeVolatileSource(sourceText: string): boolean {
+  const source = sourceText.toLowerCase();
   return (
     /\bnow\s*\(/.test(source) ||
     /\bclock_timestamp\s*\(/.test(source) ||

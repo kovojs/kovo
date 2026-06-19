@@ -131,6 +131,56 @@ export const SubscriptionRow = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV312' }));
   });
 
+  it('reports KV312 when rendered fields come from a volatile-time rowset', () => {
+    const result = compileComponentModule({
+      fileName: 'subscription-row.tsx',
+      queryShapes: {
+        sub: {
+          kind: 'volatile-time',
+          shape: {
+            name: 'string',
+          },
+        },
+      },
+      source: `
+export const SubscriptionRow = component({
+  queries: { sub: subscriptionQuery },
+  render: ({ sub }) => <span>{sub.name}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV312',
+        message: 'Time-dependent rendered position lacks a declared cadence. sub.name',
+        severity: 'error',
+      }),
+    );
+  });
+
+  it('accepts rendered volatile-time rowset fields with a refresh binding', () => {
+    const result = compileComponentModule({
+      fileName: 'subscription-row.tsx',
+      queryShapes: {
+        sub: {
+          kind: 'volatile-time',
+          shape: {
+            name: 'string',
+          },
+        },
+      },
+      source: `
+export const SubscriptionRow = component({
+  queries: { sub: subscriptionQuery.refresh({ every: '30s' }) },
+  render: ({ sub }) => <span>{sub.name}</span>,
+});
+`,
+    });
+
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV312' }));
+  });
+
   it('does not treat event-handler clock arguments as rendered positions', () => {
     const result = compileComponentModule({
       fileName: 'message-row.tsx',

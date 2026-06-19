@@ -314,13 +314,18 @@ framing (already loud-recoverable via the render-plan token, §9.1.1).
           expressions need a multi-input/store-backed compiled derive path before
           every declared clock read can be tick-driven; `kovo explain` cadence
           budget output and any lint gate also remain open.
-  - [ ] Extend KV410 with the `volatile:'time'` output facet for raw-SQL `now()`
+  - [x] Extend KV410 with the `volatile:'time'` output facet for raw-SQL `now()`
         projections (`req.now`); extend the §11.1/§10.2 read-set deriver to flag
         time-predicate WHEREs (`expiresAt > req.now`) as time-volatile rowsets.
     - [x] Raw SQL time projections:
           `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts`
-          covers typed `sql<T>\`now()\``carrying`volatile-time`.
-    - [ ] Time-predicate rowsets remain open.
+          covers typed SQL `now()` projections carrying `volatile-time`.
+    - [x] Time-predicate rowsets:
+      - Evidence 2026-06-19:
+        `npx vitest --run packages/compiler/src/query-coverage.test.ts packages/drizzle/src/index.query-shapes.test.ts`
+        covers time-dependent `where` predicates wrapping the rowset query shape
+        as `volatile-time`, plus KV312 on rendered fields unless the binding has
+        `.refresh(...)`.
   - [x] **KV315 (warn):** a raw `Date.now()`/`new Date()` read in a derive is an
         untracked clock; teaching message redirects to a declared `clocks` input.
     - Evidence 2026-06-19: `packages/compiler/src/scan/parse.ts` emits typed

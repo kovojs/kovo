@@ -120,8 +120,7 @@ function volatileQueryReadFromPropertyAccess(
 
   const fieldSegments = segments.slice(1);
   if (fieldSegments.length === 0) return [];
-  const shape = shapeAtSegments(queryShapes[query], fieldSegments);
-  if (!shapeHasVolatileTime(shape)) return [];
+  if (!shapeHasVolatileTimeAtSegments(queryShapes[query], fieldSegments)) return [];
 
   return [
     {
@@ -141,18 +140,20 @@ function refreshedComponentQueryNames(model: ComponentModuleModel): Set<string> 
   );
 }
 
-function shapeAtSegments(
+function shapeHasVolatileTimeAtSegments(
   shape: QueryShape | undefined,
   segments: readonly string[],
-): QueryShape | undefined {
-  if (shape === undefined || segments.length === 0) return shape;
+): boolean {
+  if (shape === undefined) return false;
+  if (shapeHasVolatileTime(shape)) return true;
+  if (segments.length === 0) return false;
   const current = unwrapQueryShape(shape);
-  if (Array.isArray(current)) return shapeAtSegments(current[0], segments);
-  if (!isQueryShapeObject(current)) return undefined;
+  if (Array.isArray(current)) return shapeHasVolatileTimeAtSegments(current[0], segments);
+  if (!isQueryShapeObject(current)) return false;
 
   const [head, ...tail] = segments;
-  if (!head) return current;
-  return shapeAtSegments(current[head], tail);
+  if (!head) return false;
+  return shapeHasVolatileTimeAtSegments(current[head], tail);
 }
 
 function shapeHasVolatileTime(shape: QueryShape | undefined): boolean {
