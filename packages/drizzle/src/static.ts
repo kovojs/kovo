@@ -14,7 +14,7 @@ import type {
   SymbolicMatch,
   SymbolicValue,
 } from '@kovojs/core/internal/derivation';
-import type { TouchGraph, TouchGraphEntry } from '@kovojs/core/internal/graph';
+import type { ScopeAuditFact, TouchGraph, TouchGraphEntry } from '@kovojs/core/internal/graph';
 import {
   Node,
   Project,
@@ -160,8 +160,44 @@ export interface QueryFact {
   };
   query: string;
   reads: readonly string[];
+  /** Domains this query anchors to `req.session.*` (session-scoped, SPEC §11.1). */
+  sessionAnchoredReads?: readonly string[];
   shape: QueryShape;
   site: string;
+}
+
+/**
+ * Classify each read of an `owner:`-annotated domain into an IDOR scope-audit
+ * fact (SPEC §10.3): a client-arg-keyed read is `args` (the IDOR candidate), a
+ * `req.session`-anchored read is `session` (safe), and anything else is
+ * `unscoped` (fail closed). The CLI audit turns a non-`session` fact into the
+ * enforced KV414 unless an `owns()` guard discharges it.
+ */
+export function scopeAuditsFromQueryFacts(
+  facts: readonly QueryFact[],
+  ownerDomains: Iterable<string>,
+): ScopeAuditFact[] {
+  const owners = new Set(ownerDomains);
+  const audits: ScopeAuditFact[] = [];
+
+  for (const fact of facts) {
+    for (const domain of fact.reads) {
+      if (!owners.has(domain)) continue;
+
+      const argKeyed =
+        fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:');
+      const sessionAnchored = (fact.sessionAnchoredReads ?? []).includes(domain);
+      const scope: ScopeAuditFact['scope'] = argKeyed
+        ? 'args'
+        : sessionAnchored
+          ? 'session'
+          : 'unscoped';
+
+      audits.push({ domain, kind: 'query', name: fact.query, scope, site: fact.site });
+    }
+  }
+
+  return audits;
 }
 
 /** @internal */
@@ -2042,11 +2078,16 @@ function extractQueryFactsFromPreparedFiles(
       const allReads = [...new Set([...reads, ...helperReads])].sort();
       if (!query.hasSelection && allReads.length === 0 && diagnostics.length === 0) continue;
 
+      const sessionAnchoredReads = querySessionAnchoredDomains(
+        query.instanceKeyComparisons,
+        fileTables,
+      );
       facts.push({
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...queryInstanceKey(query.instanceKeyComparisons, fileTables),
         query: query.query,
         reads: allReads,
+        ...(sessionAnchoredReads.length > 0 ? { sessionAnchoredReads } : {}),
         shape: query.shape,
         site,
       });
@@ -3142,6 +3183,7 @@ interface QueryInstanceKeyComparison {
 
 interface QueryInstanceKeyOperand {
   inputKey?: string;
+  sessionKey?: boolean;
   tableKey?: {
     key: string;
     tableIdentifier: string;
@@ -5425,6 +5467,42 @@ function queryInstanceKey(
   return null;
 }
 
+/**
+ * The domains a query's `where` predicates anchor to `req.session.*` (SPEC §11.1
+ * session-traceability). A read of an owner-annotated domain anchored this way is
+ * session-scoped (not IDOR), so it discharges KV414.
+ */
+function querySessionAnchoredDomains(
+  comparisons: readonly QueryInstanceKeyComparison[],
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly string[] {
+  const domains = new Set<string>();
+  for (const comparison of comparisons) {
+    const domain = sessionAnchoredDomainFromEqOperands(comparison.left, comparison.right, tables);
+    if (domain) domains.add(domain);
+  }
+  return [...domains].sort();
+}
+
+function sessionAnchoredDomainFromEqOperands(
+  left: QueryInstanceKeyOperand,
+  right: QueryInstanceKeyOperand,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string | null {
+  const candidates = [
+    { sessionKey: right.sessionKey, tableKey: left.tableKey },
+    { sessionKey: left.sessionKey, tableKey: right.tableKey },
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.sessionKey || !candidate.tableKey) continue;
+    const tableKey = resolvedQueryTableKey(candidate.tableKey, tables);
+    if (tableKey) return tableKey.domain;
+  }
+
+  return null;
+}
+
 function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
@@ -5459,7 +5537,24 @@ function queryInstanceKeyOperand(
   return {
     ...queryTableKeyOperand(expression, readTableIdentifier),
     ...queryInputKeyOperand(expression),
+    ...querySessionKeyOperand(expression),
   };
+}
+
+/**
+ * Detects a session-anchored predicate operand (SPEC §11.1): a static access
+ * chain rooted at a non-`input` identifier (`req`/`request`/`ctx`) whose path
+ * includes `session` — e.g. `req.session.cartId`. `req.session.*` is the trusted
+ * principal the `sessionProvider` sets server-side, so a key predicate anchored
+ * to it makes an owner-table access session-scoped (not IDOR). A non-static
+ * operand (a call, etc.) is NOT session-anchored — the scope classifier then
+ * fails closed.
+ */
+function querySessionKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'sessionKey'> {
+  const segments = staticAccessSegments(expression);
+  if (!segments) return {};
+  if (Node.isIdentifier(segments.root) && segments.root.getText() === 'input') return {};
+  return segments.path.includes('session') ? { sessionKey: true } : {};
 }
 
 function queryTableKeyOperand(
