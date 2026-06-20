@@ -205,6 +205,16 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 
 ### Keystones & cheap wins (Wave 1)
 - [x] **B0** `vite.config.ts` integration input broadened to `packages/test/src/**` (verifier now an input) — _meta-test (assert every importable src dir is represented) still TODO_
+- [ ] **S1** prod-build-served fixture driven in a real browser. **Scoping (done):** `kovo build`
+  → `createKovoNodeServer()` → serve is the pattern in `packages/cli/src/index.kovo-build.test.ts`,
+  which **already** asserts at HTTP/fetch level: page 200, `/_m/` 303, `/_q/` query, **`/c/__v/<hash>/`
+  client module 200 + `cache-control: immutable` + `text/javascript`**, and immutable stylesheet.
+  So S1's build/serve/asset-immutability value largely exists. **Genuine remaining gap = the BROWSER
+  drive of a REAL compiler-emitted island** (the loader's delegation→`import()`→execute chain against
+  a prod build) — this is S1+S2 combined and the hardest piece. Next-session entry point: model a new
+  Playwright spec on the CLI test's build+serve, but with a real interactive TSX island and
+  `chromium` driving a click. Obstacle to design around: a prod server with a query/mutation needs a
+  data source (use an in-memory/no-DB app like the CLI test's `appModuleSource`, not commerce).
 - [ ] **B1 / G‑S1** prod-build-served fixture driven in Playwright (`kovo build` → `dist/server/server.mjs` → click a `/c/__v/` island, submit a mutation, assert immutable hashed assets, interactive)
 - [ ] **B2 / G‑S2/3** real-TSX canonical fixtures via public client API + `fixtures/realistic-app` (drizzle extracted graph → `createDbVerifier`, better-auth `sessionProvider`, `@kovojs/style`, `@kovojs/ui` Dialog)
 
