@@ -56,7 +56,6 @@ export interface OtpFieldInputProps extends OtpFieldStateProps {
 export const otpFieldStyles = style.create({
   group: {
     alignItems: 'center',
-    columnGap: 8,
     display: 'flex',
   },
   hiddenInput: {
@@ -70,12 +69,20 @@ export const otpFieldStyles = style.create({
     whiteSpace: 'nowrap',
     width: 1,
   },
+  // Base slot. Slots sit edge-to-edge sharing inner borders: every slot keeps
+  // its top/bottom/right border, but only the first slot draws a left border
+  // (others use borderLeftWidth 0) and only the ends are rounded. End/rounding
+  // is applied per-position via the `first`/`last` variants below.
   input: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     borderStyle: 'solid',
     borderWidth: 1,
+    borderLeftWidth: 0,
     boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
     color: uiTheme.color.foreground,
     fontSize: 16,
@@ -83,7 +90,9 @@ export const otpFieldStyles = style.create({
     height: 40,
     textAlign: 'center',
     transitionProperty: 'border-color, color, box-shadow',
-    width: 36,
+    width: 40,
+    // Keep the focus ring above the shared borders so the active slot reads.
+    position: 'relative',
     '[data-filled]': {
       borderColor: uiTheme.color.borderStrong,
     },
@@ -100,10 +109,22 @@ export const otpFieldStyles = style.create({
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
+      zIndex: 1,
     },
     '[data-invalid]:focus-visible': {
       outlineColor: uiTheme.color.danger.border,
     },
+  },
+  // First slot: restore its left border and round the left corners.
+  inputFirst: {
+    borderLeftWidth: 1,
+    borderTopLeftRadius: uiTheme.radius.md,
+    borderBottomLeftRadius: uiTheme.radius.md,
+  },
+  // Last slot: round the right corners.
+  inputLast: {
+    borderTopRightRadius: uiTheme.radius.md,
+    borderBottomRightRadius: uiTheme.radius.md,
   },
   root: {
     color: uiTheme.color.foreground,
@@ -233,7 +254,14 @@ export const OtpFieldInput = component({
       slotIndex: props.slotIndex,
       ...(props.value === undefined ? {} : { value: props.value }),
     });
-    const styleAttrs = style.attrs(otpFieldStyles.input, props.styles?.input);
+    const isFirst = props.slotIndex === 0;
+    const isLast = props.length !== undefined && props.slotIndex === props.length - 1;
+    const styleAttrs = style.attrs(
+      otpFieldStyles.input,
+      isFirst ? otpFieldStyles.inputFirst : null,
+      isLast ? otpFieldStyles.inputLast : null,
+      props.styles?.input,
+    );
 
     return (
       <input

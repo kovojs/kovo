@@ -14,13 +14,14 @@ export interface BadgeProps {
 
 const base = style.create({
   root: {
+    // Filled variants are borderless; only the outline variant draws a border.
     alignItems: 'center',
     borderRadius: uiTheme.radius.md,
     borderStyle: 'solid',
-    borderWidth: 1,
+    borderWidth: 0,
     display: 'inline-flex',
     fontSize: 12,
-    fontWeight: 500,
+    fontWeight: 600,
     paddingBlock: 2,
     paddingInline: 8,
   },
@@ -40,6 +41,8 @@ const variants = style.create({
   outline: {
     backgroundColor: 'transparent',
     borderColor: uiTheme.color.border,
+    borderStyle: 'solid',
+    borderWidth: 1,
     color: uiTheme.color.foreground,
   },
   success: {

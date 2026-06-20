@@ -3,7 +3,7 @@
 exports[`@kovojs/ui styled package foundation > wraps field and fieldset primitives as styled native form wiring 1`] = `
 {
   "fieldControlClasses": [
-    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-1bvfe7 kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-16sfjy kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
   ],
   "fieldDescriptionClasses": [
     "kv-field-fg-zzbnl3 kv-field-font-1ditt9",
@@ -15,13 +15,13 @@ exports[`@kovojs/ui styled package foundation > wraps field and fieldset primiti
     "kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-line-md0e74 kv-field-cursor-1uohhp kv-field-opacity-1cqgy8",
   ],
   "fieldSelectClasses": [
-    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-1bvfe7 kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-16sfjy kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
   ],
   "fieldSelectOptionClasses": [
     "kv-field-fg-tkbfam kv-field-fg-p2kepe",
   ],
   "fieldTextareaClasses": [
-    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-1bvfe7 kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q",
+    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-16sfjy kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q",
   ],
   "fieldsetClasses": [
     "kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-fg-tkbfam kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-pad-g8j5fv kv-field-row-zmgosv kv-field-opacity-r0fqdm kv-field-bd-12jlqi",
@@ -35,10 +35,10 @@ exports[`@kovojs/ui styled package foundation > wraps field and fieldset primiti
 exports[`@kovojs/ui styled package foundation > wraps the headless checkbox-group primitive as styled native checkboxes 1`] = `
 {
   "checkboxGroupControlClasses": [
-    "kv-checkbox-group-accent-61xbru kv-checkbox-group-bd-13i1kt kv-checkbox-group-bd-15tghl kv-checkbox-group-bd-1aw25w kv-checkbox-group-bd-11qmhr kv-checkbox-group-fg-tkbfam kv-checkbox-group-h-164368 kv-checkbox-group-w-6iqu6x kv-checkbox-group-cursor-1evm4m kv-checkbox-group-opacity-1hh78w kv-checkbox-group-outline-1bvfe7 kv-checkbox-group-outline-1ukfww kv-checkbox-group-outline-6gshig kv-checkbox-group-outline-6qyzyk",
+    "kv-checkbox-group-align-mdmoer kv-checkbox-group-bg-u75tmf kv-checkbox-group-bd-clff9y kv-checkbox-group-bd-15tghl kv-checkbox-group-bd-1aw25w kv-checkbox-group-bd-11qmhr kv-checkbox-group-box-1bdq87 kv-checkbox-group-fg-j5lzg9 kv-checkbox-group-d-1n6e8w kv-checkbox-group-flex-1wyp24 kv-checkbox-group-h-qa7slm kv-checkbox-group-justify-iu6wo7 kv-checkbox-group-position-ca5if3 kv-checkbox-group-transition-j7j2o5 kv-checkbox-group-transition-1tuco5 kv-checkbox-group-w-qt7ajb kv-checkbox-group-bg-tmzbm8 kv-checkbox-group-bd-80vhpm kv-checkbox-group-bg-190abl kv-checkbox-group-bd-1w9lle kv-checkbox-group-bd-3mkdzy kv-checkbox-group-bd-sv1z1b kv-checkbox-group-bd-zrllch kv-checkbox-group-box-vdia00 kv-checkbox-group-content-196y7w kv-checkbox-group-h-15lha5 kv-checkbox-group-m-1q5bgq kv-checkbox-group-transform-vfiddr kv-checkbox-group-w-2ci0g5 kv-checkbox-group-bg-1qxjdr kv-checkbox-group-bd-1h9dw6 kv-checkbox-group-content-1a08b3 kv-checkbox-group-h-1gcwyq kv-checkbox-group-w-1slwvu kv-checkbox-group-outline-18gll4 kv-checkbox-group-outline-lylpz8 kv-checkbox-group-outline-1348e5 kv-checkbox-group-outline-8vx8sj",
   ],
   "checkboxGroupItemClasses": [
-    "kv-checkbox-group-align-1vxg5e kv-checkbox-group-column-1wng6t kv-checkbox-group-d-1ks6ev kv-checkbox-group-cursor-el2a3t kv-checkbox-group-opacity-1icjyx",
+    "kv-checkbox-group-align-mdmoer kv-checkbox-group-column-1wng6t kv-checkbox-group-d-1n6e8w kv-checkbox-group-cursor-el2a3t kv-checkbox-group-opacity-1icjyx",
   ],
   "checkboxGroupLabelClasses": [
     "kv-checkbox-group-line-md0e74 kv-checkbox-group-user-12skah kv-checkbox-group-cursor-el2a3t",
@@ -49,13 +49,13 @@ exports[`@kovojs/ui styled package foundation > wraps the headless checkbox-grou
 exports[`@kovojs/ui styled package foundation > wraps the headless number-field primitive as a styled native number input 1`] = `
 {
   "numberFieldButtonClasses": [
-    "kv-number-field-align-1y3jg4 kv-number-field-bg-1fv8eg kv-number-field-bd-xuay1f kv-number-field-bd-4z5b1i kv-number-field-fg-jwan6n kv-number-field-d-1fn6u0 kv-number-field-font-1rwqzl kv-number-field-font-jcobea kv-number-field-h-1oc3mb kv-number-field-justify-349ke2 kv-number-field-transition-b73h37 kv-number-field-w-t445li kv-number-field-bd-ulgdjb kv-number-field-bd-jna0we kv-number-field-opacity-1h6dwn kv-number-field-bg-12tw1u kv-number-field-fg-uzqr5b kv-number-field-cursor-h58pqt kv-number-field-outline-14k8ai kv-number-field-outline-h6kib kv-number-field-outline-iwu8tj kv-number-field-outline-3c9hx7 kv-number-field-bg-g1fqq4",
+    "kv-number-field-align-1y3jg4 kv-number-field-bg-1fv8eg kv-number-field-bd-xuay1f kv-number-field-bd-4z5b1i kv-number-field-fg-jwan6n kv-number-field-d-1fn6u0 kv-number-field-font-1rwqzl kv-number-field-font-jcobea kv-number-field-h-1oc3mb kv-number-field-justify-349ke2 kv-number-field-transition-b73h37 kv-number-field-w-t445li kv-number-field-bd-ulgdjb kv-number-field-bd-jna0we kv-number-field-opacity-1h6dwn kv-number-field-bg-12tw1u kv-number-field-fg-uzqr5b kv-number-field-cursor-h58pqt kv-number-field-outline-1t9ky9 kv-number-field-outline-h6kib kv-number-field-outline-iwu8tj kv-number-field-outline-3c9hx7 kv-number-field-bg-g1fqq4",
   ],
   "numberFieldControlClasses": [
     "kv-number-field-align-1y3jg4 kv-number-field-bg-u75tmf kv-number-field-bd-xuay1f kv-number-field-bd-28g5u0 kv-number-field-bd-4z5b1i kv-number-field-bd-11qmhr kv-number-field-box-2a3fpd kv-number-field-d-1fn6u0 kv-number-field-h-1oc3mb kv-number-field-overflow-1leduo kv-number-field-w-c15nat kv-number-field-opacity-1x4d36 kv-number-field-bd-12ztm7",
   ],
   "numberFieldInputClasses": [
-    "kv-number-field-bg-10najn kv-number-field-bd-4p4cnm kv-number-field-fg-ndg53x kv-number-field-font-1rwqzl kv-number-field-h-1oc3mb kv-number-field-outline-1ipo24 kv-number-field-pad-13ileu kv-number-field-text-1riyps kv-number-field-w-13yygs kv-number-field-fg-esd770 kv-number-field-bg-12tw1u kv-number-field-fg-uzqr5b kv-number-field-cursor-h58pqt kv-number-field-outline-14k8ai kv-number-field-outline-iwu8tj kv-number-field-outline-3c9hx7",
+    "kv-number-field-bg-10najn kv-number-field-bd-4p4cnm kv-number-field-fg-ndg53x kv-number-field-font-1rwqzl kv-number-field-h-1oc3mb kv-number-field-outline-1ipo24 kv-number-field-pad-13ileu kv-number-field-text-1riyps kv-number-field-w-13yygs kv-number-field-fg-esd770 kv-number-field-bg-12tw1u kv-number-field-fg-uzqr5b kv-number-field-cursor-h58pqt kv-number-field-outline-1t9ky9 kv-number-field-outline-iwu8tj kv-number-field-outline-3c9hx7",
   ],
 }
 `;
@@ -63,13 +63,13 @@ exports[`@kovojs/ui styled package foundation > wraps the headless number-field 
 exports[`@kovojs/ui styled package foundation > wraps the headless otp-field primitive as styled aggregate and slot inputs 1`] = `
 {
   "otpFieldGroupClasses": [
-    "kv-otp-field-align-1ktise kv-otp-field-column-16aop2 kv-otp-field-d-1ou0cj",
+    "kv-otp-field-align-1ktise kv-otp-field-d-1ou0cj",
   ],
   "otpFieldHiddenInputClasses": [
     "kv-otp-field-bd-dhbxdy kv-otp-field-clip-is8nbc kv-otp-field-h-2s8kot kv-otp-field-m-1inywp kv-otp-field-overflow-1j7625 kv-otp-field-pad-1x3ys8 kv-otp-field-position-fb4emz kv-otp-field-white-ex7o48 kv-otp-field-w-1muffd",
   ],
   "otpFieldInputClasses": [
-    "kv-otp-field-bg-1e8vv7 kv-otp-field-bd-xuygo5 kv-otp-field-bd-1oyuq7 kv-otp-field-bd-1qf6xu kv-otp-field-bd-1wna9r kv-otp-field-box-1ti0zz kv-otp-field-fg-ndg53x kv-otp-field-font-1h5jqe kv-otp-field-font-10t3pk kv-otp-field-h-14pom0 kv-otp-field-text-1riyps kv-otp-field-transition-afk2ej kv-otp-field-w-2bzhgg kv-otp-field-bd-1et633 kv-otp-field-bd-191kyi kv-otp-field-bg-19mu96 kv-otp-field-fg-1m99ep kv-otp-field-cursor-1puzf0 kv-otp-field-outline-10m2j4 kv-otp-field-outline-1ag1xs kv-otp-field-outline-piwjfh kv-otp-field-outline-1y03xn kv-otp-field-outline-16ryq0",
+    "kv-otp-field-bg-1e8vv7 kv-otp-field-bd-xuygo5 kv-otp-field-bd-1iob07 kv-otp-field-bd-6dny0f kv-otp-field-bd-1owflb kv-otp-field-bd-lvv3hz kv-otp-field-bd-1qf6xu kv-otp-field-bd-1wna9r kv-otp-field-bd-ejkkba kv-otp-field-box-1ti0zz kv-otp-field-fg-ndg53x kv-otp-field-font-1h5jqe kv-otp-field-font-10t3pk kv-otp-field-h-14pom0 kv-otp-field-text-1riyps kv-otp-field-transition-afk2ej kv-otp-field-w-n8m0b5 kv-otp-field-position-18liaz kv-otp-field-bd-1et633 kv-otp-field-bd-191kyi kv-otp-field-bg-19mu96 kv-otp-field-fg-1m99ep kv-otp-field-cursor-1puzf0 kv-otp-field-outline-z4aaho kv-otp-field-outline-1ag1xs kv-otp-field-outline-piwjfh kv-otp-field-outline-1y03xn kv-otp-field-z-1qoxgx kv-otp-field-outline-16ryq0",
   ],
 }
 `;

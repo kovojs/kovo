@@ -71,6 +71,25 @@ export const breadcrumbStyles = style.create({
     display: 'inline-flex',
     fontSize: 14,
     userSelect: 'none',
+    // Default separator is a small right-chevron caret (CSS border idiom,
+    // rotate(-45deg)) instead of literal '/' text.
+    '::after': {
+      borderColor: uiTheme.color.foregroundMuted,
+      borderStyle: 'solid',
+      borderWidth: '0 2px 2px 0',
+      content: '""',
+      flexShrink: 0,
+      height: 7,
+      transform: 'rotate(-45deg)',
+      width: 7,
+    },
+  },
+  // Applied when the caller supplies explicit separator text: suppress the
+  // default chevron so the literal glyph (e.g. '>') is shown on its own.
+  separatorText: {
+    '::after': {
+      content: 'none',
+    },
   },
 });
 
@@ -131,7 +150,12 @@ export const BreadcrumbLink = component({
 export const BreadcrumbSeparator = component({
   render(props: BreadcrumbPartProps) {
     const attrs = separatorRootAttributes();
-    const styleAttrs = style.attrs(breadcrumbStyles.separator, props.styles?.separator);
+    const hasText = props.children !== undefined;
+    const styleAttrs = style.attrs(
+      breadcrumbStyles.separator,
+      hasText ? breadcrumbStyles.separatorText : undefined,
+      props.styles?.separator,
+    );
 
     return (
       <li
@@ -141,7 +165,7 @@ export const BreadcrumbSeparator = component({
         data-orientation={attrs['data-orientation']}
         role={attrs.role}
       >
-        {props.children ?? '/'}
+        {props.children}
       </li>
     );
   },

@@ -53,10 +53,6 @@ export const collapsibleStyles = style.create({
   },
   root: {
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
     color: uiTheme.color.foreground,
     fontSize: 14,
     '[data-disabled]': {
@@ -93,9 +89,6 @@ export const collapsibleStyles = style.create({
     '[data-disabled]': {
       cursor: 'not-allowed',
       opacity: 0.5,
-    },
-    '[data-state=open]': {
-      backgroundColor: uiTheme.color.backgroundRaised,
     },
     '[data-state=open]::after': {
       transform: 'rotate(-135deg)',

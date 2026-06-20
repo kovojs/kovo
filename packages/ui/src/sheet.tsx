@@ -113,7 +113,7 @@ export const sheetStyles = style.create({
     borderColor: uiTheme.color.border,
     borderStyle: 'solid',
     borderWidth: 0,
-    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.25), 0 8px 10px -6px rgb(0 0 0 / 0.25)',
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     color: uiTheme.color.foreground,
     display: 'flex',
     flexDirection: 'column',
@@ -124,6 +124,9 @@ export const sheetStyles = style.create({
     zIndex: 50,
     '[data-state=closed]': {
       display: 'none',
+    },
+    '::backdrop': {
+      backgroundColor: 'rgb(0 0 0 / 0.8)',
     },
   },
   description: {
@@ -144,7 +147,7 @@ export const sheetStyles = style.create({
   trigger: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.borderStrong,
+    borderColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.md,
     borderStyle: 'solid',
     borderWidth: 1,

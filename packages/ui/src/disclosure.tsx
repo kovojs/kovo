@@ -44,10 +44,6 @@ export interface DisclosureContentProps extends DisclosureStateProps {
 export const disclosureStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
     color: uiTheme.color.foregroundMuted,
     fontSize: 14,
     padding: 12,
@@ -67,7 +63,7 @@ export const disclosureStyles = style.create({
   trigger: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.borderStrong,
+    borderColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.md,
     borderStyle: 'solid',
     borderWidth: 1,

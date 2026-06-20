@@ -77,10 +77,9 @@ export const accordionStyles = style.create({
   },
   item: {
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
+    borderBottomColor: uiTheme.color.border,
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
     '[data-disabled]': {
       opacity: 0.5,
     },
@@ -123,9 +122,6 @@ export const accordionStyles = style.create({
     '[data-disabled]': {
       opacity: 0.5,
     },
-    '[data-state=open]': {
-      backgroundColor: uiTheme.color.backgroundRaised,
-    },
     '[data-state=open]::after': {
       transform: 'rotate(-135deg)',
     },
@@ -139,7 +135,7 @@ export const accordionStyles = style.create({
       outlineWidth: 2,
     },
     ':hover': {
-      backgroundColor: uiTheme.color.backgroundRaised,
+      textDecoration: 'underline',
     },
   },
 });

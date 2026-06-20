@@ -108,7 +108,7 @@ export const dropdownMenuStyles = style.create({
   item: {
     alignItems: 'center',
     borderRadius: uiTheme.radius.sm,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     columnGap: 8,
     cursor: 'default',
     display: 'flex',

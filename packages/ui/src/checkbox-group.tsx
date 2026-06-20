@@ -10,7 +10,7 @@ import {
 import * as style from '@kovojs/style';
 
 import type { CollectionOrientation, TextDirection } from './navigation-types.js';
-import { passThroughProps } from './pass-through.js';
+import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
@@ -69,24 +69,74 @@ export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
 }
 
 export const checkboxGroupStyles = style.create({
+  // Custom square matching the standalone Checkbox box. Carries data-state to
+  // paint the teal fill + check/dash glyph (mirrors checkbox.tsx `box`). Kept
+  // under the `control` key so the public control class export is unchanged.
   control: {
-    accentColor: uiTheme.color.accent,
-    borderColor: uiTheme.color.border,
+    alignItems: 'center',
+    backgroundColor: uiTheme.color.background,
+    borderColor: uiTheme.color.borderStrong,
     borderRadius: 4,
     borderStyle: 'solid',
     borderWidth: 1,
-    color: uiTheme.color.foreground,
-    height: 16,
-    width: 16,
-    ':disabled': {
-      cursor: 'not-allowed',
-      opacity: 0.5,
+    boxSizing: 'border-box',
+    color: uiTheme.color.accentForeground,
+    display: 'inline-flex',
+    flexShrink: 0,
+    height: 18,
+    justifyContent: 'center',
+    position: 'relative',
+    transitionDuration: '0.15s',
+    transitionProperty: 'background-color, border-color, box-shadow',
+    width: 18,
+    '[data-state=checked]': {
+      backgroundColor: uiTheme.color.accent,
+      borderColor: uiTheme.color.accent,
     },
-    ':focus-visible': {
+    '[data-state=indeterminate]': {
+      backgroundColor: uiTheme.color.accent,
+      borderColor: uiTheme.color.accent,
+    },
+    // Checkmark (drawn with borders, rotated) shown only when checked.
+    '[data-state=checked]::after': {
+      borderColor: uiTheme.color.accentForeground,
+      borderStyle: 'solid',
+      borderWidth: '0 2px 2px 0',
+      boxSizing: 'border-box',
+      content: '""',
+      height: 9,
+      marginTop: -1,
+      transform: 'rotate(45deg)',
+      width: 5,
+    },
+    // Dash for the indeterminate state.
+    '[data-state=indeterminate]::after': {
+      backgroundColor: uiTheme.color.accentForeground,
+      borderRadius: 1,
+      content: '""',
+      height: 2,
+      width: 9,
+    },
+    ':focus-within': {
       outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
+    },
+  },
+  // Native checkbox kept for a11y/form state; visually hidden but still the
+  // click/focus target stretched over the box (mirrors checkbox.tsx `input`).
+  controlInput: {
+    cursor: 'pointer',
+    height: '100%',
+    left: 0,
+    margin: 0,
+    opacity: 0,
+    position: 'absolute',
+    top: 0,
+    width: '100%',
+    ':disabled': {
+      cursor: 'not-allowed',
     },
   },
   item: {
@@ -230,25 +280,35 @@ export const CheckboxGroupControl = component({
       ...(props.value === undefined ? {} : { value: props.value }),
       ...(props.controlId === undefined ? {} : { controlId: props.controlId }),
     });
-    const styleAttrs = style.attrs(checkboxGroupStyles.control, props.styles?.control);
+    const boxStyleAttrs = style.attrs(checkboxGroupStyles.control, props.styles?.control);
+    const inputStyleAttrs = style.attrs(checkboxGroupStyles.controlInput);
 
+    // Custom box matching the standalone Checkbox (checkbox.tsx): a decorative
+    // `span` paints the teal fill + check glyph driven by data-state, wrapping a
+    // visually-hidden native input that remains the real checkbox — semantics,
+    // form state, events, island ownership, and the single click/focus/tab
+    // target. bindingProps forwards only the data-state binding stamp so the box
+    // re-renders its fill client-side without becoming a second tab stop or
+    // splitting the island scope (SPEC.md §4.6).
     return (
-      <input
-        {...styleAttrs}
-        {...passThroughProps(props)}
-        aria-checked={attrs['aria-checked']}
-        checked={attrs.checked}
-        data-disabled={attrs['data-disabled']}
-        data-state={attrs['data-state']}
-        disabled={attrs.disabled}
-        form={attrs.form}
-        id={attrs.id}
-        name={attrs.name}
-        required={attrs.required}
-        tabIndex={attrs.tabIndex}
-        type={attrs.type}
-        value={attrs.value}
-      />
+      <span {...boxStyleAttrs} {...bindingProps(props, ['data-state'])} data-state={attrs['data-state']}>
+        <input
+          {...inputStyleAttrs}
+          {...passThroughProps(props)}
+          aria-checked={attrs['aria-checked']}
+          checked={attrs.checked}
+          data-disabled={attrs['data-disabled']}
+          data-state={attrs['data-state']}
+          disabled={attrs.disabled}
+          form={attrs.form}
+          id={attrs.id}
+          name={attrs.name}
+          required={attrs.required}
+          tabIndex={attrs.tabIndex}
+          type={attrs.type}
+          value={attrs.value}
+        />
+      </span>
     );
   },
 });
