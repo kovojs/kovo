@@ -1886,6 +1886,7 @@ async function runCompileDrizzleStaticCommand(
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
     extractMaterializedViewRefreshFactsFromProject,
+    extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
     extractSymbolicEffectsFromProject,
     extractTouchGraphFromProject,
@@ -1904,12 +1905,20 @@ async function runCompileDrizzleStaticCommand(
       input.extract ?? [
         'algebraicShapes',
         'materializedViewRefreshFacts',
+        'ownerAudit',
         'queryFacts',
         'symbolicEffects',
         'touchGraph',
       ],
     );
     if (extract.has('touchGraph')) output.touchGraph = extractTouchGraphFromProject({ files });
+    if (extract.has('ownerAudit')) {
+      // SPEC §10.1/§10.3: owner-domain facts + IDOR scope audits the graph emission
+      // feeds to `kovo check` (KV414).
+      const ownerAudit = extractOwnerAuditFromProject({ files });
+      output.ownerDomains = ownerAudit.ownerDomains;
+      output.scopeAudits = ownerAudit.scopeAudits;
+    }
     if (extract.has('materializedViewRefreshFacts')) {
       output.materializedViewRefreshFacts = extractMaterializedViewRefreshFactsFromProject({
         files,
