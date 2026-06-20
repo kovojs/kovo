@@ -339,7 +339,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C8a** no-JS degradation in a real browser (`counter-no-js`). Passes.
 - [x] **C8b** keyed-morph at scale, 300 rows (`scale-keyed-list`). Passes.
 - [x] **C8c** morph native-element-state survival (`morph-native-state`) — **expected-fail**, documents a real impl gap + F39 SPEC-vs-impl divergence (alerts when fixed).
-- [~] **C8d** ✅ multi-feature interaction page (optimism+morph+sibling island, `optimistic-success`) + `layout()` e2e (`layout-primitive-nested`) done. _F39/F40 (KV420/KV316 compiler checks) need new lowering analysis._
+- [~] **C8d** ✅ multi-feature page + `layout()` e2e + **KV316 (F40) implemented** (isomorphic-children compile error, `validateIsomorphicSlotComposition`, 4 tests). _KV420 (F39) registered but blocked: detection is cross-module (parent fragment-target + stateful child island in another file); `compileComponentModule` is single-module with no child-local-state channel — needs a `component→declares-state` RegistryFact + parent JSX-child resolution. Honest blocker, not faked._
 - [x] **C9a** HEAD empty-body + Content-Length (`http-methods`). Passes.
 - [x] **C9b-i** KV-code surfacing — KV227/KV242/KV302 each surface as a blocking 500 teaching document (`diagnostic-dev-document`); KV242 had zero prior coverage. Passes.
 - [ ] **C9b-ii** KV234 cross-pkg prefix · explain-from-extracted-graph (needs S2) · clock freshness (needs `clocks` impl).
