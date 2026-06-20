@@ -16,6 +16,13 @@ test('routes GET and HEAD while reserving mutation POST for /_m/', async ({
   const head = await request.head('/');
   expect(head.status()).toBe(200);
   expect(head.headers()['content-type']).toBe('text/html; charset=utf-8');
+  // SPEC §9.5 (testing-audit §5.4): a HEAD answer carries the headers but no body.
+  expect(await head.text()).toBe('');
+  // If Content-Length is advertised it must equal the GET body's byte length.
+  const headLength = head.headers()['content-length'];
+  if (headLength !== undefined) {
+    expect(Number(headLength)).toBe(Buffer.byteLength(await get.text(), 'utf8'));
+  }
 
   const mutationPost = await request.post('/_m/methods/record', {
     form: {},
