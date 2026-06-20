@@ -156,7 +156,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-selected',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -173,7 +174,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="combobox"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" role="combobox" type="text" value="enterprise" aria-activedescendant="gallery-combobox-listbox-option-1" aria-controls="gallery-combobox-listbox" id="gallery-combobox-input" aria-labelledby="gallery-combobox-label" aria-describedby="author-combobox-description" aria-invalid="true" name="author-plan" placeholder="Choose a plan" required class="combobox-input rounded"><div data-state="open" data-invalid="" data-required="" role="menu" id="gallery-combobox-listbox" aria-labelledby="gallery-combobox-label" class="combobox-listbox shadow"><div data-state="checked" data-highlighted="" aria-selected="false" role="menuitem" id="gallery-combobox-option-1" label="Enterprise" value="enterprise" class="combobox-option font-medium">Enterprise</div></div></section>',
+      '<section data-gallery-merge="combobox"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" role="combobox" type="text" value="enterprise" aria-activedescendant="gallery-combobox-listbox-option-1" aria-controls="gallery-combobox-listbox" id="gallery-combobox-input" aria-labelledby="gallery-combobox-label" aria-describedby="author-combobox-description" aria-invalid="true" name="author-plan" placeholder="Choose a plan" required class="combobox-input rounded"><div data-state="open" data-invalid="" data-required="" role="menu" id="gallery-combobox-listbox" aria-labelledby="gallery-combobox-label" class="combobox-listbox shadow"><div data-state="checked" data-highlighted="" aria-selected="true" role="menuitem" id="gallery-combobox-option-1" label="Enterprise" value="enterprise" class="combobox-option font-medium">Enterprise</div></div></section>',
     );
   });
 
@@ -426,7 +427,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(<button {...merged.attrs}>Saved</button>).toBe(
-      '<button data-state="pressed" aria-pressed="mixed" disabled type="submit" class="inline-flex saved rounded-sm" kovo-deps="toggle:pressed route:gallery" on:click="/gallery/author.client.js#trackToggle /gallery/toggle.client.js#primitiveToggle" style="--toggle-state: pressed; color: blue; color: red; margin: 0">Saved</button>',
+      // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" wins over author "mixed".
+      '<button data-state="pressed" aria-pressed="true" disabled type="submit" class="inline-flex saved rounded-sm" kovo-deps="toggle:pressed route:gallery" on:click="/gallery/author.client.js#trackToggle /gallery/toggle.client.js#primitiveToggle" style="--toggle-state: pressed; color: blue; color: red; margin: 0">Saved</button>',
     );
   });
 
@@ -465,7 +467,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(<input {...merged.attrs} />).toBe(
-      '<input data-state="indeterminate" aria-checked="false" disabled name="author-consent" required type="checkbox" value="author-yes" class="checkbox-control rounded border">',
+      // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "mixed" wins over author "false".
+      '<input data-state="indeterminate" aria-checked="mixed" disabled name="author-consent" required type="checkbox" value="author-yes" class="checkbox-control rounded border">',
     );
   });
 
@@ -759,7 +762,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -775,7 +779,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <div {...option.attrs}>Growth</div>
       </button>,
     ).toBe(
-      '<button data-state="open" data-required="" aria-expanded="false" aria-haspopup="listbox" type="button" id="gallery-select" aria-labelledby="gallery-select-label" class="select-trigger min-w-40" name="author-plan"><div data-state="checked" aria-selected="true" role="option" value="author-growth" label="Author Growth" class="select-option font-medium">Growth</div></button>',
+      '<button data-state="open" data-required="" aria-expanded="true" aria-haspopup="listbox" type="button" id="gallery-select" aria-labelledby="gallery-select-label" class="select-trigger min-w-40" name="author-plan"><div data-state="checked" aria-selected="true" role="option" value="author-growth" label="Author Growth" class="select-option font-medium">Growth</div></button>',
     );
   });
 
@@ -807,12 +811,13 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-checked',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
     expect(<input {...merged.attrs} />).toBe(
-      '<input data-state="checked" aria-checked="false" checked disabled name="gallery-notifications" role="switch" required type="checkbox" value="enabled" class="switch-control rounded-full">',
+      '<input data-state="checked" aria-checked="true" checked disabled name="gallery-notifications" role="switch" required type="checkbox" value="enabled" class="switch-control rounded-full">',
     );
   });
 
@@ -907,7 +912,8 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(control.diagnostics).toEqual([
       {
         attr: 'aria-checked',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -922,7 +928,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </fieldset>,
     ).toBe(
-      '<fieldset data-gallery-merge="checkbox-group"><div data-orientation="vertical" data-invalid="" data-required="" role="group" id="gallery-notifications" aria-labelledby="gallery-notifications-label" aria-describedby="author-notifications-help" aria-invalid="true" aria-required="true" class="checkbox-group gap-2"><div data-state="checked" id="author-notifications-email-item" class="checkbox-group-item flex"><input data-state="checked" aria-checked="false" checked disabled tabIndex="0" type="checkbox" value="email" id="author-notifications-email" name="notifications" required class="checkbox-group-control"><label data-state="checked" for="author-notifications-email" id="gallery-notifications-email-label" class="checkbox-group-label">Email</label></div></div></fieldset>',
+      '<fieldset data-gallery-merge="checkbox-group"><div data-orientation="vertical" data-invalid="" data-required="" role="group" id="gallery-notifications" aria-labelledby="gallery-notifications-label" aria-describedby="author-notifications-help" aria-invalid="true" aria-required="true" class="checkbox-group gap-2"><div data-state="checked" id="author-notifications-email-item" class="checkbox-group-item flex"><input data-state="checked" aria-checked="true" checked disabled tabIndex="0" type="checkbox" value="email" id="author-notifications-email" name="notifications" required class="checkbox-group-control"><label data-state="checked" for="author-notifications-email" id="gallery-notifications-email-label" class="checkbox-group-label">Email</label></div></div></fieldset>',
     );
   });
 
@@ -1043,7 +1049,8 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(toggleButton.diagnostics).toEqual([
       {
         attr: 'aria-pressed',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -1063,7 +1070,8 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(toolbarButton.diagnostics).toEqual([
       {
         attr: 'aria-pressed',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -1081,7 +1089,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="roving-groups"><div data-orientation="horizontal" role="toolbar" id="gallery-formatting" aria-labelledby="author-formatting-label" aria-describedby="gallery-formatting-help" class="toggle-group rounded"><span data-state="pressed" id="gallery-bold-item" class="toggle-group-item selected"><button data-state="pressed" aria-pressed="false" disabled tabIndex="0" type="button" value="author-bold" id="gallery-bold-button" class="toggle-group-button">Bold</button></span></div><div data-orientation="vertical" role="group" id="gallery-toolbar" aria-label="Editor toolbar" aria-describedby="gallery-toolbar-help" aria-orientation="horizontal" class="toolbar-root gap-1"><span id="gallery-align-left-item" class="toolbar-item shrink-0"><button disabled tabIndex="0" type="button" value="author-align-left" aria-pressed="false" data-pressed="true" id="gallery-align-left-button" class="toolbar-button">Left</button></span></div></section>',
+      '<section data-gallery-merge="roving-groups"><div data-orientation="horizontal" role="toolbar" id="gallery-formatting" aria-labelledby="author-formatting-label" aria-describedby="gallery-formatting-help" class="toggle-group rounded"><span data-state="pressed" id="gallery-bold-item" class="toggle-group-item selected"><button data-state="pressed" aria-pressed="true" disabled tabIndex="0" type="button" value="author-bold" id="gallery-bold-button" class="toggle-group-button">Bold</button></span></div><div data-orientation="vertical" role="group" id="gallery-toolbar" aria-label="Editor toolbar" aria-describedby="gallery-toolbar-help" aria-orientation="horizontal" class="toolbar-root gap-1"><span id="gallery-align-left-item" class="toolbar-item shrink-0"><button disabled tabIndex="0" type="button" value="author-align-left" aria-pressed="true" data-pressed="true" id="gallery-align-left-button" class="toolbar-button">Left</button></span></div></section>',
     );
   });
 

@@ -447,6 +447,46 @@ export const AttributeOverrideBad = component({
       }).diagnostics,
   },
   {
+    // SPEC.md §4.6: state-bearing aria-* is primitive-wins; a static author value that
+    // contradicts the primitive's render-time value is an error (KV317), not a lint (KV232).
+    // The positive fixture passes matching primitive+author state-aria → KV232 lint, not KV317.
+    // The negative fixture passes contradicting values → KV317 error.
+    // Both use the attrs= primitive composition pattern so they route through
+    // mergePrimitiveAndAuthorAttributes where KV317 is emitted.
+    code: 'KV317',
+    spec: 'SPEC.md §4.6',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'state-aria-no-contradiction.tsx',
+        source: `
+export const StateAriaNoContradiction = component({
+  render: () => (
+    <state-aria-no-contradiction>
+      <Tooltip.Trigger attrs={{ 'aria-expanded': 'true' }}>
+        {(attrs) => <button {...attrs} aria-expanded="true">Toggle</button>}
+      </Tooltip.Trigger>
+    </state-aria-no-contradiction>
+  ),
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'state-aria-contradiction.tsx',
+        source: `
+export const StateAriaContradiction = component({
+  render: () => (
+    <state-aria-contradiction>
+      <Tooltip.Trigger attrs={{ 'aria-expanded': 'true' }}>
+        {(attrs) => <button {...attrs} aria-expanded="false">Toggle</button>}
+      </Tooltip.Trigger>
+    </state-aria-contradiction>
+  ),
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV233',
     spec: 'SPEC.md §4.6/§4.8',
     positive: () =>
@@ -1025,11 +1065,6 @@ const outOfScopeCompilerDiagnostics = [
     reason:
       'Compiler-owned, but emitted by the kovo check coverage graph path (`packages/cli/src/index.kovo-check.test.ts`) rather than compileComponentModule/deriveAppGraph/query-shape validation.',
   },
-  {
-    code: 'KV317',
-    reason:
-      'Registered for the state-aria contradiction error (SPEC §4.6); attribute-merge emission + matrix coverage land with the CMP-ATTR lane (bug-and-testing-part2 J1).',
-  },
 ] as const satisfies readonly OutOfScopeDiagnosticRow[];
 
 describe('compiler diagnostic coverage matrix', () => {
@@ -1049,10 +1084,6 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV314",
           "reason": "Compiler-owned, but emitted by the kovo check coverage graph path (\`packages/cli/src/index.kovo-check.test.ts\`) rather than compileComponentModule/deriveAppGraph/query-shape validation.",
-        },
-        {
-          "code": "KV317",
-          "reason": "Registered for the state-aria contradiction error (SPEC §4.6); attribute-merge emission + matrix coverage land with the CMP-ATTR lane (bug-and-testing-part2 J1).",
         },
       ]
     `);
@@ -1178,6 +1209,12 @@ describe('compiler diagnostic coverage matrix', () => {
         },
         {
           "code": "KV232",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.6",
+        },
+        {
+          "code": "KV317",
           "negativeCount": 1,
           "positiveCount": 0,
           "spec": "SPEC.md §4.6",
@@ -1558,6 +1595,21 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 39,
             "line": 3,
+          },
+        },
+        {
+          "code": "KV317",
+          "fileName": "state-aria-contradiction.tsx",
+          "help": "Would lower to: a static state-bearing ARIA attribute whose author value contradicts the primitive's render-time state.
+      Blocked reason: state aria-* (aria-expanded/selected/checked/pressed/current, state-driven aria-disabled) is primitive-wins; the primitive's runtime derive keeps writing it, so a static author value that disagrees with the render-time state is a frozen-vs-clobbered ambiguity the author cannot have meant — distinct from the visible-override lint KV232.
+      Fixes: drop the contradicting static value (let the primitive own it) or set it to match the primitive's render-time state.
+      SPEC §4.6 makes a contradicting static state aria-* an error (KV317), not the override lint (KV232).",
+          "length": 21,
+          "message": "Static state-bearing aria-* value contradicts the primitive's render-time state. aria-expanded (writers: primitive attrs, author JSX)",
+          "severity": "error",
+          "start": {
+            "column": 40,
+            "line": 6,
           },
         },
         {

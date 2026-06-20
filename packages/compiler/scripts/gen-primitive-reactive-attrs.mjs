@@ -45,7 +45,9 @@ const dialog = await import('@kovojs/headless-ui/dialog');
 const disclosure = await import('@kovojs/headless-ui/disclosure');
 const radioGroup = await import('@kovojs/headless-ui/radio-group');
 const switchPrimitive = await import('@kovojs/headless-ui/switch');
+const tabs = await import('@kovojs/headless-ui/tabs');
 const toggle = await import('@kovojs/headless-ui/toggle');
+const toggleGroup = await import('@kovojs/headless-ui/toggle-group');
 const tooltip = await import('@kovojs/headless-ui/tooltip');
 
 // Attributes whose presence (not string value) is the reactive signal. These
@@ -250,6 +252,81 @@ const probes = [
     discriminatorField: 'itemValue',
     attrs: radioGroup.radioGroupLabelAttributes,
     base: { itemValue: 'item-a' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'tabs.root',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: tabs.tabsRootAttributes,
+    base: {},
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'tabs.list',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: tabs.tabsListAttributes,
+    base: {},
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'tabs.trigger',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: tabs.tabsTriggerAttributes,
+    base: { itemValue: 'item-a' },
+    ignoreAttrs: ['tabIndex', 'type', 'value'],
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'tabs.panel',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: tabs.tabsPanelAttributes,
+    base: { itemValue: 'item-a' },
+    ignoreAttrs: ['tabIndex'],
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'toggle-group.root',
+    controlField: 'value',
+    controlKind: 'equality',
+    discriminatorField: 'itemValue',
+    attrs: toggleGroup.toggleGroupRootAttributes,
+    base: {},
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'toggle-group.item',
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+    attrs: toggleGroup.toggleGroupItemAttributes,
+    base: { itemValue: 'item-a', type: 'single' },
+    whenFalse: { value: 'item-b' },
+    whenTrue: { value: 'item-a' },
+  },
+  {
+    key: 'toggle-group.button',
+    controlField: 'value',
+    controlKind: 'set-membership',
+    discriminatorField: 'itemValue',
+    modeField: 'type',
+    attrs: toggleGroup.toggleGroupButtonAttributes,
+    base: { itemValue: 'item-a', type: 'single' },
+    ignoreAttrs: ['tabIndex', 'type', 'value'],
     whenFalse: { value: 'item-b' },
     whenTrue: { value: 'item-a' },
   },

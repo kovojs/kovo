@@ -328,6 +328,99 @@ export const FixpointDemo = component({
       first.match(/_aria_checked_derive\b/g)?.length ?? 0,
     );
   });
+
+  // A11Y-2: query-rooted control props should emit aria-* / data-state derives
+  // with the query as the derive input (not hardcoded "state"). SPEC.md §4.6.
+  // The control prop expression must use the query variable directly (e.g.
+  // `account.optIn`) so the compiler can identify "account" as the root.
+  it('A11Y-2: query-driven Switch checked prop emits aria-checked/data-state derives with query input', () => {
+    const server = compile(
+      'switch-query-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { Switch } from '@kovojs/ui/switch';
+// Queries are declared in registryFacts; the render param destructures the query
+// directly so "account" is the root identifier the compiler sees.
+const accountQuery = {};
+export const SwitchQueryDemo = component({
+  queries: { account: accountQuery },
+  render: ({ account }: { account: { optIn: boolean } }) => (
+    <Switch checked={account.optIn}>x</Switch>
+  ),
+});
+`,
+    );
+
+    // The derive should reference the query name "account", not "state"
+    expect(server).toContain('data-bind:aria-checked=');
+    expect(server).toContain('data-bind:data-state=');
+    // derive input must be ["account"], param must be "account"
+    expect(server).toContain('derive(["account"], (account: any) =>');
+    // The stamp must be account.* not state.*
+    expect(server).toMatch(/data-bind:aria-checked="account\./);
+  });
+
+  // A11Y-3: Tabs and ToggleGroup components must appear in the reactive registry
+  // and produce aria-selected / aria-pressed / data-state derives. SPEC.md §4.6.
+  it('A11Y-3: TabsTrigger emits aria-selected/data-state derives from value + itemValue', () => {
+    const server = compile(
+      'tabs-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { Tabs, TabsTrigger, TabsPanel } from '@kovojs/ui/tabs';
+export const TabsDemo = component({
+  state: () => ({ active: 'billing' }),
+  render: (_q: Record<string, never>, state: { active: string }) => (
+    <Tabs value={state.active}>
+      <TabsTrigger itemValue="billing" value={state.active}>Billing</TabsTrigger>
+      <TabsPanel itemValue="billing" value={state.active}>Panel</TabsPanel>
+    </Tabs>
+  ),
+});
+`,
+    );
+
+    // TabsTrigger must bind aria-selected and data-state
+    expect(server).toContain('data-bind:aria-selected=');
+    expect(server).toContain(
+      'export const TabsDemo$TabsTrigger_aria_selected_derive = derive(["state"], (state: any) => (((state.active) === "billing") ? "true" : "false"));',
+    );
+    // TabsPanel must bind data-state and hidden
+    expect(server).toContain('data-bind:hidden=');
+    expect(server).toContain(
+      'export const TabsDemo$TabsPanel_hidden_derive = derive(["state"], (state: any) => (((state.active) === "billing") ? null : ""));',
+    );
+  });
+
+  it('A11Y-3: ToggleGroupButton emits aria-pressed/data-state derives from value + itemValue', () => {
+    const server = compile(
+      'toggle-group-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { ToggleGroup, ToggleGroupItem, ToggleGroupButton } from '@kovojs/ui/toggle-group';
+export const ToggleGroupDemo = component({
+  state: () => ({ active: 'bold' }),
+  render: (_q: Record<string, never>, state: { active: string }) => (
+    <ToggleGroup value={state.active} type="single">
+      <ToggleGroupItem itemValue="bold" value={state.active} type="single">
+        <ToggleGroupButton itemValue="bold" value={state.active} type="single">B</ToggleGroupButton>
+      </ToggleGroupItem>
+    </ToggleGroup>
+  ),
+});
+`,
+    );
+
+    // ToggleGroupButton must bind aria-pressed and data-state
+    expect(server).toContain('data-bind:aria-pressed=');
+    expect(server).toContain(
+      'export const ToggleGroupDemo$ToggleGroupButton_aria_pressed_derive = derive(["state"], (state: any) => (((state.active) === "bold") ? "true" : "false"));',
+    );
+    // ToggleGroupItem must bind data-state
+    expect(server).toContain(
+      'export const ToggleGroupDemo$ToggleGroupItem_data_state_derive = derive(["state"], (state: any) => (((state.active) === "bold") ? "pressed" : "off"));',
+    );
+  });
 });
 
 // Lower a single component module through the structural JSX pass only and
