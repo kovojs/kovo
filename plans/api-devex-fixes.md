@@ -170,7 +170,14 @@ invisible at the source. Consumer imports are unaffected (pure refactor).
 
 ## Latest verification
 
-_(none yet — populate when items land; keep to the shortest proof per checkbox.)_
+Items **#1, #2, #4, #5, #6 complete** on branch `agent/api-devex-impl` (worktree `kovo-devex`).
+Per-item evidence is under each checkbox. Cross-cutting at the time of the last fix (#1):
+`api-surface-gate.mjs` exit 0 (baseline 1571, no new undocumented exports across all five);
+`@kovojs/site api:check` 37 @example blocks typecheck; focused suites green
+(`@kovojs/browser` 454, `@kovojs/drizzle` 261 + selector test, `@kovojs/test` 4, `@kovojs/better-auth`
+66); `vp check` typecheck/lint clean for all touched files (the only `vp check` failure is the
+**pre-existing** 21-file formatting drift present on the original `main`). **#3 →
+`plans/ownership-idor.md`** (in progress).
 
 Shared gates before any checkpoint touching these: `pnpm run check:api-surface` ·
 `public-packages.test.mjs` · focused package tests (`@kovojs/browser`, `@kovojs/drizzle`,
