@@ -56,6 +56,11 @@ dependency gates and file-ownership rules so independent work runs concurrently 
       `<meta name="kovo-build">`, used for deploy-skew detection).
     - **F7 / F8** (output escaping, URL-scheme allowlist, script-data encoding) — already in
       `security-output.ts`/`html.ts` (verified by the C1 fixtures).
+    - **F12 (CRITICAL — IDOR)** — already satisfied: the owner-table predicate analysis
+      (`unscopedAccesses`) + a **blocking gate** (`kovo explain --unscoped --fail-on-findings` → exit 1)
+      exist, regression-locked by `unscoped-owner-fixture.spec.ts` ("typed read only exposes rows for
+      the session owner", green) + unit tests. bugs-1 flagged it because the SPEC didn't *mandate* the
+      gate; Phase 1 fixed that. **Both criticals (F7, F12) are now spec + code + test aligned.**
     - So the genuinely-needs-new-code backlog is much smaller than "~24": Phase 1 made the SPEC
       mandate what the code already does (regression-locked), and the truly-missing pieces were the
       6 I implemented (F35/F34/F13/F36/F2/F9-NUL) plus the items below.
