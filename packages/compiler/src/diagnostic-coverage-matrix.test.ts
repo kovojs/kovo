@@ -1025,6 +1025,11 @@ const outOfScopeCompilerDiagnostics = [
     reason:
       'Compiler-owned, but emitted by the kovo check coverage graph path (`packages/cli/src/index.kovo-check.test.ts`) rather than compileComponentModule/deriveAppGraph/query-shape validation.',
   },
+  {
+    code: 'KV317',
+    reason:
+      'Registered for the state-aria contradiction error (SPEC §4.6); attribute-merge emission + matrix coverage land with the CMP-ATTR lane (bug-and-testing-part2 J1).',
+  },
 ] as const satisfies readonly OutOfScopeDiagnosticRow[];
 
 describe('compiler diagnostic coverage matrix', () => {
@@ -1044,6 +1049,10 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV314",
           "reason": "Compiler-owned, but emitted by the kovo check coverage graph path (\`packages/cli/src/index.kovo-check.test.ts\`) rather than compileComponentModule/deriveAppGraph/query-shape validation.",
+        },
+        {
+          "code": "KV317",
+          "reason": "Registered for the state-aria contradiction error (SPEC §4.6); attribute-merge emission + matrix coverage land with the CMP-ATTR lane (bug-and-testing-part2 J1).",
         },
       ]
     `);

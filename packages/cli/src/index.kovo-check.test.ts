@@ -510,7 +510,8 @@ describe('kovo check', () => {
     });
   });
 
-  it('reports unresolved touch graph sites as KV406', () => {
+  it('fails kovo check on an unresolved (KV406) touch graph site', () => {
+    // SPEC §11.2/§11.3: a statically un-analyzable write site is a build-failing error, not a warn.
     expect(
       kovoCheck({
         touchGraph: {
@@ -527,9 +528,9 @@ describe('kovo check', () => {
         },
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output:
-        'kovo-check/v1\nWARN KV406 cart.domain.ts:20 Statically un-analyzable write site; manual touches required.\n',
+        'kovo-check/v1\nERROR KV406 cart.domain.ts:20 Statically un-analyzable write site; manual touches required.\n',
     });
   });
 
@@ -648,7 +649,7 @@ describe('kovo check', () => {
       exitCode: 1,
       output: [
         'kovo-check/v1',
-        'WARN KV405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
+        'ERROR KV405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
         'ERROR KV402 domain:audit Write touched an undeclared domain. domain=audit observed table audit_log',
         'ERROR KV408 product.domain.ts:9 Declared row key differs from observed row predicate. domain=product expected id observed sku',
         'WARN KV403 domain:order Declared domain was never observed written. domain=order',
