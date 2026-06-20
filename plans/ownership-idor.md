@@ -70,7 +70,7 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
       where the 2nd arg is the **row-key column** the args select (`owns((a) => a.id, orders.id)`,
       `SPEC.md:996,1075`); the **owner** column is read from that table's `owner:` annotation. SPEC
       §10.3 prose (`table.ownerColumn`) is reconciled to this in Phase 5.
-- [ ] **Confirm multi-table-domain expressibility** before Phase 4 removes `ownerDomains`. A
+- [x] **Confirmed multi-table-domain expressibility** (resolution below; commerce verified Case A). A
       domain can span tables where only one carries the principal column (e.g. `carts.userId`);
       children (`cart_items`) are owned transitively via FK. **Resolution (decided 2026-06-19):**
   - **Case A — child reached through a session-anchored parent** (the common case): annotate the
@@ -86,12 +86,12 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
     (`owner: (t) => t.cartId` following the FK to an owner-annotated parent) is a **deferred
     extension** — built only if a real case needs a child keyed without any session-anchorable
     column, and it also requires a SPEC addition (SPEC specs only Case A + single-table-direct).
-  - [ ] Verify `reference`/`commerce` need only Case A + single-table-direct (they appear to:
-        cart/orders scope by `req.session.user.id`). If one needs Case B, apply the session-scoped
-        predicate; only if neither works, revisit the "replace" decision toward deprecate-and-keep.
-- [ ] Map the existing fact flow to the new one: `OwnerDomainFact` → owner-column facts derived
-      from `owner:`; `scopeAudits` reused; `owns()` adds an "authorized by ownership guard"
-      discharge alongside `scope === 'session'`.
+  - [x] Verified: commerce uses Case A (orders scoped by the session user id via a local var) — the
+        end-to-end emit-graph run produces `ownerDomains [{order,userId}]` + `scopeAudits []`, no
+        false positive. No Case B needed.
+- [x] Mapped + built: `extractOwnerAuditFromProject` derives `ownerDomains` from `owner:` annotations
+      and `scopeAudits` (arg-keyed → `args`); the cli audit adds the `owns()` discharge alongside
+      `scope === 'session'` plus the justification suppression.
 
 ## Phase 1 — `owner:` annotation + generated owner facts
 
@@ -103,13 +103,12 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
       `vitest run packages/drizzle` 263 pass (no regression); `api-surface` baseline unchanged;
       types compile. The SPEC-promised `owner:` annotation now exists on the public surface and is
       extracted.
-- [ ] **REMAINING — flow the owner column into the graph** and make it the audit's owner source
-      (replacing app-level `OwnerDomainFact`). This needs the graph-assembly plumbing (where
-      `KovoCheckInput.ownerDomains`/`scopeAudits` are populated) — not yet wired.
-- [ ] **REMAINING — tests** asserting an owner-column fact surfaces in a public extraction output
-      (currently `owner` is extracted onto the internal `ExtractedTableAnnotation` but not surfaced
-      in `extractTouchGraphFromProject`/`extractQueryFactsFromProject`, so there is no observable
-      assertion point until the graph-flow above lands).
+- [x] **DONE (via the producer):** `extractOwnerAuditFromProject` flows the owner column into the
+      graph as `ownerDomains` (`{domain, owner}`) and is wired into the `drizzle-static` extraction
+      (`packages/cli/src/index.ts`), so `kovo check` receives real-app owner facts.
+- [x] **DONE — tests:** `index.scope-audits.test.ts` asserts the producer surfaces
+      `ownerDomains [{order, userId}]` from a project, and commerce's end-to-end emit-graph run
+      confirms it in the real graph.
 
 ## Phase 2 — `owns()` guard in `@kovojs/server` — DONE 2026-06-20
 
@@ -124,8 +123,10 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
 - [x] Tests (`guards.test.ts`): owns passes/forbids/rejects-unauthenticated, composes under
       `all(authed, owns(...))`, awaits async predicates — **20 guard tests pass**.
 - [ ] **REMAINING — KV418 interaction:** a `csrf:false` mutation referencing `owns()` must be
-      KV418 (`SPEC.md:728`). Not yet wired (needs the compiler to recognize `owns()` as a
-      session-derived guard — same recognition the producer below needs).
+      KV418 (`SPEC.md:728`). **Out of scope for owns():** KV418 itself is *unbuilt* (only defined in
+      `diagnostics.ts`, like KV414 was) — implementing the `csrf:false` + session-derived-guard check
+      is a separate CSRF-diagnostic task; `owns()` would just join `authed`/`role` in its
+      session-derived-guard set once that lands.
 
 ## Phase 3 — KV414 as the enforced IDOR gate
 
