@@ -1,19 +1,37 @@
-import { domain, endpoint, guards, mutation, s } from '@kovojs/server';
+import { domain, s } from '@kovojs/server';
 import type {
-  AuthenticatedRequest,
   CsrfValidationOptions,
   Domain,
-  EndpointAuthDeclaration,
-  EndpointDeclaration,
-  EndpointMethod,
   Guard,
   GuardDenial,
   MutationDefinition,
   MutationFail,
-  SessionProvider,
-  SessionRequestLike,
 } from '@kovojs/server';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
+
+import type { BetterAuthRoleRequest, BetterAuthRoleSession } from './guards.js';
+import type { BetterAuthSessionPayload } from './session.js';
+
+// The package's 13 public symbols are authored in the honestly-named source files
+// (`session.ts`, `mount.ts`, `mutations.ts`, `guards.ts`) and re-exported from the
+// package root by `index.ts` (api-devex-fixes #6). They are re-exported here so the
+// `./internal` subpath — and the colocated tests that import from it — keep resolving
+// the same names; the `@internal` machinery below stays authored in this file.
+export type {
+  BetterAuthRoleRequest,
+  BetterAuthRoleSession,
+  BetterAuthRoleUser,
+} from './guards.js';
+export { authed, role } from './guards.js';
+export type { BetterAuthMountOptions } from './mount.js';
+export { mount } from './mount.js';
+export {
+  betterAuthSignInEmailMutation,
+  betterAuthSignOutMutation,
+  betterAuthSignUpEmailMutation,
+} from './mutations.js';
+export type { BetterAuthSessionMapper, BetterAuthSessionPayload } from './session.js';
+export { betterAuthSession } from './session.js';
 
 /**
  * Options passed to a Better Auth `getSession` call. Carries the incoming request
@@ -22,16 +40,6 @@ import type { MutationRegistry } from '@kovojs/server/internal/execution';
  */
 export interface BetterAuthGetSessionOptions {
   headers: Headers;
-}
-
-/**
- * The `{ session, user }` pair Better Auth returns for an authenticated request. The
- * adapter maps this into the app's own session value via a `BetterAuthSessionMapper`;
- * see SPEC.md §6.5 for how sessions flow into the request.
- */
-export interface BetterAuthSessionPayload<Session, User> {
-  session: Session;
-  user: User;
 }
 
 /**
@@ -80,91 +88,6 @@ export type BetterAuthMountHandler = (request: Request) => Promise<Response> | R
  */
 export interface BetterAuthMountLike {
   handler: BetterAuthMountHandler;
-}
-
-/**
- * Options for `mount`. `auth` overrides the default `custom` endpoint auth
- * declaration; `method` narrows the HTTP method; `csrfJustification` records why this
- * prefix endpoint is exempt from CSRF (the endpoint always runs with `csrf: false` — see
- * `mount` for the SPEC.md §6.6 rationale).
- */
-export interface BetterAuthMountOptions<Method extends EndpointMethod = EndpointMethod> {
-  auth?: EndpointAuthDeclaration;
-  csrfJustification?: string;
-  method?: Method;
-}
-
-/**
- * Function the app supplies to `betterAuthSession` to project Better Auth's
- * `{ session, user }` payload into the app's own session value. Called once per
- * authenticated request (SPEC.md §6.5).
- */
-export type BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue> = (
-  value: BetterAuthSessionPayload<AuthSession, AuthUser>,
-) => SessionValue;
-
-/**
- * Builds a Kovo `SessionProvider` backed by Better Auth: it calls
- * `auth.api.getSession({ headers })` for each request and projects the result through
- * `map` into the app's session value, returning `null` when there is no session. Wire the
- * returned provider into `session(...)` so guards and pages see the authenticated user
- * (SPEC.md §6.5).
- */
-export function betterAuthSession<
-  AuthSession,
-  AuthUser,
-  SessionValue,
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
->(
-  auth: BetterAuthLike<AuthSession, AuthUser>,
-  map: BetterAuthSessionMapper<AuthSession, AuthUser, SessionValue>,
-): SessionProvider<Request, SessionValue> {
-  return async (request) => {
-    const value = await auth.api.getSession({ headers: request.headers });
-
-    if (!value) return null;
-
-    return map(value);
-  };
-}
-
-/**
- * Mounts Better Auth's own request handler at a prefix endpoint so its browser redirect
- * protocol — OAuth/SAML/magic-link callbacks and similar provider round-trips — is served
- * under one declared path, while credential forms stay on typed mutations (SPEC.md §9.1).
- *
- * SECURITY — this endpoint is always declared with `csrf: false`. Per SPEC.md §6.6, CSRF
- * protection is default-ON for server-rendered, cookie-authenticated mutations, and
- * `csrf: false` is the framework's *sanctioned opt-out* reserved for endpoints that are
- * not browser-form-driven or are authenticated by some other means (e.g. non-browser /
- * externally-authenticated callers). Better Auth's redirect protocol handler is exactly
- * such an endpoint: the inbound requests are external-provider redirects and the
- * library-supplied OAuth `state` parameter (not a Kovo CSRF token) carries the
- * anti-forgery guarantee, so a Kovo CSRF token cannot be present or required here.
- * Disabling CSRF on this prefix does NOT relax protection on the app's own credential
- * mutations, which keep CSRF on. The reason is recorded on the endpoint via
- * `csrfJustification` (overridable through `BetterAuthMountOptions`).
- */
-export function mount<
-  const Path extends string,
-  const Method extends EndpointMethod = EndpointMethod,
->(
-  path: Path,
-  auth: BetterAuthMountLike | BetterAuthMountHandler,
-  options: BetterAuthMountOptions<Method> = {},
-): EndpointDeclaration<Path, Method, 'prefix'> {
-  const handler = typeof auth === 'function' ? auth : auth.handler;
-
-  return endpoint(path, {
-    auth: options.auth ?? { kind: 'custom', name: 'better-auth' },
-    csrf: false,
-    csrfJustification: options.csrfJustification ?? 'better-auth browser redirect protocol handler',
-    handler(request) {
-      return handler(request);
-    },
-    ...(options.method === undefined ? {} : { method: options.method }),
-    mount: 'prefix',
-  });
 }
 
 /**
@@ -1113,175 +1036,6 @@ export interface BetterAuthCredentialMutationOptions<
   ) => Promise<Result>;
 }
 
-/**
- * Builds a typed Kovo mutation that signs a user in via Better Auth email/password.
- * Calls `auth.api.signInEmail` with `asResponse: true`, treats the result as success only
- * on POSITIVE evidence of an established session (2xx, no two-factor-pending body, and a
- * session-establishing `Set-Cookie`), forwards the session cookie, and otherwise returns
- * the declared `INVALID_CREDENTIALS` failure. Defaults the mutation key to `auth/sign-in`.
- * Wire it into the app's mutation registry and pair it with a CSRF-protected login form
- * (SPEC.md §6.5; CSRF default-on per §6.6).
- */
-export function betterAuthSignInEmailMutation<
-  const Key extends string = 'auth/sign-in',
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
-  GuardedRequest extends Request = Request,
->(
-  auth: BetterAuthSignInEmailLike,
-  options: BetterAuthCredentialMutationOptions<Key, Request, GuardedRequest> = {},
-): MutationDefinition<
-  Key,
-  typeof betterAuthSignInEmailInput,
-  typeof betterAuthCredentialMutationErrors,
-  Request,
-  BetterAuthCredentialMutationValue<'signed-in'>,
-  GuardedRequest
-> & { key: Key } {
-  return mutation(options.key ?? ('auth/sign-in' as Key), {
-    ...credentialMutationDefinitionOptions(
-      options,
-      betterAuthCredentialMutationTouches.signInEmail,
-    ),
-    errors: betterAuthCredentialMutationErrors,
-    input: betterAuthSignInEmailInput,
-    redirectTo: (result) => result.value.redirectTo,
-    async handler(input, request, context) {
-      try {
-        const response = await auth.api.signInEmail({
-          asResponse: true,
-          body: {
-            email: input.email,
-            password: input.password,
-          },
-          headers: request.headers,
-        });
-
-        const success = await resolveBetterAuthCredentialSuccess(response, context, {
-          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-          status: 'signed-in',
-        });
-
-        if (success === null) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        return success;
-      } catch (error) {
-        if (isBetterAuthCredentialFailureError(error)) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        throw error;
-      }
-    },
-  });
-}
-
-/**
- * Builds a typed Kovo mutation that registers a user via Better Auth email/password.
- * Calls `auth.api.signUpEmail` with `asResponse: true`, applies the same
- * positive-session-evidence success check as sign-in, forwards the session cookie, and
- * returns the declared `INVALID_CREDENTIALS` failure otherwise. Defaults the mutation key
- * to `auth/sign-up` (SPEC.md §6.5; CSRF default-on per §6.6).
- */
-export function betterAuthSignUpEmailMutation<
-  const Key extends string = 'auth/sign-up',
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
-  GuardedRequest extends Request = Request,
->(
-  auth: BetterAuthSignUpEmailLike,
-  options: BetterAuthCredentialMutationOptions<Key, Request, GuardedRequest> = {},
-): MutationDefinition<
-  Key,
-  typeof betterAuthSignUpEmailInput,
-  typeof betterAuthCredentialMutationErrors,
-  Request,
-  BetterAuthCredentialMutationValue<'signed-up'>,
-  GuardedRequest
-> & { key: Key } {
-  return mutation(options.key ?? ('auth/sign-up' as Key), {
-    ...credentialMutationDefinitionOptions(
-      options,
-      betterAuthCredentialMutationTouches.signUpEmail,
-    ),
-    errors: betterAuthCredentialMutationErrors,
-    input: betterAuthSignUpEmailInput,
-    redirectTo: (result) => result.value.redirectTo,
-    async handler(input, request, context) {
-      try {
-        const response = await auth.api.signUpEmail({
-          asResponse: true,
-          body: {
-            email: input.email,
-            name: input.name,
-            password: input.password,
-          },
-          headers: request.headers,
-        });
-
-        const success = await resolveBetterAuthCredentialSuccess(response, context, {
-          redirectTo: redirectPath(input.next, options.defaultRedirectTo ?? '/'),
-          status: 'signed-up',
-        });
-
-        if (success === null) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        return success;
-      } catch (error) {
-        if (isBetterAuthCredentialFailureError(error)) {
-          return context.fail('INVALID_CREDENTIALS', {});
-        }
-
-        throw error;
-      }
-    },
-  });
-}
-
-/**
- * Builds a typed Kovo mutation that signs a user out via Better Auth. Calls
- * `auth.api.signOut` with `asResponse: true`, forwards the session-clearing `Set-Cookie`
- * headers into the mutation response, and redirects to `defaultRedirectTo` (default
- * `/login`). Defaults the mutation key to `auth/sign-out`. Typically guarded so only an
- * authenticated request can sign out (SPEC.md §6.5; CSRF default-on per §6.6).
- */
-export function betterAuthSignOutMutation<
-  const Key extends string = 'auth/sign-out',
-  Request extends BetterAuthRequestLike = BetterAuthRequestLike,
-  GuardedRequest extends Request = Request,
->(
-  auth: BetterAuthSignOutLike,
-  options: BetterAuthCredentialMutationOptions<Key, Request, GuardedRequest> = {},
-): MutationDefinition<
-  Key,
-  typeof betterAuthSignOutInput,
-  Record<string, never>,
-  Request,
-  BetterAuthCredentialMutationValue<'signed-out'>,
-  GuardedRequest
-> & { key: Key } {
-  return mutation(options.key ?? ('auth/sign-out' as Key), {
-    ...credentialMutationDefinitionOptions(options, betterAuthCredentialMutationTouches.signOut),
-    input: betterAuthSignOutInput,
-    redirectTo: (result) => result.value.redirectTo,
-    async handler(_input, request, context) {
-      const response = await auth.api.signOut({
-        asResponse: true,
-        headers: request.headers,
-      });
-
-      forwardBetterAuthSetCookie(response.headers, context);
-
-      return {
-        redirectTo: options.defaultRedirectTo ?? '/login',
-        status: 'signed-out',
-      };
-    },
-  });
-}
-
 /** @internal Forward Better Auth `Set-Cookie` headers into the mutation response channel. */
 // SPEC.md §9.1 and archived D5 auth plan B4: credential mutations can only forward auth cookies
 // through the current mutation response-header channel.
@@ -1382,10 +1136,12 @@ async function isBetterAuthTwoFactorPendingResponse(
   }
 }
 
-// Resolve a credential response to a success value only when the session was
-// positively established; otherwise return null so the caller emits the declared
-// failure. See SECURITY_FINDINGS.md M2.
-async function resolveBetterAuthCredentialSuccess<Status extends string>(
+/**
+ * @internal Resolve a credential response to a success value only when the session was
+ * positively established; otherwise return null so the caller emits the declared
+ * failure. See SECURITY_FINDINGS.md M2.
+ */
+export async function resolveBetterAuthCredentialSuccess<Status extends string>(
   response: BetterAuthResponseLike,
   context: { setCookie?: (rawSetCookie: string) => void },
   success: BetterAuthCredentialMutationValue<Status>,
@@ -1409,67 +1165,6 @@ export function isBetterAuthCredentialFailureError(error: unknown): boolean {
     readNumericProperty(error, 'code');
 
   return status === undefined ? false : isCredentialFailureStatus(status);
-}
-
-/**
- * Guard that requires an authenticated session, narrowing the request to an
- * `AuthenticatedRequest`. A thin re-export of the framework's `guards.authed` for use on
- * auth-protected mutations and routes; an unauthenticated request denies with a
- * login-redirect intent (SPEC.md §6.5).
- */
-export function authed<Request extends SessionRequestLike>(): Guard<
-  Request,
-  AuthenticatedRequest<Request>
-> {
-  return guards.authed<Request>();
-}
-
-/**
- * Minimal user shape the `role` guard reads: an optional `id` and an optional `roles`
- * list. Apps' own session-user types structurally satisfy this (SPEC.md §6.5).
- */
-export interface BetterAuthRoleUser {
-  id?: string;
-  roles?: readonly string[] | null;
-}
-
-/** Minimal session shape the `role` guard reads: an optional `user`. */
-export interface BetterAuthRoleSession {
-  user?: BetterAuthRoleUser | null;
-}
-
-/** Minimal request shape the `role` guard reads: an optional `session`. */
-export interface BetterAuthRoleRequest {
-  session?: BetterAuthRoleSession | null;
-}
-
-type SessionFor<Request extends BetterAuthRoleRequest> = NonNullable<Request['session']>;
-type UserFor<Request extends BetterAuthRoleRequest> = NonNullable<SessionFor<Request>['user']>;
-type RoleNameFor<Request extends BetterAuthRoleRequest> =
-  UserFor<Request> extends {
-    roles?: readonly (infer Role)[] | null;
-  }
-    ? Extract<Role, string>
-    : string;
-
-/**
- * Guard that requires the session user to hold a given role. Denies with an
- * unauthenticated (→ login redirect) intent when there is no session user, and with a
- * forbidden (→ 403) intent when the user lacks the role. The role name is type-checked
- * against the request's own `roles` element type when known (SPEC.md §6.5).
- */
-export function role<Request extends BetterAuthRoleRequest>(
-  requiredRole: RoleNameFor<Request>,
-): Guard<Request>;
-export function role(requiredRole: string): Guard<BetterAuthRoleRequest>;
-export function role(requiredRole: string): Guard<BetterAuthRoleRequest> {
-  return (request) => {
-    if (!request.session?.user) return unauthenticatedGuardFailure();
-
-    return request.session.user.roles?.includes(requiredRole) === true
-      ? true
-      : unauthorizedGuardFailure();
-  };
 }
 
 /** @internal Session shape with an optional active organization id, read by `activeOrganization`. */
@@ -1502,16 +1197,19 @@ export function activeOrganization<Request extends BetterAuthOrganizationRequest
   };
 }
 
-// SPEC.md §6.5 and §10.3: adapter guards preserve the unauthenticated (→ login
-// redirect) vs forbidden (→ 403 shell) intent the framework maps to HTTP.
-function unauthenticatedGuardFailure(): GuardDenial {
+/**
+ * @internal SPEC.md §6.5 and §10.3: adapter guards preserve the unauthenticated (→ login
+ * redirect) vs forbidden (→ 403 shell) intent the framework maps to HTTP.
+ */
+export function unauthenticatedGuardFailure(): GuardDenial {
   return {
     kind: 'unauthenticated',
     payload: {},
   };
 }
 
-function unauthorizedGuardFailure(): GuardDenial {
+/** @internal Forbidden (→ 403 shell) guard denial; pairs with `unauthenticatedGuardFailure`. */
+export function unauthorizedGuardFailure(): GuardDenial {
   return {
     kind: 'forbidden',
     payload: {},
@@ -1538,7 +1236,8 @@ function readNumericProperty(value: object, key: string): number | undefined {
 // eslint-disable-next-line no-control-regex -- intentional ASCII control-char class (U+0000 to U+001F, U+007F).
 const redirectControlCharPattern = /[\u0000-\u001f\u007f]/;
 
-function redirectPath(value: string | undefined, fallback: string): string {
+/** @internal Same-origin redirect-target guard for the credential mutations (SECURITY_FINDINGS.md H4). */
+export function redirectPath(value: string | undefined, fallback: string): string {
   if (typeof value !== 'string' || value === '') return fallback;
   if (redirectControlCharPattern.test(value)) return fallback;
 
@@ -1550,7 +1249,8 @@ function redirectPath(value: string | undefined, fallback: string): string {
   return value;
 }
 
-function credentialMutationDefinitionOptions<
+/** @internal Build the shared `csrf`/`guard`/`registry`/`transaction` options for the credential mutations. */
+export function credentialMutationDefinitionOptions<
   Key extends string,
   Request extends BetterAuthRequestLike,
   GuardedRequest extends Request,

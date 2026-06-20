@@ -1,18 +1,11 @@
-export type {
-  BetterAuthMountOptions,
-  BetterAuthRoleRequest,
-  BetterAuthRoleSession,
-  BetterAuthRoleUser,
-  BetterAuthSessionMapper,
-  BetterAuthSessionPayload,
-} from './internal.js';
-
+export type { BetterAuthRoleRequest, BetterAuthRoleSession, BetterAuthRoleUser } from './guards.js';
+export { authed, role } from './guards.js';
+export type { BetterAuthMountOptions } from './mount.js';
+export { mount } from './mount.js';
 export {
-  authed,
-  betterAuthSession,
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
   betterAuthSignUpEmailMutation,
-  mount,
-  role,
-} from './internal.js';
+} from './mutations.js';
+export type { BetterAuthSessionMapper, BetterAuthSessionPayload } from './session.js';
+export { betterAuthSession } from './session.js';
