@@ -129,6 +129,47 @@ describe('server app matched dispatch boundary', () => {
     expect(response.status).toBe(404);
     await expect(response.text()).resolves.toBe('<h1>Missing</h1>');
   });
+
+  // H2 (medium) — SPEC §9.4: /_q/ is a credentialed GET endpoint; non-GET/HEAD methods
+  // must be rejected 405 with Allow: GET, HEAD so they cannot be used as a no-CSRF read channel.
+
+  it('H2: rejects POST to /_q/<key> with 405 Allow:GET,HEAD without running the query', async () => {
+    let loadCalls = 0;
+    const cart = query('cart', {
+      load() {
+        loadCalls += 1;
+        return { count: 1 };
+      },
+      reads: [],
+    });
+    const app = createApp({ queries: [cart] });
+    const request = new Request('https://shop.example.test/_q/cart', { method: 'POST' });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('GET, HEAD');
+    expect(loadCalls).toBe(0);
+  });
+
+  it('H2: rejects DELETE to /_q/<key> with 405 Allow:GET,HEAD without running the query', async () => {
+    let loadCalls = 0;
+    const cart = query('cart', {
+      load() {
+        loadCalls += 1;
+        return { count: 1 };
+      },
+      reads: [],
+    });
+    const app = createApp({ queries: [cart] });
+    const request = new Request('https://shop.example.test/_q/cart', { method: 'DELETE' });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBe('GET, HEAD');
+    expect(loadCalls).toBe(0);
+  });
 });
 
 function matchedAppRequest(

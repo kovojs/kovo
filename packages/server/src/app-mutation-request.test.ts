@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from './app.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
@@ -239,5 +239,56 @@ describe('server app mutation request boundary', () => {
     expect(sessionReads).toBe(1);
     expect(seen).toEqual(['response:u1:/_m/cart/add?from=button:true', 'handler:u1:p1']);
     expect('session' in request).toBe(false);
+  });
+
+  // H1 (high) — SPEC §9.2: malformed/wrong-Content-Type mutation body → 422, before CSRF.
+  // Before the fix, readMutationRequestBody threw into the generic 500 shell + onError.
+
+  it('H1: returns 422 for a malformed JSON body without calling onError', async () => {
+    const onError = vi.fn();
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+    const app = createApp({ mutations: [addToCart], onError });
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: '{ this is not valid json !!',
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+
+    expect(response.status).toBe(422);
+    expect(onError).not.toHaveBeenCalled();
+    const body = await response.json() as { code: string };
+    expect(body.code).toBe('VALIDATION');
+  });
+
+  it('H1: returns 422 for a text/plain Content-Type body without calling onError', async () => {
+    const onError = vi.fn();
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+    const app = createApp({ mutations: [addToCart], onError });
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: 'productId=p1',
+      headers: { 'Content-Type': 'text/plain' },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+
+    expect(response.status).toBe(422);
+    expect(onError).not.toHaveBeenCalled();
+    const body = await response.json() as { code: string };
+    expect(body.code).toBe('VALIDATION');
   });
 });

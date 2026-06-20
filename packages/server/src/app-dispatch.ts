@@ -40,9 +40,21 @@ export async function dispatchMatchedAppRequest({
   }
 
   if (match.kind === 'query') {
+    // SPEC §9.4: /_q/ is a credentialed GET endpoint. Reject non-GET/HEAD methods
+    // with 405 so state-unsafe verbs (POST, DELETE …) cannot use the query channel
+    // as a no-CSRF read path.
+    const method = request.method.toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD') {
+      return methodNotAllowedWebResponse(request, ['GET', 'HEAD']);
+    }
+
+    // SPEC §5.2.1 rule 2(d): include the build token so `renderQueryEndpointResponse`
+    // can stamp it as `Kovo-Build` on the 200 read response.
+    const buildToken = app.clientModules.buildToken();
     const queryRequest: QueryEndpointRequest<Request> = {
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
+      ...(buildToken !== '' ? { buildToken } : {}),
       request,
       search: url.searchParams,
       ...(app.db === undefined ? {} : { db: app.db }),
