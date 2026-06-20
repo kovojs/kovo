@@ -53,6 +53,7 @@ export type DiagnosticCode =
   | 'KV411'
   | 'KV412'
   | 'KV413'
+  | 'KV414'
   | 'KV419';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
@@ -656,6 +657,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Database engine side-effect needs a declared fan-out.',
+  },
+  KV414: {
+    code: 'KV414',
+    help: [
+      'Would lower to: an owner-scoped read/write whose key predicate is traceable to req.session or an owns() ownership guard.',
+      'Blocked reason: this query or write reaches an owner-annotated table through a client-visible key that is not tied to the session principal, so one user could read or mutate another user\'s rows (IDOR).',
+      'Fixes: scope the predicate by a session field (e.g. eq(table.id, req.session.userId)), add an owns() ownership guard, or record a public-read justification if the table is genuinely public.',
+      'SPEC §10.1/§10.3/§11.2 make the --unscoped audit a blocking gate: owner-table access must be session-traceable or ownership-guarded.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Owner-table access is not scoped to the session principal (IDOR).',
   },
   KV419: {
     code: 'KV419',

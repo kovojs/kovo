@@ -59,6 +59,7 @@ describe('diagnostic registry', () => {
       'KV411',
       'KV412',
       'KV413',
+      'KV414',
       'KV419',
     ]);
   });
@@ -475,6 +476,15 @@ describe('diagnostic registry', () => {
       Fixes: declare kovo({ fans: [{ via, domain, when }] }) for the trigger fan-out, move the side-effect into a modeled domain write, or mark the table exempt only when no UI reads it.
       SPEC §10.1 and §11.1 require DB-engine side effects that cannot be derived statically to be declared and checked.",
           "message": "Database engine side-effect needs a declared fan-out.",
+          "severity": "error",
+        },
+        "KV414": {
+          "code": "KV414",
+          "help": "Would lower to: an owner-scoped read/write whose key predicate is traceable to req.session or an owns() ownership guard.
+      Blocked reason: this query or write reaches an owner-annotated table through a client-visible key that is not tied to the session principal, so one user could read or mutate another user's rows (IDOR).
+      Fixes: scope the predicate by a session field (e.g. eq(table.id, req.session.userId)), add an owns() ownership guard, or record a public-read justification if the table is genuinely public.
+      SPEC §10.1/§10.3/§11.2 make the --unscoped audit a blocking gate: owner-table access must be session-traceable or ownership-guarded.",
+          "message": "Owner-table access is not scoped to the session principal (IDOR).",
           "severity": "error",
         },
         "KV419": {
