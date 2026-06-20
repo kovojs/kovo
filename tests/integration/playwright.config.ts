@@ -9,6 +9,15 @@ import { fileURLToPath } from 'node:url';
 
 import { defineConfig, devices } from '@playwright/test';
 
+// Specs promoted to the Firefox/WebKit engine matrix. Keep this curated to
+// engine-portable, engine-bound behavior; verify any addition passes on all three
+// engines before promoting (a flaky cross-engine spec breaks CI on the slow path).
+const CROSS_ENGINE = [
+  /browser-engine-degradation-matrix\.spec\.ts/,
+  /counter\.spec\.ts/,
+  /binding-text-attr\.spec\.ts/,
+];
+
 export default defineConfig({
   testDir: fileURLToPath(new URL('./specs', import.meta.url)),
   // Keep run artifacts OUT of tests/integration so the `vp run integration` cache
@@ -27,14 +36,17 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    // Curated @cross-engine tier (plans/bugs-and-testing.md P3; testing-audit §5.7):
+    // engine-bound behavior — degradation, the click→mutation→morph round-trip, and
+    // server text/attribute bindings — runs on Firefox/WebKit too, not Chromium alone.
     {
       name: 'firefox-engine-matrix',
-      testMatch: /browser-engine-degradation-matrix\.spec\.ts/,
+      testMatch: CROSS_ENGINE,
       use: { ...devices['Desktop Firefox'] },
     },
     {
       name: 'webkit-engine-matrix',
-      testMatch: /browser-engine-degradation-matrix\.spec\.ts/,
+      testMatch: CROSS_ENGINE,
       use: { ...devices['Desktop Safari'] },
     },
   ],
