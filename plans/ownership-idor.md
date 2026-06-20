@@ -27,11 +27,14 @@ feature on a **blocking** gate, not a gap fix).
   extraction**. **Soundness resolved (no data-flow tracing needed):** KV414's signal is precisely a
   client-visible `args.*` key, so the producer flags **only** arg-keyed owner reads (+ direct
   `req.session` as safe) and emits nothing for a read keyed by a session-bound local (commerce
-  `eq(orders.userId, userId)`) — so a safe app is never false-positived. **Remaining (open):** wire
-  the producer output through the example **emit-graph** scripts + annotate example tables (Phase 4;
-  the change is correct but the emit-graph run needs a built `dist/`, absent in this worktree),
-  KV418×`owns()`, the §11.2 **runtime** cross-check (a separate runtime-instrumentation system), and
-  docs (Phase 5).
+  `eq(orders.userId, userId)`) — so a safe app is never false-positived. **Verified end-to-end on a
+  real app:** commerce's `orders` table is annotated `owner: (t) => t.userId`, the producer is wired
+  through commerce's `emit-graph`, and a clean run emits `ownerDomains [{order, userId}]` with
+  `scopeAudits []` — `kovo check` passes, no false positive (Phase 4). **Remaining (open):** the
+  §11.2 **runtime** cross-check (a separate runtime-instrumentation system; defense-in-depth on the
+  complete static gate), public-read justification suppression, the other example annotations
+  (crm/stackoverflow/reference — same pattern as commerce), KV418×`owns()`, and the SPEC §10.3
+  `owns()`-signature prose reconciliation (the shipped app-lookup contract vs the column-form sugar).
 
 ## Current state (verified)
 
@@ -150,16 +153,19 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
 - [ ] **REMAINING — Runtime §11.2 cross-check** — a separate runtime-instrumentation system (verify
       executed predicates against the static result); not built.
 
-## Phase 4 — remove `ownerDomains`, migrate apps
+## Phase 4 — migrate apps to producer-driven owner facts
 
-- [ ] Remove the `createApp({ ownerDomains })` option and `OwnerDomainFact` source path
-      (`core/graph.ts`, the cli audit input). Per `rules/api-surface.md` this is a public-surface
-      removal — gate it through `check:api-surface`.
-- [ ] Migrate `examples/reference/src/app.ts` and `examples/commerce/scripts/emit-graph.mjs` to
-      table `owner:` annotations + `owns()` guards; reconcile the inconsistent `'userId'` vs
-      `'session.user.id'` owner values to column selectors.
-- [ ] Update cli audit tests (`index.kovo-check.test.ts`, `index.kovo-explain.test.ts`) off the
-      `ownerDomains` fixtures.
+- [x] **Commerce migrated + verified end-to-end:** annotated `orders` with `owner: (t) => t.userId`
+      and wired commerce's `emit-graph` to use the producer's `ownerDomains`/`scopeAudits` (was empty
+      stubs). A clean `emit-graph` run (from source, exit 0) emits `ownerDomains [{order, userId}]`
+      with `scopeAudits []` — `kovo check` passes, commerce's session-scoped order reads correctly
+      not false-positived; 10 commerce tests pass.
+  - **Note:** the prior "remove `createApp({ ownerDomains })`" framing was a misread — `ownerDomains`
+    is a graph fact (hand-authored in fixtures / stubbed in emit-graph), not a `createApp` option.
+    The migration is feeding the producer output through emit-graph, which commerce now does.
+- [ ] **REMAINING — other examples** (crm/stackoverflow/reference): same emit-graph pattern, but each
+      needs its own ownership model (e.g. stackoverflow questions are *public*, so must NOT be
+      `owner:`-annotated). Per-app author work; commerce proves the framework capability.
 
 ## Phase 5 — docs + reconciliation + gates
 
