@@ -66,7 +66,10 @@ const budgets = JSON.parse(
   readFileSync(new URL('./compiler-perf.budgets.json', import.meta.url), 'utf8'),
 ) as CompilerPerfBudgets;
 
-describe('compiler performance gates', () => {
+const compilerPerfEnabled = process.env.KOVO_RUN_COMPILER_PERF === '1';
+const describeCompilerPerf = compilerPerfEnabled ? describe : describe.skip;
+
+describeCompilerPerf('compiler performance gates', () => {
   it('keeps generated compiler corpora within checked-in budgets', () => {
     // SPEC.md §5.2 defines compileComponentModule as the TSX-to-lowered-IR pipeline; this gate
     // times that public compiler path over generated app-scale TSX corpora.

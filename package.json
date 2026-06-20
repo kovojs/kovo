@@ -23,7 +23,7 @@
     "check:inline-loader": "pnpm --filter @kovojs/browser run check:inline-loader",
     "bump": "node scripts/bump.mjs",
     "docs:serve": "pnpm run check:build && pnpm --filter @kovojs/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
-    "test": "vitest --run --exclude tests/compiler-perf.test.ts",
+    "test": "vitest --run",
     "test:browser": "vp run browser",
     "test:compiler-perf": "vp run compiler-perf",
     "test:conformance": "vp run conformance",
