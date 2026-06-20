@@ -66,10 +66,9 @@ const variants = style.create({
     ':focus-visible': {
       outlineColor: uiTheme.color.danger.border,
     },
+    // Darken on hover (Material state layer) instead of swapping to the pale error container.
     ':hover': {
-      backgroundColor: uiTheme.color.danger.background,
-      borderColor: uiTheme.color.danger.background,
-      color: uiTheme.color.danger.foreground,
+      filter: 'brightness(0.92)',
     },
   },
   ghost: {
@@ -77,7 +76,7 @@ const variants = style.create({
     borderColor: 'transparent',
     color: uiTheme.color.foreground,
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundSubtle,
@@ -88,7 +87,7 @@ const variants = style.create({
     borderColor: uiTheme.color.border,
     color: uiTheme.color.foreground,
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundSubtle,
@@ -102,8 +101,9 @@ const variants = style.create({
     ':focus-visible': {
       outlineColor: uiTheme.color.accentBorder,
     },
+    // Darken the teal on hover rather than lightening to the bright primary container.
     ':hover': {
-      backgroundColor: uiTheme.color.accentHover,
+      filter: 'brightness(0.92)',
     },
   },
   secondary: {
@@ -112,7 +112,7 @@ const variants = style.create({
     boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
     color: uiTheme.color.foreground,
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundRaised,

@@ -103,7 +103,7 @@ export const comboboxStyles = style.create({
       cursor: 'not-allowed',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

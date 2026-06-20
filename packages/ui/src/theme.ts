@@ -3,6 +3,13 @@ import { tokens } from '@kovojs/style';
 const color = tokens.sys.color;
 const shape = tokens.sys.shape;
 
+// Reference an app-defined Material custom-color role (from `defineTheme({ colors })`),
+// falling back to a guaranteed M3 system role when the app has not defined it. Lets the
+// styled UI render true semantic green/amber status while staying backward compatible.
+// SPEC.md §13.1.
+const customColor = (name: string, role: string, fallback: string): string =>
+  `var(--kovo-theme-custom-${name}-${role}, ${fallback})`;
+
 export const uiTheme = Object.freeze({
   color: {
     accent: color.primary,
@@ -14,6 +21,7 @@ export const uiTheme = Object.freeze({
     backgroundRaised: color.surfaceContainerLow,
     backgroundSubtle: color.surfaceContainer,
     backgroundSubtleHigh: color.surfaceContainerHigh,
+    backgroundMuted: color.surfaceContainerHighest,
     border: color.outlineVariant,
     borderStrong: color.outline,
     foregroundInverse: color.inverseOnSurface,
@@ -30,14 +38,14 @@ export const uiTheme = Object.freeze({
       foreground: color.onPrimaryContainer,
     },
     success: {
-      background: color.secondaryContainer,
-      border: color.secondary,
-      foreground: color.onSecondaryContainer,
+      background: customColor('success', 'color-container', color.secondaryContainer),
+      border: customColor('success', 'color', color.secondary),
+      foreground: customColor('success', 'on-color-container', color.onSecondaryContainer),
     },
     warning: {
-      background: color.tertiaryContainer,
-      border: color.tertiary,
-      foreground: color.onTertiaryContainer,
+      background: customColor('warning', 'color-container', color.tertiaryContainer),
+      border: customColor('warning', 'color', color.tertiary),
+      foreground: customColor('warning', 'on-color-container', color.onTertiaryContainer),
     },
   },
   radius: {

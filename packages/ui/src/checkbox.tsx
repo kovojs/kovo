@@ -75,7 +75,7 @@ export const checkboxStyles = style.create({
       width: 9,
     },
     ':focus-within': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

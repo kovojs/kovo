@@ -86,22 +86,21 @@ export const alertDialogStyles = style.create({
       pointerEvents: 'none',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
     },
+    // Lighten the dark action surface on hover (Material state layer) rather than flipping to cyan.
     ':hover': {
-      backgroundColor: uiTheme.color.accentHover,
-      color: uiTheme.color.foreground,
+      filter: 'brightness(1.2)',
     },
     '[data-intent=destructive]': {
       backgroundColor: uiTheme.color.danger.border,
       color: uiTheme.color.foregroundInverse,
     },
     '[data-intent=destructive]:hover': {
-      backgroundColor: uiTheme.color.danger.background,
-      color: uiTheme.color.danger.foreground,
+      filter: 'brightness(0.92)',
     },
   },
   cancel: {
@@ -125,7 +124,7 @@ export const alertDialogStyles = style.create({
       pointerEvents: 'none',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
@@ -185,7 +184,7 @@ export const alertDialogStyles = style.create({
       pointerEvents: 'none',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

@@ -165,7 +165,7 @@ export const contextMenuStyles = style.create({
       borderColor: uiTheme.color.borderStrong,
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

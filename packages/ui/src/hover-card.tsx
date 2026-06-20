@@ -84,7 +84,7 @@ export const hoverCardStyles = style.create({
       textDecorationLine: 'underline',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
