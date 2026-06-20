@@ -201,13 +201,6 @@ export const toastStyles = style.create({
   },
 });
 
-export const toastViewportClasses = [style.attrs(toastStyles.viewport).class ?? ''] as const;
-export const toastClasses = [style.attrs(toastStyles.root).class ?? ''] as const;
-export const toastTitleClasses = [style.attrs(toastStyles.title).class ?? ''] as const;
-export const toastDescriptionClasses = [style.attrs(toastStyles.description).class ?? ''] as const;
-export const toastActionClasses = [style.attrs(toastStyles.action).class ?? ''] as const;
-export const toastCloseClasses = [style.attrs(toastStyles.close).class ?? ''] as const;
-
 export const ToastViewport = component({
   render(props: ToastViewportProps) {
     const attrs = toastViewportAttributes({

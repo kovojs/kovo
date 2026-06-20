@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Kbd, kbdClasses, kbdStyles } from './kbd.js';
+import { Kbd, kbdStyles } from './kbd.js';
 
 describe('@kovojs/ui Kbd StyleX styles', () => {
   it('matches default rendered output', () => {
     expect({
-      classes: kbdClasses,
+      classes: [style.attrs(kbdStyles.root).class ?? ''] as const,
       rendered: Kbd.definition.render({ children: 'Ctrl' }),
     }).toMatchSnapshot();
   });

@@ -7,10 +7,6 @@ import {
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
-  checkboxGroupClasses,
-  checkboxGroupControlClasses,
-  checkboxGroupItemClasses,
-  checkboxGroupLabelClasses,
   checkboxGroupStyles,
 } from './checkbox-group.js';
 
@@ -33,13 +29,13 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
     };
 
     expect({
-      classes: checkboxGroupClasses,
+      classes: [style.attrs(checkboxGroupStyles.root).class ?? ''] as const,
       control: CheckboxGroupControl.definition.render({
         ...state,
         controlId: 'notifications-updates',
         itemValue: 'updates',
       }),
-      controlClasses: checkboxGroupControlClasses,
+      controlClasses: [style.attrs(checkboxGroupStyles.control).class ?? ''] as const,
       disabledControl: CheckboxGroupControl.definition.render({
         ...state,
         controlId: 'notifications-security',
@@ -50,14 +46,14 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
         children: 'updates input',
         itemValue: 'updates',
       }),
-      itemClasses: checkboxGroupItemClasses,
+      itemClasses: [style.attrs(checkboxGroupStyles.item).class ?? ''] as const,
       label: CheckboxGroupLabel.definition.render({
         ...state,
         children: 'Product updates',
         controlId: 'notifications-updates',
         itemValue: 'updates',
       }),
-      labelClasses: checkboxGroupLabelClasses,
+      labelClasses: [style.attrs(checkboxGroupStyles.label).class ?? ''] as const,
       root: CheckboxGroup.definition.render({
         ...state,
         children: 'checkbox options',

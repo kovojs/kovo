@@ -8,10 +8,6 @@ import {
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
-  numberFieldButtonClasses,
-  numberFieldClasses,
-  numberFieldControlClasses,
-  numberFieldInputClasses,
   numberFieldStyles,
 } from './number-field.js';
 
@@ -28,14 +24,14 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
     };
 
     expect({
-      buttonClasses: numberFieldButtonClasses,
-      classes: numberFieldClasses,
+      buttonClasses: [style.attrs(numberFieldStyles.button).class ?? ''] as const,
+      classes: [style.attrs(numberFieldStyles.root).class ?? ''] as const,
       control: NumberFieldControl.definition.render({
         ...state,
         children: 'stepper',
         id: 'quantity-control',
       }),
-      controlClasses: numberFieldControlClasses,
+      controlClasses: [style.attrs(numberFieldStyles.control).class ?? ''] as const,
       decrement: NumberFieldDecrement.definition.render({
         ...state,
         id: 'quantity-decrement',
@@ -60,7 +56,7 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
         id: 'quantity-input',
         labelledBy: 'quantity-label',
       }),
-      inputClasses: numberFieldInputClasses,
+      inputClasses: [style.attrs(numberFieldStyles.input).class ?? ''] as const,
       root: NumberField.definition.render({
         ...state,
         children: 'quantity controls',

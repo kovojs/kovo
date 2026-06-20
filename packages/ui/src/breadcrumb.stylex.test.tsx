@@ -7,14 +7,20 @@ import {
   BreadcrumbItem,
   BreadcrumbLink,
   BreadcrumbSeparator,
-  breadcrumbClasses,
   breadcrumbStyles,
 } from './breadcrumb.js';
 
 describe('@kovojs/ui Breadcrumb StyleX styles', () => {
   it('matches breadcrumb parts with StyleX output', () => {
     expect({
-      classes: breadcrumbClasses,
+      classes: [
+        style.attrs(breadcrumbStyles.root).class ?? '',
+        style.attrs(breadcrumbStyles.list).class ?? '',
+        style.attrs(breadcrumbStyles.item).class ?? '',
+        style.attrs(breadcrumbStyles.link).class ?? '',
+        style.attrs(breadcrumbStyles.current).class ?? '',
+        style.attrs(breadcrumbStyles.separator).class ?? '',
+      ] as const,
       current: BreadcrumbLink.definition.render({ children: 'Billing', current: true }),
       item: BreadcrumbItem.definition.render({ children: 'Settings' }),
       link: BreadcrumbLink.definition.render({ children: 'Account', href: '/account' }),

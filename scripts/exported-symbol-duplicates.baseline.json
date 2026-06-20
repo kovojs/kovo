@@ -34,22 +34,6 @@
           "subpath": "./client"
         }
       ]
-    },
-    {
-      "packageName": "@kovojs/server",
-      "symbol": "StaticExportNonExportablePolicy",
-      "homes": [
-        {
-          "importPath": "@kovojs/server",
-          "kind": "type",
-          "subpath": "."
-        },
-        {
-          "importPath": "@kovojs/server/app-shell/static-export",
-          "kind": "type",
-          "subpath": "./app-shell/static-export"
-        }
-      ]
     }
   ]
 }

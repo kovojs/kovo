@@ -116,12 +116,6 @@ export const toggleGroupStyles = style.create({
   },
 });
 
-export const toggleGroupClasses = [style.attrs(toggleGroupStyles.root).class ?? ''] as const;
-export const toggleGroupItemClasses = [style.attrs(toggleGroupStyles.item).class ?? ''] as const;
-export const toggleGroupButtonClasses = [
-  style.attrs(toggleGroupStyles.button).class ?? '',
-] as const;
-
 export const ToggleGroup = component({
   render(props: ToggleGroupProps) {
     const attrs = toggleGroupRootAttributes({

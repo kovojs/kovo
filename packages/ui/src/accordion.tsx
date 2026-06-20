@@ -144,12 +144,6 @@ export const accordionStyles = style.create({
   },
 });
 
-export const accordionClasses = [style.attrs(accordionStyles.root).class ?? ''] as const;
-export const accordionItemClasses = [style.attrs(accordionStyles.item).class ?? ''] as const;
-export const accordionHeaderClasses = [style.attrs(accordionStyles.header).class ?? ''] as const;
-export const accordionTriggerClasses = [style.attrs(accordionStyles.trigger).class ?? ''] as const;
-export const accordionContentClasses = [style.attrs(accordionStyles.content).class ?? ''] as const;
-
 function accordionState(props: AccordionStateProps) {
   return {
     ...(props.collapsible === undefined ? {} : { collapsible: props.collapsible }),

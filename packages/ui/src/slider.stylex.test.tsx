@@ -8,12 +8,7 @@ import {
   SliderRange,
   SliderThumb,
   SliderTrack,
-  sliderClasses,
-  sliderInputClasses,
-  sliderRangeClasses,
   sliderStyles,
-  sliderThumbClasses,
-  sliderTrackClasses,
 } from './slider.js';
 
 describe('@kovojs/ui Slider StyleX styles', () => {
@@ -30,7 +25,7 @@ describe('@kovojs/ui Slider StyleX styles', () => {
     };
 
     expect({
-      classes: sliderClasses,
+      classes: [style.attrs(sliderStyles.root).class ?? ''] as const,
       input: SliderInput.definition.render({
         ...state,
         descriptionId: 'volume-description',
@@ -40,12 +35,12 @@ describe('@kovojs/ui Slider StyleX styles', () => {
         label: 'Volume',
         valueText: '35 percent',
       }),
-      inputClasses: sliderInputClasses,
+      inputClasses: [style.attrs(sliderStyles.input).class ?? ''] as const,
       range: SliderRange.definition.render({
         ...state,
         id: 'volume-range',
       }),
-      rangeClasses: sliderRangeClasses,
+      rangeClasses: [style.attrs(sliderStyles.range).class ?? ''] as const,
       root: Slider.definition.render({
         ...state,
         children: 'volume slider',
@@ -58,13 +53,13 @@ describe('@kovojs/ui Slider StyleX styles', () => {
         label: 'Volume',
         valueText: '35 percent',
       }),
-      thumbClasses: sliderThumbClasses,
+      thumbClasses: [style.attrs(sliderStyles.thumb).class ?? ''] as const,
       track: SliderTrack.definition.render({
         ...state,
         children: SliderRange.definition.render(state),
         id: 'volume-track',
       }),
-      trackClasses: sliderTrackClasses,
+      trackClasses: [style.attrs(sliderStyles.track).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

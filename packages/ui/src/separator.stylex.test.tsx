@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Separator, separatorClasses, separatorStyles } from './separator.js';
+import { Separator, separatorStyles } from './separator.js';
 
 describe('@kovojs/ui Separator StyleX styles', () => {
   it('matches default and semantic orientation output', () => {
     expect({
-      classes: separatorClasses,
+      classes: [
+        style.attrs(separatorStyles.base.root, separatorStyles.orientations.horizontal).class ?? '',
+        style.attrs(separatorStyles.orientations.vertical).class ?? '',
+      ] as const,
       decorative: Separator.definition.render({}),
       semanticVertical: Separator.definition.render({
         decorative: false,

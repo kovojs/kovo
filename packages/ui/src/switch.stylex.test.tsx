@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Switch, switchClasses, switchInputClasses, switchStyles } from './switch.js';
+import { Switch, switchStyles } from './switch.js';
 
 describe('@kovojs/ui Switch StyleX styles', () => {
   it('matches native switch states with StyleX output', () => {
@@ -14,9 +14,9 @@ describe('@kovojs/ui Switch StyleX styles', () => {
         name: 'notifications',
         value: 'enabled',
       }),
-      classes: switchClasses,
+      classes: [style.attrs(switchStyles.root).class ?? ''] as const,
       disabled: Switch.definition.render({ children: 'Disabled', disabled: true }),
-      inputClasses: switchInputClasses,
+      inputClasses: [style.attrs(switchStyles.input).class ?? ''] as const,
       unchecked: Switch.definition.render({ children: 'Marketing' }),
     }).toMatchSnapshot();
   });

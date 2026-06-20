@@ -11,15 +11,7 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   NavigationMenuViewport,
-  navigationMenuClasses,
-  navigationMenuContentClasses,
-  navigationMenuIndicatorClasses,
-  navigationMenuItemClasses,
-  navigationMenuLinkClasses,
-  navigationMenuListClasses,
   navigationMenuStyles,
-  navigationMenuTriggerClasses,
-  navigationMenuViewportClasses,
 } from './navigation-menu.js';
 
 const items = [
@@ -30,12 +22,12 @@ const items = [
 describe('@kovojs/ui NavigationMenu StyleX slots', () => {
   it('matches navigation menu markup with StyleX slot output', () => {
     expect({
-      classes: navigationMenuClasses,
-      contentClasses: navigationMenuContentClasses,
-      indicatorClasses: navigationMenuIndicatorClasses,
-      itemClasses: navigationMenuItemClasses,
-      linkClasses: navigationMenuLinkClasses,
-      listClasses: navigationMenuListClasses,
+      classes: [style.attrs(navigationMenuStyles.root).class ?? ''] as const,
+      contentClasses: [style.attrs(navigationMenuStyles.content).class ?? ''] as const,
+      indicatorClasses: [style.attrs(navigationMenuStyles.indicator).class ?? ''] as const,
+      itemClasses: [style.attrs(navigationMenuStyles.item).class ?? ''] as const,
+      linkClasses: [style.attrs(navigationMenuStyles.link).class ?? ''] as const,
+      listClasses: [style.attrs(navigationMenuStyles.list).class ?? ''] as const,
       nav: NavigationMenu.definition.render({
         activeValue: 'products',
         children:
@@ -90,8 +82,8 @@ describe('@kovojs/ui NavigationMenu StyleX slots', () => {
         openValue: 'products',
         orientation: 'horizontal',
       }),
-      triggerClasses: navigationMenuTriggerClasses,
-      viewportClasses: navigationMenuViewportClasses,
+      triggerClasses: [style.attrs(navigationMenuStyles.trigger).class ?? ''] as const,
+      viewportClasses: [style.attrs(navigationMenuStyles.viewport).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

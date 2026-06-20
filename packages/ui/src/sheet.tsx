@@ -200,21 +200,6 @@ export const sheetSideStyles = style.create({
   },
 });
 
-export const sheetClasses = [style.attrs(sheetStyles.root).class ?? ''] as const;
-export const sheetTriggerClasses = [style.attrs(sheetStyles.trigger).class ?? ''] as const;
-export const sheetContentClasses = [
-  style.attrs(sheetStyles.content, sheetSideStyles.right).class ?? '',
-  style.attrs(sheetSideStyles.bottom).class ?? '',
-  style.attrs(sheetSideStyles.left).class ?? '',
-  style.attrs(sheetSideStyles.top).class ?? '',
-] as const;
-export const sheetHeaderClasses = [style.attrs(sheetStyles.header).class ?? ''] as const;
-export const sheetTitleClasses = [style.attrs(sheetStyles.title).class ?? ''] as const;
-export const sheetDescriptionClasses = [style.attrs(sheetStyles.description).class ?? ''] as const;
-export const sheetBodyClasses = [style.attrs(sheetStyles.body).class ?? ''] as const;
-export const sheetCloseClasses = [style.attrs(sheetStyles.close).class ?? ''] as const;
-export const sheetContentClassNames = sheetStyles.content;
-
 function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
   const open = props.open === true;
   const side = props.side ?? defaultSide;

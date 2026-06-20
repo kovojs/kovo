@@ -32,8 +32,6 @@ export const kbdStyles = style.create({
   },
 });
 
-export const kbdClasses = [style.attrs(kbdStyles.root).class ?? ''] as const;
-
 export const Kbd = component({
   render(props: KbdProps) {
     const attrs = style.attrs(kbdStyles.root, props.style);

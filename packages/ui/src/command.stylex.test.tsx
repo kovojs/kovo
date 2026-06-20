@@ -12,16 +12,7 @@ import {
   CommandListbox,
   CommandTrigger,
   CommandValue,
-  commandClasses,
-  commandCloseClasses,
-  commandDialogClasses,
-  commandEmptyClasses,
-  commandInputClasses,
-  commandItemClasses,
-  commandListboxClasses,
   commandStyles,
-  commandTriggerClasses,
-  commandValueClasses,
 } from './command.js';
 
 const commandItems = [
@@ -32,13 +23,13 @@ const commandItems = [
 describe('@kovojs/ui Command StyleX slots', () => {
   it('matches command states with StyleX output', () => {
     expect({
-      classes: commandClasses,
-      closeClasses: commandCloseClasses,
-      dialogClasses: commandDialogClasses,
-      emptyClasses: commandEmptyClasses,
-      inputClasses: commandInputClasses,
-      itemClasses: commandItemClasses,
-      listboxClasses: commandListboxClasses,
+      classes: [style.attrs(commandStyles.root).class ?? ''] as const,
+      closeClasses: [style.attrs(commandStyles.close).class ?? ''] as const,
+      dialogClasses: [style.attrs(commandStyles.dialog).class ?? ''] as const,
+      emptyClasses: [style.attrs(commandStyles.empty).class ?? ''] as const,
+      inputClasses: [style.attrs(commandStyles.input).class ?? ''] as const,
+      itemClasses: [style.attrs(commandStyles.item).class ?? ''] as const,
+      listboxClasses: [style.attrs(commandStyles.listbox).class ?? ''] as const,
       rendered: Command.definition.render({
         children:
           CommandTrigger.definition.render({
@@ -97,8 +88,8 @@ describe('@kovojs/ui Command StyleX slots', () => {
         open: true,
         value: 'open-file',
       }),
-      triggerClasses: commandTriggerClasses,
-      valueClasses: commandValueClasses,
+      triggerClasses: [style.attrs(commandStyles.trigger).class ?? ''] as const,
+      valueClasses: [style.attrs(commandStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

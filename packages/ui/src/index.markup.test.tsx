@@ -9,46 +9,38 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogTrigger,
-  alertDialogActionClasses,
-  alertDialogClasses,
-  alertDialogContentClasses,
+  alertDialogStyles,
 } from './alert-dialog.js';
-import { autocompleteClasses, autocompleteInputClasses } from './autocomplete.js';
+import { autocompleteStyles } from './autocomplete.js';
 import { Avatar, AvatarFallback, AvatarImage } from './avatar.js';
 import { Badge } from './badge.js';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from './breadcrumb.js';
 import { Button } from './button.js';
 import { Card } from './card.js';
-import { checkboxGroupClasses } from './checkbox-group.js';
+import { checkboxGroupStyles } from './checkbox-group.js';
 import { CollapsibleContent, CollapsibleTrigger } from './collapsible.js';
-import { comboboxClasses, comboboxInputClasses, comboboxListboxClasses } from './combobox.js';
-import { commandClasses } from './command.js';
-import { contextMenuClasses } from './context-menu.js';
-import {
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-  dialogClasses,
-  dialogContentClasses,
-} from './dialog.js';
+import { comboboxStyles } from './combobox.js';
+import { commandStyles } from './command.js';
+import { contextMenuStyles } from './context-menu.js';
+import { DialogClose, DialogContent, DialogTrigger, dialogStyles } from './dialog.js';
 import { DisclosureContent, DisclosureTrigger } from './disclosure.js';
-import { dropdownMenuClasses } from './dropdown-menu.js';
-import { fieldClasses } from './field.js';
+import { dropdownMenuStyles } from './dropdown-menu.js';
+import { fieldStyles } from './field.js';
 import { HoverCardContent, HoverCardTrigger } from './hover-card.js';
 import { Kbd } from './kbd.js';
-import { menubarClasses } from './menubar.js';
+import { menubarStyles } from './menubar.js';
 import { Meter } from './meter.js';
-import { navigationMenuClasses } from './navigation-menu.js';
-import { numberFieldClasses } from './number-field.js';
-import { otpFieldClasses } from './otp-field.js';
+import { navigationMenuStyles } from './navigation-menu.js';
+import { numberFieldStyles } from './number-field.js';
+import { otpFieldStyles } from './otp-field.js';
 import { PopoverContent, PopoverTrigger } from './popover.js';
 import { Progress } from './progress.js';
-import { selectClasses, selectTriggerClasses } from './select.js';
+import { selectStyles } from './select.js';
 import { Separator } from './separator.js';
 import { Skeleton } from './skeleton.js';
-import { sliderClasses, sliderInputClasses } from './slider.js';
+import { sliderStyles } from './slider.js';
 import { Table, TableCell, TableHeaderCell } from './table.js';
-import { toastClasses, toastViewportClasses } from './toast.js';
+import { toastStyles } from './toast.js';
 import { TooltipContent, TooltipTrigger } from './tooltip.js';
 import { readSource } from './test-source.js';
 
@@ -117,31 +109,31 @@ describe('@kovojs/ui styled package foundation', () => {
       'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );
     expect({
-      alertDialogActionClasses,
-      alertDialogClasses,
-      alertDialogContentClasses,
-      autocompleteClasses,
-      autocompleteInputClasses,
-      checkboxGroupClasses,
-      commandClasses,
-      contextMenuClasses,
-      dialogClasses,
-      dialogContentClasses,
-      dropdownMenuClasses,
-      fieldClasses,
-      menubarClasses,
-      navigationMenuClasses,
-      numberFieldClasses,
-      otpFieldClasses,
-      selectClasses,
-      selectTriggerClasses,
-      sliderClasses,
-      sliderInputClasses,
-      toastClasses,
-      toastViewportClasses,
-      comboboxClasses,
-      comboboxInputClasses,
-      comboboxListboxClasses,
+      alertDialogActionClasses: [style.attrs(alertDialogStyles.action).class ?? ''] as const,
+      alertDialogClasses: [style.attrs(alertDialogStyles.root).class ?? ''] as const,
+      alertDialogContentClasses: [style.attrs(alertDialogStyles.content).class ?? ''] as const,
+      autocompleteClasses: [style.attrs(autocompleteStyles.root).class ?? ''] as const,
+      autocompleteInputClasses: [style.attrs(autocompleteStyles.input).class ?? ''] as const,
+      checkboxGroupClasses: [style.attrs(checkboxGroupStyles.root).class ?? ''] as const,
+      commandClasses: [style.attrs(commandStyles.root).class ?? ''] as const,
+      contextMenuClasses: [style.attrs(contextMenuStyles.root).class ?? ''] as const,
+      dialogClasses: [style.attrs(dialogStyles.root).class ?? ''] as const,
+      dialogContentClasses: [style.attrs(dialogStyles.content).class ?? ''] as const,
+      dropdownMenuClasses: [style.attrs(dropdownMenuStyles.root).class ?? ''] as const,
+      fieldClasses: [style.attrs(fieldStyles.root).class ?? ''] as const,
+      menubarClasses: [style.attrs(menubarStyles.root).class ?? ''] as const,
+      navigationMenuClasses: [style.attrs(navigationMenuStyles.root).class ?? ''] as const,
+      numberFieldClasses: [style.attrs(numberFieldStyles.root).class ?? ''] as const,
+      otpFieldClasses: [style.attrs(otpFieldStyles.root).class ?? ''] as const,
+      selectClasses: [style.attrs(selectStyles.root).class ?? ''] as const,
+      selectTriggerClasses: [style.attrs(selectStyles.trigger).class ?? ''] as const,
+      sliderClasses: [style.attrs(sliderStyles.root).class ?? ''] as const,
+      sliderInputClasses: [style.attrs(sliderStyles.input).class ?? ''] as const,
+      toastClasses: [style.attrs(toastStyles.root).class ?? ''] as const,
+      toastViewportClasses: [style.attrs(toastStyles.viewport).class ?? ''] as const,
+      comboboxClasses: [style.attrs(comboboxStyles.root).class ?? ''] as const,
+      comboboxInputClasses: [style.attrs(comboboxStyles.input).class ?? ''] as const,
+      comboboxListboxClasses: [style.attrs(comboboxStyles.listbox).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

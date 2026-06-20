@@ -27,8 +27,6 @@ export const skeletonStyles = style.create({
   },
 });
 
-export const skeletonClasses = [style.attrs(skeletonStyles.root).class ?? ''] as const;
-
 export const Skeleton = component({
   render(props: SkeletonProps) {
     return <div {...style.attrs(skeletonStyles.root, props.style)} aria-hidden="true" />;

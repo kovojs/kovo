@@ -7,10 +7,6 @@ import {
   RadioGroupItem,
   RadioGroupLabel,
   RadioGroupRadio,
-  radioGroupClasses,
-  radioGroupItemClasses,
-  radioGroupLabelClasses,
-  radioGroupRadioClasses,
   radioGroupStyles,
 } from './radio-group.js';
 
@@ -31,26 +27,26 @@ describe('@kovojs/ui RadioGroup StyleX styles', () => {
     };
 
     expect({
-      classes: radioGroupClasses,
+      classes: [style.attrs(radioGroupStyles.root).class ?? ''] as const,
       item: RadioGroupItem.definition.render({
         ...state,
         children: 'Express option',
         itemValue: 'express',
       }),
-      itemClasses: radioGroupItemClasses,
+      itemClasses: [style.attrs(radioGroupStyles.item).class ?? ''] as const,
       label: RadioGroupLabel.definition.render({
         ...state,
         children: 'Express',
         controlId: 'shipping-express',
         itemValue: 'express',
       }),
-      labelClasses: radioGroupLabelClasses,
+      labelClasses: [style.attrs(radioGroupStyles.label).class ?? ''] as const,
       radio: RadioGroupRadio.definition.render({
         ...state,
         controlId: 'shipping-express',
         itemValue: 'express',
       }),
-      radioClasses: radioGroupRadioClasses,
+      radioClasses: [style.attrs(radioGroupStyles.radio).class ?? ''] as const,
       root: RadioGroup.definition.render({
         ...state,
         children: 'radio options',

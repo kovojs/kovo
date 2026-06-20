@@ -22,8 +22,6 @@ export const cardStyles = style.create({
   },
 });
 
-export const cardClasses = [style.attrs(cardStyles.root).class ?? ''] as const;
-
 export const Card = component({
   render(props: CardProps) {
     const attrs = style.attrs(cardStyles.root, props.style);

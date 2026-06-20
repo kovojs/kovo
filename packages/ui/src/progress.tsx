@@ -75,14 +75,6 @@ export const progressStyles = style.create({
   },
 });
 
-export const progressClasses = [style.attrs(progressStyles.root).class ?? ''] as const;
-/** CSS class tuple for the visual progress indicator slot. */
-export const progressIndicatorClasses = [
-  style.attrs(progressStyles.indicator).class ?? '',
-] as const;
-/** CSS class tuple for the native semantic progress slot. */
-export const progressNativeClasses = [style.attrs(progressStyles.native).class ?? ''] as const;
-
 function fillStyle(value: string | undefined, max: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   const parsedValue = Number(value);

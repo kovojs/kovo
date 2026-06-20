@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import * as packageRootApi from '@kovojs/server';
-import * as packageStaticExportApi from '@kovojs/server/app-shell/static-export';
 import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import * as packageInternalCsrfApi from '@kovojs/server/internal/csrf';
@@ -25,7 +24,6 @@ import * as internalRouteApi from '../internal/route.js';
 import * as mutationApi from '../mutation.js';
 import * as nodeSourceApi from '../node.js';
 import * as queryApi from '../query.js';
-import * as staticExportApi from './app-shell/static-export.js';
 import * as dataApi from './data.js';
 import * as documentCoreApi from '../document-core.js';
 import * as documentDiagnosticsApi from '../document-diagnostics.js';
@@ -336,26 +334,6 @@ describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
     const packageRootValues = packageRootApi as Record<string, unknown>;
-    const rootAppShellEntrypoints = new Set([
-      'createApp',
-      'createRequestHandler',
-      'exportStaticApp',
-      'isKovoApp',
-      'layout',
-      'respond',
-      'route',
-      'toNodeHandler',
-    ]);
-    const rootAppShellEntrypointValues = {
-      createApp: appApi.createApp,
-      createRequestHandler: appApi.createRequestHandler,
-      exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
-      isKovoApp: appGuardsApi.isKovoApp,
-      layout: routeApi.layout,
-      respond: responseApi.respond,
-      route: routeApi.route,
-      toNodeHandler: nodeSourceApi.toNodeHandler,
-    };
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
@@ -374,17 +352,6 @@ describe('server app-shell public API barrels', () => {
     expect(Object.keys(publicValues).sort()).toEqual(rootValues);
     expect(Object.keys(packageRootValues).sort()).toEqual(rootValues);
     expect(Object.keys(staticExportOrchestratorApi).sort()).toEqual(['exportStaticApp']);
-
-    const splitAppShellValues = aggregateValueKeys(staticExportApi);
-    for (const key of splitAppShellValues) {
-      if (rootAppShellEntrypoints.has(key)) {
-        expect(publicValues[key]).toBe(
-          rootAppShellEntrypointValues[key as keyof typeof rootAppShellEntrypointValues],
-        );
-      } else {
-        expect(publicValues).not.toHaveProperty(key);
-      }
-    }
 
     expect(publicApi.createApp).toBe(appApi.createApp);
     expect(publicApi.createRequestHandler).toBe(appApi.createRequestHandler);
@@ -531,7 +498,6 @@ describe('server app-shell public API barrels', () => {
       'runRoutePage',
     ]);
     expect(packageInternalExecutionApi).toEqual(internalExecutionApi);
-    expect(moduleValueKeys(packageStaticExportApi)).toEqual([]);
     expect(moduleValueKeys(packageViteApi)).toEqual(['kovo']);
     expect(packageViteApi.kovo).toBe(viteApi.kovo);
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
@@ -557,19 +523,6 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalClientModulesApi.createMemoryVersionedClientModuleRegistry).toBe(
       internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
     );
-    expect(packageStaticExportApi).not.toHaveProperty('exportStaticApp');
-    expect(packageStaticExportApi).not.toHaveProperty('StaticExportError');
-    expect(packageStaticExportApi).not.toHaveProperty('staticExportInventory');
-    expect(packageStaticExportApi).not.toHaveProperty('staticExportManifest');
-    expect(packageStaticExportApi).not.toHaveProperty('staticExportOutputPlan');
-    expect(packageStaticExportApi).not.toHaveProperty('assertStaticExportManifestMatchesResult');
-    expect(packageStaticExportApi).not.toHaveProperty(
-      'assertStaticExportManifestUsesDirectoryIndexDocuments',
-    );
-    expect(packageStaticExportApi).not.toHaveProperty('formatStaticExportDiagnostic');
-    expect(packageStaticExportApi).not.toHaveProperty('formatStaticExportDiagnostics');
-    expect(packageStaticExportApi).not.toHaveProperty('isStaticExportDiagnostic');
-    expect(packageStaticExportApi).not.toHaveProperty('isStaticExportDiagnosticError');
     expect(packageInternalStaticExportApi.staticExportInventory).toBe(
       staticExportResultApi.staticExportInventory,
     );
@@ -605,9 +558,12 @@ describe('server app-shell public API barrels', () => {
         subpath.startsWith('./app-shell'),
       ),
     );
-    expect(appShellPackageExports).toEqual({
-      './app-shell/static-export': './src/api/app-shell/static-export.ts',
-    });
+    // Phase 9A removed the redundant `./app-shell/static-export` subpath; its 5 types
+    // stay public via the root barrel through StaticExportResult/StaticExportOptions.
+    expect(appShellPackageExports).toEqual({});
+    expect(serverPackage.exports as Record<string, string>).not.toHaveProperty(
+      './app-shell/static-export',
+    );
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './internal/client-modules': './src/internal/client-modules.ts',
       './internal/csrf': './src/internal/csrf.ts',

@@ -170,12 +170,6 @@ function valuePercent(ratio: string | undefined): string {
   return `${(clamped * 100).toFixed(4).replace(/\.?0+$/, '')}%`;
 }
 
-export const sliderClasses = [style.attrs(sliderStyles.root).class ?? ''] as const;
-export const sliderInputClasses = [style.attrs(sliderStyles.input).class ?? ''] as const;
-export const sliderTrackClasses = [style.attrs(sliderStyles.track).class ?? ''] as const;
-export const sliderRangeClasses = [style.attrs(sliderStyles.range).class ?? ''] as const;
-export const sliderThumbClasses = [style.attrs(sliderStyles.thumb).class ?? ''] as const;
-
 export const Slider = component({
   render(props: SliderProps) {
     const attrs = sliderRootAttributes({

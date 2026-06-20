@@ -104,10 +104,6 @@ export const popoverStyles = style.create({
   },
 });
 
-export const popoverClasses = [style.attrs(popoverStyles.root).class ?? ''] as const;
-export const popoverTriggerClasses = [style.attrs(popoverStyles.trigger).class ?? ''] as const;
-export const popoverContentClasses = [style.attrs(popoverStyles.content).class ?? ''] as const;
-
 function popoverState(props: PopoverStateProps) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

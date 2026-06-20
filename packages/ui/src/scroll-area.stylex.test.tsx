@@ -8,12 +8,7 @@ import {
   ScrollAreaScrollbar,
   ScrollAreaThumb,
   ScrollAreaViewport,
-  scrollAreaClasses,
-  scrollAreaCornerClasses,
-  scrollAreaScrollbarClasses,
   scrollAreaStyles,
-  scrollAreaThumbClasses,
-  scrollAreaViewportClasses,
 } from './scroll-area.js';
 
 describe('@kovojs/ui ScrollArea StyleX styles', () => {
@@ -24,9 +19,9 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
     };
 
     expect({
-      classes: scrollAreaClasses,
+      classes: [style.attrs(scrollAreaStyles.root).class ?? ''] as const,
       corner: ScrollAreaCorner.definition.render({ ...state, id: 'activity-corner' }),
-      cornerClasses: scrollAreaCornerClasses,
+      cornerClasses: [style.attrs(scrollAreaStyles.corner).class ?? ''] as const,
       hiddenThumb: ScrollAreaThumb.definition.render({
         ...state,
         forceMount: true,
@@ -40,8 +35,8 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
         children: 'viewport and scrollbars',
         id: 'activity',
       }),
-      scrollbarClasses: scrollAreaScrollbarClasses,
-      thumbClasses: scrollAreaThumbClasses,
+      scrollbarClasses: [style.attrs(scrollAreaStyles.scrollbar).class ?? ''] as const,
+      thumbClasses: [style.attrs(scrollAreaStyles.thumb).class ?? ''] as const,
       verticalScrollbar: ScrollAreaScrollbar.definition.render({
         ...state,
         children: ScrollAreaThumb.definition.render({
@@ -64,7 +59,7 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
         scrollX: 'none',
         scrollY: 'middle',
       }),
-      viewportClasses: scrollAreaViewportClasses,
+      viewportClasses: [style.attrs(scrollAreaStyles.viewport).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

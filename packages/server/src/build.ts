@@ -6,7 +6,11 @@ import type { KovoNeutralBuild } from './neutral-build.js';
 
 const immutableCacheControl = 'public, max-age=31536000, immutable';
 
-/** Build-time preset descriptor consumed by `kovo build` and deployment tooling. */
+/**
+ * Build-time preset descriptor consumed by `kovo build` and deployment tooling.
+ *
+ * @experimental
+ */
 export interface KovoPreset {
   /** Emit platform-native output from an already-written neutral build. */
   emit?(build: KovoNeutralBuild, context: PresetContext): Promise<void> | void;
@@ -19,7 +23,11 @@ export interface KovoPreset {
   name: string;
 }
 
-/** Context passed to a preset while it validates target-specific constraints. */
+/**
+ * Context passed to a preset while it validates target-specific constraints.
+ *
+ * @experimental
+ */
 export interface PresetInspectContext {
   /** Environment variables the app declares or the build inferred, such as `DATABASE_URL`. */
   declaredEnv: readonly string[];
@@ -27,7 +35,11 @@ export interface PresetInspectContext {
   readServerHandlerSource?(): Promise<string | undefined> | string | undefined;
 }
 
-/** Context passed to a preset while it transforms the neutral build output. */
+/**
+ * Context passed to a preset while it transforms the neutral build output.
+ *
+ * @experimental
+ */
 export interface PresetContext extends PresetInspectContext {
   /** Build log sink supplied by the CLI or host integration. */
   log(message: string): void;
@@ -37,7 +49,11 @@ export interface PresetContext extends PresetInspectContext {
   readNeutral(): KovoNeutralBuild;
 }
 
-/** A preset validation diagnostic reported before platform output is emitted. */
+/**
+ * A preset validation diagnostic reported before platform output is emitted.
+ *
+ * @experimental
+ */
 export interface PresetDiagnostic {
   /** Stable diagnostic code owned by the preset. */
   code: string;
@@ -83,13 +99,21 @@ export interface CloudflarePresetOptions {
   name?: string;
 }
 
-/** Build-time project configuration loaded from `kovo.config.ts`. */
+/**
+ * Build-time project configuration loaded from `kovo.config.ts`.
+ *
+ * @experimental
+ */
 export interface KovoConfig {
   /** Platform preset used by `kovo build` when CLI/env overrides are absent. */
   preset?: KovoPreset;
 }
 
-/** Type helper for authoring `kovo.config.ts` without changing runtime behavior. */
+/**
+ * Type helper for authoring `kovo.config.ts` without changing runtime behavior.
+ *
+ * @experimental
+ */
 export function defineConfig(config: KovoConfig): KovoConfig {
   return config;
 }

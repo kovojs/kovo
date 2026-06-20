@@ -119,13 +119,6 @@ export const otpFieldStyles = style.create({
   },
 });
 
-export const otpFieldClasses = [style.attrs(otpFieldStyles.root).class ?? ''] as const;
-export const otpFieldGroupClasses = [style.attrs(otpFieldStyles.group).class ?? ''] as const;
-export const otpFieldHiddenInputClasses = [
-  style.attrs(otpFieldStyles.hiddenInput).class ?? '',
-] as const;
-export const otpFieldInputClasses = [style.attrs(otpFieldStyles.input).class ?? ''] as const;
-
 export const OtpField = component({
   render(props: OtpFieldProps) {
     const attrs = otpFieldRootAttributes({

@@ -8,12 +8,7 @@ import {
   ComboboxListbox,
   ComboboxOption,
   ComboboxValue,
-  comboboxClasses,
-  comboboxInputClasses,
-  comboboxListboxClasses,
-  comboboxOptionClasses,
   comboboxStyles,
-  comboboxValueClasses,
 } from './combobox.js';
 
 const items = [
@@ -33,7 +28,7 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
     };
 
     expect({
-      classes: comboboxClasses,
+      classes: [style.attrs(comboboxStyles.root).class ?? ''] as const,
       input: ComboboxInput.definition.render({
         ...state,
         descriptionId: 'team-help',
@@ -42,19 +37,19 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
         labelledBy: 'team-label',
         name: 'team',
       }),
-      inputClasses: comboboxInputClasses,
+      inputClasses: [style.attrs(comboboxStyles.input).class ?? ''] as const,
       listbox: ComboboxListbox.definition.render({
         ...state,
         children: 'options',
         id: 'team-listbox',
         labelledBy: 'team-input',
       }),
-      listboxClasses: comboboxListboxClasses,
+      listboxClasses: [style.attrs(comboboxStyles.listbox).class ?? ''] as const,
       option: ComboboxOption.definition.render({
         ...state,
         itemValue: 'design',
       }),
-      optionClasses: comboboxOptionClasses,
+      optionClasses: [style.attrs(comboboxStyles.option).class ?? ''] as const,
       root: Combobox.definition.render({
         ...state,
         children: 'combobox body',
@@ -66,7 +61,7 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
         ...state,
         id: 'team-value',
       }),
-      valueClasses: comboboxValueClasses,
+      valueClasses: [style.attrs(comboboxStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

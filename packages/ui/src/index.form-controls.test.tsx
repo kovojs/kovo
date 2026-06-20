@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import * as style from '@kovojs/style';
+
 import { Checkbox } from './checkbox.js';
 import {
   CheckboxGroup,
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
-  checkboxGroupControlClasses,
-  checkboxGroupItemClasses,
-  checkboxGroupLabelClasses,
+  checkboxGroupStyles,
 } from './checkbox-group.js';
 import {
   Field,
@@ -21,15 +21,7 @@ import {
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
-  fieldControlClasses,
-  fieldDescriptionClasses,
-  fieldErrorClasses,
-  fieldLabelClasses,
-  fieldSelectClasses,
-  fieldSelectOptionClasses,
-  fieldTextareaClasses,
-  fieldsetClasses,
-  fieldsetLegendClasses,
+  fieldStyles,
 } from './field.js';
 import {
   NumberField,
@@ -37,18 +29,14 @@ import {
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
-  numberFieldButtonClasses,
-  numberFieldControlClasses,
-  numberFieldInputClasses,
+  numberFieldStyles,
 } from './number-field.js';
 import {
   OtpField,
   OtpFieldGroup,
   OtpFieldHiddenInput,
   OtpFieldInput,
-  otpFieldGroupClasses,
-  otpFieldHiddenInputClasses,
-  otpFieldInputClasses,
+  otpFieldStyles,
 } from './otp-field.js';
 import { RadioGroup, RadioGroupItem, RadioGroupLabel, RadioGroupRadio } from './radio-group.js';
 import { Switch } from './switch.js';
@@ -117,9 +105,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disabledControl).toContain('tabIndex="-1" type="checkbox" value="security"');
     expect(label).toContain('for="notifications-updates"');
     expect({
-      checkboxGroupControlClasses,
-      checkboxGroupItemClasses,
-      checkboxGroupLabelClasses,
+      checkboxGroupControlClasses: [style.attrs(checkboxGroupStyles.control).class ?? ''] as const,
+      checkboxGroupItemClasses: [style.attrs(checkboxGroupStyles.item).class ?? ''] as const,
+      checkboxGroupLabelClasses: [style.attrs(checkboxGroupStyles.label).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -393,9 +381,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disabledAtMax).toContain('data-disabled=""');
     expect(disabledAtMax).toContain('disabled type="button"');
     expect({
-      numberFieldButtonClasses,
-      numberFieldControlClasses,
-      numberFieldInputClasses,
+      numberFieldButtonClasses: [style.attrs(numberFieldStyles.button).class ?? ''] as const,
+      numberFieldControlClasses: [style.attrs(numberFieldStyles.control).class ?? ''] as const,
+      numberFieldInputClasses: [style.attrs(numberFieldStyles.input).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -457,9 +445,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(emptySlot).toContain('data-slot="5"');
     expect(completeDisabled).toContain('data-complete="" data-disabled=""');
     expect({
-      otpFieldGroupClasses,
-      otpFieldHiddenInputClasses,
-      otpFieldInputClasses,
+      otpFieldGroupClasses: [style.attrs(otpFieldStyles.group).class ?? ''] as const,
+      otpFieldHiddenInputClasses: [style.attrs(otpFieldStyles.hiddenInput).class ?? ''] as const,
+      otpFieldInputClasses: [style.attrs(otpFieldStyles.input).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -588,15 +576,15 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(fieldset).toContain('id="plan-fieldset"');
     expect(fieldset).toContain('id="plan-legend"');
     expect({
-      fieldControlClasses,
-      fieldDescriptionClasses,
-      fieldErrorClasses,
-      fieldLabelClasses,
-      fieldSelectClasses,
-      fieldSelectOptionClasses,
-      fieldTextareaClasses,
-      fieldsetClasses,
-      fieldsetLegendClasses,
+      fieldControlClasses: [style.attrs(fieldStyles.control).class ?? ''] as const,
+      fieldDescriptionClasses: [style.attrs(fieldStyles.description).class ?? ''] as const,
+      fieldErrorClasses: [style.attrs(fieldStyles.error).class ?? ''] as const,
+      fieldLabelClasses: [style.attrs(fieldStyles.label).class ?? ''] as const,
+      fieldSelectClasses: [style.attrs(fieldStyles.select).class ?? ''] as const,
+      fieldSelectOptionClasses: [style.attrs(fieldStyles.selectOption).class ?? ''] as const,
+      fieldTextareaClasses: [style.attrs(fieldStyles.textarea).class ?? ''] as const,
+      fieldsetClasses: [style.attrs(fieldStyles.fieldset).class ?? ''] as const,
+      fieldsetLegendClasses: [style.attrs(fieldStyles.fieldsetLegend).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 });

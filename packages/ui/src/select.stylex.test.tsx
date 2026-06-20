@@ -9,13 +9,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  selectClasses,
-  selectContentClasses,
-  selectHiddenInputClasses,
-  selectItemClasses,
   selectStyles,
-  selectTriggerClasses,
-  selectValueClasses,
 } from './select.js';
 
 const items = [
@@ -35,26 +29,26 @@ describe('@kovojs/ui Select StyleX slots', () => {
     };
 
     expect({
-      classes: selectClasses,
+      classes: [style.attrs(selectStyles.root).class ?? ''] as const,
       content: SelectContent.definition.render({
         ...state,
         children: 'options',
         id: 'team-listbox',
         labelledBy: 'team-trigger',
       }),
-      contentClasses: selectContentClasses,
+      contentClasses: [style.attrs(selectStyles.content).class ?? ''] as const,
       hiddenInput: SelectHiddenInput.definition.render({
         ...state,
         form: 'team-form',
         id: 'team-hidden',
         name: 'team',
       }),
-      hiddenInputClasses: selectHiddenInputClasses,
+      hiddenInputClasses: [style.attrs(selectStyles.hiddenInput).class ?? ''] as const,
       item: SelectItem.definition.render({
         ...state,
         itemValue: 'design',
       }),
-      itemClasses: selectItemClasses,
+      itemClasses: [style.attrs(selectStyles.item).class ?? ''] as const,
       root: Select.definition.render({
         ...state,
         children: 'select body',
@@ -70,12 +64,12 @@ describe('@kovojs/ui Select StyleX slots', () => {
         id: 'team-trigger',
         labelledBy: 'team-label',
       }),
-      triggerClasses: selectTriggerClasses,
+      triggerClasses: [style.attrs(selectStyles.trigger).class ?? ''] as const,
       value: SelectValue.definition.render({
         ...state,
         id: 'team-value',
       }),
-      valueClasses: selectValueClasses,
+      valueClasses: [style.attrs(selectStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

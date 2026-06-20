@@ -97,25 +97,6 @@ export const tableStyles = style.create({
   },
 });
 
-export const tableWrapperClasses = [style.attrs(tableStyles.wrapper).class ?? ''] as const;
-export const tableRootClasses = [style.attrs(tableStyles.table).class ?? ''] as const;
-export const tableHeadClasses = [style.attrs(tableStyles.head).class ?? ''] as const;
-export const tableBodyClasses = [style.attrs(tableStyles.body).class ?? ''] as const;
-export const tableRowClasses = [style.attrs(tableStyles.row).class ?? ''] as const;
-export const tableHeaderCellClasses = [style.attrs(tableStyles.headerCell).class ?? ''] as const;
-export const tableCellClasses = [style.attrs(tableStyles.cell).class ?? ''] as const;
-export const tableCaptionClasses = [style.attrs(tableStyles.caption).class ?? ''] as const;
-export const tableClasses = [
-  ...tableWrapperClasses,
-  ...tableRootClasses,
-  ...tableHeadClasses,
-  ...tableBodyClasses,
-  ...tableRowClasses,
-  ...tableHeaderCellClasses,
-  ...tableCellClasses,
-  ...tableCaptionClasses,
-] as const;
-
 export const Table = component({
   render(props: TableProps) {
     const wrapperAttrs = style.attrs(tableStyles.wrapper, props.styles?.wrapper);

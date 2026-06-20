@@ -109,14 +109,6 @@ export const collapsibleStyles = style.create({
   },
 });
 
-export const collapsibleClasses = [style.attrs(collapsibleStyles.root).class ?? ''] as const;
-export const collapsibleTriggerClasses = [
-  style.attrs(collapsibleStyles.trigger).class ?? '',
-] as const;
-export const collapsibleContentClasses = [
-  style.attrs(collapsibleStyles.content).class ?? '',
-] as const;
-
 function collapsibleState(props: CollapsibleStateProps) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import * as style from '@kovojs/style';
+
 import {
   Command,
   CommandClose,
@@ -10,38 +12,24 @@ import {
   CommandListbox,
   CommandTrigger,
   CommandValue,
-  commandDialogClasses,
-  commandInputClasses,
-  commandItemClasses,
-  commandListboxClasses,
-  commandTriggerClasses,
+  commandStyles,
 } from './command.js';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  contextMenuContentClasses,
-  contextMenuItemClasses,
-  contextMenuTriggerClasses,
+  contextMenuStyles,
 } from './context-menu.js';
-import { Drawer, drawerContentClasses } from './drawer.js';
+import { Drawer, drawerSideStyles, drawerStyles } from './drawer.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  dropdownMenuContentClasses,
-  dropdownMenuItemClasses,
-  dropdownMenuTriggerClasses,
+  dropdownMenuStyles,
 } from './dropdown-menu.js';
-import {
-  Menubar,
-  MenubarItem,
-  MenubarSubmenu,
-  menubarItemClasses,
-  menubarSubmenuClasses,
-} from './menubar.js';
+import { Menubar, MenubarItem, MenubarSubmenu, menubarStyles } from './menubar.js';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -50,13 +38,9 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   NavigationMenuViewport,
-  navigationMenuContentClasses,
-  navigationMenuLinkClasses,
-  navigationMenuListClasses,
-  navigationMenuTriggerClasses,
-  navigationMenuViewportClasses,
+  navigationMenuStyles,
 } from './navigation-menu.js';
-import { Sheet, sheetContentClasses } from './sheet.js';
+import { Sheet, sheetSideStyles, sheetStyles } from './sheet.js';
 import {
   Toast,
   ToastAction,
@@ -64,10 +48,7 @@ import {
   ToastDescription,
   ToastTitle,
   ToastViewport,
-  toastActionClasses,
-  toastCloseClasses,
-  toastDescriptionClasses,
-  toastTitleClasses,
+  toastStyles,
 } from './toast.js';
 
 describe('@kovojs/ui styled package foundation', () => {
@@ -136,10 +117,10 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(hiddenToast).toContain('data-state="closed"');
     expect(hiddenToast).toContain('hidden id="hidden-toast"');
     expect({
-      toastActionClasses,
-      toastCloseClasses,
-      toastDescriptionClasses,
-      toastTitleClasses,
+      toastActionClasses: [style.attrs(toastStyles.action).class ?? ''] as const,
+      toastCloseClasses: [style.attrs(toastStyles.close).class ?? ''] as const,
+      toastDescriptionClasses: [style.attrs(toastStyles.description).class ?? ''] as const,
+      toastTitleClasses: [style.attrs(toastStyles.title).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -212,9 +193,9 @@ describe('@kovojs/ui styled package foundation', () => {
       'disabled role="menuitem" tabIndex="-1" type="button" value="archive"',
     );
     expect({
-      dropdownMenuContentClasses,
-      dropdownMenuItemClasses,
-      dropdownMenuTriggerClasses,
+      dropdownMenuContentClasses: [style.attrs(dropdownMenuStyles.content).class ?? ''] as const,
+      dropdownMenuItemClasses: [style.attrs(dropdownMenuStyles.item).class ?? ''] as const,
+      dropdownMenuTriggerClasses: [style.attrs(dropdownMenuStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
     expect(context).toContain('kovo-context-menu="row-menu"');
     expect(context).toContain('aria-haspopup="menu"');
@@ -226,9 +207,9 @@ describe('@kovojs/ui styled package foundation', () => {
       'disabled role="menuitem" tabIndex="-1" type="button" value="delete"',
     );
     expect({
-      contextMenuContentClasses,
-      contextMenuItemClasses,
-      contextMenuTriggerClasses,
+      contextMenuContentClasses: [style.attrs(contextMenuStyles.content).class ?? ''] as const,
+      contextMenuItemClasses: [style.attrs(contextMenuStyles.item).class ?? ''] as const,
+      contextMenuTriggerClasses: [style.attrs(contextMenuStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -342,8 +323,8 @@ describe('@kovojs/ui styled package foundation', () => {
       'disabled role="menuitem" tabIndex="-1" type="button" value="import"',
     );
     expect({
-      menubarItemClasses,
-      menubarSubmenuClasses,
+      menubarItemClasses: [style.attrs(menubarStyles.item).class ?? ''] as const,
+      menubarSubmenuClasses: [style.attrs(menubarStyles.submenu).class ?? ''] as const,
     }).toMatchSnapshot();
     expect(navigation).toContain('aria-label="Primary"');
     expect(navigation).toContain('data-state="open"');
@@ -356,11 +337,17 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(navigation).toContain('role="group" tabIndex="-1"');
     expect(navigation).toContain('id="products-viewport"');
     expect({
-      navigationMenuContentClasses,
-      navigationMenuLinkClasses,
-      navigationMenuListClasses,
-      navigationMenuTriggerClasses,
-      navigationMenuViewportClasses,
+      navigationMenuContentClasses: [
+        style.attrs(navigationMenuStyles.content).class ?? '',
+      ] as const,
+      navigationMenuLinkClasses: [style.attrs(navigationMenuStyles.link).class ?? ''] as const,
+      navigationMenuListClasses: [style.attrs(navigationMenuStyles.list).class ?? ''] as const,
+      navigationMenuTriggerClasses: [
+        style.attrs(navigationMenuStyles.trigger).class ?? '',
+      ] as const,
+      navigationMenuViewportClasses: [
+        style.attrs(navigationMenuStyles.viewport).class ?? '',
+      ] as const,
     }).toMatchSnapshot();
   });
 
@@ -440,11 +427,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(command).toContain('command="request-close" commandfor="command-dialog"');
     expect(command).toContain('id="command-value">Invite teammate</span>');
     expect({
-      commandDialogClasses,
-      commandInputClasses,
-      commandItemClasses,
-      commandListboxClasses,
-      commandTriggerClasses,
+      commandDialogClasses: [style.attrs(commandStyles.dialog).class ?? ''] as const,
+      commandInputClasses: [style.attrs(commandStyles.input).class ?? ''] as const,
+      commandItemClasses: [style.attrs(commandStyles.item).class ?? ''] as const,
+      commandListboxClasses: [style.attrs(commandStyles.listbox).class ?? ''] as const,
+      commandTriggerClasses: [style.attrs(commandStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -482,7 +469,20 @@ describe('@kovojs/ui styled package foundation', () => {
       trigger: 'Open drawer',
     });
 
-    expect({ drawerContentClasses, sheetContentClasses }).toMatchSnapshot();
+    expect({
+      drawerContentClasses: [
+        style.attrs(drawerStyles.content, drawerSideStyles.bottom).class ?? '',
+        style.attrs(drawerSideStyles.left).class ?? '',
+        style.attrs(drawerSideStyles.right).class ?? '',
+        style.attrs(drawerSideStyles.top).class ?? '',
+      ] as const,
+      sheetContentClasses: [
+        style.attrs(sheetStyles.content, sheetSideStyles.right).class ?? '',
+        style.attrs(sheetSideStyles.bottom).class ?? '',
+        style.attrs(sheetSideStyles.left).class ?? '',
+        style.attrs(sheetSideStyles.top).class ?? '',
+      ] as const,
+    }).toMatchSnapshot();
     expect(topSheet).toContain('data-style-src="sheet.tsx#content; sheet.tsx#top"');
     expect(drawer).toContain('command="show-modal" commandfor="account-drawer"');
     expect(drawer).toContain('<dialog class=');

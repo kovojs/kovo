@@ -236,29 +236,6 @@ export const navigationMenuStyles = style.create({
   },
 });
 
-export const navigationMenuClasses = [style.attrs(navigationMenuStyles.root).class ?? ''] as const;
-export const navigationMenuListClasses = [
-  style.attrs(navigationMenuStyles.list).class ?? '',
-] as const;
-export const navigationMenuItemClasses = [
-  style.attrs(navigationMenuStyles.item).class ?? '',
-] as const;
-export const navigationMenuTriggerClasses = [
-  style.attrs(navigationMenuStyles.trigger).class ?? '',
-] as const;
-export const navigationMenuContentClasses = [
-  style.attrs(navigationMenuStyles.content).class ?? '',
-] as const;
-export const navigationMenuLinkClasses = [
-  style.attrs(navigationMenuStyles.link).class ?? '',
-] as const;
-export const navigationMenuViewportClasses = [
-  style.attrs(navigationMenuStyles.viewport).class ?? '',
-] as const;
-export const navigationMenuIndicatorClasses = [
-  style.attrs(navigationMenuStyles.indicator).class ?? '',
-] as const;
-
 export const NavigationMenu = component({
   render(props: NavigationMenuProps) {
     const attrs = navigationMenuRootAttributes({

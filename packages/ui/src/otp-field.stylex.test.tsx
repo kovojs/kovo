@@ -7,10 +7,6 @@ import {
   OtpFieldGroup,
   OtpFieldHiddenInput,
   OtpFieldInput,
-  otpFieldClasses,
-  otpFieldGroupClasses,
-  otpFieldHiddenInputClasses,
-  otpFieldInputClasses,
   otpFieldStyles,
 } from './otp-field.js';
 
@@ -30,7 +26,7 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
     };
 
     expect({
-      classes: otpFieldClasses,
+      classes: [style.attrs(otpFieldStyles.root).class ?? ''] as const,
       completeDisabled: OtpField.definition.render({
         disabled: true,
         length: 4,
@@ -48,10 +44,10 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
         slotIndex: 0,
       }),
       group: OtpFieldGroup.definition.render({ children: 'slots' }),
-      groupClasses: otpFieldGroupClasses,
+      groupClasses: [style.attrs(otpFieldStyles.group).class ?? ''] as const,
       hidden: OtpFieldHiddenInput.definition.render({ ...state, id: 'otp-code' }),
-      hiddenInputClasses: otpFieldHiddenInputClasses,
-      inputClasses: otpFieldInputClasses,
+      hiddenInputClasses: [style.attrs(otpFieldStyles.hiddenInput).class ?? ''] as const,
+      inputClasses: [style.attrs(otpFieldStyles.input).class ?? ''] as const,
       root: OtpField.definition.render({
         ...state,
         children: 'otp controls',

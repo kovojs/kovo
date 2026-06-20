@@ -162,12 +162,6 @@ export const menubarStyles = style.create({
   },
 });
 
-export const menubarClasses = [style.attrs(menubarStyles.root).class ?? ''] as const;
-export const menubarItemClasses = [style.attrs(menubarStyles.item).class ?? ''] as const;
-export const menubarSubmenuClasses = [style.attrs(menubarStyles.submenu).class ?? ''] as const;
-export const menubarGroupClasses = [style.attrs(menubarStyles.group).class ?? ''] as const;
-export const menubarSeparatorClasses = [style.attrs(menubarStyles.separator).class ?? ''] as const;
-
 export const Menubar = component({
   render(props: MenubarProps) {
     const attrs = menubarRootAttributes({

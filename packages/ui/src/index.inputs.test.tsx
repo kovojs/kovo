@@ -1,22 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
+import * as style from '@kovojs/style';
+
 import {
   AutocompleteInput,
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  autocompleteListClasses,
-  autocompleteOptionClasses,
-  autocompleteValueClasses,
+  autocompleteStyles,
 } from './autocomplete.js';
 import {
   ComboboxInput,
   ComboboxListbox,
   ComboboxOption,
   ComboboxValue,
-  comboboxListboxClasses,
-  comboboxOptionClasses,
-  comboboxValueClasses,
+  comboboxStyles,
 } from './combobox.js';
 import {
   ScrollArea,
@@ -32,9 +30,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  selectContentClasses,
-  selectItemClasses,
-  selectValueClasses,
+  selectStyles,
 } from './select.js';
 import {
   Slider,
@@ -42,9 +38,7 @@ import {
   SliderRange,
   SliderThumb,
   SliderTrack,
-  sliderRangeClasses,
-  sliderThumbClasses,
-  sliderTrackClasses,
+  sliderStyles,
 } from './slider.js';
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from './tabs.js';
 
@@ -167,9 +161,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(hiddenInput).not.toContain('required');
     expect(value).toContain('id="plan-value">Growth</span>');
     expect({
-      selectContentClasses,
-      selectItemClasses,
-      selectValueClasses,
+      selectContentClasses: [style.attrs(selectStyles.content).class ?? ''] as const,
+      selectItemClasses: [style.attrs(selectStyles.item).class ?? ''] as const,
+      selectValueClasses: [style.attrs(selectStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -227,9 +221,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(listbox).toContain('aria-disabled="true"');
     expect(value).toContain('id="assignee-value">Ada Lovelace</span>');
     expect({
-      comboboxListboxClasses,
-      comboboxOptionClasses,
-      comboboxValueClasses,
+      comboboxListboxClasses: [style.attrs(comboboxStyles.listbox).class ?? ''] as const,
+      comboboxOptionClasses: [style.attrs(comboboxStyles.option).class ?? ''] as const,
+      comboboxValueClasses: [style.attrs(comboboxStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -286,9 +280,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(list).toContain('aria-disabled="true"');
     expect(value).toContain('id="plan-search-value">Growth plan</span>');
     expect({
-      autocompleteListClasses,
-      autocompleteOptionClasses,
-      autocompleteValueClasses,
+      autocompleteListClasses: [style.attrs(autocompleteStyles.list).class ?? ''] as const,
+      autocompleteOptionClasses: [style.attrs(autocompleteStyles.option).class ?? ''] as const,
+      autocompleteValueClasses: [style.attrs(autocompleteStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -331,9 +325,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(root).toContain('data-part="thumb"');
     expect(root).toContain('data-value-ratio="0.65"');
     expect({
-      sliderRangeClasses,
-      sliderThumbClasses,
-      sliderTrackClasses,
+      sliderRangeClasses: [style.attrs(sliderStyles.range).class ?? ''] as const,
+      sliderThumbClasses: [style.attrs(sliderStyles.thumb).class ?? ''] as const,
+      sliderTrackClasses: [style.attrs(sliderStyles.track).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

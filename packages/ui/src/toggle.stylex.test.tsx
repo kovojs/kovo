@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Toggle, toggleClasses, toggleStyles } from './toggle.js';
+import { Toggle, toggleStyles } from './toggle.js';
 
 describe('@kovojs/ui Toggle StyleX styles', () => {
   it('matches native toggle states with StyleX output', () => {
     expect({
-      classes: toggleClasses,
+      classes: [
+        style.attrs(toggleStyles.base.root, toggleStyles.variants.outline).class ?? '',
+        style.attrs(toggleStyles.variants.subtle).class ?? '',
+      ] as const,
       disabled: Toggle.definition.render({ children: 'Disabled', disabled: true }),
       off: Toggle.definition.render({ children: 'Save view', pressed: false, variant: 'subtle' }),
       pressed: Toggle.definition.render({ children: 'Saved', pressed: true }),

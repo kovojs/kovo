@@ -103,13 +103,6 @@ export const switchStyles = style.create({
   },
 });
 
-export const switchClasses = [style.attrs(switchStyles.root).class ?? ''] as const;
-export const switchInputClasses = [style.attrs(switchStyles.input).class ?? ''] as const;
-/** CSS class tuple for the visual switch track slot. */
-export const switchTrackClasses = [style.attrs(switchStyles.track).class ?? ''] as const;
-/** CSS class tuple for the visual switch thumb slot. */
-export const switchThumbClasses = [style.attrs(switchStyles.thumb).class ?? ''] as const;
-
 export const Switch = component({
   render(props: SwitchProps) {
     const attrs = switchRootAttributes({

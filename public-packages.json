@@ -33,7 +33,7 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [".", "./app-shell/static-export", "./build", "./vite"],
+        "public": [".", "./build", "./vite"],
         "generated": ["./jsx-runtime", "./jsx-dev-runtime"],
         "internal": [
           "./internal/app-shell-vite",
@@ -118,6 +118,7 @@
           "./internal/integration",
           "./internal/integration/define",
           "./internal/harness-operations",
+          "./internal/html-wire",
           "./internal/page",
           "./internal/sql-observer",
           "./internal/verifier",

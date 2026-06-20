@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Button, buttonClasses, buttonStyles } from './button.js';
+import { Button, buttonStyles } from './button.js';
 
 describe('@kovojs/ui Button StyleX prototype', () => {
   it('renders StyleX-authored classes and metadata', () => {
@@ -52,7 +52,31 @@ describe('@kovojs/ui Button StyleX prototype', () => {
 
   it('exports StyleX style objects instead of variant-helper output', () => {
     expect(buttonStyles.base.root.$$css).toBe(true);
-    expect(buttonClasses.join(' ')).toContain('kv-button-size-h-');
-    expect(buttonClasses.join(' ')).toContain('kv-button-variant-bg-');
+    expect(
+      (
+        [
+          style.attrs(buttonStyles.base.root, buttonStyles.sizes.md, buttonStyles.variants.primary)
+            .class ?? '',
+          style.attrs(buttonStyles.sizes.sm).class ?? '',
+          style.attrs(buttonStyles.variants.secondary).class ?? '',
+          style.attrs(buttonStyles.variants.ghost).class ?? '',
+          style.attrs(buttonStyles.variants.destructive).class ?? '',
+          style.attrs(buttonStyles.variants.outline).class ?? '',
+        ] as const
+      ).join(' '),
+    ).toContain('kv-button-size-h-');
+    expect(
+      (
+        [
+          style.attrs(buttonStyles.base.root, buttonStyles.sizes.md, buttonStyles.variants.primary)
+            .class ?? '',
+          style.attrs(buttonStyles.sizes.sm).class ?? '',
+          style.attrs(buttonStyles.variants.secondary).class ?? '',
+          style.attrs(buttonStyles.variants.ghost).class ?? '',
+          style.attrs(buttonStyles.variants.destructive).class ?? '',
+          style.attrs(buttonStyles.variants.outline).class ?? '',
+        ] as const
+      ).join(' '),
+    ).toContain('kv-button-variant-bg-');
   });
 });

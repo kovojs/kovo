@@ -99,10 +99,6 @@ export const tooltipStyles = style.create({
   },
 });
 
-export const tooltipClasses = [style.attrs(tooltipStyles.root).class ?? ''] as const;
-export const tooltipTriggerClasses = [style.attrs(tooltipStyles.trigger).class ?? ''] as const;
-export const tooltipContentClasses = [style.attrs(tooltipStyles.content).class ?? ''] as const;
-
 function tooltipState(props: TooltipStateProps) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

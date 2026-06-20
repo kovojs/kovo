@@ -18,6 +18,7 @@ export interface KovoTestCase {
  * to `fn`, and (optionally) registers the case with a test runner like vitest's
  * `it`.
  *
+ * @experimental
  * @param name - The test name.
  * @param fn - The test body, receiving the harness context.
  * @param options - Harness options (db, pages, verification, …).

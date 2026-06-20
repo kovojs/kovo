@@ -6,10 +6,7 @@ import {
   Disclosure,
   DisclosureContent,
   DisclosureTrigger,
-  disclosureClasses,
-  disclosureContentClasses,
   disclosureStyles,
-  disclosureTriggerClasses,
 } from './disclosure.js';
 
 describe('@kovojs/ui Disclosure StyleX styles', () => {
@@ -18,7 +15,7 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
     const closed = { contentId: 'archived-details', open: false as const };
 
     expect({
-      classes: disclosureClasses,
+      classes: [style.attrs(disclosureStyles.root).class ?? ''] as const,
       closed: Disclosure.definition.render({
         children:
           DisclosureTrigger.definition.render({ ...closed, children: 'Archived review' }) +
@@ -29,7 +26,7 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
         id: 'disclosure-closed',
         open: false,
       }),
-      contentClasses: disclosureContentClasses,
+      contentClasses: [style.attrs(disclosureStyles.content).class ?? ''] as const,
       disabled: Disclosure.definition.render({
         children:
           DisclosureTrigger.definition.render({
@@ -58,7 +55,7 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
         id: 'disclosure-open',
         open: true,
       }),
-      triggerClasses: disclosureTriggerClasses,
+      triggerClasses: [style.attrs(disclosureStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
