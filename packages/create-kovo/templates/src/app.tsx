@@ -1,90 +1,122 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import {
+  createApp,
+  createMemoryVersionedClientModuleRegistry,
+  createRequestHandler,
+  layout,
+  redirect,
+  route,
+  stylesheet,
+  type RequestHandler,
+} from '@kovojs/server';
 import * as style from '@kovojs/style';
 
-const appStyles = style.create({
-  action: {
-    backgroundColor: style.tokens.customColor('success').colorContainer,
-    borderColor: style.tokens.customColor('success').color,
-    borderRadius: style.tokens.sys.shape.cornerMedium,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    color: style.tokens.customColor('success').onColorContainer,
-    fontWeight: 500,
-    paddingBlock: 8,
-    paddingInline: 16,
-  },
-  body: {
-    fontSize: 16,
-    lineHeight: 1.75,
-    maxWidth: 576,
-  },
-  eyebrow: {
-    color: style.tokens.sys.color.onSurfaceVariant,
-    fontSize: 14,
-    fontWeight: 500,
-    textTransform: 'uppercase',
-  },
-  heading: {
-    color: style.tokens.sys.color.primary,
-    fontSize: 30,
-    fontWeight: 600,
-    letterSpacing: 0,
-    lineHeight: 1.2,
-    margin: 0,
-  },
-  root: {
+import { LoginForm, SignOutForm } from './components/auth-forms.js';
+import { ContactsRegion } from './components/contacts.js';
+import {
+  appSessionProvider,
+  appSignIn,
+  appSignOut,
+  seedDemoUser,
+  type AppRequest,
+} from './auth.js';
+import { appDb } from './db.js';
+import { addContact } from './mutations.js';
+import { contactsQuery } from './queries.js';
+import { appTheme } from './theme.js';
+
+// The whole app in one file: a contact book over a real PGlite/Drizzle database,
+// gated by real Better Auth. `kovo({ app: '/src/app.tsx' })` (vite.config.ts) and
+// `kovo build ./src/app.tsx` both load this default export (SPEC.md §9.5).
+
+// Seed the demo account so a fresh `vp dev` can sign in with
+// demo@example.com / password123.
+await seedDemoUser();
+
+const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;
+
+const styles = style.create({
+  shell: {
     color: style.tokens.sys.color.onSurface,
-    display: 'grid',
     marginInline: 'auto',
     maxWidth: 768,
     minHeight: '100dvh',
+    paddingBlock: 32,
     paddingInline: 24,
-    placeItems: 'center',
   },
-  section: {
-    display: 'grid',
-    rowGap: 20,
-  },
-  status: {
-    color: style.tokens.sys.color.onSurfaceVariant,
-    fontSize: 14,
-  },
-  toolbar: {
+  header: {
     alignItems: 'center',
-    columnGap: 12,
     display: 'flex',
-    flexWrap: 'wrap',
+    gap: 16,
+    justifyContent: 'space-between',
+    marginBlockEnd: 24,
   },
+  brand: { fontSize: 18, fontWeight: 700 },
+  who: {
+    alignItems: 'center',
+    color: style.tokens.sys.color.onSurfaceVariant,
+    display: 'flex',
+    fontSize: 14,
+    gap: 12,
+  },
+  loginMain: { marginInline: 'auto', maxWidth: 384, paddingBlock: 48 },
 });
 
-export const App = component({
-  props: { cartCount: Number },
-  state: () => ({ clicks: 0 }),
-  render: ({ cartCount }: { cartCount: number }) => (
-    <main {...style.attrs(appStyles.root)} kovo-c="app-root" kovo-state='{"clicks":0}'>
-      <section {...style.attrs(appStyles.section)}>
-        <p {...style.attrs(appStyles.eyebrow)}>Routed by the app shell</p>
-        <h1 {...style.attrs(appStyles.heading)}>Hello from Kovo</h1>
-        <p {...style.attrs(appStyles.body)}>
-          This page is declared as a Kovo route and served by the same request handler used for
-          static export.
-        </p>
-        <p {...style.attrs(appStyles.status)}>Starter cart count: {cartCount}</p>
-        <div {...style.attrs(appStyles.toolbar)}>
-          <button
-            {...style.attrs(appStyles.action)}
-            data-p-message="starter"
-            on:click="/c/__v/starter-r7/starter.client.js#Starter$announce"
-            type="button"
-          >
-            Try interaction
-          </button>
-          <output {...style.attrs(appStyles.status)} id="starter-status">
-            Ready for first interaction.
-          </output>
-        </div>
-      </section>
-    </main>
-  ),
+const AppLayout = layout({
+  render: (_queries, _state, { children }) => <div style={styles.shell}>{children}</div>,
 });
+
+function HomePage({ request }: { request: AppRequest }): string {
+  return (
+    <div>
+      <header style={styles.header}>
+        <span style={styles.brand}>Kovo Starter</span>
+        <span style={styles.who}>
+          {request.session?.user.name ?? 'Guest'}
+          <SignOutForm />
+        </span>
+      </header>
+      <ContactsRegion />
+    </div>
+  );
+}
+
+const app = createApp({
+  clientModules: createMemoryVersionedClientModuleRegistry(),
+  db: () => appDb,
+  document: { lang: 'en' },
+  mutations: [addContact, appSignIn, appSignOut],
+  queries: [contactsQuery],
+  sessionProvider: (request) => appSessionProvider(request as unknown as AppRequest),
+  routes: [
+    route('/', {
+      meta: {
+        description: 'A Kovo starter: a contact book over a real database, gated by real auth.',
+        title: 'Kovo Starter',
+      },
+      layout: AppLayout,
+      stylesheets,
+      page(_context, request: AppRequest) {
+        // The read is public-shaped, but the page requires a session so the guarded
+        // add-contact form always has one (SPEC.md §9.5 redirect outcome).
+        if (!request.session) return redirect('/login', {});
+        return <HomePage request={request} />;
+      },
+    }),
+    route('/login', {
+      meta: { description: 'Sign in to the Kovo starter.', title: 'Sign in · Kovo Starter' },
+      layout: AppLayout,
+      stylesheets,
+      page() {
+        return (
+          <main style={styles.loginMain}>
+            <LoginForm />
+          </main>
+        );
+      },
+    }),
+  ],
+});
+
+export const requestHandler: RequestHandler = createRequestHandler(app);
+export default app;
