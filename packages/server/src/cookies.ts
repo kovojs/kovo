@@ -16,8 +16,12 @@ export function validateRawSetCookie(value: string): string {
 
 export function serializeCookie(name: string, value: string, options: CookieOptions = {}): string {
   assertCookieName(name);
-  assertCookieOctets(value, 'cookie value');
-  const parts = [`${name}=${value}`];
+  // SPEC §9.1.1:846: reject any control character (B4) before encoding; then
+  // percent-encode the value so spaces, commas, equals, etc. cannot inject a
+  // second cookie or add unintended attributes (B2).
+  assertNoHeaderControlCharacters(value, 'cookie value');
+  const encodedValue = encodeURIComponent(value);
+  const parts = [`${name}=${encodedValue}`];
 
   if (options.maxAge !== undefined) {
     if (!Number.isInteger(options.maxAge)) throw new Error('Cookie maxAge must be an integer');
@@ -63,7 +67,9 @@ function assertCookieOctets(value: string, label: string): void {
 }
 
 function assertNoHeaderControlCharacters(value: string, label: string): void {
-  // SPEC §9.1.1 / bugs-1 F9: reject CR, LF, and NUL so a handler-set cookie/header value
-  // cannot inject additional response headers or split the response.
-  if (/[\r\n\0]/.test(value)) throw new Error(`${label} must not contain CR, LF, or NUL`);
+  // SPEC §9.1.1:846 (B4): reject all C0 control characters (0x00-0x1F) and DEL (0x7F),
+  // not just CR/LF/NUL. TAB, BEL, and other control bytes outside the printable header
+  // grammar must be rejected by throwing — never silently stripped.
+  if (/[\x00-\x1f\x7f]/.test(value))
+    throw new Error(`${label} must not contain control characters`);
 }

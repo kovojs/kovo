@@ -77,6 +77,18 @@ export interface HmacSignatureOptions {
   payload: HmacSignaturePayload;
   scheme?: string;
   secret: HmacSecret | readonly HmacSecret[];
+  /**
+   * When `tolerance` is configured, the verifier automatically prepends
+   * `${timestamp}.` to the signed bytes so a captured `(signature, body)` pair
+   * cannot be replayed with a forged-fresh timestamp (SPEC §9.1.1:846 / B5).
+   *
+   * Set `timestampBound: false` only when your `payload` function already folds
+   * the timestamp into the signed bytes — the preset recipes (`standardWebhooks`,
+   * `timestampedProvider`) both do this and therefore set `false`.
+   *
+   * Defaults to `true` whenever `tolerance` is present.
+   */
+  timestampBound?: boolean;
   tolerance?: HmacSignatureTolerance;
 }
 
@@ -214,6 +226,9 @@ export function standardWebhooks(options: StandardWebhooksOptions): HmacSignatur
     },
     scheme: 'standard-webhooks:v1:hmac-sha256',
     secret: normalizeStandardWebhooksSecrets(options.secret),
+    // timestamp is already embedded in the payload above; skip the automatic
+    // timestamp-prefix folding that hmacSignature applies when tolerance is set.
+    timestampBound: false,
     tolerance: {
       header: 'webhook-timestamp',
       seconds: defaultWebhookToleranceSeconds,
@@ -239,7 +254,28 @@ async function verifyHmacSignature(
     typeof options.payload === 'function'
       ? await options.payload(request, context)
       : options.payload;
-  const signedPayloadBytes = payloadToBytes(signedPayload);
+
+  // SPEC §9.1.1:846 (B5): when `tolerance` is configured and the caller has not
+  // explicitly opted out via `timestampBound: false`, fold the timestamp into the
+  // signed bytes so a captured (signature, body) cannot be replayed with a forged-
+  // fresh timestamp header. Preset recipes that already embed the timestamp in their
+  // payload function set `timestampBound: false` to avoid double-binding.
+  let signedPayloadBytes: Uint8Array;
+  if (options.tolerance !== undefined && options.timestampBound !== false) {
+    const timestampValue =
+      options.tolerance.timestamp?.(request, context) ??
+      (options.tolerance.header === undefined
+        ? undefined
+        : getHeader(request.headers, options.tolerance.header));
+    const prefix = timestampValue !== undefined ? `${timestampValue}.` : '';
+    const prefixBytes = textEncoder.encode(prefix);
+    const payloadBytes = payloadToBytes(signedPayload);
+    signedPayloadBytes = new Uint8Array(prefixBytes.length + payloadBytes.length);
+    signedPayloadBytes.set(prefixBytes, 0);
+    signedPayloadBytes.set(payloadBytes, prefixBytes.length);
+  } else {
+    signedPayloadBytes = payloadToBytes(signedPayload);
+  }
   const signatures = parseSignatures(options.multiSig, signatureHeader)
     .map((signature) => decodeSignature(signature, options.encoding))
     .filter((signature): signature is Uint8Array => signature !== undefined);
