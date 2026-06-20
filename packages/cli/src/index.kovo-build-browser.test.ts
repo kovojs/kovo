@@ -92,6 +92,19 @@ describe('kovo build — browser drive (S1)', () => {
 
       browser = await chromium.launch();
       const page = await browser.newPage();
+
+      // Capture the versioned /c/ client-module response the loader import()s, to assert
+      // it is served with an immutable, long-lived cache posture (content-hashed URL).
+      const clientModuleResponses: Array<{ url: string; cacheControl: string | undefined }> = [];
+      page.on('response', (response) => {
+        if (response.url().includes('/c/__v/')) {
+          clientModuleResponses.push({
+            url: response.url(),
+            cacheControl: response.headers()['cache-control'],
+          });
+        }
+      });
+
       await page.goto(`${origin}/`);
 
       const output = page.locator('output[data-bind="state.n"]');
@@ -108,6 +121,14 @@ describe('kovo build — browser drive (S1)', () => {
         { timeout: 10_000 },
       );
       expect(await output.textContent()).toBe('1');
+
+      // The /c/ module the browser actually loaded is a content-versioned URL served with
+      // an immutable cache posture — safe to cache forever, never poisoning a redeploy.
+      const counterModule = clientModuleResponses.find((entry) =>
+        entry.url.includes('counter-v1/counter.client.js'),
+      );
+      expect(counterModule, 'loader import()ed the versioned /c/ module').toBeTruthy();
+      expect(counterModule?.cacheControl).toContain('immutable');
     } finally {
       await browser?.close();
       if (server) await close(server);

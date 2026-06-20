@@ -202,6 +202,9 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
+      // Sub-agent git worktrees live here without their own node_modules; never
+      // glob their duplicate test copies into the root unit pool.
+      '**/.claude/**',
       '**/*.browser.test.ts',
       // The framework-owned integration specs use @playwright/test, not vitest;
       // they run under their own gate (`vp run integration`).
