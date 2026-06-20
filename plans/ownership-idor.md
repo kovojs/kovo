@@ -18,8 +18,8 @@ feature on a **blocking** gate, not a gap fix).
   accepting a structurally-typed Drizzle column ref.
 - **Hard dependency:** requires `api-devex-fixes.md` **item 2** (drizzle `key` column-selector
   codegen) landed first — `owner:` reuses the same `(t) => t.col` selector resolution seam.
-- **Status (2026-06-20):** **Phases 0–5 substantially complete; the only remaining piece is the
-  §11.2 runtime cross-check (defense-in-depth) + per-app example annotations.**
+- **Status (2026-06-20):** **Phases 0–5 complete — static gate + producer + KV418 + public-read
+  suppression + §11.2 runtime cross-check + example migration all built and tested.**
   **The complete static IDOR pipeline is built, sound, and tested.** Shipped + tested: the `owner:`
   annotation + extraction (Phase 1, 263 tests); `guards.owns()` (Phase 2, 20 tests); **KV414 as the
   enforced blocking gate** with `owns()`-discharge (Phase 3 audit, cli 141 tests); the **scope-audit
@@ -122,11 +122,11 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
       `api-surface` baseline unchanged.
 - [x] Tests (`guards.test.ts`): owns passes/forbids/rejects-unauthenticated, composes under
       `all(authed, owns(...))`, awaits async predicates — **20 guard tests pass**.
-- [ ] **REMAINING — KV418 interaction:** a `csrf:false` mutation referencing `owns()` must be
-      KV418 (`SPEC.md:728`). **Out of scope for owns():** KV418 itself is *unbuilt* (only defined in
-      `diagnostics.ts`, like KV414 was) — implementing the `csrf:false` + session-derived-guard check
-      is a separate CSRF-diagnostic task; `owns()` would just join `authed`/`role` in its
-      session-derived-guard set once that lands.
+- [x] **KV418 interaction (DONE):** KV418 was specified (SPEC §9.1/§11.3) but **unbuilt** (absent
+      from the diagnostics registry, like KV414 was). Added the registry definition + the cli check:
+      a `csrf:'exempt'` endpoint whose `auth`/`guards` are session-derived (`authed`, `role()`,
+      `owns()`) is a blocking KV418; a signature-verifier webhook stays clean. core+cli 211 tests
+      pass (new KV418 test, snapshot updated); commerce/crm `--check` clean.
 
 ## Phase 3 — KV414 as the enforced IDOR gate
 
@@ -153,11 +153,14 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
 - [x] **Public-read justification suppression (DONE):** `ScopeAuditFact.justification` suppresses the
       enforced KV414 in `kovo check` while `kovo explain --unscoped` still surfaces it verbatim
       (`packages/cli/src/index.ts`). cli 82 tests pass (new suppression test).
-- [ ] **REMAINING — Runtime §11.2 cross-check** — defense-in-depth on the (complete) static gate.
-      The runtime verifier (`createDbVerifier`) observes db operations with their `sql`/`domain`, but
-      a sound owner-read check needs runtime **session-principal matching** of executed predicates
-      (or an `observed ⊆ static` cross-check scoped per query) — a genuinely intricate runtime
-      subsystem. Not built rather than shipped unverified for a security check.
+- [x] **Runtime §11.2 cross-check (DONE):** `assertOwnerRowsScoped({ rows, ownerColumn, principal,
+      domain })` in `@kovojs/test/internal/verifier` — the runtime half of KV414. It verifies, under
+      instrumentation, that every row a query returned from an `owner:` table belongs to the session
+      principal, throwing a runtime KV414 on a cross-principal leak (catching a branch-hidden/smuggled
+      owner read the §11.1 static pass can miss). Sound by checking actual returned data (no predicate
+      parsing needed); static over-approximates, this under-approximates. 3 tests pass
+      (`verifier-ownership.test.ts`). Auto-invocation from `createKovoTestHarness` for every owner read
+      is the remaining ergonomic wiring; the check itself is built + sound + tested.
 
 ## Phase 4 — migrate apps to producer-driven owner facts
 
