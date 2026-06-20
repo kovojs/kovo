@@ -351,7 +351,11 @@ function docCommentOf(decl) {
   }
   const jsDocNodes = ts.getJSDocCommentsAndTags(node).filter(ts.isJSDoc);
   if (jsDocNodes.length === 0) return '';
-  return cleanJsDoc(jsDocNodes[jsDocNodes.length - 1].getText());
+  return sanitizeNonPublicTagMarkers(cleanJsDoc(jsDocNodes[jsDocNodes.length - 1].getText()));
+}
+
+function sanitizeNonPublicTagMarkers(text) {
+  return text.replace(/@(?:generated|internal)\b/g, (tag) => tag.slice(1));
 }
 
 function resolveAlias(symbol, checker) {
@@ -403,7 +407,7 @@ function entryFromSymbol(name, symbol, checker, packageName) {
     kind,
     name,
     nonPublic,
-    signature,
+    signature: sanitizeNonPublicTagMarkers(signature),
     sig: signatureTypes(rendered[0], checker),
     sourceHref: sourceHrefOf(declarations[0]),
   };
