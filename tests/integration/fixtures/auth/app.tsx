@@ -41,6 +41,17 @@ export const signIn = mutation('auth/sign-in', {
   },
 });
 
+// Clears the session cookie (the logout half of the round-trip). Emptying the value
+// makes readSessionCookie() resolve to null; maxAge:0 also expires it in the browser.
+export const signOut = mutation('auth/sign-out', {
+  csrf: false,
+  input: s.object({}),
+  handler: (_input: unknown, _request, context) => {
+    context.setCookie?.(COOKIE, '', { httpOnly: true, maxAge: 0, path: '/', sameSite: 'lax' });
+    return {};
+  },
+});
+
 const loginRoute = route('/login', {
   page: () =>
     `<main><h1>Sign in</h1><form method="post" action="/_m/auth/sign-in" enhance data-mutation="auth/sign-in">
@@ -53,11 +64,14 @@ const loginRoute = route('/login', {
 const accountRoute = route('/account', {
   guard: guards.authed<AuthRequest>(),
   page: (_context, request: AuthRequest) =>
-    `<main><h1>Account</h1><p>Signed in as ${request.session?.user?.id ?? '(anonymous)'}</p></main>`,
+    `<main><h1>Account</h1><p>Signed in as ${request.session?.user?.id ?? '(anonymous)'}</p>
+      <form method="post" action="/_m/auth/sign-out" enhance data-mutation="auth/sign-out">
+        <button type="submit">Sign out</button>
+      </form></main>`,
 });
 
 const app = createApp<AuthSession>({
-  mutations: [signIn],
+  mutations: [signIn, signOut],
   routes: [loginRoute, accountRoute],
   sessionProvider: (request) => readSessionCookie(request),
 });

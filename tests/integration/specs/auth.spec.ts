@@ -22,3 +22,27 @@ test('the guarded route does not leak account content when signed out', async ({
   // framework's to decide).
   await expect(page.getByText('ada@example.com')).toHaveCount(0);
 });
+
+test('login → authed request → logout round-trip clears the session (testing-audit §4)', async ({
+  page,
+  kovoApp,
+}) => {
+  await kovoApp.login({
+    fields: { email: 'ada@example.com', password: 'correct' },
+    submit: 'Sign in',
+  });
+
+  // Authed request renders the account.
+  await page.goto('/account');
+  await expect(page.getByText('Signed in as ada@example.com')).toBeVisible();
+
+  // Logout clears the session cookie via the enhanced mutation.
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/_m/auth/sign-out') && r.status() < 400),
+    page.getByRole('button', { name: 'Sign out' }).click(),
+  ]);
+
+  // The next request to the guarded route no longer renders the account.
+  await page.goto('/account');
+  await expect(page.getByText('ada@example.com')).toHaveCount(0);
+});
