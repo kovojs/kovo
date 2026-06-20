@@ -340,8 +340,12 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [ ] **C9b-ii** KV234 cross-pkg prefix · explain-from-extracted-graph (needs S2) · clock freshness (needs `clocks` impl).
 - [x] **D1** Firefox/WebKit cross-engine matrix (degradation + counter + binding-text-attr). Verified on all 3 engines.
 - [ ] **D2** flake gate (retried-but-passed annotation + scheduled `--repeat-each=3`) · module-scope reset · snapshot allowlist meta-test · CSS-manifest clear-on-close · B0 meta-test.
-- [ ] **C3** IDOR/auth integration + KV414 build-fail + negative-compile tier ← needs A2 **impl** (KV414/owns() are SPEC-only so far).
-- [ ] **C4/C5** cache+bfcache leak · prod-delta · deploy-skew-422 · minified-name survival ← needs **G‑S1** (prod-build browser harness).
+- [x] **C3 (IDOR gate)** — KV414 registered in the impl registry; the blocking owner-table gate
+  (`--unscoped --fail-on-findings`) exists and is regression-locked (`unscoped-owner-fixture.spec.ts`,
+  green). _Negative-compile `@ts-expect-error` tier still TODO._
+- [x] **C4 (cache + bfcache leak)** — implemented + verified: F35 (`/_q` `private/no-store`+`Vary`)
+  and F34 (guarded-doc `no-store`), with integration assertions. _C5 (prod-delta · deploy-skew-422 ·
+  minified-name survival) still needs **G‑S1** (prod-build browser harness)._
 - [ ] **C6** queue FIFO · multi-transform rebase · concurrent-distinct lost-update · derived-optimism e2e ← needs A5 impl (+ G‑S2/3 for derived).
 - [ ] **Deferred** F15 + SSE subscribe-then-revoke — lands with the (unbuilt) SSE feature.
 
