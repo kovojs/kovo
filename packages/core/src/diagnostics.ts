@@ -52,7 +52,8 @@ export type DiagnosticCode =
   | 'KV410'
   | 'KV411'
   | 'KV412'
-  | 'KV413';
+  | 'KV413'
+  | 'KV419';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -655,5 +656,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Database engine side-effect needs a declared fan-out.',
+  },
+  KV419: {
+    code: 'KV419',
+    help: [
+      'Would lower to: a speculationrules prerender that renders this route server-side, with the user\'s credentials, on hover/pointerdown.',
+      'Blocked reason: prefetch "moderate" prerenders a guarded (session-dependent) route, which executes its render — and any per-user side effects — for a navigation that may be discarded.',
+      'Fixes: use prefetch "conservative" (prefetch document bytes, no prerender) or false; restrict prefetch "moderate" to public, idempotent routes; or remove the guard if the route is genuinely public.',
+      'SPEC §8 requires auto-prerender to be opt-in only where renders are idempotent and not session-dependent.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'prefetch "moderate" prerenders a guarded, session-dependent route.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

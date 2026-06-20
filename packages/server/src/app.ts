@@ -1,6 +1,6 @@
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest } from './app-request.js';
-import { routeTableDiagnostics } from './app-diagnostics.js';
+import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
@@ -88,7 +88,7 @@ export function createApp<
 
   return {
     clientModules: options.clientModules ?? createMemoryVersionedClientModuleRegistry(),
-    diagnostics: routeTableDiagnostics(routes),
+    diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],
     errorShells: options.errorShells ?? {},

@@ -59,6 +59,7 @@ describe('diagnostic registry', () => {
       'KV411',
       'KV412',
       'KV413',
+      'KV419',
     ]);
   });
 
@@ -474,6 +475,15 @@ describe('diagnostic registry', () => {
       Fixes: declare kovo({ fans: [{ via, domain, when }] }) for the trigger fan-out, move the side-effect into a modeled domain write, or mark the table exempt only when no UI reads it.
       SPEC §10.1 and §11.1 require DB-engine side effects that cannot be derived statically to be declared and checked.",
           "message": "Database engine side-effect needs a declared fan-out.",
+          "severity": "error",
+        },
+        "KV419": {
+          "code": "KV419",
+          "help": "Would lower to: a speculationrules prerender that renders this route server-side, with the user's credentials, on hover/pointerdown.
+      Blocked reason: prefetch "moderate" prerenders a guarded (session-dependent) route, which executes its render — and any per-user side effects — for a navigation that may be discarded.
+      Fixes: use prefetch "conservative" (prefetch document bytes, no prerender) or false; restrict prefetch "moderate" to public, idempotent routes; or remove the guard if the route is genuinely public.
+      SPEC §8 requires auto-prerender to be opt-in only where renders are idempotent and not session-dependent.",
+          "message": "prefetch "moderate" prerenders a guarded, session-dependent route.",
           "severity": "error",
         },
       }

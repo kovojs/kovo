@@ -28,6 +28,31 @@ export function routeTableDiagnostics(routes: readonly RouteLike[]): readonly Ap
   }));
 }
 
+interface PrefetchGuardRouteLike {
+  guard?: unknown;
+  path?: string;
+  prefetch?: 'conservative' | 'moderate' | false;
+}
+
+/**
+ * bugs-1 F36 / SPEC §8: prefetch "moderate" prerenders a route — executing its render
+ * (and any per-user side effects) with the user's credentials on hover/pointerdown, for
+ * a navigation that may be discarded. On a guarded (session-dependent) route that is
+ * unsafe, so it is **KV419**. Restrict "moderate" to public, idempotent routes.
+ */
+export function routePrefetchGuardDiagnostics(
+  routes: readonly PrefetchGuardRouteLike[],
+): readonly AppDiagnostic[] {
+  return routes
+    .filter((route) => route.prefetch === 'moderate' && route.guard !== undefined)
+    .map((route) => ({
+      code: 'KV419' as const,
+      fileName: route.path ?? '(route)',
+      help: diagnosticDefinitions.KV419.help,
+      message: diagnosticDefinitions.KV419.message,
+    }));
+}
+
 export function blockingAppDiagnostics(
   app: Pick<KovoApp, 'diagnostics'>,
 ): readonly AppDiagnostic[] {
