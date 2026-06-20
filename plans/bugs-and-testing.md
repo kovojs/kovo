@@ -41,8 +41,24 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     `DiagnosticCode` union **and** the exhaustive definitions `Record` (a missing def breaks tsc) —
     then its **check** implemented (route-validation for KV419 at `app.ts:91`; analyzer for KV414;
     compiler-lowering for KV314-class). Also: impl `KV243` is absent from the SPEC §11.3 table.
-  - Next runtime candidates (medium, dispatch/loader): F1 (csrf:false session strip), F6 (auth-redirect
-    401/`Kovo-Reauth` + loader), F17/F22/F19/F27 (optimistic), F13/F29 (browser delta/rebroadcast).
+  - **Precisely-scoped blockers for each remaining contract** (discovered by tracing the code):
+    - **F1/KV418** (csrf:false + session guard) — the declarative check is easy, BUT the test suite
+      uses `csrf:false` + a guard for *test simplicity* (skip the CSRF dance) in `guarded-mutation`,
+      `session-provider-once`, etc. Enforcing KV418 as written would break them. **Precursor:** give
+      the harness a CSRF-bypass that isn't `csrf:false`, then migrate those fixtures, then enforce.
+    - **F13** (BroadcastChannel principal fingerprint) — browser receive-side check is contained
+      (`broadcast.ts`), but there is **no session fingerprint the browser can read** (csrf token is a
+      per-form hidden field, not exposed; only `<meta name="kovo-build">` exists). **Needs:** server
+      stamps an opaque per-session `<meta name="kovo-session">` (threading the session value at
+      document render) + the browser envelope/discard check. Medium, two halves.
+    - **F6** (auth-redirect 401/`Kovo-Reauth`) — server response shaping + an inline-loader handler
+      to follow the reauth directive (8KB budget); changing mutation auth-failure from 422→401 risks
+      the existing §9.2 typed-error tests.
+    - **KV414** (IDOR gate) — hardest: needs WHERE-predicate→`req.session` traceability analysis
+      (or runtime predicate observation via the §11.2 cross-check). **KV420/316/317** — compiler
+      lowering/nesting analysis. Each follows F36's register-in-core step, then the hard analysis.
+    - **F17/F22/F19/F27/F29** — optimistic/delta runtime in `packages/browser` (rebase, snapshot,
+      queue, idem-token, deep-merge); each risks the optimism/morph path.
 - **Phase 2 — Test + harness half (Lanes B/C/D): IN PROGRESS.**
   - ✅ **B0** — harness cache-input fix: `integration` task input broadened from
     `packages/test/src/integration/**` to `packages/test/src/**` so the runtime verifier
