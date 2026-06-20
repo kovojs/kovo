@@ -251,4 +251,51 @@ describe('query refetch', () => {
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('reviews')).toEqual({ total: 2 });
   });
+
+  it('escalates to a reload (no apply) when a /_q refetch token still differs (D3, SPEC §14)', async () => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    const onBuildSkew = vi.fn();
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-B' : null) },
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
+    }));
+
+    const applied = await refetchQueries({
+      expectedBuildToken: 'build-A',
+      fetch,
+      onBuildSkew,
+      queries: ['cart'],
+      queryStore: store,
+    });
+
+    // The fresh-build (build-B) value must NOT be merged into the stale-build (build-A) store;
+    // the document is fundamentally skewed → a single reload escalation, no chunks applied.
+    expect(onBuildSkew).toHaveBeenCalledTimes(1);
+    expect(applied).toEqual([]);
+    expect(store.get('cart')).toEqual({ count: 1 });
+  });
+
+  it('applies normally when the /_q refetch token matches the document token (D2)', async () => {
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    const onBuildSkew = vi.fn();
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-A' : null) },
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":2}</kovo-query>',
+    }));
+
+    await refetchQueries({
+      expectedBuildToken: 'build-A',
+      fetch,
+      onBuildSkew,
+      queries: ['cart'],
+      queryStore: store,
+    });
+
+    expect(onBuildSkew).not.toHaveBeenCalled();
+    expect(store.get('cart')).toEqual({ count: 2 });
+  });
 });

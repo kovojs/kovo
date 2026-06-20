@@ -13,6 +13,13 @@ import type { QueryChunk } from './wire-parser.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchOptions {
+  /**
+   * The current document's render-plan version token (`<meta name="kovo-build">`). When set, a
+   * `/_q/` refetch whose `Kovo-Build` response header differs is a deploy-skew event: the chunks
+   * are NOT applied to the stale-build store and `onBuildSkew` is invoked instead (SPEC §5.2.1
+   * rule 2d, §14 recovery — "if the refetch still differs … perform a full navigation reload").
+   */
+  expectedBuildToken?: string;
   fetch: QueryRefetchFetch;
   /**
    * Reports typed-read fetch, response-body, and wire-apply failures. Refetch is
@@ -20,6 +27,12 @@ export interface QueryRefetchOptions {
    * and skipped while later queries continue under SPEC.md §4.4 hydration.
    */
   onError?: (error: unknown) => void;
+  /**
+   * Invoked at most once when a `/_q/` refetch returns a build token that still differs from
+   * `expectedBuildToken` — the document is fundamentally skewed and the caller should perform a
+   * single full navigation reload of the current route (SPEC §14). No chunks are applied.
+   */
+  onBuildSkew?: () => void;
   urlForQuery?: (query: string) => string | undefined;
 }
 
@@ -37,6 +50,7 @@ export interface QueryRefetchFetch {
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryRefetchResponse {
+  headers?: { get(name: string): string | null };
   ok?: boolean;
   status?: number;
   text(): Promise<string> | string;
@@ -95,6 +109,19 @@ export async function refetchQueries(
 
       if (response.ok === false || (response.status !== undefined && response.status >= 400)) {
         continue;
+      }
+
+      // SPEC §5.2.1 rule 2d / §14: a /_q/ refetch whose build token still differs from the
+      // document token means the document is fundamentally skewed — do NOT merge fresh-build data
+      // into the stale-build store; escalate to a full navigation reload (once) instead.
+      const responseBuildToken = response.headers?.get('Kovo-Build') ?? undefined;
+      if (
+        options.expectedBuildToken !== undefined &&
+        responseBuildToken !== undefined &&
+        responseBuildToken !== options.expectedBuildToken
+      ) {
+        options.onBuildSkew?.();
+        return [];
       }
 
       bodies.push({ queries: readQueryChunks(await response.text(), options.onError) });
