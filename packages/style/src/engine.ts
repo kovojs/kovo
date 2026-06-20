@@ -7,7 +7,13 @@ const DEFAULT_LAYER_NAME = 'kovo-style';
 /** CSS scalar values Kovo's static atomic compiler can emit without runtime CSS parsing. */
 export type StylePrimitive = string | number;
 
-/** Explicit raw inline style payload used only through the internal `raw(...)` escape hatch. */
+/**
+ * Explicit raw inline style payload used only through the internal `raw(...)`
+ * escape hatch. Not part of the public `@kovojs/style` surface; the raw tuple
+ * form is inlined into `StyleInput` so the public type does not name this alias
+ * (rules/api-surface.md recursive publicness).
+ * @internal
+ */
 export type InlineStyle = Readonly<Record<string, StylePrimitive>>;
 
 /** Values accepted in a Kovo static style object. */
@@ -22,7 +28,10 @@ export interface StyleObject {
 export type Style = CompiledStyle | null | false | undefined;
 
 /** A style argument accepted by `attrs`, including arrays and raw inline tuples. */
-export type StyleInput = Style | ReadonlyArray<StyleInput> | readonly [Style, InlineStyle];
+export type StyleInput =
+  | Style
+  | ReadonlyArray<StyleInput>
+  | readonly [Style, Readonly<Record<string, StylePrimitive>>];
 
 /** Compiler-produced atomic style record keyed by CSS-property conflict group. */
 export interface CompiledStyle {

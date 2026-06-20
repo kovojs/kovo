@@ -639,22 +639,6 @@ type MutationErrorFailures<Errors> =
 export type FormInput<Definition> =
   Definition extends Form<string, infer Input, unknown> ? Input : never;
 
-/** The string-literal union of a form's field names. */
-export type FormFieldName<Definition> = Extract<keyof FormInput<Definition>, string>;
-
-type MissingFormFields<
-  Definition extends Form<string, any, unknown>,
-  Fields extends readonly string[],
-> = Exclude<FormFieldName<Definition>, Fields[number]>;
-
-type CompleteFormFields<
-  Definition extends Form<string, any, unknown>,
-  Fields extends readonly FormFieldName<Definition>[],
-> =
-  MissingFormFields<Definition, Fields> extends never
-    ? Fields
-    : readonly ['Missing form fields', MissingFormFields<Definition, Fields>];
-
 function createMutationForm<
   const Key extends RegistryKey<MutationRegistry>,
   Input extends Record<string, JsonValue> = RegistryMutationInput<Key>,
@@ -703,22 +687,6 @@ function getRouteForm<const Path extends RegistryKey<RouteRegistry>>(
 export const form = Object.assign(createMutationForm, {
   get: getRouteForm,
 });
-
-/**
- * Assert and return the exhaustive field list of a form. TypeScript rejects the
- * call unless `fields` names every input field of the form, so renaming a field
- * surfaces as a type error at every call site (SPEC §6.3).
- *
- * @param _form - The form whose fields are being enumerated.
- * @param fields - The complete tuple of the form's field names.
- * @returns The same `fields` tuple, typed.
- */
-export function formFields<
-  Definition extends Form<string, any, unknown>,
-  const Fields extends readonly FormFieldName<Definition>[],
->(_form: Definition, fields: CompleteFormFields<Definition, Fields>): Fields {
-  return fields as Fields;
-}
 
 /**
  * Render a field-scoped mutation failure message. The compiler injects the

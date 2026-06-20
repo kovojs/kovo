@@ -4,7 +4,6 @@ import {
   component,
   FieldError,
   form,
-  formFields,
   FormError,
   href,
   Link,
@@ -14,7 +13,6 @@ import {
   type Component as KovoComponent,
   type ComponentDefinitionInput,
   type FormFailure,
-  type FormFieldName,
   type FormInput,
   type FormValidationFailure,
   type JsonValue,
@@ -372,50 +370,6 @@ describe('core authoring APIs', () => {
     };
     expect(assertMissingInput).toBeTypeOf('function');
     expect(assertUnknownFailure).toBeTypeOf('function');
-  });
-
-  it('checks form field completeness from typed mutation inputs', () => {
-    const addToCart = form<
-      'cart/add',
-      { productId: string; quantity: number },
-      { code: 'OUT_OF_STOCK' }
-    >('cart/add');
-    const fields = formFields(addToCart, ['productId', 'quantity'] as const);
-    const fieldName = 'productId' satisfies FormFieldName<typeof addToCart>;
-
-    expect(fields).toEqual(['productId', 'quantity']);
-    expect(fieldName).toBe('productId');
-
-    const assertMissingField = () => {
-      // @ts-expect-error quantity is required by the mutation input schema.
-      formFields(addToCart, ['productId'] as const);
-    };
-    const assertUnknownField = () => {
-      // @ts-expect-error sku is not part of the mutation input schema.
-      formFields(addToCart, ['productId', 'quantity', 'sku'] as const);
-    };
-    expect(assertMissingField).toBeTypeOf('function');
-    expect(assertUnknownField).toBeTypeOf('function');
-  });
-
-  it('checks form field completeness from generated mutation registry input facts', () => {
-    const addToCart = form('cart/add');
-    const fields = formFields(addToCart, ['productId', 'quantity'] as const);
-    const fieldName = 'quantity' satisfies FormFieldName<typeof addToCart>;
-
-    expect(fields).toEqual(['productId', 'quantity']);
-    expect(fieldName).toBe('quantity');
-
-    const assertMissingField = () => {
-      // @ts-expect-error quantity is required by the generated mutation input schema.
-      formFields(addToCart, ['productId'] as const);
-    };
-    const assertUnknownField = () => {
-      // @ts-expect-error sku is not part of the generated mutation input schema.
-      formFields(addToCart, ['productId', 'quantity', 'sku'] as const);
-    };
-    expect(assertMissingField).toBeTypeOf('function');
-    expect(assertUnknownField).toBeTypeOf('function');
   });
 
   it('checks fragment target names and props from generated registry facts', () => {

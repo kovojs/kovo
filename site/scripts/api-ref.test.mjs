@@ -283,12 +283,15 @@ describe('api-ref generator', () => {
     // the regenerated documented counts after the public-API cleanup narrowed the
     // surface (e.g. @kovojs/test dropped its internalized verifier subpaths and
     // @kovojs/style grew its documented exports); they must not silently regress.
+    // The audit-driven cleanup removed @kovojs/core#formFields and folded
+    // @kovojs/style#InlineStyle into StyleInput (audit-api-20260620 Definitely
+    // Remove), so those packages' documented floors drop by one.
     const expected = {
       '@kovojs/core': 68,
       '@kovojs/drizzle': 4,
       '@kovojs/browser': 90,
       '@kovojs/server': 160,
-      '@kovojs/style': 35,
+      '@kovojs/style': 34,
       '@kovojs/better-auth': 13,
       '@kovojs/compiler': 12,
       '@kovojs/cli': 12,

@@ -2,7 +2,6 @@ export { create, attrs, defineVars, createTheme, keyframes } from './engine.js';
 export type {
   AttrsResult,
   CssValue,
-  InlineStyle,
   Keyframes,
   Style,
   StyleInput,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { form, formFields, href, Link, redirect, type Route } from '@kovojs/core';
+import { form, href, Link, redirect, type Route } from '@kovojs/core';
 
 import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
 import { createSubmitContext } from './submit-context.js';
@@ -110,10 +110,6 @@ describe('submit context apply', () => {
     });
     const catalogFilter = form.get('/catalog');
 
-    expect(formFields(addToCartAfterFieldRename, ['sku', 'quantity'] as const)).toEqual([
-      'sku',
-      'quantity',
-    ]);
     expect(href('/catalog/:id', { params: { id: 'p 1' }, search: { max: 500 } })).toBe(
       '/catalog/p%201?max=500',
     );
@@ -125,10 +121,6 @@ describe('submit context apply', () => {
 
     const submitRenamedShape = () =>
       ctx.submit(addToCartAfterFieldRename, { input: { quantity: 1, sku: 'sku-1' } });
-    const assertLegacyFormFieldsRejected = () => {
-      // @ts-expect-error SPEC.md §6.2/§6.3: mutation input field renames make old form fields red under vp check.
-      formFields(addToCartAfterFieldRename, ['productId', 'quantity'] as const);
-    };
     const assertLegacySubmitInputRejected = () => {
       void ctx.submit(addToCartAfterFieldRename, {
         // @ts-expect-error SPEC.md §6.2/§6.3: productId was renamed to sku in the form input schema.
@@ -157,7 +149,6 @@ describe('submit context apply', () => {
     };
 
     expect(submitRenamedShape).toBeTypeOf('function');
-    expect(assertLegacyFormFieldsRejected).toBeTypeOf('function');
     expect(assertLegacySubmitInputRejected).toBeTypeOf('function');
     expect(assertLegacyHrefRejected).toBeTypeOf('function');
     expect(assertLegacyLinkRejected).toBeTypeOf('function');
