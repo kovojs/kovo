@@ -30,13 +30,19 @@ describe('server route matching', () => {
     expect(matchRoute([productNew, product], '/products/p1')?.route).toBe(product);
   });
 
-  it('extracts raw param segments for parseRouteRequest coercion', () => {
+  it('URL-decodes param segments so typed links round-trip (I2 ROUTING-NAV-2)', () => {
     const product = route('/products/:id/files/:file', {});
 
+    // %2F decodes to '/' — a valid decoded segment value.
     expect(matchRoute([product], '/products/sku%2F1/files/readme.md')?.params).toEqual({
       file: 'readme.md',
-      id: 'sku%2F1',
+      id: 'sku/1',
     });
+    // Space encoded as %20 must round-trip to the human value.
+    const users = route('/users/:id', {});
+    expect(matchRoute([users], '/users/john%20doe')?.params).toEqual({ id: 'john doe' });
+    // Malformed percent-sequence → no match (404).
+    expect(matchRoute([users], '/users/bad%ZZid')).toBeUndefined();
   });
 
   it('invalidates cached route tables when a route path changes', () => {

@@ -1,10 +1,11 @@
-import type { JsonValue } from '@kovojs/core';
+import type { JsonValue, Redirect } from '@kovojs/core';
 
 import { reportServerError } from './diagnostics.js';
 import {
   renderHttpGuardFailureResponse,
   resolveLifecycleRequest,
   runGuard,
+  sanitizeNext,
   type Guard,
   type GuardFailureResponseOptions,
   type RequestLifecycleOptions,
@@ -156,7 +157,7 @@ export interface RouteDefinition<
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
     request: GuardedRequest,
-  ) => Page | NotFound | RouteResponseOutcome | Promise<Page | NotFound | RouteResponseOutcome>;
+  ) => Page | NotFound | Redirect | RouteResponseOutcome | Promise<Page | NotFound | Redirect | RouteResponseOutcome>;
   params?: ParamsSchema;
   search?: SearchSchema;
   staticPaths?: readonly string[];
@@ -424,7 +425,7 @@ async function runRoutePageInternal<
         } catch (error) {
           throw new RouteBoundaryRenderError(error, routeBoundaryFor('error', definition, layouts));
         }
-        if (isNotFound(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
+        if (isNotFound(pageValue) || isRedirect(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
         const metadata = getRoutePageMetadata(definition);
         return renderLayoutChain(
           layouts,
@@ -453,6 +454,9 @@ async function runRoutePageInternal<
       routeBoundaryFor('notFound', definition, layouts),
     );
   }
+  // SPEC §6.4: redirect() is a sanctioned non-200 page outcome. Sanitize the
+  // location through sanitizeNext for defence-in-depth (open-redirect guard).
+  if (isRedirect(value)) return { ok: true, redirect: value };
   if (isRouteResponseOutcome(value)) return { ok: true, outcome: value };
   return { ok: true, value: value as Page };
 }
@@ -690,7 +694,10 @@ function unescapeAttribute(value: string): string {
 export type RoutePageResult<Page> = RoutePageSuccess<Page> | RoutePageFailure;
 
 /** @internal */
-export type RoutePageSuccess<Page> = RoutePageRenderSuccess<Page> | RoutePageOutcomeSuccess;
+export type RoutePageSuccess<Page> =
+  | RoutePageRenderSuccess<Page>
+  | RoutePageOutcomeSuccess
+  | RoutePageRedirectSuccess;
 
 /** @internal */
 export interface RoutePageRenderSuccess<Page> {
@@ -702,6 +709,12 @@ export interface RoutePageRenderSuccess<Page> {
 export interface RoutePageOutcomeSuccess {
   ok: true;
   outcome: RouteResponseOutcome;
+}
+
+/** @internal */
+export interface RoutePageRedirectSuccess {
+  ok: true;
+  redirect: Redirect;
 }
 
 /** @internal */
@@ -880,6 +893,14 @@ export async function renderRoutePageResponse<
   }
 
   if ('outcome' in result) return routeOutcomeResponse(result.outcome, request);
+  // SPEC §6.4: page redirect() → 303 + sanitized Location header.
+  if ('redirect' in result) {
+    return {
+      body: '',
+      headers: { Location: sanitizeNext(result.redirect.location) },
+      status: 303,
+    };
+  }
 
   try {
     return {
@@ -991,6 +1012,18 @@ function isNotFound(value: unknown): value is NotFound {
     value.notFound === true &&
     'status' in value &&
     value.status === 404
+  );
+}
+
+// SPEC §6.4: redirect() returns { location: string, status: 303 }.
+function isRedirect(value: unknown): value is Redirect {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'status' in value &&
+    value.status === 303 &&
+    'location' in value &&
+    typeof (value as { location: unknown }).location === 'string'
   );
 }
 

@@ -234,7 +234,15 @@ function matchCompiledRoute(
       continue;
     }
 
-    params[routeSegment.name ?? routeSegment.value.slice(1)] = pathnameSegment;
+    // I2 (ROUTING-NAV-2): URL-decode params so typed links round-trip correctly.
+    // Malformed percent-sequences → treat as no-match (undefined) per SPEC §6.4.
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(pathnameSegment);
+    } catch {
+      return undefined;
+    }
+    params[routeSegment.name ?? routeSegment.value.slice(1)] = decoded;
   }
 
   return params;
