@@ -143,6 +143,19 @@ function deriveAgg(
   const match = matchToRowMatches(effect.match);
   if (match.reason) return fail(match.reason);
 
+  // C5: A `keys`-kind match whose columns don't cover the declared rowKey is a
+  // non-key predicate that may match multiple rows.  Only single-row update/delete
+  // is safe, so punt when the eq columns don't include every key column.
+  // (SPEC.md §10.5 "eq(t.col,value) only when cols provably cover the table key")
+  if (field.rowKey) {
+    const keyColumns = field.rowKey.split(',').map((c) => c.trim());
+    const matchColumns = new Set(match.value.map((m) => m.column));
+    const coversKey = keyColumns.every((kc) => matchColumns.has(kc));
+    if (!coversKey) {
+      return fail({ code: 'non-key-match', expr: `non-key eq on ${field.rowset.table}` });
+    }
+  }
+
   if (effect.op === 'delete') {
     return rows({ guard: 'find-or-noop', match: match.value, op: 'remove-row', path });
   }
@@ -194,8 +207,16 @@ function deriveSum(
   effect: SymbolicEffect,
   shape: AlgebraicQueryShape,
 ): FieldDerivation {
-  const rowsPath = fullRowsPath(shape, field.rowset.table);
   const column = field.arith.kind === 'col' ? field.arith.column : undefined;
+
+  // C6: Only use the resum-over-witness path when the witness ships the summed
+  // column.  RowWitness.columns records exactly which columns the sibling AGG
+  // projects; reading row[col] from a witness that doesn't ship col yields 0
+  // for every row, collapsing the total (SPEC.md §10.5).
+  const witness = shape.rowsByTable?.[field.rowset.table];
+  const witnessShipsSummedCol =
+    witness && column ? witness.columns.includes(column) : false;
+  const rowsPath = witnessShipsSummedCol ? witness?.rowsPath : undefined;
 
   if (effect.op === 'insert' || effect.op === 'upsert') {
     if (rowsPath && column) {
@@ -228,7 +249,12 @@ function deriveCount(
   effect: SymbolicEffect,
   shape: AlgebraicQueryShape,
 ): FieldDerivation {
-  const rowsPath = fullRowsPath(shape, field.rowset.table);
+  // C4: The rowsByTable witness is keyed by table only; a sibling unfiltered AGG
+  // builds a witness over ALL rows.  If this COUNT has a predicate, recount(witness)
+  // would count every row rather than only those satisfying pred → wrong optimistic
+  // count.  Punt (no-row-witness) unless the COUNT has no predicate (plain COUNT(*)).
+  // (SPEC.md §10.5 "soundly optimistic — wrong predictions are worse than none")
+  const rowsPath = field.pred ? undefined : fullRowsPath(shape, field.rowset.table);
 
   if (effect.op === 'insert' || effect.op === 'upsert') {
     const satisfies = predSatisfiedByInsert(field.pred, effect.values);

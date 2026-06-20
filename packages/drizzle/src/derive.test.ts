@@ -373,3 +373,141 @@ describe('deriveOptimistic — membership exit + sorted insert (in-grammar)', ()
     });
   });
 });
+
+// ── C4 / C5 / C6 correctness guards ──────────────────────────────────────────
+// SPEC.md §10.5 "soundly optimistic": wrong predictions are worse than none.
+
+describe('deriveOptimistic — C4: COUNT(pred) must not recount unfiltered witness', () => {
+  // items AGG (no filter) + active COUNT(pred done=false) share the same
+  // todos witness.  The witness ships ALL rows (done:true and done:false), so
+  // recount(witness) would return the wrong total for the filtered COUNT.
+  // Correct fix: use inc-by-1 for INSERT (when pred is satisfied) rather than
+  // recount; for DELETE/UPDATE that flip the pred column, punt (no-row-witness).
+  const rowset = { filters: [], key: 'id', orderBy: [], table: 'todos' };
+  const shape: AlgebraicQueryShape = {
+    fields: {
+      // Unfiltered AGG — ships the rows witness for the todos table
+      items: { kind: 'agg', projection: ['id', 'done'], rowKey: 'id', rowset },
+      // COUNT with a predicate — must NOT blindly recount from the unfiltered witness
+      active: {
+        kind: 'count',
+        pred: { column: 'done', op: 'eq', value: { kind: 'const', value: false } },
+        rowset,
+      },
+    },
+    query: 'todoList',
+    rowsByTable: { todos: { columns: ['id', 'done'], rowsPath: 'items' } },
+  };
+
+  it('uses inc-by-1 for INSERT done:false — not recount from the unfiltered witness', () => {
+    // Old code: rowsPath exists → recount(items) → counts ALL rows including any
+    // done:true rows → wrong active count.
+    // New code: pred present → rowsPath=undefined → inc by 1 (correct).
+    const effect: SymbolicEffect = {
+      op: 'insert',
+      table: 'todos',
+      values: {
+        done: { kind: 'const', value: false },
+        id: { kind: 'param', path: 'id' },
+      },
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'derived',
+      program: {
+        ops: [
+          // items AGG: push the new row
+          {
+            op: 'push-row',
+            path: 'items',
+            placeholderColumns: [],
+            position: 'end',
+            row: {
+              done: { kind: 'const', value: false },
+              id: { kind: 'param', path: 'id' },
+            },
+          },
+          // active COUNT: inc by 1 (not recount) — the new row satisfies the pred
+          { by: { kind: 'const', value: 1 }, op: 'inc', path: 'active' },
+        ],
+        query: 'todoList',
+      },
+    });
+  });
+
+  it('punts (no-row-witness) on DELETE — cannot filter the witness by pred to recount', () => {
+    // A DELETE changes the count only if the deleted row satisfied the pred.
+    // Since the witness is unfiltered and has no pred info, punt.
+    const effect: SymbolicEffect = {
+      match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+      op: 'delete',
+      table: 'todos',
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'no-row-witness', field: 'active' },
+    });
+  });
+});
+
+describe('deriveOptimistic — C5: non-key eq match must punt, not single-row update', () => {
+  // AGG over products with rowKey 'id'; UPDATE matches on non-key column 'category'.
+  // A keys-kind match whose columns don't cover the declared rowKey must punt.
+  const rowset = { filters: [], key: 'id', orderBy: [], table: 'products' };
+  const shape: AlgebraicQueryShape = {
+    fields: {
+      items: {
+        kind: 'agg',
+        projection: ['id', 'category', 'price'],
+        rowKey: 'id',
+        rowset,
+      },
+    },
+    query: 'productGrid',
+    rowsByTable: { products: { columns: ['id', 'category', 'price'], rowsPath: 'items' } },
+  };
+
+  it('punts (non-key-match) when eq columns do not include the declared rowKey', () => {
+    const effect: SymbolicEffect = {
+      // Non-key eq: category is not the primary key
+      match: { eq: [{ column: 'category', value: { kind: 'const', value: 'books' } }], kind: 'keys' },
+      op: 'update',
+      sets: { price: { kind: 'param', path: 'price' } },
+      table: 'products',
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'non-key-match', expr: 'non-key eq on products' },
+    });
+  });
+});
+
+describe('deriveOptimistic — C6: SUM resum must not proceed when witness omits the summed column', () => {
+  // items AGG projects only ['id'] — does NOT ship qty.
+  // total SUM over qty must punt on DELETE, not zero out via resum.
+  const rowset = { filters: [], key: 'id', orderBy: [], table: 'items' };
+  const shape: AlgebraicQueryShape = {
+    fields: {
+      // AGG ships only id — witness columns do NOT include qty
+      items: { kind: 'agg', projection: ['id'], rowKey: 'id', rowset },
+      total: {
+        arith: { kind: 'col', column: 'qty' },
+        kind: 'sum',
+        rowset,
+      },
+    },
+    query: 'itemTotals',
+    rowsByTable: { items: { columns: ['id'], rowsPath: 'items' } },
+  };
+
+  it('punts (no-row-witness) on DELETE when the witness does not ship the summed column', () => {
+    const effect: SymbolicEffect = {
+      match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+      op: 'delete',
+      table: 'items',
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'no-row-witness', field: 'total' },
+    });
+  });
+});
