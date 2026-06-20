@@ -243,6 +243,10 @@ const staticGraphArtifacts = compileDrizzleStatic({
 
 const crmGraph = createCrmGraph(crmTouchGraph, optimisticEntries, crmQueryDomains);
 const graph = deriveGraphViaCli({ graph: crmGraph });
+// SPEC §10.1/§10.3: feed the drizzle-static producer's owner/IDOR facts into the
+// checked graph (contacts/deals are owner-annotated; their reads are not arg-keyed).
+graph.ownerDomains = staticFacts.ownerDomains ?? [];
+graph.scopeAudits = staticFacts.scopeAudits ?? [];
 
 const crmInvalidationSource = staticGraphArtifacts.invalidationRegistrySource;
 const crmMutationTouchRegistrySource = staticGraphArtifacts.mutationTouchRegistrySource;

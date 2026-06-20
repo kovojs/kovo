@@ -256,7 +256,7 @@ const commerceGraph = {
       status: 'derived',
     },
   ],
-  ownerDomains: [],
+  ownerDomains: staticFacts.ownerDomains ?? [],
   pages: [
     {
       i18n: ['en-US:cartLabel,productStock'],
@@ -276,7 +276,7 @@ const commerceGraph = {
     },
   ],
   queries: commerceQueryDomains,
-  scopeAudits: [],
+  scopeAudits: staticFacts.scopeAudits ?? [],
   touchGraph: commerceTouchGraph,
 };
 

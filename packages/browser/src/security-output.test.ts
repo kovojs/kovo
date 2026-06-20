@@ -3,12 +3,15 @@ import { describe, expect, it } from 'vitest';
 import {
   isBrowserTrustedHtml,
   isKovoTrustedHtml,
+  isKovoTrustedUrl,
   kovoBoundAttributeValue,
   kovoEscapeHtml,
+  kovoSafeUrl,
   kovoStyleProperties,
   kovoStyleProperty,
   kovoTrustedHtmlContent,
   trustedHtml,
+  trustedUrl,
 } from './security-output.js';
 
 describe('runtime output-context helpers', () => {
@@ -19,6 +22,25 @@ describe('runtime output-context helpers', () => {
     expect(kovoBoundAttributeValue('href', 'java\tscript:alert(1)')).toBe('#');
     expect(kovoBoundAttributeValue('href', '/products/p1')).toBe('/products/p1');
     expect(kovoBoundAttributeValue('title', '<b>copy</b>')).toBe('<b>copy</b>');
+  });
+
+  it('passes author-vouched trustedUrl values through unsafe-scheme neutralization (SPEC §4.8)', () => {
+    expect(trustedUrl('javascript:alert(1)')).toEqual({
+      __kovoTrustedUrl: true,
+      value: 'javascript:alert(1)',
+    });
+    expect(isKovoTrustedUrl(trustedUrl('data:text/html,x'))).toBe(true);
+    expect(isKovoTrustedUrl('data:text/html,x')).toBe(false);
+
+    // An unbranded unsafe URL is neutralized; the trusted brand is emitted verbatim.
+    expect(kovoSafeUrl('javascript:alert(1)')).toBe('#');
+    expect(kovoSafeUrl(trustedUrl('javascript:alert(1)'))).toBe('javascript:alert(1)');
+
+    // The compiler-emitted bound-attribute path honors the brand too.
+    expect(kovoBoundAttributeValue('href', 'data:text/html,evil')).toBe('#');
+    expect(kovoBoundAttributeValue('href', trustedUrl('data:image/png;base64,AAAA'))).toBe(
+      'data:image/png;base64,AAAA',
+    );
   });
 
   it('sanitizes generated CSS property values', () => {

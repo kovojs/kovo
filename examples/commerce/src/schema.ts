@@ -11,7 +11,7 @@ export const products = pgTable(
     stock: integer('stock').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({ domain: 'product', key: 'id' }),
+  kovo({ domain: 'product', key: (t) => t.id }),
 );
 
 export const cartItems = pgTable(
@@ -22,7 +22,7 @@ export const cartItems = pgTable(
     qty: integer('qty').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({ domain: 'cart', key: 'id' }),
+  kovo({ domain: 'cart', key: (t) => t.id }),
 );
 
 export const orders = pgTable(
@@ -34,5 +34,7 @@ export const orders = pgTable(
     total: integer('total').notNull(),
     userId: text('user_id').notNull(),
   },
-  kovo({ domain: 'order', key: 'id' }),
+  // SPEC §10.1: orders are principal-owned (the order's user); the §10.3 IDOR
+  // audit checks that order reads are scoped to that owner.
+  kovo({ domain: 'order', key: (t) => t.id, owner: (t) => t.userId }),
 );

@@ -62,6 +62,7 @@ describe('diagnostic registry', () => {
       'KV412',
       'KV413',
       'KV414',
+      'KV418',
       'KV419',
       'KV420',
     ]);
@@ -507,6 +508,15 @@ describe('diagnostic registry', () => {
       Fixes: scope the predicate by a session field (e.g. eq(table.id, req.session.userId)), add an owns() ownership guard, or record a public-read justification if the table is genuinely public.
       SPEC §10.1/§10.3/§11.2 make the --unscoped audit a blocking gate: owner-table access must be session-traceable or ownership-guarded.",
           "message": "Owner-table access is not scoped to the session principal (IDOR).",
+          "severity": "error",
+        },
+        "KV418": {
+          "code": "KV418",
+          "help": "Would lower to: a csrf-exempt endpoint that authenticates by a signature/verifier (e.g. a webhook), not by the session cookie.
+      Blocked reason: this endpoint opts out of CSRF protection (csrf: false) yet depends on the session — it reads req.session or runs a session/cookie-derived guard (authed, role(), owns()). CSRF protection is exactly what keeps cookie-authenticated requests safe, so a session-dependent endpoint that disables it is forgeable.
+      Fixes: keep CSRF protection (remove csrf: false) for any session-authenticated endpoint; or, if the endpoint is a genuine third-party callback, authenticate it by a signature verifier instead of the session and drop the session-derived guard.
+      SPEC §9.1 makes a csrf: false endpoint that depends on the session a compile error.",
+          "message": "csrf-exempt endpoint depends on the session (forgeable).",
           "severity": "error",
         },
         "KV419": {

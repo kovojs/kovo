@@ -47,6 +47,39 @@ export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
 }
 
 /**
+ * Kovo's explicit trusted-URL escape-hatch wrapper — the URL-scheme counterpart
+ * of {@link TrustedHtml} (SPEC §4.8). Brands a URL the author vouches for so
+ * URL-bearing sinks (`href`/`src`/`action`/…) emit it verbatim instead of
+ * neutralizing it against the scheme allowlist.
+ */
+export interface TrustedUrl {
+  readonly __kovoTrustedUrl: true;
+  readonly value: string;
+}
+
+/**
+ * Marks an intentional, author-vouched URL for Kovo's URL-bearing sinks,
+ * suppressing the `javascript:`/`data:` scheme neutralization that would
+ * otherwise rewrite it to `#` (SPEC §4.8, KV236). The URL-scheme counterpart of
+ * {@link trustedHtml}: you take responsibility for the URL's safety, and the
+ * brand is visible in source and `kovo explain`.
+ */
+export function trustedUrl(value: string): TrustedUrl {
+  return { __kovoTrustedUrl: true, value };
+}
+
+/**
+ * Returns whether a value uses Kovo's explicit trusted-URL wrapper.
+ */
+export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as { __kovoTrustedUrl?: unknown }).__kovoTrustedUrl === true
+  );
+}
+
+/**
  * Returns whether a value matches the browser TrustedHTML brand accepted by Kovo.
  */
 export function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTML {
@@ -83,6 +116,7 @@ export function kovoEscapeHtml(value: unknown): string {
  * Neutralizes unsafe URL schemes for generated URL-bearing attributes.
  */
 export function kovoSafeUrl(value: unknown): string {
+  if (isKovoTrustedUrl(value)) return value.value;
   const rendered = formatOutputValue(value);
   return hasUnsafeUrlScheme(rendered) ? '#' : rendered;
 }
@@ -94,8 +128,10 @@ export function kovoSafeUrl(value: unknown): string {
 export function kovoBoundAttributeValue(name: string, value: unknown): string | null {
   // KV236: refuse event-handler and srcdoc sinks at runtime regardless of value.
   if (/^on/i.test(name) || name.toLowerCase() === 'srcdoc') return null;
-  const rendered = formatOutputValue(value);
-  return isUrlAttributeName(name) ? kovoSafeUrl(rendered) : rendered;
+  // URL attributes route the RAW value through kovoSafeUrl so a `trustedUrl`
+  // brand survives (formatting it first would stringify the wrapper object).
+  if (isUrlAttributeName(name)) return kovoSafeUrl(value);
+  return formatOutputValue(value);
 }
 
 /**

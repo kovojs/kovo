@@ -1886,6 +1886,7 @@ async function runCompileDrizzleStaticCommand(
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
     extractMaterializedViewRefreshFactsFromProject,
+    extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
     extractSymbolicEffectsFromProject,
     extractTouchGraphFromProject,
@@ -1904,12 +1905,20 @@ async function runCompileDrizzleStaticCommand(
       input.extract ?? [
         'algebraicShapes',
         'materializedViewRefreshFacts',
+        'ownerAudit',
         'queryFacts',
         'symbolicEffects',
         'touchGraph',
       ],
     );
     if (extract.has('touchGraph')) output.touchGraph = extractTouchGraphFromProject({ files });
+    if (extract.has('ownerAudit')) {
+      // SPEC §10.1/§10.3: owner-domain facts + IDOR scope audits the graph emission
+      // feeds to `kovo check` (KV414).
+      const ownerAudit = extractOwnerAuditFromProject({ files });
+      output.ownerDomains = ownerAudit.ownerDomains;
+      output.scopeAudits = ownerAudit.scopeAudits;
+    }
     if (extract.has('materializedViewRefreshFacts')) {
       output.materializedViewRefreshFacts = extractMaterializedViewRefreshFactsFromProject({
         files,
@@ -3993,7 +4002,10 @@ export function kovoCheck(
 
   if (includeAll) {
     for (const finding of unscopedAccesses(graph)) {
-      pushFinding(`WARN ${unscopedLine(finding)}`);
+      // SPEC §10.3: a recorded public-read justification suppresses the enforced
+      // KV414 (the access is still surfaced by `kovo explain --unscoped`).
+      if (finding.justification) continue;
+      pushFinding(unscopedKv414Line(finding), true);
     }
 
     for (const lint of graph.lints ?? []) {
@@ -4044,6 +4056,23 @@ export function kovoCheck(
       if (endpoint.csrf === 'exempt' && !endpoint.csrfJustification) {
         pushFinding(
           `WARN ENDPOINT ${endpointName(endpoint)} csrf exemption requires a named justification.`,
+        );
+      }
+      // SPEC §9.1: KV418 — a csrf-exempt endpoint must not depend on the session (auth:'authed'
+      // or a session/cookie-derived guard: authed, role(), owns()); CSRF protection is what makes
+      // session auth safe, so a session-dependent endpoint that opts out of it is a contradiction.
+      // A signature/verifier-authed webhook (auth:'verifier:*') is the legitimate exempt pattern.
+      if (
+        endpoint.csrf === 'exempt' &&
+        (endpoint.auth === 'authed' ||
+          (endpoint.guards ?? []).some(
+            (guard) => guard === 'authed' || guard.startsWith('role:') || isOwnsGuard(guard),
+          ))
+      ) {
+        const message = diagnosticDefinitionText('KV418', { includeHelp: true });
+        pushFinding(
+          `ERROR KV418 ENDPOINT ${endpointName(endpoint)} csrf-exempt endpoint runs a session-derived guard. ${message}`,
+          true,
         );
       }
     }
@@ -4741,11 +4770,33 @@ function renderOnceInvalidationConflictLine(conflict: RenderOnceInvalidationConf
 
 function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAuditFact[] {
   const ownerDomains = new Set((input.ownerDomains ?? []).map((owner) => owner.domain));
+  const ownsGuarded = ownsGuardedNames(input);
 
-  return (input.scopeAudits ?? [])
-    .filter((fact) => ownerDomains.has(fact.domain))
-    .filter((fact) => fact.scope !== 'session')
-    .sort(compareScopeAudit);
+  return (
+    (input.scopeAudits ?? [])
+      .filter((fact) => ownerDomains.has(fact.domain))
+      // SPEC §10.3: an owner-table access discharges KV414 when its key predicate is
+      // session-traceable (scope 'session') OR an `owns()` ownership guard covers it.
+      .filter((fact) => fact.scope !== 'session')
+      .filter((fact) => !ownsGuarded.has(fact.name))
+      .sort(compareScopeAudit)
+  );
+}
+
+/** Query/mutation names whose guard chain includes an `owns()` ownership guard (SPEC §10.3). */
+function ownsGuardedNames(input: CoreGraph.KovoCheckInput): Set<string> {
+  const names = new Set<string>();
+  for (const query of input.queries ?? []) {
+    if ((query.guards ?? []).some(isOwnsGuard)) names.add(query.query);
+  }
+  for (const mutation of input.mutations ?? []) {
+    if ((mutation.guards ?? []).some(isOwnsGuard)) names.add(mutation.key);
+  }
+  return names;
+}
+
+function isOwnsGuard(guard: string): boolean {
+  return guard === 'owns' || guard.startsWith('owns(') || guard.startsWith('owns:');
 }
 
 function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
@@ -4756,6 +4807,23 @@ function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
     `domain=${fact.domain}`,
     `scope=${fact.scope}`,
     `site=${fact.site}`,
+    fact.justification ? `justification=${fact.justification}` : '',
+    fact.detail ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** The enforced KV414 (IDOR) error line for an unscoped owner-table access (SPEC §10.3). */
+function unscopedKv414Line(fact: CoreGraph.ScopeAuditFact): string {
+  return [
+    'ERROR KV414',
+    fact.kind.toUpperCase(),
+    fact.name,
+    `domain=${fact.domain}`,
+    `scope=${fact.scope}`,
+    `site=${fact.site}`,
+    diagnosticDefinitions.KV414.message,
     fact.detail ?? '',
   ]
     .filter(Boolean)

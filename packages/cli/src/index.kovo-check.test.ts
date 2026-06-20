@@ -208,10 +208,57 @@ describe('kovo check', () => {
     ).toBe(
       [
         'kovo-check/v1',
-        'WARN UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21 where eq(carts.id, args.cartId)',
+        'ERROR KV414 QUERY cartById domain=cart scope=args site=cart.queries.ts:21 Owner-table access is not scoped to the session principal (IDOR). where eq(carts.id, args.cartId)',
         '',
       ].join('\n'),
     );
+  });
+
+  it('discharges an owner-domain arg access guarded by owns() (SPEC §10.3)', () => {
+    const base = {
+      ownerDomains: [{ domain: 'order', owner: 'userId' }],
+      scopeAudits: [
+        {
+          domain: 'order',
+          kind: 'query',
+          name: 'orderById',
+          scope: 'args',
+          site: 'order.queries.ts:12',
+        },
+      ],
+    };
+    // Without an owns() guard, an owner-domain arg access is the enforced KV414 IDOR error.
+    expect(
+      kovoCheck({
+        ...base,
+        queries: [{ domains: ['order'], guards: ['authed'], query: 'orderById' }],
+      }).output,
+    ).toContain('ERROR KV414 QUERY orderById domain=order');
+    // An owns() guard in the chain discharges it (SPEC §10.3).
+    expect(
+      kovoCheck({
+        ...base,
+        queries: [{ domains: ['order'], guards: ['authed', 'owns'], query: 'orderById' }],
+      }).output,
+    ).not.toContain('KV414');
+  });
+
+  it('suppresses KV414 with a recorded public-read justification (SPEC §10.3)', () => {
+    const result = kovoCheck({
+      ownerDomains: [{ domain: 'order', owner: 'userId' }],
+      scopeAudits: [
+        {
+          domain: 'order',
+          justification: 'aggregate order count is intentionally public',
+          kind: 'query',
+          name: 'publicOrderCount',
+          scope: 'args',
+          site: 'order.queries.ts:30',
+        },
+      ],
+    });
+    expect(result.output).not.toContain('KV414');
+    expect(result.exitCode).toBe(0);
   });
 
   it('reports unguarded queries and pages alongside mutations', () => {
@@ -918,6 +965,39 @@ describe('kovo check', () => {
         '',
       ].join('\n'),
     });
+  });
+
+  it('flags KV418 when a csrf-exempt endpoint depends on the session (SPEC §9.1)', () => {
+    const viaGuard = kovoCheck({
+      endpoints: [
+        {
+          csrf: 'exempt',
+          csrfJustification: 'mobile client',
+          guards: ['authed'],
+          method: 'POST',
+          name: 'api/sync',
+          path: '/api/sync',
+        },
+      ],
+    });
+    expect(viaGuard.output).toContain('KV418');
+    expect(viaGuard.exitCode).not.toBe(0);
+
+    // A signature-verifier webhook (not session-derived) is the legitimate exempt pattern.
+    expect(
+      kovoCheck({
+        endpoints: [
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+          },
+        ],
+      }).output,
+    ).not.toContain('KV418');
   });
 
   it('audits manual invalidate escape-hatch usage', () => {

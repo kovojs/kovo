@@ -14,7 +14,7 @@ import type {
   SymbolicMatch,
   SymbolicValue,
 } from '@kovojs/core/internal/derivation';
-import type { TouchGraph, TouchGraphEntry } from '@kovojs/core/internal/graph';
+import type { ScopeAuditFact, TouchGraph, TouchGraphEntry } from '@kovojs/core/internal/graph';
 import {
   Node,
   Project,
@@ -160,8 +160,69 @@ export interface QueryFact {
   };
   query: string;
   reads: readonly string[];
+  /** Domains this query anchors to `req.session.*` (session-scoped, SPEC §11.1). */
+  sessionAnchoredReads?: readonly string[];
   shape: QueryShape;
   site: string;
+}
+
+/**
+ * Scope-audit facts for reads of an `owner:`-annotated domain (SPEC §10.3). The
+ * KV414 IDOR signal is precisely a **client-visible `args.*` key**, so this emits:
+ * `args` for an arg-keyed read (the IDOR candidate the CLI enforces unless an
+ * `owns()` guard discharges it) and `session` for a directly `req.session`-anchored
+ * read (safe). A read that is **neither** — e.g. one keyed by a local bound from
+ * the session (`const userId = …session…; where(eq(col, userId))`) — emits **no
+ * fact**: it is not a client-controlled key, so it is not the IDOR pattern, and
+ * skipping it avoids false-positiving a safe app without needing inter-procedural
+ * session data-flow tracing.
+ */
+export function scopeAuditsFromQueryFacts(
+  facts: readonly QueryFact[],
+  ownerDomains: Iterable<string>,
+): ScopeAuditFact[] {
+  const owners = new Set(ownerDomains);
+  const audits: ScopeAuditFact[] = [];
+
+  for (const fact of facts) {
+    for (const domain of fact.reads) {
+      if (!owners.has(domain)) continue;
+
+      const argKeyed =
+        fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:');
+      if (argKeyed) {
+        audits.push({ domain, kind: 'query', name: fact.query, scope: 'args', site: fact.site });
+        continue;
+      }
+
+      if ((fact.sessionAnchoredReads ?? []).includes(domain)) {
+        audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
+      }
+    }
+  }
+
+  return audits;
+}
+
+/**
+ * The owner-domain facts (`{ domain, owner }`) derived from `owner:`-annotated
+ * Drizzle tables (SPEC §10.1). These tell the CLI audit which domains are
+ * principal-owned, so a scope-audit fact for them is enforced as KV414.
+ */
+function ownerDomainsFromTables(
+  tables: Iterable<ExtractedTable>,
+): { domain: string; owner: string }[] {
+  const byDomain = new Map<string, string>();
+  for (const table of tables) {
+    if (!table.annotation || !isDomainExtractedTableAnnotation(table.annotation)) continue;
+    const owner = table.annotation.owner;
+    if (typeof owner === 'string' && !byDomain.has(table.annotation.domain)) {
+      byDomain.set(table.annotation.domain, owner);
+    }
+  }
+  return [...byDomain]
+    .map(([domain, owner]) => ({ domain, owner }))
+    .sort((a, b) => (a.domain < b.domain ? -1 : a.domain > b.domain ? 1 : 0));
 }
 
 /** @internal */
@@ -354,6 +415,45 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
       sourceContext,
       (file) => projectFunctionsForFile(file, projectFunctionExtractions),
     );
+  } finally {
+    extraction.dispose();
+  }
+}
+
+/**
+ * Produce the owner/IDOR audit facts for a project (SPEC §10.1/§10.3): the
+ * `ownerDomains` derived from `owner:` annotations, and the `scopeAudits` for
+ * owner-domain reads (a client-arg-keyed read -> KV414 unless `owns()`-discharged;
+ * a directly `req.session`-anchored read -> safe). The graph emission feeds these
+ * into `kovo check`.
+ *
+ * @internal
+ */
+export function extractOwnerAuditFromProject(options: TouchGraphProjectOptions): {
+  ownerDomains: { domain: string; owner: string }[];
+  scopeAudits: ScopeAuditFact[];
+} {
+  const ownerDomains = ownerDomainsFromProject(options);
+  const scopeAudits = scopeAuditsFromQueryFacts(
+    extractQueryFactsFromProject(options),
+    ownerDomains.map((owner) => owner.domain),
+  );
+  return { ownerDomains, scopeAudits };
+}
+
+function ownerDomainsFromProject(
+  options: TouchGraphProjectOptions,
+): { domain: string; owner: string }[] {
+  const extraction = createProjectExtraction(options);
+  try {
+    const sourceContext = projectSourceModuleContext(extraction);
+    const tables: ExtractedTable[] = [];
+    for (const file of projectContextFiles(extraction)) {
+      for (const entries of tablesForFile(file, sourceContext).values()) {
+        tables.push(...entries);
+      }
+    }
+    return ownerDomainsFromTables(tables);
   } finally {
     extraction.dispose();
   }
@@ -2042,11 +2142,16 @@ function extractQueryFactsFromPreparedFiles(
       const allReads = [...new Set([...reads, ...helperReads])].sort();
       if (!query.hasSelection && allReads.length === 0 && diagnostics.length === 0) continue;
 
+      const sessionAnchoredReads = querySessionAnchoredDomains(
+        query.instanceKeyComparisons,
+        fileTables,
+      );
       facts.push({
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
         ...queryInstanceKey(query.instanceKeyComparisons, fileTables),
         query: query.query,
         reads: allReads,
+        ...(sessionAnchoredReads.length > 0 ? { sessionAnchoredReads } : {}),
         shape: query.shape,
         site,
       });
@@ -3142,6 +3247,7 @@ interface QueryInstanceKeyComparison {
 
 interface QueryInstanceKeyOperand {
   inputKey?: string;
+  sessionKey?: boolean;
   tableKey?: {
     key: string;
     tableIdentifier: string;
@@ -5425,6 +5531,42 @@ function queryInstanceKey(
   return null;
 }
 
+/**
+ * The domains a query's `where` predicates anchor to `req.session.*` (SPEC §11.1
+ * session-traceability). A read of an owner-annotated domain anchored this way is
+ * session-scoped (not IDOR), so it discharges KV414.
+ */
+function querySessionAnchoredDomains(
+  comparisons: readonly QueryInstanceKeyComparison[],
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly string[] {
+  const domains = new Set<string>();
+  for (const comparison of comparisons) {
+    const domain = sessionAnchoredDomainFromEqOperands(comparison.left, comparison.right, tables);
+    if (domain) domains.add(domain);
+  }
+  return [...domains].sort();
+}
+
+function sessionAnchoredDomainFromEqOperands(
+  left: QueryInstanceKeyOperand,
+  right: QueryInstanceKeyOperand,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string | null {
+  const candidates = [
+    { sessionKey: right.sessionKey, tableKey: left.tableKey },
+    { sessionKey: left.sessionKey, tableKey: right.tableKey },
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.sessionKey || !candidate.tableKey) continue;
+    const tableKey = resolvedQueryTableKey(candidate.tableKey, tables);
+    if (tableKey) return tableKey.domain;
+  }
+
+  return null;
+}
+
 function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
@@ -5459,7 +5601,24 @@ function queryInstanceKeyOperand(
   return {
     ...queryTableKeyOperand(expression, readTableIdentifier),
     ...queryInputKeyOperand(expression),
+    ...querySessionKeyOperand(expression),
   };
+}
+
+/**
+ * Detects a session-anchored predicate operand (SPEC §11.1): a static access
+ * chain rooted at a non-`input` identifier (`req`/`request`/`ctx`) whose path
+ * includes `session` — e.g. `req.session.cartId`. `req.session.*` is the trusted
+ * principal the `sessionProvider` sets server-side, so a key predicate anchored
+ * to it makes an owner-table access session-scoped (not IDOR). A non-static
+ * operand (a call, etc.) is NOT session-anchored — the scope classifier then
+ * fails closed.
+ */
+function querySessionKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'sessionKey'> {
+  const segments = staticAccessSegments(expression);
+  if (!segments) return {};
+  if (Node.isIdentifier(segments.root) && segments.root.getText() === 'input') return {};
+  return segments.path.includes('session') ? { sessionKey: true } : {};
 }
 
 function queryTableKeyOperand(
@@ -5949,12 +6108,14 @@ function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   }
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
-  const key = stringPropertyFromObject(annotationObject, 'key');
+  const key = columnNamePropertyFromObject(annotationObject, 'key');
+  const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const fans = fanAnnotationsFromObject(annotationObject);
   return {
     domain,
     ...(fans.length > 0 ? { fans } : {}),
     ...(key ? { key } : {}),
+    ...(owner ? { owner } : {}),
     name: tableName,
   };
 }
@@ -6033,6 +6194,48 @@ function stringPropertyFromObject(object: Node, name: string): string | undefine
   return undefined;
 }
 
+/**
+ * Resolve a Kovo column reference (SPEC §10.1) from a property initializer: a
+ * string-literal column name, or a `(table) => table.column` selector (the
+ * Drizzle idiom — read statically here, never called at runtime). Returns the
+ * referenced column name in both forms.
+ */
+function columnRefName(initializer: Node | undefined): string | undefined {
+  if (!initializer) return undefined;
+  if (Node.isStringLiteral(initializer)) return initializer.getLiteralText();
+  if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) {
+    return undefined;
+  }
+  let body: Node | undefined = initializer.getBody();
+  if (body && Node.isBlock(body)) {
+    const returnStatement = body
+      .getStatements()
+      .find((statement) => Node.isReturnStatement(statement));
+    body =
+      returnStatement && Node.isReturnStatement(returnStatement)
+        ? returnStatement.getExpression()
+        : undefined;
+  }
+  while (body && Node.isParenthesizedExpression(body)) body = body.getExpression();
+  if (body && Node.isPropertyAccessExpression(body)) return body.getName();
+  if (body && Node.isElementAccessExpression(body)) {
+    const argument = body.getArgumentExpression();
+    if (argument && Node.isStringLiteral(argument)) return argument.getLiteralText();
+  }
+  return undefined;
+}
+
+/** Like `stringPropertyFromObject` but also accepts a `(t) => t.col` column selector (SPEC §10.1). */
+function columnNamePropertyFromObject(object: Node, name: string): string | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+    return columnRefName(property.getInitializer());
+  }
+  return undefined;
+}
+
 function booleanPropertyFromObject(object: Node, name: string): boolean | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
 
@@ -6082,7 +6285,7 @@ function fanAnnotationsFromObject(object: Node): KovoFanAnnotation[] {
     if (!Node.isObjectLiteralExpression(element)) return [];
 
     const domain = stringPropertyFromObject(element, 'domain');
-    const via = stringPropertyFromObject(element, 'via');
+    const via = columnNamePropertyFromObject(element, 'via');
     if (!domain || !via) return [];
 
     const when = stringPropertyFromObject(element, 'when');

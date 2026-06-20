@@ -254,3 +254,35 @@ function isSqlHandleLike(value: unknown): value is object {
 
   return handleMethodCount >= 2;
 }
+
+/**
+ * SPEC §11.2 runtime cross-check for KV414 (IDOR): assert that every row a query
+ * returned from an `owner:`-annotated table belongs to the session principal. This
+ * is the runtime half of the static KV414 gate (§10.3) — run under instrumentation
+ * it catches a branch-hidden or smuggled owner-table read that fetched another
+ * principal's row, which the §11.1 static predicate analysis can miss. Static
+ * over-approximates (all branches); this under-approximates (the executed read),
+ * so the two are independent cross-checks of the same invariant.
+ *
+ * @param options.rows - The rows the owner-table read returned.
+ * @param options.ownerColumn - The principal-owning column (the table's `owner:`, §10.1).
+ * @param options.principal - The session principal (e.g. `req.session.user.id`).
+ * @param options.domain - The owner domain, for the diagnostic message.
+ * @throws if any returned row's owner column is not the principal (cross-principal leak).
+ * @internal
+ */
+export function assertOwnerRowsScoped(options: {
+  rows: readonly Record<string, unknown>[];
+  ownerColumn: string;
+  principal: unknown;
+  domain: string;
+}): void {
+  const leaked = options.rows.filter((row) => row[options.ownerColumn] !== options.principal);
+  if (leaked.length === 0) return;
+
+  const foreignOwners = [...new Set(leaked.map((row) => String(row[options.ownerColumn])))];
+  throw new Error(
+    `KV414 (runtime §11.2): a query returned ${leaked.length} ${options.domain} row(s) owned by ` +
+      `${foreignOwners.join(', ')}, not the session principal ${String(options.principal)} — IDOR.`,
+  );
+}

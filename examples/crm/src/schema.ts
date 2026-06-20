@@ -16,7 +16,8 @@ export const contacts = pgTable(
     company: text('company').notNull().default('Independent'),
     title: text('title').notNull().default('Contact'),
   },
-  kovo({ domain: 'contact', key: 'id' }),
+  // SPEC §10.1: contacts are owned by the CRM user (ownerId).
+  kovo({ domain: 'contact', key: (t) => t.id, owner: (t) => t.ownerId }),
 );
 
 export const deals = pgTable(
@@ -30,7 +31,8 @@ export const deals = pgTable(
     // Human deal name shown in the pipeline.
     title: text('title').notNull().default('New opportunity'),
   },
-  kovo({ domain: 'deal', key: 'id' }),
+  // SPEC §10.1: deals are owned by the CRM user (ownerId).
+  kovo({ domain: 'deal', key: (t) => t.id, owner: (t) => t.ownerId }),
 );
 
 export const activities = pgTable(
@@ -41,5 +43,5 @@ export const activities = pgTable(
     kind: text('kind').notNull(),
     note: text('note').notNull(),
   },
-  kovo({ domain: 'activity', key: 'id' }),
+  kovo({ domain: 'activity', key: (t) => t.id }),
 );

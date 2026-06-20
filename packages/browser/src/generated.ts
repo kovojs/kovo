@@ -34,7 +34,13 @@ export {
   kovoTrustedHtmlContent,
   isBrowserTrustedHtml,
   isKovoTrustedHtml,
+  isKovoTrustedUrl,
 } from './security-output.js';
-export type { BrowserTrustedHTML, KovoOutputContext, TrustedHtml } from './security-output.js';
+export type {
+  BrowserTrustedHTML,
+  KovoOutputContext,
+  TrustedHtml,
+  TrustedUrl,
+} from './security-output.js';
 export { derive } from './derive.js';
 export type { DeriveDefinition } from './derive.js';

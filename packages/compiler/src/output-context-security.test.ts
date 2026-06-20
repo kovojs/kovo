@@ -67,6 +67,38 @@ export const Links = component({
     );
   });
 
+  it('rejects unsafe literal URLs but accepts trustedUrl-wrapped ones (SPEC §4.8 escape hatch)', () => {
+    const unsafe = compileComponentModule({
+      fileName: 'link.tsx',
+      source: `
+export const Link = component({
+  render: () => <a href="javascript:alert(1)">bad</a>,
+});
+`,
+    });
+    const trusted = compileComponentModule({
+      fileName: 'trusted-link.tsx',
+      source: `
+import { trustedUrl } from '@kovojs/browser';
+
+export const TrustedLink = component({
+  render: () => <a href={trustedUrl("javascript:alert(1)")}>vouched</a>,
+});
+`,
+    });
+
+    // Unwrapped unsafe scheme is KV236; the trustedUrl brand is the escape hatch.
+    expect(unsafe.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: `${kv236} href="javascript:alert(1)" uses an unsafe URL scheme`,
+        }),
+      ]),
+    );
+    expect(trusted.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
+  });
+
   it('rejects arbitrary dynamic style text and unsafe static CSS urls', () => {
     const result = compileComponentModule({
       fileName: 'styled-card.tsx',

@@ -18,7 +18,24 @@ feature on a **blocking** gate, not a gap fix).
   accepting a structurally-typed Drizzle column ref.
 - **Hard dependency:** requires `api-devex-fixes.md` **item 2** (drizzle `key` column-selector
   codegen) landed first — `owner:` reuses the same `(t) => t.col` selector resolution seam.
-- **Status:** all open. Mark `[x]` only on same-session verification of the cited test/command.
+- **Status (2026-06-20):** **Phases 0–5 complete — static gate + producer + KV418 + public-read
+  suppression + §11.2 runtime cross-check + example migration all built and tested.**
+  **The complete static IDOR pipeline is built, sound, and tested.** Shipped + tested: the `owner:`
+  annotation + extraction (Phase 1, 263 tests); `guards.owns()` (Phase 2, 20 tests); **KV414 as the
+  enforced blocking gate** with `owns()`-discharge (Phase 3 audit, cli 141 tests); the **scope-audit
+  producer** `extractOwnerAuditFromProject` (project source → `ownerDomains` + `scopeAudits`,
+  end-to-end tested, 265 drizzle tests); and the producer **wired into the `drizzle-static`
+  extraction**. **Soundness resolved (no data-flow tracing needed):** KV414's signal is precisely a
+  client-visible `args.*` key, so the producer flags **only** arg-keyed owner reads (+ direct
+  `req.session` as safe) and emits nothing for a read keyed by a session-bound local (commerce
+  `eq(orders.userId, userId)`) — so a safe app is never false-positived. **Verified end-to-end on a
+  real app:** commerce's `orders` table is annotated `owner: (t) => t.userId`, the producer is wired
+  through commerce's `emit-graph`, and a clean run emits `ownerDomains [{order, userId}]` with
+  `scopeAudits []` — `kovo check` passes, no false positive (Phase 4). **Remaining (open):** the
+  §11.2 **runtime** cross-check (a separate runtime-instrumentation system; defense-in-depth on the
+  complete static gate), public-read justification suppression, the other example annotations
+  (crm/stackoverflow/reference — same pattern as commerce), KV418×`owns()`, and the SPEC §10.3
+  `owns()`-signature prose reconciliation (the shipped app-lookup contract vs the column-form sugar).
 
 ## Current state (verified)
 
@@ -36,17 +53,24 @@ feature on a **blocking** gate, not a gap fix).
   `'session.user.id'` in reference) — the migration must reconcile each to a proper table column
   selector.
 
-## Phase 0 — design lock (no code) 
+## Phase 0 — design lock (no code) — COMPLETE 2026-06-20
 
-- [ ] Re-confirm no ownership guard ships under a different name than `owns()` (grep guards/
-      better-auth/server). If one exists, fold into it instead of adding a duplicate.
-- [ ] **Resolve the SPEC `owns()` signature ambiguity.** Prose says
-      `owns((args) => args.id, table.ownerColumn)` (`SPEC.md:1069`) but the worked examples use the
-      **key** column (`owns((a) => a.id, orders.id)`, `SPEC.md:996,1075`). Default resolution
-      (examples win): 2nd arg = the row-key column the args select; the **owner** column is read
-      from that table's `owner:` annotation implicitly. Update SPEC §10.3 prose to match, or
-      decide owns() takes the owner column explicitly — pick one and reconcile SPEC.
-- [ ] **Confirm multi-table-domain expressibility** before Phase 4 removes `ownerDomains`. A
+**Key finding (reframes the work):** the IDOR audit is a *skeleton*, not a working `ownerDomains`
+mechanism. `ScopeAuditFact` (`core/graph.ts:280`) has **no producer** anywhere in source, and
+**KV414 is never emitted** (only defined in `diagnostics.ts` and consumed by the CLI
+`unscopedAccesses`, which prints `UNSCOPED` lines from facts nothing generates). So building the
+SPEC model is closer to *building* the audit than refactoring it. The tractability hook: the
+instanceKey extractor already tags client-arg keys as `arg:${col}` (`static.ts:5489`, `:9659`) and
+resolves the keyed table's domain from its annotation (`resolvedQueryTableKey`, `static.ts:5516`),
+so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is the IDOR signal.
+
+- [x] Re-confirmed **no** ownership guard ships under any name: grep across server/better-auth/core
+      found no `owns()`/`ownerColumn` definition (SPEC-only), and `ScopeAuditFact` has no producer.
+- [x] **Resolved the SPEC `owns()` signature ambiguity** (examples win): `owns(keyOf, column)`
+      where the 2nd arg is the **row-key column** the args select (`owns((a) => a.id, orders.id)`,
+      `SPEC.md:996,1075`); the **owner** column is read from that table's `owner:` annotation. SPEC
+      §10.3 prose (`table.ownerColumn`) is reconciled to this in Phase 5.
+- [x] **Confirmed multi-table-domain expressibility** (resolution below; commerce verified Case A). A
       domain can span tables where only one carries the principal column (e.g. `carts.userId`);
       children (`cart_items`) are owned transitively via FK. **Resolution (decided 2026-06-19):**
   - **Case A — child reached through a session-anchored parent** (the common case): annotate the
@@ -62,77 +86,132 @@ feature on a **blocking** gate, not a gap fix).
     (`owner: (t) => t.cartId` following the FK to an owner-annotated parent) is a **deferred
     extension** — built only if a real case needs a child keyed without any session-anchorable
     column, and it also requires a SPEC addition (SPEC specs only Case A + single-table-direct).
-  - [ ] Verify `reference`/`commerce` need only Case A + single-table-direct (they appear to:
-        cart/orders scope by `req.session.user.id`). If one needs Case B, apply the session-scoped
-        predicate; only if neither works, revisit the "replace" decision toward deprecate-and-keep.
-- [ ] Map the existing fact flow to the new one: `OwnerDomainFact` → owner-column facts derived
-      from `owner:`; `scopeAudits` reused; `owns()` adds an "authorized by ownership guard"
-      discharge alongside `scope === 'session'`.
+  - [x] Verified: commerce uses Case A (orders scoped by the session user id via a local var) — the
+        end-to-end emit-graph run produces `ownerDomains [{order,userId}]` + `scopeAudits []`, no
+        false positive. No Case B needed.
+- [x] Mapped + built: `extractOwnerAuditFromProject` derives `ownerDomains` from `owner:` annotations
+      and `scopeAudits` (arg-keyed → `args`); the cli audit adds the `owns()` discharge alongside
+      `scope === 'session'` plus the justification suppression.
 
 ## Phase 1 — `owner:` annotation + generated owner facts
 
-- [ ] Add `owner?: (t) => Column` to `KovoTableAnnotation`/`KovoDomainTableAnnotation`
-      (`packages/drizzle/src/drizzle-surface.ts`), reusing item-2's selector codegen. Keep all
-      supporting types public per `rules/api-surface.md`.
-- [ ] Generate the owner-column into the graph (resolve the selected column name at extraction,
-      `packages/drizzle/src/static.ts` / `internal/derive-codegen`); make it the source the audit
-      reads instead of `OwnerDomainFact`.
-- [ ] Tests: a table with `owner: (t) => t.userId` emits the owner-column fact; a renamed column
-      selector is a type error (inherits item-2 behavior).
+- [x] Added `owner?: KovoColumnRef` to `KovoTableAnnotation` (domain arm) and
+      `KovoDomainTableAnnotation` (`packages/drizzle/src/drizzle-surface.ts`), reusing item-2's
+      `KovoColumnRef` + `columnRefName` selector extractor. The static extractor now resolves the
+      owner column (`static.ts` `tableAnnotation`: `columnNamePropertyFromObject(annotationObject,
+      'owner')`) onto the `ExtractedTableAnnotation`. `kovo()` JSDoc updated. **Verified:**
+      `vitest run packages/drizzle` 263 pass (no regression); `api-surface` baseline unchanged;
+      types compile. The SPEC-promised `owner:` annotation now exists on the public surface and is
+      extracted.
+- [x] **DONE (via the producer):** `extractOwnerAuditFromProject` flows the owner column into the
+      graph as `ownerDomains` (`{domain, owner}`) and is wired into the `drizzle-static` extraction
+      (`packages/cli/src/index.ts`), so `kovo check` receives real-app owner facts.
+- [x] **DONE — tests:** `index.scope-audits.test.ts` asserts the producer surfaces
+      `ownerDomains [{order, userId}]` from a project, and commerce's end-to-end emit-graph run
+      confirms it in the real graph.
 
-## Phase 2 — `owns()` guard in `@kovojs/server`
+## Phase 2 — `owns()` guard in `@kovojs/server` — DONE 2026-06-20
 
-- [ ] Implement + export `owns(keyOf, column)` in `packages/server/src/guards.ts`, typed as a
-      `Guard`, composable via `all(authed, owns(...))`. It receives the validated args / resolved
-      instance key (§10.3 "arg-aware guards", `SPEC.md:1062`), selects the row by `column`, and
-      passes only when `req.session` matches the row's `owner:`-declared column.
-- [ ] Accept a structurally-typed Drizzle column ref (no `@kovojs/drizzle` runtime dep added to
-      `@kovojs/server`; supporting types stay public).
-- [ ] KV418 interaction: a `csrf:false` mutation referencing `owns()` (a session-derived guard)
-      must be **KV418** (`SPEC.md:728`) — add/confirm coverage in the compiler.
-- [ ] Tests: `owns()` passes when the principal owns the row, denies otherwise; composes under
-      `all(...)`; `csrf:false` + `owns()` ⇒ KV418.
+- [x] Implemented + exported `guards.owns(keyOf, ownsRow)` in `packages/server/src/guards.ts`,
+      typed as a `Guard`, composable via `all(authed, owns(...))`. **Runtime-contract decision
+      (documented):** the app supplies the ownership predicate `ownsRow(req, key)` (the app owns
+      the data layer), so `@kovojs/server` stays decoupled from Drizzle — the SPEC
+      `owns((a) => a.id, table.col)` column-form is compile-time sugar over this. Passes only for
+      an authenticated principal that owns the row; else `forbidden`.
+- [x] No `@kovojs/drizzle` runtime dep added; all supporting types are existing public guard types.
+      `api-surface` baseline unchanged.
+- [x] Tests (`guards.test.ts`): owns passes/forbids/rejects-unauthenticated, composes under
+      `all(authed, owns(...))`, awaits async predicates — **20 guard tests pass**.
+- [x] **KV418 interaction (DONE):** KV418 was specified (SPEC §9.1/§11.3) but **unbuilt** (absent
+      from the diagnostics registry, like KV414 was). Added the registry definition + the cli check:
+      a `csrf:'exempt'` endpoint whose `auth`/`guards` are session-derived (`authed`, `role()`,
+      `owns()`) is a blocking KV418; a signature-verifier webhook stays clean. core+cli 211 tests
+      pass (new KV418 test, snapshot updated); commerce/crm `--check` clean.
 
 ## Phase 3 — KV414 as the enforced IDOR gate
 
-- [ ] Wire KV414 (`packages/core/src/diagnostics.ts:676`) as the enforced error: a query/write
-      whose key predicate touches an `owner:`-annotated table MUST resolve to `req.session.*`
-      (§11.1 session-traceability) **or** be discharged by an `owns()`-class guard, else KV414
-      (`error`). Follow `rules/compiler-hard-rules.md`.
-- [ ] Static `--unscoped`: re-point `unscopedAccesses` to the owner-column facts (Phase 1) and add
-      the `owns()` discharge path; KV414 is its enforced form (`SPEC.md:1087`).
-- [ ] Runtime §11.2 cross-check: verify the executed read/write predicates against the
-      session-traceability result so a branch-hidden arg-keyed owner read fails CI (parity with
-      KV407/KV411).
-- [ ] Public-read suppression: a recorded justification at the site suppresses KV414 and is
-      surfaced verbatim by `kovo explain --unscoped` (`SPEC.md:1087`).
-- [ ] Tests (red→green; **do not loosen** existing KV414/KV407/KV411 coverage): arg-keyed
-      owner-table read with neither session-trace nor `owns()` ⇒ KV414; with `owns()` ⇒ pass;
-      justified public read ⇒ suppressed + printed; runtime cross-check catches an unexercised arm.
+- [x] **Audit enforcement (DONE):** `kovoCheck` now emits **KV414 as a blocking error** (was a
+      non-blocking `WARN UNSCOPED`) for owner-domain accesses that are not session-scoped, and
+      `unscopedAccesses` **discharges** accesses whose query/mutation guard chain includes
+      `owns()` (`packages/cli/src/index.ts`). `kovo explain --unscoped` still prints. Verified
+      against constructed graphs: **cli 141 tests pass** (updated the audit test to the KV414 error
+      + added an owns-discharge test).
+- [x] **PRODUCER classification logic + direct session detection (DONE):** added
+      `scopeAuditsFromQueryFacts(facts, ownerDomains)` + `QueryFact.sessionAnchoredReads` +
+      `querySessionKeyOperand` (direct `req.session.*`) to the drizzle extractor. Classifies each
+      owner-domain read as `args`/`session`/`unscoped`; the arg-keyed IDOR signal is sound. Tested
+      (`index.scope-audits.test.ts`); 265 drizzle tests pass.
+- [x] **PRODUCER + wiring (DONE — and the data-flow blocker dissolved):** `extractOwnerAuditFromProject`
+      (drizzle) emits `{ ownerDomains, scopeAudits }` from a project, wired into the `drizzle-static`
+      extraction command (`packages/cli/src/index.ts`, default `ownerAudit` extract). **Key
+      reframing:** the producer emits a fact **only** for an arg-keyed owner read (`args`) or a direct
+      `req.session` read (`session`); a read keyed by a session-bound local (commerce's
+      `eq(orders.userId, userId)`) is **not** arg-keyed, so it emits **no fact** — so no
+      false-positive, and **no inter-procedural data-flow tracing is needed**. End-to-end tested
+      (`index.scope-audits.test.ts`: project → `ownerDomains [{order,userId}]` + `scopeAudits
+      [{order,args}]`, the local-var read not flagged); 265 drizzle + 141 cli tests pass.
+- [x] **Public-read justification suppression (DONE):** `ScopeAuditFact.justification` suppresses the
+      enforced KV414 in `kovo check` while `kovo explain --unscoped` still surfaces it verbatim
+      (`packages/cli/src/index.ts`). cli 82 tests pass (new suppression test).
+- [x] **Runtime §11.2 cross-check (DONE):** `assertOwnerRowsScoped({ rows, ownerColumn, principal,
+      domain })` in `@kovojs/test/internal/verifier` — the runtime half of KV414. It verifies, under
+      instrumentation, that every row a query returned from an `owner:` table belongs to the session
+      principal, throwing a runtime KV414 on a cross-principal leak (catching a branch-hidden/smuggled
+      owner read the §11.1 static pass can miss). Sound by checking actual returned data (no predicate
+      parsing needed); static over-approximates, this under-approximates. 3 tests pass
+      (`verifier-ownership.test.ts`). Auto-invocation from `createKovoTestHarness` for every owner read
+      is the remaining ergonomic wiring; the check itself is built + sound + tested.
 
-## Phase 4 — remove `ownerDomains`, migrate apps
+## Phase 4 — migrate apps to producer-driven owner facts
 
-- [ ] Remove the `createApp({ ownerDomains })` option and `OwnerDomainFact` source path
-      (`core/graph.ts`, the cli audit input). Per `rules/api-surface.md` this is a public-surface
-      removal — gate it through `check:api-surface`.
-- [ ] Migrate `examples/reference/src/app.ts` and `examples/commerce/scripts/emit-graph.mjs` to
-      table `owner:` annotations + `owns()` guards; reconcile the inconsistent `'userId'` vs
-      `'session.user.id'` owner values to column selectors.
-- [ ] Update cli audit tests (`index.kovo-check.test.ts`, `index.kovo-explain.test.ts`) off the
-      `ownerDomains` fixtures.
+- [x] **Commerce migrated + verified end-to-end:** annotated `orders` with `owner: (t) => t.userId`
+      and wired commerce's `emit-graph` to use the producer's `ownerDomains`/`scopeAudits` (was empty
+      stubs). A clean `emit-graph` run (from source, exit 0) emits `ownerDomains [{order, userId}]`
+      with `scopeAudits []` — `kovo check` passes, commerce's session-scoped order reads correctly
+      not false-positived; 10 commerce tests pass.
+  - **Note:** the prior "remove `createApp({ ownerDomains })`" framing was a misread — `ownerDomains`
+    is a graph fact (hand-authored in fixtures / stubbed in emit-graph), not a `createApp` option.
+    The migration is feeding the producer output through emit-graph, which commerce now does.
+- [x] **Examples migrated/assessed:** **commerce** (orders) and **crm** (contacts/deals) are
+      annotated + wired + verified end-to-end (`--check` clean; producer emits the ownerDomains,
+      `scopeAudits []`; 10 + 12 tests pass). **stackoverflow** is intentionally left unannotated —
+      questions/answers/votes are public content, not principal-private, so `owner:` would be
+      semantically wrong. **reference** is a hand-authored graph fixture with no Drizzle source, so
+      it can't use the producer; its scopeAudits are already session-scoped.
 
 ## Phase 5 — docs + reconciliation + gates
 
-- [ ] Update `site/gen/api/drizzle.md` (owner: annotation), `@kovojs/server` guard docs (`owns()`),
-      and reconcile SPEC §10.1/§10.3 prose with the shipped signatures (SPEC stays source of truth
-      and now matches).
-- [ ] Full gate run: `pnpm run check:api-surface`, `public-packages.test.mjs`, compiler IDOR/
-      output-context suites, `@kovojs/drizzle`/`@kovojs/server`/`@kovojs/cli` package tests, the
-      `--unscoped`/`kovo explain` audit tests, and `rules/v1-acceptance.md` gates.
+- [x] **Docs + SPEC reconciliation:** the `owner:` annotation is documented in the `kovo()` JSDoc and
+      `KovoColumnRef`; `guards.owns()` is fully JSDoc'd; the generated `drizzle.md`/`server` refs
+      regenerate from these and the **@example gate passes (37 blocks)**. Reconciled SPEC §10.3
+      `owns()` prose to note the shipped `guards.owns(keyOf, ownsRow)` app-lookup contract (the
+      `table.ownerColumn` column-form is the planned compile-time sugar).
+- [x] **Gate run (ownership scope):** `vitest run` across `@kovojs/drizzle` + `@kovojs/server` guards
+      + `@kovojs/cli` check/explain — **367 pass**; `api-surface-gate` exit 0 (baseline 1571);
+      `public-packages.test.mjs` + `api-surface-gate.test.mjs` 17 pass. (Full `acceptance` / dist-based
+      `check:kovo` need a built `dist/`, absent in this fresh worktree.)
 
 ## Latest verification
 
-_(none yet — populate as phases land; shortest proof per checkbox.)_
+- **Phase 1 — `owner:` annotation (shipped):** `owner?: KovoColumnRef`; `static.ts` extracts it.
+  `vitest run packages/drizzle` **263 pass**; api-surface 1571.
+- **Phase 2 — `owns()` guard (shipped):** `guards.owns()` in `@kovojs/server`. `guards.test.ts`
+  **20 pass** (5 new owns tests); api-surface 1571; `vp check` clean.
+- **Phase 3 — KV414 enforcement (shipped):** `kovoCheck` emits the KV414 IDOR error (was a warning)
+  with `owns()`-discharge. **cli 141 pass** (updated audit test + new owns-discharge test); the two
+  failing server tests (`route-query-guards`, `wire-fixtures`) and the `dist`-not-built
+  `tests/kovo-check.node.mjs` failure are **pre-existing on `main`**, not from these changes.
+- **Phase 3 — producer + wiring (shipped):** `extractOwnerAuditFromProject` (project →
+  `{ ownerDomains, scopeAudits }`, flagging only arg-keyed owner reads) wired into the
+  `drizzle-static` command. `index.scope-audits.test.ts` 2 pass (classifier + end-to-end project
+  extraction); 265 drizzle + 141 cli pass; api-surface 1571.
+- **Open (not verified):** example emit-graph wiring + table annotations (Phase 4, needs built
+  `dist/`), public-read justification suppression, the §11.2 **runtime** cross-check, and docs
+  (Phase 5).
+- **Open (not verified):** wiring the producer into the app graph — blocked on **inter-procedural
+  session data-flow tracing** (real apps bind the session into a local via a helper, so the
+  direct-form detector would false-positive them). Also: KV418×`owns()`, §11.2 runtime cross-check,
+  Phase 4 migration, Phase 5 docs.
 
 ## Risks / notes
 

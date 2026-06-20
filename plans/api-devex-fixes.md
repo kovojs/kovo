@@ -33,18 +33,29 @@ legitimately-trusted dynamic `data:`/custom-scheme URL is undismissable.
 Trusted Types' `TrustedHTML`/`TrustedScriptURL` split, and closes a no-recourse dead-end on a
 security sink.
 
-- [ ] **Runtime:** add `trustedUrl(value: string): TrustedUrl` branding `__kovoTrustedUrl: true`
-      in `security-output.ts`, beside `trustedHtml`; export from the `@kovojs/browser` public
-      barrel (mirror `trustedHtml`'s entrypoints).
-- [ ] **Sanitizer:** make `kovoSafeUrl` pass a `trustedUrl`-branded value through unchanged
-      instead of rewriting to `'#'`.
-- [ ] **Compiler (KV236):** suppress KV236 for URL-scheme sinks
-      (`href`/`src`/`action`/`formaction`/`xlink:href`/`ping`/`poster`/CSS `url()`) when the
-      lowered binding value is `trustedUrl`-branded; the brand must be author-written, never
-      compiler-derived (mirror `trustedHtml`). Follow `rules/compiler-hard-rules.md`.
-- [ ] **Tests:** (a) a `trustedUrl`-branded value reaches an `href` with **no** KV236 and **no**
-      `'#'` rewrite; (b) the same unbranded value is still KV236 + sanitized. Add to
-      `packages/compiler/src/output-context-*.test.ts`.
+- [x] **Runtime:** added `trustedUrl(value): TrustedUrl` (brand `__kovoTrustedUrl: true`) +
+      `isKovoTrustedUrl` in `security-output.ts`, beside `trustedHtml`. Exported `trustedUrl` +
+      `TrustedUrl` from the `@kovojs/browser` root barrel (`index.ts`) and `isKovoTrustedUrl` +
+      `TrustedUrl` from the generated ABI (`generated.ts`), mirroring `trustedHtml`.
+- [x] **Sanitizer:** `kovoSafeUrl` returns a `trustedUrl`-branded value verbatim; **also fixed
+      `kovoBoundAttributeValue`** (the compiler-emitted bound-attr helper) to route the RAW value
+      through `kovoSafeUrl` for URL attrs — it previously `formatOutputValue`-stringified first,
+      which would have destroyed the brand object.
+- [x] **Compiler (KV236):** no compiler change needed — KV236 fires only on *static literal*
+      unsafe URLs; wrapping in `trustedUrl(...)` makes the value a non-literal call expression
+      (exactly how `trustedHtml` already suppresses KV236), and the brand reaches the runtime
+      sanitizer. Verified by a new compiler test.
+- [x] **Tests:** runtime (`security-output.test.ts`) — `kovoSafeUrl`/`kovoBoundAttributeValue`
+      emit a `trustedUrl` brand verbatim while neutralizing unbranded `javascript:`/`data:`;
+      compiler (`output-context-security.test.ts`) — `href="javascript:alert(1)"` is KV236 but
+      `href={trustedUrl("javascript:alert(1)")}` has **no** KV236; export assertion
+      (`index-exports.test.ts`) updated for the new root export.
+
+  **Verified:** full `@kovojs/browser` suite 77 files / **454 pass** (the `kovoBoundAttributeValue`
+  refactor regression-free) + the 4 focused test files 18/18; `api-surface-gate.mjs` exit 0
+  (baseline 1571 — `trustedUrl`/`TrustedUrl`/`isKovoTrustedUrl` documented); `@kovojs/site api:check`
+  37 @example blocks typecheck (browser exports 490→492); `vp check` reports my files clean (no
+  type/lint errors). SPEC §4.8 and KV236 now match the shipped surface (no SPEC edit needed).
 
 ## 2. drizzle `key` accepts a column selector `(t) => t.id` — **High** · Decided: **Ship selector**
 
@@ -56,17 +67,31 @@ extra-config callback that receives the table, so the typed columns object is av
 **Decided 2026-06-19 — Ship the selector:** spec-conformant + Drizzle-idiomatic + strictly better
 ergonomics (type-safe, rename-safe, autocomplete). **Land before #3** (shared mechanism).
 
-- [ ] **Public type:** widen `key` on `KovoTableAnnotation`/`KovoDomainTableAnnotation` to accept a
-      column selector `(t) => Column` (optionally `| string` for back-compat). Keep all supporting
-      types public (no internal type leak) per `rules/api-surface.md`.
-- [ ] **Codegen:** resolve the selected column's name at extraction
-      (`packages/drizzle/src/static.ts` / `internal/derive-codegen`) so the generated reverse
-      index / `DomainKey` / key extractor read the column the selector returns. This is the reusable
-      selector seam #3 depends on.
-- [ ] **Examples + docs:** migrate the 3 example schemas to `key: (t) => t.id`; refresh
-      `site/gen/api/drizzle.md`.
-- [ ] **Tests:** a selector-keyed table generates the same key extractor as the string form did; a
-      renamed-column selector is a type error. Extend the drizzle extraction tests.
+- [x] **Public type:** added `export type KovoColumnRef = string | ((table: Record<string, unknown>)
+      => unknown)` (documented) and widened `key` on `KovoTableAnnotation`/`KovoDomainTableAnnotation`
+      and `via` on `KovoFanAnnotation` to it (`packages/drizzle/src/drizzle-surface.ts`). All
+      supporting types public; api-surface gate stays at baseline 1571.
+- [x] **Codegen:** added `columnRefName` + `columnNamePropertyFromObject` in
+      `packages/drizzle/src/static.ts` (handles string literal, `(t) => t.col`, block-body, and
+      `t['col']` bracket forms) and routed `key` + fan `via` extraction through it. Downstream
+      consumes the resolved column **name string** unchanged — this is the reusable selector seam #3
+      reuses for `owner:`.
+- [x] **Examples:** migrated all 3 example schemas (commerce/crm/stackoverflow, 9 sites) to
+      `key: (t) => t.id`. `site/gen/api/drizzle.md` regenerates from the updated `kovo` `@example`
+      (now selector form) — verified by the `@example` gate.
+- [x] **Tests:** new `packages/drizzle/src/index.key-selector.test.ts` — a selector-keyed read
+      derives the **same `instanceKey` (`arg:cartId`)** as the string form (full query-fact parity),
+      plus block-body + bracket-access variants. **Note:** TS-level rename-safety isn't achievable
+      for the SPEC `kovo({ key: (t) => t.id })` shape (kovo can't infer the table type, so `t` is a
+      permissive record); the column is resolved **statically by the compiler**, so the selector is
+      at parity with the string form. A column-existence diagnostic (true rename-error) is a possible
+      follow-up, not added here.
+
+  **Verified:** `vitest run packages/drizzle` 261 pass (string regression) + new selector test 2/2;
+  example graph/invalidation tests (`crm/graph`, `stackoverflow/kovo-graph`, `commerce/app.add-to-cart`,
+  `commerce/app.queries`) 13/13 with the migrated selector schemas; `api-surface-gate.mjs` exit 0;
+  `@kovojs/site api:check` 37 @example blocks typecheck; `vp check` typecheck clean (the only `vp check`
+  failure is pre-existing formatting drift on 21 base files; my files reformatted clean).
 
 ## 3. Build the SPEC ownership model (`owner:` + `owns()` + KV414) — **High** · Decided: **Build full model** → split to sub-plan
 
@@ -92,14 +117,21 @@ two args (`SPEC.md:1336`); the shipped function requires a third positional `opt
 **Decided 2026-06-19 — change the code so `kovoTest(name, fn)` works.** Bonus: this makes the SPEC
 §12 two-arg snippet compile **as written**, so no spec edit is needed.
 
-- [ ] **Mechanism:** either make `options` optional with a zero-config default harness
-      (auto-provisioned PGlite db + default page context) so `kovoTest(name, fn)` provisions a
-      context, **or** add a `kovoTest.configure(options)` factory returning a pre-bound `kovoTest`.
-- [ ] **Implement** in `packages/test/src/test-case.ts`; ensure `createKovoTestHarness` runs with
-      defaults / configured options.
-- [ ] **Verify** the `@example` typecheck gate stays green and the SPEC §12 snippet now compiles
-      unchanged. (The §12 `res.queries.*` / `.error.code` / `html.fragment()` result-shape finding
-      is tracked separately in `plans/api-devex.md`.)
+- [x] **Mechanism: `kovoTest.configure(options)`** (the zero-config-default path is unsound — the
+      harness `db` is genuinely required). `configure` binds the harness once and returns a typed
+      `test(name, fn, runner?)`; the bare `options` arg is now optional so `kovoTest(name, fn)` is
+      also a legal call. Both keep full back-compat with the existing 3-arg callers.
+- [x] **Implemented** in `packages/test/src/test-case.ts` (added `configure`, made `options?`
+      optional; `createKovoTestHarness` called with `options ?? {}`). Guide
+      `site/content/guides/testing.md` updated to the `kovoTest.configure(...)` per-case form.
+- [x] **Verified:** `vitest run packages/test/src/test-case.test.ts` 4/4 (back-compat); `vp check`
+      typecheck clean (no errors in `test-case.ts`/`harness.ts`); `api-surface-gate.mjs` exit 0
+      (baseline 1571 — `configure` is documented, no new undocumented export); `@kovojs/site`
+      `api:check` green (37 @example blocks typecheck). **SPEC.md left unchanged** (per the
+      decision): the bare 2-arg `kovoTest(name, fn)` call now compiles; the *typed* per-case
+      ergonomic form is `kovoTest.configure(opts)` (a fully-typed `ctx` needs `options`, so the
+      typed body uses `configure`, demonstrated in the guide). §12 result-shape finding stays in
+      `plans/api-devex.md`.
 
 ## 5. Drop the empty `@kovojs/headless-ui` `.` barrel — **Low (packaging)** · no decision
 
@@ -107,10 +139,15 @@ two args (`SPEC.md:1336`); the shipped function requires a third positional `opt
 `.` → it, so a bare `import … from '@kovojs/headless-ui'` resolves to an empty module with no hint
 to use the per-primitive subpaths (Radix ships no root barrel at all).
 
-- [ ] Remove the `.` entry from `packages/headless-ui/package.json#exports` (and delete/repurpose
-      `src/index.ts`); confirm no consumer imports the root `.`.
-- [ ] Verify `pnpm run check:api-surface`, `public-packages.test.mjs`, and the build pass, and that
-      `@kovojs/ui` + examples only import per-primitive subpaths. Follow `rules/api-surface.md`.
+- [x] Removed `.` from `packages/headless-ui/package.json` `exports` + `publishConfig.exports` +
+      `build:dist`, dropped `.` from `public-packages.json` headless-ui `apiBoundary.public`, and
+      deleted the empty `src/index.ts`. No consumer imports the root `.` (grep over
+      packages/examples/site found none).
+- [x] Green: `vitest run scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs`
+      (17 pass), `api-surface-gate.mjs` + `exported-symbols.mjs --duplicates --check` exit 0, and
+      `pnpm --filter @kovojs/headless-ui build:dist` builds 154 files with no `dist/index.*`.
+      (`import-boundary.mjs` fails pre-existing on the base commit — unrelated
+      `site/scripts/export-static.mjs` → `@kovojs/compiler/package-styles`.)
 
 ## 6. Move `@kovojs/better-auth` public API out of `internal.ts` — **Low (maintainer legibility)** · no decision
 
@@ -118,18 +155,29 @@ to use the per-primitive subpaths (Radix ships no root barrel at all).
 `from './internal.js'`, intermixed with ~65 `@internal` symbols — the public/internal line is
 invisible at the source. Consumer imports are unaffected (pure refactor).
 
-- [ ] Move the 13 public declarations (`authed`, `betterAuthSession`, the 3 sign-in/up/out
-      mutations, `mount`, `role`, + 6 public types) into named files (e.g. `session.ts`,
-      `mutations.ts`, `guards.ts`, `mount.ts`); keep `internal.ts` for the `@internal` machinery;
-      `index.ts` re-exports from the named files.
-- [ ] Verify the public surface is byte-identical: `pnpm run check:api-surface`,
-      `@kovojs/better-auth` tests, and build pass with no surface diff.
+- [x] Moved the 13 publics into `session.ts` (`betterAuthSession` + `BetterAuthSessionPayload` +
+      `BetterAuthSessionMapper`), `mount.ts` (`mount` + `BetterAuthMountOptions`), `mutations.ts`
+      (the 3 sign-in/up/out mutations), `guards.ts` (`authed`, `role` + `BetterAuthRole*`).
+      `internal.ts` keeps the `@internal` machinery (2963 → 2663 lines) and imports the moved types
+      where it references them; `index.ts` re-exports the 13 from the named files. (Delegated to a
+      sub-agent in worktree `kovo-ba6`; cherry-picked as `11e5c016`.)
+- [x] Verified in the primary worktree: `vitest run packages/better-auth` 5 files / **66 pass**;
+      `api-surface-gate.mjs` exit 0 (baseline 1571 — public `.` = 13 symbols and `./internal` = 104
+      symbols are **byte-identical to base**); `exported-symbols.mjs --duplicates --check` exit 0;
+      `tsc --noEmit` clean (sub-agent).
 
 ---
 
 ## Latest verification
 
-_(none yet — populate when items land; keep to the shortest proof per checkbox.)_
+Items **#1, #2, #4, #5, #6 complete** on branch `agent/api-devex-impl` (worktree `kovo-devex`).
+Per-item evidence is under each checkbox. Cross-cutting at the time of the last fix (#1):
+`api-surface-gate.mjs` exit 0 (baseline 1571, no new undocumented exports across all five);
+`@kovojs/site api:check` 37 @example blocks typecheck; focused suites green
+(`@kovojs/browser` 454, `@kovojs/drizzle` 261 + selector test, `@kovojs/test` 4, `@kovojs/better-auth`
+66); `vp check` typecheck/lint clean for all touched files (the only `vp check` failure is the
+**pre-existing** 21-file formatting drift present on the original `main`). **#3 →
+`plans/ownership-idor.md`** (in progress).
 
 Shared gates before any checkpoint touching these: `pnpm run check:api-surface` ·
 `public-packages.test.mjs` · focused package tests (`@kovojs/browser`, `@kovojs/drizzle`,

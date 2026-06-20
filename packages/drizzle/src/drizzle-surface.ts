@@ -10,6 +10,15 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
 /**
+ * A column reference inside a Kovo annotation: either the column name as a
+ * string, or a `(table) => table.column` selector (the Drizzle idiom, SPEC
+ * §10.1). The selector is read statically by the compiler and is never called at
+ * runtime — the compiler resolves and validates the referenced column — so
+ * renaming the column surfaces at the annotation site.
+ */
+export type KovoColumnRef = string | ((table: Record<string, unknown>) => unknown);
+
+/**
  * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
  * also invalidate the named `domain` reached `via` the given relation, optionally scoped
  * to a write `when` (`insert`/`update`/`delete`). The element type of `KovoTableAnnotation.fans`
@@ -17,7 +26,7 @@ export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
  */
 export interface KovoFanAnnotation {
   domain: string;
-  via: string;
+  via: KovoColumnRef;
   when?: 'delete' | 'insert' | 'update';
 }
 
@@ -27,12 +36,13 @@ export interface KovoViewAnnotation {
   refresh?: 'async' | 'sync';
 }
 
-/** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key`), or an `exempt` marker. */
+/** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
       domain: string;
       fans?: readonly KovoFanAnnotation[];
-      key?: string;
+      key?: KovoColumnRef;
+      owner?: KovoColumnRef;
     }
   | {
       exempt: true;
@@ -45,11 +55,12 @@ export interface KovoViewExtraConfigAnnotation {
 
 export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation;
 
-/** The domain-bearing form of a table annotation: its `domain` and optional `key` column. */
+/** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
 export interface KovoDomainTableAnnotation {
   domain: string;
   fans?: readonly KovoFanAnnotation[];
-  key?: string;
+  key?: KovoColumnRef;
+  owner?: KovoColumnRef;
 }
 
 /** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */
@@ -68,13 +79,14 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key? }` binding, `{ exempt: true }`, or
+ * @param annotation - A `{ domain, key?, owner? }` binding (`owner` names the
+ *   principal-owning column for the §10.3 IDOR audit), `{ exempt: true }`, or
  *   `{ view: { of, refresh? } }` binding.
  * @returns A Drizzle extra-config callback carrying the Kovo annotation.
  * @example
  * import { kovo } from '@kovojs/drizzle';
  *
- * export const cartConfig = () => kovo({ domain: 'cart', key: 'id' });
+ * export const cartConfig = () => kovo({ domain: 'cart', key: (t) => t.id });
  */
 export function kovo(annotation: KovoViewExtraConfigAnnotation): KovoViewExtraConfig;
 export function kovo(annotation: KovoTableAnnotation): KovoTableExtraConfig;

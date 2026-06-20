@@ -187,7 +187,6 @@
       "kind": "library",
       "apiBoundary": {
         "public": [
-          ".",
           "./accordion",
           "./alert-dialog",
           "./autocomplete",

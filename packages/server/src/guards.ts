@@ -265,6 +265,25 @@ export const guards = {
       return request.session.user.roles?.includes(role) ? true : unauthorizedGuardFailure();
     };
   },
+  /**
+   * Ownership guard (SPEC §10.3): passes only when the authenticated principal
+   * owns the row the validated key selects, discharging the KV414 IDOR obligation
+   * for that key. `keyOf` reads the owned-row key from the request (which carries
+   * the validated args / resolved instance key, §10.3); `ownsRow` is the
+   * app-provided ownership predicate — the app owns the data layer, so the guard
+   * stays decoupled from Drizzle (the SPEC `owns((a) => a.id, table.col)`
+   * column-form is compile-time sugar over this runtime contract). Composes with
+   * the other guards, e.g. `all(authed, owns((req) => req.args.id, ownsOrder))`.
+   */
+  owns<Request extends SessionRequestLike, Key>(
+    keyOf: (request: Request) => Key,
+    ownsRow: (request: Request, key: Key) => boolean | Promise<boolean>,
+  ): Guard<Request> {
+    return async (request) => {
+      if (!request.session?.user) return unauthenticatedGuardFailure();
+      return (await ownsRow(request, keyOf(request))) ? true : unauthorizedGuardFailure();
+    };
+  },
 };
 
 /**
