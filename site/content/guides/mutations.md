@@ -102,10 +102,12 @@ Field names are type-checked against the mutation's input schema. A missing requ
 typo'd `name` is a compile error, so you find out at build time instead of in production:
 
 ```ts
-import { form, formFields } from '@kovojs/core';
+import { form } from '@kovojs/core';
 
 const f = form(addToCart); // mutation value validated; input type inferred
-formFields(f, ['productId', 'quantity']); // ✗ compile error if a required field is missing
+// `f` carries the inferred input type, so the rendered form's field `name`s and
+// its FieldError slots are checked against the schema — a renamed or missing
+// required field is a compile error at every call site.
 ```
 
 ## CSRF is on by default
