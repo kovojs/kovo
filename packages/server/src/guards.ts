@@ -460,9 +460,28 @@ function defaultOnUnauthenticated<Request>(
 function loginLocationWithNext(loginPath: string, next: string): string {
   const base = 'https://kovo.local';
   const url = new URL(loginPath, base);
-  url.searchParams.set('next', next);
+  url.searchParams.set('next', sanitizeNext(next));
 
   return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : url.toString();
+}
+
+/**
+ * bugs-1 F2 / SPEC §6.5: `next` MUST be a same-origin, single-leading-slash absolute path
+ * (no `//`, no `/\`, no scheme, no host) so a login flow that redirects to it cannot become
+ * an open redirect. Anything else is stripped to the safe default `/`.
+ *
+ * @internal
+ */
+export function sanitizeNext(next: string): string {
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/';
+  try {
+    const base = 'https://kovo.local';
+    const resolved = new URL(next, base);
+    if (resolved.origin !== base) return '/';
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return '/';
+  }
 }
 
 function guardFailureIsUnauthenticated<Request>(

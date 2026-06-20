@@ -1,9 +1,24 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { guards, session } from './guards.js';
+import { guards, sanitizeNext, session } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
+
+describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
+  it('keeps a same-origin, single-leading-slash path (with query/hash)', () => {
+    expect(sanitizeNext('/account')).toBe('/account');
+    expect(sanitizeNext('/account?tab=1#x')).toBe('/account?tab=1#x');
+  });
+
+  it('strips protocol-relative, scheme, host, and backslash redirects to "/"', () => {
+    expect(sanitizeNext('//evil.example')).toBe('/');
+    expect(sanitizeNext('/\\evil.example')).toBe('/');
+    expect(sanitizeNext('https://evil.example/login')).toBe('/');
+    expect(sanitizeNext('javascript:alert(1)')).toBe('/');
+    expect(sanitizeNext('account')).toBe('/');
+  });
+});
 
 describe('server guard and session primitives', () => {
   it('guards mutations by authenticated session user', async () => {
