@@ -395,16 +395,16 @@ describe('decoded mutation response apply', () => {
     const buffer = new StreamTextBuffer();
 
     // Push a chunk and flush so the target has content.
-    applyStreamTextChunks(streamRoot, [{ target: 'assistant:a1', text: 'Initial text' }], { buffer });
+    applyStreamTextChunks(streamRoot, [{ target: 'assistant:a1', text: 'Initial text' }], {
+      buffer,
+    });
     await buffer.flush('completion');
     expect(streamTarget.textContent).toBe('Initial text');
 
     // Push an empty checkpoint — this must clear the accumulated text.
-    applyStreamTextChunks(
-      streamRoot,
-      [{ mode: 'checkpoint', target: 'assistant:a1', text: '' }],
-      { buffer },
-    );
+    applyStreamTextChunks(streamRoot, [{ mode: 'checkpoint', target: 'assistant:a1', text: '' }], {
+      buffer,
+    });
     await buffer.flush('completion');
 
     // SPEC §9.1: checkpoint replaces accumulated source — empty string must win.

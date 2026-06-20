@@ -52,9 +52,11 @@ describe('commerce enhanced navigation', () => {
     const layoutPersisted = await page.evaluate(
       () =>
         (
-          document.querySelector('[data-commerce-shell]') as (HTMLElement & {
-            __kovoTestPersist?: true;
-          }) | null
+          document.querySelector('[data-commerce-shell]') as
+            | (HTMLElement & {
+                __kovoTestPersist?: true;
+              })
+            | null
         )?.__kovoTestPersist === true,
     );
     await page.evaluate(() => {

@@ -51,7 +51,8 @@ describe('mutation response metadata', () => {
         configurable: true,
         value: {
           getRandomValues: (array: Uint8Array) => {
-            for (let index = 0; index < array.length; index += 1) array[index] = (index * 37 + 11) & 0xff;
+            for (let index = 0; index < array.length; index += 1)
+              array[index] = (index * 37 + 11) & 0xff;
             return array;
           },
         },

@@ -214,8 +214,7 @@ function deriveSum(
   // projects; reading row[col] from a witness that doesn't ship col yields 0
   // for every row, collapsing the total (SPEC.md §10.5).
   const witness = shape.rowsByTable?.[field.rowset.table];
-  const witnessShipsSummedCol =
-    witness && column ? witness.columns.includes(column) : false;
+  const witnessShipsSummedCol = witness && column ? witness.columns.includes(column) : false;
   const rowsPath = witnessShipsSummedCol ? witness?.rowsPath : undefined;
 
   if (effect.op === 'insert' || effect.op === 'upsert') {

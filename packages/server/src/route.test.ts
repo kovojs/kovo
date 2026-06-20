@@ -131,9 +131,7 @@ describe('route primitives', () => {
       page: () => redirectValue,
     });
 
-    await expect(
-      renderRoutePageResponse(homeRoute, {}, {}),
-    ).resolves.toEqual({
+    await expect(renderRoutePageResponse(homeRoute, {}, {})).resolves.toEqual({
       body: '',
       headers: { Location: '/new-home' },
       status: 303,

@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  KOVO_IDEM_FIELD_NAME,
-  renderMutationIdemField,
-} from '../../server/src/csrf.js';
+import { KOVO_IDEM_FIELD_NAME, renderMutationIdemField } from '../../server/src/csrf.js';
 import { compileComponentModule } from './index.js';
 
 // Tests for F1 (server URL-scheme sanitizer) and A2 (Kovo-Idem field emission)

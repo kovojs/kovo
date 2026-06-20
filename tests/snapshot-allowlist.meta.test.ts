@@ -28,10 +28,7 @@ const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)),
 
 // Read the compiler predicate source so we can do lockstep assertions
 // without needing to export the private function.
-const SERVER_TS = path.join(
-  REPO_ROOT,
-  'packages/compiler/src/emit/server.ts',
-);
+const SERVER_TS = path.join(REPO_ROOT, 'packages/compiler/src/emit/server.ts');
 
 function readPredicateBody(): string {
   const source = fs.readFileSync(SERVER_TS, 'utf8');

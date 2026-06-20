@@ -750,12 +750,10 @@ export async function renderMutationResponse<
 
   let result: MutationResult<Value, InferSchema<InputSchema>>;
   try {
-    result = await runMutation(
-      definition,
-      wireRequest.rawInput,
-      wireRequest.request,
-      { ...runMutationOptions(wireRequest.csrf, wireRequest), guardResolved: true },
-    );
+    result = await runMutation(definition, wireRequest.rawInput, wireRequest.request, {
+      ...runMutationOptions(wireRequest.csrf, wireRequest),
+      guardResolved: true,
+    });
   } catch (error) {
     // The handler threw before producing a result; release the reservation so a
     // retry can run, then surface the server-error fragment (never replayed).
@@ -1277,8 +1275,14 @@ export async function renderNoJsMutationResponse<
   // guardResolved: the no-JS guard chain is evaluated once below (A1) before the replay lookup, so
   // runMutation must not re-run it (would double-execute a stateful rateLimit guard). The flag is
   // inert for resolveLifecycleRequest.
-  const lifecycleOpts = { ...runMutationOptions(noJsRequest.csrf, noJsRequest), guardResolved: true };
-  const lifecycleRequestForGuard = await resolveLifecycleRequest(noJsRequest.request, lifecycleOpts);
+  const lifecycleOpts = {
+    ...runMutationOptions(noJsRequest.csrf, noJsRequest),
+    guardResolved: true,
+  };
+  const lifecycleRequestForGuard = await resolveLifecycleRequest(
+    noJsRequest.request,
+    lifecycleOpts,
+  );
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
     const body = noJsRequest.renderFailurePage
@@ -1443,9 +1447,7 @@ function noJsReplayScopeFor<Request>(
     }
   }
 
-  return sessionScope !== null
-    ? `${mutationKey}\0${sessionScope}`
-    : `nojs:${mutationKey}`;
+  return sessionScope !== null ? `${mutationKey}\0${sessionScope}` : `nojs:${mutationKey}`;
 }
 
 function isMutationFail(value: unknown): value is MutationFail {

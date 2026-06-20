@@ -235,7 +235,10 @@ function readQueryChunkPayload(
  */
 function parseSettlementSet(settles?: string | null): string[] {
   if (!settles) return [];
-  return settles.trim().split(/\s+/).filter((token) => token.length > 0);
+  return settles
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
 }
 
 function readQueryChunkIdentity(name: string, key?: string | null): { key?: string; name: string } {

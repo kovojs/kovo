@@ -5949,7 +5949,7 @@ function appendDeclaredFanOutWriteSummaries(
       site,
       table: {
         domain: fan.domain,
-        name: fan.via,
+        name: typeof fan.via === 'string' ? fan.via : fan.domain,
       },
     });
   }
@@ -9643,7 +9643,7 @@ function predicateSummaryFromFacts(
   tableIdentifier: string,
   table: KovoDomainTableAnnotation,
 ): ExtractedPredicateSummary {
-  if (!table.key) return {};
+  if (typeof table.key !== 'string') return {};
 
   const keyColumns = tableKeyColumns(table.key);
   const keyFacts = keyColumns.map((key) =>
@@ -9880,7 +9880,7 @@ interface DeriveCallback {
 
 /** The instance/primary-key column from a table annotation (null for exempt tables). */
 function tableAnnotationKey(annotation: ExtractedTableAnnotation): string | null {
-  return 'key' in annotation && annotation.key ? annotation.key : null;
+  return 'key' in annotation && typeof annotation.key === 'string' ? annotation.key : null;
 }
 
 function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtraction {

@@ -13,7 +13,9 @@ async function cartCount(db: KovoFixtureRequest['db']): Promise<number> {
 }
 
 async function productStock(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ stock: number }>('select stock from products where id = $1', ['p1']);
+  const rows = await db.query<{ stock: number }>('select stock from products where id = $1', [
+    'p1',
+  ]);
   return rows[0]?.stock ?? 0;
 }
 
@@ -78,7 +80,9 @@ const app = createApp({
     [addPartial.key]: ({ request }) => {
       const db = (request as unknown as KovoFixtureRequest).db;
       return {
-        fragmentRenderers: [{ render: async () => renderCart(await cartCount(db)), target: 'cart-count' }],
+        fragmentRenderers: [
+          { render: async () => renderCart(await cartCount(db)), target: 'cart-count' },
+        ],
         redirectTo: '/',
       };
     },

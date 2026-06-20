@@ -43,11 +43,21 @@ const app = createApp({
   mutationResponses: {
     [bumpA.key]: ({ request }) => {
       const db = (request as unknown as KovoFixtureRequest).db;
-      return { fragmentRenderers: [{ render: async () => renderPanel(await readCount(db)), target: 'counter' }], redirectTo: '/' };
+      return {
+        fragmentRenderers: [
+          { render: async () => renderPanel(await readCount(db)), target: 'counter' },
+        ],
+        redirectTo: '/',
+      };
     },
     [bumpB.key]: ({ request }) => {
       const db = (request as unknown as KovoFixtureRequest).db;
-      return { fragmentRenderers: [{ render: async () => renderPanel(await readCount(db)), target: 'counter' }], redirectTo: '/' };
+      return {
+        fragmentRenderers: [
+          { render: async () => renderPanel(await readCount(db)), target: 'counter' },
+        ],
+        redirectTo: '/',
+      };
     },
   },
 });

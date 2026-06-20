@@ -125,7 +125,11 @@ describe('mutation broadcast replay', () => {
         capturedSignal = ctx.signal;
       },
     }));
-    await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule, islandSignalScope);
+    await dispatchDelegatedEvent(
+      { target: element, type: 'visible' },
+      importModule,
+      islandSignalScope,
+    );
     expect(capturedSignal?.aborted).toBe(false);
 
     installMutationBroadcast({

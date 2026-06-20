@@ -797,11 +797,15 @@ describe('server mutation response replay', () => {
     const rateLimitedMutation = mutation('cart/add', {
       errors: { RATE_LIMITED: s.object({}) },
       input: s.object({ productId: s.string() }),
-      handler(input, _request, context) {
+      handler(input, _request, _context) {
         handlerCalls += 1;
         if (rateLimited) {
           // Handler emits a 429 RATE_LIMITED failure (transient shed).
-          return { error: { code: 'RATE_LIMITED', payload: {} }, ok: false as const, status: 429 as const };
+          return {
+            error: { code: 'RATE_LIMITED', payload: {} },
+            ok: false as const,
+            status: 429 as const,
+          };
         }
         return input;
       },

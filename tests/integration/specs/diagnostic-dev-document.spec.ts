@@ -1,6 +1,7 @@
 // SPEC.md §11.3: error diagnostics block dev page requests with teaching documents.
 import { createServer, type Server } from 'node:http';
 
+import type { DiagnosticCode } from '@kovojs/core';
 import { createApp, route } from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
@@ -56,10 +57,22 @@ test('serves a teaching diagnostic document for a route depending on an error mo
 // coverage). Surface a high-impact subset through the same ledger→teaching-document
 // path, asserting each blocking `error` code yields a 500 carrying the exact code.
 const ERROR_CODES = [
-  { code: 'KV227', help: 'Add ?. or a null-handling derive.', message: 'Binding path traverses a nullable segment without ?.' },
-  { code: 'KV242', help: 'Match the form control names to the mutation input schema.', message: 'Enhanced mutation form control names do not match the bound mutation input schema.' },
-  { code: 'KV302', help: 'Bind a path that exists in the declared query shape.', message: 'data-bind path is not present in the declared query shape.' },
-];
+  {
+    code: 'KV227',
+    help: 'Add ?. or a null-handling derive.',
+    message: 'Binding path traverses a nullable segment without ?.',
+  },
+  {
+    code: 'KV242',
+    help: 'Match the form control names to the mutation input schema.',
+    message: 'Enhanced mutation form control names do not match the bound mutation input schema.',
+  },
+  {
+    code: 'KV302',
+    help: 'Bind a path that exists in the declared query shape.',
+    message: 'data-bind path is not present in the declared query shape.',
+  },
+] satisfies readonly { code: DiagnosticCode; help: string; message: string }[];
 
 for (const entry of ERROR_CODES) {
   test(`surfaces ${entry.code} as a blocking 500 teaching document`, async () => {

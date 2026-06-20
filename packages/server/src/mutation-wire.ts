@@ -224,7 +224,10 @@ export interface NoJsMutationResponse extends ServerResponseBase<
  * 303 redirect responses in addition to 422/429/500 failures.
  */
 export interface NoJsMutationReplayStore {
-  get(scope: string, idem: string): Promise<NoJsMutationResponse | undefined> | NoJsMutationResponse | undefined;
+  get(
+    scope: string,
+    idem: string,
+  ): Promise<NoJsMutationResponse | undefined> | NoJsMutationResponse | undefined;
   reserve(scope: string, idem: string): NoJsMutationReplayReservation | undefined;
 }
 

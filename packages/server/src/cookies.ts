@@ -70,6 +70,10 @@ function assertNoHeaderControlCharacters(value: string, label: string): void {
   // SPEC §9.1.1:846 (B4): reject all C0 control characters (0x00-0x1F) and DEL (0x7F),
   // not just CR/LF/NUL. TAB, BEL, and other control bytes outside the printable header
   // grammar must be rejected by throwing — never silently stripped.
-  if (/[\x00-\x1f\x7f]/.test(value))
-    throw new Error(`${label} must not contain control characters`);
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) {
+      throw new Error(`${label} must not contain control characters`);
+    }
+  }
 }

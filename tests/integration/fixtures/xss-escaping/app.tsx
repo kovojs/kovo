@@ -62,7 +62,8 @@ const app = createApp({
 
 export default defineFixture({
   app,
-  schema: 'create table xss_payload (id integer primary key, text text not null, url text not null)',
+  schema:
+    'create table xss_payload (id integer primary key, text text not null, url text not null)',
   // Seed text contains a </script><script> break-out attempt so the initial
   // <script type="application/json"> JSON island must escape `<` to < (F8).
   seed: (db) =>

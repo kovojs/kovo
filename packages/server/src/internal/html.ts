@@ -1,4 +1,10 @@
-export { escapeAttribute, escapeHtml, escapeScriptJson, escapeText, safeUrlAttribute } from '../html.js';
+export {
+  escapeAttribute,
+  escapeHtml,
+  escapeScriptJson,
+  escapeText,
+  safeUrlAttribute,
+} from '../html.js';
 export {
   componentMutationFailureSlots,
   renderComponent,

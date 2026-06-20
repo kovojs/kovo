@@ -157,7 +157,12 @@ export interface RouteDefinition<
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,
     request: GuardedRequest,
-  ) => Page | NotFound | Redirect | RouteResponseOutcome | Promise<Page | NotFound | Redirect | RouteResponseOutcome>;
+  ) =>
+    | Page
+    | NotFound
+    | Redirect
+    | RouteResponseOutcome
+    | Promise<Page | NotFound | Redirect | RouteResponseOutcome>;
   params?: ParamsSchema;
   search?: SearchSchema;
   staticPaths?: readonly string[];
@@ -425,7 +430,8 @@ async function runRoutePageInternal<
         } catch (error) {
           throw new RouteBoundaryRenderError(error, routeBoundaryFor('error', definition, layouts));
         }
-        if (isNotFound(pageValue) || isRedirect(pageValue) || isRouteResponseOutcome(pageValue)) return pageValue;
+        if (isNotFound(pageValue) || isRedirect(pageValue) || isRouteResponseOutcome(pageValue))
+          return pageValue;
         const metadata = getRoutePageMetadata(definition);
         return renderLayoutChain(
           layouts,

@@ -1,5 +1,10 @@
 import { request as httpRequest, createServer } from 'node:http';
-import type { IncomingHttpHeaders, IncomingMessage, RequestListener, ServerResponse } from 'node:http';
+import type {
+  IncomingHttpHeaders,
+  IncomingMessage,
+  RequestListener,
+  ServerResponse,
+} from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -199,11 +204,7 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
     let capturedSetCookie: string | string[] | undefined;
     const fakeNodeResponse = {
       writeHead: vi.fn(
-        (
-          _status: number,
-          _statusText: string,
-          headers: Record<string, string | string[]>,
-        ) => {
+        (_status: number, _statusText: string, headers: Record<string, string | string[]>) => {
           capturedSetCookie = headers['set-cookie'];
         },
       ),

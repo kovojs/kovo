@@ -280,7 +280,11 @@ export const CheckboxGroupControl = component({
     // re-renders its fill client-side without becoming a second tab stop or
     // splitting the island scope (SPEC.md §4.6).
     return (
-      <span {...boxStyleAttrs} {...bindingProps(props, ['data-state'])} data-state={attrs['data-state']}>
+      <span
+        {...boxStyleAttrs}
+        {...bindingProps(props, ['data-state'])}
+        data-state={attrs['data-state']}
+      >
         <input
           {...inputStyleAttrs}
           {...passThroughProps(props)}

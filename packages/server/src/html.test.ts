@@ -48,7 +48,9 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
   });
 
   it('passes through http:// URLs unchanged', () => {
-    expect(safeUrlAttribute('href', 'http://example.com')).toBe(escapeAttribute('http://example.com'));
+    expect(safeUrlAttribute('href', 'http://example.com')).toBe(
+      escapeAttribute('http://example.com'),
+    );
   });
 
   it('passes through mailto: URLs unchanged', () => {
@@ -58,9 +60,7 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
   });
 
   it('passes through tel: URLs unchanged', () => {
-    expect(safeUrlAttribute('href', 'tel:+15551234567')).toBe(
-      escapeAttribute('tel:+15551234567'),
-    );
+    expect(safeUrlAttribute('href', 'tel:+15551234567')).toBe(escapeAttribute('tel:+15551234567'));
   });
 
   it('passes through ftp:// URLs unchanged (SPEC §4.8:347 includes ftp)', () => {
@@ -86,9 +86,7 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
 
   it('does not scheme-check non-URL attribute names', () => {
     // class, id, title, etc. go through plain escapeAttribute with no scheme check.
-    expect(safeUrlAttribute('class', 'javascript:foo')).toBe(
-      escapeAttribute('javascript:foo'),
-    );
+    expect(safeUrlAttribute('class', 'javascript:foo')).toBe(escapeAttribute('javascript:foo'));
     expect(safeUrlAttribute('title', 'javascript:alert(1)')).toBe(
       escapeAttribute('javascript:alert(1)'),
     );
@@ -96,9 +94,7 @@ describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
 
   it('still HTML-escapes safe URL attribute values', () => {
     // Ensures the output is safe for embedding inside a double-quoted attribute.
-    expect(safeUrlAttribute('href', 'https://x.com?a=1&b=2')).toBe(
-      'https://x.com?a=1&amp;b=2',
-    );
+    expect(safeUrlAttribute('href', 'https://x.com?a=1&b=2')).toBe('https://x.com?a=1&amp;b=2');
     expect(safeUrlAttribute('href', 'https://x.com/path"suffix')).toBe(
       'https://x.com/path&quot;suffix',
     );

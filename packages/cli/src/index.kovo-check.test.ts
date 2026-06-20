@@ -1466,9 +1466,7 @@ describe('kovo check', () => {
             unresolved: [],
           },
         },
-        optimistic: [
-          { mutation: 'cart/add', query: 'cartQuery', status: 'hand-written' },
-        ],
+        optimistic: [{ mutation: 'cart/add', query: 'cartQuery', status: 'hand-written' }],
       }),
     ).toEqual({
       exitCode: 0,

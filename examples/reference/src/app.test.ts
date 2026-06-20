@@ -320,7 +320,7 @@ describe('reference auth adoption', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['kovo_reference_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_reference_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax'],
       },
       status: 303,
     });

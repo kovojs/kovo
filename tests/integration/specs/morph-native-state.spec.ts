@@ -23,7 +23,9 @@ test('a fragment morph preserves a user-opened <details> (native UA state)', asy
 
   // An unrelated change morphs the enclosing fragment.
   await Promise.all([
-    page.waitForResponse((r) => r.url().endsWith('/_m/morph-native-state/bump') && r.status() === 200),
+    page.waitForResponse(
+      (r) => r.url().endsWith('/_m/morph-native-state/bump') && r.status() === 200,
+    ),
     page.getByRole('button', { name: 'Bump' }).click(),
   ]);
   await expect(page.getByTestId('count')).toHaveText('1');

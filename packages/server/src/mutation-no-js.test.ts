@@ -3,10 +3,8 @@ import { component, form } from '@kovojs/core';
 
 import { renderComponentMutationFailure } from './component-render.js';
 import { renderNoJsMutationResponse } from './mutation.js';
-import { createMemoryMutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
-import type { NoJsMutationReplayStore, NoJsMutationReplayReservation } from './mutation-wire.js';
 
 describe('no-JS mutation responses', () => {
   it('renders no-JS mutation success as POST-redirect-GET', async () => {
@@ -177,8 +175,12 @@ describe('no-JS mutation responses', () => {
         if (store.has(key)) return undefined;
         // Use a sentinel value to mark as reserved (pending).
         const reservation: import('./mutation-wire.js').NoJsMutationReplayReservation = {
-          abort() { store.delete(key); },
-          commit(response) { store.set(key, response); },
+          abort() {
+            store.delete(key);
+          },
+          commit(response) {
+            store.set(key, response);
+          },
         };
         // Mark slot as taken so a concurrent reserve returns undefined.
         store.set(key, { body: '', headers: {}, status: 303 });
@@ -227,8 +229,12 @@ describe('no-JS mutation responses', () => {
         const key = `${scope}\0${idem}`;
         if (store.has(key)) return undefined;
         const reservation: import('./mutation-wire.js').NoJsMutationReplayReservation = {
-          abort() { store.delete(key); },
-          commit(response) { store.set(key, response); },
+          abort() {
+            store.delete(key);
+          },
+          commit(response) {
+            store.set(key, response);
+          },
         };
         store.set(key, { body: '', headers: {}, status: 303 });
         return reservation;

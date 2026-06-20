@@ -214,7 +214,9 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     // dynamic DB/query values like `href={row.url}` cannot render as `javascript:`
     // sinks on first paint. `safeUrlAttribute` returns '#' for unsafe schemes.
     rendered +=
-      value === true ? ` ${name}` : ` ${name}="${safeUrlAttribute(name, attributeText(name, value))}"`;
+      value === true
+        ? ` ${name}`
+        : ` ${name}="${safeUrlAttribute(name, attributeText(name, value))}"`;
   }
 
   if (styleAttrs?.class && !renderedClass)

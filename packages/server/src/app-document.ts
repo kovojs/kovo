@@ -121,9 +121,7 @@ function sessionFingerprintFromRequest(request: Request): string | undefined {
     sessionId?: string;
   };
   const resolvedId =
-    (typeof req.session?.id === 'string' && req.session.id !== ''
-      ? req.session.id
-      : undefined) ??
+    (typeof req.session?.id === 'string' && req.session.id !== '' ? req.session.id : undefined) ??
     (typeof req.sessionId === 'string' && req.sessionId !== '' ? req.sessionId : undefined) ??
     (typeof req.session?.user?.id === 'string' && req.session.user.id !== ''
       ? req.session.user.id

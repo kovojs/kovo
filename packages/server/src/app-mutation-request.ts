@@ -255,9 +255,7 @@ function mergeMutationRegistryQueries(
   };
 }
 
-type MutationRequestBodyResult =
-  | { ok: true; value: unknown }
-  | { ok: false; reason: string };
+type MutationRequestBodyResult = { ok: true; value: unknown } | { ok: false; reason: string };
 
 /**
  * Parse the mutation request body from JSON or form data.
@@ -269,9 +267,7 @@ type MutationRequestBodyResult =
  * a typed 422 BEFORE the CSRF check runs (attacker-controllable bad bodies must
  * not drive `onError`).
  */
-async function readMutationRequestBody(
-  request: Request,
-): Promise<MutationRequestBodyResult> {
+async function readMutationRequestBody(request: Request): Promise<MutationRequestBodyResult> {
   const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
 
   if (contentType.includes('application/json')) {

@@ -13,7 +13,7 @@ A multi-agent adversarial sweep (the same methodology as `bugs-1`): **14 subsyst
 implementation (output-safety, auth/CSRF, optimism/rebase, morph, wire/dispatch, compiler-lowering,
 static-analysis/verifier, routing, static-export/deploy-skew, data-plane/IDOR, loader-runtime,
 a11y/primitives, streaming/broadcast, and a cross-cutting coverage sweep), then **each finding faced two
-independent verifiers** — an *exploiter* (build the concrete repro / prove the path) and a *refuter* (find
+independent verifiers** — an _exploiter_ (build the concrete repro / prove the path) and a _refuter_ (find
 the code that already handles it, or the test that already covers it). A completeness critic then named
 under-covered bug-classes and a second targeted round (the `GAP*` findings) ran the same gauntlet. Finders
 were primed with the `KNOWN-OPEN` list from `bugs-and-testing.md` so this plan does **not** re-report items
@@ -43,7 +43,7 @@ the main thread. **tsc clean; `api-surface-gate` unchanged (1571=baseline); per-
   wiring of real query-shape facts is a documented seam (`setRenderPlanFingerprint`) — see Deferred._
 - **Lane E — diagnostics/verifier:** E1 (KV405/KV406→error + KV317 registered), E2 (KV310 from touch
   graph), E3 (KV402 touch-vs-declared) — done.
-- **Lane F — output safety:** F1 (server URL sanitizer + render-equivalence), F2 (KV236 on*/srcdoc/
+- **Lane F — output safety:** F1 (server URL sanitizer + render-equivalence), F2 (KV236 on\*/srcdoc/
   formaction sinks), F3 (morph attr sanitize — covered by F1 server trust + runtime), F4 (ftp) — done.
 - **Lane G — morph engine:** G2 (signal abort by identity), G3 (textarea), G4 (caret/scrollLeft) — done
   via the shipped inline-loader/morph paths; **G1 (engine unification / parity suite)** partially
@@ -67,6 +67,7 @@ the typed read wire fixture response byte-for-byte" and `route-query-guards` ses
 at `main` (`d54b21f7`).
 
 **Deferred (contested and/or larger than this slice — documented, not silently dropped):**
+
 - **OPT4** (queue head-of-line timeout/abort + bound) and **OPT5** (copy-on-write bounded snapshot) —
   contested; both would re-touch the just-stabilized optimism path (abort plumbing into mutation-fetch;
   structural-sharing rewrite of the clone path). Left for a dedicated slice.
@@ -81,8 +82,8 @@ at `main` (`d54b21f7`).
 
 These contradict "done" claims in `bugs-and-testing.md`/`bugs-1.md` and matter most:
 
-1. **F4 is NOT fully closed.** `bugs-and-testing.md` says F4 ("re-authorize before replay") was *already
-   hardened* because replay is scoped by `(session, mutation, idem)`. But the **re-authorization clause**
+1. **F4 is NOT fully closed.** `bugs-and-testing.md` says F4 ("re-authorize before replay") was _already
+   hardened_ because replay is scoped by `(session, mutation, idem)`. But the **re-authorization clause**
    (§10.3:1061 "a replay hit does not bypass authorization … re-evaluate the session-bound guard chain
    against the current principal") is unimplemented: the replay early-return (`mutation.ts:701-702`) runs
    **before** the guard (`mutation.ts:553`). A revoked-role / lost-ownership principal is re-served the
@@ -97,25 +98,25 @@ These contradict "done" claims in `bugs-and-testing.md`/`bugs-1.md` and matter m
 
 ## Summary (confirmed, by lane)
 
-| Lane | Theme | Crit | High | Med | Low |
-| --- | --- | --- | --- | --- | --- |
-| **A** | Replay & idempotency soundness | 1 | 5 | 1 | 1 |
-| **B** | Auth, cookies & header channel | 1 | 2 | 2 | — |
-| **C** | Optimistic correctness (settlement, rollback, data-plane lowering) | 1 | 4 | 1 | — |
-| **D** | Version token & deploy-skew recovery | 1 | 2 | 1 | — |
-| **E** | Diagnostics severity & verifier wiring | 1 | 1 | 1 | — |
-| **F** | Output safety & morph-path encoding | — | 2¹ | 2 | — |
-| **G** | Morph engine duplication & shipped-engine bugs | — | 2 | 2 | — |
-| **H** | Wire dispatch & request shell | — | 1 | 2 | 1 |
-| **I** | Routing & navigation | — | 3 | — | — |
-| **J** | A11y, attribute-merge & primitive reactivity | — | 1 | 2 | — |
-| **K** | Streaming, broadcast & island lifecycle | — | 2 | 4 | 1 |
+| Lane  | Theme                                                              | Crit | High | Med | Low |
+| ----- | ------------------------------------------------------------------ | ---- | ---- | --- | --- |
+| **A** | Replay & idempotency soundness                                     | 1    | 5    | 1   | 1   |
+| **B** | Auth, cookies & header channel                                     | 1    | 2    | 2   | —   |
+| **C** | Optimistic correctness (settlement, rollback, data-plane lowering) | 1    | 4    | 1   | —   |
+| **D** | Version token & deploy-skew recovery                               | 1    | 2    | 1   | —   |
+| **E** | Diagnostics severity & verifier wiring                             | 1    | 1    | 1   | —   |
+| **F** | Output safety & morph-path encoding                                | —    | 2¹   | 2   | —   |
+| **G** | Morph engine duplication & shipped-engine bugs                     | —    | 2    | 2   | —   |
+| **H** | Wire dispatch & request shell                                      | —    | 1    | 2   | 1   |
+| **I** | Routing & navigation                                               | —    | 3    | —   | —   |
+| **J** | A11y, attribute-merge & primitive reactivity                       | —    | 1    | 2   | —   |
+| **K** | Streaming, broadcast & island lifecycle                            | —    | 2    | 4   | 1   |
 
 ¹ includes the promoted OUTPUT-SAFETY-1. Contested items (11) are triaged in their own section.
 
 ---
 
-## Lane A — Replay & idempotency soundness  *(the standout cluster: security + correctness)*
+## Lane A — Replay & idempotency soundness _(the standout cluster: security + correctness)_
 
 The replay store is the spine of §10.3 "atomic reservation for **all** mutation paths." Eight independent
 bugs break that contract; several are security-grade. Owner: `packages/server/src/{mutation,replay,webhook}.ts`.
@@ -123,9 +124,9 @@ bugs break that contract; several are security-grade. Owner: `packages/server/sr
 - [x] **A1 (critical) — Replay hit re-serves a private response without re-running the guard chain** `spec-impl-divergence` (GAP1-1)
   - **Where:** `mutation.ts:701-702` (replay early-return) precedes the only `runGuard` at `mutation.ts:553`
     (reached at `:711`); scope keyed on session id only (`replay.ts:286-289`).
-  - **Defect:** §10.3:1061 requires re-evaluating the session-bound guard against the *current* principal
+  - **Defect:** §10.3:1061 requires re-evaluating the session-bound guard against the _current_ principal
     before re-serving. Same session id ≠ same authorization (role revoked / `owns()` row reassigned), so a
-    cached owner-only fragment is re-served for the TTL (default 5 min). CSRF *is* re-checked before replay
+    cached owner-only fragment is re-served for the TTL (default 5 min). CSRF _is_ re-checked before replay
     (`:674-690`) — the guard was simply left after the return.
   - **Fix:** run the guard chain before `readMutationReplay`; on a replay hit still re-run guards before
     returning the stored body. Order: CSRF → parse → guard → reserve → handler.
@@ -147,13 +148,13 @@ bugs break that contract; several are security-grade. Owner: `packages/server/sr
     runs (`:864-880`); streamed chunks + `renderDoneWireHtml()` live only in the live `ReadableStream`.
   - **Defect:** a duplicate idem replays an empty/head-only, **unterminated** body; the client drains EOF and
     silently settles a confirmed-but-empty assistant answer (violates §10.3:1063 + §9 "no silent partial").
-    `mutation-response.test.ts:1077` *codifies the loss* (`expect(second.body).toBe('')`).
+    `mutation-response.test.ts:1077` _codifies the loss_ (`expect(second.body).toBe('')`).
   - **Fix:** commit after stream completion with head + rendered chunks + `<kovo-done>`; harden the client to
     treat completion-without-`<kovo-done>` (for a stream-opted request) as incomplete.
   - **Test:** replace the `toBe('')` assertion — replayed body must contain the streamed text and `kovo-done`.
 
 - [x] **A4 (high) — Webhook caches unexpected-exception 500s; provider retry replays the cached 500** `impl-bug` (GAP3-1)
-  - **Where:** `webhook.ts:317-327` commits `{status:500}` to the replay store on a *thrown* error; retry hits
+  - **Where:** `webhook.ts:317-327` commits `{status:500}` to the replay store on a _thrown_ error; retry hits
     `get()` (`:240-249`) and never re-runs the handler. Contrast `mutation.ts:720` which `abort()`s on throw.
   - **Defect:** a transient DB blip is cached as terminal for the TTL → the write is permanently lost within
     the window, defeating Stripe/GitHub 5xx-retry semantics (§9.1:850).
@@ -188,11 +189,11 @@ bugs break that contract; several are security-grade. Owner: `packages/server/sr
   - **Test:** mock `randomUUID` undefined → assert ≥128-bit non-timestamp values.
 
 > **Contested sibling:** GAP4-2 (`csrf:false` + no ambient session → `scope=null` → replay silently disabled)
-> is real per the exploiter but the refuter found partial handling — see *Contested*. It belongs to this lane.
+> is real per the exploiter but the refuter found partial handling — see _Contested_. It belongs to this lane.
 
 ---
 
-## Lane B — Auth, cookies & header channel  *(security; `cookies.ts`, `mutation.ts`, `node.ts`)*
+## Lane B — Auth, cookies & header channel _(security; `cookies.ts`, `mutation.ts`, `node.ts`)_
 
 - [x] **B1 (critical) — Node adapter collapses multiple `Set-Cookie` headers, dropping all but the last** `impl-bug` (WIRE-DISPATCH-1)
   - **Where:** `node.ts:143-149` `headers.forEach((v,n)=>{nodeHeaders[n]=v})` — `Headers.forEach` combines
@@ -235,7 +236,7 @@ bugs break that contract; several are security-grade. Owner: `packages/server/sr
 
 ---
 
-## Lane C — Optimistic correctness  *(settlement, rollback, data-plane lowering)*
+## Lane C — Optimistic correctness _(settlement, rollback, data-plane lowering)_
 
 The "soundly optimistic / wrong predictions are worse than none" self-claim. Owner:
 `packages/browser/src/{optimism,mutation-optimistic}.ts`, `packages/drizzle/src/derive.ts`, `packages/core/src/derivation.ts`.
@@ -297,11 +298,11 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
     (`no-row-witness`), not a zeroing `resum`.
 
 > **Contested siblings (this lane):** OPTIMISM-4 (queue has no head-of-line timeout / no bound) and OPTIMISM-5
-> (whole-value `structuredClone` violates the bounded-snapshot rule) — both real per exploiter; see *Contested*.
+> (whole-value `structuredClone` violates the bounded-snapshot rule) — both real per exploiter; see _Contested_.
 
 ---
 
-## Lane D — Version token & deploy-skew recovery  *(`client-modules.ts`, `query-refetch.ts`, `apply-mutation-response.ts`)*
+## Lane D — Version token & deploy-skew recovery _(`client-modules.ts`, `query-refetch.ts`, `apply-mutation-response.ts`)_
 
 - [x] **D1 (critical) — Render-plan token is derived from client-module versions alone** `spec-impl-divergence` (STATIC-EXPORT-DEPLOY-1)
   - **Where:** `client-modules.ts:91-112` hashes only sorted `path@version`; no query-shape / update-plan-grammar
@@ -315,7 +316,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 - [x] **D2 (high) — `/_q/` read responses are not stamped with the build token** `spec-impl-divergence` (STATIC-EXPORT-DEPLOY-2)
   - **Where:** `query.ts:358-371` returns no `Kovo-Build`; `refetchQueries` (`query-refetch.ts:87-104`) applies
     chunks with no token comparison.
-  - **Defect:** §5.2.1 rule 2(d) requires the token on "every /_q/ read response so a plain refetch into a stale
+  - **Defect:** §5.2.1 rule 2(d) requires the token on "every /\_q/ read response so a plain refetch into a stale
     tab is detected." A background visible-return refetch applies fresh-build data into a stale document.
   - **Fix:** add `Kovo-Build` to `/_q/` responses; compare in `refetchQueries`.
   - **Test:** assert `GET /_q/<k>` carries `Kovo-Build`; mismatched token → chunks not applied.
@@ -323,7 +324,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 - [x] **D3 (high) — Deploy-skew recovery never escalates to a full reload** `spec-impl-divergence` (COVERAGE-GAPS-3)
   - **Where:** `query-refetch.ts:77-135` applies `/_q/` chunks unconditionally; no `location.reload` in the query
     path; `createDeltaMissRefetcher` is fire-and-forget (`:152-171`).
-  - **Defect:** §9.1.1/§14 require: if the refetch *itself* still returns a differing token, the document is
+  - **Defect:** §9.1.1/§14 require: if the refetch _itself_ still returns a differing token, the document is
     fundamentally skewed → full navigation reload. Tier-2 is absent; mixed-build data is merged instead.
   - **Fix:** thread the document token into `refetchQueries`; on persistent mismatch reload (GET, once).
   - **Test:** injected `/_q/` response with a still-mismatched token → store untouched, reload hook called once.
@@ -337,14 +338,14 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 
 ---
 
-## Lane E — Diagnostics severity & verifier wiring  *(the "machine-auditable, build-failing" self-claim)*
+## Lane E — Diagnostics severity & verifier wiring _(the "machine-auditable, build-failing" self-claim)_
 
 - [x] **E1 (critical) — KV406 is `warn` in the registry but `error` in SPEC → un-provable write sites pass CI** `spec-impl-divergence` (ANALYSIS-VERIFIER-1)
   - **Where:** `core/src/diagnostics.ts:630` `KV406: {severity:'warn'}`; `kovoCheck` fails only on `error`
     (`cli/index.ts:3953,4235`). SPEC §11.3:1285 + §11.2:1211 say `error` / "not advisory."
   - **Defect:** a raw-SQL / opaque / un-resolvable write site reports `WARN KV406` and `exitCode 0` — the
     headline guarantee silently off for exactly the writes the analyzer can't prove. `index.kovo-check.test.ts:513`
-    *locks in* `exitCode:0`.
+    _locks in_ `exitCode:0`.
   - **Fix:** set KV406 (and KV405) `error`, or fail-closed on touch-graph unresolved codes regardless of registry
     severity; fix the test.
   - **Test:** KV406-only graph → `exitCode 1` + `ERROR KV406`.
@@ -352,7 +353,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 - [x] **E2 (high) — KV310 optimistic-exhaustiveness is computed from declared `invalidates`/`writes`, not the touch graph** `impl-bug` (ANALYSIS-VERIFIER-3)
   - **Where:** `optimisticCoverageWarnings` (`cli/index.ts:4606-4615`) uses `mutationAffectedDomains` only; never
     reads `graph.touchGraph` (KV407 and KV314 both do).
-  - **Defect:** §10.6 ties KV310 to the *derived* invalidation set. A mutation whose only invalidation edge is in
+  - **Defect:** §10.6 ties KV310 to the _derived_ invalidation set. A mutation whose only invalidation edge is in
     the touch graph ships no optimistic story and `kovo check optimistic` stays silent.
   - **Fix:** union touch-graph-derived domains into the mutation→query match (mirror `deriveInvalidationRegistry`).
   - **Test:** mutation with empty `invalidates` but a `cart` touch-graph edge + uncovered `cartQuery` → `WARN KV310`.
@@ -365,18 +366,18 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
     superset check inside `kovoCheck`).
   - **Test:** real `extractTouchGraphFromProject` whose mutation touches an extra domain → KV402, `exitCode 1`.
 
-> **Contested sibling:** ANALYSIS-VERIFIER-2 (KV405 also `warn` not `error`) — same root as E1; see *Contested*.
+> **Contested sibling:** ANALYSIS-VERIFIER-2 (KV405 also `warn` not `error`) — same root as E1; see _Contested_.
 
 ---
 
-## Lane F — Output safety & morph-path encoding  *(`security-output.ts`, `output-context.ts`, `html.ts`, `morph.ts`)*
+## Lane F — Output safety & morph-path encoding _(`security-output.ts`, `output-context.ts`, `html.ts`, `morph.ts`)_
 
-- [x] **F1 (high) — Server SSR does not scheme-check dynamic URL attributes** `spec-impl-divergence` (OUTPUT-SAFETY-1, *promoted*)
+- [x] **F1 (high) — Server SSR does not scheme-check dynamic URL attributes** `spec-impl-divergence` (OUTPUT-SAFETY-1, _promoted_)
   - **Where:** `html.ts:16 escapeAttribute` escapes only `&<>"`; `jsx-runtime.ts:210` + `emit/server.ts:472`
     render dynamic attrs through it; **the server imports no URL sanitizer** (main-thread-verified grep → 0); the
     compiler's `validateUrlAttribute` bails for non-literal expressions (`output-context.ts:139`).
   - **Defect:** a query/DB-controlled `href={row.url}` of `javascript:…` renders as a live sink on **first paint**;
-    the client later rewrites the *same* value to `#` → §5.2#10 render-equivalence divergence + server stored-XSS.
+    the client later rewrites the _same_ value to `#` → §5.2#10 render-equivalence divergence + server stored-XSS.
     (Contested — refuter conflated literal/compile handling + client tests; the dynamic-server path is real.)
   - **Fix:** route URL-bearing attrs through a shared server `kovoSafeUrl` in the JSX runtime + emitted modules so
     server == client; emit a runtime sanitizer wrapper for non-literal URL expressions.
@@ -408,9 +409,9 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 
 ---
 
-## Lane G — Morph engine duplication & shipped-engine bugs  *(`morph.ts` vs `inline-loader.ts`)*
+## Lane G — Morph engine duplication & shipped-engine bugs _(`morph.ts` vs `inline-loader.ts`)_
 
-- [x] **G1 (high) — Two divergent morph engines; the *shipped* one (inline loader) is weaker and largely untested** `coverage-gap` (MORPH-5) — *root cause of G2–G4*
+- [x] **G1 (high) — Two divergent morph engines; the _shipped_ one (inline loader) is weaker and largely untested** `coverage-gap` (MORPH-5) — _root cause of G2–G4_
   - **Where:** the served document injects the minified `m/u/k/d` from `response-fragment-apply.ts`/`inline-loader.ts`
     (`document-core.ts:356`); the thorough unit/browser tests target `morph.ts` (a separately-exposed bootstrap not
     used by default documents).
@@ -447,7 +448,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 
 ---
 
-## Lane H — Wire dispatch & request shell  *(`app-dispatch.ts`, `app-mutation-request.ts`, `query.ts`, `shell.ts`)*
+## Lane H — Wire dispatch & request shell _(`app-dispatch.ts`, `app-mutation-request.ts`, `query.ts`, `shell.ts`)_
 
 - [x] **H1 (high) — Malformed / wrong-Content-Type mutation body returns 500 (+ onError) before CSRF** `spec-impl-divergence` (WIRE-DISPATCH-2)
   - **Where:** `app-mutation-request.ts:47` reads the body with no try/catch; bad JSON / non-form Content-Type
@@ -466,7 +467,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 - [x] **H3 (medium) — `/_q/` failure/guard responses omit `Cache-Control: private, no-store` + `Vary: Cookie`** `spec-impl-divergence` (WIRE-DISPATCH-4)
   - **Where:** only the 200 branch sets them (`query.ts:358-371`); 422/429/500 (`:348-355`) and guard-failure
     403/redirect (`guards.ts:336-347`) carry only Content-Type/Location.
-  - **Defect:** §9.4:895 "holds for every transport that hits /_q/"; a shared cache can store an anon 403 and
+  - **Defect:** §9.4:895 "holds for every transport that hits /\_q/"; a shared cache can store an anon 403 and
     replay it to an authed user.
   - **Fix:** apply the cache posture to all `/_q/` responses.
   - **Test:** assert headers on 422 / 500 / 403-redirect.
@@ -479,7 +480,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 
 ---
 
-## Lane I — Routing & navigation  *(`route.ts`, `match.ts`, `app-diagnostics.ts`)*
+## Lane I — Routing & navigation _(`route.ts`, `match.ts`, `app-diagnostics.ts`)_
 
 - [x] **I1 (high) — A route page returning `redirect()` renders as a 200 `[object Object]`** `spec-impl-divergence` (ROUTING-NAV-1)
   - **Where:** `runRoutePageInternal` (`route.ts:427`) recognizes only `notFound`/`routeResponse`; a `Redirect`
@@ -491,7 +492,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 
 - [x] **I2 (high) — Route params delivered to pages are never URL-decoded** `impl-bug` (ROUTING-NAV-2)
   - **Where:** `match.ts:237` assigns the raw split segment; nothing downstream decodes (`route.ts:316-318`,
-    schema layer). Typed-link emission *encodes* (`navigation.ts:257`), so the round-trip is broken;
+    schema layer). Typed-link emission _encodes_ (`navigation.ts:257`), so the round-trip is broken;
     `match.test.ts:33-40` even asserts the encoded value as expected.
   - **Defect:** `GET /users/john%20doe` → `params.id === 'john%20doe'`; DB lookups on the human value fail.
   - **Fix:** `decodeURIComponent` each segment (try/catch → 400); fix the test.
@@ -506,14 +507,14 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
   - **Fix:** extend the gate to session/side-effect facts; add `prefetchJustification` to suppress KV419.
   - **Test:** unguarded session-scoped route → KV419; guarded+moderate+justification → none.
 
-> **Contested sibling:** ROUTING-NAV-4 (login `next` not validated against the route table) — partial; see *Contested*.
+> **Contested sibling:** ROUTING-NAV-4 (login `next` not validated against the route table) — partial; see _Contested_.
 
 ---
 
-## Lane J — A11y, attribute-merge & primitive reactivity  *(`lower/attribute-merge.ts`, `lower/structural-jsx.ts`, `primitive-reactive-registry.ts`)*
+## Lane J — A11y, attribute-merge & primitive reactivity _(`lower/attribute-merge.ts`, `lower/structural-jsx.ts`, `primitive-reactive-registry.ts`)_
 
 - [x] **J1 (high) — State-bearing `aria-*` resolves author-wins in attribute-merge; SPEC says primitive-wins** `spec-impl-divergence` (A11Y-PRIMITIVES-1, COMPILER-LOWER-2)
-  - **Where:** `attribute-merge.ts:247-250` collapses *all* `aria-*`/`role` into one `return author` branch;
+  - **Where:** `attribute-merge.ts:247-250` collapses _all_ `aria-*`/`role` into one `return author` branch;
     `data-state` correctly returns `primitive` (`:252-255`), exposing the inconsistency.
   - **Defect:** §4.6 splits descriptive `aria-*` (author wins) from **state** `aria-*` the primitive updates
     (`aria-expanded/selected/checked/pressed/current` → primitive wins; KV232/KV317). Initial SSR shows the wrong
@@ -540,12 +541,12 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 
 > **Contested siblings (this lane):** A11Y-PRIMITIVES-2 (query-rooted primitive control props freeze
 > `aria-*`/`data-state`) and A11Y-PRIMITIVES-3 (Tabs/ToggleGroup missing from the reactive registry — the
-> documented "ARIA derives only for call-site attrs" gotcha, generalized) — both real per exploiter; see *Contested*.
+> documented "ARIA derives only for call-site attrs" gotcha, generalized) — both real per exploiter; see _Contested_.
 > These overlap the `gallery-css-and-derive-gotchas` memory.
 
 ---
 
-## Lane K — Streaming, broadcast & island lifecycle  *(`broadcast.ts`, `stream-text.ts`, `apply-deferred-stream.ts`, `loader-lifecycle.ts`, `clock-tick-bus.ts`)*
+## Lane K — Streaming, broadcast & island lifecycle _(`broadcast.ts`, `stream-text.ts`, `apply-deferred-stream.ts`, `loader-lifecycle.ts`, `clock-tick-bus.ts`)_
 
 - [x] **K1 (high) — Broadcast principal check is asymmetric: a tab with no fingerprint accepts any rebroadcast** `impl-bug` (STREAMING-LIVE-2)
   - **Where:** `broadcast.ts:105` `if (options.principal !== undefined && event.data.principal !== options.principal) return;`
@@ -568,7 +569,7 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
   - **Where:** `app-document.ts:100-109` FNV-1a's the entire `Cookie:` header; the real principal is available
     (`guards.ts:516`, `replay.ts:284-290`).
   - **Defect:** §9.3 "derived from req.session identity." Any non-session cookie churn (CSRF rotation, theme, cart)
-    gives two tabs of the *same* user different fingerprints → legitimate same-user sync is discarded.
+    gives two tabs of the _same_ user different fingerprints → legitimate same-user sync is discarded.
   - **Fix:** derive from the resolved session id (hashed), `undefined` only when genuinely anonymous.
   - **Test:** same session id + different extra cookies → same fingerprint; different session id → different.
 
@@ -612,42 +613,42 @@ The "soundly optimistic / wrong predictions are worse than none" self-claim. Own
 
 ---
 
-## Contested — needs adjudication  *(real per the exploiter; the refuter found partial handling/coverage)*
+## Contested — needs adjudication _(real per the exploiter; the refuter found partial handling/coverage)_
 
-Each is genuine on the code, but a verifier dissented (usually: a sibling case *is* handled/tested, or it overlaps
+Each is genuine on the code, but a verifier dissented (usually: a sibling case _is_ handled/tested, or it overlaps
 a known-open item). Worth a focused decision before building.
 
 - [ ] **OPTIMISM-4 (high)** — `MutationQueue` (28 lines) has no head-of-line timeout/abort and no depth bound; a hung
-  head blocks the tail forever (§10.4:1122/1123/1125). *Refuter: refuted.* Belongs with Lane C.
+      head blocks the tail forever (§10.4:1122/1123/1125). _Refuter: refuted._ Belongs with Lane C.
 - [ ] **OPTIMISM-5 (medium)** — every snapshot/clone uses whole-value `structuredClone` (`query-store.ts:52`,
-  `optimism.ts:137/194/302`), violating the normative bounded/copy-on-write snapshot rule (O(dataset) per rebase tick).
-  The "F22 snapshot bound" box in `bugs-and-testing.md` has no test. *Refuter: refuted.*
+      `optimism.ts:137/194/302`), violating the normative bounded/copy-on-write snapshot rule (O(dataset) per rebase tick).
+      The "F22 snapshot bound" box in `bugs-and-testing.md` has no test. _Refuter: refuted._
 - [ ] **ANALYSIS-VERIFIER-2 (high)** — KV405 is also `warn` not `error` (`diagnostics.ts:625`); an isolated KV405
-  passes CI despite §11.2 "no longer advisory." Same root + fix as **E1**. *Refuter: refuted.*
+      passes CI despite §11.2 "no longer advisory." Same root + fix as **E1**. _Refuter: refuted._
 - [ ] **GAP4-2 (high)** — `csrf:false` + no ambient session → `scope=null` → `reserveMutationReplayBeforeRun` returns
-  `disabled` → duplicate external POSTs with a stable idem double-execute (§10.3 all-paths). *Refuter: handled+tested
-  (but on the session-bearing path).* Belongs with Lane A.
+      `disabled` → duplicate external POSTs with a stable idem double-execute (§10.3 all-paths). _Refuter: handled+tested
+      (but on the session-bearing path)._ Belongs with Lane A.
 - [ ] **LOADER-RUNTIME-4 (high)** — the inline loader's `sef` applies/ignores the response body without inspecting
-  `res.status`/`Kovo-Reauth`; a non-fragment 4xx/5xx body is silently swallowed (form shows no failure). Overlaps
-  known-open F6 but is the deeper status-blind-swallow bug. *Refuter: refuted (overlaps F6).*
+      `res.status`/`Kovo-Reauth`; a non-fragment 4xx/5xx body is silently swallowed (form shows no failure). Overlaps
+      known-open F6 but is the deeper status-blind-swallow bug. _Refuter: refuted (overlaps F6)._
 - [ ] **A11Y-PRIMITIVES-2 (high)** — `lowerPrimitiveReactiveAttributes` only accepts `state`-rooted control props
-  (`structural-jsx.ts:889`); a query-driven `<Switch checked={q.field}>` freezes `aria-checked`/`data-state` while
-  `checked` stays reactive. *Refuter: not refuted (verdict incomplete).* Strong candidate to promote.
+      (`structural-jsx.ts:889`); a query-driven `<Switch checked={q.field}>` freezes `aria-checked`/`data-state` while
+      `checked` stays reactive. _Refuter: not refuted (verdict incomplete)._ Strong candidate to promote.
 - [ ] **A11Y-PRIMITIVES-3 (high)** — Tabs/TabsTrigger/TabsPanel and ToggleGroup* are missing from
-  `primitiveReactiveComponents`, so their state `aria-*` freeze on interaction. *Refuter: handled+tested (the
-  primitive *function* is tested in isolation; the compiler wiring is not).* Strong candidate to promote.
+      `primitiveReactiveComponents`, so their state `aria-*` freeze on interaction. *Refuter: handled+tested (the
+      primitive *function* is tested in isolation; the compiler wiring is not).* Strong candidate to promote.
 - [ ] **STATIC-EXPORT-DEPLOY-3 (high)** — an empty build token (module-less L0/L1 doc) omits the `kovo-build` meta and
-  disables the skew gate entirely (`apply-mutation-response.ts:97-100`). *Refuter: handled+tested.* Resolved by **D1**
-  (make the token build-global, never empty).
+      disables the skew gate entirely (`apply-mutation-response.ts:97-100`). _Refuter: handled+tested._ Resolved by **D1**
+      (make the token build-global, never empty).
 - [ ] **STATIC-EXPORT-DEPLOY-4 (high)** — prior-artifact retention is count-based (`client-modules.ts:244-250`), not
-  the §14 24h wall-clock floor; a redeploy burst 404s in-window artifacts; KV417 is unregistered. *Refuter: refuted.*
+      the §14 24h wall-clock floor; a redeploy burst 404s in-window artifacts; KV417 is unregistered. _Refuter: refuted._
 - [ ] **ROUTING-NAV-4 (medium)** — login `next` is origin-sanitized but never validated against the route table
-  (§6.5:724); an in-app non-route path survives. *Refuter: refuted (open-redirect prong is handled).*
-- [ ] **OUTPUT-SAFETY-1 (high)** — *promoted to F1 above* after main-thread verification.
+      (§6.5:724); an in-app non-route path survives. _Refuter: refuted (open-redirect prong is handled)._
+- [ ] **OUTPUT-SAFETY-1 (high)** — _promoted to F1 above_ after main-thread verification.
 
 ---
 
-## Sequencing & ownership  *(CLAUDE.md worktree protocol; ≤5 sub-agents at once)*
+## Sequencing & ownership _(CLAUDE.md worktree protocol; ≤5 sub-agents at once)_
 
 Lanes are file-partitioned, so most run concurrently. Watch these shared hotspots:
 
@@ -668,7 +669,7 @@ Independent / slot anywhere: A7, B4, B5, F4, H2/H3/H4, K6/K7/K8, the contested t
 ## Governance & proof
 
 - **Definition of done per item:** the cited test goes **red against today's code, green after the fix** (for
-  coverage gaps, the new fixture/assertion fails on the unfixed path). Several existing tests *codify the bug*
+  coverage gaps, the new fixture/assertion fails on the unfixed path). Several existing tests _codify the bug_
   (`replay 5min`/`index.kovo-check.test.ts:513` KV406, `mutation-response.test.ts:1077` streaming `toBe('')`,
   `match.test.ts:33-40` encoded param, `client-modules.test.ts:55-59` count-eviction 404) — those assertions must be
   inverted, not preserved.

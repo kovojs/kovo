@@ -5,7 +5,10 @@ import { expect, test } from '@kovojs/test/internal/integration';
 // read-modify-write race across overlapping request lifecycles/transactions.
 test.use({ kovoFixture: 'concurrent-distinct-writes' });
 
-test('two overlapping distinct writes both apply (no lost update)', async ({ kovoApp, request }) => {
+test('two overlapping distinct writes both apply (no lost update)', async ({
+  kovoApp,
+  request,
+}) => {
   // Fire both mutations concurrently; their handlers sleep before the atomic increment
   // so the request lifecycles genuinely overlap.
   const [a, b] = await Promise.all([

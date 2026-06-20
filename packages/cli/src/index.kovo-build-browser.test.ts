@@ -45,7 +45,11 @@ function writeClientEntry(root: string): void {
     '<!doctype html><html><body><script type="module" src="/src/client.ts"></script></body></html>',
     'utf8',
   );
-  writeFileSync(join(root, 'src/client.ts'), "import './style.css';\nexport const client = true;\n", 'utf8');
+  writeFileSync(
+    join(root, 'src/client.ts'),
+    "import './style.css';\nexport const client = true;\n",
+    'utf8',
+  );
   writeFileSync(join(root, 'src/style.css'), 'main { color: rebeccapurple; }\n', 'utf8');
 }
 

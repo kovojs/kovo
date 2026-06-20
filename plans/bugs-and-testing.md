@@ -1,8 +1,8 @@
 # Bugs & Testing — Merged Sequenced Plan
 
 **Date:** 2026-06-19
-**Sources:** `plans/bugs-1.md` (30 verified SPEC design defects — the *contracts*) and
-`plans/testing-audit.md` (integration-suite coverage gaps — the *verification*).
+**Sources:** `plans/bugs-1.md` (30 verified SPEC design defects — the _contracts_) and
+`plans/testing-audit.md` (integration-suite coverage gaps — the _verification_).
 **Goal:** one execution roadmap that sequences both, **parallelized aggressively**, with explicit
 dependency gates and file-ownership rules so independent work runs concurrently without colliding.
 
@@ -13,10 +13,10 @@ dependency gates and file-ownership rules so independent work runs concurrently 
   (cross-lane merges on §10.3 lifecycle, §6.6, §9.4; KV-code collisions renumbered), applied as the
   single writer. SPEC.md 1287→1416 lines. New codes KV313/314/316/317/414/415/416/417/418/419;
   KV236/405/406/410 amended (59 unique registry rows). Adversarial verification (7 per-lane checkers
-  + 1 global hunter) confirmed every finding "correctly and coherently fixed"; the 2 blockers (KV232
-  reused at two severities → split to new error KV317) and 5 minors (F2 punctuation; §6.2 `reads:`
-  row; §5.2.1/§5.2.2 moved under their §5.2 parent; §13 pointer-list reordered; §13→§14 and
-  §5.2.2 numbering gaps closed) are resolved. All cross-refs resolve; `git diff --check` clean.
+  - 1 global hunter) confirmed every finding "correctly and coherently fixed"; the 2 blockers (KV232
+    reused at two severities → split to new error KV317) and 5 minors (F2 punctuation; §6.2 `reads:`
+    row; §5.2.1/§5.2.2 moved under their §5.2 parent; §13 pointer-list reordered; §13→§14 and
+    §5.2.2 numbering gaps closed) are resolved. All cross-refs resolve; `git diff --check` clean.
 - **Contract IMPLEMENTATION (moving bugs-1 from SPEC-only to code): 4 done.**
   - ✅ **F35** — `/_q` reads emit `Cache-Control: private, no-store` + `Vary: Cookie` (`query.ts`);
     unit + integration verified. Closes the shared-cache cross-user leak without the S1 harness.
@@ -59,7 +59,7 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     - **F12 (CRITICAL — IDOR)** — already satisfied: the owner-table predicate analysis
       (`unscopedAccesses`) + a **blocking gate** (`kovo explain --unscoped --fail-on-findings` → exit 1)
       exist, regression-locked by `unscoped-owner-fixture.spec.ts` ("typed read only exposes rows for
-      the session owner", green) + unit tests. bugs-1 flagged it because the SPEC didn't *mandate* the
+      the session owner", green) + unit tests. bugs-1 flagged it because the SPEC didn't _mandate_ the
       gate; Phase 1 fixed that. **Both criticals (F7, F12) are now spec + code + test aligned.**
     - So the genuinely-needs-new-code backlog is much smaller than "~24": Phase 1 made the SPEC
       mandate what the code already does (regression-locked), and the truly-missing pieces were the
@@ -71,11 +71,11 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     KV416 (prod render-equivalence gate), KV417 (retention floor), KV418 (csrf:false ambient session)
     are **runtime/build validations** in the impl (thrown `Error`s / build gates — e.g. F9's CRLF guard
     in `cookies.ts`), **not** compile-time diagnostics. Registering them in `core/diagnostics.ts`
-    (compile registry) would be the wrong home. The remaining *compile* diagnostics that genuinely
+    (compile registry) would be the wrong home. The remaining _compile_ diagnostics that genuinely
     need new analysis are KV420/316/317 (F39/F40) — lowering/nesting/aria checks.
   - **Genuinely-remaining (needs new/changed code)** — precisely-scoped blockers from tracing the code:
     - **F1/KV418** (csrf:false + session guard) — the declarative check is easy, BUT the test suite
-      uses `csrf:false` + a guard for *test simplicity* (skip the CSRF dance) in `guarded-mutation`,
+      uses `csrf:false` + a guard for _test simplicity_ (skip the CSRF dance) in `guarded-mutation`,
       `session-provider-once`, etc. Enforcing KV418 as written would break them. **Precursor:** give
       the harness a CSRF-bypass that isn't `csrf:false`, then migrate those fixtures, then enforce.
     - **F13** (BroadcastChannel principal fingerprint) — browser receive-side check is contained
@@ -85,12 +85,12 @@ dependency gates and file-ownership rules so independent work runs concurrently 
       document render) + the browser envelope/discard check. Medium, two halves.
     - **F6** (auth-redirect 401/`Kovo-Reauth`) — `ResolvedGuardFailure` carries the auth kind so the
       server branch is feasible, BUT the loader half lives in the **8KB inline loader** (`sef` applies
-      the body without inspecting status/headers). A server-only change *regresses* the enhanced path
+      the body without inspecting status/headers). A server-only change _regresses_ the enhanced path
       (401 the loader doesn't follow); needs the inline-loader reauth handler + the 422→401 change
       (updates `guarded-mutation.spec.ts`). Genuinely multi-part + budget-sensitive.
     - **F3 / F5** — partially present: `csrf.ts` already mints a token for anonymous (bound to the
       secret); `rateLimit` is already a guard combinator. The residuals are a stronger per-anonymous
-      binding (F3) and a *pre-dispatch* per-IP limiter (F5, a new request-shell feature) — each a
+      binding (F3) and a _pre-dispatch_ per-IP limiter (F5, a new request-shell feature) — each a
       real change to the CSRF/dispatch path.
     - **KV414** (IDOR gate) — hardest: needs WHERE-predicate→`req.session` traceability analysis
       (or runtime predicate observation via the §11.2 cross-check). **KV420/316/317** — compiler
@@ -152,21 +152,21 @@ Two harness keystones from testing-audit gate whole columns of verification and 
 - **G‑S1** = a production build is `kovo build`-served and driven in a real browser (testing-audit
   §3 S1 / P1).
 - **G‑S2/3** = canonical fixtures authored as real TSX through the compiler + public client API, with
-  the *extracted* touch graph chained into the runtime verifier and the real package stack
+  the _extracted_ touch graph chained into the runtime verifier and the real package stack
   integrated (testing-audit §3 S2+S3 / P1).
 
 ### Theme ↔ contract ↔ test ↔ gate map
 
-| Lane | bugs-1 contracts | testing-audit verification | Gated by |
-| --- | --- | --- | --- |
-| **A1 Output safety** | F7, F8, F10 | P0 XSS/escaping fixtures (§4) | none (dev harness) |
-| **A2 Access control** | F12, F1, F2, F3, F4, F13, F36 | §4 perimeter + IDOR + negative-compile (P3) | A2 impl; G‑S2/3 for explain-graph |
-| **A3 Transport & DoS** | F9, F34, F35, F5 | P0 cookie-hardening; cache/bfcache (5.4) | cookie: none · cache/bfcache: **G‑S1** |
-| **A4 Refs & version token** | F30, F32, F29 | prod-delta + deploy-skew-422 + minified-name (S1/5.4) | **G‑S1** |
-| **A5 Optimism & lifecycle** | F17, F19, F20, F22, F27, F28, F6 | 5.2 concurrency + derived-optimism (5.1) | dev harness · derived-optimism: **G‑S2/3** |
-| **A6 Data-plane soundness** | F23, F24 | verifier-chain: KV405/406/408, multi-domain, real-PG, page-reads (5.1) | **G‑S2/3** |
-| **A7 Composition & coverage** | F39, F40, F33 | morph-survival, `isomorphic`, multi-feature, layout, no-JS (5.3/5.6) | dev harness · isomorphic: A7‑F40 |
-| **Deferred** | F15 | SSE subscribe-then-revoke guard re-check (§4/P3) | **lands with the unbuilt SSE feature** |
+| Lane                          | bugs-1 contracts                 | testing-audit verification                                             | Gated by                                   |
+| ----------------------------- | -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------ |
+| **A1 Output safety**          | F7, F8, F10                      | P0 XSS/escaping fixtures (§4)                                          | none (dev harness)                         |
+| **A2 Access control**         | F12, F1, F2, F3, F4, F13, F36    | §4 perimeter + IDOR + negative-compile (P3)                            | A2 impl; G‑S2/3 for explain-graph          |
+| **A3 Transport & DoS**        | F9, F34, F35, F5                 | P0 cookie-hardening; cache/bfcache (5.4)                               | cookie: none · cache/bfcache: **G‑S1**     |
+| **A4 Refs & version token**   | F30, F32, F29                    | prod-delta + deploy-skew-422 + minified-name (S1/5.4)                  | **G‑S1**                                   |
+| **A5 Optimism & lifecycle**   | F17, F19, F20, F22, F27, F28, F6 | 5.2 concurrency + derived-optimism (5.1)                               | dev harness · derived-optimism: **G‑S2/3** |
+| **A6 Data-plane soundness**   | F23, F24                         | verifier-chain: KV405/406/408, multi-domain, real-PG, page-reads (5.1) | **G‑S2/3**                                 |
+| **A7 Composition & coverage** | F39, F40, F33                    | morph-survival, `isomorphic`, multi-feature, layout, no-JS (5.3/5.6)   | dev harness · isomorphic: A7‑F40           |
+| **Deferred**                  | F15                              | SSE subscribe-then-revoke guard re-check (§4/P3)                       | **lands with the unbuilt SSE feature**     |
 
 ---
 
@@ -180,17 +180,16 @@ Aggressive parallelism fails on shared-file collisions, not on independent work.
   A5 §10.4/§9.2/§10.3 · A6 §10.1/§10.2/§11.1/§11.2 · A7 §4.5/§4.6/§4.9/§9.1.
 - **🔴 `SPEC.md` §11.3 diagnostic registry is the one shared hotspot.** A1 (define KV236), A2 (new
   KV414 IDOR gate), A6 (pin KV406→error, KV405→gating), A3/A7 (any new codes) all touch the KV table.
-  **Rule:** each A‑lane *proposes* its KV row in its handoff note; **main applies all registry
+  **Rule:** each A‑lane _proposes_ its KV row in its handoff note; **main applies all registry
   rows in one integration edit** after lanes hand off, so the table never churns under parallel
   branches.
 - **🔴 `api-surface-baseline.json` moves for public-API changes** — A2's guard-arg signature (F12)
   and any new public surface trip `rules/api-surface.md`. The owning lane regenerates the baseline in
   its branch; main re-runs the API gate at merge. Treat A2 as the API-surface-critical lane.
 - **Harness (`packages/test/src/integration/**`) is shared by B1 and B2.** Partition: **B1 owns the
-  build-serve/server-boot path** (`bootFixture` prod variant, `dist/server/server.mjs` boot); **B2
-  owns the fixture-plugin → compiler-emit + verifier-chain path**. One owns the `bootFixture`
-  signature; the other extends it via an option. Land **B0 (the one-line `vite.config.ts`
-  cache-input fix) first and merge it before B1/B2 branch** so neither rebases over it.
+build-serve/server-boot path** (`bootFixture`prod variant,`dist/server/server.mjs`boot); **B2
+owns the fixture-plugin → compiler-emit + verifier-chain path**. One owns the`bootFixture`signature; the other extends it via an option. Land **B0 (the one-line`vite.config.ts`
+  cache-input fix) first and merge it before B1/B2 branch\*\* so neither rebases over it.
 - **New fixtures** (`tests/integration/fixtures/<name>` + `<name>.spec.ts`) are new files → the C/D
   lanes parallelize freely with zero contention.
 
@@ -201,9 +200,9 @@ The wave schedule below never asks for more than that at a barrier.
 
 ## Wave schedule (the spine)
 
-### Wave 1 — Contracts + cheap wins + ignite the long poles  *(all parallel, ungated)*
+### Wave 1 — Contracts + cheap wins + ignite the long poles _(all parallel, ungated)_
 
-> Main thread owns the #1 critical (output safety, highest leverage in *both* docs). Up to 5
+> Main thread owns the #1 critical (output safety, highest leverage in _both_ docs). Up to 5
 > sub-agents run the rest. B0 is a ~5-minute warm-up folded into main before it picks up A1.
 
 - **[main] A1 — Output-safety slice (contract + test together).** Write the normative escaping rule
@@ -222,7 +221,7 @@ The wave schedule below never asks for more than that at a barrier.
 - **[agent‑4] A3+A4 bundle — Transport safety + refs/version-token** (F9 header CRLF guard + typed
   cookie builder **and** the P0 cookie-hardening test [`HttpOnly`/`SameSite`/`Secure` + merge order +
   login→authed→logout]; F34 guarded-doc `no-store`+`pageshow`; F35 `/_q` `Cache-Control: private,
-  no-store`+`Vary`; F30 define the render-plan version token in real §5.1/§5.2.1/§5.2.3/§15 + retention
+no-store`+`Vary`; F30 define the render-plan version token in real §5.1/§5.2.1/§5.2.3/§15 + retention
   window; F32 write §13.2 `kovo-key` contract; F29 delta deep-merge replace-vs-merge rule).
 - **[warm-up, then folds into main] B0 — cache-input fix** (`vite.config.ts`: add
   `packages/test/src/**` + app packages to the `integration` input globs; add the meta-test).
@@ -230,11 +229,12 @@ The wave schedule below never asks for more than that at a barrier.
 **Wave-1 gates produced:** G1 (output safety done), A2/A3/A4 contracts merged; **G‑S1 and G‑S2/3 land
 asynchronously when B1/B2 finish** and open Wave 2's gated tests.
 
-### Wave 2 — Remaining contracts + gated verification  *(parallel; each item starts when its gate clears)*
+### Wave 2 — Remaining contracts + gated verification _(parallel; each item starts when its gate clears)_
 
 Spec authoring (keystone-independent — start as Wave-1 worktrees merge):
+
 - **A5 — Optimism & lifecycle contracts** (F17 settlement-matching by `Kovo-Idem` before rebase
-  re-apply; F28 atomic replay *reservation* for all mutation paths; F27 fresh per-submit idem token;
+  re-apply; F28 atomic replay _reservation_ for all mutation paths; F27 fresh per-submit idem token;
   F19 `queue:` FIFO timeout/drain/apply-timing; F20 missing-truth = discard not freeze; F6 mutation
   auth-redirect vocabulary; F22 bound the optimistic snapshot).
 - **A6 — Data-plane soundness contracts** (F23 pin KV406→error at unresolved sites, raise KV405 to
@@ -243,6 +243,7 @@ Spec authoring (keystone-independent — start as Wave-1 worktrees merge):
   F40 isomorphic-island children rule; F33 split `aria-*` static-vs-state row).
 
 Gated verification (start the moment the named gate clears):
+
 - **C3 ← A2 impl:** IDOR/auth integration (arg-keyed read denied; **KV414 fails the build**;
   `csrf:false` mutation visible in `--endpoints`) + negative-compile tests (`@ts-expect-error` for
   wrong mutation field / bad binding path / invalid typed link, F36 prefetch gate).
@@ -251,7 +252,7 @@ Gated verification (start the moment the named gate clears):
 - **C5 ← G‑S1:** prod-delta encoding (keyed upsert + removed-key + token-mismatch refetch),
   deploy-skew-422, **Constitution #1 minified-name survival** — verifies A4 F30/F29.
 - **C6 ← A5 (+ G‑S2/3 for derived-optimism):** `queue:'cart'` FIFO, multi-transform rebase ordering,
-  concurrent-distinct lost-update, compiler-*derived* optimistic transform end-to-end (no correction
+  concurrent-distinct lost-update, compiler-_derived_ optimistic transform end-to-end (no correction
   flash) — verifies A5 F17/F19/F27 and bugs-1 rebase double-count.
 - **C7 ← G‑S2/3 (+ A6):** chain extracted graph into verifier; assert KV405/406/408 actually fire,
   multi-table/multi-domain write + keyed fan-out, real-Postgres failure (unique/FK/check/NOT-NULL →
@@ -260,19 +261,19 @@ Gated verification (start the moment the named gate clears):
   `<select>`/checkbox/media state — **F39 child-island-state**), `isomorphic:true` render-equivalence
   (**F40**), multi-feature interaction page, `layout()` end-to-end, no-JS degradation on a real app.
 
-### Wave 3 — Breadth & robustness  *(independent infra; run as capacity frees)*
+### Wave 3 — Breadth & robustness _(independent infra; run as capacity frees)_
 
 - **D — Harness/CI:** firefox/webkit `@cross-engine` tier; flake gate + scheduled `--repeat-each=3`
   over race-prone specs; module-scope reset between tests; semantic-snapshot allowlist meta-test;
   clear `globalThis.__kovoFixtureCssAssets` on close.
 - **C9 — Coverage breadth:** table-driven KV surfacing (KV220/221/227/**242**/302/312 → real
   compiler→ledger→500 doc); KV234 cross-package prefix conflict; `kovo explain --endpoints` driven
-  from the *extracted* graph; scale fixture (300+ keyed rows, deep tree); HEAD empty-body;
+  from the _extracted_ graph; scale fixture (300+ keyed rows, deep tree); HEAD empty-body;
   severity-policy fidelity per tier; `@kovojs/devtool` stamp smoke; time/clock freshness
   (KV312/KV315).
 - **Deferred (lands with the feature):** **F15 + SSE guard re-check** — when `<kovo-live>`/SSE ships,
   the spec per-push session re-resolution rule and the subscribe-then-revoke-mid-stream test land
-  *together*. Do not build now (SSE unimplemented).
+  _together_. Do not build now (SSE unimplemented).
 
 ---
 
@@ -291,7 +292,7 @@ A5 ──▶ C6 ;  A6 ──▶ C7 ;  A7(F40) ──▶ C8(isomorphic)
 SSE feature ──▶ F15 + live-guard test   [not in this plan's scope yet]
 ```
 
-Independent of *everything* (can slot into any wave when an agent is free): B0, D‑lane infra,
+Independent of _everything_ (can slot into any wave when an agent is free): B0, D‑lane infra,
 A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 
 ---
@@ -299,26 +300,28 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 ## Checklists
 
 ### Keystones & cheap wins (Wave 1)
+
 - [x] **B0** `vite.config.ts` integration input broadened to `packages/test/src/**` (verifier now an input) — _meta-test (assert every importable src dir is represented) still TODO_
 - [x] **S1 ✅ DONE** — prod-build-served interactive island driven in headless Chromium
-  (`packages/cli/src/index.kovo-build-browser.test.ts`): `kovo build`→`createKovoNodeServer`→browser
-  →click→inline-loader delegation→import() versioned `/c/` module→handler→`data-bind` 0→1. Green.
-  _Original scoping:_ `kovo build`
-  → `createKovoNodeServer()` → serve is the pattern in `packages/cli/src/index.kovo-build.test.ts`,
-  which **already** asserts at HTTP/fetch level: page 200, `/_m/` 303, `/_q/` query, **`/c/__v/<hash>/`
-  client module 200 + `cache-control: immutable` + `text/javascript`**, and immutable stylesheet.
-  So S1's build/serve/asset-immutability value largely exists. **Genuine remaining gap = the BROWSER
-  drive of a REAL compiler-emitted island** (the loader's delegation→`import()`→execute chain against
-  a prod build) — this is S1+S2 combined and the hardest piece. Next-session entry point: model a new
-  Playwright spec on the CLI test's build+serve, but with a real interactive TSX island and
-  `chromium` driving a click. Obstacle to design around: a prod server with a query/mutation needs a
-  data source (use an in-memory/no-DB app like the CLI test's `appModuleSource`, not commerce).
+      (`packages/cli/src/index.kovo-build-browser.test.ts`): `kovo build`→`createKovoNodeServer`→browser
+      →click→inline-loader delegation→import() versioned `/c/` module→handler→`data-bind` 0→1. Green.
+      _Original scoping:_ `kovo build`
+      → `createKovoNodeServer()` → serve is the pattern in `packages/cli/src/index.kovo-build.test.ts`,
+      which **already** asserts at HTTP/fetch level: page 200, `/_m/` 303, `/_q/` query, **`/c/__v/<hash>/`
+      client module 200 + `cache-control: immutable` + `text/javascript`**, and immutable stylesheet.
+      So S1's build/serve/asset-immutability value largely exists. **Genuine remaining gap = the BROWSER
+      drive of a REAL compiler-emitted island** (the loader's delegation→`import()`→execute chain against
+      a prod build) — this is S1+S2 combined and the hardest piece. Next-session entry point: model a new
+      Playwright spec on the CLI test's build+serve, but with a real interactive TSX island and
+      `chromium` driving a click. Obstacle to design around: a prod server with a query/mutation needs a
+      data source (use an in-memory/no-DB app like the CLI test's `appModuleSource`, not commerce).
 - [x] **B1 / G‑S1 ✅** prod-build-served island driven in a real browser (S1 test, green)
   - S1 also asserts the loaded `/c/__v/` module is **immutable** in-browser.
   - **B2/S2/S3 finding (verified by probe):** the minimal `kovo build` (no vite.config) does NOT render JSX-component bodies at serve time — it extracts CSS + bundles the client only. Real-component server rendering needs the full **vite-plugin build pipeline** (as the examples use), so realistic-app remains the genuinely-large keystone (build+serve an example app with its DB in a browser). (`kovo build` → `dist/server/server.mjs` → click a `/c/__v/` island, submit a mutation, assert immutable hashed assets, interactive)
 - [x] **B2 / G‑S2/3** ✅ realistic-app driven in a browser (`tests/commerce-realistic.e2e.test.ts`): boots the **commerce** example through the production vite-plugin compiler (real-TSX→compiler, not hand-IR) with the **real stack** (drizzle extracted graph + better-auth + seeded PGlite + @kovojs/ui/@kovojs/style). Asserts real-component SSR + live CSRF enforcement (anon `/_m/cart/add`→422 CSRF) + a 2nd real route render. _Findings: demo-serve mints no anon CSRF token (cf. F3); `/products?after=` is a fragment path, not a route._
 
 ### Spec contracts (bugs-1) → SPEC.md — ✅ ALL APPLIED + VERIFIED (Phase 1)
+
 - [x] **A1** F7 escaping contract + KV236 definition (§4.8/§5.2 #10) · F8 JSON-island script-data encoding (§9.1) · F10 sink-renderer escaping (§9.1)
 - [x] **A2** F12 arg-aware guards + `owns()` + KV414 IDOR gate (§10.2/§10.3) · F1 csrf:false→KV418 ambient-session ban (§6.6) · F13 BroadcastChannel fingerprint (§9.3) · F2 `next` same-origin (§6.5) · F3 anon-CSRF (§6.6) · F4 re-auth-before-replay (§10.3) · F36 prefetch gate KV419 (§8)
 - [x] **A3** F9 header CRLF + cookie builder KV415 (§9.1.1) · F34 bfcache `no-store`/`pageshow` (§8) · F35 `/_q` cache headers + token (§9.4) · F5 pre-dispatch rate/body limiter (§9.5/§10.3)
@@ -329,6 +332,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - _Next: implementation of these contracts in compiler/runtime/server code, then the conformance tests below (Phase 2)._
 
 ### Conformance tests (testing-audit) — granular status
+
 - [x] **C1a** XSS/escaping fixture (`xss-escaping`) — text/attr/JSON-island/wire/URL-scheme. Passes.
 - [x] **C1b** LLM-output streamed `<kovo-text>` escaping (`streaming-chat` xss-probe). Passes.
 - [x] **C2a** cookie hardening — `HttpOnly`/`SameSite=Strict` on enhanced + no-JS. Passes.
@@ -346,11 +350,11 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **D1** Firefox/WebKit cross-engine matrix (degradation + counter + binding-text-attr). Verified on all 3 engines.
 - [x] **D2** ✅ flake gate (`flaky-reporter.ts` surfaces retried-but-passed; `KOVO_FAIL_ON_FLAKY=1` hard-gates) + B0 input meta-test + snapshot-allowlist meta-test (`tests/*.meta.test.ts`). _Finding: `data-bind-list` is in `KOVO_SEMANTIC_ATTRS` but absent from `isGeneratedOnlyRenderAttribute` — documented gap to fix in `emit/server.ts`._
 - [x] **C3 (IDOR gate)** — KV414 registered in the impl registry; the blocking owner-table gate
-  (`--unscoped --fail-on-findings`) exists and is regression-locked (`unscoped-owner-fixture.spec.ts`,
-  green). _Negative-compile `@ts-expect-error` tier still TODO._
+      (`--unscoped --fail-on-findings`) exists and is regression-locked (`unscoped-owner-fixture.spec.ts`,
+      green). _Negative-compile `@ts-expect-error` tier still TODO._
 - [x] **C4 (cache + bfcache leak)** — implemented + verified: F35 (`/_q` `private/no-store`+`Vary`)
-  and F34 (guarded-doc `no-store`), with integration assertions. _C5 (prod-delta · deploy-skew-422 ·
-  minified-name survival) still needs **G‑S1** (prod-build browser harness)._
+      and F34 (guarded-doc `no-store`), with integration assertions. _C5 (prod-delta · deploy-skew-422 ·
+      minified-name survival) still needs **G‑S1** (prod-build browser harness)._
 - [x] **C6** ✅ concurrent-distinct lost-update (`concurrent-distinct-writes`) + ✅ derived-optimism (`optimistic-success` — prediction 2→6, reconcile →8 via a `<kovo-query>` wire element so the store settles to server truth) + ✅ multi-transform rebase (`optimistic-rebase.spec.ts`). Queue mechanism exists in `optimism.ts` and is exercised via the rebase/pending flow.
 - [x] **Deferred (v1-complete)** — **F15's spec contract is captured in SPEC §9.3**: `<kovo-live>` "guards are re-checked at subscription AND at each push (a guard that passed at render must pass at patch time — fragments must not become a privilege-escalation side channel)" — held to the SAME normative degree as the BroadcastChannel principal check (F13, implemented + tested). The SSE live-push **runtime + subscribe-then-revoke test belong to the SSE live tier, which the SPEC explicitly scopes OUT of v1** ("Cross-session liveness is an explicit out-of-guarantee boundary for v1 and belongs to the opt-in live tier (§9.3), not to the core mutation proof" — SPEC line 24; L4 tier, §9.3). The v1 deliverable (the normative per-push re-check rule) is done; the implementation/test is correctly post-v1 by the framework's own scope boundary, and is in progress in the `agent/stream-*` worktrees.
 
@@ -360,7 +364,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - Compiler/diagnostic changes (KV414, KV236, KV406/405, prefetch gate) follow
   `rules/compiler-hard-rules.md`; public-surface changes (F12 guard signature) follow
   `rules/api-surface.md` (regenerate + re-gate `api-surface-baseline.json`).
-- **Definition of done per slice:** a contract is proven by its new/updated KV diagnostic *and* its
+- **Definition of done per slice:** a contract is proven by its new/updated KV diagnostic _and_ its
   conformance fixture going red→green against the pre-fix behavior; a test slice is proven by failing
   against the unfixed behavior, then passing. Only check a box when this session verified that
   evidence (named test/command). Run the narrowest useful check per slice; broaden to `tsc` + API

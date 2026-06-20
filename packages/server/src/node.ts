@@ -140,9 +140,7 @@ function nodeHeadersToWebHeaders(request: IncomingMessage): Headers {
   return headers;
 }
 
-function responseHeadersToNodeHeaders(
-  headers: Headers,
-): Record<string, string | string[]> {
+function responseHeadersToNodeHeaders(headers: Headers): Record<string, string | string[]> {
   // SPEC §9.4/§9.1.1: Node's writeHead accepts string[] for multi-value headers.
   // Headers.forEach combines set-cookie into one entry (comma-joined), so handle
   // it separately via getSetCookie() which preserves each cookie as a distinct value.

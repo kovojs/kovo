@@ -592,9 +592,7 @@ function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, n
  * by default; stamping them prevents a shared cache from serving one user's denial
  * to another.
  */
-function withQueryCacheHeaders(
-  response: QueryEndpointResponse,
-): QueryEndpointResponse {
+function withQueryCacheHeaders(response: QueryEndpointResponse): QueryEndpointResponse {
   return {
     ...response,
     headers: {

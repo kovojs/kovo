@@ -139,7 +139,11 @@ describe('@kovojs/test server fixture facts', () => {
     expect(fact.query).toEqual({
       endpoint: {
         body: '<kovo-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
-        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        headers: {
+          'Cache-Control': 'private, no-store',
+          'Content-Type': 'text/html; charset=utf-8',
+          Vary: 'Cookie',
+        },
         status: 200,
       },
       invalidInput: {

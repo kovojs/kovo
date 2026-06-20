@@ -591,13 +591,13 @@ export const diagnosticDefinitions = {
   KV317: {
     code: 'KV317',
     help: [
-      'Would lower to: a static state-bearing ARIA attribute whose author value contradicts the primitive\'s render-time state.',
-      'Blocked reason: state aria-* (aria-expanded/selected/checked/pressed/current, state-driven aria-disabled) is primitive-wins; the primitive\'s runtime derive keeps writing it, so a static author value that disagrees with the render-time state is a frozen-vs-clobbered ambiguity the author cannot have meant — distinct from the visible-override lint KV232.',
-      'Fixes: drop the contradicting static value (let the primitive own it) or set it to match the primitive\'s render-time state.',
+      "Would lower to: a static state-bearing ARIA attribute whose author value contradicts the primitive's render-time state.",
+      "Blocked reason: state aria-* (aria-expanded/selected/checked/pressed/current, state-driven aria-disabled) is primitive-wins; the primitive's runtime derive keeps writing it, so a static author value that disagrees with the render-time state is a frozen-vs-clobbered ambiguity the author cannot have meant — distinct from the visible-override lint KV232.",
+      "Fixes: drop the contradicting static value (let the primitive own it) or set it to match the primitive's render-time state.",
       'SPEC §4.6 makes a contradicting static state aria-* an error (KV317), not the override lint (KV232).',
     ].join('\n'),
     severity: 'error',
-    message: 'Static state-bearing aria-* value contradicts the primitive\'s render-time state.',
+    message: "Static state-bearing aria-* value contradicts the primitive's render-time state.",
   },
   KV320: {
     code: 'KV320',

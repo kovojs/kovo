@@ -91,9 +91,7 @@ describe('server jsx runtime', () => {
 
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
     // alongside the CSRF field. The idem value is a fresh UUID each render.
-    expect(html).toContain(
-      `<input type="hidden" name="csrf" value="${csrfToken(request, csrf)}">`,
-    );
+    expect(html).toContain(`<input type="hidden" name="csrf" value="${csrfToken(request, csrf)}">`);
     expect(html).toMatch(/name="Kovo-Idem" value="[^"]+"/);
     expect(html).toContain('action="/_m/cart/add"');
     expect(html.match(/name="csrf"/g)).toHaveLength(1);
@@ -156,9 +154,7 @@ describe('server jsx runtime', () => {
   });
 
   it('F1: neutralizes javascript: with embedded control chars (bypass attempt)', () => {
-    expect(jsx('a', { href: 'java\nscript:alert(1)', children: 'x' })).toBe(
-      '<a href="#">x</a>',
-    );
+    expect(jsx('a', { href: 'java\nscript:alert(1)', children: 'x' })).toBe('<a href="#">x</a>');
   });
 
   it('F1: passes safe https:// href through unchanged', () => {

@@ -264,7 +264,7 @@ describe('server app mutation request boundary', () => {
 
     expect(response.status).toBe(422);
     expect(onError).not.toHaveBeenCalled();
-    const body = await response.json() as { code: string };
+    const body = (await response.json()) as { code: string };
     expect(body.code).toBe('VALIDATION');
   });
 
@@ -288,7 +288,7 @@ describe('server app mutation request boundary', () => {
 
     expect(response.status).toBe(422);
     expect(onError).not.toHaveBeenCalled();
-    const body = await response.json() as { code: string };
+    const body = (await response.json()) as { code: string };
     expect(body.code).toBe('VALIDATION');
   });
 });

@@ -469,7 +469,10 @@ describe('deriveOptimistic — C5: non-key eq match must punt, not single-row up
   it('punts (non-key-match) when eq columns do not include the declared rowKey', () => {
     const effect: SymbolicEffect = {
       // Non-key eq: category is not the primary key
-      match: { eq: [{ column: 'category', value: { kind: 'const', value: 'books' } }], kind: 'keys' },
+      match: {
+        eq: [{ column: 'category', value: { kind: 'const', value: 'books' } }],
+        kind: 'keys',
+      },
       op: 'update',
       sets: { price: { kind: 'param', path: 'price' } },
       table: 'products',

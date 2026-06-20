@@ -5004,7 +5004,11 @@ function touchGraphMutationSupersetFailures(
   return failures.sort((left, right) => {
     const leftKey = 'query' in left ? left.query : left.mutation;
     const rightKey = 'query' in right ? right.query : right.mutation;
-    return left.code.localeCompare(right.code) || leftKey.localeCompare(rightKey) || left.domain.localeCompare(right.domain);
+    return (
+      left.code.localeCompare(right.code) ||
+      leftKey.localeCompare(rightKey) ||
+      left.domain.localeCompare(right.domain)
+    );
   });
 }
 

@@ -1,10 +1,11 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { ReadSite, TouchGraph, TouchGraphEntry, TouchSite } from '@kovojs/core/internal/graph';
+import type { KovoColumnRef } from './drizzle-surface.js';
 
 interface GraphDomainTableAnnotation {
   domain: string;
-  key?: string;
+  key?: KovoColumnRef;
 }
 
 /** @internal */

@@ -5,7 +5,10 @@ import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from '
 import { guards } from './guards.js';
 import { stylesheet } from './hints.js';
 import { layout, notFound, route } from './route.js';
-import { computeRenderPlanFingerprint, createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+import {
+  computeRenderPlanFingerprint,
+  createMemoryVersionedClientModuleRegistry,
+} from './client-modules.js';
 
 // ─── DEPLOY-3: module-less app always stamps kovo-build ───────────────────────
 
@@ -68,8 +71,7 @@ describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
       }),
     ]);
 
-    const extract = (body: string) =>
-      body.match(/<meta name="kovo-build" content="([^"]*)"/)?.[1];
+    const extract = (body: string) => body.match(/<meta name="kovo-build" content="([^"]*)"/)?.[1];
 
     const tokenA = extract(resA.body as string);
     const tokenB = extract(resB.body as string);

@@ -937,7 +937,6 @@ export function assertRenderPlanTokenMonotonicity(
   const shapesChanged =
     JSON.stringify(sortedRecord(before)) !== JSON.stringify(sortedRecord(after));
 
-
   if (shapesChanged && beforeToken === afterToken) {
     throw new Error(
       `KV416: render-plan token failed to move on a projected-query-shape change. ` +
@@ -949,7 +948,9 @@ export function assertRenderPlanTokenMonotonicity(
 }
 
 function sortedRecord(record: Record<string, string>): [string, string][] {
-  return Object.keys(record).sort().map((k) => [k, record[k] as string]);
+  return Object.keys(record)
+    .sort()
+    .map((k) => [k, record[k] as string]);
 }
 
 /**

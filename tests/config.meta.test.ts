@@ -44,8 +44,11 @@ describe('vite.config.ts integration task (B0 cache-key guard)', () => {
 
     // Find the integration task block and verify the glob is inside it, not
     // just anywhere in the file (defensive: checks locality, not just presence).
-    const integrationBlockStart = source.indexOf("integration: {");
-    expect(integrationBlockStart, 'integration task block must exist in vite.config.ts').toBeGreaterThan(0);
+    const integrationBlockStart = source.indexOf('integration: {');
+    expect(
+      integrationBlockStart,
+      'integration task block must exist in vite.config.ts',
+    ).toBeGreaterThan(0);
 
     // Find the next top-level task after integration to bound the search.
     // (Use a simple heuristic: the next task key at the same indent level.)
