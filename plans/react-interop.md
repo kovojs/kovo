@@ -103,7 +103,7 @@ export const Kanban$mount = mountReact(() => import('./kanban-board.react.js'), 
 2. §4.9 table: add the `react` status row.
 3. §11.3: KV340–KV343 — pending the KV302 registry reconciliation, which should be fixed first and independently.
 4. §15 risks table: one row — React-island creep (mitigation: KV340/KV343 budgets, `kovo explain` listing).
-5. §1.3 phrasing check: "Kovo islands can host rich widgets" becomes a normative pointer to this package.
+5. §1.4 phrasing check: "Kovo islands can host rich widgets" becomes a normative pointer to this package.
 
 ## Open questions (for R0)
 

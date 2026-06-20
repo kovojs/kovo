@@ -192,7 +192,7 @@ instances:
   or A logs out and B logs in. A mutates → `<kovo-query name="cart">` (A's PII) is rebroadcast on the
   origin channel → tab 2 (now B) morphs A's data into B's UI. No attacker code needed.
 - **Verifier note:** High; gated on a shared-device precondition (separate browser profiles don't
-  share a channel), but a real automatic cross-principal disclosure. The §1.1 "cross-session
+  share a channel), but a real automatic cross-principal disclosure. The §1.2 "cross-session
   liveness out of guarantee" caveat is about *freshness*, not *confidentiality*, so it does not
   cover this.
 - [ ] **Fix:** Carry a session/principal fingerprint on the rebroadcast envelope; the receiving tab
@@ -480,7 +480,7 @@ instances:
   is dev/test-only and under-approximates. So an opaque projection reading an exempt/outbox table on
   an unexercised branch is caught by neither half. The verifier noted the spec **already** offers a
   read-side `reads` override (§11.1) and explicitly carves raw-SQL seams out of the static proof
-  (§1.1) — so this is partly "use the existing escape hatch" — but the spec does not *require*
+  (§1.2) — so this is partly "use the existing escape hatch" — but the spec does not *require*
   `reads` on KV410 sites, leaving the hole open by default.
 - [ ] **Fix:** Require KV410 opaque projections to declare a `reads:`/`from:` table set (statically
   checked against exemption and fed into the read set), not relying on runtime observation alone.

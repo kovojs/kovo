@@ -76,8 +76,8 @@ License is permissive; attribution is the only obligation.
 ## 5. The central tension — and the resolution
 
 Material's generators are **runtime JavaScript color math**. Kovo's constitution is the opposite:
-static, legible, "every artifact readable in devtools, checkable without a browser" (SPEC §1.1–1.3),
-and a deliberately minimal client runtime (§1.3 non-goals).
+static, legible, "every artifact readable in devtools, checkable without a browser" (SPEC §1.2–1.4),
+and a deliberately minimal client runtime (§1.4 non-goals).
 
 **Resolution: run the color engine at build time; emit plain CSS custom properties.** The seed color
 is _sugar_; the emitted system-token CSS block is the _authorable artifact_ — which is precisely

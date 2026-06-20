@@ -115,6 +115,6 @@ wiring to be a _type error when it's wrong_, that's the gap Kovo fills.
 Vision and audience: SPEC §1. The five design tests (legibility, no global knowledge at local
 sites, sugar lowers to authorable IR, the wire is the documentation, server truth wins): SPEC §2.
 Non-goals (Figma-class apps, offline-first, cross-navigation media, browser parity, public JSON
-API): SPEC §1.3. Rejected prior art (client router, hydration, client store, shadow DOM): SPEC §3.1.
+API): SPEC §1.4. Rejected prior art (client router, hydration, client store, shadow DOM): SPEC §3.1.
 
 </details>

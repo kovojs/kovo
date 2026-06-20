@@ -9,7 +9,7 @@ model.
 ## Thesis
 
 Kovo is the one framework where this devtool is mostly already built. The whole
-point of the architecture (`SPEC.md` §1.1, §1.2) is that an app's complete
+point of the architecture (`SPEC.md` §1.2, §1.3) is that an app's complete
 dataflow — every component's queries-in, every mutation's writes-out, every
 invalidation edge, every optimistic and update-coverage status — is a **static
 compile-time artifact**, not something to reconstruct by instrumenting a running
