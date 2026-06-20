@@ -148,10 +148,14 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
       false-positive, and **no inter-procedural data-flow tracing is needed**. End-to-end tested
       (`index.scope-audits.test.ts`: project → `ownerDomains [{order,userId}]` + `scopeAudits
       [{order,args}]`, the local-var read not flagged); 265 drizzle + 141 cli tests pass.
-- [ ] **REMAINING — Public-read justification suppression** (small: honor a recorded justification
-      at the site).
-- [ ] **REMAINING — Runtime §11.2 cross-check** — a separate runtime-instrumentation system (verify
-      executed predicates against the static result); not built.
+- [x] **Public-read justification suppression (DONE):** `ScopeAuditFact.justification` suppresses the
+      enforced KV414 in `kovo check` while `kovo explain --unscoped` still surfaces it verbatim
+      (`packages/cli/src/index.ts`). cli 82 tests pass (new suppression test).
+- [ ] **REMAINING — Runtime §11.2 cross-check** — defense-in-depth on the (complete) static gate.
+      The runtime verifier (`createDbVerifier`) observes db operations with their `sql`/`domain`, but
+      a sound owner-read check needs runtime **session-principal matching** of executed predicates
+      (or an `observed ⊆ static` cross-check scoped per query) — a genuinely intricate runtime
+      subsystem. Not built rather than shipped unverified for a security check.
 
 ## Phase 4 — migrate apps to producer-driven owner facts
 
