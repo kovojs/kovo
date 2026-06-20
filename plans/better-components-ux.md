@@ -27,6 +27,7 @@ visible tone (V9); collapsible/disclosure grid-rows open/close animation (C1 sub
 `<output>` sr-only sweep across the interactive demos (T1).
 
 **Deferred (tracked follow-ups, with reason):**
+
 - **B6 OTP per-slot reactive value** — the styled per-slot value can't be sliced by `slotIndex` in a
   client `data-bind` (no indexing in binding paths); needs a component-owned slot-value primitive.
   Reverted to the working original (typing/delete work client-side; the apparent "bug" was a probe
