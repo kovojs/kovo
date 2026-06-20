@@ -126,14 +126,21 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
       `owns()` (`packages/cli/src/index.ts`). `kovo explain --unscoped` still prints. Verified
       against constructed graphs: **cli 141 tests pass** (updated the audit test to the KV414 error
       + added an owns-discharge test).
-- [ ] **REMAINING — the PRODUCER (the hard, security-critical part):** auto-emit `scopeAudits` +
-      `ownerDomains` from real apps so KV414 fires without hand-authored graph facts. **Blocker:**
-      the drizzle extraction detects `arg:`-keyed predicates but has **no `req.session`-anchor
-      detection**, so it cannot soundly classify a non-arg owner read as session-scoped (safe) vs
-      unscoped (IDOR). Building that session-anchor static analysis is the prerequisite — without
-      it the producer either misses real IDOR (false negatives) or flags every safe session-scoped
-      app (false positives, breaking the reference app). This is the genuine remaining security
-      build; left open rather than shipped unsound.
+- [x] **PRODUCER classification logic + direct session detection (DONE):** added
+      `scopeAuditsFromQueryFacts(facts, ownerDomains)` + `QueryFact.sessionAnchoredReads` +
+      `querySessionKeyOperand` (direct `req.session.*`) to the drizzle extractor. Classifies each
+      owner-domain read as `args`/`session`/`unscoped`; the arg-keyed IDOR signal is sound. Tested
+      (`index.scope-audits.test.ts`); 265 drizzle tests pass.
+- [ ] **REMAINING — wire the producer into the app graph.** **Concrete blocker (demonstrated):**
+      real apps anchor the session **indirectly** — commerce does
+      `const userId = requireCommerceQueryUserId(context); … where(eq(orders.userId, userId))`, so
+      the key operand is a local var bound from a *helper* that reads the session. Proving that is
+      session-scoped (to avoid false-positiving a safe app, which the existing `scope !== 'session'`
+      audit would) needs **inter-procedural data-flow tracing** of session values through locals and
+      helpers — a major static-analysis feature. The direct-`req.session.*` form is handled; the
+      indirect form is the remaining build. Until it lands, wiring the producer would break the
+      commerce check, so it stays unwired (the audit + classifier are tested against constructed/
+      direct-form facts).
 - [ ] **REMAINING — Runtime §11.2 cross-check** (depends on the producer + a runtime predicate hook).
 - [ ] **REMAINING — Public-read justification suppression.**
 
@@ -167,8 +174,13 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
   with `owns()`-discharge. **cli 141 pass** (updated audit test + new owns-discharge test); the two
   failing server tests (`route-query-guards`, `wire-fixtures`) and the `dist`-not-built
   `tests/kovo-check.node.mjs` failure are **pre-existing on `main`**, not from these changes.
-- **Open (not verified):** the producer (needs `req.session`-anchor detection), KV418×`owns()`,
-  §11.2 runtime cross-check, Phase 4 migration, Phase 5 docs.
+- **Phase 3 — producer logic (shipped):** `scopeAuditsFromQueryFacts` + `sessionAnchoredReads` +
+  direct `req.session.*` detection in the drizzle extractor. `index.scope-audits.test.ts` 2 pass
+  (classifier + fail-closed); 265 drizzle tests; api-surface 1571 (internal subpath).
+- **Open (not verified):** wiring the producer into the app graph — blocked on **inter-procedural
+  session data-flow tracing** (real apps bind the session into a local via a helper, so the
+  direct-form detector would false-positive them). Also: KV418×`owns()`, §11.2 runtime cross-check,
+  Phase 4 migration, Phase 5 docs.
 
 ## Risks / notes
 
