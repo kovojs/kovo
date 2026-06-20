@@ -167,11 +167,15 @@ export interface QueryFact {
 }
 
 /**
- * Classify each read of an `owner:`-annotated domain into an IDOR scope-audit
- * fact (SPEC §10.3): a client-arg-keyed read is `args` (the IDOR candidate), a
- * `req.session`-anchored read is `session` (safe), and anything else is
- * `unscoped` (fail closed). The CLI audit turns a non-`session` fact into the
- * enforced KV414 unless an `owns()` guard discharges it.
+ * Scope-audit facts for reads of an `owner:`-annotated domain (SPEC §10.3). The
+ * KV414 IDOR signal is precisely a **client-visible `args.*` key**, so this emits:
+ * `args` for an arg-keyed read (the IDOR candidate the CLI enforces unless an
+ * `owns()` guard discharges it) and `session` for a directly `req.session`-anchored
+ * read (safe). A read that is **neither** — e.g. one keyed by a local bound from
+ * the session (`const userId = …session…; where(eq(col, userId))`) — emits **no
+ * fact**: it is not a client-controlled key, so it is not the IDOR pattern, and
+ * skipping it avoids false-positiving a safe app without needing inter-procedural
+ * session data-flow tracing.
  */
 export function scopeAuditsFromQueryFacts(
   facts: readonly QueryFact[],
@@ -186,18 +190,39 @@ export function scopeAuditsFromQueryFacts(
 
       const argKeyed =
         fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:');
-      const sessionAnchored = (fact.sessionAnchoredReads ?? []).includes(domain);
-      const scope: ScopeAuditFact['scope'] = argKeyed
-        ? 'args'
-        : sessionAnchored
-          ? 'session'
-          : 'unscoped';
+      if (argKeyed) {
+        audits.push({ domain, kind: 'query', name: fact.query, scope: 'args', site: fact.site });
+        continue;
+      }
 
-      audits.push({ domain, kind: 'query', name: fact.query, scope, site: fact.site });
+      if ((fact.sessionAnchoredReads ?? []).includes(domain)) {
+        audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
+      }
     }
   }
 
   return audits;
+}
+
+/**
+ * The owner-domain facts (`{ domain, owner }`) derived from `owner:`-annotated
+ * Drizzle tables (SPEC §10.1). These tell the CLI audit which domains are
+ * principal-owned, so a scope-audit fact for them is enforced as KV414.
+ */
+function ownerDomainsFromTables(
+  tables: Iterable<ExtractedTable>,
+): { domain: string; owner: string }[] {
+  const byDomain = new Map<string, string>();
+  for (const table of tables) {
+    if (!table.annotation || !isDomainExtractedTableAnnotation(table.annotation)) continue;
+    const owner = table.annotation.owner;
+    if (typeof owner === 'string' && !byDomain.has(table.annotation.domain)) {
+      byDomain.set(table.annotation.domain, owner);
+    }
+  }
+  return [...byDomain]
+    .map(([domain, owner]) => ({ domain, owner }))
+    .sort((a, b) => (a.domain < b.domain ? -1 : a.domain > b.domain ? 1 : 0));
 }
 
 /** @internal */
@@ -390,6 +415,45 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
       sourceContext,
       (file) => projectFunctionsForFile(file, projectFunctionExtractions),
     );
+  } finally {
+    extraction.dispose();
+  }
+}
+
+/**
+ * Produce the owner/IDOR audit facts for a project (SPEC §10.1/§10.3): the
+ * `ownerDomains` derived from `owner:` annotations, and the `scopeAudits` for
+ * owner-domain reads (a client-arg-keyed read -> KV414 unless `owns()`-discharged;
+ * a directly `req.session`-anchored read -> safe). The graph emission feeds these
+ * into `kovo check`.
+ *
+ * @internal
+ */
+export function extractOwnerAuditFromProject(options: TouchGraphProjectOptions): {
+  ownerDomains: { domain: string; owner: string }[];
+  scopeAudits: ScopeAuditFact[];
+} {
+  const ownerDomains = ownerDomainsFromProject(options);
+  const scopeAudits = scopeAuditsFromQueryFacts(
+    extractQueryFactsFromProject(options),
+    ownerDomains.map((owner) => owner.domain),
+  );
+  return { ownerDomains, scopeAudits };
+}
+
+function ownerDomainsFromProject(
+  options: TouchGraphProjectOptions,
+): { domain: string; owner: string }[] {
+  const extraction = createProjectExtraction(options);
+  try {
+    const sourceContext = projectSourceModuleContext(extraction);
+    const tables: ExtractedTable[] = [];
+    for (const file of projectContextFiles(extraction)) {
+      for (const entries of tablesForFile(file, sourceContext).values()) {
+        tables.push(...entries);
+      }
+    }
+    return ownerDomainsFromTables(tables);
   } finally {
     extraction.dispose();
   }
