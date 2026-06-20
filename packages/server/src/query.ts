@@ -357,7 +357,16 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
 
   return {
     body: renderQueryEndpointChunk(definition, result.input, result.value),
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      // SPEC §9.4 (bugs-1 F35): /_q reads return per-user, session-dependent query JSON and
+      // the query guard is checked on every read. Default to a private, uncacheable posture
+      // keyed on the cookie so a shared/intermediary cache can never replay one user's data
+      // to another and bypass that guard. (Relaxing to a cacheable posture for queries proven
+      // session-independent is a later optimization; the safe default is unconditional.)
+      'Cache-Control': 'private, no-store',
+      Vary: 'Cookie',
+    },
     status: 200,
   };
 }

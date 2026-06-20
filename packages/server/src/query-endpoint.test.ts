@@ -69,7 +69,11 @@ describe('query endpoints', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 200,
     });
   });
@@ -147,7 +151,11 @@ describe('query endpoints', () => {
     });
     await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
       body: '<kovo-query name="product">{"id":"p1","stock":3}</kovo-query>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 200,
     });
   });
@@ -193,7 +201,11 @@ describe('query endpoints', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-query name="product:p1">{"id":"p1","name":"Mug"}</kovo-query>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 200,
     });
 
