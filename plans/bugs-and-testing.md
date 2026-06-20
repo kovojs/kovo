@@ -228,18 +228,26 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **A7** F39 fragment-morph state → KV314 (§4.5/§4.9/§9.1) · F40 isomorphic children → KV316 (§4.5/§4.8) · F33 aria split + KV317 (§4.6)
 - _Next: implementation of these contracts in compiler/runtime/server code, then the conformance tests below (Phase 2)._
 
-### Conformance tests (testing-audit)
-- [x] **C1** XSS/escaping fixture+spec (`xss-escaping`) — text/attr/JSON-island/wire/URL-scheme, passes; _streaming-chat `<kovo-text>` escaping assertion still TODO_
-- [ ] **C2** cookie hardening + login→authed→logout *(co-developed with A3‑F9)*
-- [ ] **C3** IDOR/auth integration + KV414 build-fail + negative-compile tier ← A2
-- [ ] **C4** cache + bfcache leak tests ← G‑S1
-- [ ] **C5** prod-delta + deploy-skew-422 + minified-name survival ← G‑S1
-- [ ] **C6** queue FIFO · multi-transform rebase · concurrent-distinct lost-update · derived-optimism e2e ← A5 (+G‑S2/3)
-- [ ] **C7** verifier-chain KV405/406/408 fire · multi-domain · real-PG failure · page-render reads ← G‑S2/3 (+A6)
-- [ ] **C8** morph survival (incl. F39 child-island state) · isomorphic (F40) · multi-feature · layout · no-JS ← A7
-- [ ] **C9** KV-code surfacing (incl. KV242) · KV234 cross-pkg · explain-from-extracted-graph · scale · HEAD body · severity fidelity · clock freshness
-- [ ] **D** cross-engine matrix · flake gate · module-scope reset · snapshot meta-test · CSS manifest clear
-- [ ] **Deferred** F15 + SSE subscribe-then-revoke — lands with the SSE feature
+### Conformance tests (testing-audit) — granular status
+- [x] **C1a** XSS/escaping fixture (`xss-escaping`) — text/attr/JSON-island/wire/URL-scheme. Passes.
+- [x] **C1b** LLM-output streamed `<kovo-text>` escaping (`streaming-chat` xss-probe). Passes.
+- [x] **C2a** cookie hardening — `HttpOnly`/`SameSite=Strict` on enhanced + no-JS. Passes.
+- [ ] **C2b** login→authed-request→logout cookie round-trip; framework-vs-handler header precedence.
+- [x] **C7a** multi-domain write fan-out + KV402 names the missing domain (`multi-domain-write`). Passes.
+- [x] **C7b** real-PG unique-violation rollback + sanitized error (`pg-constraint-failure`). Passes.
+- [ ] **C7c** KV405/KV408 fire at integration; page-render (`route.page`) read verification.
+- [x] **C8a** no-JS degradation in a real browser (`counter-no-js`). Passes.
+- [x] **C8b** keyed-morph at scale, 300 rows (`scale-keyed-list`). Passes.
+- [x] **C8c** morph native-element-state survival (`morph-native-state`) — **expected-fail**, documents a real impl gap + F39 SPEC-vs-impl divergence (alerts when fixed).
+- [ ] **C8d** F39 child-island-state-in-fragment (KV314 compile-error) · F40 isomorphic render-equivalence · multi-feature interaction page · `layout()` e2e.
+- [x] **C9a** HEAD empty-body + Content-Length (`http-methods`). Passes.
+- [ ] **C9b** KV-code surfacing (incl. KV242) · KV234 cross-pkg · explain-from-extracted-graph · severity fidelity · clock freshness.
+- [x] **D1** Firefox/WebKit cross-engine matrix (degradation + counter + binding-text-attr). Verified on all 3 engines.
+- [ ] **D2** flake gate (retried-but-passed annotation + scheduled `--repeat-each=3`) · module-scope reset · snapshot allowlist meta-test · CSS-manifest clear-on-close · B0 meta-test.
+- [ ] **C3** IDOR/auth integration + KV414 build-fail + negative-compile tier ← needs A2 **impl** (KV414/owns() are SPEC-only so far).
+- [ ] **C4/C5** cache+bfcache leak · prod-delta · deploy-skew-422 · minified-name survival ← needs **G‑S1** (prod-build browser harness).
+- [ ] **C6** queue FIFO · multi-transform rebase · concurrent-distinct lost-update · derived-optimism e2e ← needs A5 impl (+ G‑S2/3 for derived).
+- [ ] **Deferred** F15 + SSE subscribe-then-revoke — lands with the (unbuilt) SSE feature.
 
 ## Governance & proof (per CLAUDE.md / rules)
 
