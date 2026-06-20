@@ -107,10 +107,15 @@ two args (`SPEC.md:1336`); the shipped function requires a third positional `opt
 `.` → it, so a bare `import … from '@kovojs/headless-ui'` resolves to an empty module with no hint
 to use the per-primitive subpaths (Radix ships no root barrel at all).
 
-- [ ] Remove the `.` entry from `packages/headless-ui/package.json#exports` (and delete/repurpose
-      `src/index.ts`); confirm no consumer imports the root `.`.
-- [ ] Verify `pnpm run check:api-surface`, `public-packages.test.mjs`, and the build pass, and that
-      `@kovojs/ui` + examples only import per-primitive subpaths. Follow `rules/api-surface.md`.
+- [x] Removed `.` from `packages/headless-ui/package.json` `exports` + `publishConfig.exports` +
+      `build:dist`, dropped `.` from `public-packages.json` headless-ui `apiBoundary.public`, and
+      deleted the empty `src/index.ts`. No consumer imports the root `.` (grep over
+      packages/examples/site found none).
+- [x] Green: `vitest run scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs`
+      (17 pass), `api-surface-gate.mjs` + `exported-symbols.mjs --duplicates --check` exit 0, and
+      `pnpm --filter @kovojs/headless-ui build:dist` builds 154 files with no `dist/index.*`.
+      (`import-boundary.mjs` fails pre-existing on the base commit — unrelated
+      `site/scripts/export-static.mjs` → `@kovojs/compiler/package-styles`.)
 
 ## 6. Move `@kovojs/better-auth` public API out of `internal.ts` — **Low (maintainer legibility)** · no decision
 
