@@ -346,6 +346,36 @@ describe('decoded mutation response apply', () => {
     }
   });
 
+  it('clears textContent on a buffered empty-text checkpoint (K6 empty checkpoint)', async () => {
+    // K6 / SPEC §9.1: "checkpoint replaces accumulated source" — an empty
+    // checkpoint must clear textContent even when pending.length === 0.
+    const root = new FakeMorphRoot();
+    const streamTarget = new FakeQueryBindingElement(
+      { 'data-stream-text': 'assistant:a1' },
+      { textContent: '' },
+    );
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+    const streamRoot = root as unknown as StreamTextRoot;
+    const buffer = new StreamTextBuffer();
+
+    // Push a chunk and flush so the target has content.
+    applyStreamTextChunks(streamRoot, [{ target: 'assistant:a1', text: 'Initial text' }], { buffer });
+    await buffer.flush('completion');
+    expect(streamTarget.textContent).toBe('Initial text');
+
+    // Push an empty checkpoint — this must clear the accumulated text.
+    applyStreamTextChunks(
+      streamRoot,
+      [{ mode: 'checkpoint', target: 'assistant:a1', text: '' }],
+      { buffer },
+    );
+    await buffer.flush('completion');
+
+    // SPEC §9.1: checkpoint replaces accumulated source — empty string must win.
+    expect(streamTarget.textContent).toBe('');
+  });
+
   it('runs declared stream renderers with accumulated source without corrupting text on failure', async () => {
     const store = createQueryStore();
     const root = new FakeMorphRoot();

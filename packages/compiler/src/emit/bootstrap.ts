@@ -71,7 +71,7 @@ const clockUpdatePlans = [
 ${clockSpreads || '  // no compiled clock update plans'}
 ];
 
-installKovoLoader({
+const loader = installKovoLoader({
   importModule: (specifier) => import(specifier),
   root: document,
   clockUpdatePlans,
@@ -88,6 +88,9 @@ export function applyKovoDeferredStreamResponse(body, options = {}) {
   return applyDeferredStreamResponseToRuntime({
     body,
     ...(options.boundary ? { boundary: options.boundary } : {}),
+    // K4 / SPEC §4.7: thread the loader's islandSignalScope so a deferred-stream
+    // morph that removes an island correctly aborts its ctx.signal.
+    islandSignalScope: loader.islandSignalScope,
     ...(options.morph ? { morph: options.morph } : {}),
     queryPlans,
     root: options.root ?? document,

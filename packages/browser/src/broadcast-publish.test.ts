@@ -239,4 +239,25 @@ describe('mutation broadcast publish', () => {
     });
     expect(store.get('cart')).toEqual({ count: 2 });
   });
+
+  it('discards a principal-stamped message when the receiver has no principal (K1 asymmetric discard)', () => {
+    // K1: an undefined-principal (anonymous/cold page) receiver must NOT accept a
+    // stamped message — cross-principal disclosure via the asymmetric path (SPEC §9.3).
+    const channel = new FakeBroadcastChannel();
+    const store = createQueryStore();
+    // Receiver installed with principal: undefined (anonymous page).
+    installMutationBroadcast({ channel, store });
+
+    channel.onmessage?.({
+      data: {
+        body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        changes: [],
+        principal: 'session-B',
+        type: 'kovo:mutation-response',
+      },
+    });
+
+    // The stamped message must be discarded — store unchanged.
+    expect(store.get('cart')).toBeUndefined();
+  });
 });

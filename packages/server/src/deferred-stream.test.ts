@@ -145,6 +145,34 @@ describe('deferred streams', () => {
     );
   });
 
+  it('uses configurable boundary in inline apply and cleanup scripts (K8)', () => {
+    // K8: the apply/cleanup scripts were hardcoding '--kovo-boundary' while emit markers
+    // used the configurable `boundary` option. Any non-default boundary broke the apply walk.
+    const result = renderDeferredStream({
+      boundary: 'alt-bnd',
+      chunks: [
+        {
+          fragments: [{ html: '<section>Hello</section>', target: 'main' }],
+        },
+      ],
+      shell: '<!doctype html><html><body><kovo-defer target="main"></kovo-defer>',
+    });
+
+    // Apply script must reference --alt-bnd, not --kovo-boundary.
+    expect(result.body).toContain('--alt-bnd');
+    expect(result.body).not.toContain('--kovo-boundary');
+
+    // Emit markers must also use the configured boundary.
+    const lines = result.body.split('\n');
+    expect(lines).toContain('--alt-bnd');
+    expect(lines).toContain('--alt-bnd--');
+
+    // Apply script interpolates the boundary correctly.
+    expect(result.body).toContain(`t.includes("--alt-bnd")`);
+    // Cleanup script interpolates the boundary correctly.
+    expect(result.body).toContain(`includes("--alt-bnd")`);
+  });
+
   it('delivers late stylesheets with deferred fragments', () => {
     expect(
       renderDeferredStream({
