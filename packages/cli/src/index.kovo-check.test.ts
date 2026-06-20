@@ -966,6 +966,39 @@ describe('kovo check', () => {
     });
   });
 
+  it('flags KV418 when a csrf-exempt endpoint depends on the session (SPEC §9.1)', () => {
+    const viaGuard = kovoCheck({
+      endpoints: [
+        {
+          csrf: 'exempt',
+          csrfJustification: 'mobile client',
+          guards: ['authed'],
+          method: 'POST',
+          name: 'api/sync',
+          path: '/api/sync',
+        },
+      ],
+    });
+    expect(viaGuard.output).toContain('KV418');
+    expect(viaGuard.exitCode).not.toBe(0);
+
+    // A signature-verifier webhook (not session-derived) is the legitimate exempt pattern.
+    expect(
+      kovoCheck({
+        endpoints: [
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+          },
+        ],
+      }).output,
+    ).not.toContain('KV418');
+  });
+
   it('audits manual invalidate escape-hatch usage', () => {
     expect(
       kovoCheck({

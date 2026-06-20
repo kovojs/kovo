@@ -677,17 +677,28 @@ export const diagnosticDefinitions = {
     code: 'KV414',
     help: [
       'Would lower to: an owner-scoped read/write whose key predicate is traceable to req.session or an owns() ownership guard.',
-      'Blocked reason: this query or write reaches an owner-annotated table through a client-visible key that is not tied to the session principal, so one user could read or mutate another user\'s rows (IDOR).',
+      "Blocked reason: this query or write reaches an owner-annotated table through a client-visible key that is not tied to the session principal, so one user could read or mutate another user's rows (IDOR).",
       'Fixes: scope the predicate by a session field (e.g. eq(table.id, req.session.userId)), add an owns() ownership guard, or record a public-read justification if the table is genuinely public.',
       'SPEC §10.1/§10.3/§11.2 make the --unscoped audit a blocking gate: owner-table access must be session-traceable or ownership-guarded.',
     ].join('\n'),
     severity: 'error',
     message: 'Owner-table access is not scoped to the session principal (IDOR).',
   },
+  KV418: {
+    code: 'KV418',
+    help: [
+      'Would lower to: a csrf-exempt endpoint that authenticates by a signature/verifier (e.g. a webhook), not by the session cookie.',
+      'Blocked reason: this endpoint opts out of CSRF protection (csrf: false) yet depends on the session — it reads req.session or runs a session/cookie-derived guard (authed, role(), owns()). CSRF protection is exactly what keeps cookie-authenticated requests safe, so a session-dependent endpoint that disables it is forgeable.',
+      'Fixes: keep CSRF protection (remove csrf: false) for any session-authenticated endpoint; or, if the endpoint is a genuine third-party callback, authenticate it by a signature verifier instead of the session and drop the session-derived guard.',
+      'SPEC §9.1 makes a csrf: false endpoint that depends on the session a compile error.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'csrf-exempt endpoint depends on the session (forgeable).',
+  },
   KV419: {
     code: 'KV419',
     help: [
-      'Would lower to: a speculationrules prerender that renders this route server-side, with the user\'s credentials, on hover/pointerdown.',
+      "Would lower to: a speculationrules prerender that renders this route server-side, with the user's credentials, on hover/pointerdown.",
       'Blocked reason: prefetch "moderate" prerenders a guarded (session-dependent) route, which executes its render — and any per-user side effects — for a navigation that may be discarded.',
       'Fixes: use prefetch "conservative" (prefetch document bytes, no prerender) or false; restrict prefetch "moderate" to public, idempotent routes; or remove the guard if the route is genuinely public.',
       'SPEC §8 requires auto-prerender to be opt-in only where renders are idempotent and not session-dependent.',
@@ -699,9 +710,9 @@ export const diagnosticDefinitions = {
     code: 'KV420',
     help: [
       'Would lower to: a full-subtree re-render from (declared queries ∪ stamped props) on every fragment patch of the enclosing server-refreshable target.',
-      'Blocked reason: the fragment morph carries no serialization of island-local kovo-state (§9.1), so re-emitting the enclosing target would reset the nested island to its render-time default and clobber the child\'s live local state.',
-      'Fixes: lift the child\'s state into a declared query so it travels in the refreshable channel, mark the child isomorphic: true so it self-renders rather than being server-refreshed (§4.8), set disableServerRefresh: true on the enclosing component so the child reclassifies under §4.9, or move the stateful island outside the refreshable target.',
-      'SPEC §4.5/§4.9/§9.1 forbid an island declaring local state from rendering inside another component\'s inferred server-refreshable fragment target.',
+      "Blocked reason: the fragment morph carries no serialization of island-local kovo-state (§9.1), so re-emitting the enclosing target would reset the nested island to its render-time default and clobber the child's live local state.",
+      "Fixes: lift the child's state into a declared query so it travels in the refreshable channel, mark the child isomorphic: true so it self-renders rather than being server-refreshed (§4.8), set disableServerRefresh: true on the enclosing component so the child reclassifies under §4.9, or move the stateful island outside the refreshable target.",
+      "SPEC §4.5/§4.9/§9.1 forbid an island declaring local state from rendering inside another component's inferred server-refreshable fragment target.",
       'Escape: document-lifetime-immutable local state is renderOnce and does not trip KV420.',
     ].join('\n'),
     severity: 'error',

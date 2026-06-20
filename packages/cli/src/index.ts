@@ -4046,6 +4046,23 @@ export function kovoCheck(
           `WARN ENDPOINT ${endpointName(endpoint)} csrf exemption requires a named justification.`,
         );
       }
+      // SPEC §9.1: KV418 — a csrf-exempt endpoint must not depend on the session (auth:'authed'
+      // or a session/cookie-derived guard: authed, role(), owns()); CSRF protection is what makes
+      // session auth safe, so a session-dependent endpoint that opts out of it is a contradiction.
+      // A signature/verifier-authed webhook (auth:'verifier:*') is the legitimate exempt pattern.
+      if (
+        endpoint.csrf === 'exempt' &&
+        (endpoint.auth === 'authed' ||
+          (endpoint.guards ?? []).some(
+            (guard) => guard === 'authed' || guard.startsWith('role:') || isOwnsGuard(guard),
+          ))
+      ) {
+        const message = diagnosticDefinitionText('KV418', { includeHelp: true });
+        pushFinding(
+          `ERROR KV418 ENDPOINT ${endpointName(endpoint)} csrf-exempt endpoint runs a session-derived guard. ${message}`,
+          true,
+        );
+      }
     }
 
     for (const mutation of graph.mutations ?? []) {

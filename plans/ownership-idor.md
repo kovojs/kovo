@@ -169,9 +169,12 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
   - **Note:** the prior "remove `createApp({ ownerDomains })`" framing was a misread — `ownerDomains`
     is a graph fact (hand-authored in fixtures / stubbed in emit-graph), not a `createApp` option.
     The migration is feeding the producer output through emit-graph, which commerce now does.
-- [ ] **REMAINING — other examples** (crm/stackoverflow/reference): same emit-graph pattern, but each
-      needs its own ownership model (e.g. stackoverflow questions are *public*, so must NOT be
-      `owner:`-annotated). Per-app author work; commerce proves the framework capability.
+- [x] **Examples migrated/assessed:** **commerce** (orders) and **crm** (contacts/deals) are
+      annotated + wired + verified end-to-end (`--check` clean; producer emits the ownerDomains,
+      `scopeAudits []`; 10 + 12 tests pass). **stackoverflow** is intentionally left unannotated —
+      questions/answers/votes are public content, not principal-private, so `owner:` would be
+      semantically wrong. **reference** is a hand-authored graph fixture with no Drizzle source, so
+      it can't use the producer; its scopeAudits are already session-scoped.
 
 ## Phase 5 — docs + reconciliation + gates
 
