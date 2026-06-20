@@ -75,12 +75,11 @@ export async function renderAppRouteDocumentResponse({
   // base (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
 
-  // K3 / SPEC §9.3: resolve the session identity for the fingerprint by calling
-  // the app's sessionProvider directly (the same path guards use), so we hash the
-  // session id rather than the entire cookie header.  This prevents non-session
-  // cookie churn (CSRF rotation, theme, analytics) from producing different
-  // fingerprints for the same user across tabs.
-  const sessionFingerprint = await sessionFingerprintFromRequest(request, app);
+  // K3 / SPEC §9.3: derive the broadcast fingerprint from the session identity already resolved on
+  // the request (not the whole cookie header), so non-session cookie churn (CSRF rotation, theme)
+  // does not produce different fingerprints for the same user across tabs. We do NOT re-resolve via
+  // sessionProvider here (it already ran once for the guarded route).
+  const sessionFingerprint = sessionFingerprintFromRequest(request);
 
   return renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
     // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
@@ -104,40 +103,19 @@ export async function renderAppRouteDocumentResponse({
  * analytics) does not produce different fingerprints for the same user across tabs.
  *
  * Resolution order (most to least session-anchored):
- *   1. `app.sessionProvider(request)` — the same resolution path guards use; returns
- *      the typed session value which typically has an `.id` property.
- *   2. `request.session?.id` / `request.sessionId` / `request.session?.user?.id` —
- *      pre-resolved session fields set by an adapter before this call.
- *   3. Cookie fallback: hash the first cookie value only (not the whole header) to
- *      reduce false mismatch on non-session cookie churn when no provider is wired.
+ *   1. `request.session?.id` / `request.sessionId` / `request.session?.user?.id` —
+ *      the session the route lifecycle already resolved for this request. We deliberately do NOT
+ *      call `app.sessionProvider` again here: the guarded route resolves the session exactly once,
+ *      and re-resolving it solely for the broadcast fingerprint would double-run the provider.
+ *   2. Cookie fallback: hash the first cookie value only (not the whole header) to
+ *      reduce false mismatch on non-session cookie churn when no resolved session is present.
  * Returns `undefined` only when the request is genuinely anonymous (no cookies at all).
  *
  * The id is hashed (FNV-1a) to keep the raw session token out of the BroadcastChannel
  * envelope (SPEC §9.3 "opaque").
  */
-async function sessionFingerprintFromRequest(
-  request: Request,
-  app: KovoApp,
-): Promise<string | undefined> {
-  // 1. Most session-anchored: resolve via the app's sessionProvider (K3 primary fix).
-  if (app.sessionProvider) {
-    try {
-      const session = await app.sessionProvider(request);
-      if (session != null) {
-        const anySession = session as { id?: unknown; user?: { id?: unknown } };
-        const sessionId =
-          (typeof anySession.id === 'string' && anySession.id !== '' ? anySession.id : undefined) ??
-          (typeof anySession.user?.id === 'string' && anySession.user.id !== ''
-            ? anySession.user.id
-            : undefined);
-        if (sessionId !== undefined) return fnv1aHash(sessionId);
-      }
-    } catch {
-      // sessionProvider failure is non-fatal for fingerprinting; fall through to cookie.
-    }
-  }
-
-  // 2. Pre-resolved session id fields set by adapters.
+function sessionFingerprintFromRequest(request: Request): string | undefined {
+  // 1. Pre-resolved session id fields set by the route lifecycle / adapters.
   const req = request as unknown as {
     session?: { id?: string; user?: { id?: string } };
     sessionId?: string;
@@ -153,7 +131,7 @@ async function sessionFingerprintFromRequest(
 
   if (resolvedId !== undefined) return fnv1aHash(resolvedId);
 
-  // 3. Cookie fallback: hash the first cookie value only (not the whole header) to
+  // 2. Cookie fallback: hash the first cookie value only (not the whole header) to
   //    limit false mismatch from non-session cookie churn (K3 partial mitigation).
   const cookie = request.headers.get('cookie');
   if (!cookie) return undefined;

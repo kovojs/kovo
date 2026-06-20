@@ -110,6 +110,15 @@ function staticExportParamRouteTargets(
       continue;
     }
 
+    // Check segment safety BEFORE matching: a malformed-encoding segment (e.g. an incomplete
+    // percent-escape) now fails route matching (matchRoute decodeURIComponent-throws per I2), so the
+    // specific "unsafe URL path segment" diagnostic must be raised here rather than being preempted
+    // by the generic "does not match" message (SPEC §9.5).
+    if (!staticExportRouteTargetPathIsSafe(normalized.pathname)) {
+      diagnostics.push(unsafeStaticExportRouteTargetDiagnostic(route.path, normalized.pathname));
+      continue;
+    }
+
     if (!matchRoute([route], normalized.pathname)) {
       diagnostics.push(
         staticExportDiagnostic(
