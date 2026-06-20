@@ -96,7 +96,11 @@ export const accordionStyles = style.create({
   },
   trigger: {
     alignItems: 'center',
+    // Transparent borderless button so the de-boxed accordion reads as flat rows
+    // (otherwise the native <button> chrome — gray fill + bevel — shows through).
+    backgroundColor: 'transparent',
     borderRadius: uiTheme.radius.md,
+    borderStyle: 'none',
     color: uiTheme.color.foreground,
     display: 'flex',
     fontSize: 14,
