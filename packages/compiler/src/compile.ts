@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
@@ -861,6 +862,94 @@ export function assertRenderEquivalence(result: CompileResult): void {
       throw new Error(`Render equivalence failed for ${check.artifact}${detail}`);
     }
   }
+}
+
+/**
+ * The render-plan grammar version used when computing render-plan fingerprints from
+ * the compiler.  Must stay in sync with the same constant in `@kovojs/server`'s
+ * `client-modules.ts` (both serve SPEC §5.2.1 rule 1).
+ * @internal
+ */
+const RENDER_PLAN_GRAMMAR_VERSION = 'kovo-render-plan/1';
+
+/**
+ * Input to {@link computeCompilerRenderPlanFingerprint}: a map of query name to an
+ * opaque string that captures the projected shape for that query.  The values must
+ * change whenever the projected shape changes (SPEC §5.2.1 rule 1).
+ * @internal
+ */
+export type CompilerRenderPlanFingerprintInput = Record<string, string>;
+
+/**
+ * Compute the render-plan fingerprint over a set of projected query shapes + the
+ * grammar version.  Mirrors `computeRenderPlanFingerprint` from `@kovojs/server`
+ * so the compiler can generate a compatible token for KV416 checks without
+ * importing from the server package (SPEC §5.2.1 rule 1, §5.2.2 KV416).
+ * @internal
+ */
+export function computeCompilerRenderPlanFingerprint(
+  input: CompilerRenderPlanFingerprintInput,
+): string {
+  const entries = Object.keys(input)
+    .sort()
+    .map((name) => `${name}:${input[name]}`);
+  return createHash('sha256')
+    .update(RENDER_PLAN_GRAMMAR_VERSION)
+    .update('\0')
+    .update(entries.join('\n'))
+    .digest('hex')
+    .slice(0, 16);
+}
+
+/**
+ * Input for a KV416 token-monotonicity check: a "before" and "after" snapshot of
+ * the projected query-shape signatures, plus an optional token function that takes
+ * a {@link CompilerRenderPlanFingerprintInput} and returns an opaque string.
+ * Supply `tokenFn` to use a custom token provider; omit it to use the built-in
+ * {@link computeCompilerRenderPlanFingerprint}.
+ * @internal
+ */
+export interface AssertRenderPlanTokenMonotonicityOptions {
+  after: CompilerRenderPlanFingerprintInput;
+  before: CompilerRenderPlanFingerprintInput;
+  tokenFn?: (input: CompilerRenderPlanFingerprintInput) => string;
+}
+
+/**
+ * Assert SPEC §5.2.2 KV416 token monotonicity: if the projected query shapes (or the
+ * grammar version) changed between `before` and `after`, the render-plan token MUST
+ * also change.  A token that fails to move on a shape change causes a `KV416` build
+ * failure.
+ *
+ * Callers pass the "before" and "after" shape-signature records; the function uses
+ * `computeCompilerRenderPlanFingerprint` (or a custom `tokenFn`) to compute both
+ * tokens and compares them.  Call this from the build gate after a differential corpus
+ * run (SPEC §5.2.2).
+ */
+export function assertRenderPlanTokenMonotonicity(
+  options: AssertRenderPlanTokenMonotonicityOptions,
+): void {
+  const { before, after, tokenFn = computeCompilerRenderPlanFingerprint } = options;
+
+  const beforeToken = tokenFn(before);
+  const afterToken = tokenFn(after);
+
+  const shapesChanged =
+    JSON.stringify(sortedRecord(before)) !== JSON.stringify(sortedRecord(after));
+
+
+  if (shapesChanged && beforeToken === afterToken) {
+    throw new Error(
+      `KV416: render-plan token failed to move on a projected-query-shape change. ` +
+        `Token before and after: "${beforeToken}". ` +
+        `SPEC §5.2.2: a corpus edit that changes a projected query shape or the ` +
+        `update-plan grammar must change the §5.2.1 render-plan version token.`,
+    );
+  }
+}
+
+function sortedRecord(record: Record<string, string>): [string, string][] {
+  return Object.keys(record).sort().map((k) => [k, record[k] as string]);
 }
 
 /**

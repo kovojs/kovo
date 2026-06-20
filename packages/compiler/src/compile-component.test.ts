@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './index.js';
+import {
+  assertFixpoint,
+  assertRenderEquivalence,
+  assertRenderPlanTokenMonotonicity,
+  compileComponentModule,
+  computeCompilerRenderPlanFingerprint,
+} from './index.js';
 import { emitServerModule, semanticRenderEquivalenceCheck } from './emit/server.js';
 import { parseComponentModule } from './scan/parse.js';
 import { compileFixture } from './test-support.js';
@@ -1105,5 +1111,64 @@ export const CartBadge = component({
 
     expect(recompiled.diagnostics).toEqual([]);
     expect(recompiled.files).toEqual([emitted]);
+  });
+});
+
+// ─── D4: KV416 render-plan token monotonicity (SPEC §5.2.2) ─────────────────
+
+describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () => {
+  it('passes when shapes are unchanged (same token)', () => {
+    const shapes = { cart: 'field:id,count', product: 'field:id,name' };
+    // Should not throw — shapes identical before and after
+    expect(() => assertRenderPlanTokenMonotonicity({ before: shapes, after: shapes })).not.toThrow();
+  });
+
+  it('passes when shapes change AND the token changes', () => {
+    const before = { cart: 'field:id,count' };
+    const after  = { cart: 'field:id,total' }; // field renamed → shape changed
+    // With the real fingerprint function, different shapes → different tokens → no throw
+    expect(() => assertRenderPlanTokenMonotonicity({ before, after })).not.toThrow();
+  });
+
+  it('throws KV416 when a projected-query field rename does NOT move a stubbed non-monotonic token (D4)', () => {
+    // Simulate a broken token function that always returns the same value.
+    const frozenToken = (_: Record<string, string>) => 'frozen-token';
+
+    const before = { cart: 'field:id,count' };
+    const after  = { cart: 'field:id,total' }; // shape changed — field renamed
+
+    expect(() =>
+      assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken }),
+    ).toThrow(/KV416/);
+  });
+
+  it('throws KV416 when a new query is added but the token does not move (coverage: added field)', () => {
+    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+
+    const before = { cart: 'field:id,count' };
+    const after  = { cart: 'field:id,count', product: 'field:id,name' }; // new query
+
+    expect(() =>
+      assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken }),
+    ).toThrow(/KV416/);
+  });
+
+  it('does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)', () => {
+    const before = { cart: 'field:id,count' };
+    const after  = { cart: 'field:id,total' }; // field renamed
+
+    const tokenBefore = computeCompilerRenderPlanFingerprint(before);
+    const tokenAfter  = computeCompilerRenderPlanFingerprint(after);
+
+    // Sanity: the real fingerprint must actually move for this test to be meaningful.
+    expect(tokenBefore).not.toBe(tokenAfter);
+
+    expect(() =>
+      assertRenderPlanTokenMonotonicity({
+        before,
+        after,
+        tokenFn: computeCompilerRenderPlanFingerprint,
+      }),
+    ).not.toThrow();
   });
 });

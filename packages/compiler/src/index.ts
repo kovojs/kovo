@@ -41,7 +41,15 @@ export type {
   RoutePageComponentPropFact,
   RoutePageFact,
 } from './types.js';
-export { assertFixpoint, assertRenderEquivalence, compileComponentModule } from './compile.js';
+export {
+  assertFixpoint,
+  assertRenderEquivalence,
+  assertRenderPlanTokenMonotonicity,
+  compileComponentModule,
+  computeCompilerRenderPlanFingerprint,
+  type AssertRenderPlanTokenMonotonicityOptions,
+  type CompilerRenderPlanFingerprintInput,
+} from './compile.js';
 
 /**
  * The Kovo Vite plugin: lowers authored component modules through compileComponentModule

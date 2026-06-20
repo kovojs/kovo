@@ -3,6 +3,45 @@ import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 
 /**
+ * The render-plan grammar version folded into every build token so that a
+ * module-less (no islands) app still produces a non-empty token (DEPLOY-3),
+ * and so that a grammar-only change produces a different token even when no
+ * client-module versions changed (SPEC §5.2.1 rule 1).
+ *
+ * Bump this string whenever the update-plan grammar changes in a way that
+ * breaks wire compatibility.
+ */
+export const RENDER_PLAN_GRAMMAR_VERSION = 'kovo-render-plan/1';
+
+/**
+ * Input to {@link computeRenderPlanFingerprint}: a map of query name to an
+ * opaque string that captures the projected shape (field names, nesting, and
+ * order) for that query. The values are stable within a build and must change
+ * whenever the projected shape changes (SPEC §5.2.1 rule 1).
+ */
+export type RenderPlanFingerprintInput = Record<string, string>;
+
+/**
+ * Compute an opaque fingerprint that covers the projected query shapes and the
+ * render-plan grammar version. Thread this into a
+ * {@link VersionedClientModuleRegistry} via
+ * {@link MemoryVersionedClientModuleRegistryOptions.renderPlanFingerprint} or
+ * via the registry's `setRenderPlanFingerprint` method so `buildToken()` is
+ * derived from shape + grammar, not just module hashes (SPEC §5.2.1 rule 1).
+ */
+export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput): string {
+  const entries = Object.keys(input)
+    .sort()
+    .map((name) => `${name}:${input[name]}`);
+  return createHash('sha256')
+    .update(RENDER_PLAN_GRAMMAR_VERSION)
+    .update('\0')
+    .update(entries.join('\n'))
+    .digest('hex')
+    .slice(0, 16);
+}
+
+/**
  * Source module registered into a {@link VersionedClientModuleRegistry} for
  * versioned browser delivery (SPEC §9.5). Apps that inject a custom registry via
  * `createApp({ clientModules })` name this when calling `put`.
@@ -30,11 +69,11 @@ export interface VersionedClientModuleResponse extends ServerResponseBase<
  */
 export interface VersionedClientModuleRegistry {
   /**
-   * A deterministic build-global token derived from the set of registered
-   * client module versions. Identical within one build, changes on redeploy.
-   * Used for `Kovo-Build` response header and `<meta name="kovo-build">` page
-   * stamping so the client can detect deploy skew (SPEC §5.1, §9.1.1).
-   * Returns an empty string when no modules are registered.
+   * A deterministic build-global token derived from the render-plan grammar
+   * version, optional projected query-shape fingerprint, and the set of
+   * registered client-module versions.  Always non-empty — even a module-less
+   * app produces a token so the `<meta name="kovo-build">` stamp is always
+   * present (SPEC §5.2.1 rule 1, SPEC §5.2.1 rule 2(b)).
    */
   buildToken(): string;
   /**
@@ -45,6 +84,14 @@ export interface VersionedClientModuleRegistry {
   entries(): readonly VersionedClientModuleInput[];
   put(module: VersionedClientModuleInput): string;
   resolve(href: string): ServerResponseBase<string, Record<string, string>, 200 | 404>;
+  /**
+   * Supply an opaque projected-query-shape fingerprint (computed by
+   * {@link computeRenderPlanFingerprint}) so that `buildToken()` changes
+   * whenever the query shape changes, even when no module versions changed
+   * (SPEC §5.2.1 rule 1).  Optional: custom registry implementations that
+   * already fold shape facts into their own token do not need to call this.
+   */
+  setRenderPlanFingerprint?(fingerprint: string): void;
 }
 
 /** @internal Request context accepted by the server-owned client-module request path. */
@@ -59,6 +106,13 @@ export interface VersionedClientModuleRequest {
  */
 export interface MemoryVersionedClientModuleRegistryOptions {
   maxVersionsPerPath?: number;
+  /**
+   * Initial projected-query-shape fingerprint (produced by
+   * {@link computeRenderPlanFingerprint}).  Folded into `buildToken()` so the
+   * token changes on a shape-only redeploy (SPEC §5.2.1 rule 1).  Can also be
+   * set or updated at any time via `setRenderPlanFingerprint`.
+   */
+  renderPlanFingerprint?: string;
 }
 
 /** @internal Construct a version-stamped client-module href for framework request-shell output. */
@@ -82,7 +136,9 @@ export function createMemoryVersionedClientModuleRegistry(
 ): VersionedClientModuleRegistry {
   const modules = new Map<string, VersionedClientModuleInput>();
   const versionsByPath = new Map<string, string[]>();
-  // Cache: recompute whenever versionsByPath changes (tracked by a generation counter).
+  // Shape fingerprint threaded in from the build pipeline (SPEC §5.2.1 rule 1).
+  let renderPlanFingerprint: string | undefined = options.renderPlanFingerprint;
+  // Cache: recompute whenever versionsByPath or renderPlanFingerprint changes.
   let cachedBuildToken: string | undefined;
   let buildTokenGeneration = 0;
   let lastTokenGeneration = -1;
@@ -93,8 +149,12 @@ export function createMemoryVersionedClientModuleRegistry(
       if (cachedBuildToken !== undefined && lastTokenGeneration === buildTokenGeneration) {
         return cachedBuildToken;
       }
-      // Derive a deterministic token: sorted "path@version" pairs hashed with SHA-256.
-      // This is stable for the same set of modules regardless of registration order.
+      // Derive a deterministic token:
+      //   1. Always seed with RENDER_PLAN_GRAMMAR_VERSION so the token is never
+      //      empty (DEPLOY-3) and so a grammar-only change moves the token
+      //      (SPEC §5.2.1 rule 1).
+      //   2. Fold in the optional projected-shape fingerprint if one was supplied.
+      //   3. Fold in sorted "path@version" pairs (original module-hash input).
       const entries: string[] = [];
       for (const [path, versions] of versionsByPath) {
         for (const version of versions) {
@@ -102,13 +162,24 @@ export function createMemoryVersionedClientModuleRegistry(
         }
       }
       entries.sort();
-      const token =
-        entries.length === 0
-          ? ''
-          : createHash('sha256').update(entries.join('\n')).digest('hex').slice(0, 16);
+      const hash = createHash('sha256');
+      hash.update(RENDER_PLAN_GRAMMAR_VERSION);
+      hash.update('\0');
+      if (renderPlanFingerprint !== undefined) {
+        hash.update(renderPlanFingerprint);
+        hash.update('\0');
+      }
+      hash.update(entries.join('\n'));
+      const token = hash.digest('hex').slice(0, 16);
       cachedBuildToken = token;
       lastTokenGeneration = buildTokenGeneration;
       return token;
+    },
+    setRenderPlanFingerprint(fingerprint: string) {
+      renderPlanFingerprint = fingerprint;
+      // Invalidate the cached token so the next buildToken() call recomputes.
+      cachedBuildToken = undefined;
+      buildTokenGeneration += 1;
     },
     entries() {
       return [...modules.values()]

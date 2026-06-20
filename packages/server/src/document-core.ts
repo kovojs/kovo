@@ -189,9 +189,11 @@ function assembleDocumentParts(
     ...queryScripts.map((query) => query.csp),
   );
 
-  // Stamp the build-token meta tag once per document (SPEC §5.1, §9.1.1).
+  // Stamp the build-token meta tag once per document (SPEC §5.1, §9.1.1,
+  // §5.2.1 rule 2(b)). The token is now always non-empty (DEPLOY-3) so we only
+  // check for presence, not emptiness.
   const buildMeta =
-    options.buildToken !== undefined && options.buildToken !== ''
+    options.buildToken !== undefined
       ? `<meta name="kovo-build" content="${escapeAttribute(options.buildToken)}">`
       : '';
 
