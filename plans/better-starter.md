@@ -24,7 +24,7 @@ and `examples/crm` apps already prove. **Status: complete and verified (see Veri
       **Works.** Recipe: introspect schema via `getAuthTables(auth.options)`, hand-author DDL for
       `user`/`session`/`account`/`verification` (quoted camelCase columns) + matching `pg-core`
       pgTables, `betterAuth({ baseURL, secret, emailAndPassword:{enabled:true}, database:
-      drizzleAdapter(db,{provider:'pg',schema}) })`. Evidence: scratch spike ran signUp→signIn→
+drizzleAdapter(db,{provider:'pg',schema}) })`. Evidence: scratch spike ran signUp→signIn→
       getSession (returned the real user)→signOut, all HTTP 200.
 - [x] **Decision gate → adopted 4a.** No fallback needed. (Repo's other `betterAuth` call sites use
       `memoryAdapter`; the Drizzle/PGlite path had no precedent but the spike + full e2e prove it.)
