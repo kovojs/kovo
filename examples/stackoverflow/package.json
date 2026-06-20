@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build",
+    "build": "vp build && node scripts/materialize-demo-css.mjs",
     "dev": "vp dev",
     "emit-components": "node scripts/emit-components.mjs",
     "emit-graph": "node scripts/emit-graph.mjs",
@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@kovojs/cli": "workspace:*",
+    "@kovojs/compiler": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/test": "workspace:*",
     "vite": "8.0.16",

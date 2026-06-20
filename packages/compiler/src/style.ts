@@ -271,7 +271,10 @@ function collectStyleEnvironment(
   const provenanceReplacements: SourceReplacement[] = [];
   const rules: AtomicRule[] = [];
   const usages: StyleRuleUsage[] = [];
-  const staticValues = new Map<string, unknown>(importedStaticValues);
+  const staticValues = new Map<string, unknown>([
+    ...collectLocalStaticValues(sourceFile, styleImports),
+    ...importedStaticValues,
+  ]);
   // Module-local `const x = { ... }` objects, so static `{ ...x }` spreads inside
   // a style object resolve (e.g. @kovojs/ui field.tsx shares `nativeControlStyle`).
   const localObjects = collectLocalObjectLiterals(sourceFile);
@@ -722,6 +725,24 @@ function collectLocalObjectLiterals(sourceFile: ts.SourceFile): LocalObjectLiter
     }
   }
   return objects;
+}
+
+function collectLocalStaticValues(
+  sourceFile: ts.SourceFile,
+  styleImports: StyleImports,
+): ReadonlyMap<string, unknown> {
+  const staticValues = new Map<string, unknown>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      const value = staticValueFromExpression(declaration.initializer, staticValues, styleImports);
+      if (value !== undefined) staticValues.set(declaration.name.text, value);
+    }
+  }
+
+  return staticValues;
 }
 
 function unwrapObjectLiteral(node: ts.Expression): ts.ObjectLiteralExpression | null {

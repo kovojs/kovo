@@ -94,8 +94,10 @@ describe('extractAppComponentCss', () => {
 import { tokens } from '@kovojs/style';
 import * as style from '@kovojs/style';
 
+const palette = { accent: 'teal' } as const;
 const appStyles = style.create({
   root: {
+    backgroundColor: palette.accent,
     color: tokens.sys.color.primary,
     padding: 8,
   },
@@ -124,6 +126,7 @@ const generatedStyles = style.create({ root: { color: 'red' } });
 
       expect(result.sourceFiles).toEqual([join(root, 'app.tsx')]);
       expect(result.diagnostics).toEqual([]);
+      expect(result.css).toContain('background-color:teal');
       expect(result.css).toContain('color:var(--kovo-theme-sys-color-primary)');
       expect(result.css).toContain('padding:8px');
       expect(result.css).not.toContain('red');

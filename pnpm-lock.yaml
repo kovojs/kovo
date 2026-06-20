@@ -320,6 +320,9 @@ importers:
       '@kovojs/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@kovojs/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../../packages/headless-ui
