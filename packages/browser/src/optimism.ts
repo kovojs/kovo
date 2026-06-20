@@ -185,10 +185,30 @@ export class OptimisticRebaser {
     }
   }
 
-  applyServerTruth<Value>(queryName: string, value: Value, key?: string): void {
+  applyServerTruth<Value>(
+    queryName: string,
+    value: Value,
+    key?: string,
+    settles?: readonly string[],
+  ): void {
     const storeKey = queryStoreKey(queryName, key);
     let next: unknown = value;
-    const pendingTransforms = this.#pendingByQuery.get(storeKey) ?? [];
+
+    // Settlement-before-rebase (SPEC §9.1.1 line 828, §10.4 line 1118): drop every pending
+    // transform whose mutation idem is in the arriving truth's settlement set BEFORE re-applying
+    // the remainder, so a transform already folded into this truth is never re-applied
+    // (double-counted). Concurrent distinct same-query commits each settle in their own chunk.
+    let pendingTransforms = this.#pendingByQuery.get(storeKey) ?? [];
+    if (settles && settles.length > 0 && pendingTransforms.length > 0) {
+      const settled = new Set(settles);
+      const survivors = pendingTransforms.filter((pending) => !settled.has(pending.id));
+      if (survivors.length === 0) {
+        this.#pendingByQuery.delete(storeKey);
+      } else {
+        this.#pendingByQuery.set(storeKey, survivors);
+      }
+      pendingTransforms = survivors;
+    }
 
     if (pendingTransforms.length > 0) {
       this.#serverTruthByQuery.set(storeKey, structuredClone(value));

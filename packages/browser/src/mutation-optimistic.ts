@@ -43,36 +43,50 @@ export async function submitOptimisticEnhancedMutation<Input>(
     targets: string[];
   }
 > {
-  if (options.queue) {
-    // SPEC.md §10.4: mutations that declare a named queue run as named FIFO.
-    return options.queue.run(options.optimistic.queue, () =>
-      submitOptimisticEnhancedMutationDirect(options),
-    );
-  }
-
-  return submitOptimisticEnhancedMutationDirect(options);
-}
-
-async function submitOptimisticEnhancedMutationDirect<Input>(
-  options: OptimisticEnhancedMutationSubmitOptions<Input>,
-): Promise<EnhancedMutationAppliedResult> {
   const idem = options.idem ?? createMutationIdem();
   const queryNames = Object.keys(options.optimistic.transforms);
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
   const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
 
-  // SPEC.md §10.4: predict against query data, mark dependent islands pending,
-  // then reconcile the server fragment/query truth over remaining predictions.
+  // SPEC.md §10.4 line 1121 (normative): a queued mutation applies its optimistic transform on
+  // ENQUEUE (immediately, against the current optimistic value including earlier queued-but-unsent
+  // transforms), not on dequeue — so the UI reflects the full queued intent without waiting for the
+  // head to drain. We therefore predict + mark pending up-front and queue only the network send +
+  // reconcile.
   options.rebaser.addChange(idem, optimisticChange, options.optimistic);
   if (options.pendingRoot) {
     stampPendingQueries(options.pendingRoot, queryNames, true);
   }
 
+  const context: OptimisticSubmitContext = { idem, optimisticKeys, queryNames };
+  const sendAndReconcile = () => submitOptimisticEnhancedMutationDirect(options, context);
+
+  if (options.queue) {
+    // SPEC.md §10.4: mutations that declare a named queue send as a named FIFO (the prediction
+    // already applied above; only the send/reconcile is serialized behind the head).
+    return options.queue.run(options.optimistic.queue, sendAndReconcile);
+  }
+
+  return sendAndReconcile();
+}
+
+interface OptimisticSubmitContext {
+  idem: string;
+  optimisticKeys: Readonly<Record<string, string | undefined>>;
+  queryNames: string[];
+}
+
+async function submitOptimisticEnhancedMutationDirect<Input>(
+  options: OptimisticEnhancedMutationSubmitOptions<Input>,
+  context: OptimisticSubmitContext,
+): Promise<EnhancedMutationAppliedResult> {
+  const { idem, optimisticKeys, queryNames } = context;
+
   try {
     const fetched = await fetchEnhancedMutation(options, idem);
 
     if (isFailedMutationResponse(fetched.response)) {
-      options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
+      discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
       if (options.pendingRoot) {
         stampPendingQueries(options.pendingRoot, queryNames, false);
       }
@@ -96,12 +110,30 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
       ...applied,
     };
   } catch (error) {
-    options.rebaser.discardPendingOptimism(queryNames, optimisticKeys);
+    discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, queryNames, false);
     }
     reportRuntimeError(options.onError, error);
     throw error;
+  }
+}
+
+/**
+ * Roll back ONLY the failed mutation's own optimistic transforms, preserving any co-pending
+ * sibling mutations' predictions (SPEC §10.4 line 1118: per-query pending log — rebase only the
+ * not-yet-committed transforms). `settleWithoutServerTruth` removes this mutation's id from each
+ * query's pending log and re-derives the store from the captured baseline plus the surviving
+ * siblings, so a single failure never wipes a concurrent in-flight mutation's prediction.
+ */
+function discardFailedOptimism(
+  rebaser: OptimisticRebaser,
+  idem: string,
+  queryNames: readonly string[],
+  optimisticKeys: Readonly<Record<string, string | undefined>>,
+): void {
+  for (const queryName of queryNames) {
+    rebaser.settleWithoutServerTruth(idem, queryName, optimisticKeys[queryName]);
   }
 }
 
@@ -113,7 +145,9 @@ function optimisticMutationRuntimeApplyHooks<Input>(
 ): MutationRuntimeApplyHooks {
   return {
     applyQuery(query) {
-      options.rebaser.applyServerTruth(query.name, query.value, query.key);
+      // SPEC §9.1.1/§10.4: settle (drop) the transforms this truth already reflects before rebasing
+      // the rest, so a sibling mutation's committed effect folded into this re-run is not re-applied.
+      options.rebaser.applyServerTruth(query.name, query.value, query.key, query.settles);
       return { value: options.store.get(query.name, query.key) };
     },
     beforeApplyQueries(queryChunks) {

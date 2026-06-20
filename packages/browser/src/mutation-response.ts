@@ -74,14 +74,22 @@ export function sanitizeMutationChangeRecord(value: unknown): MutationChangeReco
   };
 }
 
-let generatedMutationIdemCounter = 0;
-
-/** @internal Mint a stable per-request `Kovo-Idem` metadata value (SPEC §9.1). */
+/** @internal Mint a fresh high-entropy `Kovo-Idem` value for each logical submit (SPEC §10.3 line 1065). */
 export function createMutationIdem(): string {
-  // SPEC.md §9.1: enhanced mutation requests carry stable Kovo-Idem metadata.
-  // Browser crypto is preferred; this fallback only needs per-tab uniqueness.
-  return (
-    globalThis.crypto?.randomUUID?.() ??
-    `idem_${Date.now().toString(36)}_${(generatedMutationIdemCounter += 1).toString(36)}`
+  // SPEC.md §10.3 line 1065 (normative): the client MUST mint a fresh high-entropy token
+  // (≥128 bits from a cryptographic source) for each logical submit. randomUUID is preferred;
+  // when it is unavailable we fall back to 16 cryptographic-random bytes (still ≥128 bits) — never
+  // to a predictable Date.now()+counter, which would weaken the per-(principal,mutation,idem) replay key.
+  const cryptoApi = globalThis.crypto;
+  const randomUuid = cryptoApi?.randomUUID?.bind(cryptoApi);
+  if (randomUuid) return randomUuid();
+  if (cryptoApi?.getRandomValues) {
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+    let hex = '';
+    for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
+    return `idem_${hex}`;
+  }
+  throw new Error(
+    'createMutationIdem requires a cryptographic source (crypto.randomUUID or crypto.getRandomValues); SPEC §10.3 forbids a predictable idem token.',
   );
 }

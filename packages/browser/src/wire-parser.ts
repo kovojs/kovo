@@ -20,6 +20,14 @@ export interface QueryChunk {
   delta?: boolean;
   key?: string;
   name: string;
+  /**
+   * Settlement set (SPEC §9.1.1 line 828, §10.4 line 1118): the `Kovo-Idem` tokens of the
+   * committed mutations whose effects this re-run truth already reflects. The client MUST drop
+   * every pending optimistic transform whose token is in this set BEFORE re-applying the rest, so
+   * an already-committed transform is never double-counted. Absent ⇒ settle only the triggering
+   * token (legacy fallback).
+   */
+  settles?: readonly string[];
   value: unknown;
 }
 
@@ -137,6 +145,7 @@ export function readQueryElementChunk(
       delta: hasBooleanAttribute(chunk.attrs, 'delta'),
       key: readAttribute(chunk.attrs, 'key'),
       name: readAttribute(chunk.attrs, 'name'),
+      settles: readAttribute(chunk.attrs, 'settles'),
     },
     onError,
   );
@@ -180,6 +189,7 @@ export function readQueryScriptChunk(
       decodeHtmlEntities: false,
       key: script.getAttribute('key'),
       name,
+      settles: script.getAttribute('settles'),
     },
     onError,
   );
@@ -191,6 +201,7 @@ interface QueryChunkPayload {
   delta?: boolean;
   key?: string | null;
   name: string | null;
+  settles?: string | null;
 }
 
 function readQueryChunkPayload(
@@ -208,12 +219,23 @@ function readQueryChunkPayload(
   }
 
   const identity = readQueryChunkIdentity(payload.name, payload.key);
+  const settles = parseSettlementSet(payload.settles);
   return {
     ...(payload.delta ? { delta: true } : {}),
     ...(identity.key === undefined ? {} : { key: identity.key }),
     name: identity.name,
+    ...(settles.length > 0 ? { settles } : {}),
     value: parsed.value,
   };
+}
+
+/**
+ * Parse the `settles` attribute (SPEC §9.1.1): a space-separated list of `Kovo-Idem` tokens whose
+ * committed effects this truth chunk already reflects. Returns `[]` when absent.
+ */
+function parseSettlementSet(settles?: string | null): string[] {
+  if (!settles) return [];
+  return settles.trim().split(/\s+/).filter((token) => token.length > 0);
 }
 
 function readQueryChunkIdentity(name: string, key?: string | null): { key?: string; name: string } {
