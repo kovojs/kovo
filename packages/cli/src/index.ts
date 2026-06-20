@@ -3992,7 +3992,7 @@ export function kovoCheck(
 
   if (includeAll) {
     for (const finding of unscopedAccesses(graph)) {
-      pushFinding(`WARN ${unscopedLine(finding)}`);
+      pushFinding(unscopedKv414Line(finding), true);
     }
 
     for (const lint of graph.lints ?? []) {
@@ -4721,11 +4721,33 @@ function renderOnceInvalidationConflictLine(conflict: RenderOnceInvalidationConf
 
 function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAuditFact[] {
   const ownerDomains = new Set((input.ownerDomains ?? []).map((owner) => owner.domain));
+  const ownsGuarded = ownsGuardedNames(input);
 
-  return (input.scopeAudits ?? [])
-    .filter((fact) => ownerDomains.has(fact.domain))
-    .filter((fact) => fact.scope !== 'session')
-    .sort(compareScopeAudit);
+  return (
+    (input.scopeAudits ?? [])
+      .filter((fact) => ownerDomains.has(fact.domain))
+      // SPEC §10.3: an owner-table access discharges KV414 when its key predicate is
+      // session-traceable (scope 'session') OR an `owns()` ownership guard covers it.
+      .filter((fact) => fact.scope !== 'session')
+      .filter((fact) => !ownsGuarded.has(fact.name))
+      .sort(compareScopeAudit)
+  );
+}
+
+/** Query/mutation names whose guard chain includes an `owns()` ownership guard (SPEC §10.3). */
+function ownsGuardedNames(input: CoreGraph.KovoCheckInput): Set<string> {
+  const names = new Set<string>();
+  for (const query of input.queries ?? []) {
+    if ((query.guards ?? []).some(isOwnsGuard)) names.add(query.query);
+  }
+  for (const mutation of input.mutations ?? []) {
+    if ((mutation.guards ?? []).some(isOwnsGuard)) names.add(mutation.key);
+  }
+  return names;
+}
+
+function isOwnsGuard(guard: string): boolean {
+  return guard === 'owns' || guard.startsWith('owns(') || guard.startsWith('owns:');
 }
 
 function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
@@ -4736,6 +4758,22 @@ function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
     `domain=${fact.domain}`,
     `scope=${fact.scope}`,
     `site=${fact.site}`,
+    fact.detail ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** The enforced KV414 (IDOR) error line for an unscoped owner-table access (SPEC §10.3). */
+function unscopedKv414Line(fact: CoreGraph.ScopeAuditFact): string {
+  return [
+    'ERROR KV414',
+    fact.kind.toUpperCase(),
+    fact.name,
+    `domain=${fact.domain}`,
+    `scope=${fact.scope}`,
+    `site=${fact.site}`,
+    diagnosticDefinitions.KV414.message,
     fact.detail ?? '',
   ]
     .filter(Boolean)

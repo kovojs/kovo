@@ -208,10 +208,39 @@ describe('kovo check', () => {
     ).toBe(
       [
         'kovo-check/v1',
-        'WARN UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21 where eq(carts.id, args.cartId)',
+        'ERROR KV414 QUERY cartById domain=cart scope=args site=cart.queries.ts:21 Owner-table access is not scoped to the session principal (IDOR). where eq(carts.id, args.cartId)',
         '',
       ].join('\n'),
     );
+  });
+
+  it('discharges an owner-domain arg access guarded by owns() (SPEC §10.3)', () => {
+    const base = {
+      ownerDomains: [{ domain: 'order', owner: 'userId' }],
+      scopeAudits: [
+        {
+          domain: 'order',
+          kind: 'query',
+          name: 'orderById',
+          scope: 'args',
+          site: 'order.queries.ts:12',
+        },
+      ],
+    };
+    // Without an owns() guard, an owner-domain arg access is the enforced KV414 IDOR error.
+    expect(
+      kovoCheck({
+        ...base,
+        queries: [{ domains: ['order'], guards: ['authed'], query: 'orderById' }],
+      }).output,
+    ).toContain('ERROR KV414 QUERY orderById domain=order');
+    // An owns() guard in the chain discharges it (SPEC §10.3).
+    expect(
+      kovoCheck({
+        ...base,
+        queries: [{ domains: ['order'], guards: ['authed', 'owns'], query: 'orderById' }],
+      }).output,
+    ).not.toContain('KV414');
   });
 
   it('reports unguarded queries and pages alongside mutations', () => {

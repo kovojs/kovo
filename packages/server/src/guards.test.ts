@@ -360,3 +360,61 @@ describe('server guard and session primitives', () => {
     });
   });
 });
+
+describe('guards.owns (SPEC §10.3 ownership / IDOR discharge)', () => {
+  type Req = { session?: { user?: { id: string } | null } | null; args: { id: string } };
+  const ownsRow = (req: Req, key: string) => req.session?.user?.id === `owner-of-${key}`;
+
+  it('passes when the authenticated principal owns the row', async () => {
+    const guard = guards.owns<Req, string>((req) => req.args.id, ownsRow);
+    await expect(
+      guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
+    ).resolves.toBe(true);
+  });
+
+  it('forbids when the principal does not own the row (IDOR)', async () => {
+    const guard = guards.owns<Req, string>((req) => req.args.id, ownsRow);
+    await expect(
+      guard({ session: { user: { id: 'someone-else' } }, args: { id: 'r1' } }),
+    ).resolves.toEqual({ kind: 'forbidden', payload: {} });
+  });
+
+  it('rejects an unauthenticated caller before consulting the ownership check', async () => {
+    const consulted: string[] = [];
+    const guard = guards.owns<Req, string>(
+      (req) => req.args.id,
+      (_req, key) => {
+        consulted.push(key);
+        return true;
+      },
+    );
+    await expect(guard({ session: null, args: { id: 'r1' } })).resolves.toEqual({
+      kind: 'unauthenticated',
+      payload: {},
+    });
+    expect(consulted).toEqual([]);
+  });
+
+  it('composes with all(authed, owns(...))', async () => {
+    const guard = guards.all<Req>(
+      guards.authed<Req>(),
+      guards.owns<Req, string>((req) => req.args.id, ownsRow),
+    );
+    await expect(
+      guard({ session: { user: { id: 'owner-of-r1' } }, args: { id: 'r1' } }),
+    ).resolves.toBe(true);
+    await expect(
+      guard({ session: { user: { id: 'intruder' } }, args: { id: 'r1' } }),
+    ).resolves.toEqual({ kind: 'forbidden', payload: {} });
+  });
+
+  it('awaits an async ownership predicate', async () => {
+    const guard = guards.owns<Req, string>(
+      (req) => req.args.id,
+      async (req, key) => Promise.resolve(req.session?.user?.id === `owner-of-${key}`),
+    );
+    await expect(
+      guard({ session: { user: { id: 'owner-of-r9' } }, args: { id: 'r9' } }),
+    ).resolves.toBe(true);
+  });
+});
