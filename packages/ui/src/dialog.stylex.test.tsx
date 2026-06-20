@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Dialog, DialogClose, DialogContent, DialogTrigger, dialogStyles } from './dialog.js';
+import {
+  Dialog,
+  DialogClose,
+  DialogCloseX,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  dialogStyles,
+} from './dialog.js';
 
 describe('@kovojs/ui Dialog StyleX slots', () => {
   it('matches dialog markup with StyleX slot output', () => {
@@ -11,14 +21,25 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
     expect({
       classes: [style.attrs(dialogStyles.root).class ?? ''] as const,
       closeClasses: [style.attrs(dialogStyles.close).class ?? ''] as const,
+      closeXClasses: [style.attrs(dialogStyles.closeX).class ?? ''] as const,
       contentClasses: [style.attrs(dialogStyles.content).class ?? ''] as const,
+      descriptionClasses: [style.attrs(dialogStyles.description).class ?? ''] as const,
+      headerClasses: [style.attrs(dialogStyles.header).class ?? ''] as const,
       open: Dialog.definition.render({
         children:
           DialogTrigger.definition.render({ ...dialogState, children: 'Edit account' }) +
           DialogContent.definition.render({
             ...dialogState,
             children:
-              '<h2 id="account-title">Account</h2><p id="account-description">Profile settings</p>',
+              DialogCloseX.definition.render({ ...dialogState }) +
+              DialogHeader.definition.render({
+                children:
+                  DialogTitle.definition.render({ children: 'Account', id: 'account-title' }) +
+                  DialogDescription.definition.render({
+                    children: 'Profile settings',
+                    id: 'account-description',
+                  }),
+              }),
             descriptionId: 'account-description',
             titleId: 'account-title',
           }) +
@@ -26,6 +47,7 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
         id: 'dialog-root',
         open: true,
       }),
+      titleClasses: [style.attrs(dialogStyles.title).class ?? ''] as const,
       triggerClasses: [style.attrs(dialogStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
@@ -78,9 +100,13 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
   it('exports StyleX style groups', () => {
     expect({
       closeMarker: dialogStyles.close.$$css,
+      closeXMarker: dialogStyles.closeX.$$css,
       contentMarker: dialogStyles.content.$$css,
+      descriptionMarker: dialogStyles.description.$$css,
+      headerMarker: dialogStyles.header.$$css,
       keys: Object.keys(dialogStyles),
       rootMarker: dialogStyles.root.$$css,
+      titleMarker: dialogStyles.title.$$css,
       triggerMarker: dialogStyles.trigger.$$css,
     }).toMatchSnapshot();
   });

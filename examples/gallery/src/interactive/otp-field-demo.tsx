@@ -215,9 +215,11 @@ export const GalleryOtpFieldDemo = component({
         <p id="gallery-interactive-otp-description" style="font-size:0.875rem;color:#6b7280">
           Enter the four digit code.
         </p>
+        {/* Debug-state probe: kept in the DOM for gallery/a11y gates (textContent
+            read) but visually hidden (sr-only) so it does not leak as page text. */}
         <output
           data-demo-state="otp-value"
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
         >
           {state.value}
         </output>

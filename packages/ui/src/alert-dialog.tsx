@@ -18,7 +18,11 @@ export interface AlertDialogStyleOverrides {
   action?: style.StyleInput;
   cancel?: style.StyleInput;
   content?: style.StyleInput;
+  description?: style.StyleInput;
+  footer?: style.StyleInput;
+  header?: style.StyleInput;
   root?: style.StyleInput;
+  title?: style.StyleInput;
   trigger?: style.StyleInput;
 }
 
@@ -61,6 +65,12 @@ export interface AlertDialogActionProps extends AlertDialogStateProps {
   contentId?: string;
   id?: string;
   intent?: AlertDialogActionIntent;
+  styles?: AlertDialogStyleOverrides;
+}
+
+export interface AlertDialogPartProps {
+  children?: string;
+  id?: string;
   styles?: AlertDialogStyleOverrides;
 }
 
@@ -143,18 +153,43 @@ export const alertDialogStyles = style.create({
     color: uiTheme.color.foreground,
     left: '50%',
     maxWidth: 448,
+    opacity: 1,
     padding: 24,
     position: 'fixed',
     top: '50%',
-    transform: 'translate(-50%, -50%)',
+    transform: 'translate(-50%, -50%) scale(1)',
+    transitionBehavior: 'allow-discrete',
+    transitionDuration: '160ms',
+    transitionProperty: 'opacity, transform, display, overlay',
     width: 'calc(100% - 2rem)',
     zIndex: 50,
     '[data-state=closed]': {
       display: 'none',
     },
+    '@starting-style': {
+      opacity: 0,
+      transform: 'translate(-50%, -50%) scale(0.96)',
+    },
     '::backdrop': {
       backgroundColor: 'rgb(0 0 0 / 0.8)',
     },
+  },
+  description: {
+    color: uiTheme.color.foregroundMuted,
+    fontSize: 14,
+    margin: 0,
+  },
+  footer: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'flex-end',
+    marginTop: 16,
+  },
+  header: {
+    display: 'grid',
+    gap: 4,
+    marginBottom: 16,
   },
   root: {
     color: uiTheme.color.foreground,
@@ -162,6 +197,12 @@ export const alertDialogStyles = style.create({
     '[data-disabled]': {
       opacity: 0.5,
     },
+  },
+  title: {
+    color: uiTheme.color.foreground,
+    fontSize: 16,
+    fontWeight: 600,
+    margin: 0,
   },
   trigger: {
     alignItems: 'center',
@@ -331,6 +372,52 @@ export const AlertDialogAction = component({
       >
         {props.children}
       </button>
+    );
+  },
+});
+
+export const AlertDialogHeader = component({
+  render(props: AlertDialogPartProps) {
+    const styleAttrs = style.attrs(alertDialogStyles.header, props.styles?.header);
+    return (
+      <div {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </div>
+    );
+  },
+});
+
+export const AlertDialogTitle = component({
+  render(props: AlertDialogPartProps) {
+    const styleAttrs = style.attrs(alertDialogStyles.title, props.styles?.title);
+    return (
+      <h2 {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </h2>
+    );
+  },
+});
+
+export const AlertDialogDescription = component({
+  render(props: AlertDialogPartProps) {
+    const styleAttrs = style.attrs(alertDialogStyles.description, props.styles?.description);
+    return (
+      <p {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </p>
+    );
+  },
+});
+
+// Footer row that lays the Cancel/Action buttons out with a real gap instead of
+// flush siblings (the "squished footer" defect). See issues-digest alert-dialog P1.
+export const AlertDialogFooter = component({
+  render(props: AlertDialogPartProps) {
+    const styleAttrs = style.attrs(alertDialogStyles.footer, props.styles?.footer);
+    return (
+      <div {...styleAttrs} {...passThroughProps(props)} id={props.id}>
+        {props.children}
+      </div>
     );
   },
 });

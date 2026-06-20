@@ -7,6 +7,10 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   AlertDialogTrigger,
   alertDialogStyles,
 } from './alert-dialog.js';
@@ -20,29 +24,46 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
       cancelClasses: [style.attrs(alertDialogStyles.cancel).class ?? ''] as const,
       classes: [style.attrs(alertDialogStyles.root).class ?? ''] as const,
       contentClasses: [style.attrs(alertDialogStyles.content).class ?? ''] as const,
+      descriptionClasses: [style.attrs(alertDialogStyles.description).class ?? ''] as const,
+      footerClasses: [style.attrs(alertDialogStyles.footer).class ?? ''] as const,
+      headerClasses: [style.attrs(alertDialogStyles.header).class ?? ''] as const,
       open: AlertDialog.definition.render({
         children:
           AlertDialogTrigger.definition.render({ ...dialogState, children: 'Delete account' }) +
           AlertDialogContent.definition.render({
             ...dialogState,
             children:
-              '<h2 id="delete-title">Delete account</h2><p id="delete-description">This action is permanent.</p>',
+              AlertDialogHeader.definition.render({
+                children:
+                  AlertDialogTitle.definition.render({
+                    children: 'Delete account',
+                    id: 'delete-title',
+                  }) +
+                  AlertDialogDescription.definition.render({
+                    children: 'This action is permanent.',
+                    id: 'delete-description',
+                  }),
+              }) +
+              AlertDialogFooter.definition.render({
+                children:
+                  AlertDialogCancel.definition.render({
+                    ...dialogState,
+                    autoFocus: true,
+                    children: 'Cancel',
+                  }) +
+                  AlertDialogAction.definition.render({
+                    ...dialogState,
+                    children: 'Delete',
+                    intent: 'destructive',
+                  }),
+              }),
             descriptionId: 'delete-description',
             titleId: 'delete-title',
-          }) +
-          AlertDialogCancel.definition.render({
-            ...dialogState,
-            autoFocus: true,
-            children: 'Cancel',
-          }) +
-          AlertDialogAction.definition.render({
-            ...dialogState,
-            children: 'Delete',
-            intent: 'destructive',
           }),
         id: 'alert-dialog-root',
         open: true,
       }),
+      titleClasses: [style.attrs(alertDialogStyles.title).class ?? ''] as const,
       triggerClasses: [style.attrs(alertDialogStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
@@ -107,8 +128,12 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
       actionMarker: alertDialogStyles.action.$$css,
       cancelMarker: alertDialogStyles.cancel.$$css,
       contentMarker: alertDialogStyles.content.$$css,
+      descriptionMarker: alertDialogStyles.description.$$css,
+      footerMarker: alertDialogStyles.footer.$$css,
+      headerMarker: alertDialogStyles.header.$$css,
       keys: Object.keys(alertDialogStyles),
       rootMarker: alertDialogStyles.root.$$css,
+      titleMarker: alertDialogStyles.title.$$css,
       triggerMarker: alertDialogStyles.trigger.$$css,
     }).toMatchSnapshot();
   });

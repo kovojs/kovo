@@ -119,9 +119,17 @@ export const drawerStyles = style.create({
     display: 'flex',
     flexDirection: 'column',
     gap: 16,
+    // Reset the UA modal-<dialog> box (inset:0 + margin:auto) that would otherwise
+    // center the panel; the per-side rules in drawerSideStyles then anchor each edge.
+    inset: 'auto',
+    margin: 0,
     maxWidth: '100vw',
+    opacity: 1,
     padding: 24,
     position: 'fixed',
+    transitionBehavior: 'allow-discrete',
+    transitionDuration: '220ms',
+    transitionProperty: 'transform, opacity, display, overlay',
     zIndex: 50,
     '[data-state=closed]': {
       display: 'none',
@@ -187,29 +195,63 @@ export const drawerSideStyles = style.create({
     left: 0,
     maxHeight: '85vh',
     right: 0,
+    // Anchor to the bottom edge: clear the opposite (top) inset so the panel is a
+    // full-width strip flush to the bottom rather than a centered card.
+    top: 'auto',
+    transform: 'translateY(0)',
+    '@starting-style': {
+      transform: 'translateY(100%)',
+    },
+    '[data-state=closed]': {
+      transform: 'translateY(100%)',
+    },
   },
   left: {
     borderRightWidth: 1,
     bottom: 0,
     left: 0,
     maxWidth: 384,
+    right: 'auto',
     top: 0,
+    transform: 'translateX(0)',
     width: '100%',
+    '@starting-style': {
+      transform: 'translateX(-100%)',
+    },
+    '[data-state=closed]': {
+      transform: 'translateX(-100%)',
+    },
   },
   right: {
     borderLeftWidth: 1,
     bottom: 0,
+    left: 'auto',
     maxWidth: 384,
     right: 0,
     top: 0,
+    transform: 'translateX(0)',
     width: '100%',
+    '@starting-style': {
+      transform: 'translateX(100%)',
+    },
+    '[data-state=closed]': {
+      transform: 'translateX(100%)',
+    },
   },
   top: {
     borderBottomWidth: 1,
+    bottom: 'auto',
     left: 0,
     maxHeight: '85vh',
     right: 0,
     top: 0,
+    transform: 'translateY(0)',
+    '@starting-style': {
+      transform: 'translateY(-100%)',
+    },
+    '[data-state=closed]': {
+      transform: 'translateY(-100%)',
+    },
   },
 });
 

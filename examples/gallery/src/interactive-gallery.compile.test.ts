@@ -464,7 +464,7 @@ describe('compiled interactive gallery demos', () => {
     );
 
     expect(meter).toContain('data-gallery-interactive="meter"');
-    expect(meter).toContain('kovo-state=\'{"dataState":"suboptimum","value":72}\'');
+    expect(meter).toContain('kovo-state=\'{"dataState":"optimum","value":72}\'');
     expect(meter).toContain('<Meter');
     expect(meter).toMatch(
       /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/meter-demo\.client\.js#GalleryMeterDemo\$[A-Za-z]+_click"/,

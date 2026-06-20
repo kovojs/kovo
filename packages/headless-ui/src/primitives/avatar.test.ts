@@ -87,6 +87,20 @@ describe('headless-ui avatar primitive', () => {
     });
   });
 
+  it('never shows the image and fallback together (loaded hides fallback, error hides image)', () => {
+    // Loaded: photo visible, initials fallback removed so they do not coexist.
+    const loadedImage = avatarImageAttributes({ alt: 'Grace', src: '/g.svg', status: 'loaded' });
+    const loadedFallback = avatarFallbackAttributes({ src: '/g.svg', status: 'loaded' });
+    expect(loadedImage.hidden).toBe(false);
+    expect(loadedFallback.hidden).toBe(true);
+
+    // Error: image hidden so the broken-image glyph never paints over initials.
+    const errorImage = avatarImageAttributes({ alt: '', src: '/x.svg', status: 'error' });
+    const errorFallback = avatarFallbackAttributes({ src: '/x.svg', status: 'error' });
+    expect(errorImage.hidden).toBe(true);
+    expect(errorFallback.hidden).toBe(false);
+  });
+
   it('returns frozen records', () => {
     expect(Object.isFrozen(avatarImageState({ src: '/ada.png' }))).toBe(true);
     expect(Object.isFrozen(avatarRootAttributes({ src: '/ada.png' }))).toBe(true);

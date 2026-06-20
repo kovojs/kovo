@@ -107,11 +107,16 @@ export const dropdownMenuStyles = style.create({
   },
   item: {
     alignItems: 'center',
+    appearance: 'none',
+    backgroundColor: 'transparent',
     borderRadius: uiTheme.radius.sm,
+    borderStyle: 'none',
+    borderWidth: 0,
     color: uiTheme.color.foreground,
     columnGap: 8,
     cursor: 'default',
     display: 'flex',
+    font: 'inherit',
     fontSize: 14,
     outlineStyle: 'none',
     paddingBlock: 6,
@@ -125,6 +130,13 @@ export const dropdownMenuStyles = style.create({
     '[data-highlighted]': {
       backgroundColor: uiTheme.color.backgroundSubtle,
       color: uiTheme.color.foreground,
+    },
+    ':focus-visible': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      outlineColor: uiTheme.color.accent,
+      outlineOffset: -2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundSubtle,

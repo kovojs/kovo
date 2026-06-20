@@ -8,7 +8,10 @@ describe('@kovojs/ui Skeleton StyleX styles', () => {
   it('renders decorative skeleton markup with StyleX classes', () => {
     const rendered = Skeleton.definition.render({}) as string;
 
-    expect(rendered).toContain('<div class="kv-skeleton-animation-');
+    // Was a keyframe pulse (`kv-skeleton-animation-`), but a keyframes name
+    // referenced by variable isn't statically extractable (KV236); skeleton now
+    // uses a static, clearly-visible background tone instead.
+    expect(rendered).toContain('<div class="kv-skeleton-bg-');
     expect(rendered).toContain('data-style-src="skeleton.tsx#root"');
     expect(rendered).toContain('aria-hidden="true"');
     expect(([style.attrs(skeletonStyles.root).class ?? ''] as const).join(' ')).toContain(

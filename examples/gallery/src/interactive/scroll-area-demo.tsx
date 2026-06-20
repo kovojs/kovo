@@ -272,12 +272,21 @@ export const GalleryScrollAreaDemo = component({
             state.scrollY = nextAtEnd ? 'end' : 'start';
             state.thumbOffset = nextAtEnd ? 100 : 0;
             state.scrolling = true;
+            // NOTE (plan T7, deferred): imperatively scrolling the live viewport
+            // (.scrollTop) needs a shared client-action primitive — a data-bind
+            // stamp only sets an attribute. Doing it inline captured an
+            // unserializable closure value (KV201), so the property-backed scroll
+            // binding is tracked as a follow-up; the state mutations above keep the
+            // thumb/aria-pressed contract correct.
           }}
         >
           <span>{state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}</span>
         </button>
+        {/* Visually hidden (sr-only) state probe: kept in the DOM for the gallery
+            tests that read data-demo-state, removed from layout so it no longer
+            paints as stray "start" body text (T1). */}
         <output
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
           data-demo-state="scroll-area-position"
         >
           {state.scrollY}

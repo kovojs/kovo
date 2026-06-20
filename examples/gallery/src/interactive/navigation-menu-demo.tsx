@@ -246,8 +246,18 @@ export const GalleryNavigationMenuDemo = component({
           hidden={state.openValue === ''}
           id="gallery-navigation-viewport"
         />
-        <output data-demo-state="navigation-open">{state.openValue || 'none'}</output>
-        <output data-demo-state="navigation-value">{state.value}</output>
+        <output
+          data-demo-state="navigation-open"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.openValue || 'none'}
+        </output>
+        <output
+          data-demo-state="navigation-value"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.value}
+        </output>
       </NavigationMenu>
     );
   },

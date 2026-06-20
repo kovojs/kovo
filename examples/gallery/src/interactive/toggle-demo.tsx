@@ -13,7 +13,7 @@ export const GalleryToggleDemo = component({
   state: () => ({ pressed: false }),
   render: (_queries: Record<string, never>, state: GalleryToggleDemoState) => (
     <section
-      style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
+      style="display:flex;flex-direction:column;align-items:flex-start;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
       data-gallery-interactive="toggle"
     >
       <Toggle
@@ -28,7 +28,7 @@ export const GalleryToggleDemo = component({
         Dense rows
       </Toggle>
       <output
-        style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+        style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
         data-demo-state="pressed"
       >
         {state.pressed ? 'pressed' : 'off'}

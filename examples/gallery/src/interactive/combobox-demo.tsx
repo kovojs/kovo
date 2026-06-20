@@ -65,55 +65,31 @@ export const GalleryComboboxDemo = component({
           City
         </label>
         <form id="gallery-combobox-form" data-gallery-form="combobox" />
-        <ComboboxInput
-          {...inputState}
-          aria-activedescendant={
-            state.highlightedValue === 'chicago'
-              ? 'gallery-combobox-listbox-option-2'
-              : state.highlightedValue === 'boston'
-                ? 'gallery-combobox-listbox-option-1'
-                : state.highlightedValue === 'austin'
-                  ? 'gallery-combobox-listbox-option-0'
-                  : null
-          }
-          aria-expanded={state.open ? 'true' : 'false'}
-          data-placeholder={state.inputValue === '' ? '' : null}
-          data-state={state.open ? 'open' : 'closed'}
-          id="gallery-combobox-input"
-          labelledBy="gallery-combobox-label"
-          onInput={() => {
-            const result = _comboboxInput(Object(event), { value: state.inputValue });
-            if (!result) return;
-            state.inputValue = result.value ?? '';
-            state.open = true;
-            const filteredItems = _comboboxFilteredItems({
-              items: [
-                {
-                  id: 'gallery-combobox-listbox-option-0',
-                  label: 'Austin',
-                  value: 'austin',
-                },
-                {
-                  disabled: true,
-                  id: 'gallery-combobox-listbox-option-1',
-                  label: 'Boston',
-                  value: 'boston',
-                },
-                {
-                  id: 'gallery-combobox-listbox-option-2',
-                  textValue: 'Chicago city',
-                  value: 'chicago',
-                },
-              ],
-              value: state.inputValue,
-            });
-            state.highlightedValue =
-              filteredItems[0]?.disabled === true ? '' : (filteredItems[0]?.value ?? '');
-          }}
-          onKeyDown={() => {
-            const result = _comboboxKeyDown(Object(event), {
-              highlightedValue: state.highlightedValue,
-              items: _comboboxFilteredItems({
+        {/* T6 (UX): wrap input + listbox in a position:relative anchor so the
+            listbox drops flush below the input instead of overlaying it. */}
+        <div style="position:relative">
+          <ComboboxInput
+            {...inputState}
+            aria-activedescendant={
+              state.highlightedValue === 'chicago'
+                ? 'gallery-combobox-listbox-option-2'
+                : state.highlightedValue === 'boston'
+                  ? 'gallery-combobox-listbox-option-1'
+                  : state.highlightedValue === 'austin'
+                    ? 'gallery-combobox-listbox-option-0'
+                    : null
+            }
+            aria-expanded={state.open ? 'true' : 'false'}
+            data-placeholder={state.inputValue === '' ? '' : null}
+            data-state={state.open ? 'open' : 'closed'}
+            id="gallery-combobox-input"
+            labelledBy="gallery-combobox-label"
+            onInput={() => {
+              const result = _comboboxInput(Object(event), { value: state.inputValue });
+              if (!result) return;
+              state.inputValue = result.value ?? '';
+              state.open = true;
+              const filteredItems = _comboboxFilteredItems({
                 items: [
                   {
                     id: 'gallery-combobox-listbox-option-0',
@@ -133,154 +109,192 @@ export const GalleryComboboxDemo = component({
                   },
                 ],
                 value: state.inputValue,
-              }),
-              open: state.open,
-              value: state.value,
-            });
-            if (!result) return;
+              });
+              state.highlightedValue =
+                filteredItems[0]?.disabled === true ? '' : (filteredItems[0]?.value ?? '');
+            }}
+            onKeyDown={() => {
+              const result = _comboboxKeyDown(Object(event), {
+                highlightedValue: state.highlightedValue,
+                items: _comboboxFilteredItems({
+                  items: [
+                    {
+                      id: 'gallery-combobox-listbox-option-0',
+                      label: 'Austin',
+                      value: 'austin',
+                    },
+                    {
+                      disabled: true,
+                      id: 'gallery-combobox-listbox-option-1',
+                      label: 'Boston',
+                      value: 'boston',
+                    },
+                    {
+                      id: 'gallery-combobox-listbox-option-2',
+                      textValue: 'Chicago city',
+                      value: 'chicago',
+                    },
+                  ],
+                  value: state.inputValue,
+                }),
+                open: state.open,
+                value: state.value,
+              });
+              if (!result) return;
 
-            if ('value' in result) {
-              if (result.value.changed) {
-                state.open = result.open.open;
-                state.value = result.value.value ?? state.value;
-                state.inputValue = state.value;
-                state.highlightedValue = state.value;
-              }
-            } else if ('highlightedValue' in result) {
-              state.highlightedValue = result.highlightedValue ?? '';
-            } else {
-              state.open = result.open;
-              if (Object(event)['key'] === 'Escape') {
-                state.inputValue = state.value;
-                state.highlightedValue = state.value;
-              }
-            }
-          }}
-          value={state.inputValue}
-        />
-        <ComboboxListbox
-          {...inputState}
-          data-state={state.open ? 'open' : 'closed'}
-          hidden={!state.open}
-          id={listboxId}
-          labelledBy="gallery-combobox-label"
-        >
-          <ComboboxOption
-            {...selectedState}
-            aria-selected={state.value === 'austin' ? 'true' : 'false'}
-            data-highlighted={state.highlightedValue === 'austin' ? '' : null}
-            data-state={state.value === 'austin' ? 'checked' : 'unchecked'}
-            hidden={
-              state.inputValue !== '' &&
-              !'austin austin'.includes(state.inputValue.toLocaleLowerCase())
-            }
-            id="gallery-combobox-listbox-option-0"
-            itemLabel="Austin"
-            itemValue="austin"
-            onClick={() => {
-              const result = _comboboxOptionClick(Object(event), {
-                highlightedValue: state.highlightedValue,
-                items: [
-                  {
-                    id: 'gallery-combobox-listbox-option-0',
-                    label: 'Austin',
-                    value: 'austin',
-                  },
-                  {
-                    disabled: true,
-                    id: 'gallery-combobox-listbox-option-1',
-                    label: 'Boston',
-                    value: 'boston',
-                  },
-                  {
-                    id: 'gallery-combobox-listbox-option-2',
-                    textValue: 'Chicago city',
-                    value: 'chicago',
-                  },
-                ],
-                itemValue: 'austin',
-                open: state.open,
-                value: state.value,
-              });
-              if (!result) return;
-              if (result.value.changed) {
-                state.open = result.open.open;
-                state.value = result.value.value ?? state.value;
-                state.inputValue = state.value;
-                state.highlightedValue = state.value;
+              if ('value' in result) {
+                if (result.value.changed) {
+                  state.open = result.open.open;
+                  state.value = result.value.value ?? state.value;
+                  state.inputValue = state.value;
+                  state.highlightedValue = state.value;
+                }
+              } else if ('highlightedValue' in result) {
+                state.highlightedValue = result.highlightedValue ?? '';
+              } else {
+                state.open = result.open;
+                if (Object(event)['key'] === 'Escape') {
+                  state.inputValue = state.value;
+                  state.highlightedValue = state.value;
+                }
               }
             }}
-            tabIndex={state.highlightedValue === 'austin' ? 0 : -1}
+            value={state.inputValue}
+          />
+          <ComboboxListbox
+            {...inputState}
+            data-state={state.open ? 'open' : 'closed'}
+            hidden={!state.open}
+            id={listboxId}
+            labelledBy="gallery-combobox-label"
           >
-            Austin
-          </ComboboxOption>
-          <ComboboxOption
-            {...selectedState}
-            aria-selected={state.value === 'boston' ? 'true' : 'false'}
-            data-highlighted={state.highlightedValue === 'boston' ? '' : null}
-            data-state={state.value === 'boston' ? 'checked' : 'unchecked'}
-            hidden={
-              state.inputValue !== '' &&
-              !'boston boston'.includes(state.inputValue.toLocaleLowerCase())
-            }
-            id="gallery-combobox-listbox-option-1"
-            itemDisabled={true}
-            itemLabel="Boston"
-            itemValue="boston"
-            tabIndex={-1}
-          >
-            Boston
-          </ComboboxOption>
-          <ComboboxOption
-            {...selectedState}
-            aria-selected={state.value === 'chicago' ? 'true' : 'false'}
-            data-highlighted={state.highlightedValue === 'chicago' ? '' : null}
-            data-state={state.value === 'chicago' ? 'checked' : 'unchecked'}
-            hidden={
-              state.inputValue !== '' &&
-              !'chicago city chicago'.includes(state.inputValue.toLocaleLowerCase())
-            }
-            id="gallery-combobox-listbox-option-2"
-            itemValue="chicago"
-            onClick={() => {
-              const result = _comboboxOptionClick(Object(event), {
-                highlightedValue: state.highlightedValue,
-                items: [
-                  {
-                    id: 'gallery-combobox-listbox-option-0',
-                    label: 'Austin',
-                    value: 'austin',
-                  },
-                  {
-                    disabled: true,
-                    id: 'gallery-combobox-listbox-option-1',
-                    label: 'Boston',
-                    value: 'boston',
-                  },
-                  {
-                    id: 'gallery-combobox-listbox-option-2',
-                    textValue: 'Chicago city',
-                    value: 'chicago',
-                  },
-                ],
-                itemValue: 'chicago',
-                open: state.open,
-                value: state.value,
-              });
-              if (!result) return;
-              if (result.value.changed) {
-                state.open = result.open.open;
-                state.value = result.value.value ?? state.value;
-                state.inputValue = state.value;
-                state.highlightedValue = state.value;
+            <ComboboxOption
+              {...selectedState}
+              aria-selected={state.value === 'austin' ? 'true' : 'false'}
+              data-highlighted={state.highlightedValue === 'austin' ? '' : null}
+              data-state={state.value === 'austin' ? 'checked' : 'unchecked'}
+              hidden={
+                state.inputValue !== '' &&
+                !'austin austin'.includes(state.inputValue.toLocaleLowerCase())
               }
-            }}
-            tabIndex={state.highlightedValue === 'chicago' ? 0 : -1}
-          >
-            Chicago city
-          </ComboboxOption>
-        </ComboboxListbox>
-        <ComboboxValue {...selectedState} data-demo-state="combobox-value" />
+              id="gallery-combobox-listbox-option-0"
+              itemLabel="Austin"
+              itemValue="austin"
+              onClick={() => {
+                const result = _comboboxOptionClick(Object(event), {
+                  highlightedValue: state.highlightedValue,
+                  items: [
+                    {
+                      id: 'gallery-combobox-listbox-option-0',
+                      label: 'Austin',
+                      value: 'austin',
+                    },
+                    {
+                      disabled: true,
+                      id: 'gallery-combobox-listbox-option-1',
+                      label: 'Boston',
+                      value: 'boston',
+                    },
+                    {
+                      id: 'gallery-combobox-listbox-option-2',
+                      textValue: 'Chicago city',
+                      value: 'chicago',
+                    },
+                  ],
+                  itemValue: 'austin',
+                  open: state.open,
+                  value: state.value,
+                });
+                if (!result) return;
+                // B5 (UX): selecting any option closes the listbox, even when the
+                // value is unchanged (re-selecting the current option).
+                state.open = result.open.open;
+                if (result.value.changed) {
+                  state.value = result.value.value ?? state.value;
+                  state.inputValue = state.value;
+                  state.highlightedValue = state.value;
+                }
+              }}
+              tabIndex={state.highlightedValue === 'austin' ? 0 : -1}
+            >
+              Austin
+            </ComboboxOption>
+            <ComboboxOption
+              {...selectedState}
+              aria-selected={state.value === 'boston' ? 'true' : 'false'}
+              data-highlighted={state.highlightedValue === 'boston' ? '' : null}
+              data-state={state.value === 'boston' ? 'checked' : 'unchecked'}
+              hidden={
+                state.inputValue !== '' &&
+                !'boston boston'.includes(state.inputValue.toLocaleLowerCase())
+              }
+              id="gallery-combobox-listbox-option-1"
+              itemDisabled={true}
+              itemLabel="Boston"
+              itemValue="boston"
+              tabIndex={-1}
+            >
+              Boston
+            </ComboboxOption>
+            <ComboboxOption
+              {...selectedState}
+              aria-selected={state.value === 'chicago' ? 'true' : 'false'}
+              data-highlighted={state.highlightedValue === 'chicago' ? '' : null}
+              data-state={state.value === 'chicago' ? 'checked' : 'unchecked'}
+              hidden={
+                state.inputValue !== '' &&
+                !'chicago city chicago'.includes(state.inputValue.toLocaleLowerCase())
+              }
+              id="gallery-combobox-listbox-option-2"
+              itemValue="chicago"
+              onClick={() => {
+                const result = _comboboxOptionClick(Object(event), {
+                  highlightedValue: state.highlightedValue,
+                  items: [
+                    {
+                      id: 'gallery-combobox-listbox-option-0',
+                      label: 'Austin',
+                      value: 'austin',
+                    },
+                    {
+                      disabled: true,
+                      id: 'gallery-combobox-listbox-option-1',
+                      label: 'Boston',
+                      value: 'boston',
+                    },
+                    {
+                      id: 'gallery-combobox-listbox-option-2',
+                      textValue: 'Chicago city',
+                      value: 'chicago',
+                    },
+                  ],
+                  itemValue: 'chicago',
+                  open: state.open,
+                  value: state.value,
+                });
+                if (!result) return;
+                // B5 (UX): selecting any option closes the listbox, even when the
+                // value is unchanged (re-selecting the current option).
+                state.open = result.open.open;
+                if (result.value.changed) {
+                  state.value = result.value.value ?? state.value;
+                  state.inputValue = state.value;
+                  state.highlightedValue = state.value;
+                }
+              }}
+              tabIndex={state.highlightedValue === 'chicago' ? 0 : -1}
+            >
+              Chicago city
+            </ComboboxOption>
+          </ComboboxListbox>
+        </div>
+        {/* Debug-state probe: kept in the DOM for gallery/a11y gates (it reads the
+            value node's textContent) but wrapped in a visually-hidden (sr-only)
+            span so it does not leak as page text. The component blocks raw
+            `style` pass-through, so the wrapper carries the sr-only style. */}
+        <span style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0">
+          <ComboboxValue {...selectedState} data-demo-state="combobox-value" />
+        </span>
       </Combobox>
     );
   },

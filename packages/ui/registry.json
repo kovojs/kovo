@@ -42,7 +42,11 @@
         "AlertDialogTrigger",
         "AlertDialogContent",
         "AlertDialogCancel",
-        "AlertDialogAction"
+        "AlertDialogAction",
+        "AlertDialogHeader",
+        "AlertDialogTitle",
+        "AlertDialogDescription",
+        "AlertDialogFooter"
       ],
       "dependencies": {
         "@kovojs/headless-ui": [
@@ -303,7 +307,16 @@
       "name": "dialog",
       "title": "Dialog",
       "files": ["src/dialog.tsx"],
-      "exports": ["Dialog", "DialogTrigger", "DialogContent", "DialogClose"],
+      "exports": [
+        "Dialog",
+        "DialogTrigger",
+        "DialogContent",
+        "DialogClose",
+        "DialogCloseX",
+        "DialogHeader",
+        "DialogTitle",
+        "DialogDescription"
+      ],
       "dependencies": {
         "@kovojs/headless-ui": [
           "dialogCloseAttributes",

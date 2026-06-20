@@ -42,13 +42,33 @@ export interface CollapsibleContentProps extends CollapsibleStateProps {
 }
 
 export const collapsibleStyles = style.create({
+  // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
+  // `display:grid` overrides both the UA `details:not([open]) > *{display:none}`
+  // rule and the closed state, so the panel smoothly expands/collapses instead of
+  // snapping. data-state comes from the reactive data-bind stamp forwarded via
+  // passThroughProps (the reveal fix), so the transition fires client-side.
   content: {
+    display: 'grid',
+    gridTemplateRows: '1fr',
+    transitionDuration: '200ms',
+    transitionProperty: 'grid-template-rows',
+    transitionTimingFunction: 'ease',
+    '[data-state=closed]': {
+      gridTemplateRows: '0fr',
+    },
+    '@media (prefers-reduced-motion: reduce)': {
+      transitionProperty: 'none',
+    },
+  },
+  contentInner: {
     color: uiTheme.color.foregroundMuted,
     fontSize: 14,
+    minHeight: 0,
+    overflow: 'hidden',
     paddingBottom: 12,
     paddingInline: 12,
     '[data-state=closed]': {
-      display: 'none',
+      paddingBottom: 0,
     },
   },
   root: {
@@ -160,13 +180,23 @@ export const CollapsibleContent = component({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
     const styleAttrs = style.attrs(collapsibleStyles.content, props.styles?.content);
+    const innerStyleAttrs = style.attrs(collapsibleStyles.contentInner);
 
     return (
       // passThroughProps forwards the compiler-emitted data-bind:* reactive stamps
       // (e.g. data-bind:data-state) so the panel re-renders open/closed client-side;
       // without it the SSR value stays frozen and the content never reveals.
-      <div {...styleAttrs} {...passThroughProps(props)} data-state={attrs['data-state']} id={attrs.id}>
-        {props.children}
+      // Outer div is the animatable grid wrapper; the inner div holds the padded
+      // content and mirrors data-state so its padding collapses with the row.
+      <div
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-state={attrs['data-state']}
+        id={attrs.id}
+      >
+        <div {...innerStyleAttrs} data-state={attrs['data-state']}>
+          {props.children}
+        </div>
       </div>
     );
   },

@@ -11,6 +11,10 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   AlertDialogTrigger,
 } from '@kovojs/ui/alert-dialog';
 
@@ -59,41 +63,43 @@ export const GalleryAlertDialogDemo = component({
           }}
           titleId={titleId}
         >
-          <h2 style="font-size:1rem;font-weight:600" id={titleId}>
-            Delete workspace?
-          </h2>
-          <p style="font-size:0.875rem;color:#525252" id={descriptionId}>
-            This removes the shared gallery workspace for every member.
-          </p>
-          <AlertDialogCancel
-            autoFocus={true}
-            contentId={contentId}
-            data-state={state.open ? 'open' : 'closed'}
-            open={state.open}
-            onClick={() => {
-              const result = _alertDialogCancelClick(Object(event), { open: state.open });
-              if (!result?.changed) return;
-              state.open = result.open;
-            }}
-          >
-            Keep workspace
-          </AlertDialogCancel>
-          <AlertDialogAction
-            contentId={contentId}
-            data-state={state.open ? 'open' : 'closed'}
-            intent="destructive"
-            open={state.open}
-            onClick={() => {
-              const result = _alertDialogActionClick(Object(event), { open: state.open });
-              if (!result?.changed) return;
-              state.open = result.open;
-            }}
-          >
-            Delete
-          </AlertDialogAction>
+          <AlertDialogHeader>
+            <AlertDialogTitle id={titleId}>Delete workspace?</AlertDialogTitle>
+            <AlertDialogDescription id={descriptionId}>
+              This removes the shared gallery workspace for every member.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              autoFocus={true}
+              contentId={contentId}
+              data-state={state.open ? 'open' : 'closed'}
+              open={state.open}
+              onClick={() => {
+                const result = _alertDialogCancelClick(Object(event), { open: state.open });
+                if (!result?.changed) return;
+                state.open = result.open;
+              }}
+            >
+              Keep workspace
+            </AlertDialogCancel>
+            <AlertDialogAction
+              contentId={contentId}
+              data-state={state.open ? 'open' : 'closed'}
+              intent="destructive"
+              open={state.open}
+              onClick={() => {
+                const result = _alertDialogActionClick(Object(event), { open: state.open });
+                if (!result?.changed) return;
+                state.open = result.open;
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
         <output
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
           data-demo-state="alert-dialog-open"
         >
           {state.open ? 'open' : 'closed'}

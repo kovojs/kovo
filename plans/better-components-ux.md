@@ -9,11 +9,47 @@ live in `packages/ui/src/*.tsx` (StyleX skin over the `packages/headless-ui/src/
 behavior); the live demos are the compiled TSX under `examples/gallery/src/interactive/*-demo.tsx`
 (plus static ones in `examples/gallery/src/demo-fixtures.tsx`).
 
-**Status (2026-06-20):** Diagnosis **complete and evidence-backed**; implementation **not started**.
-All 44 gallery components were driven in a real headless browser and cross-checked against source.
-Result: **14 P0 (broken / non-functional), 28 P1 (clearly worse than shadcn), 54 P2 (polish)** across
-the surface, almost all reducible to ~9 shared root causes. No code changed yet — every box below is
-open.
+**Status (2026-06-20):** Diagnosis complete; **implementation pass landed** on branch
+`agent/better-components-ux` (fan-out of 7 component-slice agents + main-thread integration). The
+worktree is **green**: `pnpm exec vp check --fix` → 1422 files, 0 type/lint errors; the full
+non-browser suite (`npx vitest run`) passes (the 2 commerce/tutorial 60s tests pass in isolation —
+they only time out under whole-suite CPU contention); `check:api-surface` green (new exports
+baselined); the gallery browser suite passes except the 2 synthetic-CSS visual-baseline snapshots
+(see "Deferred" below).
+
+**Landed (verified):** collapsible/disclosure reveal (B1); drawer + sheet edge-anchoring (B2);
+popover/hover-card anchored placement (B3); autocomplete/combobox listbox-below-input (B4) +
+close-on-reselect (B5); slider drag (B7); progress styled track (B10); avatar real images (B9, via
+inline data-URI SVGs); menu/toolbar/number-field UA-bevel button reset (V1); dialog/sheet close-X +
+Dialog/AlertDialog Header/Title/Description/Footer families (V3/V4); toast trigger moved out of the
+fixed viewport + inline layout + centered placement (V5); meter optimum/green color (V6); skeleton
+visible tone (V9); collapsible/disclosure grid-rows open/close animation (C1 subset); ~demo-state
+`<output>` sr-only sweep across the interactive demos (T1).
+
+**Deferred (tracked follow-ups, with reason):**
+- **B6 OTP per-slot reactive value** — the styled per-slot value can't be sliced by `slotIndex` in a
+  client `data-bind` (no indexing in binding paths); needs a component-owned slot-value primitive.
+  Reverted to the working original (typing/delete work client-side; the apparent "bug" was a probe
+  artifact). OTP marked **not-reproduced/works** rather than fixed.
+- **B8 checkbox-group "All notifications" styled select-all** — a styled `Checkbox` regressed the
+  native `.checked` form state across the group on toggle (native-property vs morph); reverted.
+  Needs a select-all primitive that drives the group's native `.checked` properties.
+- **avatar load/error island** (B9 deeper), **scroll-area `.scrollTop` jump** (V8), **progress
+  indeterminate animation** — all need a shared client-action primitive for live-property binding
+  (attribute `data-bind` can't set element properties). The visuals/static states are fixed; the
+  property-backed behavior is the follow-up.
+- **Keyframe animations** (tabs fade, skeleton pulse, progress slide) — `style.keyframes(name)`
+  referenced by variable isn't statically extractable by the package-css / vendored-compile StyleX
+  extractor (KV236 / A5 coverage); replaced with static styling. Needs keyframes-resolution support.
+- **V10 Vaul drawer drag/snap/background-scale** — large gesture feature; out of this pass.
+- **Visual baseline snapshots** (`interactive-gallery.visual.browser.test.ts`) — geometry shifted
+  (intended) and the screenshot hashes are CI-environment-specific (they fail locally even on `main`),
+  so they need a **CI-side baseline regeneration** to reflect the intended visual changes. Per the
+  Verification protocol this synthetic-CSS test is non-authoritative; real-CSS confirmation is the
+  Playwright-on-built-gallery probe.
+
+Original diagnosis (unchanged): **14 P0, 28 P1, 54 P2** across all 44 components, reducible to ~9
+shared root causes.
 
 **Behavior source of truth:** `SPEC.md` (§5.2 TSX-authored components / KV235 hand-authored lowered
 IR is forbidden; §13.1 stylesheet linking; §12.x accessibility), `rules/accessibility-conformance.md`,

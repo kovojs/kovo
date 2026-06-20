@@ -69,6 +69,7 @@ export type ToastCloseProps = ToastActionProps;
 export const toastStyles = style.create({
   action: {
     alignItems: 'center',
+    appearance: 'none',
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.borderStrong,
     borderRadius: uiTheme.radius.md,
@@ -76,12 +77,19 @@ export const toastStyles = style.create({
     borderWidth: 1,
     color: uiTheme.color.foreground,
     display: 'inline-flex',
+    font: 'inherit',
     fontSize: 14,
     fontWeight: 500,
+    // better-components-ux: keep actions in the trailing grid column, hugging
+    // their content (not stretched to a full-width bar). See toastStyles.root.
+    gridColumnStart: 2,
     height: 32,
     justifyContent: 'center',
+    justifySelf: 'end',
     paddingInline: 12,
     transitionProperty: 'background-color, color',
+    whiteSpace: 'nowrap',
+    width: 'auto',
     ':disabled': {
       cursor: 'not-allowed',
       opacity: 0.5,
@@ -98,11 +106,21 @@ export const toastStyles = style.create({
   },
   close: {
     alignItems: 'center',
+    appearance: 'none',
+    backgroundColor: 'transparent',
+    borderStyle: 'none',
+    borderWidth: 0,
     borderRadius: uiTheme.radius.md,
     color: uiTheme.color.foregroundMuted,
     display: 'inline-flex',
+    font: 'inherit',
+    // better-components-ux: pin the close affordance to the trailing column at
+    // the top of the toast, like shadcn's top-right dismiss. See toastStyles.root.
+    gridColumnStart: 2,
+    gridRowStart: 1,
     height: 32,
     justifyContent: 'center',
+    justifySelf: 'end',
     transitionProperty: 'background-color, color',
     width: 32,
     ':disabled': {
@@ -122,6 +140,8 @@ export const toastStyles = style.create({
   },
   description: {
     color: uiTheme.color.foregroundMuted,
+    // Content lives in the leading column (see toastStyles.root).
+    gridColumnStart: 1,
   },
   root: {
     backgroundColor: uiTheme.color.background,
@@ -131,10 +151,17 @@ export const toastStyles = style.create({
     borderWidth: 1,
     boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     color: uiTheme.color.foreground,
+    // better-components-ux: inline layout [content | actions/close] instead of a
+    // single full-width column where every child became a stacked full-width bar.
+    // Content (title/description) flows down the leading 1fr column; actions and
+    // the close button sit in the trailing auto column on the right.
+    columnGap: 12,
     display: 'grid',
     fontSize: 14,
+    gridTemplateColumns: '1fr auto',
+    alignItems: 'start',
     padding: 16,
-    rowGap: 8,
+    rowGap: 4,
     '[data-disabled]': {
       opacity: 0.5,
     },
@@ -145,12 +172,19 @@ export const toastStyles = style.create({
       backgroundColor: uiTheme.color.danger.background,
       borderColor: uiTheme.color.danger.border,
     },
+    // better-components-ux: soften the info/success fills to a quieter component-
+    // local tone. The full container hue reads as a loud bar; layering a faint
+    // surface over the semantic background keeps the Material hue (per MEMORY
+    // ui-shadcn-parity-material-skin) but at a calmer intensity. Only the border
+    // keeps the saturated semantic color as the accent.
     '[data-variant=info]': {
       backgroundColor: uiTheme.color.info.background,
+      backgroundImage: 'linear-gradient(0deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55))',
       borderColor: uiTheme.color.info.border,
     },
     '[data-variant=success]': {
       backgroundColor: uiTheme.color.success.background,
+      backgroundImage: 'linear-gradient(0deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55))',
       borderColor: uiTheme.color.success.border,
     },
     '[data-variant=warning]': {
@@ -161,6 +195,8 @@ export const toastStyles = style.create({
   title: {
     color: uiTheme.color.foreground,
     fontWeight: 500,
+    // Content lives in the leading column (see toastStyles.root).
+    gridColumnStart: 1,
   },
   viewport: {
     display: 'grid',
@@ -177,6 +213,9 @@ export const toastStyles = style.create({
     '[data-placement=bottom-center]': {
       bottom: 0,
       left: '50%',
+      // better-components-ux: left:50% alone offsets the viewport's left edge to
+      // center; translateX(-50%) re-centers the box itself.
+      transform: 'translateX(-50%)',
     },
     '[data-placement=bottom-end]': {
       bottom: 0,
@@ -189,6 +228,8 @@ export const toastStyles = style.create({
     '[data-placement=top-center]': {
       left: '50%',
       top: 0,
+      // better-components-ux: re-center the box after the left:50% origin offset.
+      transform: 'translateX(-50%)',
     },
     '[data-placement=top-end]': {
       right: 0,

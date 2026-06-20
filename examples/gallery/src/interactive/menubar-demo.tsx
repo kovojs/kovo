@@ -319,9 +319,24 @@ export const GalleryMenubarDemo = component({
             Import
           </MenubarItem>
         </MenubarSubmenu>
-        <output data-demo-state="menubar-active">{state.activeValue}</output>
-        <output data-demo-state="menubar-open">{state.openValue || 'none'}</output>
-        <output data-demo-state="menubar-value">{state.value}</output>
+        <output
+          data-demo-state="menubar-active"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.activeValue}
+        </output>
+        <output
+          data-demo-state="menubar-open"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.openValue || 'none'}
+        </output>
+        <output
+          data-demo-state="menubar-value"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.value}
+        </output>
       </section>
     );
   },

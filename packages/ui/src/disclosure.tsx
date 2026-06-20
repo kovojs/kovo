@@ -42,13 +42,34 @@ export interface DisclosureContentProps extends DisclosureStateProps {
 }
 
 export const disclosureStyles = style.create({
+  // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
+  // `display:grid` overrides the UA `[hidden]{display:none}` so the panel can
+  // transition while `hidden` stays true (correct a11y + gallery contract).
+  // data-state comes from the reactive data-bind stamp forwarded via
+  // passThroughProps (the reveal fix).
   content: {
     backgroundColor: uiTheme.color.background,
+    display: 'grid',
+    gridTemplateRows: '1fr',
+    transitionDuration: '200ms',
+    transitionProperty: 'grid-template-rows',
+    transitionTimingFunction: 'ease',
+    '[data-state=closed]': {
+      gridTemplateRows: '0fr',
+    },
+    '@media (prefers-reduced-motion: reduce)': {
+      transitionProperty: 'none',
+    },
+  },
+  contentInner: {
     color: uiTheme.color.foregroundMuted,
     fontSize: 14,
+    minHeight: 0,
+    overflow: 'hidden',
     padding: 12,
     '[data-state=closed]': {
-      display: 'none',
+      paddingBottom: 0,
+      paddingTop: 0,
     },
   },
   root: {
@@ -169,11 +190,14 @@ export const DisclosureContent = component({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
     const styleAttrs = style.attrs(disclosureStyles.content, props.styles?.content);
+    const innerStyleAttrs = style.attrs(disclosureStyles.contentInner);
 
     return (
       // passThroughProps forwards the compiler-emitted data-bind:* reactive stamps
       // (data-bind:data-state / data-bind:hidden) so the panel reveals client-side;
       // without it the SSR closed value stays frozen and clicking does nothing.
+      // Outer div is the animatable grid wrapper and keeps the hidden/id/data-state
+      // contract; the inner div holds the padded content and collapses with the row.
       <div
         {...styleAttrs}
         {...passThroughProps(props)}
@@ -181,7 +205,9 @@ export const DisclosureContent = component({
         hidden={attrs.hidden}
         id={attrs.id}
       >
-        {props.children}
+        <div {...innerStyleAttrs} data-state={attrs['data-state']}>
+          {props.children}
+        </div>
       </div>
     );
   },

@@ -356,6 +356,24 @@ describe('headless-ui slider primitive', () => {
     expect(snappedResult).toMatchObject({ changed: true, value: 75 });
   });
 
+  it('updates value from native range input events during drag (gallery wiring)', () => {
+    // Regression for the gallery slider drag fix: the native range overlay is
+    // the pointer/drag target, so its `input` event must drive value changes.
+    const reasons: string[] = [];
+    const result = sliderInput(
+      sliderInputEvent('60'),
+      { max: 100, min: 0, step: 1, value: 25 },
+      {
+        onValueChange(detail) {
+          reasons.push(detail.reason);
+        },
+      },
+    );
+
+    expect(result).toMatchObject({ changed: true, value: 60 });
+    expect(reasons).toEqual(['input']);
+  });
+
   it('maps slider keyboard commands to snapped values', () => {
     expect(sliderKeyDown(sliderKeyEvent('ArrowRight'), { step: 5, value: 10 })).toMatchObject({
       changed: true,

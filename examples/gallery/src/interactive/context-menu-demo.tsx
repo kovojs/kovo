@@ -347,8 +347,18 @@ export const GalleryContextMenuDemo = component({
             Inspect
           </ContextMenuItem>
         </ContextMenuContent>
-        <output data-demo-state="context-open">{state.open ? 'open' : 'closed'}</output>
-        <output data-demo-state="context-value">{state.value}</output>
+        <output
+          data-demo-state="context-open"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
+        <output
+          data-demo-state="context-value"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.value}
+        </output>
       </ContextMenu>
     );
   },

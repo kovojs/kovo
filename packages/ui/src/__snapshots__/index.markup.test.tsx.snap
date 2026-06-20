@@ -9,7 +9,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-alert-dialog-fg-1xoz2m kv-alert-dialog-d-1578mh kv-alert-dialog-opacity-1wmp2v",
   ],
   "alertDialogContentClasses": [
-    "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-ekta4l kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-ts27i0 kv-alert-dialog-fg-1xoz2m kv-alert-dialog-left-1dkzcg kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-position-qymjrz kv-alert-dialog-top-145aer kv-alert-dialog-transform-1c0eiv kv-alert-dialog-w-l5ey9h kv-alert-dialog-z-1ag0ds kv-alert-dialog-d-1que9w kv-alert-dialog-bg-1v5hde",
+    "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-ekta4l kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-ts27i0 kv-alert-dialog-fg-1xoz2m kv-alert-dialog-left-1dkzcg kv-alert-dialog-max-kcc8f5 kv-alert-dialog-opacity-1kvles kv-alert-dialog-pad-1kfxum kv-alert-dialog-position-qymjrz kv-alert-dialog-top-145aer kv-alert-dialog-transform-1p3l1l kv-alert-dialog-transition-14irv7 kv-alert-dialog-transition-c227ml kv-alert-dialog-transition-606ani kv-alert-dialog-w-l5ey9h kv-alert-dialog-z-1ag0ds kv-alert-dialog-d-1que9w kv-alert-dialog-opacity-1ryqx3 kv-alert-dialog-transform-1m2gu3 kv-alert-dialog-bg-1v5hde",
   ],
   "autocompleteClasses": [
     "kv-autocomplete-fg-ndg53x kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-position-ojetho kv-autocomplete-row-1m16zq kv-autocomplete-opacity-uz1kyp kv-autocomplete-fg-1j04p9",
@@ -27,10 +27,10 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-fg-ndg53x kv-combobox-font-1rygq8 kv-combobox-h-1crj27 kv-combobox-outline-1ipo24 kv-combobox-pad-13ileu kv-combobox-transition-1nf16q kv-combobox-w-lhhf6b kv-combobox-fg-1haook kv-combobox-bd-1l3qua kv-combobox-bg-19mu96 kv-combobox-fg-1m99ep kv-combobox-cursor-1puzf0 kv-combobox-outline-z4aaho kv-combobox-outline-1ag1xs kv-combobox-outline-piwjfh kv-combobox-outline-1y03xn",
   ],
   "comboboxListboxClasses": [
-    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-rsn8w4 kv-combobox-m-nikuj2 kv-combobox-max-1ajqiv kv-combobox-min-qyj00s kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-position-1ncx2x kv-combobox-w-lhhf6b kv-combobox-z-13q0r7 kv-combobox-d-dphzaj kv-combobox-d-y6pz22",
+    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-rsn8w4 kv-combobox-left-1l0qed kv-combobox-m-nikuj2 kv-combobox-max-1ajqiv kv-combobox-min-qyj00s kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-position-1ncx2x kv-combobox-top-1l3g0t kv-combobox-w-lhhf6b kv-combobox-z-13q0r7 kv-combobox-d-dphzaj kv-combobox-d-y6pz22",
   ],
   "commandClasses": [
-    "kv-command-fg-1f1he7 kv-command-d-1mghfj kv-command-font-kvxk8f kv-command-row-1m16zq kv-command-opacity-1icjyx",
+    "kv-command-fg-1aikyw kv-command-d-1mghfj kv-command-font-x31h30 kv-command-row-1m16zq kv-command-opacity-1icjyx",
   ],
   "contextMenuClasses": [
     "kv-context-menu-fg-16p8sm kv-context-menu-font-1cumtw kv-context-menu-position-ojetho kv-context-menu-opacity-1ctby9",
@@ -39,7 +39,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-dialog-fg-1f1he7 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v",
   ],
   "dialogContentClasses": [
-    "kv-dialog-bg-1noq3u kv-dialog-bd-jllngq kv-dialog-bd-1o6h6q kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-ts27i0 kv-dialog-fg-1f1he7 kv-dialog-left-1dkzcg kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-position-qymjrz kv-dialog-top-145aer kv-dialog-transform-1c0eiv kv-dialog-w-l5ey9h kv-dialog-z-1ag0ds kv-dialog-d-1que9w kv-dialog-bg-1v5hde",
+    "kv-dialog-bg-1noq3u kv-dialog-bd-jllngq kv-dialog-bd-1o6h6q kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-ts27i0 kv-dialog-fg-1f1he7 kv-dialog-left-1dkzcg kv-dialog-max-rbx48h kv-dialog-opacity-1kvles kv-dialog-pad-1kfxum kv-dialog-position-qymjrz kv-dialog-top-145aer kv-dialog-transform-1p3l1l kv-dialog-transition-14irv7 kv-dialog-transition-c227ml kv-dialog-transition-606ani kv-dialog-w-l5ey9h kv-dialog-z-1ag0ds kv-dialog-d-1que9w kv-dialog-opacity-1ryqx3 kv-dialog-transform-1m2gu3 kv-dialog-bg-1v5hde",
   ],
   "dropdownMenuClasses": [
     "kv-dropdown-menu-fg-16p8sm kv-dropdown-menu-d-14glvo kv-dropdown-menu-font-1cumtw kv-dropdown-menu-position-ojetho kv-dropdown-menu-opacity-1ctby9",
@@ -72,10 +72,10 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-slider-cursor-1rtfyn kv-slider-h-i8ke14 kv-slider-left-1hp4pw kv-slider-m-9505pz kv-slider-opacity-1ntpd0 kv-slider-position-1uzy1e kv-slider-top-1or6xt kv-slider-w-lhhf6b kv-slider-z-ev9kh2 kv-slider-cursor-1puzf0",
   ],
   "toastClasses": [
-    "kv-toast-bg-1wqigr kv-toast-bd-1gezg0 kv-toast-bd-12jlys kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-box-16dxlr kv-toast-fg-nxulax kv-toast-d-1mghfj kv-toast-font-1h16nm kv-toast-pad-1uhz8j kv-toast-row-1m16zq kv-toast-opacity-1wmp2v kv-toast-d-kgigk0 kv-toast-bg-1cg7x5 kv-toast-bd-hcmn8o kv-toast-bg-1onn1h kv-toast-bd-1ry346 kv-toast-bg-xi921s kv-toast-bd-88dcfm kv-toast-bg-1cwyxf kv-toast-bd-a8ys9o",
+    "kv-toast-bg-1wqigr kv-toast-bd-1gezg0 kv-toast-bd-12jlys kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-box-16dxlr kv-toast-fg-nxulax kv-toast-column-10rz7u kv-toast-d-1mghfj kv-toast-font-1h16nm kv-toast-grid-1s2sb3 kv-toast-align-1h2s0q kv-toast-pad-1uhz8j kv-toast-row-h4ih58 kv-toast-opacity-1wmp2v kv-toast-d-kgigk0 kv-toast-bg-1cg7x5 kv-toast-bd-hcmn8o kv-toast-bg-1onn1h kv-toast-bg-1ozkfo kv-toast-bd-1ry346 kv-toast-bg-xi921s kv-toast-bg-xg3hpo kv-toast-bd-88dcfm kv-toast-bg-1cwyxf kv-toast-bd-a8ys9o",
   ],
   "toastViewportClasses": [
-    "kv-toast-d-1mghfj kv-toast-max-deaxyh kv-toast-outline-x8cs7p kv-toast-pad-1uhz8j kv-toast-position-1lh6gn kv-toast-row-1m16zq kv-toast-w-1nzatp kv-toast-z-1q40g6 kv-toast-opacity-1wmp2v kv-toast-bottom-1p0zhn kv-toast-left-m8ec8w kv-toast-bottom-1mp0ju kv-toast-right-ty8wwr kv-toast-bottom-tbzdsb kv-toast-left-i46tzl kv-toast-left-1c220h kv-toast-top-s7hg34 kv-toast-right-ifx2pt kv-toast-top-4qyn5k kv-toast-left-14yl8z kv-toast-top-1bkjkp",
+    "kv-toast-d-1mghfj kv-toast-max-deaxyh kv-toast-outline-x8cs7p kv-toast-pad-1uhz8j kv-toast-position-1lh6gn kv-toast-row-1e4tey kv-toast-w-1nzatp kv-toast-z-1q40g6 kv-toast-opacity-1wmp2v kv-toast-bottom-1p0zhn kv-toast-left-m8ec8w kv-toast-transform-7uer4n kv-toast-bottom-1mp0ju kv-toast-right-ty8wwr kv-toast-bottom-tbzdsb kv-toast-left-i46tzl kv-toast-left-1c220h kv-toast-top-s7hg34 kv-toast-transform-1m5yb1 kv-toast-right-ifx2pt kv-toast-top-4qyn5k kv-toast-left-14yl8z kv-toast-top-1bkjkp",
   ],
 }
 `;

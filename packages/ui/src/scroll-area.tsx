@@ -116,11 +116,18 @@ export const scrollAreaStyles = style.create({
       opacity: 0,
     },
   },
+  // shadcn-weight thumb: a subtle rounded bar (border token) that darkens on
+  // hover/drag, with a fade transition tied to the scrollbar visibility state.
   thumb: {
-    backgroundColor: uiTheme.color.borderStrong,
+    backgroundColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.full,
     flex: 1,
     position: 'relative',
+    transitionDuration: '120ms',
+    transitionProperty: 'background-color, opacity',
+    '[data-dragging]': {
+      backgroundColor: uiTheme.color.foregroundMuted,
+    },
     '[data-orientation=horizontal]': {
       minWidth: 32,
     },
@@ -129,6 +136,9 @@ export const scrollAreaStyles = style.create({
     },
     '[data-state=hidden]': {
       opacity: 0,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.borderStrong,
     },
   },
   viewport: {
@@ -186,9 +196,13 @@ export const ScrollAreaViewport = component({
     const styleAttrs = style.attrs(scrollAreaStyles.viewport, props.styles?.viewport);
 
     return (
+      // { style: true } forwards a consumer's inline style (e.g. the demo's
+      // max-height:72px) so it can override the StyleX maxHeight default; without
+      // it the inline style is dropped and the viewport keeps the 224px default,
+      // leaving almost nothing to scroll (T7 / scroll-area V8).
       <div
         {...styleAttrs}
-        {...passThroughProps(props)}
+        {...passThroughProps(props, { style: true })}
         aria-describedby={attrs['aria-describedby']}
         aria-disabled={attrs['aria-disabled']}
         aria-label={attrs['aria-label']}

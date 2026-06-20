@@ -59,10 +59,18 @@ export interface ToggleGroupButtonProps extends ToggleGroupStateProps {
 
 export const toggleGroupStyles = style.create({
   button: {
+    // Button reset: kill the native UA <button> bevel so items read as a flat
+    // segmented control (mirrors select.tsx's clean option rows).
     alignItems: 'center',
+    appearance: 'none',
+    backgroundColor: 'transparent',
     borderRadius: 4,
+    borderStyle: 'none',
+    borderWidth: 0,
     color: uiTheme.color.foregroundMuted,
+    cursor: 'pointer',
     display: 'inline-flex',
+    fontFamily: 'inherit',
     fontSize: 14,
     fontWeight: 500,
     height: 32,

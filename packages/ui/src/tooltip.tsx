@@ -47,11 +47,17 @@ export const tooltipStyles = style.create({
     borderRadius: uiTheme.radius.sm,
     color: uiTheme.color.foregroundInverse,
     fontSize: 12,
+    // better-components-ux: the tooltip content already resolves against the
+    // relative root (it does not use the native popover top layer), so add CSS
+    // anchor positioning as basic, future-proof collision-aware placement that
+    // also keeps it centered below the trigger when the anchor is available.
     marginTop: 4,
     maxWidth: 256,
     paddingBlock: 6,
     paddingInline: 10,
     position: 'absolute',
+    positionAnchor: '--kovo-tooltip-anchor',
+    positionArea: 'bottom',
     width: 'max-content',
     zIndex: 50,
     '[data-state=closed]': {
@@ -70,6 +76,9 @@ export const tooltipStyles = style.create({
   },
   trigger: {
     alignItems: 'center',
+    // Anchor target for the TooltipContent (see content rule).
+    anchorName: '--kovo-tooltip-anchor',
+    appearance: 'none',
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.borderStrong,
     borderRadius: uiTheme.radius.md,
@@ -78,6 +87,7 @@ export const tooltipStyles = style.create({
     boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
     color: uiTheme.color.foreground,
     display: 'inline-flex',
+    font: 'inherit',
     fontSize: 14,
     fontWeight: 500,
     height: 32,

@@ -272,6 +272,33 @@ describe('headless-ui autocomplete primitive', () => {
     ]);
   });
 
+  // UX B5: re-selecting the already-selected suggestion must still close the list.
+  // Previously the unchanged value short-circuited and left the list open.
+  it('closes suggestions when re-selecting the current option (value unchanged)', () => {
+    const seen: string[] = [];
+    const result = selectAutocompleteOption(
+      { inputValue: 'austin', items: cityItems, open: true, value: 'austin' },
+      'austin',
+      {
+        onInputValueChange(detail) {
+          seen.push(`input:${detail.reason}:${detail.value}`);
+        },
+        onOpenChange(detail) {
+          seen.push(`open:${detail.reason}:${detail.value}`);
+        },
+        onValueChange(detail) {
+          seen.push(`value:${detail.reason}:${detail.value}`);
+        },
+      },
+    );
+
+    expect(result.value).toMatchObject({ changed: false, value: 'austin' });
+    expect(result.inputValue).toMatchObject({ changed: false, inputValue: 'austin' });
+    expect(result.open).toMatchObject({ changed: true, open: false });
+    // Value and input text are identical, so only the close is dispatched.
+    expect(seen).toEqual(['open:option-select:false']);
+  });
+
   it('uses shared typeahead helpers to find enabled options', () => {
     const first = autocompleteTypeahead({ items: cityItems, value: 'austin' }, 'b', {
       now: 100,

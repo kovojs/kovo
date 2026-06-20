@@ -30,7 +30,12 @@ export const GalleryPopoverDemo = component({
         >
           Weekday arrivals are available from 9 AM to 5 PM.
         </PopoverContent>
-        <output data-demo-state="popover-open">{state.open ? 'open' : 'closed'}</output>
+        <output
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+          data-demo-state="popover-open"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
       </Popover>
     );
   },

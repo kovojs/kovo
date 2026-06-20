@@ -71,15 +71,13 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
     // The gate must SCAN a broad surface; if this drops to a handful something
     // is mis-resolving the exports map.
     expect(result.sourceFiles.length).toBeGreaterThan(40);
-    // Document the KNOWN coverage gap: progress.tsx / skeleton.tsx reference a
-    // `style.keyframes(...)` const by identifier, which the static extractor does
-    // not yet resolve, so they emit no CSS (would render unstyled). Examples must
-    // not use animated Progress/Skeleton until keyframes resolution lands. Any
-    // OTHER name appearing here is a regression that ships an unstyled component.
-    expect(result.diagnostics.map((d) => d.fileName).sort()).toEqual([
-      'src/progress.tsx',
-      'src/skeleton.tsx',
-    ]);
+    // Every @kovojs/ui component must emit extractable CSS. The former gap —
+    // progress.tsx / skeleton.tsx referenced a `style.keyframes(...)` const by
+    // identifier, which the static extractor cannot resolve, so they emitted no
+    // CSS and rendered unstyled — is now closed: both use static StyleX (no
+    // keyframes), so the coverage report is empty. Any name appearing here is a
+    // regression that would ship an unstyled component.
+    expect(result.diagnostics.map((d) => d.fileName).sort()).toEqual([]);
   });
 });
 

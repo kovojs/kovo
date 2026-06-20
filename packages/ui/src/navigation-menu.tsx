@@ -139,6 +139,7 @@ export const navigationMenuStyles = style.create({
     height: 36,
     outlineStyle: 'none',
     paddingInline: 12,
+    textDecoration: 'none',
     transitionProperty: 'background-color, color',
     '[data-disabled]': {
       opacity: 0.5,
@@ -187,14 +188,20 @@ export const navigationMenuStyles = style.create({
   },
   trigger: {
     alignItems: 'center',
+    appearance: 'none',
+    backgroundColor: 'transparent',
     borderRadius: uiTheme.radius.sm,
+    borderStyle: 'none',
+    borderWidth: 0,
     color: uiTheme.color.foreground,
     display: 'inline-flex',
+    font: 'inherit',
     fontSize: 14,
     fontWeight: 500,
     height: 36,
     outlineStyle: 'none',
     paddingInline: 12,
+    textAlign: 'left',
     transitionProperty: 'background-color, color',
     '::after': {
       borderColor: uiTheme.color.foregroundMuted,

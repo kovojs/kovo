@@ -60,14 +60,38 @@ export interface AccordionContentProps extends AccordionItemProps {
 }
 
 export const accordionStyles = style.create({
+  // Outer grid wrapper animates open/close via grid-template-rows 0fr<->1fr
+  // (SPEC complaint #9: panel should smoothly animate height). The inner
+  // `contentInner` owns padding/min-height:0; this div carries no padding so the
+  // collapsed 0fr row leaves zero height. data-state is driven by the reactive
+  // data-bind stamp forwarded through passThroughProps, so the transition fires
+  // client-side. Falls back to discrete display:none for reduced-motion users.
   content: {
+    display: 'grid',
+    gridTemplateRows: '1fr',
+    transitionDuration: '200ms',
+    transitionProperty: 'grid-template-rows',
+    transitionTimingFunction: 'ease',
+    '[data-state=closed]': {
+      gridTemplateRows: '0fr',
+    },
+    '@media (prefers-reduced-motion: reduce)': {
+      transitionProperty: 'none',
+    },
+  },
+  contentInner: {
     color: uiTheme.color.foregroundMuted,
     fontSize: 14,
+    minHeight: 0,
+    overflow: 'hidden',
+    // Padding lives on a nested element so it animates away with the row height;
+    // padding on the grid track itself would keep a residual gap when collapsed.
     paddingBottom: 12,
     paddingInline: 12,
     paddingTop: 4,
     '[data-state=closed]': {
-      display: 'none',
+      paddingBottom: 0,
+      paddingTop: 0,
     },
   },
   header: {
@@ -258,8 +282,17 @@ export const AccordionContent = component({
       ...(props.triggerId === undefined ? {} : { triggerId: props.triggerId }),
     });
     const styleAttrs = style.attrs(accordionStyles.content, props.styles?.content);
+    const innerStyleAttrs = style.attrs(accordionStyles.contentInner);
 
     return (
+      // Outer div is the grid wrapper that animates height; it keeps the id/role/
+      // aria-labelledby/data-state/hidden contract and forwards the reactive
+      // data-bind stamps via passThroughProps. The inner div carries the padded
+      // content and mirrors data-state so its padding collapses with the row.
+      // `hidden` stays on this element for a11y + the gallery contract: the closed
+      // panel is correctly removed from the accessibility tree. The StyleX
+      // `display:grid` (author rule) overrides the UA `[hidden]{display:none}`, so
+      // the grid-rows 0fr<->1fr transition still fires while `hidden` stays true.
       <div
         {...styleAttrs}
         {...passThroughProps(props)}
@@ -270,7 +303,9 @@ export const AccordionContent = component({
         id={attrs.id}
         role={attrs.role}
       >
-        {props.children}
+        <div {...innerStyleAttrs} data-state={attrs['data-state']}>
+          {props.children}
+        </div>
       </div>
     );
   },

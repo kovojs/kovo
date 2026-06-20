@@ -639,14 +639,17 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     const { imports } = installInteractiveGalleryLoader(root);
 
-    expect(root.getAttribute('kovo-state')).toBe('{"dataState":"suboptimum","value":72}');
+    // Meter thresholds were retuned (optimum 70, high 85) so the default 72% reads
+    // as `optimum` (green) instead of the old alarming brown; the toggle now drops
+    // to 30% (below `low`, so `suboptimum`) and back.
+    expect(root.getAttribute('kovo-state')).toBe('{"dataState":"optimum","value":72}');
     expect(meter.min).toBe(0);
     expect(meter.max).toBe(100);
     expect(meter.low).toBe(40);
-    expect(meter.high).toBe(80);
-    expect(meter.optimum).toBe(90);
+    expect(meter.high).toBe(85);
+    expect(meter.optimum).toBe(70);
     expect(meter.value).toBe(72);
-    expect(meter.getAttribute('data-state')).toBe('suboptimum');
+    expect(meter.getAttribute('data-state')).toBe('optimum');
     expect(meter.getAttribute('aria-valuetext')).toBe('72 percent capacity');
     expect(output.textContent).toBe('72');
 
@@ -659,14 +662,14 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
 
       expect(imports).toEqual(['/c/src/interactive/meter-demo.client.js']);
-      expect(root.getAttribute('kovo-state')).toBe('{"dataState":"optimum","value":92}');
-      expect(currentMeter.value).toBe(92);
-      expect(currentMeter.getAttribute('data-state')).toBe('optimum');
-      expect(currentMeter.getAttribute('aria-valuetext')).toBe('92 percent capacity');
-      expect(currentOutput.textContent).toBe('92');
+      expect(root.getAttribute('kovo-state')).toBe('{"dataState":"suboptimum","value":30}');
+      expect(currentMeter.value).toBe(30);
+      expect(currentMeter.getAttribute('data-state')).toBe('suboptimum');
+      expect(currentMeter.getAttribute('aria-valuetext')).toBe('30 percent capacity');
+      expect(currentOutput.textContent).toBe('30');
     });
 
-    // SPEC §12.1: the meter optimum end-state (value in the optimum band, data-state=optimum with an
+    // SPEC §12.1: the meter end-state (value in a defined band, data-state set with an
     // aria-valuetext) must stay axe-clean.
     await expectNoAxeViolations(root);
   });
@@ -1412,7 +1415,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     );
     installInteractiveGalleryLoader(toastRoot, { events: ['click', 'keydown', 'animationend'] });
 
-    expect(toastRoot.getAttribute('role')).toBe('region');
+    // The Show-toast trigger now sits in the demo flow (not inside the fixed
+    // viewport), so the demo root is a wrapper; the role=region viewport is a child.
+    const viewport = required(toastRoot.querySelector<HTMLElement>('#gallery-toast-viewport'));
+    expect(viewport.getAttribute('role')).toBe('region');
     expect(toast.getAttribute('role')).toBe('status');
     expect(toast.getAttribute('aria-live')).toBe('polite');
     expect(toastRoot.getAttribute('kovo-state')).toBe(

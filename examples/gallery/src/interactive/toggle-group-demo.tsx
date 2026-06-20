@@ -36,7 +36,7 @@ export const GalleryToggleGroupDemo = component({
 
     return (
       <section
-        style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
         data-gallery-interactive="toggle-group"
       >
         <h3 id="gallery-toggle-group-label" style="font-size:0.875rem;font-weight:500">
@@ -143,7 +143,7 @@ export const GalleryToggleGroupDemo = component({
           </ToggleGroupItem>
         </ToggleGroup>
         <output
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
           data-demo-state="toggle-group-value"
         >
           {state.value || 'none'}

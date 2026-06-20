@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  sliderInput as _sliderInput,
   sliderKeyDown as _sliderKeyDown,
   sliderThumbDrag as _sliderThumbDrag,
   sliderThumbDragStart as _sliderThumbDragStart,
@@ -45,7 +46,24 @@ export const GallerySliderDemo = component({
         >
           Completion
         </label>
-        <SliderInput {...sliderState} id="gallery-slider-input" value={state.value} />
+        <SliderInput
+          {...sliderState}
+          id="gallery-slider-input"
+          value={state.value}
+          onInput={() => {
+            // The native range overlay (zIndex 2) is the actual pointer/drag
+            // target, so wiring its input event makes dragging update state
+            // (SPEC.md §6.3 keeps the range as the submitted/keyboard control).
+            const result = _sliderInput(Object(event), {
+              max: 100,
+              min: 0,
+              step: 25,
+              value: state.value,
+            });
+            if (!result?.changed) return;
+            state.value = result.value;
+          }}
+        />
         <SliderTrack
           {...sliderState}
           data-value={String(state.value)}
@@ -126,7 +144,7 @@ export const GallerySliderDemo = component({
         </SliderTrack>
         <output
           data-demo-state="slider-value"
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
         >
           {String(state.value)}
         </output>

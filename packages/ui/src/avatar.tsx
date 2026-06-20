@@ -47,23 +47,38 @@ export interface AvatarFallbackProps extends AvatarStateProps {
 }
 
 export const avatarStyles = style.create({
+  // The fallback fills the relative root (inset:0) so the initials sit centered
+  // behind/over the image rather than stacking next to it in static flow.
+  // Once the image reports `loaded` the fallback is removed so the photo shows.
   fallback: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundSubtleHigh,
     borderRadius: uiTheme.radius.full,
+    bottom: 0,
+    color: uiTheme.color.foregroundMuted,
     display: 'flex',
-    height: '100%',
+    fontSize: 14,
+    fontWeight: 500,
+    inset: 0,
     justifyContent: 'center',
-    width: '100%',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
     '[data-state=loaded]': {
       display: 'none',
     },
   },
+  // The image sits above the fallback (position:relative for stacking) and is
+  // hidden authoritatively in the error state so the broken-image glyph is never
+  // rasterized over the initials.
   image: {
     aspectRatio: '1 / 1',
     height: '100%',
     objectFit: 'cover',
+    position: 'relative',
     width: '100%',
+    zIndex: 1,
     '[data-state=error]': {
       display: 'none',
     },

@@ -226,6 +226,48 @@ describe('headless-ui otp-field primitive', () => {
     });
   });
 
+  // UX B6: each visible slot must render its own digit from the FULL aggregate
+  // value (the demo passes the whole code string to every slot and the primitive
+  // indexes it by slotIndex), and a single Backspace must remove exactly one
+  // digit — not the whole field. This proves the fix for "typing only fills the
+  // first slot and Backspace wipes everything".
+  it('renders each slot from the full value and deletes exactly one digit on Backspace', () => {
+    // Typing "1234" one slot at a time builds the aggregate "1234".
+    expect(setOtpFieldSlotValue({ length: 4, value: '' }, 0, '1', 'input')).toMatchObject({
+      changed: true,
+      focusIndex: 1,
+      value: '1',
+    });
+    expect(setOtpFieldSlotValue({ length: 4, value: '1' }, 1, '2', 'input')).toMatchObject({
+      changed: true,
+      focusIndex: 2,
+      value: '12',
+    });
+    expect(setOtpFieldSlotValue({ length: 4, value: '12' }, 2, '3', 'input')).toMatchObject({
+      changed: true,
+      focusIndex: 3,
+      value: '123',
+    });
+    expect(setOtpFieldSlotValue({ length: 4, value: '123' }, 3, '4', 'input')).toMatchObject({
+      changed: true,
+      complete: true,
+      focusIndex: 3,
+      value: '1234',
+    });
+
+    // Given the full value "1234", every slot resolves its own digit.
+    expect(otpFieldSlotValue({ length: 4, value: '1234' }, 0)).toBe('1');
+    expect(otpFieldSlotValue({ length: 4, value: '1234' }, 1)).toBe('2');
+    expect(otpFieldSlotValue({ length: 4, value: '1234' }, 2)).toBe('3');
+    expect(otpFieldSlotValue({ length: 4, value: '1234' }, 3)).toBe('4');
+
+    // A single Backspace on the last filled slot removes exactly one digit.
+    const deleteEvent = otpKeyboardEvent('Backspace', '4');
+    const deleteResult = otpFieldKeyDown(deleteEvent, { length: 4, slotIndex: 3, value: '1234' });
+    expect(deleteResult).toMatchObject({ changed: true, value: '123' });
+    expect(deleteEvent.defaultPrevented).toBe(true);
+  });
+
   it('moves focus for arrow and edge keys', () => {
     expect(otpFieldMoveFocus({ length: 4 }, 1, 'ArrowLeft')).toEqual({ focusIndex: 0 });
     expect(otpFieldMoveFocus({ length: 4 }, 1, 'ArrowRight')).toEqual({ focusIndex: 2 });

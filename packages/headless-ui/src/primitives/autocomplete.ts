@@ -323,14 +323,11 @@ export function selectAutocompleteOption(
   options: AutocompleteChangeOptions = {},
 ): AutocompleteOptionSelectResult {
   const valueResult = setAutocompleteValue(state, value, 'option-select', options);
-  if (!valueResult.changed) {
-    return {
-      inputValue: { changed: false, inputValue: state.inputValue ?? state.value ?? '' },
-      open: { changed: false, open: state.open === true },
-      value: valueResult,
-    };
-  }
 
+  // UX (B5): selecting any option closes the listbox, including re-selecting the
+  // currently selected value. Previously an unchanged value early-returned with
+  // open unchanged, leaving the suggestion list open on re-select. We sync the
+  // input value to the (possibly unchanged) selected value and close the list.
   const inputResult = setAutocompleteInputValue(
     state,
     valueResult.value ?? '',

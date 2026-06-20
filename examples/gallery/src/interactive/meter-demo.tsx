@@ -15,14 +15,18 @@ export interface GalleryMeterDemoState {
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryMeterDemo = component({
-  state: () => ({ dataState: 'suboptimum' as MeterDataState, value: 72 }),
+  state: () => ({ dataState: 'optimum' as MeterDataState, value: 72 }),
   render: (_queries: Record<string, never>, state: GalleryMeterDemoState) => {
+    // Thresholds chosen so the default 72% lands in the same region as `optimum`
+    // (both in the [low, high] middle band) → state `optimum` → green/success
+    // hue, reading as a healthy filled gauge instead of the alarming brown the
+    // old optimum=90 produced. Dropping below `low` (40) flips to suboptimum.
     const meterState = {
-      high: 80,
+      high: 85,
       low: 40,
       max: 100,
       min: 0,
-      optimum: 90,
+      optimum: 70,
       value: state.value,
       valueText: `${state.value} percent capacity`,
     };
@@ -51,14 +55,14 @@ export const GalleryMeterDemo = component({
           type="button"
           variant="secondary"
           onClick={() => {
-            const value = state.value === 92 ? 72 : 92;
+            const value = state.value === 30 ? 72 : 30;
             state.value = value;
             state.dataState = _meterValueState({
-              high: 80,
+              high: 85,
               low: 40,
               max: 100,
               min: 0,
-              optimum: 90,
+              optimum: 70,
               value,
             }).state;
           }}
@@ -66,7 +70,7 @@ export const GalleryMeterDemo = component({
           Optimize capacity
         </Button>
         <output
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
           data-demo-state="meter-value"
         >
           {String(state.value)}

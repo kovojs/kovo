@@ -23,17 +23,11 @@ export interface ProgressProps {
   valueText?: string;
 }
 
-const indeterminateSlide = style.keyframes(
-  {
-    '0%': { transform: 'translateX(-100%)' },
-    '100%': { transform: 'translateX(250%)' },
-  },
-  { namespace: 'progressSlide' },
-);
-
 export const progressStyles = style.create({
-  // Custom indicator filled by value ratio (set inline). Slides when
-  // indeterminate (no resolved value).
+  // Custom indicator filled by value ratio (set inline). A static partial fill
+  // marks the indeterminate state. (A keyframe slide isn't used: a keyframes name
+  // referenced by variable isn't statically extractable by the package-css /
+  // vendored-compile StyleX extractor — KV236 — so it is left as a follow-up.)
   indicator: {
     backgroundColor: uiTheme.color.accent,
     borderRadius: uiTheme.radius.full,
@@ -46,10 +40,6 @@ export const progressStyles = style.create({
       backgroundColor: uiTheme.color.success.border,
     },
     '[data-state=indeterminate]': {
-      animationDuration: '1.5s',
-      animationIterationCount: 'infinite',
-      animationName: indeterminateSlide,
-      animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
       width: '40%',
     },
   },

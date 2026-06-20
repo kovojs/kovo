@@ -307,6 +307,29 @@ describe('headless-ui combobox primitive', () => {
     expect(seen).toEqual(['value:option-select:chicago', 'open:option-select:false']);
   });
 
+  // UX B5: re-selecting the already-selected option must still close the listbox.
+  // Previously the unchanged value short-circuited and left the popup open.
+  it('closes the listbox when re-selecting the current option (value unchanged)', () => {
+    const seen: string[] = [];
+    const result = selectComboboxOption(
+      { items: cityItems, open: true, value: 'austin' },
+      'austin',
+      {
+        onOpenChange(detail) {
+          seen.push(`open:${detail.reason}:${detail.value}`);
+        },
+        onValueChange(detail) {
+          seen.push(`value:${detail.reason}:${detail.value}`);
+        },
+      },
+    );
+
+    expect(result.value).toMatchObject({ changed: false, value: 'austin' });
+    expect(result.open).toMatchObject({ changed: true, open: false });
+    // No value change dispatched (value identical), but the close is dispatched.
+    expect(seen).toEqual(['open:option-select:false']);
+  });
+
   it('uses shared typeahead helpers to find enabled options', () => {
     const first = comboboxTypeahead({ items: cityItems, value: 'austin' }, 'b', {
       now: 100,

@@ -83,7 +83,12 @@ export const GalleryHoverCardDemo = component({
         >
           First programmer and analytical engine collaborator.
         </HoverCardContent>
-        <output data-demo-state="hover-card-open">{state.open ? 'open' : 'closed'}</output>
+        <output
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+          data-demo-state="hover-card-open"
+        >
+          {state.open ? 'open' : 'closed'}
+        </output>
       </HoverCard>
     );
   },

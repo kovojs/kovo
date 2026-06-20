@@ -89,16 +89,22 @@ export const menubarStyles = style.create({
   },
   item: {
     alignItems: 'center',
+    appearance: 'none',
+    backgroundColor: 'transparent',
     borderRadius: uiTheme.radius.sm,
+    borderStyle: 'none',
+    borderWidth: 0,
     color: uiTheme.color.foreground,
     cursor: 'default',
     display: 'inline-flex',
+    font: 'inherit',
     fontSize: 14,
     fontWeight: 500,
     height: 32,
     outlineStyle: 'none',
     paddingInline: 10,
     position: 'relative',
+    textAlign: 'left',
     '[data-disabled]': {
       opacity: 0.5,
       pointerEvents: 'none',
@@ -110,6 +116,13 @@ export const menubarStyles = style.create({
     '[data-state=open]': {
       backgroundColor: uiTheme.color.backgroundSubtle,
       color: uiTheme.color.foreground,
+    },
+    ':focus-visible': {
+      backgroundColor: uiTheme.color.backgroundSubtle,
+      outlineColor: uiTheme.color.accent,
+      outlineOffset: -2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundSubtle,
@@ -140,6 +153,7 @@ export const menubarStyles = style.create({
     marginBlock: 4,
   },
   submenu: {
+    alignItems: 'stretch',
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.md,
@@ -147,7 +161,9 @@ export const menubarStyles = style.create({
     borderWidth: 1,
     boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     color: uiTheme.color.foreground,
+    flexDirection: 'column',
     fontSize: 14,
+    gap: 2,
     marginTop: 4,
     minWidth: 180,
     outlineStyle: 'none',
@@ -158,7 +174,7 @@ export const menubarStyles = style.create({
       display: 'none',
     },
     '[data-state=open]': {
-      display: 'block',
+      display: 'flex',
     },
   },
 });

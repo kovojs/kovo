@@ -120,12 +120,16 @@ export const autocompleteStyles = style.create({
     boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     color: uiTheme.color.foreground,
     fontSize: 14,
+    // T6 (UX): anchor the list flush to the bottom edge of the relative root so
+    // it drops below the input instead of painting over it. marginTop is the gap.
+    left: 0,
     marginTop: 4,
     maxHeight: 224,
     minWidth: 180,
     overflow: 'auto',
     padding: 4,
     position: 'absolute',
+    top: '100%',
     width: '100%',
     zIndex: 50,
     '[data-state=closed]': {

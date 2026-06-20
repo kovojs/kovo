@@ -584,13 +584,33 @@ export function AccordionDemo(): string {
   );
 }
 
+// Inline data-URI SVG portraits so the gallery avatars render real, loaded
+// images without depending on /avatars/*.png assets that 404 in the static
+// build. Each is a self-contained `image/svg+xml` document (gradient disc +
+// monogram) that the browser decodes synchronously, so the styled photo paints
+// over the initials fallback. Avatar load/error detection (flipping data-state
+// on the live <img>) is a client island deferred to shared infra; here the
+// static demo shows the loaded/loading/error visuals directly.
+function avatarSvg(initials: string, from: string, to: string): string {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">` +
+    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
+    `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>` +
+    `</linearGradient></defs>` +
+    `<rect width="80" height="80" fill="url(#g)"/>` +
+    `<text x="40" y="40" fill="#ffffff" font-family="ui-sans-serif,system-ui,sans-serif" ` +
+    `font-size="32" font-weight="600" text-anchor="middle" dominant-baseline="central">${initials}</text>` +
+    `</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
 export function AvatarDemo(): string {
   const loading = {
-    src: '/avatars/ada.png',
+    src: avatarSvg('AL', '#0ea5e9', '#2563eb'),
     status: 'loading' as const,
   };
   const loaded = {
-    src: '/avatars/grace.png',
+    src: avatarSvg('GH', '#10b981', '#059669'),
     status: 'loaded' as const,
   };
   const error = {
@@ -611,6 +631,7 @@ export function AvatarDemo(): string {
             AvatarImage.definition.render({
               ...loading,
               alt: 'Ada Lovelace',
+              decoding: 'async',
               loading: 'lazy',
               sizes: '40px',
               srcSet: '/avatars/ada@2x.png 2x',

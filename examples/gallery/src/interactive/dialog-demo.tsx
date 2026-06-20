@@ -5,7 +5,16 @@ import {
   dialogCloseClick as _dialogCloseClick,
   dialogTriggerClick as _dialogTriggerClick,
 } from '@kovojs/headless-ui/dialog';
-import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@kovojs/ui/dialog';
+import {
+  Dialog,
+  DialogClose,
+  DialogCloseX,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@kovojs/ui/dialog';
 
 export interface GalleryDialogDemoState {
   open: boolean;
@@ -44,12 +53,21 @@ export const GalleryDialogDemo = component({
           open={state.open}
           titleId={titleId}
         >
-          <h2 style="font-size:1rem;font-weight:600" id={titleId}>
-            Cart review
-          </h2>
-          <p style="font-size:0.875rem;color:#525252" id={descriptionId}>
-            Confirm the current cart before checkout.
-          </p>
+          <DialogCloseX
+            contentId={contentId}
+            onClick={() => {
+              const result = _dialogCloseClick(Object(event), { open: state.open });
+              if (!result?.changed) return;
+              state.open = result.open;
+            }}
+            open={state.open}
+          />
+          <DialogHeader>
+            <DialogTitle id={titleId}>Cart review</DialogTitle>
+            <DialogDescription id={descriptionId}>
+              Confirm the current cart before checkout.
+            </DialogDescription>
+          </DialogHeader>
           <DialogClose
             contentId={contentId}
             onClick={() => {
@@ -63,7 +81,7 @@ export const GalleryDialogDemo = component({
           </DialogClose>
         </DialogContent>
         <output
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
           data-demo-state="open"
         >
           {state.open ? 'open' : 'closed'}

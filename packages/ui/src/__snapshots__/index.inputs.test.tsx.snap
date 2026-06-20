@@ -3,7 +3,7 @@
 exports[`@kovojs/ui styled package foundation > wraps the headless autocomplete primitive as styled input and listbox markup 1`] = `
 {
   "autocompleteListClasses": [
-    "kv-autocomplete-bg-1e8vv7 kv-autocomplete-bd-xuygo5 kv-autocomplete-bd-1oyuq7 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1k5l93 kv-autocomplete-fg-ndg53x kv-autocomplete-font-1rygq8 kv-autocomplete-m-12xy1b kv-autocomplete-max-fbvdgt kv-autocomplete-min-az02nb kv-autocomplete-overflow-yncc4o kv-autocomplete-pad-lb8ayw kv-autocomplete-position-1mq0m8 kv-autocomplete-w-lhhf6b kv-autocomplete-z-1ar0gs kv-autocomplete-d-nhbelo kv-autocomplete-d-jnq5xr",
+    "kv-autocomplete-bg-1e8vv7 kv-autocomplete-bd-xuygo5 kv-autocomplete-bd-1oyuq7 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1k5l93 kv-autocomplete-fg-ndg53x kv-autocomplete-font-1rygq8 kv-autocomplete-left-c5n8a kv-autocomplete-m-12xy1b kv-autocomplete-max-fbvdgt kv-autocomplete-min-az02nb kv-autocomplete-overflow-yncc4o kv-autocomplete-pad-lb8ayw kv-autocomplete-position-1mq0m8 kv-autocomplete-top-45bckc kv-autocomplete-w-lhhf6b kv-autocomplete-z-1ar0gs kv-autocomplete-d-nhbelo kv-autocomplete-d-jnq5xr",
   ],
   "autocompleteOptionClasses": [
     "kv-autocomplete-align-ak0nsl kv-autocomplete-bd-1c782e kv-autocomplete-fg-115iei kv-autocomplete-column-1k3095 kv-autocomplete-cursor-1hig62 kv-autocomplete-d-84o7e1 kv-autocomplete-font-1rygq8 kv-autocomplete-pad-26pgt7 kv-autocomplete-pad-18yvo6 kv-autocomplete-fg-uqu71d kv-autocomplete-opacity-uz1kyp kv-autocomplete-pointer-7bzpay kv-autocomplete-bg-110btb kv-autocomplete-fg-1rbjcz kv-autocomplete-bg-owdlvr kv-autocomplete-fg-1f9cvq kv-autocomplete-font-1evhu5 kv-autocomplete-fg-rkx3wk kv-autocomplete-font-1wefqf kv-autocomplete-bg-1g0j00 kv-autocomplete-fg-fazoo",
@@ -17,7 +17,7 @@ exports[`@kovojs/ui styled package foundation > wraps the headless autocomplete 
 exports[`@kovojs/ui styled package foundation > wraps the headless combobox primitive as styled input and listbox markup 1`] = `
 {
   "comboboxListboxClasses": [
-    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-rsn8w4 kv-combobox-m-nikuj2 kv-combobox-max-1ajqiv kv-combobox-min-qyj00s kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-position-1ncx2x kv-combobox-w-lhhf6b kv-combobox-z-13q0r7 kv-combobox-d-dphzaj kv-combobox-d-y6pz22",
+    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-rsn8w4 kv-combobox-left-1l0qed kv-combobox-m-nikuj2 kv-combobox-max-1ajqiv kv-combobox-min-qyj00s kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-position-1ncx2x kv-combobox-top-1l3g0t kv-combobox-w-lhhf6b kv-combobox-z-13q0r7 kv-combobox-d-dphzaj kv-combobox-d-y6pz22",
   ],
   "comboboxOptionClasses": [
     "kv-combobox-align-ak0nsl kv-combobox-bd-1c782e kv-combobox-fg-115iei kv-combobox-column-1k3095 kv-combobox-cursor-1hig62 kv-combobox-d-84o7e1 kv-combobox-font-1rygq8 kv-combobox-pad-26pgt7 kv-combobox-pad-18yvo6 kv-combobox-opacity-uz1kyp kv-combobox-pointer-7bzpay kv-combobox-bg-110btb kv-combobox-fg-1rbjcz kv-combobox-bg-owdlvr kv-combobox-fg-1f9cvq kv-combobox-font-1evhu5 kv-combobox-fg-rkx3wk kv-combobox-font-1wefqf kv-combobox-bg-1g0j00 kv-combobox-fg-fazoo",

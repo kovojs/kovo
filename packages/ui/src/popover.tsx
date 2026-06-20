@@ -50,9 +50,20 @@ export const popoverStyles = style.create({
     borderWidth: 1,
     color: uiTheme.color.foreground,
     fontSize: 14,
-    marginTop: 4,
+    // SPEC.md §5.2 / better-components-ux: the native popover is promoted to the
+    // top layer where position:absolute no longer resolves against the relative
+    // root and the UA [popover]:popover-open rule (inset:0;margin:auto) would
+    // center it on screen. CSS anchor positioning re-anchors it to the trigger:
+    // override the UA centering with inset:auto + margin:0, then place the box in
+    // the bottom-right area of the trigger anchor. A 6px gap is added via the top
+    // margin (margins are honored inside the position-area).
+    inset: 'auto',
+    margin: 0,
+    marginTop: 6,
     padding: 12,
     position: 'absolute',
+    positionAnchor: '--kovo-popover-anchor',
+    positionArea: 'bottom span-right',
     width: 256,
     zIndex: 50,
     '[data-state=closed]': {
@@ -71,6 +82,9 @@ export const popoverStyles = style.create({
   },
   trigger: {
     alignItems: 'center',
+    // Anchor target for the top-layer PopoverContent (see content rule).
+    anchorName: '--kovo-popover-anchor',
+    appearance: 'none',
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.md,
@@ -79,6 +93,7 @@ export const popoverStyles = style.create({
     boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
     color: uiTheme.color.foreground,
     display: 'inline-flex',
+    font: 'inherit',
     fontSize: 14,
     fontWeight: 500,
     height: 36,

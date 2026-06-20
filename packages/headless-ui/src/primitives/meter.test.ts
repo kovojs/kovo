@@ -76,6 +76,19 @@ describe('headless-ui meter primitive', () => {
     );
   });
 
+  it('maps the gallery meter demo default (72%) to the optimum/green state', () => {
+    // Gallery meter-demo thresholds: low=40, high=85, optimum=70. The default
+    // 72% shares the [low, high] middle region with optimum → `optimum` → green,
+    // fixing the old optimum=90 mapping that rendered an alarming brown bar.
+    expect(meterValueState({ high: 85, low: 40, max: 100, optimum: 70, value: 72 }).state).toBe(
+      'optimum',
+    );
+    // Toggling below `low` flips it to suboptimum, demonstrating the color map.
+    expect(meterValueState({ high: 85, low: 40, max: 100, optimum: 70, value: 30 }).state).toBe(
+      'suboptimum',
+    );
+  });
+
   it('preserves optional value text', () => {
     expect(meterRootAttributes({ max: 5, value: 3, valueText: '3 of 5 stars' })).toMatchObject({
       'aria-valuetext': '3 of 5 stars',

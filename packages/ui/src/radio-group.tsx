@@ -73,6 +73,10 @@ export const radioGroupStyles = style.create({
     alignItems: 'center',
     columnGap: 8,
     display: 'inline-flex',
+    // Hug control+label instead of stretching the full grid column so each row
+    // reads as a compact radio + label (matches shadcn).
+    justifySelf: 'start',
+    width: 'fit-content',
     '[data-disabled]': {
       cursor: 'not-allowed',
       opacity: 0.5,
