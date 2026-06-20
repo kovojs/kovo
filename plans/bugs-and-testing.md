@@ -17,6 +17,17 @@ dependency gates and file-ownership rules so independent work runs concurrently 
   reused at two severities → split to new error KV317) and 5 minors (F2 punctuation; §6.2 `reads:`
   row; §5.2.1/§5.2.2 moved under their §5.2 parent; §13 pointer-list reordered; §13→§14 and
   §5.2.2 numbering gaps closed) are resolved. All cross-refs resolve; `git diff --check` clean.
+- **Contract IMPLEMENTATION (moving bugs-1 from SPEC-only to code): STARTED.**
+  - ✅ **F35** — `/_q` reads emit `Cache-Control: private, no-store` + `Vary: Cookie` (`query.ts`);
+    unit + integration verified. Closes the shared-cache cross-user leak without the S1 harness.
+  - ✅ **F9** — cookie/header channel rejects CR/LF **and NUL** (`cookies.ts`); the typed cookie
+    builder + CRLF guard were already present, residual (NUL) closed; unit-tested.
+  - ✅ **F2** — the framework never emits an open-redirect `next` (`guards.ts` `sanitizeNext`);
+    unit-tested.
+  - Next contract candidates (each a real medium effort — dispatch/pipeline threading or a
+    browser-loader change): F34 (bfcache `no-store` on guarded docs + `pageshow`), F1 (csrf:false
+    ambient-session strip), F6 (mutation auth-failure 401/`Kovo-Reauth`), F17/F22/F19/F27 (optimistic
+    runtime), F13/F29 (browser delta/rebroadcast). Deep analyzer: KV414, KV314, F36, F30 token.
 - **Phase 2 — Test + harness half (Lanes B/C/D): IN PROGRESS.**
   - ✅ **B0** — harness cache-input fix: `integration` task input broadened from
     `packages/test/src/integration/**` to `packages/test/src/**` so the runtime verifier
