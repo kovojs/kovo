@@ -55,6 +55,7 @@ export type DiagnosticCode =
   | 'KV412'
   | 'KV413'
   | 'KV414'
+  | 'KV418'
   | 'KV419'
   | 'KV420';
 
