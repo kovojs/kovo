@@ -95,7 +95,12 @@ export default defineConfig({
         input: [
           { auto: true },
           { pattern: 'tests/integration/**', base: 'workspace' },
-          { pattern: 'packages/test/src/integration/**', base: 'workspace' },
+          // The integration suite is the SOLE exerciser of the runtime DB verifier
+          // (packages/test/src/{verifier,verifier-*,sql-observer,pglite}.ts) and the
+          // harness. Input must be the whole test-package src, not just integration/**,
+          // or a verifier refactor that disables KV402/407/411 enforcement cache-hits
+          // green (plans/bugs-and-testing.md C-lane "B0"; testing-audit §5.7).
+          { pattern: 'packages/test/src/**', base: 'workspace' },
           { pattern: 'packages/core/src/**', base: 'workspace' },
           { pattern: 'packages/server/src/**', base: 'workspace' },
           { pattern: 'packages/compiler/src/**', base: 'workspace' },
