@@ -243,6 +243,24 @@ describe('kovo check', () => {
     ).not.toContain('KV414');
   });
 
+  it('suppresses KV414 with a recorded public-read justification (SPEC §10.3)', () => {
+    const result = kovoCheck({
+      ownerDomains: [{ domain: 'order', owner: 'userId' }],
+      scopeAudits: [
+        {
+          domain: 'order',
+          justification: 'aggregate order count is intentionally public',
+          kind: 'query',
+          name: 'publicOrderCount',
+          scope: 'args',
+          site: 'order.queries.ts:30',
+        },
+      ],
+    });
+    expect(result.output).not.toContain('KV414');
+    expect(result.exitCode).toBe(0);
+  });
+
   it('reports unguarded queries and pages alongside mutations', () => {
     expect(
       kovoCheck({

@@ -4001,6 +4001,9 @@ export function kovoCheck(
 
   if (includeAll) {
     for (const finding of unscopedAccesses(graph)) {
+      // SPEC §10.3: a recorded public-read justification suppresses the enforced
+      // KV414 (the access is still surfaced by `kovo explain --unscoped`).
+      if (finding.justification) continue;
       pushFinding(unscopedKv414Line(finding), true);
     }
 
@@ -4767,6 +4770,7 @@ function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {
     `domain=${fact.domain}`,
     `scope=${fact.scope}`,
     `site=${fact.site}`,
+    fact.justification ? `justification=${fact.justification}` : '',
     fact.detail ?? '',
   ]
     .filter(Boolean)

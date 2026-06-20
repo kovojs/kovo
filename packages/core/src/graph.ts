@@ -280,6 +280,8 @@ export interface OwnerDomainFact {
 export interface ScopeAuditFact {
   detail?: string;
   domain: string;
+  /** SPEC §10.3: a recorded public-read justification — suppresses KV414 in `kovo check` while still surfaced by `kovo explain --unscoped`. */
+  justification?: string;
   kind: 'query' | 'write';
   name: string;
   scope: 'args' | 'session' | 'unscoped' | 'unknown';
