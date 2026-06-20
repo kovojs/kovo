@@ -80,6 +80,9 @@ export async function renderAppRouteDocumentResponse({
     hints: mergeAppRouteHints(app, route),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
+    // bugs-1 F34: a guarded route renders session-dependent content; mark its
+    // document no-store so a Back/bfcache restore can't show it after logout.
+    ...(route.guard === undefined ? {} : { noStore: true }),
   });
 }
 

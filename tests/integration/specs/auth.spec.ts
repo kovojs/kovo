@@ -46,3 +46,24 @@ test('login → authed request → logout round-trip clears the session (testing
   await page.goto('/account');
   await expect(page.getByText('ada@example.com')).toHaveCount(0);
 });
+
+test('guarded route documents are no-store; unguarded ones are not (bugs-1 F34)', async ({
+  page,
+  kovoApp,
+}) => {
+  await kovoApp.login({
+    fields: { email: 'ada@example.com', password: 'correct' },
+    submit: 'Sign in',
+  });
+
+  // The guarded /account document renders session-dependent content, so it must be
+  // no-store — the browser's bfcache cannot restore it after logout without the guard.
+  const guarded = await page.request.get('/account');
+  expect(guarded.status()).toBe(200);
+  expect(guarded.headers()['cache-control']).toBe('no-store');
+
+  // The unguarded /login document is not forced no-store.
+  const unguarded = await page.request.get('/login');
+  expect(unguarded.status()).toBe(200);
+  expect(unguarded.headers()['cache-control']).toBeUndefined();
+});

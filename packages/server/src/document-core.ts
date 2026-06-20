@@ -73,7 +73,14 @@ export interface DocumentAssemblyOptions {
 export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {}
 
 /** @internal */
-export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {}
+export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {
+  /**
+   * bugs-1 F34 / SPEC §8: a guarded or session-dependent route document carries
+   * `Cache-Control: no-store` so the browser's bfcache can never restore an
+   * authenticated page after logout/expiry without re-running the route guard.
+   */
+  noStore?: boolean;
+}
 
 /** @internal */
 export interface DeferredDocumentAssemblyOptions extends Omit<DocumentAssemblyOptions, 'template'> {
@@ -200,6 +207,7 @@ export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
 ): DocumentRoutePageResponse {
+  const { noStore, ...assemblyOptions } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
     response.status !== 200 ||
@@ -210,7 +218,7 @@ export function renderRouteDocumentResponse(
   }
 
   const document = renderDocument({
-    ...options,
+    ...assemblyOptions,
     body: response.body,
   });
 
@@ -219,6 +227,8 @@ export function renderRouteDocumentResponse(
     headers: {
       ...mergeDocumentHeaders(response.headers, document.earlyHints),
       'Content-Type': 'text/html; charset=utf-8',
+      // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
+      ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
     },
     status: response.status,
   };
