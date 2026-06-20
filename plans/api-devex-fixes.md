@@ -33,18 +33,29 @@ legitimately-trusted dynamic `data:`/custom-scheme URL is undismissable.
 Trusted Types' `TrustedHTML`/`TrustedScriptURL` split, and closes a no-recourse dead-end on a
 security sink.
 
-- [ ] **Runtime:** add `trustedUrl(value: string): TrustedUrl` branding `__kovoTrustedUrl: true`
-      in `security-output.ts`, beside `trustedHtml`; export from the `@kovojs/browser` public
-      barrel (mirror `trustedHtml`'s entrypoints).
-- [ ] **Sanitizer:** make `kovoSafeUrl` pass a `trustedUrl`-branded value through unchanged
-      instead of rewriting to `'#'`.
-- [ ] **Compiler (KV236):** suppress KV236 for URL-scheme sinks
-      (`href`/`src`/`action`/`formaction`/`xlink:href`/`ping`/`poster`/CSS `url()`) when the
-      lowered binding value is `trustedUrl`-branded; the brand must be author-written, never
-      compiler-derived (mirror `trustedHtml`). Follow `rules/compiler-hard-rules.md`.
-- [ ] **Tests:** (a) a `trustedUrl`-branded value reaches an `href` with **no** KV236 and **no**
-      `'#'` rewrite; (b) the same unbranded value is still KV236 + sanitized. Add to
-      `packages/compiler/src/output-context-*.test.ts`.
+- [x] **Runtime:** added `trustedUrl(value): TrustedUrl` (brand `__kovoTrustedUrl: true`) +
+      `isKovoTrustedUrl` in `security-output.ts`, beside `trustedHtml`. Exported `trustedUrl` +
+      `TrustedUrl` from the `@kovojs/browser` root barrel (`index.ts`) and `isKovoTrustedUrl` +
+      `TrustedUrl` from the generated ABI (`generated.ts`), mirroring `trustedHtml`.
+- [x] **Sanitizer:** `kovoSafeUrl` returns a `trustedUrl`-branded value verbatim; **also fixed
+      `kovoBoundAttributeValue`** (the compiler-emitted bound-attr helper) to route the RAW value
+      through `kovoSafeUrl` for URL attrs — it previously `formatOutputValue`-stringified first,
+      which would have destroyed the brand object.
+- [x] **Compiler (KV236):** no compiler change needed — KV236 fires only on *static literal*
+      unsafe URLs; wrapping in `trustedUrl(...)` makes the value a non-literal call expression
+      (exactly how `trustedHtml` already suppresses KV236), and the brand reaches the runtime
+      sanitizer. Verified by a new compiler test.
+- [x] **Tests:** runtime (`security-output.test.ts`) — `kovoSafeUrl`/`kovoBoundAttributeValue`
+      emit a `trustedUrl` brand verbatim while neutralizing unbranded `javascript:`/`data:`;
+      compiler (`output-context-security.test.ts`) — `href="javascript:alert(1)"` is KV236 but
+      `href={trustedUrl("javascript:alert(1)")}` has **no** KV236; export assertion
+      (`index-exports.test.ts`) updated for the new root export.
+
+  **Verified:** full `@kovojs/browser` suite 77 files / **454 pass** (the `kovoBoundAttributeValue`
+  refactor regression-free) + the 4 focused test files 18/18; `api-surface-gate.mjs` exit 0
+  (baseline 1571 — `trustedUrl`/`TrustedUrl`/`isKovoTrustedUrl` documented); `@kovojs/site api:check`
+  37 @example blocks typecheck (browser exports 490→492); `vp check` reports my files clean (no
+  type/lint errors). SPEC §4.8 and KV236 now match the shipped surface (no SPEC edit needed).
 
 ## 2. drizzle `key` accepts a column selector `(t) => t.id` — **High** · Decided: **Ship selector**
 

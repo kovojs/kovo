@@ -11,7 +11,7 @@ export type {
   OptimisticQueryKey,
   OptimisticTransform,
 } from './optimism.js';
-export { trustedHtml } from './security-output.js';
-export type { BrowserTrustedHTML, TrustedHtml } from './security-output.js';
+export { trustedHtml, trustedUrl } from './security-output.js';
+export type { BrowserTrustedHTML, TrustedHtml, TrustedUrl } from './security-output.js';
 export { derive } from './derive.js';
 export type { DeriveDefinition } from './derive.js';
