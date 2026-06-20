@@ -40,3 +40,37 @@ test('reconciles a successful optimistic mutation across all query consumers', a
   );
   expect(Number(rows[0]?.count)).toBe(4);
 });
+
+test("a sibling island's local state survives an optimistic mutation + morph (multi-feature, C8d)", async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.waitForFunction(
+    () =>
+      (window as typeof window & { __optimisticSuccessReady?: boolean })
+        .__optimisticSuccessReady === true,
+  );
+
+  const toggle = page.getByTestId('toggle-state');
+  const count = page.locator('#cart-panel [data-bind="cart.count"]');
+  await expect(toggle).toHaveText('false');
+  await expect(count).toHaveText('1');
+
+  // User sets the sibling island's local state.
+  await page.getByRole('button', { name: 'toggle' }).click();
+  await expect(toggle).toHaveText('true');
+
+  // Fire the optimistic mutation: it predicts the cart count and morphs the cart panel.
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/_m/optimistic-success/add') && response.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Add optimistically' }).click();
+  await expect(count).toHaveText('3'); // optimistic prediction
+  await responsePromise;
+  await expect(count).toHaveText('4'); // reconciled to server truth
+
+  // The sibling island (outside the morphed fragment) keeps its local state through
+  // the whole optimistic + reconcile + morph cycle — no cross-feature interference.
+  await expect(toggle).toHaveText('true');
+});

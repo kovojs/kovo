@@ -61,6 +61,12 @@ const homeRoute = route('/', {
         <input type="hidden" name="quantity" value="2">
         <button type="submit">Add optimistically</button>
       </form>
+      <!-- Sibling pure-client state island (bugs-1 C8d multi-feature): its local state
+           must survive an optimistic mutation + fragment morph of the cart panel. -->
+      <state-toggle kovo-c="state-toggle" kovo-state='{"on":false}'>
+        <button type="button" on:click="/state-actions.ts#toggle">toggle</button>
+        <output data-bind="state.on" data-testid="toggle-state">false</output>
+      </state-toggle>
     </main>`;
   },
 });
