@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { guards, sanitizeNext, session } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
+import { route } from './route.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
@@ -17,6 +18,41 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
     expect(sanitizeNext('https://evil.example/login')).toBe('/');
     expect(sanitizeNext('javascript:alert(1)')).toBe('/');
     expect(sanitizeNext('account')).toBe('/');
+  });
+
+  // ROUTING-NAV-4 (medium, contested) — SPEC §6.5:724: `next` must also be validated
+  // against the route table when available; an in-app path with no matching route is
+  // stripped to the safe default `/`.
+
+  it('ROUTING-NAV-4: strips an unrecognized in-app path to "/" when routes are supplied', () => {
+    const routes = [
+      route('/home', { page: () => '<h1>Home</h1>' }),
+      route('/account', { page: () => '<h1>Account</h1>' }),
+    ];
+
+    expect(sanitizeNext('/totally-unknown', routes)).toBe('/');
+    expect(sanitizeNext('/home', routes)).toBe('/home');
+    expect(sanitizeNext('/account', routes)).toBe('/account');
+  });
+
+  it('ROUTING-NAV-4: keeps query/hash on a matched route path', () => {
+    const routes = [route('/account', { page: () => '<h1>Account</h1>' })];
+
+    expect(sanitizeNext('/account?tab=orders#section', routes)).toBe('/account?tab=orders#section');
+  });
+
+  it('ROUTING-NAV-4: preserves existing open-redirect protection when routes are supplied', () => {
+    const routes = [route('/home', { page: () => '<h1>Home</h1>' })];
+
+    expect(sanitizeNext('//evil.example', routes)).toBe('/');
+    expect(sanitizeNext('/\\evil.example', routes)).toBe('/');
+    expect(sanitizeNext('https://evil.example/login', routes)).toBe('/');
+    expect(sanitizeNext('javascript:alert(1)', routes)).toBe('/');
+  });
+
+  it('ROUTING-NAV-4: falls back to origin-only validation when routes array is empty', () => {
+    // An empty routes array means no route table is available; skip route check.
+    expect(sanitizeNext('/any-path', [])).toBe('/any-path');
   });
 });
 

@@ -44,7 +44,22 @@ export async function handleAppMutationRequest(
     ...(app.db === undefined ? {} : { db: app.db }),
     ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
   });
-  const rawInput = await readMutationRequestBody(mutationRequest);
+
+  // SPEC §9.2: parse the body BEFORE proceeding further; an attacker-controllable
+  // malformed body must return a typed 422, not a 500 through onError. We short-circuit
+  // here, before CSRF, because an invalid Content-Type or parse failure is not a CSRF
+  // concern — the mutation lifecycle never starts.
+  const bodyResult = await readMutationRequestBody(mutationRequest);
+  if (!bodyResult.ok) {
+    return new Response(
+      JSON.stringify({ code: 'VALIDATION', payload: { reason: bodyResult.reason } }),
+      {
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        status: 422,
+      },
+    );
+  }
+  const rawInput = bodyResult.value;
   const currentUrl = appRequestUrl(url);
   const sourceUrl = mutationSourceUrl(request, url);
   const mutationResponseOptions = await resolveAppMutationResponsePolicy(app, {
@@ -240,10 +255,49 @@ function mergeMutationRegistryQueries(
   };
 }
 
-async function readMutationRequestBody(request: Request): Promise<unknown> {
+type MutationRequestBodyResult =
+  | { ok: true; value: unknown }
+  | { ok: false; reason: string };
+
+/**
+ * Parse the mutation request body from JSON or form data.
+ *
+ * SPEC §9.2: a body that is neither `application/json` nor a multipart/url-encoded
+ * form, or that fails to parse as the declared content type, is a client-side
+ * validation error (422) — not an unexpected server exception. We therefore return
+ * a discriminated result instead of throwing so the caller can short-circuit with
+ * a typed 422 BEFORE the CSRF check runs (attacker-controllable bad bodies must
+ * not drive `onError`).
+ */
+async function readMutationRequestBody(
+  request: Request,
+): Promise<MutationRequestBodyResult> {
   const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
-  if (contentType.includes('application/json')) return request.json();
-  return request.formData();
+
+  if (contentType.includes('application/json')) {
+    try {
+      const value = await request.json();
+      return { ok: true, value };
+    } catch {
+      return { ok: false, reason: 'invalid-json' };
+    }
+  }
+
+  if (
+    contentType.includes('multipart/form-data') ||
+    contentType.includes('application/x-www-form-urlencoded') ||
+    contentType === ''
+  ) {
+    try {
+      const value = await request.formData();
+      return { ok: true, value };
+    } catch {
+      return { ok: false, reason: 'invalid-form' };
+    }
+  }
+
+  // Unsupported Content-Type (e.g. text/plain, application/xml …).
+  return { ok: false, reason: 'unsupported-content-type' };
 }
 
 function defaultMutationRedirectTo(request: Request, currentUrl: string): string {

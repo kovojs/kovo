@@ -36,6 +36,12 @@ export interface QueryEndpointRequest<
   Request = unknown,
   SessionValue = unknown,
 > extends GuardFailureResponseOptions<Request, SessionValue> {
+  /**
+   * Optional build token (SPEC §5.2.1 rule 2(d)): when present, stamped as a
+   * `Kovo-Build` response header on the 200 read response so a plain refetch
+   * into a stale tab is detectable by the client.
+   */
+  buildToken?: string;
   request: Request;
   search?: QuerySearchInput;
 }
@@ -329,9 +335,16 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
       queryKey: definition.key,
       request: lifecycleRequest,
     });
+    // SPEC §9.4:895: the private, no-store cache posture applies to every /_q/ response,
+    // including error responses, so a shared/intermediary cache cannot store and replay
+    // any response (even an anon 403) to a different user.
     return {
       body: JSON.stringify(serverErrorPayload()),
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 500,
     };
   }
@@ -343,12 +356,16 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
         endpointRequest.currentUrl ??
         queryEndpointCurrentUrl(definition.key, endpointRequest.search ?? {}),
     });
-    if (authResponse) return authResponse;
+    // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
+    // cache posture — an anon 403 must not be cached and replayed to an authed user.
+    if (authResponse) return withQueryCacheHeaders(authResponse);
 
     return {
       body: JSON.stringify(result.error),
       headers: {
+        'Cache-Control': 'private, no-store',
         'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
         ...retryAfterHeaders(result),
       },
       status: result.status,
@@ -366,6 +383,9 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
       // session-independent is a later optimization; the safe default is unconditional.)
       'Cache-Control': 'private, no-store',
       Vary: 'Cookie',
+      // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
+      // tab can detect deploy skew and avoid merging new-build data into a stale document.
+      ...(endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {}),
     },
     status: 200,
   };
@@ -564,4 +584,23 @@ function renderQueryEndpointChunk<const Key extends string, Value, Input, Reques
 
 function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
   return { code: 'SERVER_ERROR', payload: {} };
+}
+
+/**
+ * Merge the SPEC §9.4:895 private cache posture onto any /_q/ response.
+ * Guard-failure redirects (303) and forbidden (403) carry only Location/Content-Type
+ * by default; stamping them prevents a shared cache from serving one user's denial
+ * to another.
+ */
+function withQueryCacheHeaders(
+  response: QueryEndpointResponse,
+): QueryEndpointResponse {
+  return {
+    ...response,
+    headers: {
+      'Cache-Control': 'private, no-store',
+      Vary: 'Cookie',
+      ...response.headers,
+    },
+  };
 }

@@ -107,9 +107,14 @@ describe('query endpoints', () => {
       reads: [domain('product')],
     });
 
+    // H3 fix: /_q/ 500 responses now carry the private cache posture (SPEC §9.4:895).
     await expect(renderQueryEndpointResponse(productQuery, { onError, request })).resolves.toEqual({
       body: '{"code":"SERVER_ERROR","payload":{}}',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
@@ -128,9 +133,14 @@ describe('query endpoints', () => {
       reads: [domain('product')],
     });
 
+    // H3 fix: /_q/ 422 responses now carry the private cache posture (SPEC §9.4:895).
     await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
       body: '{"code":"VALIDATION","payload":{"issues":[{"message":"Expected string","path":["id"]}]}}',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 422,
     });
   });
@@ -177,9 +187,14 @@ describe('query endpoints', () => {
       ok: false,
       status: 500,
     });
+    // H3 fix: /_q/ 500 (KV410) responses now carry the private cache posture (SPEC §9.4:895).
     await expect(renderQueryEndpointResponse(productQuery, { request: {} })).resolves.toEqual({
       body: '{"code":"KV410","payload":{}}',
-      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 500,
     });
   });
@@ -218,6 +233,105 @@ describe('query endpoints', () => {
       headers: { 'Content-Type': 'text/plain; charset=utf-8' },
       status: 404,
     });
+  });
+
+  // H3 (medium) — SPEC §9.4:895: cache headers must be on ALL /_q/ responses,
+  // including 422/500 error responses and guard-failure 403/redirect responses.
+
+  it('H3: stamps Cache-Control + Vary on /_q/ 422 args-validation failure', async () => {
+    const productQuery = query('product', {
+      args: alienValidationSchema<{ id: string }>('Expected string', ['id']),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(productQuery, { request: {} });
+
+    expect(result.status).toBe(422);
+    expect(result.headers['Cache-Control']).toBe('private, no-store');
+    expect(result.headers['Vary']).toBe('Cookie');
+  });
+
+  it('H3: stamps Cache-Control + Vary on /_q/ 500 load exception', async () => {
+    const productQuery = query('product', {
+      load() {
+        throw new Error('db down');
+      },
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(productQuery, { request: {} });
+
+    expect(result.status).toBe(500);
+    expect(result.headers['Cache-Control']).toBe('private, no-store');
+    expect(result.headers['Vary']).toBe('Cookie');
+  });
+
+  it('H3: stamps Cache-Control + Vary on /_q/ 403 guard-failure forbidden response', async () => {
+    const productQuery = query('product', {
+      guard: () => ({ kind: 'forbidden' as const }),
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(productQuery, {
+      currentUrl: '/_q/product',
+      // Simulate authed request so guard is "forbidden" (not unauthenticated redirect).
+      request: { session: { user: { id: 'u1' } } },
+    });
+
+    expect(result.status).toBe(403);
+    expect(result.headers['Cache-Control']).toBe('private, no-store');
+    expect(result.headers['Vary']).toBe('Cookie');
+  });
+
+  it('H3: stamps Cache-Control + Vary on /_q/ 303 unauthenticated guard-failure redirect', async () => {
+    const productQuery = query('product', {
+      guard: () => ({ kind: 'unauthenticated' as const }),
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(productQuery, {
+      currentUrl: '/_q/product',
+      request: {},
+    });
+
+    expect(result.status).toBe(303);
+    expect(result.headers['Cache-Control']).toBe('private, no-store');
+    expect(result.headers['Vary']).toBe('Cookie');
+  });
+
+  // D2-server (high) — SPEC §5.2.1 rule 2(d): /_q/ 200 read responses must carry
+  // a Kovo-Build header so a plain refetch into a stale tab is detectable.
+
+  it('D2: stamps Kovo-Build on /_q/ 200 read response when buildToken is provided', async () => {
+    const productQuery = query('product', {
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(productQuery, {
+      buildToken: 'sha256-abcdef1234',
+      request: {},
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.headers['Kovo-Build']).toBe('sha256-abcdef1234');
+  });
+
+  it('D2: omits Kovo-Build from /_q/ 200 read response when buildToken is absent', async () => {
+    const productQuery = query('product', {
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(productQuery, { request: {} });
+
+    expect(result.status).toBe(200);
+    expect(result.headers['Kovo-Build']).toBeUndefined();
   });
 });
 

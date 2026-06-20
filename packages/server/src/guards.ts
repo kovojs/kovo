@@ -1,5 +1,6 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
 import type { ServerErrorHandler } from './diagnostics.js';
+import { matchRoute, type RouteLike } from './match.js';
 import type { ServerResponseBase } from './response.js';
 import type { Schema } from './schema.js';
 
@@ -160,6 +161,13 @@ export interface GuardFailureResponseOptions<
   loginPath?: string;
   onUnauthenticated?: UnauthenticatedHandler<Request>;
   renderForbidden?: ForbiddenRenderer<Request>;
+  /**
+   * Optional route table for ROUTING-NAV-4 / SPEC §6.5:724: when supplied,
+   * `sanitizeNext` additionally validates the `next` pathname against this set of
+   * routes and strips it to `/` if no route matches. Pass the app route table when
+   * available to prevent post-login redirects to unrecognized in-app paths.
+   */
+  routes?: readonly RouteLike[];
 }
 
 interface HttpGuardFailureResponse extends ServerResponseBase<
@@ -331,7 +339,7 @@ export async function renderHttpGuardFailureResponse<Request>(
     const context = { next, request };
     const redirectResult = await (options.onUnauthenticated
       ? options.onUnauthenticated(context)
-      : defaultOnUnauthenticated(context, options.loginPath));
+      : defaultOnUnauthenticated(context, options.loginPath, options.routes));
 
     return {
       body: '',
@@ -450,37 +458,68 @@ function requestWithProperty<Request, Key extends string, Value>(
 function defaultOnUnauthenticated<Request>(
   context: UnauthenticatedContext<Request>,
   loginPath = '/login',
+  routes?: readonly RouteLike[],
 ): CoreRedirect {
   return {
-    location: loginLocationWithNext(loginPath, context.next),
+    location: loginLocationWithNext(loginPath, context.next, routes),
     status: 303,
   };
 }
 
-function loginLocationWithNext(loginPath: string, next: string): string {
+function loginLocationWithNext(
+  loginPath: string,
+  next: string,
+  routes?: readonly RouteLike[],
+): string {
   const base = 'https://kovo.local';
   const url = new URL(loginPath, base);
-  url.searchParams.set('next', sanitizeNext(next));
+  url.searchParams.set('next', sanitizeNext(next, routes));
 
   return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : url.toString();
 }
 
 /**
- * bugs-1 F2 / SPEC §6.5: `next` MUST be a same-origin, single-leading-slash absolute path
- * (no `//`, no `/\`, no scheme, no host) so a login flow that redirects to it cannot become
- * an open redirect. Anything else is stripped to the safe default `/`.
+ * bugs-1 F2 / SPEC §6.5 / SPEC §6.5:724: `next` MUST be a same-origin, single-leading-slash
+ * absolute path (no `//`, no `/\`, no scheme, no host) so a login flow that redirects to it
+ * cannot become an open redirect. Anything else is stripped to the safe default `/`.
+ *
+ * When `routes` is supplied (ROUTING-NAV-4), the candidate pathname is additionally matched
+ * against the app route table: a path that passes the origin check but resolves to no route
+ * is stripped to `/` per SPEC §6.5:724 ("a `next` that fails to resolve against the route
+ * table is stripped to a safe default"). This prevents in-app non-route paths (e.g. internal
+ * API stubs or ambiguous paths) from surviving as the post-login destination.
+ *
+ * The `routes` parameter is optional; when absent, only the origin/slash guards apply. Callers
+ * with the route table available (e.g. `GuardFailureResponseOptions`) should pass it.
  *
  * @internal
  */
-export function sanitizeNext(next: string): string {
+export function sanitizeNext(next: string, routes?: readonly RouteLike[]): string {
   if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/';
+  const sanitized = sanitizeNextOrigin(next);
+  if (sanitized === undefined) return '/';
+
+  // SPEC §6.5:724: if a route table is available, verify the candidate path resolves to
+  // a known route. An unrecognized in-app path is stripped to avoid sending users to a
+  // dead end (or an internal path that was never meant to be a public destination).
+  if (routes !== undefined && routes.length > 0) {
+    // Strip query string and hash to get the bare pathname for route matching.
+    const pathnameOnly = sanitized.replace(/[?#].*$/, '');
+    const match = matchRoute(routes, pathnameOnly);
+    if (!match) return '/';
+  }
+
+  return sanitized;
+}
+
+function sanitizeNextOrigin(next: string): string | undefined {
   try {
     const base = 'https://kovo.local';
     const resolved = new URL(next, base);
-    if (resolved.origin !== base) return '/';
+    if (resolved.origin !== base) return undefined;
     return `${resolved.pathname}${resolved.search}${resolved.hash}`;
   } catch {
-    return '/';
+    return undefined;
   }
 }
 
