@@ -144,12 +144,16 @@ to use the per-primitive subpaths (Radix ships no root barrel at all).
 `from './internal.js'`, intermixed with ~65 `@internal` symbols — the public/internal line is
 invisible at the source. Consumer imports are unaffected (pure refactor).
 
-- [ ] Move the 13 public declarations (`authed`, `betterAuthSession`, the 3 sign-in/up/out
-      mutations, `mount`, `role`, + 6 public types) into named files (e.g. `session.ts`,
-      `mutations.ts`, `guards.ts`, `mount.ts`); keep `internal.ts` for the `@internal` machinery;
-      `index.ts` re-exports from the named files.
-- [ ] Verify the public surface is byte-identical: `pnpm run check:api-surface`,
-      `@kovojs/better-auth` tests, and build pass with no surface diff.
+- [x] Moved the 13 publics into `session.ts` (`betterAuthSession` + `BetterAuthSessionPayload` +
+      `BetterAuthSessionMapper`), `mount.ts` (`mount` + `BetterAuthMountOptions`), `mutations.ts`
+      (the 3 sign-in/up/out mutations), `guards.ts` (`authed`, `role` + `BetterAuthRole*`).
+      `internal.ts` keeps the `@internal` machinery (2963 → 2663 lines) and imports the moved types
+      where it references them; `index.ts` re-exports the 13 from the named files. (Delegated to a
+      sub-agent in worktree `kovo-ba6`; cherry-picked as `11e5c016`.)
+- [x] Verified in the primary worktree: `vitest run packages/better-auth` 5 files / **66 pass**;
+      `api-surface-gate.mjs` exit 0 (baseline 1571 — public `.` = 13 symbols and `./internal` = 104
+      symbols are **byte-identical to base**); `exported-symbols.mjs --duplicates --check` exit 0;
+      `tsc --noEmit` clean (sub-agent).
 
 ---
 
