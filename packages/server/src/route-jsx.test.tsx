@@ -201,22 +201,28 @@ describe('route JSX pages', () => {
       sessionId: (value: typeof request) => value.session.id,
     };
 
-    await expect(
-      renderRoutePageResponse(productRoute as any, {}, request, undefined, {
-        csrf,
-        mutationFailure: {
-          failure: {
-            error: { code: 'OUT_OF_STOCK', payload: { availableQuantity: 3 } },
-            ok: false,
-            status: 422,
-          },
-          mutationKey: 'cart/add',
+    const result = (await renderRoutePageResponse(productRoute as any, {}, request, undefined, {
+      csrf,
+      mutationFailure: {
+        failure: {
+          error: { code: 'OUT_OF_STOCK', payload: { availableQuantity: 3 } },
+          ok: false,
+          status: 422,
         },
-      }),
-    ).resolves.toMatchObject({
-      body: `<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="productId" value="p1"><input name="quantity" value="1"><output role="alert" data-error-code="OUT_OF_STOCK">Only 3 left.</output><input type="hidden" name="kovo-csrf" value="${csrfToken(request, csrf)}"></form>`,
-      status: 200,
-    });
+        mutationKey: 'cart/add',
+      },
+    })) as { body: string; status: number };
+
+    // The per-submit Kovo-Idem hidden field (SPEC §10.3) carries a fresh random token; normalize it
+    // for the golden comparison while still asserting the field is emitted alongside the CSRF field.
+    const normalizedBody = result.body.replace(
+      /name="Kovo-Idem" value="[^"]*"/,
+      'name="Kovo-Idem" value="<idem>"',
+    );
+    expect(normalizedBody).toBe(
+      `<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="productId" value="p1"><input name="quantity" value="1"><output role="alert" data-error-code="OUT_OF_STOCK">Only 3 left.</output><input type="hidden" name="kovo-csrf" value="${csrfToken(request, csrf)}"><input type="hidden" name="Kovo-Idem" value="<idem>"></form>`,
+    );
+    expect(result.status).toBe(200);
   });
 
   it('stamps compiler-derived page navigation segment metadata on route JSX roots', async () => {
