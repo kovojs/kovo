@@ -143,7 +143,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-selected',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -160,7 +161,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="command"><input data-state="open" aria-autocomplete="list" aria-expanded="true" autocomplete="off" role="searchbox" type="text" value="author query" aria-activedescendant="author-command-option" aria-controls="gallery-command-listbox" aria-describedby="gallery-command-description" id="gallery-command-input" aria-labelledby="gallery-command-label" placeholder="Run a command" class="command-input text-sm"><div data-state="open" role="menu" id="author-command-listbox" aria-labelledby="gallery-command-label" class="command-listbox max-h-72"><div data-state="active" data-selected="" data-highlighted="" aria-selected="false" role="menuitem" tabIndex="-1" id="gallery-command-option-1" label="Settings" value="settings" class="command-item px-2">Settings</div></div></section>',
+      '<section data-gallery-merge="command"><input data-state="open" aria-autocomplete="list" aria-expanded="true" autocomplete="off" role="searchbox" type="text" value="author query" aria-activedescendant="author-command-option" aria-controls="gallery-command-listbox" aria-describedby="gallery-command-description" id="gallery-command-input" aria-labelledby="gallery-command-label" placeholder="Run a command" class="command-input text-sm"><div data-state="open" role="menu" id="author-command-listbox" aria-labelledby="gallery-command-label" class="command-listbox max-h-72"><div data-state="active" data-selected="" data-highlighted="" aria-selected="true" role="menuitem" tabIndex="-1" id="gallery-command-option-1" label="Settings" value="settings" class="command-item px-2">Settings</div></div></section>',
     );
   });
 
@@ -244,7 +245,8 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -297,7 +299,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="dropdown-menu"><button data-state="open" aria-expanded="false" aria-haspopup="menu" type="submit" aria-controls="author-dropdown-content" id="gallery-dropdown-trigger" class="dropdown-trigger px-2">Account</button><div data-state="open" role="listbox" tabIndex="-1" id="author-dropdown-content" aria-labelledby="gallery-dropdown-trigger" class="dropdown-content shadow"><div data-state="open" role="presentation" id="gallery-dropdown-group" aria-labelledby="author-dropdown-group-label" class="dropdown-group"><div data-state="active" data-highlighted="" role="option" tabIndex="5" id="gallery-dropdown-profile" label="Profile" value="author-profile" class="dropdown-item font-medium" aria-disabled="true">Profile</div></div><div role="none" id="gallery-dropdown-separator"></div></div></section>',
+      '<section data-gallery-merge="dropdown-menu"><button data-state="open" aria-expanded="true" aria-haspopup="menu" type="submit" aria-controls="author-dropdown-content" id="gallery-dropdown-trigger" class="dropdown-trigger px-2">Account</button><div data-state="open" role="listbox" tabIndex="-1" id="author-dropdown-content" aria-labelledby="gallery-dropdown-trigger" class="dropdown-content shadow"><div data-state="open" role="presentation" id="gallery-dropdown-group" aria-labelledby="author-dropdown-group-label" class="dropdown-group"><div data-state="active" data-highlighted="" role="option" tabIndex="5" id="gallery-dropdown-profile" label="Profile" value="author-profile" class="dropdown-item font-medium" aria-disabled="true">Profile</div></div><div role="none" id="gallery-dropdown-separator"></div></div></section>',
     );
   });
 
@@ -392,7 +394,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -455,7 +458,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="false" aria-haspopup="menu" role="button" aria-controls="author-context-content" kovo-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
+      '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="true" aria-haspopup="menu" role="button" aria-controls="author-context-content" kovo-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
     );
   });
 
@@ -628,7 +631,8 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -668,7 +672,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </nav>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="navigation-menu"><nav data-state="open" data-orientation="horizontal" role="menubar" id="gallery-nav-root" aria-label="Author nav" aria-describedby="gallery-nav-description" class="navigation-root border"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-nav-list" class="navigation-list gap-2"><div data-state="active" data-highlighted="" role="presentation" id="gallery-nav-products-item" class="navigation-item px-2"><button data-state="open" data-highlighted="" aria-expanded="false" aria-haspopup="true" disabled tabIndex="0" type="submit" value="products" aria-controls="author-nav-products-panel" id="gallery-nav-products-trigger" label="Products" class="navigation-trigger font-medium">Products</button><div data-state="open" role="region" tabIndex="-1" id="author-nav-products-panel" aria-labelledby="gallery-nav-products-trigger" class="navigation-content shadow">Product links</div></div><a data-state="inactive" tabIndex="3" value="author-company" href="/author-company" id="gallery-nav-company-link" label="Company" class="navigation-link underline">Company</a></div><div data-state="open" id="gallery-nav-viewport" class="navigation-viewport rounded" hidden></div><span data-state="open" id="gallery-nav-indicator" class="navigation-indicator accent" hidden></span></nav></section>',
+      '<section data-gallery-merge="navigation-menu"><nav data-state="open" data-orientation="horizontal" role="menubar" id="gallery-nav-root" aria-label="Author nav" aria-describedby="gallery-nav-description" class="navigation-root border"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-nav-list" class="navigation-list gap-2"><div data-state="active" data-highlighted="" role="presentation" id="gallery-nav-products-item" class="navigation-item px-2"><button data-state="open" data-highlighted="" aria-expanded="true" aria-haspopup="true" disabled tabIndex="0" type="submit" value="products" aria-controls="author-nav-products-panel" id="gallery-nav-products-trigger" label="Products" class="navigation-trigger font-medium">Products</button><div data-state="open" role="region" tabIndex="-1" id="author-nav-products-panel" aria-labelledby="gallery-nav-products-trigger" class="navigation-content shadow">Product links</div></div><a data-state="inactive" tabIndex="3" value="author-company" href="/author-company" id="gallery-nav-company-link" label="Company" class="navigation-link underline">Company</a></div><div data-state="open" id="gallery-nav-viewport" class="navigation-viewport rounded" hidden></div><span data-state="open" id="gallery-nav-indicator" class="navigation-indicator accent" hidden></span></nav></section>',
     );
   });
 
@@ -773,7 +777,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -819,7 +824,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </div>
       </nav>,
     ).toBe(
-      '<nav data-gallery-merge="menubar"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-menubar" aria-label="Author editor" aria-describedby="gallery-menubar-help" class="menubar-root border"><button data-state="active" data-highlighted="" role="option" tabIndex="0" value="author-file" aria-haspopup="menu" aria-expanded="false" aria-controls="author-file-menu" id="gallery-file-item" label="File" class="menubar-item px-2">File</button><div data-state="open" role="listbox" tabIndex="-1" id="author-file-menu" aria-labelledby="gallery-file-item" class="menubar-submenu shadow"><div data-state="open" data-orientation="horizontal" role="presentation" id="gallery-file-group" aria-labelledby="author-file-group-label" class="menubar-group py-1">Open</div><div role="none" id="gallery-file-separator"></div></div></div></nav>',
+      '<nav data-gallery-merge="menubar"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-menubar" aria-label="Author editor" aria-describedby="gallery-menubar-help" class="menubar-root border"><button data-state="active" data-highlighted="" role="option" tabIndex="0" value="author-file" aria-haspopup="menu" aria-expanded="true" aria-controls="author-file-menu" id="gallery-file-item" label="File" class="menubar-item px-2">File</button><div data-state="open" role="listbox" tabIndex="-1" id="author-file-menu" aria-labelledby="gallery-file-item" class="menubar-submenu shadow"><div data-state="open" data-orientation="horizontal" role="presentation" id="gallery-file-group" aria-labelledby="author-file-group-label" class="menubar-group py-1">Open</div><div role="none" id="gallery-file-separator"></div></div></div></nav>',
     );
   });
 

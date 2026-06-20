@@ -200,7 +200,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -238,7 +239,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         </dialog>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="alert-dialog"><button data-state="open" aria-expanded="false" aria-haspopup="dialog" type="button" aria-controls="gallery-delete-dialog" command="show-modal" commandfor="author-delete-dialog" class="alert-dialog-trigger destructive">Delete</button><dialog data-state="open" aria-modal="true" open role="dialog" id="author-delete-dialog" aria-labelledby="gallery-delete-title" aria-describedby="author-delete-description" class="alert-dialog-panel shadow-xl"><button data-state="open" data-intent="cancel" type="submit" command="request-close" commandfor="author-delete-dialog" class="alert-dialog-cancel muted">Cancel</button><button data-state="open" data-intent="author-danger" disabled type="button" command="request-close" commandfor="gallery-delete-dialog" class="alert-dialog-action danger">Confirm</button></dialog></section>',
+      '<section data-gallery-merge="alert-dialog"><button data-state="open" aria-expanded="true" aria-haspopup="dialog" type="button" aria-controls="gallery-delete-dialog" command="show-modal" commandfor="author-delete-dialog" class="alert-dialog-trigger destructive">Delete</button><dialog data-state="open" aria-modal="true" open role="dialog" id="author-delete-dialog" aria-labelledby="gallery-delete-title" aria-describedby="author-delete-description" class="alert-dialog-panel shadow-xl"><button data-state="open" data-intent="cancel" type="submit" command="request-close" commandfor="author-delete-dialog" class="alert-dialog-cancel muted">Cancel</button><button data-state="open" data-intent="author-danger" disabled type="button" command="request-close" commandfor="gallery-delete-dialog" class="alert-dialog-action danger">Confirm</button></dialog></section>',
     );
   });
 
@@ -283,7 +284,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "false" vs author "true" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -304,7 +306,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <div {...content.attrs}>Menu</div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="popover"><button data-state="closed" aria-expanded="true" type="submit" aria-controls="author-account-popover" popovertarget="author-account-popover" popovertargetaction="toggle" class="popover-trigger compact">Account</button><div data-state="closed" id="author-account-popover" popover="manual" class="popover-content min-w-48">Menu</div></section>',
+      '<section data-gallery-merge="popover"><button data-state="closed" aria-expanded="false" type="submit" aria-controls="author-account-popover" popovertarget="author-account-popover" popovertargetaction="toggle" class="popover-trigger compact">Account</button><div data-state="closed" id="author-account-popover" popover="manual" class="popover-content min-w-48">Menu</div></section>',
     );
   });
 

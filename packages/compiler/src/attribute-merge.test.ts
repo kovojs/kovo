@@ -261,4 +261,152 @@ export const PrimitiveMerge = component({
       'Two writers target the same binding slot. data-bind',
     ]);
   });
+
+  // J1: state aria-* is primitive-wins (not author-wins); KV317 on contradiction.
+  // SPEC.md §4.6 — state aria-* (aria-expanded/selected/checked/pressed/current) → primitive wins.
+  // We test through the existing primitive merge mechanism (attrs= on a @kovojs/ui primitive).
+  it('J1: Tooltip.Trigger primitive aria-expanded contradicts author → KV317 error; primitive wins', () => {
+    // Contradicting: primitive "true" vs author "false" → KV317 (error), primitive wins
+    const result = compileComponentModule({
+      fileName: 'state-aria-contradiction.tsx',
+      source: `
+export const StateAriaContradiction = component({
+  render: () => (
+    <state-aria-contradiction>
+      <Tooltip.Trigger
+        attrs={{
+          'aria-expanded': 'true',
+        }}
+      >
+        {(attrs) => (
+          <button {...attrs} aria-expanded="false">Toggle</button>
+        )}
+      </Tooltip.Trigger>
+    </state-aria-contradiction>
+  ),
+});
+`,
+    });
+    // KV317 must be raised for the contradiction
+    expect(result.diagnostics.map((d) => d.code)).toContain('KV317');
+    expect(result.diagnostics.find((d) => d.code === 'KV317')?.severity).toBe('error');
+    // Primitive value wins: "true" must appear, "false" must not be the aria-expanded value
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain('aria-expanded="true"');
+    expect(serverSource).not.toContain('aria-expanded="false"');
+  });
+
+  it('J1: matching state aria-* value raises KV232 (lint) not KV317', () => {
+    // Matching values: primitive "true" vs author "true" → KV232 only (no KV317)
+    const result = compileComponentModule({
+      fileName: 'state-aria-match.tsx',
+      source: `
+export const StateAriaMatch = component({
+  render: () => (
+    <state-aria-match>
+      <Tooltip.Trigger
+        attrs={{
+          'aria-expanded': 'true',
+        }}
+      >
+        {(attrs) => (
+          <button {...attrs} aria-expanded="true">Toggle</button>
+        )}
+      </Tooltip.Trigger>
+    </state-aria-match>
+  ),
+});
+`,
+    });
+    expect(result.diagnostics.map((d) => d.code)).toContain('KV232');
+    expect(result.diagnostics.map((d) => d.code)).not.toContain('KV317');
+    // Primitive wins: aria-expanded="true" should appear
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain('aria-expanded="true"');
+  });
+
+  it('J1: descriptive aria-label remains author-wins (KV232 only, no KV317)', () => {
+    // aria-label is descriptive → author wins, KV232 lint only, no KV317
+    const result = compileComponentModule({
+      fileName: 'descriptive-aria.tsx',
+      source: `
+export const DescriptiveAria = component({
+  render: () => (
+    <descriptive-aria>
+      <Tooltip.Trigger
+        attrs={{
+          'aria-label': 'Primitive label',
+        }}
+      >
+        {(attrs) => (
+          <button {...attrs} aria-label="Author label">Toggle</button>
+        )}
+      </Tooltip.Trigger>
+    </descriptive-aria>
+  ),
+});
+`,
+    });
+    // aria-label is descriptive → author-wins, KV232 lint only, no KV317
+    expect(result.diagnostics.map((d) => d.code)).toContain('KV232');
+    expect(result.diagnostics.map((d) => d.code)).not.toContain('KV317');
+    // Author wins: "Author label" should appear in output
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain('aria-label="Author label"');
+    expect(serverSource).not.toContain('aria-label="Primitive label"');
+  });
+
+  // J2: aria-disabled is logical-OR even in the state-aria path.
+  it('J2: Tooltip.Trigger primitive aria-disabled="true" + author "false" → stays "true" (logical-OR)', () => {
+    const result = compileComponentModule({
+      fileName: 'aria-disabled-or.tsx',
+      source: `
+export const AriaDisabledOr = component({
+  render: () => (
+    <aria-disabled-or>
+      <Tooltip.Trigger
+        attrs={{
+          'aria-disabled': 'true',
+        }}
+      >
+        {(attrs) => (
+          <button {...attrs} aria-disabled="false">Action</button>
+        )}
+      </Tooltip.Trigger>
+    </aria-disabled-or>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    // logical-OR: true || false → true
+    expect(serverSource).toContain('aria-disabled="true"');
+    expect(serverSource).not.toContain('aria-disabled="false"');
+  });
+
+  it('J2: readonly is logical-OR (primitive true + author false → present)', () => {
+    const result = compileComponentModule({
+      fileName: 'readonly-or.tsx',
+      source: `
+export const ReadonlyOr = component({
+  render: () => (
+    <readonly-or>
+      <Tooltip.Trigger
+        attrs={{
+          readonly: true,
+        }}
+      >
+        {(attrs) => (
+          <input {...attrs} readonly={false} />
+        )}
+      </Tooltip.Trigger>
+    </readonly-or>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    // logical-OR: true || false → true (readonly present)
+    expect(serverSource).toContain('readonly');
+  });
 });

@@ -171,6 +171,7 @@ export function lowerStructuralJsx(
     model,
     tree.elements,
     componentName,
+    knownQueries,
     options,
     deriveExports,
     stateDerives,
@@ -658,6 +659,7 @@ function lowerPrimitiveReactiveAttributes(
   model: ComponentModuleModel,
   elements: readonly JsxIrElement[],
   componentName: string,
+  knownQueries: ReadonlySet<string>,
   options: StructuralJsxLoweringOptions,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
@@ -677,11 +679,14 @@ function lowerPrimitiveReactiveAttributes(
     const control = element.element.attributes.find(
       (attribute) => attribute.name === entry.controlProp,
     );
-    const statePath = reactiveStatePath(control);
-    if (statePath === null) continue;
+    // SPEC.md §4.6: accept both state-rooted and single-query-rooted control props
+    // so query-driven primitives (e.g. <Switch checked={account.optIn}>) emit
+    // reactive aria-* / data-state derives that stay in sync with the query.
+    const controlPath = reactiveControlPath(control, knownQueries);
+    if (controlPath === null) continue;
     if (manifest.controlField !== entry.controlProp) continue;
 
-    const condition = primitiveReactiveCondition(element, manifest, statePath);
+    const condition = primitiveReactiveCondition(element, manifest, controlPath.path);
     if (condition === null) continue;
 
     for (const [attrName, attr] of Object.entries(manifest.attrs)) {
@@ -698,6 +703,7 @@ function lowerPrimitiveReactiveAttributes(
         attrName,
         attr,
         condition,
+        controlPath.root,
         options,
         deriveExports,
         stateDerives,
@@ -714,6 +720,7 @@ function lowerPrimitiveReactiveAttribute(
   attrName: string,
   attr: PrimitiveReactiveAttr,
   condition: PrimitiveReactiveCondition,
+  root: string,
   options: StructuralJsxLoweringOptions,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
@@ -722,29 +729,36 @@ function lowerPrimitiveReactiveAttribute(
 ): void {
   const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attrName)}_derive`;
   const exportName = nextExportName(baseName, nameCounts);
-  const stampName = `state.${exportName}`;
+  const stampName = `${root}.${exportName}`;
   const expression = primitiveReactiveExpression(condition, attr);
+  const isState = root === 'state';
 
+  // SPEC.md §4.6: emit derive(["state"], ...) for state-rooted control props or
+  // derive(["<query>"], ...) for single-query-rooted props (A11Y-PRIMITIVES-2).
+  // The parameter name mirrors the root so the expression resolves correctly.
   deriveExports.push(
-    `export const ${exportName} = derive(["state"], (state: any) => ${expression});`,
+    `export const ${exportName} = derive(${JSON.stringify([root])}, (${root}: any) => ${expression});`,
   );
+  const source = isState ? 'client-state' : 'client-query';
   const outputContext = outputWriteFact({
     context: outputContextForAttribute(attrName),
     expression,
     sink: attrName,
-    source: 'client-state',
+    source,
     writer: 'primitive reactive attribute derive',
   });
-  stateDerives.push({
-    attr: attrName,
-    expression,
-    exportName,
-    input: 'state',
-    name: exportName,
-    outputContext,
-    param: 'state',
-    placeholder: stampName,
-  });
+  if (isState) {
+    stateDerives.push({
+      attr: attrName,
+      expression,
+      exportName,
+      input: 'state',
+      name: exportName,
+      outputContext,
+      param: 'state',
+      placeholder: stampName,
+    });
+  }
   outputContexts.push(outputContext);
 
   setJsxIrAttribute(
@@ -880,14 +894,38 @@ function accordionMultipleExpression(
  * `state`. Mirrors the state-only detection used by inline attribute derives.
  */
 function reactiveStatePath(control: JsxAttributeModel | undefined): string | null {
+  const path = reactiveControlPath(control, new Set());
+  return path?.root === 'state' ? path.path : null;
+}
+
+/**
+ * The reactive path and its single root for an author control prop, or null
+ * when the prop is absent, not an expression, or references multiple roots
+ * or a root that is neither `state` nor a known query. SPEC.md §4.6.
+ */
+function reactiveControlPath(
+  control: JsxAttributeModel | undefined,
+  knownQueries: ReadonlySet<string>,
+): { path: string; root: string } | null {
   if (!control || control.expression === undefined) return null;
   const roots = new Set(
     (control.expressionPropertyAccesses ?? [])
       .map((access) => queryNameFromPath(access.path))
       .filter((root): root is string => root !== null),
   );
-  if (roots.size === 0 || ![...roots].every((root) => root === 'state')) return null;
-  return control.expression.trim();
+  if (roots.size === 0) return null;
+  // State-only: every root is "state"
+  if ([...roots].every((root) => root === 'state')) {
+    return { path: control.expression.trim(), root: 'state' };
+  }
+  // Single-query: exactly one root and it is a known query, no mixed roots
+  if (roots.size === 1 && !roots.has('state')) {
+    const [root] = roots;
+    if (root !== undefined && knownQueries.has(root)) {
+      return { path: control.expression.trim(), root };
+    }
+  }
+  return null;
 }
 
 function lowerInlineTextBindings(

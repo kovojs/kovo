@@ -81,7 +81,7 @@ export type AttributeRecord = Readonly<Record<string, AttributeValue>>;
 
 export interface MergeDiagnostic {
   attr: string;
-  code: 'KV231' | 'KV232' | 'KV233';
+  code: 'KV231' | 'KV232' | 'KV233' | 'KV317';
   message: string;
 }
 

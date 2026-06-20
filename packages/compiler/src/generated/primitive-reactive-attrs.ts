@@ -8,7 +8,11 @@
 // data-bind:<attr> derives for primitive-owned attributes automatically.
 
 /** Supported reactive-control expression families. */
-export type PrimitiveReactiveControlKind = 'boolean' | 'equality' | 'set-membership' | 'tri-state';
+export type PrimitiveReactiveControlKind =
+  | 'boolean'
+  | 'equality'
+  | 'set-membership'
+  | 'tri-state';
 
 /** One reactive attribute the compiler should bind from the controlling state. */
 export interface PrimitiveReactiveAttr {
@@ -36,341 +40,425 @@ export interface PrimitiveReactiveAttrEntry {
 }
 
 /** Per primitive-fn key (e.g. `switch.root`) → its reactive attribute manifest. */
-export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAttrEntry>> = {
-  'accordion.item': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
+export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAttrEntry>> =
+  {
+  "accordion.item": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
       },
-      open: {
-        booleanPresence: true,
-        whenFalse: false,
-        whenTrue: true,
-      },
+      "open": {
+        "booleanPresence": true,
+        "whenFalse": false,
+        "whenTrue": true
+      }
     },
-    controlField: 'value',
-    controlKind: 'set-membership',
-    discriminatorField: 'itemValue',
-    modeField: 'type',
+    "controlField": "value",
+    "controlKind": "set-membership",
+    "discriminatorField": "itemValue",
+    "modeField": "type"
   },
-  'accordion.header': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+  "accordion.header": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'value',
-    controlKind: 'set-membership',
-    discriminatorField: 'itemValue',
-    modeField: 'type',
+    "controlField": "value",
+    "controlKind": "set-membership",
+    "discriminatorField": "itemValue",
+    "modeField": "type"
   },
-  'accordion.trigger': {
-    attrs: {
-      'aria-expanded': {
-        booleanPresence: false,
-        whenFalse: 'false',
-        whenTrue: 'true',
+  "accordion.trigger": {
+    "attrs": {
+      "aria-expanded": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
       },
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'value',
-    controlKind: 'set-membership',
-    discriminatorField: 'itemValue',
-    modeField: 'type',
+    "controlField": "value",
+    "controlKind": "set-membership",
+    "discriminatorField": "itemValue",
+    "modeField": "type"
   },
-  'accordion.content': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
+  "accordion.content": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
       },
-      hidden: {
-        booleanPresence: true,
-        whenFalse: true,
-        whenTrue: false,
-      },
+      "hidden": {
+        "booleanPresence": true,
+        "whenFalse": true,
+        "whenTrue": false
+      }
     },
-    controlField: 'value',
-    controlKind: 'set-membership',
-    discriminatorField: 'itemValue',
-    modeField: 'type',
+    "controlField": "value",
+    "controlKind": "set-membership",
+    "discriminatorField": "itemValue",
+    "modeField": "type"
   },
-  'checkbox.root': {
-    attrs: {
-      'aria-checked': {
-        booleanPresence: false,
-        whenFalse: 'false',
-        whenTrue: 'true',
-        whenIndeterminate: 'mixed',
+  "checkbox.root": {
+    "attrs": {
+      "aria-checked": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true",
+        "whenIndeterminate": "mixed"
       },
-      checked: {
-        booleanPresence: true,
-        whenFalse: false,
-        whenTrue: true,
-        whenIndeterminate: false,
+      "checked": {
+        "booleanPresence": true,
+        "whenFalse": false,
+        "whenTrue": true,
+        "whenIndeterminate": false
       },
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'unchecked',
-        whenTrue: 'checked',
-        whenIndeterminate: 'indeterminate',
-      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "unchecked",
+        "whenTrue": "checked",
+        "whenIndeterminate": "indeterminate"
+      }
     },
-    controlField: 'checked',
-    controlKind: 'tri-state',
+    "controlField": "checked",
+    "controlKind": "tri-state"
   },
-  'switch.root': {
-    attrs: {
-      'aria-checked': {
-        booleanPresence: false,
-        whenFalse: 'false',
-        whenTrue: 'true',
+  "switch.root": {
+    "attrs": {
+      "aria-checked": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
       },
-      checked: {
-        booleanPresence: true,
-        whenFalse: false,
-        whenTrue: true,
+      "checked": {
+        "booleanPresence": true,
+        "whenFalse": false,
+        "whenTrue": true
       },
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'unchecked',
-        whenTrue: 'checked',
-      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "unchecked",
+        "whenTrue": "checked"
+      }
     },
-    controlField: 'checked',
-    controlKind: 'boolean',
+    "controlField": "checked",
+    "controlKind": "boolean"
   },
-  'toggle.root': {
-    attrs: {
-      'aria-pressed': {
-        booleanPresence: false,
-        whenFalse: 'false',
-        whenTrue: 'true',
+  "toggle.root": {
+    "attrs": {
+      "aria-pressed": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
       },
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'off',
-        whenTrue: 'pressed',
-      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "off",
+        "whenTrue": "pressed"
+      }
     },
-    controlField: 'pressed',
-    controlKind: 'boolean',
+    "controlField": "pressed",
+    "controlKind": "boolean"
   },
-  'disclosure.root': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+  "disclosure.root": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'disclosure.trigger': {
-    attrs: {
-      'aria-expanded': {
-        booleanPresence: false,
-        whenFalse: 'false',
-        whenTrue: 'true',
+  "disclosure.trigger": {
+    "attrs": {
+      "aria-expanded": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
       },
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'disclosure.content': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
+  "disclosure.content": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
       },
-      hidden: {
-        booleanPresence: true,
-        whenFalse: true,
-        whenTrue: false,
-      },
+      "hidden": {
+        "booleanPresence": true,
+        "whenFalse": true,
+        "whenTrue": false
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'collapsible.root': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
+  "collapsible.root": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
       },
-      open: {
-        booleanPresence: true,
-        whenFalse: false,
-        whenTrue: true,
-      },
+      "open": {
+        "booleanPresence": true,
+        "whenFalse": false,
+        "whenTrue": true
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'collapsible.trigger': {
-    attrs: {
-      'aria-expanded': {
-        booleanPresence: false,
-        whenFalse: 'false',
-        whenTrue: 'true',
+  "collapsible.trigger": {
+    "attrs": {
+      "aria-expanded": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
       },
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'collapsible.content': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+  "collapsible.content": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'dialog.root': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+  "dialog.root": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'dialog.content': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
+  "dialog.content": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
       },
-      open: {
-        booleanPresence: true,
-        whenFalse: false,
-        whenTrue: true,
-      },
+      "open": {
+        "booleanPresence": true,
+        "whenFalse": false,
+        "whenTrue": true
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'dialog.close': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
+  "dialog.close": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "open",
+    "controlKind": "boolean"
   },
-  'radio-group.item': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'unchecked',
-        whenTrue: 'checked',
-      },
+  "radio-group.item": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "unchecked",
+        "whenTrue": "checked"
+      }
     },
-    controlField: 'value',
-    controlKind: 'equality',
-    discriminatorField: 'itemValue',
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
   },
-  'radio-group.radio': {
-    attrs: {
-      'aria-checked': {
-        booleanPresence: false,
-        whenFalse: 'false',
-        whenTrue: 'true',
+  "radio-group.radio": {
+    "attrs": {
+      "aria-checked": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
       },
-      checked: {
-        booleanPresence: true,
-        whenFalse: false,
-        whenTrue: true,
+      "checked": {
+        "booleanPresence": true,
+        "whenFalse": false,
+        "whenTrue": true
       },
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'unchecked',
-        whenTrue: 'checked',
-      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "unchecked",
+        "whenTrue": "checked"
+      }
     },
-    controlField: 'value',
-    controlKind: 'equality',
-    discriminatorField: 'itemValue',
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
   },
-  'radio-group.label': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'unchecked',
-        whenTrue: 'checked',
-      },
+  "radio-group.label": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "unchecked",
+        "whenTrue": "checked"
+      }
     },
-    controlField: 'value',
-    controlKind: 'equality',
-    discriminatorField: 'itemValue',
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
   },
-  'tooltip.root': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
+  "tabs.root": {
+    "attrs": {},
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
+  },
+  "tabs.list": {
+    "attrs": {},
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
+  },
+  "tabs.trigger": {
+    "attrs": {
+      "aria-selected": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
       },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "inactive",
+        "whenTrue": "active"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
   },
-  'tooltip.trigger': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
+  "tabs.panel": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "inactive",
+        "whenTrue": "active"
       },
+      "hidden": {
+        "booleanPresence": true,
+        "whenFalse": true,
+        "whenTrue": false
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
   },
-  'tooltip.content': {
-    attrs: {
-      'data-state': {
-        booleanPresence: false,
-        whenFalse: 'closed',
-        whenTrue: 'open',
-      },
-      hidden: {
-        booleanPresence: true,
-        whenFalse: true,
-        whenTrue: false,
-      },
+  "toggle-group.root": {
+    "attrs": {},
+    "controlField": "value",
+    "controlKind": "equality",
+    "discriminatorField": "itemValue"
+  },
+  "toggle-group.item": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "off",
+        "whenTrue": "pressed"
+      }
     },
-    controlField: 'open',
-    controlKind: 'boolean',
+    "controlField": "value",
+    "controlKind": "set-membership",
+    "discriminatorField": "itemValue",
+    "modeField": "type"
   },
+  "toggle-group.button": {
+    "attrs": {
+      "aria-pressed": {
+        "booleanPresence": false,
+        "whenFalse": "false",
+        "whenTrue": "true"
+      },
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "off",
+        "whenTrue": "pressed"
+      }
+    },
+    "controlField": "value",
+    "controlKind": "set-membership",
+    "discriminatorField": "itemValue",
+    "modeField": "type"
+  },
+  "tooltip.root": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
+    },
+    "controlField": "open",
+    "controlKind": "boolean"
+  },
+  "tooltip.trigger": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      }
+    },
+    "controlField": "open",
+    "controlKind": "boolean"
+  },
+  "tooltip.content": {
+    "attrs": {
+      "data-state": {
+        "booleanPresence": false,
+        "whenFalse": "closed",
+        "whenTrue": "open"
+      },
+      "hidden": {
+        "booleanPresence": true,
+        "whenFalse": true,
+        "whenTrue": false
+      }
+    },
+    "controlField": "open",
+    "controlKind": "boolean"
+  }
 } as const;
