@@ -41,6 +41,10 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     `DiagnosticCode` union **and** the exhaustive definitions `Record` (a missing def breaks tsc) —
     then its **check** implemented (route-validation for KV419 at `app.ts:91`; analyzer for KV414;
     compiler-lowering for KV314-class). Also: impl `KV243` is absent from the SPEC §11.3 table.
+  - ✅ **F13** — BroadcastChannel principal fingerprint: server stamps an opaque per-session
+    fingerprint (FNV-1a hash of the cookie jar, no sessionProvider re-run) as `<meta name="kovo-session">`;
+    the loader passes it as the broadcast principal; publish stamps it and onmessage discards
+    cross-principal rebroadcasts. Unit + integration verified. **6th contract implemented.**
   - **Precisely-scoped blockers for each remaining contract** (discovered by tracing the code):
     - **F1/KV418** (csrf:false + session guard) — the declarative check is easy, BUT the test suite
       uses `csrf:false` + a guard for *test simplicity* (skip the CSRF dance) in `guarded-mutation`,
