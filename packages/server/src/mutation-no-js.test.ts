@@ -3,8 +3,10 @@ import { component, form } from '@kovojs/core';
 
 import { renderComponentMutationFailure } from './component-render.js';
 import { renderNoJsMutationResponse } from './mutation.js';
+import { createMemoryMutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
+import type { NoJsMutationReplayStore, NoJsMutationReplayReservation } from './mutation-wire.js';
 
 describe('no-JS mutation responses', () => {
   it('renders no-JS mutation success as POST-redirect-GET', async () => {
@@ -150,5 +152,104 @@ describe('no-JS mutation responses', () => {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 422,
     });
+  });
+
+  // A2-server (SPEC §10.3:1063): duplicate no-JS form submissions with the same Kovo-Idem
+  // must run the handler only once; the settled 303 is replayed on re-submit.
+  it('A2: deduplicates no-JS form submissions by Kovo-Idem, running the handler only once', async () => {
+    let handlerCalls = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+
+    // Build a simple in-memory NoJsMutationReplayStore using a Map.
+    const store = new Map<string, import('./mutation-wire.js').NoJsMutationResponse>();
+    const noJsReplayStore: import('./mutation-wire.js').NoJsMutationReplayStore = {
+      get(scope, idem) {
+        return store.get(`${scope}\0${idem}`);
+      },
+      reserve(scope, idem) {
+        const key = `${scope}\0${idem}`;
+        if (store.has(key)) return undefined;
+        // Use a sentinel value to mark as reserved (pending).
+        const reservation: import('./mutation-wire.js').NoJsMutationReplayReservation = {
+          abort() { store.delete(key); },
+          commit(response) { store.set(key, response); },
+        };
+        // Mark slot as taken so a concurrent reserve returns undefined.
+        store.set(key, { body: '', headers: {}, status: 303 });
+        return reservation;
+      },
+    };
+
+    const base = {
+      idem: 'idem_nojs_01',
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      replayStore: noJsReplayStore,
+      request: { sessionId: 's1' },
+    };
+
+    // First submit: handler runs, 303 committed.
+    const first = await renderNoJsMutationResponse(addToCart, base);
+    expect(first.status).toBe(303);
+    expect(handlerCalls).toBe(1);
+
+    // Second submit (same idem): handler must NOT run again; replayed 303 returned.
+    const second = await renderNoJsMutationResponse(addToCart, base);
+    expect(second.status).toBe(303);
+    expect(handlerCalls).toBe(1);
+  });
+
+  // GAP4-2 (SPEC §10.3:1062-1066): csrf:false mutation with no session must still
+  // dedup by Kovo-Idem using a mutation-key namespace scope.
+  it('GAP4-2: csrf:false sessionless mutation deduplicates by Kovo-Idem without session', async () => {
+    let handlerCalls = 0;
+    const extWrite = mutation('ext/write', {
+      csrf: false,
+      input: s.object({ value: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+
+    const store = new Map<string, import('./mutation-wire.js').NoJsMutationResponse>();
+    const noJsReplayStore: import('./mutation-wire.js').NoJsMutationReplayStore = {
+      get(scope, idem) {
+        return store.get(`${scope}\0${idem}`);
+      },
+      reserve(scope, idem) {
+        const key = `${scope}\0${idem}`;
+        if (store.has(key)) return undefined;
+        const reservation: import('./mutation-wire.js').NoJsMutationReplayReservation = {
+          abort() { store.delete(key); },
+          commit(response) { store.set(key, response); },
+        };
+        store.set(key, { body: '', headers: {}, status: 303 });
+        return reservation;
+      },
+    };
+
+    const base = {
+      idem: 'idem_gap42',
+      rawInput: { value: 'hello' },
+      redirectTo: '/done',
+      replayStore: noJsReplayStore,
+      request: {}, // no session
+    };
+
+    const first = await renderNoJsMutationResponse(extWrite, base);
+    expect(first.status).toBe(303);
+    expect(handlerCalls).toBe(1);
+
+    // Same idem, no session: must dedup and not re-run the handler.
+    const second = await renderNoJsMutationResponse(extWrite, base);
+    expect(second.status).toBe(303);
+    expect(handlerCalls).toBe(1);
   });
 });
