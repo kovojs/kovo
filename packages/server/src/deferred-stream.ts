@@ -43,11 +43,6 @@ export interface DeferredStreamResponse extends ServerResponseBase<
   200
 > {}
 
-const deferredChunkApplyScript =
-  '<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>';
-const deferredCloseCleanupScript =
-  '<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>';
-
 /**
  * Render the framework's deferred fragment stream payload.
  *
@@ -55,6 +50,13 @@ const deferredCloseCleanupScript =
  */
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
   const boundary = options.boundary ?? 'kovo-boundary';
+  // K8 / SPEC: the inline apply and cleanup scripts must reference the configurable
+  // boundary, not the hardcoded 'kovo-boundary' literal. Interpolate `--${boundary}`
+  // so non-default boundaries work correctly.
+  const deferredChunkApplyScript =
+    `<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>`;
+  const deferredCloseCleanupScript =
+    `<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()</script>`;
   const chunks = sortDeferredChunks(options.chunks).map((chunk) =>
     [
       `--${boundary}`,

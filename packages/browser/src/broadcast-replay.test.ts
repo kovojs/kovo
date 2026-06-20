@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { installMutationBroadcast } from './broadcast.js';
+import { createIslandSignalScope } from './handler-context.js';
+import { dispatchDelegatedEvent } from './handlers.js';
 import { createQueryStore } from './query-store.js';
 import {
   FakeBroadcastChannel,
+  FakeElement,
   FakeMorphRoot,
   FakeMorphTarget,
   FakeQueryBindingElement,
@@ -98,6 +101,54 @@ describe('mutation broadcast replay', () => {
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('product', 'p1')).toEqual({ stock: 8 });
     expect(onError).toHaveBeenCalledWith(applyError);
+  });
+
+  it('aborts island ctx.signal when a broadcast morph removes the island (K4 scope threading)', async () => {
+    // K4 / SPEC §4.7: broadcast apply must thread islandSignalScope so a morph that
+    // removes an island aborts its ctx.signal. Without the fix, the apply hits the
+    // default scope and no registered signal is aborted.
+    const store = createQueryStore();
+    const channel = new FakeBroadcastChannel();
+    const islandSignalScope = createIslandSignalScope();
+    const root = new FakeMorphRoot();
+    const islandHtml = '<section kovo-c="cart-filter">initial</section>';
+    root.targets.set('cart-shell', new FakeMorphTarget(islandHtml));
+
+    // Register a ctx.signal for the island in the explicit scope.
+    const element = new FakeElement({
+      'kovo-c': 'cart-filter',
+      'on:visible': '/c/cart-filter.client.js#mount',
+    });
+    let capturedSignal: AbortSignal | undefined;
+    const importModule = vi.fn(async () => ({
+      mount: (_event: Event, ctx: { signal: AbortSignal }) => {
+        capturedSignal = ctx.signal;
+      },
+    }));
+    await dispatchDelegatedEvent({ target: element, type: 'visible' }, importModule, islandSignalScope);
+    expect(capturedSignal?.aborted).toBe(false);
+
+    installMutationBroadcast({
+      channel,
+      islandSignalScope,
+      morph(target, html) {
+        target.replaceWithHtml(html);
+      },
+      root,
+      store,
+    });
+
+    // Broadcast a morph that replaces the island's fragment with HTML that removes it.
+    channel.onmessage?.({
+      data: {
+        body: '<kovo-fragment target="cart-shell"><section></section></kovo-fragment>',
+        changes: [],
+        type: 'kovo:mutation-response',
+      },
+    });
+
+    // The island signal must be aborted now that the island was removed.
+    expect(capturedSignal?.aborted).toBe(true);
   });
 
   it('morphs rebroadcast mutation fragments when a root is configured', () => {

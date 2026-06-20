@@ -99,6 +99,36 @@ describe('loader lifecycle', () => {
     });
   });
 
+  it('does not run idle handler after dispose (K5 post-dispose guard)', async () => {
+    // K5: a queued idle callback that fires after dispose() must not import or run
+    // the handler module — the loader is already torn down.
+    const root = new FakeRoot();
+    const idleElement = new FakeElement({ 'on:idle': '/c/idle.js#warm' });
+    const idleCallbacks: Array<() => void> = [];
+    const importModule = vi.fn(async () => ({ warm: vi.fn() }));
+
+    root.elements.set('[on\\:idle]', [idleElement]);
+
+    const dispose = installExecutionTriggers(
+      {
+        importModule,
+        requestIdle: (callback) => {
+          idleCallbacks.push(callback);
+        },
+        root,
+      },
+      createIslandSignalScope(),
+    );
+
+    // dispose before the queued idle callback fires
+    dispose();
+    idleCallbacks[0]?.();
+
+    // handler module must never be imported
+    await Promise.resolve(); // flush microtasks
+    expect(importModule).not.toHaveBeenCalled();
+  });
+
   it('installs declared load, idle, and visible execution triggers', async () => {
     // SPEC.md section 4.4: execution triggers are part of the always-loaded runtime path.
     const root = new FakeRoot();

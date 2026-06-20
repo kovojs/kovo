@@ -151,7 +151,10 @@ export class StreamTextBuffer {
     reason: 'checkpoint' | 'completion' | 'error' | 'threshold' | 'timer',
   ): Promise<void> {
     const state = this.states.get(targetName);
-    if (!state || state.pending.length === 0) return;
+    // K6 / SPEC §9.1: a checkpoint with empty text must still flush and clear
+    // textContent even if pending.length === 0, because "checkpoint replaces
+    // accumulated source". Skip only non-checkpoint empty flushes.
+    if (!state || (state.pending.length === 0 && reason !== 'checkpoint')) return;
 
     this.cancelTimer(state);
     state.pending = '';
