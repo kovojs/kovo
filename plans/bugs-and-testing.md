@@ -83,9 +83,15 @@ dependency gates and file-ownership rules so independent work runs concurrently 
       per-form hidden field, not exposed; only `<meta name="kovo-build">` exists). **Needs:** server
       stamps an opaque per-session `<meta name="kovo-session">` (threading the session value at
       document render) + the browser envelope/discard check. Medium, two halves.
-    - **F6** (auth-redirect 401/`Kovo-Reauth`) — server response shaping + an inline-loader handler
-      to follow the reauth directive (8KB budget); changing mutation auth-failure from 422→401 risks
-      the existing §9.2 typed-error tests.
+    - **F6** (auth-redirect 401/`Kovo-Reauth`) — `ResolvedGuardFailure` carries the auth kind so the
+      server branch is feasible, BUT the loader half lives in the **8KB inline loader** (`sef` applies
+      the body without inspecting status/headers). A server-only change *regresses* the enhanced path
+      (401 the loader doesn't follow); needs the inline-loader reauth handler + the 422→401 change
+      (updates `guarded-mutation.spec.ts`). Genuinely multi-part + budget-sensitive.
+    - **F3 / F5** — partially present: `csrf.ts` already mints a token for anonymous (bound to the
+      secret); `rateLimit` is already a guard combinator. The residuals are a stronger per-anonymous
+      binding (F3) and a *pre-dispatch* per-IP limiter (F5, a new request-shell feature) — each a
+      real change to the CSRF/dispatch path.
     - **KV414** (IDOR gate) — hardest: needs WHERE-predicate→`req.session` traceability analysis
       (or runtime predicate observation via the §11.2 cross-check). **KV420/316/317** — compiler
       lowering/nesting analysis. Each follows F36's register-in-core step, then the hard analysis.
