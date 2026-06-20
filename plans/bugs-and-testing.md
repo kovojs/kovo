@@ -64,6 +64,15 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     - So the genuinely-needs-new-code backlog is much smaller than "~24": Phase 1 made the SPEC
       mandate what the code already does (regression-locked), and the truly-missing pieces were the
       6 I implemented (F35/F34/F13/F36/F2/F9-NUL) plus the items below.
+  - ✅ **KV414 registered** — the impl diagnostic registry now formally defines KV414 (IDOR),
+    matching SPEC §11.3; the blocking gate (`--unscoped --fail-on-findings`) already enforced it and
+    is tested. (The §11.4 stable audit print format is deliberately unchanged — agents consume it.)
+  - **Architectural finding — SPEC §11.3 lumps codes the impl splits by layer:** KV415 (header CRLF),
+    KV416 (prod render-equivalence gate), KV417 (retention floor), KV418 (csrf:false ambient session)
+    are **runtime/build validations** in the impl (thrown `Error`s / build gates — e.g. F9's CRLF guard
+    in `cookies.ts`), **not** compile-time diagnostics. Registering them in `core/diagnostics.ts`
+    (compile registry) would be the wrong home. The remaining *compile* diagnostics that genuinely
+    need new analysis are KV420/316/317 (F39/F40) — lowering/nesting/aria checks.
   - **Genuinely-remaining (needs new/changed code)** — precisely-scoped blockers from tracing the code:
     - **F1/KV418** (csrf:false + session guard) — the declarative check is easy, BUT the test suite
       uses `csrf:false` + a guard for *test simplicity* (skip the CSRF dance) in `guarded-mutation`,
