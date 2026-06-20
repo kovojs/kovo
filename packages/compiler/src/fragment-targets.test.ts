@@ -5,6 +5,7 @@ import { compileComponentModule } from './index.js';
 
 const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;
+const kv316 = diagnosticDefinitions.KV316;
 
 describe('fragment target validation', () => {
   it('reports removed fragmentTarget usage and points to query inference', () => {
@@ -513,5 +514,87 @@ export const CartTable = component({
         queries: ['cart'],
       },
     ]);
+  });
+});
+
+// SPEC §4.5/§4.8 (KV316): a client self-render has no slot/children arguments, so an isomorphic
+// island that composes children or named slots would drift from the server render.
+describe('KV316 isomorphic slot composition', () => {
+  it('reports KV316 when an isomorphic island accepts destructured children/slots', () => {
+    const result = compileComponentModule({
+      fileName: 'panel.tsx',
+      source: `
+export const Panel = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }, _state, { children, footer }) => (
+    <panel-card>
+      {children}
+      <strong>{cart.count}</strong>
+      <div>{footer}</div>
+    </panel-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV316')).toMatchObject([
+      {
+        code: 'KV316',
+        fileName: 'panel.tsx',
+        message: `${kv316.message} children, footer`,
+        severity: kv316.severity,
+      },
+    ]);
+  });
+
+  it('reports KV316 when an isomorphic island accepts an identifier slots parameter', () => {
+    const result = compileComponentModule({
+      fileName: 'shell.tsx',
+      source: `
+export const Shell = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }, _state, slots) => <app-shell>{slots.children}{cart.count}</app-shell>,
+});
+`,
+    });
+
+    expect(
+      result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV316').length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('does not report KV316 for an isomorphic island without a slots parameter', () => {
+    const result = compileComponentModule({
+      fileName: 'badge.tsx',
+      source: `
+export const Badge = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge>{cart.count}</cart-badge>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV316')).toEqual([]);
+  });
+
+  it('does not report KV316 for a children-accepting component that is not isomorphic', () => {
+    const result = compileComponentModule({
+      fileName: 'card.tsx',
+      source: `
+export const Card = component({
+  render: (_queries, _state, { children, footer }) => (
+    <div class="card">
+      {children}
+      <div class="card-footer">{footer}</div>
+    </div>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV316')).toEqual([]);
   });
 });

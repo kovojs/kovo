@@ -933,6 +933,37 @@ export const ClockDeriveBad = component({
       }).diagnostics,
   },
   {
+    code: 'KV316',
+    spec: 'SPEC.md §4.5/§4.8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'isomorphic-slot-ok.tsx',
+        source: `
+export const IsomorphicSlotOk = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }) => <cart-badge>{cart.count}</cart-badge>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'isomorphic-slot-bad.tsx',
+        source: `
+export const IsomorphicSlotBad = component({
+  isomorphic: true,
+  queries: { cart: cartQuery },
+  render: ({ cart }, _state, { children }) => (
+    <cart-badge>
+      {children}
+      <strong>{cart.count}</strong>
+    </cart-badge>
+  ),
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV320',
     spec: 'SPEC.md §6.4',
     positive: () =>
@@ -1249,6 +1280,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "negativeCount": 2,
           "positiveCount": 0,
           "spec": "SPEC.md §4.8/§4.9",
+        },
+        {
+          "code": "KV316",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §4.5/§4.8",
         },
         {
           "code": "KV320",
@@ -1800,6 +1837,22 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 64,
             "line": 2,
+          },
+        },
+        {
+          "code": "KV316",
+          "fileName": "isomorphic-slot-bad.tsx",
+          "help": "Would lower to: a client self-render that morphs only the island's own positions while leaving each projected-children/named-slot region (kovo-slot="children"/kovo-slot="<name>") in place as a morph-stable hole.
+      Blocked reason: a client self-render has no slot/children arguments (projected content ships once in the initial HTML), so an isomorphic island that composes children or slots would re-render those regions as fresh Html and drift from the server output.
+      Fixes: lift the dynamic part above or below the slot so the slot region stays a contiguous static hole, make the children a stamped-prop-hoistable inferred fragment target (§4.5/KV230), or drop isomorphic: true and use a server fragment.
+      SPEC §4.5 and §4.8 require a children/slot-accepting isomorphic island to partition its render into self-render positions plus preserved projected-children regions.
+      Escape: a server fragment (no isomorphic: true) re-renders the whole subtree including projected children with no self-render drift risk.",
+          "length": 12,
+          "message": "isomorphic: true on a children/slot-accepting component would drift on self-render. children",
+          "severity": "error",
+          "start": {
+            "column": 30,
+            "line": 5,
           },
         },
         {

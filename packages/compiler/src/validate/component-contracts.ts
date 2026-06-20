@@ -11,6 +11,7 @@ import {
   componentHasInferredServerRefreshTarget,
   componentRenderHostElement,
   componentRenderInputModels,
+  componentRenderSlots,
   componentStateReturnObjectModel,
   jsxExpressions,
   jsxElementChildBody,
@@ -189,6 +190,33 @@ function isJsxEventAttributeExpression(
         expression.end <= attribute.expressionEnd,
     ),
   );
+}
+
+// SPEC §4.5/§4.8 (KV316): a client self-render binds no slot/children arguments — projected
+// children ship once in the initial HTML — so an `isomorphic: true` island that composes children
+// or named slots would re-render those regions as fresh Html and drift from the server output.
+// The partitioned self-morph that would preserve them is not modeled, so any children/slot-accepting
+// isomorphic component is rejected (drop isomorphic: true, hoist the children per KV230, or move the
+// dynamic part outside the slot).
+export function validateIsomorphicSlotComposition(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  if (componentOptionStaticValue(model, 'isomorphic') !== true) return [];
+
+  const slots = componentRenderSlots(model);
+  if (!slots) return [];
+
+  return [
+    {
+      ...diagnosticFor(fileName, 'KV316', source, slots.start, slots.end - slots.start),
+      message:
+        slots.names.length > 0
+          ? `${diagnosticDefinitions.KV316.message} ${slots.names.join(', ')}`
+          : diagnosticDefinitions.KV316.message,
+    },
+  ];
 }
 
 export function validateFragmentTargetChildren(

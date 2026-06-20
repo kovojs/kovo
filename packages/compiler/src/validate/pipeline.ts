@@ -10,6 +10,7 @@ import {
   validateFragmentTargetChildren,
   validateFragmentTargetInputs,
   validateHandAuthoredFragmentTargetStamp,
+  validateIsomorphicSlotComposition,
   validateRemovedFragmentTargetOption,
   validateReservedQueryNames,
   validateServerFactsInLocalState,
@@ -64,6 +65,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateStaticViewTransitionNameUniqueness(options.source, originalModel, options),
   ({ options }) => queryShapeFactDiagnostics(options.fileName, options.queryShapeFacts ?? []),
   ({ model, options, source }) => validateFragmentTargetInputs(source, model, options.fileName),
+  ({ model, options, source }) =>
+    validateIsomorphicSlotComposition(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),
   ({ options, originalModel }) =>

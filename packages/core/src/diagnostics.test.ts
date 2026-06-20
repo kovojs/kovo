@@ -45,6 +45,7 @@ describe('diagnostic registry', () => {
       'KV312',
       'KV314',
       'KV315',
+      'KV316',
       'KV320',
       'KV330',
       'KV402',
@@ -61,6 +62,7 @@ describe('diagnostic registry', () => {
       'KV413',
       'KV414',
       'KV419',
+      'KV420',
     ]);
   });
 
@@ -396,6 +398,16 @@ describe('diagnostic registry', () => {
           "message": "Untracked clock read in derive; use a declared clocks input.",
           "severity": "warn",
         },
+        "KV316": {
+          "code": "KV316",
+          "help": "Would lower to: a client self-render that morphs only the island's own positions while leaving each projected-children/named-slot region (kovo-slot="children"/kovo-slot="<name>") in place as a morph-stable hole.
+      Blocked reason: a client self-render has no slot/children arguments (projected content ships once in the initial HTML), so an isomorphic island that composes children or slots would re-render those regions as fresh Html and drift from the server output.
+      Fixes: lift the dynamic part above or below the slot so the slot region stays a contiguous static hole, make the children a stamped-prop-hoistable inferred fragment target (§4.5/KV230), or drop isomorphic: true and use a server fragment.
+      SPEC §4.5 and §4.8 require a children/slot-accepting isomorphic island to partition its render into self-render positions plus preserved projected-children regions.
+      Escape: a server fragment (no isomorphic: true) re-renders the whole subtree including projected children with no self-render drift risk.",
+          "message": "isomorphic: true on a children/slot-accepting component would drift on self-render.",
+          "severity": "error",
+        },
         "KV320": {
           "code": "KV320",
           "help": "Blocked reason: a fire-and-forget event payload is carrying data that overlaps server-owned query facts.
@@ -494,6 +506,16 @@ describe('diagnostic registry', () => {
       Fixes: use prefetch "conservative" (prefetch document bytes, no prerender) or false; restrict prefetch "moderate" to public, idempotent routes; or remove the guard if the route is genuinely public.
       SPEC §8 requires auto-prerender to be opt-in only where renders are idempotent and not session-dependent.",
           "message": "prefetch "moderate" prerenders a guarded, session-dependent route.",
+          "severity": "error",
+        },
+        "KV420": {
+          "code": "KV420",
+          "help": "Would lower to: a full-subtree re-render from (declared queries ∪ stamped props) on every fragment patch of the enclosing server-refreshable target.
+      Blocked reason: the fragment morph carries no serialization of island-local kovo-state (§9.1), so re-emitting the enclosing target would reset the nested island to its render-time default and clobber the child's live local state.
+      Fixes: lift the child's state into a declared query so it travels in the refreshable channel, mark the child isomorphic: true so it self-renders rather than being server-refreshed (§4.8), set disableServerRefresh: true on the enclosing component so the child reclassifies under §4.9, or move the stateful island outside the refreshable target.
+      SPEC §4.5/§4.9/§9.1 forbid an island declaring local state from rendering inside another component's inferred server-refreshable fragment target.
+      Escape: document-lifetime-immutable local state is renderOnce and does not trip KV420.",
+          "message": "Island with local state nested inside a server-refreshable fragment target loses its state on refresh.",
           "severity": "error",
         },
       }

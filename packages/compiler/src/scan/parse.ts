@@ -200,9 +200,19 @@ export interface ComponentModel {
   options: readonly ComponentOptionEntry[];
   renderHost?: RenderHostModel;
   renderInputs: readonly RenderInputModel[];
+  renderSlots?: RenderSlotsModel;
   renderSlotsParam?: RenderInputModel;
   stateReturnObject?: StateReturnObjectModel;
   stringRenderReturns?: readonly StringRenderModel[];
+}
+
+// SPEC §4.5/§4.8: the render function's third parameter is the projected-children/named-slot
+// channel (`(_, state, { children, footer })` or `(_, state, slots)`). KV316 keys off whether a
+// component composes children/slots at all, independent of whether the param is destructured.
+export interface RenderSlotsModel {
+  end: number;
+  names: readonly string[];
+  start: number;
 }
 
 export interface RenderHostModel {
@@ -489,6 +499,12 @@ export function componentRenderInputModels(model: ComponentModuleModel): RenderI
 
 export function componentRenderSlotsParam(model: ComponentModuleModel): RenderInputModel | null {
   return firstComponentModel(model)?.renderSlotsParam ?? null;
+}
+
+// SPEC §4.5/§4.8 (KV316): present iff the component's render declares a children/named-slot
+// channel (the render arrow's third parameter), in either spelling.
+export function componentRenderSlots(model: ComponentModuleModel): RenderSlotsModel | null {
+  return firstComponentModel(model)?.renderSlots ?? null;
 }
 
 export function componentRenderHost(model: ComponentModuleModel): RenderHostModel | null {
@@ -790,6 +806,7 @@ function componentModelFromInitializer(
     options,
     ...(render ? renderHostModel(sourceFile, render) : {}),
     renderInputs: render ? arrowObjectPatternKeys(sourceFile, render) : [],
+    ...(render ? renderSlots(sourceFile, render) : {}),
     ...(render ? renderSlotsParam(sourceFile, render) : {}),
     ...(stateReturnObject === null ? {} : { stateReturnObject }),
     ...(render ? { stringRenderReturns: stringRenderReturns(sourceFile, source, render) } : {}),
@@ -1878,6 +1895,36 @@ function renderSlotsParam(
       end: thirdParam.name.getEnd(),
       name: thirdParam.name.text,
       start: thirdParam.name.getStart(sourceFile),
+    },
+  };
+}
+
+// SPEC §4.5/§4.8: a component "accepts children/slots" iff its render arrow declares a third
+// parameter (the projected-children/named-slot channel). Captures both spellings — an identifier
+// (`slots`) and an object binding pattern (`{ children, footer }`) — so KV316 can flag a
+// children/slot-accepting isomorphic island whose self-render has no slot arguments.
+function renderSlots(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): { renderSlots: RenderSlotsModel } | {} {
+  if (!ts.isArrowFunction(expression)) return {};
+
+  const thirdParam = expression.parameters[2];
+  if (!thirdParam) return {};
+
+  const names = ts.isObjectBindingPattern(thirdParam.name)
+    ? thirdParam.name.elements.flatMap((element) =>
+        ts.isIdentifier(element.name) ? [element.name.text] : [],
+      )
+    : ts.isIdentifier(thirdParam.name)
+      ? [thirdParam.name.text]
+      : [];
+
+  return {
+    renderSlots: {
+      end: thirdParam.getEnd(),
+      names,
+      start: thirdParam.getStart(sourceFile),
     },
   };
 }
