@@ -256,7 +256,8 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C8c** morph native-element-state survival (`morph-native-state`) — **expected-fail**, documents a real impl gap + F39 SPEC-vs-impl divergence (alerts when fixed).
 - [ ] **C8d** F39 child-island-state-in-fragment (KV314 compile-error) · F40 isomorphic render-equivalence · multi-feature interaction page · `layout()` e2e.
 - [x] **C9a** HEAD empty-body + Content-Length (`http-methods`). Passes.
-- [ ] **C9b** KV-code surfacing (incl. KV242) · KV234 cross-pkg · explain-from-extracted-graph · severity fidelity · clock freshness.
+- [x] **C9b-i** KV-code surfacing — KV227/KV242/KV302 each surface as a blocking 500 teaching document (`diagnostic-dev-document`); KV242 had zero prior coverage. Passes.
+- [ ] **C9b-ii** KV234 cross-pkg prefix · explain-from-extracted-graph (needs S2) · clock freshness (needs `clocks` impl).
 - [x] **D1** Firefox/WebKit cross-engine matrix (degradation + counter + binding-text-attr). Verified on all 3 engines.
 - [ ] **D2** flake gate (retried-but-passed annotation + scheduled `--repeat-each=3`) · module-scope reset · snapshot allowlist meta-test · CSS-manifest clear-on-close · B0 meta-test.
 - [ ] **C3** IDOR/auth integration + KV414 build-fail + negative-compile tier ← needs A2 **impl** (KV414/owns() are SPEC-only so far).
