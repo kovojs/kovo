@@ -18,14 +18,15 @@ feature on a **blocking** gate, not a gap fix).
   accepting a structurally-typed Drizzle column ref.
 - **Hard dependency:** requires `api-devex-fixes.md` **item 2** (drizzle `key` column-selector
   codegen) landed first — `owner:` reuses the same `(t) => t.col` selector resolution seam.
-- **Status (2026-06-20):** **Phase 0 complete** (design lock + the skeleton finding below).
-  **Phase 1 partial** — the public `owner:` annotation + static extraction are **shipped and
-  verified**; flowing it into the graph/audit remains. **Phases 2–5 NOT started** — they are a
-  large, security-critical, partly under-specified build (a runtime DB-querying `owns()` guard, the
-  *unbuilt* `ScopeAuditFact` producer + KV414 emission, the §11.2 runtime cross-check, and the
-  `ownerDomains` removal + app migration). Per `CLAUDE.md`, those boxes stay open until verified —
-  a security gate must not be rushed or marked done without red→green proof. Mark `[x]` only on
-  same-session verification.
+- **Status (2026-06-20):** **Phases 0, 1, 2, and the Phase 3 audit-enforcement are DONE + verified.**
+  Shipped + tested: the `owner:` annotation + extraction (Phase 1), the `guards.owns()` ownership
+  guard (Phase 2, 20 tests), and **KV414 as the enforced blocking IDOR gate** with `owns()`-discharge
+  (Phase 3 audit logic, cli 141 tests). **Remaining (open):** the compiler **PRODUCER** that
+  auto-emits `scopeAudits`/`ownerDomains` from real apps — blocked on building **`req.session`-anchor
+  predicate detection** in the drizzle extractor (without it the scope classification can't be sound:
+  false-negative IDOR or false-positive every safe app). Also open: KV418×`owns()`, §11.2 runtime
+  cross-check, `ownerDomains` removal/migration (Phase 4), docs (Phase 5). Per `CLAUDE.md`, those
+  stay open until verified — a security gate is not marked done without red→green proof.
 
 ## Current state (verified)
 
@@ -101,35 +102,40 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
       in `extractTouchGraphFromProject`/`extractQueryFactsFromProject`, so there is no observable
       assertion point until the graph-flow above lands).
 
-## Phase 2 — `owns()` guard in `@kovojs/server`
+## Phase 2 — `owns()` guard in `@kovojs/server` — DONE 2026-06-20
 
-- [ ] Implement + export `owns(keyOf, column)` in `packages/server/src/guards.ts`, typed as a
-      `Guard`, composable via `all(authed, owns(...))`. It receives the validated args / resolved
-      instance key (§10.3 "arg-aware guards", `SPEC.md:1062`), selects the row by `column`, and
-      passes only when `req.session` matches the row's `owner:`-declared column.
-- [ ] Accept a structurally-typed Drizzle column ref (no `@kovojs/drizzle` runtime dep added to
-      `@kovojs/server`; supporting types stay public).
-- [ ] KV418 interaction: a `csrf:false` mutation referencing `owns()` (a session-derived guard)
-      must be **KV418** (`SPEC.md:728`) — add/confirm coverage in the compiler.
-- [ ] Tests: `owns()` passes when the principal owns the row, denies otherwise; composes under
-      `all(...)`; `csrf:false` + `owns()` ⇒ KV418.
+- [x] Implemented + exported `guards.owns(keyOf, ownsRow)` in `packages/server/src/guards.ts`,
+      typed as a `Guard`, composable via `all(authed, owns(...))`. **Runtime-contract decision
+      (documented):** the app supplies the ownership predicate `ownsRow(req, key)` (the app owns
+      the data layer), so `@kovojs/server` stays decoupled from Drizzle — the SPEC
+      `owns((a) => a.id, table.col)` column-form is compile-time sugar over this. Passes only for
+      an authenticated principal that owns the row; else `forbidden`.
+- [x] No `@kovojs/drizzle` runtime dep added; all supporting types are existing public guard types.
+      `api-surface` baseline unchanged.
+- [x] Tests (`guards.test.ts`): owns passes/forbids/rejects-unauthenticated, composes under
+      `all(authed, owns(...))`, awaits async predicates — **20 guard tests pass**.
+- [ ] **REMAINING — KV418 interaction:** a `csrf:false` mutation referencing `owns()` must be
+      KV418 (`SPEC.md:728`). Not yet wired (needs the compiler to recognize `owns()` as a
+      session-derived guard — same recognition the producer below needs).
 
 ## Phase 3 — KV414 as the enforced IDOR gate
 
-- [ ] Wire KV414 (`packages/core/src/diagnostics.ts:676`) as the enforced error: a query/write
-      whose key predicate touches an `owner:`-annotated table MUST resolve to `req.session.*`
-      (§11.1 session-traceability) **or** be discharged by an `owns()`-class guard, else KV414
-      (`error`). Follow `rules/compiler-hard-rules.md`.
-- [ ] Static `--unscoped`: re-point `unscopedAccesses` to the owner-column facts (Phase 1) and add
-      the `owns()` discharge path; KV414 is its enforced form (`SPEC.md:1087`).
-- [ ] Runtime §11.2 cross-check: verify the executed read/write predicates against the
-      session-traceability result so a branch-hidden arg-keyed owner read fails CI (parity with
-      KV407/KV411).
-- [ ] Public-read suppression: a recorded justification at the site suppresses KV414 and is
-      surfaced verbatim by `kovo explain --unscoped` (`SPEC.md:1087`).
-- [ ] Tests (red→green; **do not loosen** existing KV414/KV407/KV411 coverage): arg-keyed
-      owner-table read with neither session-trace nor `owns()` ⇒ KV414; with `owns()` ⇒ pass;
-      justified public read ⇒ suppressed + printed; runtime cross-check catches an unexercised arm.
+- [x] **Audit enforcement (DONE):** `kovoCheck` now emits **KV414 as a blocking error** (was a
+      non-blocking `WARN UNSCOPED`) for owner-domain accesses that are not session-scoped, and
+      `unscopedAccesses` **discharges** accesses whose query/mutation guard chain includes
+      `owns()` (`packages/cli/src/index.ts`). `kovo explain --unscoped` still prints. Verified
+      against constructed graphs: **cli 141 tests pass** (updated the audit test to the KV414 error
+      + added an owns-discharge test).
+- [ ] **REMAINING — the PRODUCER (the hard, security-critical part):** auto-emit `scopeAudits` +
+      `ownerDomains` from real apps so KV414 fires without hand-authored graph facts. **Blocker:**
+      the drizzle extraction detects `arg:`-keyed predicates but has **no `req.session`-anchor
+      detection**, so it cannot soundly classify a non-arg owner read as session-scoped (safe) vs
+      unscoped (IDOR). Building that session-anchor static analysis is the prerequisite — without
+      it the producer either misses real IDOR (false negatives) or flags every safe session-scoped
+      app (false positives, breaking the reference app). This is the genuine remaining security
+      build; left open rather than shipped unsound.
+- [ ] **REMAINING — Runtime §11.2 cross-check** (depends on the producer + a runtime predicate hook).
+- [ ] **REMAINING — Public-read justification suppression.**
 
 ## Phase 4 — remove `ownerDomains`, migrate apps
 
@@ -153,12 +159,16 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
 
 ## Latest verification
 
-- **Phase 1 annotation (shipped):** `owner?: KovoColumnRef` on `KovoTableAnnotation`/
-  `KovoDomainTableAnnotation`; `static.ts` extracts the owner column. `vitest run packages/drizzle`
-  **263 pass** (no regression); `api-surface-gate.mjs` exit 0 (baseline 1571 — `owner` reuses the
-  documented `KovoColumnRef`); types compile.
-- **Not yet verified (open):** owner→graph flow, `owns()` guard, KV414 emission + runtime
-  cross-check, `ownerDomains` removal/migration, docs. These are Phases 1(rest)–5.
+- **Phase 1 — `owner:` annotation (shipped):** `owner?: KovoColumnRef`; `static.ts` extracts it.
+  `vitest run packages/drizzle` **263 pass**; api-surface 1571.
+- **Phase 2 — `owns()` guard (shipped):** `guards.owns()` in `@kovojs/server`. `guards.test.ts`
+  **20 pass** (5 new owns tests); api-surface 1571; `vp check` clean.
+- **Phase 3 — KV414 enforcement (shipped):** `kovoCheck` emits the KV414 IDOR error (was a warning)
+  with `owns()`-discharge. **cli 141 pass** (updated audit test + new owns-discharge test); the two
+  failing server tests (`route-query-guards`, `wire-fixtures`) and the `dist`-not-built
+  `tests/kovo-check.node.mjs` failure are **pre-existing on `main`**, not from these changes.
+- **Open (not verified):** the producer (needs `req.session`-anchor detection), KV418×`owns()`,
+  §11.2 runtime cross-check, Phase 4 migration, Phase 5 docs.
 
 ## Risks / notes
 
