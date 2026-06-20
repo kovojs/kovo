@@ -55,4 +55,26 @@ describe('runtime output-context helpers', () => {
     expect(kovoTrustedHtmlContent('<img src=x onerror=alert(1)>')).toBe('');
     expect(kovoTrustedHtmlContent({ toString: () => '<i>not branded</i>' })).toBe('');
   });
+
+  // F2: runtime must neutralize on* and srcdoc attribute sinks (KV236/SPEC §4.8:348)
+  it('returns null for on* and srcdoc attribute names to suppress write', () => {
+    expect(kovoBoundAttributeValue('onclick', 'alert(1)')).toBeNull();
+    expect(kovoBoundAttributeValue('onerror', 'bad()')).toBeNull();
+    expect(kovoBoundAttributeValue('onmouseover', 'x')).toBeNull();
+    expect(kovoBoundAttributeValue('ONCLICK', 'alert(1)')).toBeNull();
+    expect(kovoBoundAttributeValue('srcdoc', '<script>bad()</script>')).toBeNull();
+    // Safe attributes still work normally.
+    expect(kovoBoundAttributeValue('data-value', 'hello')).toBe('hello');
+    expect(kovoBoundAttributeValue('aria-label', 'Close')).toBe('Close');
+  });
+
+  // F4: ftp must be in the runtime URL-scheme allowlist (SPEC §4.8:347)
+  it('allows ftp: scheme URLs as safe bound attribute values', () => {
+    expect(kovoBoundAttributeValue('href', 'ftp://example.com/x')).toBe('ftp://example.com/x');
+    expect(kovoBoundAttributeValue('src', 'ftp://files.example.com/doc')).toBe(
+      'ftp://files.example.com/doc',
+    );
+    // Unsafe schemes still blocked.
+    expect(kovoBoundAttributeValue('href', 'javascript:alert(1)')).toBe('#');
+  });
 });

@@ -335,7 +335,8 @@ describe('query binding helpers', () => {
       'state.checked',
       '/c/switch.client.js#Switch$input_checked_derive',
     ]);
-    expect(directInput.getAttribute('checked')).toBe('true');
+    // J3: checked is a boolean-presence attribute; direct state binding true → '' (present), not 'true'.
+    expect(directInput.getAttribute('checked')).toBe('');
     expect(directInput.checked).toBe(true);
     expect(input.getAttribute('checked')).toBe('');
     expect(input.checked).toBe(true);
@@ -490,5 +491,56 @@ describe('query binding helpers', () => {
   it('detects query binding roots by selector support', () => {
     expect(supportsQueryBindings(new FakeMorphRoot())).toBe(true);
     expect(supportsQueryBindings({})).toBe(false);
+  });
+
+  // J3: query-driven boolean-presence attributes must remove on falsy, set '' on truthy.
+  // (SPEC §1.1/§4.6/§4.8 — raw booleans from query source must not write 'false'/'true'.)
+  it('treats boolean-presence attributes uniformly: true → present, false → removed', () => {
+    const root = new FakeMorphRoot();
+    const button = new FakeQueryPlanElement({
+      'data-bind:disabled': 'cart.isEmpty',
+      disabled: '',
+    });
+    const details = new FakeQueryPlanElement({
+      'data-bind:open': 'nav.expanded',
+    });
+    const option = new FakeQueryPlanElement({
+      'data-bind:selected': 'option.active',
+    });
+    root.planElements.push(button, details, option);
+
+    // true → setAttribute to '' (present)
+    applyCompiledQueryUpdatePlan(root, 'cart', { isEmpty: true }, {});
+    expect(button.getAttribute('disabled')).toBe('');
+
+    // false → removeAttribute (not 'false')
+    applyCompiledQueryUpdatePlan(root, 'cart', { isEmpty: false }, {});
+    expect(button.getAttribute('disabled')).toBeNull();
+
+    // truthy non-boolean → present
+    applyCompiledQueryUpdatePlan(root, 'nav', { expanded: 1 }, {});
+    expect(details.getAttribute('open')).toBe('');
+
+    // null → removed (falsy via null check)
+    applyCompiledQueryUpdatePlan(root, 'option', { active: null }, {});
+    expect(option.getAttribute('selected')).toBeNull();
+  });
+
+  // J3: also covers disabled/hidden/readonly/required/multiple/selected/open.
+  it('removes boolean-presence attribute data-bind:hidden when value is false', () => {
+    const root = new FakeMorphRoot();
+    const panel = new FakeQueryPlanElement({
+      'data-bind:hidden': 'modal.closed',
+      hidden: '',
+    });
+    root.planElements.push(panel);
+
+    // Starts hidden (setAttribute '' expected on true).
+    applyCompiledQueryUpdatePlan(root, 'modal', { closed: true }, {});
+    expect(panel.getAttribute('hidden')).toBe('');
+
+    // Now remove when false.
+    applyCompiledQueryUpdatePlan(root, 'modal', { closed: false }, {});
+    expect(panel.getAttribute('hidden')).toBeNull();
   });
 });
