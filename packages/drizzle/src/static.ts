@@ -5949,7 +5949,7 @@ function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   }
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
-  const key = stringPropertyFromObject(annotationObject, 'key');
+  const key = columnNamePropertyFromObject(annotationObject, 'key');
   const fans = fanAnnotationsFromObject(annotationObject);
   return {
     domain,
@@ -6033,6 +6033,48 @@ function stringPropertyFromObject(object: Node, name: string): string | undefine
   return undefined;
 }
 
+/**
+ * Resolve a Kovo column reference (SPEC §10.1) from a property initializer: a
+ * string-literal column name, or a `(table) => table.column` selector (the
+ * Drizzle idiom — read statically here, never called at runtime). Returns the
+ * referenced column name in both forms.
+ */
+function columnRefName(initializer: Node | undefined): string | undefined {
+  if (!initializer) return undefined;
+  if (Node.isStringLiteral(initializer)) return initializer.getLiteralText();
+  if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) {
+    return undefined;
+  }
+  let body: Node | undefined = initializer.getBody();
+  if (body && Node.isBlock(body)) {
+    const returnStatement = body
+      .getStatements()
+      .find((statement) => Node.isReturnStatement(statement));
+    body =
+      returnStatement && Node.isReturnStatement(returnStatement)
+        ? returnStatement.getExpression()
+        : undefined;
+  }
+  while (body && Node.isParenthesizedExpression(body)) body = body.getExpression();
+  if (body && Node.isPropertyAccessExpression(body)) return body.getName();
+  if (body && Node.isElementAccessExpression(body)) {
+    const argument = body.getArgumentExpression();
+    if (argument && Node.isStringLiteral(argument)) return argument.getLiteralText();
+  }
+  return undefined;
+}
+
+/** Like `stringPropertyFromObject` but also accepts a `(t) => t.col` column selector (SPEC §10.1). */
+function columnNamePropertyFromObject(object: Node, name: string): string | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+    return columnRefName(property.getInitializer());
+  }
+  return undefined;
+}
+
 function booleanPropertyFromObject(object: Node, name: string): boolean | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
 
@@ -6082,7 +6124,7 @@ function fanAnnotationsFromObject(object: Node): KovoFanAnnotation[] {
     if (!Node.isObjectLiteralExpression(element)) return [];
 
     const domain = stringPropertyFromObject(element, 'domain');
-    const via = stringPropertyFromObject(element, 'via');
+    const via = columnNamePropertyFromObject(element, 'via');
     if (!domain || !via) return [];
 
     const when = stringPropertyFromObject(element, 'when');

@@ -16,7 +16,7 @@ export const contacts = pgTable(
     company: text('company').notNull().default('Independent'),
     title: text('title').notNull().default('Contact'),
   },
-  kovo({ domain: 'contact', key: 'id' }),
+  kovo({ domain: 'contact', key: (t) => t.id }),
 );
 
 export const deals = pgTable(
@@ -30,7 +30,7 @@ export const deals = pgTable(
     // Human deal name shown in the pipeline.
     title: text('title').notNull().default('New opportunity'),
   },
-  kovo({ domain: 'deal', key: 'id' }),
+  kovo({ domain: 'deal', key: (t) => t.id }),
 );
 
 export const activities = pgTable(
@@ -41,5 +41,5 @@ export const activities = pgTable(
     kind: text('kind').notNull(),
     note: text('note').notNull(),
   },
-  kovo({ domain: 'activity', key: 'id' }),
+  kovo({ domain: 'activity', key: (t) => t.id }),
 );

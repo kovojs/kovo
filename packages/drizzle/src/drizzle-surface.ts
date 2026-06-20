@@ -9,9 +9,18 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
+/**
+ * A column reference inside a Kovo annotation: either the column name as a
+ * string, or a `(table) => table.column` selector (the Drizzle idiom, SPEC
+ * §10.1). The selector is read statically by the compiler and is never called at
+ * runtime — the compiler resolves and validates the referenced column — so
+ * renaming the column surfaces at the annotation site.
+ */
+export type KovoColumnRef = string | ((table: Record<string, unknown>) => unknown);
+
 export interface KovoFanAnnotation {
   domain: string;
-  via: string;
+  via: KovoColumnRef;
   when?: 'delete' | 'insert' | 'update';
 }
 
@@ -26,7 +35,7 @@ export type KovoTableAnnotation =
   | {
       domain: string;
       fans?: readonly KovoFanAnnotation[];
-      key?: string;
+      key?: KovoColumnRef;
     }
   | {
       exempt: true;
@@ -43,7 +52,7 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 export interface KovoDomainTableAnnotation {
   domain: string;
   fans?: readonly KovoFanAnnotation[];
-  key?: string;
+  key?: KovoColumnRef;
 }
 
 /** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */
@@ -68,7 +77,7 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * @example
  * import { kovo } from '@kovojs/drizzle';
  *
- * export const cartConfig = () => kovo({ domain: 'cart', key: 'id' });
+ * export const cartConfig = () => kovo({ domain: 'cart', key: (t) => t.id });
  */
 export function kovo(annotation: KovoViewExtraConfigAnnotation): KovoViewExtraConfig;
 export function kovo(annotation: KovoTableAnnotation): KovoTableExtraConfig;

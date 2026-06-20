@@ -56,17 +56,31 @@ extra-config callback that receives the table, so the typed columns object is av
 **Decided 2026-06-19 — Ship the selector:** spec-conformant + Drizzle-idiomatic + strictly better
 ergonomics (type-safe, rename-safe, autocomplete). **Land before #3** (shared mechanism).
 
-- [ ] **Public type:** widen `key` on `KovoTableAnnotation`/`KovoDomainTableAnnotation` to accept a
-      column selector `(t) => Column` (optionally `| string` for back-compat). Keep all supporting
-      types public (no internal type leak) per `rules/api-surface.md`.
-- [ ] **Codegen:** resolve the selected column's name at extraction
-      (`packages/drizzle/src/static.ts` / `internal/derive-codegen`) so the generated reverse
-      index / `DomainKey` / key extractor read the column the selector returns. This is the reusable
-      selector seam #3 depends on.
-- [ ] **Examples + docs:** migrate the 3 example schemas to `key: (t) => t.id`; refresh
-      `site/gen/api/drizzle.md`.
-- [ ] **Tests:** a selector-keyed table generates the same key extractor as the string form did; a
-      renamed-column selector is a type error. Extend the drizzle extraction tests.
+- [x] **Public type:** added `export type KovoColumnRef = string | ((table: Record<string, unknown>)
+      => unknown)` (documented) and widened `key` on `KovoTableAnnotation`/`KovoDomainTableAnnotation`
+      and `via` on `KovoFanAnnotation` to it (`packages/drizzle/src/drizzle-surface.ts`). All
+      supporting types public; api-surface gate stays at baseline 1571.
+- [x] **Codegen:** added `columnRefName` + `columnNamePropertyFromObject` in
+      `packages/drizzle/src/static.ts` (handles string literal, `(t) => t.col`, block-body, and
+      `t['col']` bracket forms) and routed `key` + fan `via` extraction through it. Downstream
+      consumes the resolved column **name string** unchanged — this is the reusable selector seam #3
+      reuses for `owner:`.
+- [x] **Examples:** migrated all 3 example schemas (commerce/crm/stackoverflow, 9 sites) to
+      `key: (t) => t.id`. `site/gen/api/drizzle.md` regenerates from the updated `kovo` `@example`
+      (now selector form) — verified by the `@example` gate.
+- [x] **Tests:** new `packages/drizzle/src/index.key-selector.test.ts` — a selector-keyed read
+      derives the **same `instanceKey` (`arg:cartId`)** as the string form (full query-fact parity),
+      plus block-body + bracket-access variants. **Note:** TS-level rename-safety isn't achievable
+      for the SPEC `kovo({ key: (t) => t.id })` shape (kovo can't infer the table type, so `t` is a
+      permissive record); the column is resolved **statically by the compiler**, so the selector is
+      at parity with the string form. A column-existence diagnostic (true rename-error) is a possible
+      follow-up, not added here.
+
+  **Verified:** `vitest run packages/drizzle` 261 pass (string regression) + new selector test 2/2;
+  example graph/invalidation tests (`crm/graph`, `stackoverflow/kovo-graph`, `commerce/app.add-to-cart`,
+  `commerce/app.queries`) 13/13 with the migrated selector schemas; `api-surface-gate.mjs` exit 0;
+  `@kovojs/site api:check` 37 @example blocks typecheck; `vp check` typecheck clean (the only `vp check`
+  failure is pre-existing formatting drift on 21 base files; my files reformatted clean).
 
 ## 3. Build the SPEC ownership model (`owner:` + `owns()` + KV414) — **High** · Decided: **Build full model** → split to sub-plan
 
