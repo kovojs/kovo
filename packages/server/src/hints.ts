@@ -64,6 +64,14 @@ export interface PageHintOptions {
   meta?: RouteMetaSource | readonly RouteMetaSource[];
   modulepreloads?: readonly string[];
   prefetch?: RoutePrefetch;
+  /**
+   * Named justification that suppresses KV419 on a guarded `prefetch:'moderate'` route.
+   *
+   * SPEC §8:756 allows guarded moderate prefetch when the author supplies an explicit
+   * rationale (e.g. `"route is idempotent and safe for credentialed prerender"`).
+   * A non-empty string silences the diagnostic; an absent or empty string is ignored.
+   */
+  prefetchJustification?: string;
   prerenderUrls?: readonly string[];
   stylesheets?: readonly (string | StylesheetAsset)[];
 }
