@@ -27,6 +27,10 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     `app-document.ts`, keyed on `route.guard`); tsc-clean, unit + integration verified. (The
     `pageshow`+persisted loader reload is belt-and-suspenders, since no-store already disqualifies
     bfcache in Chrome/WebKit.)
+  - ✅ **F36 / KV419** — first new diagnostic implemented end-to-end: registered KV419 in the core
+    registry (union + exhaustive `Record` + golden tests) and a `routePrefetchGuardDiagnostics`
+    check that flags `prefetch:'moderate'` on a guarded route, wired into `createApp`; unit-tested,
+    tsc clean. **Proves the path** for the other SPEC-only codes (register in core + add the check).
   - ✅ **KV314→KV420 collision FIXED** — discovered while wiring the new diagnostics: the Phase-1
     reconciliation only de-duped within SPEC.md, not against the impl registry
     (`packages/core/src/diagnostics.ts`), which already defines KV314 ("renderOnce reads an
