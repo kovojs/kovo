@@ -4,6 +4,7 @@ import {
   executeHarnessMutation,
   executeHarnessQuery,
   type HarnessMutationOptions,
+  type HarnessPageFixture,
   loadHarnessPage,
 } from './harness-operations.js';
 import type { PageAssertion } from './page.js';
@@ -14,6 +15,7 @@ import type { DbVerificationConfig } from './verifier-observation.js';
 // SPEC.md §11: the harness verification API returns `DbVerificationDiagnostic`s
 // and the `page()` API returns a `PageAssertion`, so both documented types are
 // re-exported here to keep the harness public surface self-contained.
+export type { HarnessPageFixture } from './harness-operations.js';
 export type { PageAssertion } from './page.js';
 export type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 
@@ -39,7 +41,7 @@ export interface KovoTestContext<Db = unknown> {
 /** Options for `createKovoTestHarness`: the `db`, optional `pages`, request stub, touch graph, and verification config. */
 export interface KovoTestHarnessOptions<Db> {
   db: Db;
-  pages?: Record<string, string | (() => string | Promise<string>)>;
+  pages?: Record<string, HarnessPageFixture<Db>>;
   request?: Record<string, unknown>;
   touchGraph?: CoreGraph.TouchGraph;
   verification?: DbVerificationConfig;
@@ -83,7 +85,7 @@ export function createKovoTestHarness<Db>(
       return executeHarnessMutation(mutation, input, db, options.request, verifier, execOptions);
     },
     async page(path) {
-      return loadHarnessPage(options.pages, path);
+      return loadHarnessPage(options.pages, path, db, verifier);
     },
     async query(query, input) {
       return executeHarnessQuery(query, input, db, options.request, verifier);

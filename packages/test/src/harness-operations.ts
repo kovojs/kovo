@@ -22,6 +22,25 @@ export interface HarnessOperationVerifier {
   ): Promise<{ observed: readonly ObservedDbOperation[]; result: T }>;
 }
 
+/**
+ * A page fixture for the harness `page()` API. A bare string (or a
+ * string-returning thunk) is pre-rendered page HTML with no database access. The
+ * render form (`{ reads, render }`) supplies a route page's loader: the harness
+ * runs `render` with the wrapped `db` so its reads are cross-checked against the
+ * declared `reads` set the same way query loaders are, closing the gap where
+ * `route.page` reads escaped runtime read verification (SPEC.md §11.2 read-side
+ * cross-check; §6.4 `route.page`).
+ */
+export type HarnessPageFixture<Db = unknown> =
+  | string
+  | (() => string | Promise<string>)
+  | {
+      /** Domains the page loader is declared to read; observed reads must fall within this set (SPEC.md §11.2). */
+      reads?: readonly string[];
+      /** Render the page HTML from the wrapped `db`; its reads are verified against `reads`. */
+      render: (context: { db: Db }) => string | Promise<string>;
+    };
+
 /** @internal Per-`exec` mutation options surfaced publicly via `KovoTestExecOptions`. */
 export interface HarnessMutationOptions<Request> {
   csrf?: CsrfValidationOptions<Request>;
@@ -64,15 +83,27 @@ export async function executeHarnessMutation<
 }
 
 /** @internal Lower-level harness page loading wrapped by `createKovoTestHarness`. */
-export async function loadHarnessPage(
-  pages: Record<string, string | (() => string | Promise<string>)> | undefined,
+export async function loadHarnessPage<Db>(
+  pages: Record<string, HarnessPageFixture<Db>> | undefined,
   path: string,
+  db: Db,
+  verifier: HarnessOperationVerifier | null,
 ): Promise<PageAssertion> {
   const page = pages?.[path];
   if (!page) throw new Error(`Page fixture not found: ${path}`);
 
-  const html = typeof page === 'function' ? await page() : page;
-  return createPageAssertion(html);
+  if (typeof page === 'string') return createPageAssertion(page);
+  if (typeof page === 'function') return createPageAssertion(await page());
+
+  // SPEC.md §11.2: a route page's loader accesses the same wrapped DB seam as
+  // mutation/query execution, so its reads are cross-checked against the
+  // declared read set. Without the verifier the render still runs untracked.
+  const render = () => page.render({ db });
+  if (!verifier) return createPageAssertion(await render());
+
+  const captured = await verifier.capture(render);
+  verifier.assertReadsCoveredOperations(captured.observed, page.reads ?? []);
+  return createPageAssertion(captured.result);
 }
 
 /** @internal Lower-level harness query execution wrapped by `createKovoTestHarness`. */

@@ -175,10 +175,12 @@ describe('@kovojs/test harness operations', () => {
             '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
         },
         '/cart',
+        {},
+        null,
       ).then((page) => page.fragment('cart-badge')),
     ).resolves.toBe('<cart-badge>1</cart-badge>');
 
-    await expect(loadHarnessPage({}, '/missing')).rejects.toThrow(
+    await expect(loadHarnessPage({}, '/missing', {}, null)).rejects.toThrow(
       'Page fixture not found: /missing',
     );
   });
