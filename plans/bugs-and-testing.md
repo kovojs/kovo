@@ -313,7 +313,9 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
   Playwright spec on the CLI test's build+serve, but with a real interactive TSX island and
   `chromium` driving a click. Obstacle to design around: a prod server with a query/mutation needs a
   data source (use an in-memory/no-DB app like the CLI test's `appModuleSource`, not commerce).
-- [x] **B1 / G‑S1 ✅** prod-build-served island driven in a real browser (S1 test, green) (`kovo build` → `dist/server/server.mjs` → click a `/c/__v/` island, submit a mutation, assert immutable hashed assets, interactive)
+- [x] **B1 / G‑S1 ✅** prod-build-served island driven in a real browser (S1 test, green)
+  - S1 also asserts the loaded `/c/__v/` module is **immutable** in-browser.
+  - **B2/S2/S3 finding (verified by probe):** the minimal `kovo build` (no vite.config) does NOT render JSX-component bodies at serve time — it extracts CSS + bundles the client only. Real-component server rendering needs the full **vite-plugin build pipeline** (as the examples use), so realistic-app remains the genuinely-large keystone (build+serve an example app with its DB in a browser). (`kovo build` → `dist/server/server.mjs` → click a `/c/__v/` island, submit a mutation, assert immutable hashed assets, interactive)
 - [ ] **B2 / G‑S2/3** real-TSX canonical fixtures via public client API + `fixtures/realistic-app` (drizzle extracted graph → `createDbVerifier`, better-auth `sessionProvider`, `@kovojs/style`, `@kovojs/ui` Dialog)
 
 ### Spec contracts (bugs-1) → SPEC.md — ✅ ALL APPLIED + VERIFIED (Phase 1)
@@ -333,7 +335,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C2b** login→authed-request→logout session round-trip (`auth`). Passes. _(handler-vs-framework header precedence still TODO)_
 - [x] **C7a** multi-domain write fan-out + KV402 names the missing domain (`multi-domain-write`). Passes.
 - [x] **C7b** real-PG unique-violation rollback + sanitized error (`pg-constraint-failure`). Passes.
-- [ ] **C7c** KV405/KV408 fire at integration; page-render (`route.page`) read verification.
+- [x] **C7c** ✅ KV403/KV405/KV408 integration-locked + **page-render reads now flow through the verifier** (`verifier-claim-coverage.test.ts`, 12 tests; `harness-operations.ts` wires `route.page` db through `verifier.capture`). 155/155 test pkg, tsc 0, api-surface baseline. _Finding: SPEC §11.3 lists KV405 as `error`; the registry has `warn` — divergence to reconcile._
 - [x] **C8a** no-JS degradation in a real browser (`counter-no-js`). Passes.
 - [x] **C8b** keyed-morph at scale, 300 rows (`scale-keyed-list`). Passes.
 - [x] **C8c** morph native-element-state survival (`morph-native-state`) — **expected-fail**, documents a real impl gap + F39 SPEC-vs-impl divergence (alerts when fixed).
@@ -342,7 +344,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C9b-i** KV-code surfacing — KV227/KV242/KV302 each surface as a blocking 500 teaching document (`diagnostic-dev-document`); KV242 had zero prior coverage. Passes.
 - [ ] **C9b-ii** KV234 cross-pkg prefix · explain-from-extracted-graph (needs S2) · clock freshness (needs `clocks` impl).
 - [x] **D1** Firefox/WebKit cross-engine matrix (degradation + counter + binding-text-attr). Verified on all 3 engines.
-- [ ] **D2** flake gate (retried-but-passed annotation + scheduled `--repeat-each=3`) · module-scope reset · snapshot allowlist meta-test · CSS-manifest clear-on-close · B0 meta-test.
+- [x] **D2** ✅ flake gate (`flaky-reporter.ts` surfaces retried-but-passed; `KOVO_FAIL_ON_FLAKY=1` hard-gates) + B0 input meta-test + snapshot-allowlist meta-test (`tests/*.meta.test.ts`). _Finding: `data-bind-list` is in `KOVO_SEMANTIC_ATTRS` but absent from `isGeneratedOnlyRenderAttribute` — documented gap to fix in `emit/server.ts`._
 - [x] **C3 (IDOR gate)** — KV414 registered in the impl registry; the blocking owner-table gate
   (`--unscoped --fail-on-findings`) exists and is regression-locked (`unscoped-owner-fixture.spec.ts`,
   green). _Negative-compile `@ts-expect-error` tier still TODO._
