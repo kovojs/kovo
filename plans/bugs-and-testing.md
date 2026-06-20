@@ -45,7 +45,21 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     fingerprint (FNV-1a hash of the cookie jar, no sessionProvider re-run) as `<meta name="kovo-session">`;
     the loader passes it as the broadcast principal; publish stamps it and onmessage discards
     cross-principal rebroadcasts. Unit + integration verified. **6th contract implemented.**
-  - **Precisely-scoped blockers for each remaining contract** (discovered by tracing the code):
+  - **MAJOR finding — many bugs-1 contracts were the SPEC lagging an already-correct impl**
+    (a spec-vs-impl review surfaces exactly this; verified by reading the code):
+    - **F4 / F27 / F28** (replay key scoping, fresh per-submit idem, atomic reservation) — `replay.ts`
+      already has `get`/`reserve`/`set` scoped by `(session+mutation, idem)`; the loader mints a fresh
+      `Kovo-Idem` per submit. The "M4 security finding" comment shows this was already hardened.
+    - **F20** (missing-server-truth = settle without promoting) — `optimism.ts` already has
+      `settleWithoutServerTruth(id, queryName, key)`.
+    - **F30** (render-plan version token) — already implemented as `buildToken` (stamped as
+      `<meta name="kovo-build">`, used for deploy-skew detection).
+    - **F7 / F8** (output escaping, URL-scheme allowlist, script-data encoding) — already in
+      `security-output.ts`/`html.ts` (verified by the C1 fixtures).
+    - So the genuinely-needs-new-code backlog is much smaller than "~24": Phase 1 made the SPEC
+      mandate what the code already does (regression-locked), and the truly-missing pieces were the
+      6 I implemented (F35/F34/F13/F36/F2/F9-NUL) plus the items below.
+  - **Genuinely-remaining (needs new/changed code)** — precisely-scoped blockers from tracing the code:
     - **F1/KV418** (csrf:false + session guard) — the declarative check is easy, BUT the test suite
       uses `csrf:false` + a guard for *test simplicity* (skip the CSRF dance) in `guarded-mutation`,
       `session-provider-once`, etc. Enforcing KV418 as written would break them. **Precursor:** give
