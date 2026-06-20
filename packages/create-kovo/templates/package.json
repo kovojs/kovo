@@ -3,23 +3,24 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:prod": "kovo build ./src/app-shell.ts",
+    "build:prod": "kovo build ./src/app.tsx",
     "check": "vp check",
     "dev": "vp dev",
-    "emit-graph": "node scripts/emit-graph.mjs",
-    "preview:static": "node scripts/preview-static.mjs",
-    "serve": "npm run build:prod -- --preset node && node dist/server/server.mjs",
-    "serve:dev": "node scripts/serve.mjs",
+    "serve": "npm run build:prod && node dist/server/server.mjs",
     "start": "node dist/server/server.mjs",
-    "static": "vp run export",
     "test": "vp test"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@kovojs/better-auth": "workspace:*",
     "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
     "@kovojs/server": "workspace:*",
-    "@kovojs/style": "workspace:*"
+    "@kovojs/style": "workspace:*",
+    "@kovojs/ui": "workspace:*",
+    "better-auth": "1.6.17",
+    "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
     "@kovojs/cli": "workspace:*",

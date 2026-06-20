@@ -1,4 +1,4 @@
-@layer kovo-starter-base {
+@layer kovo-app-base {
   :root {
     color: var(--kovo-theme-sys-color-on-surface);
     background: var(--kovo-theme-sys-color-surface);

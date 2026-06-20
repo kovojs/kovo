@@ -1,11 +1,18 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-
+import { kovo } from '@kovojs/server/vite';
 import { defineConfig } from 'vite-plus';
 
+// `kovo({ app })` is the Kovo dev/SSR plugin: it loads the app shell, serves route
+// documents and `/c/` handler modules, and applies the Kovo compiler. `vp dev`,
+// `vp check`, and `vp test` all run through it; `kovo build ./src/app.tsx` (see
+// package.json) produces the deployable server.
 export default defineConfig({
-  plugins: [starterSharedAppShellDevPlugin()],
+  plugins: [kovo({ app: '/src/app.tsx' })],
   build: {
     manifest: true,
+    rollupOptions: {
+      input: { styles: 'src/styles.css' },
+      output: { assetFileNames: 'assets/[name][extname]' },
+    },
   },
   lint: {
     options: {
@@ -18,90 +25,4 @@ export default defineConfig({
     singleQuote: true,
     sortPackageJson: true,
   },
-  run: {
-    tasks: {
-      build: {
-        command: 'vp build',
-        input: [
-          { pattern: 'index.html', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-          { pattern: 'vite.config.ts', base: 'workspace' },
-        ],
-        output: ['dist/**'],
-      },
-      export: {
-        command: 'node scripts/export-static.mjs',
-        input: [
-          { pattern: 'index.html', base: 'workspace' },
-          { pattern: 'scripts/export-static.mjs', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-          { pattern: 'vite.config.ts', base: 'workspace' },
-        ],
-        output: ['dist/**'],
-      },
-      'preview-static': {
-        command: 'node scripts/preview-static.mjs',
-        input: [
-          { pattern: 'dist/**', base: 'workspace' },
-          { pattern: 'scripts/preview-static.mjs', base: 'workspace' },
-        ],
-      },
-      'kovo-check': {
-        command: 'node scripts/emit-graph.mjs && kovo check graph.json',
-        input: [
-          { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-        ],
-        output: ['graph.json'],
-      },
-      'graph-assertions': {
-        command: 'node scripts/graph-assertions.mjs',
-        input: [
-          { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-          { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
-          { pattern: 'src/**/*', base: 'workspace' },
-        ],
-      },
-    },
-  },
 });
-
-type DevMiddleware = (
-  request: IncomingMessage,
-  response: ServerResponse,
-  next: (error?: unknown) => void,
-) => void;
-
-type DevPostHook = () => void | Promise<void>;
-
-interface StarterDevServer {
-  middlewares: {
-    use(handler: DevMiddleware): void;
-  };
-  ssrLoadModule(id: string): Promise<Record<string, unknown>>;
-}
-
-interface StarterDevPlugin {
-  configureServer(server: StarterDevServer): Promise<void | DevPostHook>;
-  name: string;
-}
-
-function starterSharedAppShellDevPlugin(): StarterDevPlugin {
-  return {
-    async configureServer(server) {
-      const serverModule = await server.ssrLoadModule('@kovojs/server');
-      const createDevIntegration = serverModule.createKovoAppShellViteDevIntegration;
-      if (typeof createDevIntegration !== 'function') {
-        throw new Error('@kovojs/server must export createKovoAppShellViteDevIntegration.');
-      }
-
-      const integration = createDevIntegration({
-        earlyHints: false,
-        name: 'kovo-starter-app-shell-dev',
-      }) as { plugin: { configureServer(server: StarterDevServer): void | DevPostHook } };
-
-      return integration.plugin.configureServer(server);
-    },
-    name: 'kovo-starter-app-shell-dev-loader',
-  };
-}

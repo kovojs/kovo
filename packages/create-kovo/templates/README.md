@@ -1,24 +1,43 @@
-# Kovo Starter
+# {{name}}
 
-This starter uses Vite+ for local dev/test workflows and `kovo build` for production artifacts:
+A Kovo starter: a small contact book that exercises the building blocks a real
+CRM/ecommerce app needs — a typed database, queries, a guarded mutation with
+optimistic UI, real authentication, and styled UI components — in as little code
+as possible.
 
 ```sh
-vp check
-vp test
-npm run build:prod
-vp run export
-vp run preview-static
-npm run serve
-npm run serve:dev
-vp run emit-graph
-vp run kovo-check
-vp run graph-assertions
+npm run dev      # vp dev — start the dev server
+npm run check    # vp check — types + Kovo's compile/coverage checks
+npm run test     # vp test
+npm run build:prod   # kovo build ./src/app.tsx → dist/server (node preset)
+npm start            # node dist/server/server.mjs
 ```
 
-`src/app-shell.ts` exports the Kovo app used by `vp dev`, `kovo build`, and static export. The root `index.html` is only a Vite asset-build entry; route documents come from the app shell per SPEC.md section 9.5. `npm run build:prod` emits the node preset into `dist/server`, and `npm start` runs the generated `dist/server/server.mjs` production server without Vite in the request path. `npm run serve` rebuilds first, then starts that generated server for a local production check. `npm run serve:dev` keeps the old Vite-backed middleware stack for local source-serving checks and prints `starter-serve/v1` with the local origin. `vp run export` and `npm run static` first build the Vite assets, then call `kovo export --vite` so the command loads the app shell with the built CSS href, replays the route document, copies the `/c/` module, and copies manifest assets into `dist`; `vp run preview-static` serves only those exported `dist` files and prints `starter-static-preview/v1` for local static-host checks. If a route becomes non-exportable, the task prints stable `starter-export/v1` diagnostics and exits nonzero instead of writing a misleading static build.
+Sign in at `/login` with the seeded demo account **demo@example.com / password123**.
 
-`@kovojs/style` is the default app styling path. Define typed style objects with `style.create(...)`, apply them with `style.attrs(...)`, and keep raw global document defaults in `src/styles.css`. Change the seed and custom colors in `src/theme.ts` to retheme the starter; the app shell inlines generated theme variables while `kovo build` collects component atoms into the linked stylesheet required by SPEC.md section 13.1.
+## What's here
 
-Compiler fixpoint and render-equivalence checks are Kovo framework CI coverage. Starter apps should keep their own confidence loop on `vp check`, `vp test`, `vp run kovo-check`, and static export/preview checks.
+| File                   | Building block                                                                                                                                                                      |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/schema.ts`        | Drizzle tables. `contacts` carries a `kovo({ domain, key })` annotation so the compiler can prove invalidation; the four Better Auth tables sit alongside it.                       |
+| `src/db.ts`            | The database: Drizzle over in-process PGlite (real Postgres, no server to run), created and seeded by `createAppDb()`.                                                              |
+| `src/queries.ts`       | `contactsQuery` — a typed read whose Drizzle select the compiler extracts.                                                                                                          |
+| `src/mutations.ts`     | `addContact` — a CSRF-protected, `authed`-guarded write with input validation and an optimistic list update.                                                                        |
+| `src/auth.ts`          | Real [Better Auth](https://better-auth.com) on the same PGlite/Drizzle database, wired into Kovo via `@kovojs/better-auth`.                                                         |
+| `src/components/*.tsx` | `@kovojs/ui` components (`Card`, `Button`, `Badge`) composing the contact list, add-contact form, and auth forms.                                                                   |
+| `src/app.tsx`          | The whole app: `createApp({ db, queries, mutations, routes, sessionProvider })` plus the routes. `vite.config.ts`'s `kovo({ app })` and `kovo build` both load this default export. |
+| `src/theme.ts`         | `defineTheme` — change the seed/custom colors to retheme everything.                                                                                                                |
 
-`src/auth.tsx` is the starter auth recipe. Pass your Better Auth server instance to `createStarterAuth(auth)` and register the returned `sessionProvider`, `signIn`, and `signOut` with your app shell. The rendered login/logout forms post directly to Kovo mutation endpoints, so they keep the no-JS POST path and only use `enhance` as a progressive upgrade.
+`vp dev`, `vp check`, and `vp test` run through the `kovo()` Vite plugin, which
+compiles the app and serves route documents and `/c/` handler modules (SPEC.md
+§9.5). The compiler-derived dependency graph is auditable with `kovo check` and
+`kovo explain` against the built app — there is no hand-maintained graph file.
+
+## Deploying
+
+`kovo build ./src/app.tsx` emits a self-contained server under `dist/server`
+using the preset in `kovo.config.ts` (Node by default; uncomment Vercel or
+Cloudflare). Set `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET` to strong values in the
+target environment (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold
+time and is gitignored). The server is stateless; liveness comes from
+BroadcastChannel + refetch-on-focus, not a live bus (SPEC.md §9.3).
