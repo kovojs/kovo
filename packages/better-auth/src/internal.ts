@@ -9,7 +9,7 @@ import type {
 } from '@kovojs/server';
 import type { MutationRegistry } from '@kovojs/server/internal/execution';
 
-import type { BetterAuthRoleRequest, BetterAuthRoleSession } from './guards.js';
+import type { BetterAuthRoleSession } from './guards.js';
 import type { BetterAuthSessionPayload } from './session.js';
 
 // The package's 13 public symbols are authored in the honestly-named source files
