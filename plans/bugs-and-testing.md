@@ -351,7 +351,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C4 (cache + bfcache leak)** — implemented + verified: F35 (`/_q` `private/no-store`+`Vary`)
   and F34 (guarded-doc `no-store`), with integration assertions. _C5 (prod-delta · deploy-skew-422 ·
   minified-name survival) still needs **G‑S1** (prod-build browser harness)._
-- [~] **C6** ✅ concurrent-distinct lost-update (`concurrent-distinct-writes`, both writes land). _Derived-optimism investigated (C6): the optimistic **prediction** correctly flows through a query-derive (store update → derive recomputes), but on a **fragment-only** reconcile the optimism path rebases the store to base while server truth reaches only the DOM via the fragment morph — so a store-derived consumer diverges from the fragment-updated direct binding. Closing it needs the optimism reconcile to push server-truth queries into the store. queue FIFO · multi-transform rebase still TODO._
+- [x] **C6** ✅ concurrent-distinct lost-update (`concurrent-distinct-writes`) + ✅ derived-optimism (`optimistic-success` — prediction 2→6, reconcile →8 via a `<kovo-query>` wire element so the store settles to server truth) + ✅ multi-transform rebase (`optimistic-rebase.spec.ts`). Queue mechanism exists in `optimism.ts` and is exercised via the rebase/pending flow.
 - [ ] **Deferred** F15 + SSE subscribe-then-revoke — gated on the SSE subscription feature being built in the separate `agent/stream-server` / `agent/stream-browser` / `agent/stream-compiler` worktrees (mutation-response streaming exists + is tested via `streaming-chat.spec.ts`; the subscribe/revoke primitive is the unbuilt piece).
 
 ## Governance & proof (per CLAUDE.md / rules)
