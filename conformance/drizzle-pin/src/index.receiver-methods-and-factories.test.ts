@@ -477,7 +477,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/users.domain.ts:15',
           },
         ],

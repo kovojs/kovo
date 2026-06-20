@@ -263,6 +263,7 @@ function stripeFixtureSignature(options: {
     },
     scheme: 'stripe:v1:hmac-sha256',
     secret: options.secret,
+    timestampBound: false,
     tolerance: {
       seconds: 5 * 60,
       timestamp: (_request, context) => stripeHeaderPart(context.signatureHeader, 't'),

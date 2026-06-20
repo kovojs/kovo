@@ -96,7 +96,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         code: 'KV406',
         message: 'Statically un-analyzable write site; manual touches required.',
-        severity: 'warn',
+        severity: 'error',
         site: 'cart.domain.ts:31',
       },
       {

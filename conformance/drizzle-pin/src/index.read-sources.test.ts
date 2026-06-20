@@ -322,7 +322,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:8',
           },
         ],
@@ -640,7 +640,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product.location could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:12',
           },
         ],
@@ -726,7 +726,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:6',
           },
         ],
@@ -861,14 +861,14 @@ describe('Drizzle pinned subset conformance', () => {
         code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Insert-select read source could not be resolved to a Drizzle table.',
-        severity: 'warn',
+        severity: 'error',
         site: 'conformance/drizzle-pin/src/catalog.domain.ts:10',
       },
       {
         code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Update-from read source could not be resolved to a Drizzle table.',
-        severity: 'warn',
+        severity: 'error',
         site: 'conformance/drizzle-pin/src/catalog.domain.ts:11',
       },
     ]);
@@ -903,7 +903,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:6',
           },
         ],
@@ -974,7 +974,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db[method]().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:6',
           },
         ],
@@ -1041,49 +1041,49 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
         ],
@@ -1135,21 +1135,21 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:9',
           },
         ],
@@ -1206,21 +1206,21 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.update().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:14',
           },
         ],
@@ -1309,14 +1309,14 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.transaction().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:8',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call tx.update().',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:8',
           },
         ],
@@ -1396,7 +1396,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:4',
           },
         ],
@@ -1433,7 +1433,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:4',
           },
         ],
@@ -1480,7 +1480,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:10',
           },
         ],
@@ -1517,14 +1517,14 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:4',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query relational read source could not be resolved to a Drizzle table.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/user.queries.ts:4',
           },
         ],

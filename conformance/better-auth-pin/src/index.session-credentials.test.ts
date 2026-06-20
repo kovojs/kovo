@@ -407,7 +407,11 @@ describe('Better Auth pinned conformance', () => {
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
-        'Set-Cookie': ['better-auth.session_token=; Path=/; Max-Age=0; HttpOnly'],
+        'Set-Cookie': [
+          expect.stringMatching(
+            /^better-auth\.session_token=; (?=.*Path=\/)(?=.*Max-Age=0)(?=.*HttpOnly).*$/,
+          ),
+        ],
       },
       value: {
         status: 'signed-out',

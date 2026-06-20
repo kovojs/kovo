@@ -69,7 +69,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses an un-provable destructured Drizzle receiver surface select() without project type proof.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:13',
           },
         ],
@@ -110,7 +110,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses an un-provable destructured Drizzle receiver surface select() without project type proof.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:7',
           },
         ],
@@ -293,7 +293,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.domain.ts:23',
           },
         ],
@@ -808,7 +808,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:20',
           },
         ],
@@ -861,7 +861,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:12',
           },
         ],
@@ -909,7 +909,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
         ],
@@ -960,7 +960,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
         ],
@@ -1010,7 +1010,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:15',
           },
         ],
@@ -1059,7 +1059,7 @@ describe('Drizzle pinned subset conformance', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
         ],
