@@ -1,6 +1,6 @@
 # API Surface Cleanup — Execution Plan
 
-**Status:** Phases 1–8 substantially complete (24 / 25 slices). The dist-exports flip (task #9) landed 2026-06-16 via pnpm `publishConfig`. Remaining: the documentation long-tail (~2909 baseline exports, ~2650 of them `@kovojs/headless-ui` primitive helpers) — pure incremental docs the api-surface ratchet holds as known debt and burns down without regression. **api-surface baseline 3957 → 2909** (−1048) and ratcheting down; the `@kovojs/core`/`server`/`runtime` + `better-auth`/`compiler`/`cli` documented reference pages are `*Undocumented`-free.
+**Status:** Phases 1–8 substantially complete (24 / 25 slices). The dist-exports flip (task #9) landed 2026-06-16 via pnpm `publishConfig`. **api-surface baseline 3957 → 1571** and ratcheting down; the `@kovojs/core`/`server`/`browser` + `better-auth`/`compiler`/`cli`/`style` documented reference pages are `*Undocumented`-free. Remaining debt is dominated by the two primitive packages (`@kovojs/headless-ui` ~900, `@kovojs/ui` ~600 = 96% of the 1,571). **Phase 9 (added 2026-06-19)** sequences the follow-ups from the fresh audit `plans/audit-api-20260619-203425.md` (the `@kovojs/runtime`→`@kovojs/browser` rename and the `@kovojs/ui` `export *` fix have since landed; this is the next wave).
 **Findings source:** 2026-06-15 multi-agent API audit (memory `api-surface-audit`). The audit holds the per-finding what/why/`file:line` evidence and mature-framework contrasts; this file is the compact execution ledger — one checkbox per coherent slice, sequenced by leverage and dependency.
 **Behavior source of truth:** `SPEC.md` (cited per item). When a fix and the SPEC conflict, follow SPEC and record the conflict; do not code through it.
 
@@ -11,7 +11,7 @@ Mark `- [x]` only when this session verifies the cited proving command for the e
 ## Locked decisions (2026-06-15)
 
 1. **Distribution (REVISED 2026-06-16):** published packages ship built `dist` + rolled-up `.d.ts` via pnpm `publishConfig` (top-level `exports`/`bin` stay `./src`; pnpm swaps in `publishConfig.exports`/`publishConfig.bin`→`dist` at pack/publish). The originally-planned `development`/`source` export condition was **rejected** — plain `node`/`tsc` + example `vite build` consumers in-repo do not honor it, so the workspace would break. The `@internal` boundary is enforced by the api-surface gate (`scripts/api-surface-gate.mjs`), NOT by a `.d.ts` strip step (tsdown `--dts` does not strip `@internal`).
-2. **`@kovojs/ui`:** `private: true` — **not** an external dependency. External apps copy components in shadcn-style (registry, "you own the code"); in-repo apps (examples, site) import it via the workspace as a `@/components/ui` convenience. Corollary: **`@kovojs/headless-ui` IS an external public dependency** (copied `ui` code imports it) and must be documented + fenced.
+2. **`@kovojs/ui` (SUPERSEDED 2026-06-19 → dual distribution):** the original "`private:true`, copy-in only" stance (and the completed Phase 7 that implemented it) is **superseded** by an owner decision: `@kovojs/ui` is **both** a versioned public library **and** a shadcn-style copy-in starter. Current tree reflects this (`public-packages.json` `visibility:public kind:library`, `package.json` published with `publishConfig`, plus the `registry.json`/`kovo add` copy-in path). The library half owes full public-API discipline (document + type the `Component`/`*Props` surface, un-export the 240 compiled-class strings, ship an api-ref page); `STABILITY.md` (which still says copy-in only) must be reconciled to "both" (Phase 9C). Corollary unchanged: **`@kovojs/headless-ui` IS an external public dependency** (copied `ui` code imports it) and must be documented + fenced.
 3. **Scope:** internal/external delineation + questionable-shape fixes + the 2 confirmed bugs. The docs-dogfooding _feature_ gaps (markdown/prose `Html` ctor, nested layouts, route-awareness, catch-all routes, canonical meta — see memory `kovo-docs-dogfood-rewrite`) are **out of scope**; track separately.
 
 ### Corrected audit recommendations (do NOT re-introduce the originals)
@@ -185,3 +185,70 @@ check:links` passes (`pages=93`, `internal=13492`, `external=190`), `pnpm --filt
 test` passes (9 files, 44 tests), and `pnpm --filter @kovojs/site exec tsc --noEmit --pretty
 false` passes. The remaining proof gap for closing Phase 8 is the broader root `check:build`
     command named above.
+
+---
+
+## Phase 9 — 2026-06-19 audit follow-ups
+
+**Source:** `plans/audit-api-20260619-203425.md` (5-way audit + adversarial removal verification at
+`493eeaec`). Ordered by leverage + dependency: **A** immediate removes → **B** recursive-publicness
+fixes → **C** stability/doc reconciliation → **D** narrowing passes → **E** the blocked re-tier →
+**F** reference pages (gated on the shrink). Prove each with the cited focused command + `pnpm run
+check:api-surface` (expect `fixed-this-run` > 0). The adversarial pass already **overturned** the
+tempting bulk removals (the ~396 headless machinery types + the test-harness options are forced-public —
+they get **documented/narrowed**, never internalized); do not re-introduce those as removals.
+
+### 9A — Immediate removes / un-exports (no prerequisites; biggest baseline drop)
+
+- [ ] **Un-export the 240 `@kovojs/ui` `*Styles`/`*Classes`/`*ClassNames`.** Drop `export` from `*Styles`
+  (keep module-local; render bodies use it); delete the `*Classes`/`*ClassNames` consts; rewrite the
+  package's own `*.stylex.test.tsx` to read `style.attrs(localStyles.x).class`.
+  - Done = baseline `fixed-this-run ≈ 240`; ui builds. Prove: `pnpm run check:api-surface` + `pnpm --filter @kovojs/ui exec vitest run`.
+- [ ] **Remove dead `@kovojs/core#ComponentDefinition`** (`index.ts:87`; 0 consumers repo-wide; `ComponentDefinitionInput` stays).
+  - Prove: `pnpm --filter @kovojs/core exec vitest run` + gate.
+- [ ] **Remove `@kovojs/core#query()`** (`index.ts:446`; verified dead — only its own JSDoc `@example` references it; no app/compiler/generated consumer). Review the `Query`/`queryBinding`/`QueryRefreshBinding` handle types it returns in the same change (referenced only by that machinery; delete with it unless a component `queries` binding names `Query<>`). Keep `core#route()`.
+  - Prove: `pnpm run check` + `pnpm run typecheck-examples`.
+- [ ] **Remove redundant `@kovojs/server/app-shell/static-export` subpath.** Drop from `package.json` `exports` + `publishConfig` + manifest `apiBoundary.public`; point the two in-repo tests at the `@kovojs/server` root. Types stay public via `StaticExportResult`/`StaticExportOptions`.
+  - Prove: `pnpm --filter @kovojs/server exec vitest run` + `pnpm run check:publish`.
+- [ ] **Drop `isHeaderSource` from the server public barrel** (`routing.ts:36`; 0/0 predicate). KEEP the recursively-reachable response types (`RouteResponseOutcome`/`RouteResponseBody`/`RouteFileOptions`/`RouteStreamOptions` — forced by `route()`'s return at `route.ts:159`).
+  - Prove: `pnpm --filter @kovojs/server exec vitest run` + gate.
+
+### 9B — Recursive-publicness fixes (close the latent leaks the gate can't see)
+
+- [ ] **`style`: brand `CompiledStyle` opaque** (`engine.ts:22-63`); keep the structural `__rules`/`AtomicRule` shape on `@kovojs/style/internal` for the compiler only. Source-compatible for app authors.
+- [ ] **`style`: drop the `identity`-options public overloads** of `create`/`defineVars`/`createTheme`/`keyframes` (`engine.ts:75`); `StyleIdentityOptions` becomes impl-only.
+- [ ] **`server/vite`: narrow `kovo()`'s return** to an opaque `{ readonly name: 'kovo' }` token (`vite.ts:38,116`); keep the hook interface (`KovoViteResolvedConfig`/`KovoViteHotUpdateContext`) internal.
+- [ ] **`better-auth`: split `BetterAuthCredentialMutationOptions`** (`internal.ts:1100`) — export the narrow public `{csrf,defaultRedirectTo,guard,key}` from `index.ts`; keep `registry`(`MutationRegistry`)/`transaction` on an `@internal` extension the impl uses.
+- [ ] **`drizzle`: re-export `KovoFanAnnotation`** from `runtime.ts` (one line; `drizzle-surface.ts:12`).
+- [ ] **`test/harness`: make the options nameable** (`harness.ts:44-49`) — promote `core` `TouchGraph` to the public `index.ts` (already a clean `export` at `core/src/graph.ts:42`); re-export `DbVerificationConfig` + `HarnessMutationOptions` from `./harness`. (Types stay public — this is a fix, not a removal.)
+- [ ] **`core`: inline `component()`'s generic bound** from the public `ComponentDefinitionInput` (drop the private `ComponentDefinitionShape` from the signature; `index.ts:123,158`).
+- [ ] **`server`: replace the 3 `export *`** (`index.ts:57-59`, `api/data|rendering|routing`) with explicit named re-export blocks.
+- [ ] **Tighten the api-surface gate** to fail when a public signature names a non-public type (recursive publicness), so 9B can't regress; split `api-surface-baseline.json` into "to-document" vs "to-remove".
+  - Prove (9B): `pnpm run check` + `pnpm run check:api-surface` + per-package vitest.
+
+### 9C — Stability tags + doc reconciliation
+
+- [ ] **`@kovojs/ui` dual-distribution reconcile.** Rewrite the `STABILITY.md:21` paragraph to "versioned library **and** copy-in starter"; keep `kind:library` + `publishConfig` + `registry.json`/`kovo add`. (Supersedes Locked Decision #2 / Phase 7.)
+- [ ] **`server/build`: tag the whole preset family `@experimental`** (`KovoPreset`/`PresetContext`/`PresetInspectContext`/`PresetDiagnostic`/`KovoConfig`/`defineConfig`), matching `node`/`vercel`/`cloudflare`.
+- [ ] **`core`: add `@augmented` JSDoc** to the five registry seeds (`QueryRegistry`/`MutationRegistry`/`RouteRegistry`/`InvalidationSets`/`OptimisticDerivationSets`, `index.ts:236`) so the compiler-populated contract is documented (mirrors `core/generated.ts`).
+- [ ] **`browser`: fix `installKovoLoader` JSDoc** (`loader.ts:93` — it is NOT what ships; the prod loader is the `@internal installInlineKovoLoader`); consider `@experimental` on the `./client` facade.
+- [ ] **`test/test-case`: mark `kovoTest` `experimental_`** (or demote to a testing-guide snippet; 0 example uses over `createKovoTestHarness`).
+- [ ] **`server`: keep the 2 vite-dev functions `@experimental` on root; drop the 4 zero-import companion types** (`index.ts:15,51-56`; types remain on `./internal/app-shell-vite`).
+
+### 9D — Narrowing passes (type redesign; larger)
+
+- [ ] **`browser/client` option graph 72 → ~8.** Retype `KovoLoaderOptions.root` as `Document | Element`; move `CompiledQuery*`/`Morph*`/wire-parser shapes to `@kovojs/browser/generated`; delete the `dom-like.ts` `*Like` duck-types. (`loader.ts:38`, `dom-like.ts`.)
+- [ ] **`headless-ui` machinery types: DOCUMENT/narrow, do NOT internalize.** Per-primitive `tsc`-assisted pass — document the `*State`/`*ChangeResult`/`*PrimitiveAttributes`/… types forced by kept `*Attributes`/handler signatures; narrow the open `Record<string, boolean|string>` tail of `*PrimitiveAttributes` to known keys; demote only the genuinely-unreferenced ones. (Overturned-from-remove; ~430 upper bound on review scope.)
+- [ ] **`test/html-fragment`: move the kovo-wire-shape extractor family** (`kovoFragmentFacts`/`kovoQueryFacts`/`documentQueryScriptBehaviorFact`/`htmlMainMarkerFact` + their `*Fact` types) to `@kovojs/test/internal/*`; keep the generic `html*` element/form/key extractors public.
+
+### 9E — Re-tier the primitive ABI (BLOCKED on a prerequisite)
+
+- [ ] **PREREQ — generated handler ABI + L1 authoring story.** Add an `apiBoundary.generated` tier to `@kovojs/headless-ui` so emitted client modules import handlers from `generated` (not the human-public root), and move the L1 island-authoring path off hand-imported reducers (the gallery currently hand-imports them). Required because `rules/api-surface.md` bars emitted code from `internal`. (Standing blocker per `plans/api-cleanup-leftover.md`.)
+- [ ] **(blocked by PREREQ) Demote the 100 `@kovoPrimitiveHandler` functions** to the new `generated` tier / tag `@generated` (`switch.ts:81` et al.). Keep importable for the compiler; off the SemVer/docs surface.
+- [ ] **(blocked by PREREQ) Demote the 124 reducers** (`set*`/`toggle*`/`*Move`/`*Typeahead`/`*RovingIndex`) to `@kovojs/headless-ui/internal`. Baseline −124 once unblocked.
+
+### 9F — Reference pages (gated on 9A/9B/9D shrinking the surface; finishes Phase 8)
+
+- [ ] **Add an api-ref page for `@kovojs/headless-ui`** (`apiRef` entry in `public-packages.json` + generated page): the kept `*Attributes` builders + value/state types, after 9D documents them.
+- [ ] **Add an api-ref page for `@kovojs/ui`** (library half): the `Component`/`*Props` families, after 9A un-exports the class strings and they are documented.
+  - Prove (9F): `pnpm exec vitest run site/scripts/api-ref.test.mjs` + `pnpm run check:build`.
