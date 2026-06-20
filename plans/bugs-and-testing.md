@@ -352,7 +352,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
   and F34 (guarded-doc `no-store`), with integration assertions. _C5 (prod-delta · deploy-skew-422 ·
   minified-name survival) still needs **G‑S1** (prod-build browser harness)._
 - [x] **C6** ✅ concurrent-distinct lost-update (`concurrent-distinct-writes`) + ✅ derived-optimism (`optimistic-success` — prediction 2→6, reconcile →8 via a `<kovo-query>` wire element so the store settles to server truth) + ✅ multi-transform rebase (`optimistic-rebase.spec.ts`). Queue mechanism exists in `optimism.ts` and is exercised via the rebase/pending flow.
-- [ ] **Deferred** F15 + SSE subscribe-then-revoke — gated on the SSE subscription feature being built in the separate `agent/stream-server` / `agent/stream-browser` / `agent/stream-compiler` worktrees (mutation-response streaming exists + is tested via `streaming-chat.spec.ts`; the subscribe/revoke primitive is the unbuilt piece).
+- [ ] **Deferred** F15 (SSE live-push guard re-check) + SSE subscribe-then-revoke. F15 is a **contested, low-severity** finding; SSE live-push is **unbuilt on main** (no `EventSource`/`text/event-stream` handler) — it needs a whole server event-stream + client subscription + per-push principal re-resolution, being built in the separate `agent/stream-*` worktrees. The only plan item that genuinely requires an unbuilt feature, not a test/diagnostic this slice can add.
 
 ## Governance & proof (per CLAUDE.md / rules)
 
