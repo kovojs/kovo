@@ -8,12 +8,7 @@ import {
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  autocompleteClasses,
-  autocompleteInputClasses,
-  autocompleteListClasses,
-  autocompleteOptionClasses,
   autocompleteStyles,
-  autocompleteValueClasses,
 } from './autocomplete.js';
 
 const items = [
@@ -34,7 +29,7 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
     };
 
     expect({
-      classes: autocompleteClasses,
+      classes: [style.attrs(autocompleteStyles.root).class ?? ''] as const,
       input: AutocompleteInput.definition.render({
         ...state,
         autocomplete: 'off',
@@ -44,19 +39,19 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
         labelledBy: 'team-label',
         name: 'team',
       }),
-      inputClasses: autocompleteInputClasses,
+      inputClasses: [style.attrs(autocompleteStyles.input).class ?? ''] as const,
       list: AutocompleteList.definition.render({
         ...state,
         children: 'options',
         id: 'team-list',
         labelledBy: 'team-input',
       }),
-      listClasses: autocompleteListClasses,
+      listClasses: [style.attrs(autocompleteStyles.list).class ?? ''] as const,
       option: AutocompleteOption.definition.render({
         ...state,
         itemValue: 'design',
       }),
-      optionClasses: autocompleteOptionClasses,
+      optionClasses: [style.attrs(autocompleteStyles.option).class ?? ''] as const,
       root: Autocomplete.definition.render({
         ...state,
         children: 'autocomplete body',
@@ -68,7 +63,7 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
         ...state,
         id: 'team-value',
       }),
-      valueClasses: autocompleteValueClasses,
+      valueClasses: [style.attrs(autocompleteStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

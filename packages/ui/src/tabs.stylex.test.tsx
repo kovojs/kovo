@@ -2,17 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Tabs,
-  TabsList,
-  TabsPanel,
-  TabsTrigger,
-  tabsClasses,
-  tabsListClasses,
-  tabsPanelClasses,
-  tabsStyles,
-  tabsTriggerClasses,
-} from './tabs.js';
+import { Tabs, TabsList, TabsPanel, TabsTrigger, tabsStyles } from './tabs.js';
 
 const items = [
   { label: 'Overview', value: 'overview' },
@@ -64,10 +54,16 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
     expect(inactivePanel).toContain('aria-labelledby="billing-trigger"');
     expect(inactivePanel).toContain('data-state="inactive" hidden');
     expect(inactivePanel).toContain('role="tabpanel"');
-    expect(tabsClasses.join(' ')).toContain('kv-tabs-w-');
-    expect(tabsListClasses.join(' ')).toContain('kv-tabs-flex-');
-    expect(tabsTriggerClasses.join(' ')).toContain('kv-tabs-bg-');
-    expect(tabsPanelClasses.join(' ')).toContain('kv-tabs-pad-');
+    expect(([style.attrs(tabsStyles.root).class ?? ''] as const).join(' ')).toContain('kv-tabs-w-');
+    expect(([style.attrs(tabsStyles.list).class ?? ''] as const).join(' ')).toContain(
+      'kv-tabs-flex-',
+    );
+    expect(([style.attrs(tabsStyles.trigger).class ?? ''] as const).join(' ')).toContain(
+      'kv-tabs-bg-',
+    );
+    expect(([style.attrs(tabsStyles.panel).class ?? ''] as const).join(' ')).toContain(
+      'kv-tabs-pad-',
+    );
   });
 
   it('accepts per-slot StyleX override objects', () => {

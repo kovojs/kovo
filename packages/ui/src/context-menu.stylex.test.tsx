@@ -9,13 +9,7 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
   ContextMenuTrigger,
-  contextMenuClasses,
-  contextMenuContentClasses,
-  contextMenuGroupClasses,
-  contextMenuItemClasses,
-  contextMenuSeparatorClasses,
   contextMenuStyles,
-  contextMenuTriggerClasses,
 } from './context-menu.js';
 
 const items = [
@@ -26,10 +20,10 @@ const items = [
 describe('@kovojs/ui ContextMenu StyleX slots', () => {
   it('matches context menu markup with StyleX slot output', () => {
     expect({
-      classes: contextMenuClasses,
-      contentClasses: contextMenuContentClasses,
-      groupClasses: contextMenuGroupClasses,
-      itemClasses: contextMenuItemClasses,
+      classes: [style.attrs(contextMenuStyles.root).class ?? ''] as const,
+      contentClasses: [style.attrs(contextMenuStyles.content).class ?? ''] as const,
+      groupClasses: [style.attrs(contextMenuStyles.group).class ?? ''] as const,
+      itemClasses: [style.attrs(contextMenuStyles.item).class ?? ''] as const,
       menu: ContextMenu.definition.render({
         children:
           ContextMenuTrigger.definition.render({
@@ -67,8 +61,8 @@ describe('@kovojs/ui ContextMenu StyleX slots', () => {
         open: true,
         point: { x: 32, y: 48 },
       }),
-      separatorClasses: contextMenuSeparatorClasses,
-      triggerClasses: contextMenuTriggerClasses,
+      separatorClasses: [style.attrs(contextMenuStyles.separator).class ?? ''] as const,
+      triggerClasses: [style.attrs(contextMenuStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

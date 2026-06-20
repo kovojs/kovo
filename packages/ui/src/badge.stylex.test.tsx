@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Badge, badgeClasses, badgeStyles } from './badge.js';
+import { Badge, badgeStyles } from './badge.js';
 
 describe('@kovojs/ui Badge StyleX styles', () => {
   it('renders default and variant StyleX classes', () => {
@@ -18,8 +18,28 @@ describe('@kovojs/ui Badge StyleX styles', () => {
     expect(success).toContain('kv-badge-variant-bg-');
     expect(success).toContain('badge.tsx#root; badge.tsx#success');
     expect(warning).toContain('badge.tsx#root; badge.tsx#warning');
-    expect(badgeClasses.join(' ')).toContain('kv-badge-align-');
-    expect(badgeClasses.join(' ')).toContain('kv-badge-variant-bg-');
+    expect(
+      (
+        [
+          style.attrs(badgeStyles.base.root, badgeStyles.variants.neutral).class ?? '',
+          style.attrs(badgeStyles.variants.success).class ?? '',
+          style.attrs(badgeStyles.variants.warning).class ?? '',
+          style.attrs(badgeStyles.variants.destructive).class ?? '',
+          style.attrs(badgeStyles.variants.outline).class ?? '',
+        ] as const
+      ).join(' '),
+    ).toContain('kv-badge-align-');
+    expect(
+      (
+        [
+          style.attrs(badgeStyles.base.root, badgeStyles.variants.neutral).class ?? '',
+          style.attrs(badgeStyles.variants.success).class ?? '',
+          style.attrs(badgeStyles.variants.warning).class ?? '',
+          style.attrs(badgeStyles.variants.destructive).class ?? '',
+          style.attrs(badgeStyles.variants.outline).class ?? '',
+        ] as const
+      ).join(' '),
+    ).toContain('kv-badge-variant-bg-');
   });
 
   it('accepts author-last StyleX overrides', () => {

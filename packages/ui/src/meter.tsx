@@ -67,12 +67,6 @@ export const meterStyles = style.create({
   },
 });
 
-export const meterClasses = [style.attrs(meterStyles.root).class ?? ''] as const;
-/** CSS class tuple for the visual meter indicator slot. */
-export const meterIndicatorClasses = [style.attrs(meterStyles.indicator).class ?? ''] as const;
-/** CSS class tuple for the native semantic meter slot. */
-export const meterNativeClasses = [style.attrs(meterStyles.native).class ?? ''] as const;
-
 function fillStyle(
   value: string | undefined,
   min: string | undefined,

@@ -6,10 +6,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-  collapsibleClasses,
-  collapsibleContentClasses,
   collapsibleStyles,
-  collapsibleTriggerClasses,
 } from './collapsible.js';
 
 describe('@kovojs/ui Collapsible StyleX styles', () => {
@@ -18,7 +15,7 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
     const closed = { contentId: 'archived-notes', open: false as const };
 
     expect({
-      classes: collapsibleClasses,
+      classes: [style.attrs(collapsibleStyles.root).class ?? ''] as const,
       closed: Collapsible.definition.render({
         children:
           CollapsibleTrigger.definition.render({ ...closed, children: 'Archived notes' }) +
@@ -29,7 +26,7 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
         id: 'collapsible-closed',
         open: false,
       }),
-      contentClasses: collapsibleContentClasses,
+      contentClasses: [style.attrs(collapsibleStyles.content).class ?? ''] as const,
       disabled: Collapsible.definition.render({
         children:
           CollapsibleTrigger.definition.render({
@@ -56,7 +53,7 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
         id: 'collapsible-open',
         open: true,
       }),
-      triggerClasses: collapsibleTriggerClasses,
+      triggerClasses: [style.attrs(collapsibleStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

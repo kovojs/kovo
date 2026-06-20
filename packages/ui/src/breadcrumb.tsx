@@ -74,15 +74,6 @@ export const breadcrumbStyles = style.create({
   },
 });
 
-export const breadcrumbClasses = [
-  style.attrs(breadcrumbStyles.root).class ?? '',
-  style.attrs(breadcrumbStyles.list).class ?? '',
-  style.attrs(breadcrumbStyles.item).class ?? '',
-  style.attrs(breadcrumbStyles.link).class ?? '',
-  style.attrs(breadcrumbStyles.current).class ?? '',
-  style.attrs(breadcrumbStyles.separator).class ?? '',
-] as const;
-
 export const Breadcrumb = component({
   render(props: BreadcrumbProps) {
     const rootAttrs = style.attrs(breadcrumbStyles.root, props.styles?.root);

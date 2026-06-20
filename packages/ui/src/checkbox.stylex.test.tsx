@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Checkbox, checkboxClasses, checkboxInputClasses, checkboxStyles } from './checkbox.js';
+import { Checkbox, checkboxStyles } from './checkbox.js';
 
 describe('@kovojs/ui Checkbox StyleX styles', () => {
   it('matches native checkbox states with StyleX output', () => {
@@ -15,7 +15,7 @@ describe('@kovojs/ui Checkbox StyleX styles', () => {
         required: true,
         value: 'accepted',
       }),
-      classes: checkboxClasses,
+      classes: [style.attrs(checkboxStyles.root).class ?? ''] as const,
       disabled: Checkbox.definition.render({ children: 'Locked', disabled: true }),
       indeterminate: Checkbox.definition.render({
         checked: 'indeterminate',
@@ -23,7 +23,7 @@ describe('@kovojs/ui Checkbox StyleX styles', () => {
         name: 'permissions',
         value: 'partial',
       }),
-      inputClasses: checkboxInputClasses,
+      inputClasses: [style.attrs(checkboxStyles.input).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

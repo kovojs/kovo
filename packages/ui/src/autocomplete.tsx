@@ -190,18 +190,6 @@ export const autocompleteStyles = style.create({
   },
 });
 
-export const autocompleteClasses = [style.attrs(autocompleteStyles.root).class ?? ''] as const;
-export const autocompleteInputClasses = [
-  style.attrs(autocompleteStyles.input).class ?? '',
-] as const;
-export const autocompleteListClasses = [style.attrs(autocompleteStyles.list).class ?? ''] as const;
-export const autocompleteOptionClasses = [
-  style.attrs(autocompleteStyles.option).class ?? '',
-] as const;
-export const autocompleteValueClasses = [
-  style.attrs(autocompleteStyles.value).class ?? '',
-] as const;
-
 export const Autocomplete = component({
   render(props: AutocompleteProps) {
     const attrs = autocompleteRootAttributes({

@@ -59,14 +59,6 @@ export const badgeStyles = {
   variants,
 } as const;
 
-export const badgeClasses = [
-  style.attrs(base.root, variants.neutral).class ?? '',
-  style.attrs(variants.success).class ?? '',
-  style.attrs(variants.warning).class ?? '',
-  style.attrs(variants.destructive).class ?? '',
-  style.attrs(variants.outline).class ?? '',
-] as const;
-
 export const Badge = component({
   render(props: BadgeProps) {
     const attrs = style.attrs(base.root, variants[props.variant ?? 'neutral'], props.style);

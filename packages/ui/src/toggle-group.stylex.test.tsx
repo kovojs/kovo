@@ -6,9 +6,6 @@ import {
   ToggleGroup,
   ToggleGroupButton,
   ToggleGroupItem,
-  toggleGroupButtonClasses,
-  toggleGroupClasses,
-  toggleGroupItemClasses,
   toggleGroupStyles,
 } from './toggle-group.js';
 
@@ -34,8 +31,8 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
         id: 'bold-button',
         itemValue: 'bold',
       }),
-      buttonClasses: toggleGroupButtonClasses,
-      classes: toggleGroupClasses,
+      buttonClasses: [style.attrs(toggleGroupStyles.button).class ?? ''] as const,
+      classes: [style.attrs(toggleGroupStyles.root).class ?? ''] as const,
       disabledButton: ToggleGroupButton.definition.render({
         ...state,
         children: 'Strike',
@@ -47,7 +44,7 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
         id: 'bold-item',
         itemValue: 'bold',
       }),
-      itemClasses: toggleGroupItemClasses,
+      itemClasses: [style.attrs(toggleGroupStyles.item).class ?? ''] as const,
       root: ToggleGroup.definition.render({
         ...state,
         children: 'format controls',

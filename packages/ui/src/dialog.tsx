@@ -146,15 +146,6 @@ export const dialogStyles = style.create({
   },
 });
 
-export const dialogClasses = [style.attrs(dialogStyles.root).class ?? ''] as const;
-export const dialogTriggerClasses = [style.attrs(dialogStyles.trigger).class ?? ''] as const;
-export const dialogContentClasses = [style.attrs(dialogStyles.content).class ?? ''] as const;
-export const dialogCloseClasses = [style.attrs(dialogStyles.close).class ?? ''] as const;
-export const dialogClassNames = dialogStyles.root;
-export const dialogTriggerClassNames = dialogStyles.trigger;
-export const dialogContentClassNames = dialogStyles.content;
-export const dialogCloseClassNames = dialogStyles.close;
-
 function dialogState(props: DialogStateProps) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

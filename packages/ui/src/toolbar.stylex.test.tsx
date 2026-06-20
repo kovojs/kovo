@@ -2,15 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Toolbar,
-  ToolbarButton,
-  ToolbarItem,
-  toolbarButtonClasses,
-  toolbarClasses,
-  toolbarItemClasses,
-  toolbarStyles,
-} from './toolbar.js';
+import { Toolbar, ToolbarButton, ToolbarItem, toolbarStyles } from './toolbar.js';
 
 const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'link' }] as const;
 
@@ -30,8 +22,8 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
         itemValue: 'bold',
         pressed: true,
       }),
-      buttonClasses: toolbarButtonClasses,
-      classes: toolbarClasses,
+      buttonClasses: [style.attrs(toolbarStyles.button).class ?? ''] as const,
+      classes: [style.attrs(toolbarStyles.root).class ?? ''] as const,
       disabledButton: ToolbarButton.definition.render({
         ...state,
         children: 'Link',
@@ -44,7 +36,7 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
         id: 'bold-item',
         itemValue: 'bold',
       }),
-      itemClasses: toolbarItemClasses,
+      itemClasses: [style.attrs(toolbarStyles.item).class ?? ''] as const,
       root: Toolbar.definition.render({
         ...state,
         children: 'format controls',

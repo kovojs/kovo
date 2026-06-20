@@ -83,29 +83,6 @@ export type ComponentRenderSlots<
   Mutations extends ComponentMutationDefinitions = NoComponentMutations,
 > = ComponentRenderSlotValues & ComponentRenderFormsSlot<Mutations>;
 
-/** Typed body of a component: its query bindings, island state factory, and `render`. */
-export interface ComponentDefinition<
-  RenderQueries = Record<string, unknown>,
-  State extends JsonValue = JsonValue,
-  Mutations extends ComponentMutationDefinitions = NoComponentMutations,
-  QueryBindings = Record<string, unknown>,
-> {
-  /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
-  disableServerRefresh?: boolean;
-  /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
-  fragmentTarget?: never;
-  /** Unexpected render-error fallback for full-page and live-target renders (SPEC §9.2). */
-  errorBoundary?: ComponentErrorBoundary;
-  mutations?: Mutations;
-  queries?: QueryBindings;
-  state?: () => State;
-  render: (
-    queries: RenderQueries,
-    state: State,
-    slots: ComponentRenderSlots<Mutations>,
-  ) => ComponentRenderResult;
-}
-
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
 export interface ComponentDefinitionInput {
   /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
@@ -119,11 +96,6 @@ export interface ComponentDefinitionInput {
   state?: () => JsonValue;
   render: (...args: never[]) => ComponentRenderResult;
 }
-
-type ComponentDefinitionShape = Omit<ComponentDefinitionInput, 'mutations' | 'render'> & {
-  mutations?: ComponentMutationDefinitions;
-  render: (...args: any[]) => any;
-};
 
 /** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
 export interface Component<Definition extends ComponentDefinitionInput> {
@@ -155,7 +127,12 @@ export interface Component<Definition extends ComponentDefinitionInput> {
  *     `<button>${state.count}</button>`,
  * });
  */
-export function component<const Definition extends ComponentDefinitionShape>(
+export function component<
+  const Definition extends Omit<ComponentDefinitionInput, 'mutations' | 'render'> & {
+    mutations?: ComponentMutationDefinitions;
+    render: (...args: any[]) => any;
+  },
+>(
   definition: Definition & {
     render: (
       queries: any,
@@ -233,19 +210,38 @@ export interface Query<Key extends string, Result> {
   result?: Result;
 }
 
-/** Augmentable registry mapping query keys to result types (declaration-merged by apps). */
+/**
+ * Augmentable registry mapping query keys to result types (declaration-merged by apps).
+ *
+ * @augmented The canonical entries are emitted by the compiler via
+ * `declare module '@kovojs/core'` (compiler/src/emit/registry.ts); hand-augmentation is
+ * the SPEC §5.2/KV235-discouraged exception. Mirrors the `@generated` registries in
+ * `core/src/generated.ts`, but stays here because `form`/`query`/`href` typing resolves it.
+ */
 export interface QueryRegistry {}
 
-/** Augmentable registry mapping mutation keys to input/failure types. */
+/**
+ * Augmentable registry mapping mutation keys to input/failure types.
+ * @augmented Compiler-populated (see {@link QueryRegistry}).
+ */
 export interface MutationRegistry {}
 
-/** Augmentable registry mapping route paths to their `Route` descriptors. */
+/**
+ * Augmentable registry mapping route paths to their `Route` descriptors.
+ * @augmented Compiler-populated (see {@link QueryRegistry}).
+ */
 export interface RouteRegistry {}
 
-/** Augmentable registry mapping mutation keys to the query names they invalidate (drives `OptimisticFor`). */
+/**
+ * Augmentable registry mapping mutation keys to the query names they invalidate (drives `OptimisticFor`).
+ * @augmented Compiler-populated (see {@link QueryRegistry}).
+ */
 export interface InvalidationSets {}
 
-/** Augmentable registry mapping mutation keys to invalidated query names covered by generated optimism. */
+/**
+ * Augmentable registry mapping mutation keys to invalidated query names covered by generated optimism.
+ * @augmented Compiler-populated (see {@link QueryRegistry}).
+ */
 export interface OptimisticDerivationSets {}
 
 type RegistryKey<Registry> = keyof Registry extends never

@@ -200,15 +200,6 @@ export const selectStyles = style.create({
   },
 });
 
-export const selectClasses = [style.attrs(selectStyles.root).class ?? ''] as const;
-export const selectTriggerClasses = [style.attrs(selectStyles.trigger).class ?? ''] as const;
-export const selectContentClasses = [style.attrs(selectStyles.content).class ?? ''] as const;
-export const selectItemClasses = [style.attrs(selectStyles.item).class ?? ''] as const;
-export const selectValueClasses = [style.attrs(selectStyles.value).class ?? ''] as const;
-export const selectHiddenInputClasses = [
-  style.attrs(selectStyles.hiddenInput).class ?? '',
-] as const;
-
 export const Select = component({
   render(props: SelectProps) {
     const attrs = selectRootAttributes({

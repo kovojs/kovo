@@ -8,12 +8,7 @@ import {
   AccordionHeader,
   AccordionItem,
   AccordionTrigger,
-  accordionClasses,
-  accordionContentClasses,
-  accordionHeaderClasses,
-  accordionItemClasses,
   accordionStyles,
-  accordionTriggerClasses,
 } from './accordion.js';
 
 describe('@kovojs/ui Accordion StyleX styles', () => {
@@ -28,10 +23,10 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
     };
 
     expect({
-      classes: accordionClasses,
-      contentClasses: accordionContentClasses,
-      headerClasses: accordionHeaderClasses,
-      itemClasses: accordionItemClasses,
+      classes: [style.attrs(accordionStyles.root).class ?? ''] as const,
+      contentClasses: [style.attrs(accordionStyles.content).class ?? ''] as const,
+      headerClasses: [style.attrs(accordionStyles.header).class ?? ''] as const,
+      itemClasses: [style.attrs(accordionStyles.item).class ?? ''] as const,
       open: Accordion.definition.render({
         children:
           AccordionItem.definition.render({
@@ -77,7 +72,7 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
         id: 'account-accordion',
         value: 'shipping',
       }),
-      triggerClasses: accordionTriggerClasses,
+      triggerClasses: [style.attrs(accordionStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

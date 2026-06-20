@@ -77,11 +77,6 @@ export const toggleStyles = {
   variants,
 } as const;
 
-export const toggleClasses = [
-  style.attrs(base.root, variants.outline).class ?? '',
-  style.attrs(variants.subtle).class ?? '',
-] as const;
-
 export const Toggle = component({
   render(props: ToggleProps) {
     const attrs = toggleRootAttributes({

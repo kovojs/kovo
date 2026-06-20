@@ -11,6 +11,7 @@
     "./harness": "./src/harness.ts",
     "./html-fragment": "./src/html-fragment.ts",
     "./internal/harness-operations": "./src/harness-operations.ts",
+    "./internal/html-wire": "./src/internal/html-wire.ts",
     "./internal/integration": "./src/integration/index.ts",
     "./internal/integration/define": "./src/integration/define-fixture.ts",
     "./internal/page": "./src/page.ts",
@@ -42,6 +43,10 @@
       "./internal/harness-operations": {
         "types": "./dist/harness-operations.d.mts",
         "default": "./dist/harness-operations.mjs"
+      },
+      "./internal/html-wire": {
+        "types": "./dist/internal/html-wire.d.mts",
+        "default": "./dist/internal/html-wire.mjs"
       },
       "./internal/integration": {
         "types": "./dist/integration/index.d.mts",
@@ -82,7 +87,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/integration/define-fixture.ts src/integration/index.ts src/page.ts src/pglite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/internal/html-wire.ts src/integration/define-fixture.ts src/integration/index.ts src/page.ts src/pglite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

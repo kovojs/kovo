@@ -126,15 +126,6 @@ export const buttonStyles = {
   variants,
 } as const;
 
-export const buttonClasses = [
-  style.attrs(base.root, sizes.md, variants.primary).class ?? '',
-  style.attrs(sizes.sm).class ?? '',
-  style.attrs(variants.secondary).class ?? '',
-  style.attrs(variants.ghost).class ?? '',
-  style.attrs(variants.destructive).class ?? '',
-  style.attrs(variants.outline).class ?? '',
-] as const;
-
 export const Button = component({
   render(props: ButtonProps) {
     const attrs = style.attrs(

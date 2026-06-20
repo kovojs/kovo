@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Skeleton, skeletonClasses, skeletonStyles } from './skeleton.js';
+import { Skeleton, skeletonStyles } from './skeleton.js';
 
 describe('@kovojs/ui Skeleton StyleX styles', () => {
   it('renders decorative skeleton markup with StyleX classes', () => {
@@ -11,7 +11,9 @@ describe('@kovojs/ui Skeleton StyleX styles', () => {
     expect(rendered).toContain('<div class="kv-skeleton-animation-');
     expect(rendered).toContain('data-style-src="skeleton.tsx#root"');
     expect(rendered).toContain('aria-hidden="true"');
-    expect(skeletonClasses.join(' ')).toContain('kv-skeleton-bg-');
+    expect(([style.attrs(skeletonStyles.root).class ?? ''] as const).join(' ')).toContain(
+      'kv-skeleton-bg-',
+    );
   });
 
   it('accepts author-last StyleX size overrides', () => {

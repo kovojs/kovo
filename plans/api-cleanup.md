@@ -198,19 +198,43 @@ check:api-surface` (expect `fixed-this-run` > 0). The adversarial pass already *
 tempting bulk removals (the ~396 headless machinery types + the test-harness options are forced-public —
 they get **documented/narrowed**, never internalized); do not re-introduce those as removals.
 
+**Execution status (2026-06-19, branch `agent/api-cleanup-phase9`).** Landed + verified green this pass:
+**all of 9A** (194 ui `*Classes`/`*ClassNames` un-exported, `ComponentDefinition` removed, `static-export`
+subpath removed, `isHeaderSource` dropped; `core#query` corrected to KEEP), **all of 9C**, the safe **9B**
+items (drizzle `KovoFanAnnotation` re-export, `core` `component()` bound inline, server `export *`→named),
+and **9D** html-fragment wire→`./internal/html-wire`. **api-surface baseline 1571 → 1367 (−204).** Gates:
+`vp check` typecheck clean + my changed files formatted; `check:api-surface`/`check:exports`/`check:publish`
+green; per-package vitest green (core 68, ui 186, drizzle 261, browser 453, test 155, server 504/506 +
+conformance 173/174 — the 2 server + 1 conformance failures are PRE-EXISTING `Cache-Control`/`Vary` header
+diffs, identical on untouched `main`; `check:imports` has one PRE-EXISTING `compiler/package-styles`
+site-script failure, also on `main`).
+
+**Deferred this pass — each has a discovered blocker (NOT lazy skips):** `style` `CompiledStyle` branding
+(compiler consumes the structural shape); `style` identity-overload drop (**audit was wrong — the ui
+`*.stylex.test.tsx` call `style.create(obj, {namespace,source})`, so it is exercised**); `better-auth`
+split (`csrf`/`guard` fields also name non-public types + depends on the in-flux server barrel);
+`server/vite` `kovo()` token (example vite-config coupling); **`test/harness` `TouchGraph` promotion
+CONFLICTS with Phase 5**, which deliberately made `graph.ts` IR `@internal` — promoting it re-exposes
+verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless machinery docs (large/ratchet);
+9E (blocked on the generated-handler-ABI prereq); 9F api-ref pages (gated on the doc work).
+
 ### 9A — Immediate removes / un-exports (no prerequisites; biggest baseline drop)
 
-- [ ] **Un-export the 240 `@kovojs/ui` `*Styles`/`*Classes`/`*ClassNames`.** Drop `export` from `*Styles`
-  (keep module-local; render bodies use it); delete the `*Classes`/`*ClassNames` consts; rewrite the
-  package's own `*.stylex.test.tsx` to read `style.attrs(localStyles.x).class`.
+- [x] **Un-export `@kovojs/ui` `*Classes`/`*ClassNames` (194 done; `*Styles` deferred — see status).** Drop `export` from `*Styles`
+      (keep module-local; render bodies use it); delete the `*Classes`/`*ClassNames` consts; rewrite the
+      package's own `*.stylex.test.tsx` to read `style.attrs(localStyles.x).class`.
   - Done = baseline `fixed-this-run ≈ 240`; ui builds. Prove: `pnpm run check:api-surface` + `pnpm --filter @kovojs/ui exec vitest run`.
-- [ ] **Remove dead `@kovojs/core#ComponentDefinition`** (`index.ts:87`; 0 consumers repo-wide; `ComponentDefinitionInput` stays).
+- [x] **Remove dead `@kovojs/core#ComponentDefinition`** (`index.ts:87`; 0 consumers repo-wide; `ComponentDefinitionInput` stays).
   - Prove: `pnpm --filter @kovojs/core exec vitest run` + gate.
-- [ ] **Remove `@kovojs/core#query()`** (`index.ts:446`; verified dead — only its own JSDoc `@example` references it; no app/compiler/generated consumer). Review the `Query`/`queryBinding`/`QueryRefreshBinding` handle types it returns in the same change (referenced only by that machinery; delete with it unless a component `queries` binding names `Query<>`). Keep `core#route()`.
-  - Prove: `pnpm run check` + `pnpm run typecheck-examples`.
-- [ ] **Remove redundant `@kovojs/server/app-shell/static-export` subpath.** Drop from `package.json` `exports` + `publishConfig` + manifest `apiBoundary.public`; point the two in-repo tests at the `@kovojs/server` root. Types stay public via `StaticExportResult`/`StaticExportOptions`.
+- [x] **`@kovojs/core#query()` — KEEP (corrected; NOT a removal).** Implementation-pass investigation
+      (`packages/core/src/index.test.ts:112,174-208`) showed `core#query(key)` is the component-binding query
+      handle with `.args()`/`.refresh()` (per-use freshness, SPEC §4.9), validated against the generated
+      `ComponentRegistry` — complementary to `server#query()` which _declares_. The "remove" recommendation
+      was the "0 imports ≠ dead" trap; a trial removal was reverted. Follow-up (doc-only): tighten both
+      `query` JSDocs to spell out declare-vs-bind. Evidence: `pnpm --filter @kovojs/core exec vitest run` → 68 passed.
+- [x] **Remove redundant `@kovojs/server/app-shell/static-export` subpath.** Drop from `package.json` `exports` + `publishConfig` + manifest `apiBoundary.public`; point the two in-repo tests at the `@kovojs/server` root. Types stay public via `StaticExportResult`/`StaticExportOptions`.
   - Prove: `pnpm --filter @kovojs/server exec vitest run` + `pnpm run check:publish`.
-- [ ] **Drop `isHeaderSource` from the server public barrel** (`routing.ts:36`; 0/0 predicate). KEEP the recursively-reachable response types (`RouteResponseOutcome`/`RouteResponseBody`/`RouteFileOptions`/`RouteStreamOptions` — forced by `route()`'s return at `route.ts:159`).
+- [x] **Drop `isHeaderSource` from the server public barrel** (`routing.ts:36`; 0/0 predicate). KEEP the recursively-reachable response types (`RouteResponseOutcome`/`RouteResponseBody`/`RouteFileOptions`/`RouteStreamOptions` — forced by `route()`'s return at `route.ts:159`).
   - Prove: `pnpm --filter @kovojs/server exec vitest run` + gate.
 
 ### 9B — Recursive-publicness fixes (close the latent leaks the gate can't see)
@@ -219,27 +243,27 @@ they get **documented/narrowed**, never internalized); do not re-introduce those
 - [ ] **`style`: drop the `identity`-options public overloads** of `create`/`defineVars`/`createTheme`/`keyframes` (`engine.ts:75`); `StyleIdentityOptions` becomes impl-only.
 - [ ] **`server/vite`: narrow `kovo()`'s return** to an opaque `{ readonly name: 'kovo' }` token (`vite.ts:38,116`); keep the hook interface (`KovoViteResolvedConfig`/`KovoViteHotUpdateContext`) internal.
 - [ ] **`better-auth`: split `BetterAuthCredentialMutationOptions`** (`internal.ts:1100`) — export the narrow public `{csrf,defaultRedirectTo,guard,key}` from `index.ts`; keep `registry`(`MutationRegistry`)/`transaction` on an `@internal` extension the impl uses.
-- [ ] **`drizzle`: re-export `KovoFanAnnotation`** from `runtime.ts` (one line; `drizzle-surface.ts:12`).
+- [x] **`drizzle`: re-export `KovoFanAnnotation`** from `runtime.ts` (one line; `drizzle-surface.ts:12`).
 - [ ] **`test/harness`: make the options nameable** (`harness.ts:44-49`) — promote `core` `TouchGraph` to the public `index.ts` (already a clean `export` at `core/src/graph.ts:42`); re-export `DbVerificationConfig` + `HarnessMutationOptions` from `./harness`. (Types stay public — this is a fix, not a removal.)
-- [ ] **`core`: inline `component()`'s generic bound** from the public `ComponentDefinitionInput` (drop the private `ComponentDefinitionShape` from the signature; `index.ts:123,158`).
-- [ ] **`server`: replace the 3 `export *`** (`index.ts:57-59`, `api/data|rendering|routing`) with explicit named re-export blocks.
+- [x] **`core`: inline `component()`'s generic bound** from the public `ComponentDefinitionInput` (drop the private `ComponentDefinitionShape` from the signature; `index.ts:123,158`).
+- [x] **`server`: replace the 3 `export *`** (`index.ts:57-59`, `api/data|rendering|routing`) with explicit named re-export blocks.
 - [ ] **Tighten the api-surface gate** to fail when a public signature names a non-public type (recursive publicness), so 9B can't regress; split `api-surface-baseline.json` into "to-document" vs "to-remove".
   - Prove (9B): `pnpm run check` + `pnpm run check:api-surface` + per-package vitest.
 
 ### 9C — Stability tags + doc reconciliation
 
-- [ ] **`@kovojs/ui` dual-distribution reconcile.** Rewrite the `STABILITY.md:21` paragraph to "versioned library **and** copy-in starter"; keep `kind:library` + `publishConfig` + `registry.json`/`kovo add`. (Supersedes Locked Decision #2 / Phase 7.)
-- [ ] **`server/build`: tag the whole preset family `@experimental`** (`KovoPreset`/`PresetContext`/`PresetInspectContext`/`PresetDiagnostic`/`KovoConfig`/`defineConfig`), matching `node`/`vercel`/`cloudflare`.
-- [ ] **`core`: add `@augmented` JSDoc** to the five registry seeds (`QueryRegistry`/`MutationRegistry`/`RouteRegistry`/`InvalidationSets`/`OptimisticDerivationSets`, `index.ts:236`) so the compiler-populated contract is documented (mirrors `core/generated.ts`).
-- [ ] **`browser`: fix `installKovoLoader` JSDoc** (`loader.ts:93` — it is NOT what ships; the prod loader is the `@internal installInlineKovoLoader`); consider `@experimental` on the `./client` facade.
-- [ ] **`test/test-case`: mark `kovoTest` `experimental_`** (or demote to a testing-guide snippet; 0 example uses over `createKovoTestHarness`).
-- [ ] **`server`: keep the 2 vite-dev functions `@experimental` on root; drop the 4 zero-import companion types** (`index.ts:15,51-56`; types remain on `./internal/app-shell-vite`).
+- [x] **`@kovojs/ui` dual-distribution reconcile.** Rewrite the `STABILITY.md:21` paragraph to "versioned library **and** copy-in starter"; keep `kind:library` + `publishConfig` + `registry.json`/`kovo add`. (Supersedes Locked Decision #2 / Phase 7.)
+- [x] **`server/build`: tag the whole preset family `@experimental`** (`KovoPreset`/`PresetContext`/`PresetInspectContext`/`PresetDiagnostic`/`KovoConfig`/`defineConfig`), matching `node`/`vercel`/`cloudflare`.
+- [x] **`core`: add `@augmented` JSDoc** to the five registry seeds (`QueryRegistry`/`MutationRegistry`/`RouteRegistry`/`InvalidationSets`/`OptimisticDerivationSets`, `index.ts:236`) so the compiler-populated contract is documented (mirrors `core/generated.ts`).
+- [x] **`browser`: fix `installKovoLoader` JSDoc** (`loader.ts:93` — it is NOT what ships; the prod loader is the `@internal installInlineKovoLoader`); consider `@experimental` on the `./client` facade.
+- [x] **`test/test-case`: mark `kovoTest` `@experimental`** (or demote to a testing-guide snippet; 0 example uses over `createKovoTestHarness`).
+- [x] **`server`: keep the 2 vite-dev functions `@experimental` on root; drop the 4 zero-import companion types** (`index.ts:15,51-56`; types remain on `./internal/app-shell-vite`).
 
 ### 9D — Narrowing passes (type redesign; larger)
 
 - [ ] **`browser/client` option graph 72 → ~8.** Retype `KovoLoaderOptions.root` as `Document | Element`; move `CompiledQuery*`/`Morph*`/wire-parser shapes to `@kovojs/browser/generated`; delete the `dom-like.ts` `*Like` duck-types. (`loader.ts:38`, `dom-like.ts`.)
 - [ ] **`headless-ui` machinery types: DOCUMENT/narrow, do NOT internalize.** Per-primitive `tsc`-assisted pass — document the `*State`/`*ChangeResult`/`*PrimitiveAttributes`/… types forced by kept `*Attributes`/handler signatures; narrow the open `Record<string, boolean|string>` tail of `*PrimitiveAttributes` to known keys; demote only the genuinely-unreferenced ones. (Overturned-from-remove; ~430 upper bound on review scope.)
-- [ ] **`test/html-fragment`: move the kovo-wire-shape extractor family** (`kovoFragmentFacts`/`kovoQueryFacts`/`documentQueryScriptBehaviorFact`/`htmlMainMarkerFact` + their `*Fact` types) to `@kovojs/test/internal/*`; keep the generic `html*` element/form/key extractors public.
+- [x] **`test/html-fragment`: move the kovo-wire-shape extractor family** (`kovoFragmentFacts`/`kovoQueryFacts`/`documentQueryScriptBehaviorFact`/`htmlMainMarkerFact` + their `*Fact` types) to `@kovojs/test/internal/*`; keep the generic `html*` element/form/key extractors public.
 
 ### 9E — Re-tier the primitive ABI (BLOCKED on a prerequisite)
 

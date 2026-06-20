@@ -1,5 +1,6 @@
 export type {
   KovoDomainTableAnnotation,
+  KovoFanAnnotation,
   KovoTableAnnotation,
   KovoTableExtraConfig,
   KovoViewAnnotation,

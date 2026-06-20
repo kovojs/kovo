@@ -146,16 +146,6 @@ export const scrollAreaStyles = style.create({
   },
 });
 
-export const scrollAreaClasses = [style.attrs(scrollAreaStyles.root).class ?? ''] as const;
-export const scrollAreaViewportClasses = [
-  style.attrs(scrollAreaStyles.viewport).class ?? '',
-] as const;
-export const scrollAreaScrollbarClasses = [
-  style.attrs(scrollAreaStyles.scrollbar).class ?? '',
-] as const;
-export const scrollAreaThumbClasses = [style.attrs(scrollAreaStyles.thumb).class ?? ''] as const;
-export const scrollAreaCornerClasses = [style.attrs(scrollAreaStyles.corner).class ?? ''] as const;
-
 export const ScrollArea = component({
   render(props: ScrollAreaProps) {
     const attrs = scrollAreaRootAttributes({

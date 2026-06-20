@@ -289,16 +289,6 @@ export const commandStyles = style.create({
   },
 });
 
-export const commandClasses = [style.attrs(commandStyles.root).class ?? ''] as const;
-export const commandTriggerClasses = [style.attrs(commandStyles.trigger).class ?? ''] as const;
-export const commandDialogClasses = [style.attrs(commandStyles.dialog).class ?? ''] as const;
-export const commandInputClasses = [style.attrs(commandStyles.input).class ?? ''] as const;
-export const commandListboxClasses = [style.attrs(commandStyles.listbox).class ?? ''] as const;
-export const commandItemClasses = [style.attrs(commandStyles.item).class ?? ''] as const;
-export const commandCloseClasses = [style.attrs(commandStyles.close).class ?? ''] as const;
-export const commandEmptyClasses = [style.attrs(commandStyles.empty).class ?? ''] as const;
-export const commandValueClasses = [style.attrs(commandStyles.value).class ?? ''] as const;
-
 export const Command = component({
   render(props: CommandProps) {
     const attrs = commandRootAttributes(toCommandState(props));

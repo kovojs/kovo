@@ -8,12 +8,7 @@ import {
   MenubarItem,
   MenubarSeparator,
   MenubarSubmenu,
-  menubarClasses,
-  menubarGroupClasses,
-  menubarItemClasses,
-  menubarSeparatorClasses,
   menubarStyles,
-  menubarSubmenuClasses,
 } from './menubar.js';
 
 const items = [
@@ -25,9 +20,9 @@ const items = [
 describe('@kovojs/ui Menubar StyleX slots', () => {
   it('matches menubar markup with StyleX slot output', () => {
     expect({
-      classes: menubarClasses,
-      groupClasses: menubarGroupClasses,
-      itemClasses: menubarItemClasses,
+      classes: [style.attrs(menubarStyles.root).class ?? ''] as const,
+      groupClasses: [style.attrs(menubarStyles.group).class ?? ''] as const,
+      itemClasses: [style.attrs(menubarStyles.item).class ?? ''] as const,
       menubar: Menubar.definition.render({
         activeValue: 'file',
         children:
@@ -72,8 +67,8 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
         openValue: 'file',
         orientation: 'horizontal',
       }),
-      separatorClasses: menubarSeparatorClasses,
-      submenuClasses: menubarSubmenuClasses,
+      separatorClasses: [style.attrs(menubarStyles.separator).class ?? ''] as const,
+      submenuClasses: [style.attrs(menubarStyles.submenu).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

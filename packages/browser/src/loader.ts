@@ -90,9 +90,12 @@ const defaultDelegatedEvents = [
  * Install the Kovo client loader on a root element: wire delegated events,
  * hydrate the query store from inline scripts, lazy-load island handlers on
  * first interaction, and apply mutation fragment patches and optimistic updates.
- * This is the single client entry point; the compiler emits the inline bootstrap
- * that calls it (SPEC §8). Returns a handle whose `dispose` removes all listeners.
+ * This is the manual/programmatic loader entry for app entries and starters that
+ * wire the loader by hand; it is NOT what the compiler inlines. The shipped
+ * production bootstrap is the `@internal installInlineKovoLoader` in
+ * `./inline-loader.js` (SPEC §8). Returns a handle whose `dispose` removes all listeners.
  *
+ * @experimental
  * @param options - The `root`, an `importModule` to load handler bundles, and optional query/lifecycle hooks.
  * @returns A `KovoLoader` handle.
  */

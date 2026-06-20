@@ -2,21 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-  tooltipClasses,
-  tooltipContentClasses,
-  tooltipStyles,
-  tooltipTriggerClasses,
-} from './tooltip.js';
+import { Tooltip, TooltipContent, TooltipTrigger, tooltipStyles } from './tooltip.js';
 
 describe('@kovojs/ui Tooltip StyleX slots', () => {
   it('matches tooltip markup with StyleX slot output', () => {
     expect({
-      classes: tooltipClasses,
-      contentClasses: tooltipContentClasses,
+      classes: [style.attrs(tooltipStyles.root).class ?? ''] as const,
+      contentClasses: [style.attrs(tooltipStyles.content).class ?? ''] as const,
       disabled: Tooltip.definition.render({
         children:
           TooltipTrigger.definition.render({
@@ -40,7 +32,7 @@ describe('@kovojs/ui Tooltip StyleX slots', () => {
           }),
         open: true,
       }),
-      triggerClasses: tooltipTriggerClasses,
+      triggerClasses: [style.attrs(tooltipStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

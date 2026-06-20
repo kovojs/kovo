@@ -2,21 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-  hoverCardClasses,
-  hoverCardContentClasses,
-  hoverCardStyles,
-  hoverCardTriggerClasses,
-} from './hover-card.js';
+import { HoverCard, HoverCardContent, HoverCardTrigger, hoverCardStyles } from './hover-card.js';
 
 describe('@kovojs/ui HoverCard StyleX slots', () => {
   it('matches hover-card markup with StyleX slot output', () => {
     expect({
-      classes: hoverCardClasses,
-      contentClasses: hoverCardContentClasses,
+      classes: [style.attrs(hoverCardStyles.root).class ?? ''] as const,
+      contentClasses: [style.attrs(hoverCardStyles.content).class ?? ''] as const,
       disabled: HoverCard.definition.render({
         children:
           HoverCardTrigger.definition.render({
@@ -43,7 +35,7 @@ describe('@kovojs/ui HoverCard StyleX slots', () => {
           }),
         open: true,
       }),
-      triggerClasses: hoverCardTriggerClasses,
+      triggerClasses: [style.attrs(hoverCardStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

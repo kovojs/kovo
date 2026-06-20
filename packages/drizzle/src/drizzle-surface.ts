@@ -9,6 +9,12 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
+/**
+ * A fan-out invalidation edge for a table's `fans`: when a write touches this table,
+ * also invalidate the named `domain` reached `via` the given relation, optionally scoped
+ * to a write `when` (`insert`/`update`/`delete`). The element type of `KovoTableAnnotation.fans`
+ * and `KovoDomainTableAnnotation.fans` (SPEC §10.1 / KV413 declared engine-side-effect edges).
+ */
 export interface KovoFanAnnotation {
   domain: string;
   via: string;

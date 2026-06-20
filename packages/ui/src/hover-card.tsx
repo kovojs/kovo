@@ -95,10 +95,6 @@ export const hoverCardStyles = style.create({
   },
 });
 
-export const hoverCardClasses = [style.attrs(hoverCardStyles.root).class ?? ''] as const;
-export const hoverCardTriggerClasses = [style.attrs(hoverCardStyles.trigger).class ?? ''] as const;
-export const hoverCardContentClasses = [style.attrs(hoverCardStyles.content).class ?? ''] as const;
-
 function hoverCardState(props: HoverCardStateProps) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

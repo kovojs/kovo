@@ -18,9 +18,14 @@ package — is internal. It may change or disappear in any release with no notic
 not import it; the api-surface gate (`scripts/api-surface-gate.mjs`) and the generated
 API reference exist to keep this line visible.
 
-`@kovojs/ui` is **not** a versioned dependency: it is a shadcn-style copy-in starter
-("you own the code"). Its stability contract is the contract of what you copied; the
-primitives it builds on (`@kovojs/headless-ui`) are the versioned public dependency.
+`@kovojs/ui` is distributed **two ways** (dual distribution): it is a versioned public
+library you may depend on, **and** a shadcn-style copy-in starter you can vendor into your
+app ("you own the code") via `kovo add`. As a versioned library its public component surface
+(the `Component` factories and their `*Props`) follows the SemVer policy below and is
+documented in the API reference; as a copy-in starter, the contract of a vendored component is
+the contract of what you copied. Either way, the primitives it builds on
+(`@kovojs/headless-ui`) are the versioned public dependency. Compiled atomic-class strings and
+internal style tables are not part of the versioned surface.
 
 ## Versioning (SemVer, from `0.x`)
 

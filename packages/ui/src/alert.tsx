@@ -62,14 +62,6 @@ export const alertStyles = {
   variants,
 } as const;
 
-export const alertClasses = [
-  style.attrs(base.root, variants.info).class ?? '',
-  style.attrs(variants.success).class ?? '',
-  style.attrs(variants.warning).class ?? '',
-  style.attrs(variants.danger).class ?? '',
-  style.attrs(base.title).class ?? '',
-] as const;
-
 export const Alert = component({
   render(props: AlertProps) {
     const attrs = style.attrs(base.root, variants[props.variant ?? 'info'], props.style);

@@ -83,10 +83,6 @@ export const avatarStyles = style.create({
   },
 });
 
-export const avatarClasses = [style.attrs(avatarStyles.root).class ?? ''] as const;
-export const avatarImageClasses = [style.attrs(avatarStyles.image).class ?? ''] as const;
-export const avatarFallbackClasses = [style.attrs(avatarStyles.fallback).class ?? ''] as const;
-
 export const Avatar = component({
   render(props: AvatarProps) {
     const attrs = avatarRootAttributes({

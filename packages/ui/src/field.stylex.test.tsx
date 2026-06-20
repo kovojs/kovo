@@ -13,17 +13,7 @@ import {
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
-  fieldClasses,
-  fieldControlClasses,
-  fieldDescriptionClasses,
-  fieldErrorClasses,
-  fieldLabelClasses,
-  fieldSelectClasses,
-  fieldSelectOptionClasses,
   fieldStyles,
-  fieldTextareaClasses,
-  fieldsetClasses,
-  fieldsetLegendClasses,
 } from './field.js';
 
 describe('@kovojs/ui Field StyleX styles', () => {
@@ -34,7 +24,7 @@ describe('@kovojs/ui Field StyleX styles', () => {
     };
 
     expect({
-      classes: fieldClasses,
+      classes: [style.attrs(fieldStyles.root).class ?? ''] as const,
       control: FieldControl.definition.render({
         ...state,
         autoComplete: 'email',
@@ -51,14 +41,14 @@ describe('@kovojs/ui Field StyleX styles', () => {
         type: 'email',
         value: 'ada@example.com',
       }),
-      controlClasses: fieldControlClasses,
+      controlClasses: [style.attrs(fieldStyles.control).class ?? ''] as const,
       description: FieldDescription.definition.render({
         children: 'Used for notifications.',
         id: 'email-description',
       }),
-      descriptionClasses: fieldDescriptionClasses,
+      descriptionClasses: [style.attrs(fieldStyles.description).class ?? ''] as const,
       error: FieldError.definition.render({ children: 'Email required.', id: 'email-error' }),
-      errorClasses: fieldErrorClasses,
+      errorClasses: [style.attrs(fieldStyles.error).class ?? ''] as const,
       fieldset: Fieldset.definition.render({
         children: FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }),
         descriptionId: 'plan-description',
@@ -68,15 +58,15 @@ describe('@kovojs/ui Field StyleX styles', () => {
         invalid: true,
         name: 'plan-options',
       }),
-      fieldsetClasses,
-      fieldsetLegendClasses,
+      fieldsetClasses: [style.attrs(fieldStyles.fieldset).class ?? ''] as const,
+      fieldsetLegendClasses: [style.attrs(fieldStyles.fieldsetLegend).class ?? ''] as const,
       label: FieldLabel.definition.render({
         ...state,
         children: 'Email',
         controlId: 'email',
         id: 'email-label',
       }),
-      labelClasses: fieldLabelClasses,
+      labelClasses: [style.attrs(fieldStyles.label).class ?? ''] as const,
       root: Field.definition.render({
         ...state,
         children: 'email field',
@@ -92,14 +82,14 @@ describe('@kovojs/ui Field StyleX styles', () => {
         required: true,
         value: 'team',
       }),
-      selectClasses: fieldSelectClasses,
+      selectClasses: [style.attrs(fieldStyles.select).class ?? ''] as const,
       selectOption: FieldSelectOption.definition.render({
         children: 'Enterprise',
         disabled: true,
         selected: true,
         value: 'enterprise',
       }),
-      selectOptionClasses: fieldSelectOptionClasses,
+      selectOptionClasses: [style.attrs(fieldStyles.selectOption).class ?? ''] as const,
       textarea: FieldTextarea.definition.render({
         autoComplete: 'off',
         descriptionId: 'bio-description',
@@ -110,7 +100,7 @@ describe('@kovojs/ui Field StyleX styles', () => {
         placeholder: 'Short bio',
         rows: 4,
       }),
-      textareaClasses: fieldTextareaClasses,
+      textareaClasses: [style.attrs(fieldStyles.textarea).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

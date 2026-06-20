@@ -2,26 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogTrigger,
-  dialogClasses,
-  dialogCloseClasses,
-  dialogContentClasses,
-  dialogStyles,
-  dialogTriggerClasses,
-} from './dialog.js';
+import { Dialog, DialogClose, DialogContent, DialogTrigger, dialogStyles } from './dialog.js';
 
 describe('@kovojs/ui Dialog StyleX slots', () => {
   it('matches dialog markup with StyleX slot output', () => {
     const dialogState = { contentId: 'account-dialog', open: true as const };
 
     expect({
-      classes: dialogClasses,
-      closeClasses: dialogCloseClasses,
-      contentClasses: dialogContentClasses,
+      classes: [style.attrs(dialogStyles.root).class ?? ''] as const,
+      closeClasses: [style.attrs(dialogStyles.close).class ?? ''] as const,
+      contentClasses: [style.attrs(dialogStyles.content).class ?? ''] as const,
       open: Dialog.definition.render({
         children:
           DialogTrigger.definition.render({ ...dialogState, children: 'Edit account' }) +
@@ -36,7 +26,7 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
         id: 'dialog-root',
         open: true,
       }),
-      triggerClasses: dialogTriggerClasses,
+      triggerClasses: [style.attrs(dialogStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

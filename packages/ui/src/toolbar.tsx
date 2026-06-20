@@ -113,10 +113,6 @@ export const toolbarStyles = style.create({
   },
 });
 
-export const toolbarClasses = [style.attrs(toolbarStyles.root).class ?? ''] as const;
-export const toolbarItemClasses = [style.attrs(toolbarStyles.item).class ?? ''] as const;
-export const toolbarButtonClasses = [style.attrs(toolbarStyles.button).class ?? ''] as const;
-
 export const Toolbar = component({
   render(props: ToolbarProps) {
     const attrs = toolbarRootAttributes({

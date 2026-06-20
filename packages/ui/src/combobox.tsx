@@ -185,12 +185,6 @@ export const comboboxStyles = style.create({
   },
 });
 
-export const comboboxClasses = [style.attrs(comboboxStyles.root).class ?? ''] as const;
-export const comboboxInputClasses = [style.attrs(comboboxStyles.input).class ?? ''] as const;
-export const comboboxListboxClasses = [style.attrs(comboboxStyles.listbox).class ?? ''] as const;
-export const comboboxOptionClasses = [style.attrs(comboboxStyles.option).class ?? ''] as const;
-export const comboboxValueClasses = [style.attrs(comboboxStyles.value).class ?? ''] as const;
-
 export const Combobox = component({
   render(props: ComboboxProps) {
     const attrs = comboboxRootAttributes({

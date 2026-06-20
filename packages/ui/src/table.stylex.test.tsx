@@ -9,16 +9,7 @@ import {
   TableHead,
   TableHeaderCell,
   TableRow,
-  tableBodyClasses,
-  tableCaptionClasses,
-  tableCellClasses,
-  tableClasses,
-  tableHeadClasses,
-  tableHeaderCellClasses,
-  tableRootClasses,
-  tableRowClasses,
   tableStyles,
-  tableWrapperClasses,
 } from './table.js';
 
 describe('@kovojs/ui Table StyleX slots', () => {
@@ -53,19 +44,28 @@ describe('@kovojs/ui Table StyleX slots', () => {
     });
 
     expect({
-      bodyClasses: tableBodyClasses,
-      captionClasses: tableCaptionClasses,
-      cellClasses: tableCellClasses,
-      classes: tableClasses,
-      headClasses: tableHeadClasses,
-      headerCellClasses: tableHeaderCellClasses,
+      bodyClasses: [style.attrs(tableStyles.body).class ?? ''] as const,
+      captionClasses: [style.attrs(tableStyles.caption).class ?? ''] as const,
+      cellClasses: [style.attrs(tableStyles.cell).class ?? ''] as const,
+      classes: [
+        style.attrs(tableStyles.wrapper).class ?? '',
+        style.attrs(tableStyles.table).class ?? '',
+        style.attrs(tableStyles.head).class ?? '',
+        style.attrs(tableStyles.body).class ?? '',
+        style.attrs(tableStyles.row).class ?? '',
+        style.attrs(tableStyles.headerCell).class ?? '',
+        style.attrs(tableStyles.cell).class ?? '',
+        style.attrs(tableStyles.caption).class ?? '',
+      ] as const,
+      headClasses: [style.attrs(tableStyles.head).class ?? ''] as const,
+      headerCellClasses: [style.attrs(tableStyles.headerCell).class ?? ''] as const,
       rendered: Table.definition.render({
         caption: 'Invoices for the current billing period',
         children: `${header}${body}`,
       }),
-      rootClasses: tableRootClasses,
-      rowClasses: tableRowClasses,
-      wrapperClasses: tableWrapperClasses,
+      rootClasses: [style.attrs(tableStyles.table).class ?? ''] as const,
+      rowClasses: [style.attrs(tableStyles.row).class ?? ''] as const,
+      wrapperClasses: [style.attrs(tableStyles.wrapper).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

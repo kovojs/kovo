@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Alert, alertClasses, alertStyles } from './alert.js';
+import { Alert, alertStyles } from './alert.js';
 
 describe('@kovojs/ui Alert StyleX styles', () => {
   it('renders default and variant StyleX classes', () => {
     expect({
-      classes: alertClasses,
+      classes: [
+        style.attrs(alertStyles.base.root, alertStyles.variants.info).class ?? '',
+        style.attrs(alertStyles.variants.success).class ?? '',
+        style.attrs(alertStyles.variants.warning).class ?? '',
+        style.attrs(alertStyles.variants.danger).class ?? '',
+        style.attrs(alertStyles.base.title).class ?? '',
+      ] as const,
       danger: Alert.definition.render({
         children: 'Payment method required.',
         role: 'alert',

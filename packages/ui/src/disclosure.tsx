@@ -114,14 +114,6 @@ export const disclosureStyles = style.create({
   },
 });
 
-export const disclosureClasses = [style.attrs(disclosureStyles.root).class ?? ''] as const;
-export const disclosureTriggerClasses = [
-  style.attrs(disclosureStyles.trigger).class ?? '',
-] as const;
-export const disclosureContentClasses = [
-  style.attrs(disclosureStyles.content).class ?? '',
-] as const;
-
 function disclosureState(props: DisclosureStateProps) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

@@ -8,12 +8,7 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogTrigger,
-  alertDialogActionClasses,
-  alertDialogCancelClasses,
-  alertDialogClasses,
-  alertDialogContentClasses,
   alertDialogStyles,
-  alertDialogTriggerClasses,
 } from './alert-dialog.js';
 
 describe('@kovojs/ui AlertDialog StyleX slots', () => {
@@ -21,10 +16,10 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
     const dialogState = { contentId: 'delete-account', open: true as const };
 
     expect({
-      actionClasses: alertDialogActionClasses,
-      cancelClasses: alertDialogCancelClasses,
-      classes: alertDialogClasses,
-      contentClasses: alertDialogContentClasses,
+      actionClasses: [style.attrs(alertDialogStyles.action).class ?? ''] as const,
+      cancelClasses: [style.attrs(alertDialogStyles.cancel).class ?? ''] as const,
+      classes: [style.attrs(alertDialogStyles.root).class ?? ''] as const,
+      contentClasses: [style.attrs(alertDialogStyles.content).class ?? ''] as const,
       open: AlertDialog.definition.render({
         children:
           AlertDialogTrigger.definition.render({ ...dialogState, children: 'Delete account' }) +
@@ -48,7 +43,7 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
         id: 'alert-dialog-root',
         open: true,
       }),
-      triggerClasses: alertDialogTriggerClasses,
+      triggerClasses: [style.attrs(alertDialogStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 

@@ -196,25 +196,6 @@ export const alertDialogStyles = style.create({
   },
 });
 
-export const alertDialogClasses = [style.attrs(alertDialogStyles.root).class ?? ''] as const;
-export const alertDialogTriggerClasses = [
-  style.attrs(alertDialogStyles.trigger).class ?? '',
-] as const;
-export const alertDialogContentClasses = [
-  style.attrs(alertDialogStyles.content).class ?? '',
-] as const;
-export const alertDialogCancelClasses = [
-  style.attrs(alertDialogStyles.cancel).class ?? '',
-] as const;
-export const alertDialogActionClasses = [
-  style.attrs(alertDialogStyles.action).class ?? '',
-] as const;
-export const alertDialogClassNames = alertDialogStyles.root;
-export const alertDialogTriggerClassNames = alertDialogStyles.trigger;
-export const alertDialogContentClassNames = alertDialogStyles.content;
-export const alertDialogCancelClassNames = alertDialogStyles.cancel;
-export const alertDialogActionClassNames = alertDialogStyles.action;
-
 function alertDialogState(props: AlertDialogStateProps) {
   return {
     ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

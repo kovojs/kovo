@@ -124,17 +124,6 @@ export const checkboxGroupStyles = style.create({
   },
 });
 
-export const checkboxGroupClasses = [style.attrs(checkboxGroupStyles.root).class ?? ''] as const;
-export const checkboxGroupItemClasses = [
-  style.attrs(checkboxGroupStyles.item).class ?? '',
-] as const;
-export const checkboxGroupControlClasses = [
-  style.attrs(checkboxGroupStyles.control).class ?? '',
-] as const;
-export const checkboxGroupLabelClasses = [
-  style.attrs(checkboxGroupStyles.label).class ?? '',
-] as const;
-
 export const CheckboxGroup = component({
   render(props: CheckboxGroupProps) {
     const attrs = checkboxGroupRootAttributes({

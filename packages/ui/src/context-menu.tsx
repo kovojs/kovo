@@ -173,19 +173,6 @@ export const contextMenuStyles = style.create({
   },
 });
 
-export const contextMenuClasses = [style.attrs(contextMenuStyles.root).class ?? ''] as const;
-export const contextMenuTriggerClasses = [
-  style.attrs(contextMenuStyles.trigger).class ?? '',
-] as const;
-export const contextMenuContentClasses = [
-  style.attrs(contextMenuStyles.content).class ?? '',
-] as const;
-export const contextMenuItemClasses = [style.attrs(contextMenuStyles.item).class ?? ''] as const;
-export const contextMenuGroupClasses = [style.attrs(contextMenuStyles.group).class ?? ''] as const;
-export const contextMenuSeparatorClasses = [
-  style.attrs(contextMenuStyles.separator).class ?? '',
-] as const;
-
 export const ContextMenu = component({
   render(props: ContextMenuProps) {
     const attrs = contextMenuRootAttributes({

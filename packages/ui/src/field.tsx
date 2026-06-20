@@ -239,19 +239,6 @@ export const fieldStyles = style.create({
   },
 });
 
-export const fieldClasses = [style.attrs(fieldStyles.root).class ?? ''] as const;
-export const fieldLabelClasses = [style.attrs(fieldStyles.label).class ?? ''] as const;
-export const fieldControlClasses = [style.attrs(fieldStyles.control).class ?? ''] as const;
-export const fieldTextareaClasses = [style.attrs(fieldStyles.textarea).class ?? ''] as const;
-export const fieldSelectClasses = [style.attrs(fieldStyles.select).class ?? ''] as const;
-export const fieldSelectOptionClasses = [
-  style.attrs(fieldStyles.selectOption).class ?? '',
-] as const;
-export const fieldDescriptionClasses = [style.attrs(fieldStyles.description).class ?? ''] as const;
-export const fieldErrorClasses = [style.attrs(fieldStyles.error).class ?? ''] as const;
-export const fieldsetClasses = [style.attrs(fieldStyles.fieldset).class ?? ''] as const;
-export const fieldsetLegendClasses = [style.attrs(fieldStyles.fieldsetLegend).class ?? ''] as const;
-
 export const Field = component({
   render(props: FieldProps) {
     const attrs = fieldRootAttributes({

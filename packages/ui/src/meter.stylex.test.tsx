@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Meter, meterClasses, meterStyles } from './meter.js';
+import { Meter, meterStyles } from './meter.js';
 
 describe('@kovojs/ui Meter StyleX styles', () => {
   it('matches native meter states with StyleX output', () => {
     expect({
-      classes: meterClasses,
+      classes: [style.attrs(meterStyles.root).class ?? ''] as const,
       optimum: Meter.definition.render({
         children: '84%',
         high: 90,

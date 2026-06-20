@@ -36,11 +36,6 @@ export const separatorStyles = {
   orientations,
 } as const;
 
-export const separatorClasses = [
-  style.attrs(base.root, orientations.horizontal).class ?? '',
-  style.attrs(orientations.vertical).class ?? '',
-] as const;
-
 export const Separator = component({
   render(props: SeparatorProps) {
     const orientation = props.orientation ?? 'horizontal';

@@ -149,11 +149,6 @@ export const tabsStyles = style.create({
   },
 });
 
-export const tabsClasses = [style.attrs(tabsStyles.root).class ?? ''] as const;
-export const tabsListClasses = [style.attrs(tabsStyles.list).class ?? ''] as const;
-export const tabsTriggerClasses = [style.attrs(tabsStyles.trigger).class ?? ''] as const;
-export const tabsPanelClasses = [style.attrs(tabsStyles.panel).class ?? ''] as const;
-
 export const Tabs = component({
   render(props: TabsProps) {
     const attrs = tabsRootAttributes({

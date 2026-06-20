@@ -6,9 +6,9 @@ import { runInNewContext } from 'node:vm';
 import {
   htmlElementFacts,
   type HtmlElementSelector,
-  kovoResponseBodyFact,
   htmlLinkHrefs,
 } from '@kovojs/test/html-fragment';
+import { kovoResponseBodyFact } from '@kovojs/test/internal/html-wire';
 import { cssScopeRules, type CssScopeRuleFact } from './source-fixtures.ts';
 import type { AssertTypeScriptProgramOptions } from './typescript-fixtures.ts';
 

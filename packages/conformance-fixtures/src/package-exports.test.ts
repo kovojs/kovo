@@ -290,18 +290,20 @@ import {
   htmlFormFields,
   htmlKeyValues,
   htmlTextContent,
+  htmlKeyFacts,
+  htmlKeyTextMap,
+  htmlLinkHrefs,
+} from '@kovojs/test/html-fragment';
+import {
   documentQueryScriptBehaviorFact,
   kovoFragmentFacts,
   kovoQueryFacts,
   kovoResponseBodyFact,
   htmlDocumentRegions,
   htmlJsonScriptFacts,
-  htmlKeyFacts,
-  htmlKeyTextMap,
-  htmlLinkHrefs,
   htmlMainMarkerFact,
   type DocumentQueryScriptBehaviorFact,
-} from '@kovojs/test/html-fragment';
+} from '@kovojs/test/internal/html-wire';
 import {
   markdownBoldSectionHeadings,
   markdownCanonicalSpecRuleTitle,

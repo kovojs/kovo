@@ -150,15 +150,6 @@ export const numberFieldStyles = style.create({
   },
 });
 
-export const numberFieldClasses = [style.attrs(numberFieldStyles.root).class ?? ''] as const;
-export const numberFieldControlClasses = [
-  style.attrs(numberFieldStyles.control).class ?? '',
-] as const;
-export const numberFieldInputClasses = [style.attrs(numberFieldStyles.input).class ?? ''] as const;
-export const numberFieldButtonClasses = [
-  style.attrs(numberFieldStyles.button).class ?? '',
-] as const;
-
 export const NumberField = component({
   render(props: NumberFieldProps) {
     const attrs = numberFieldRootAttributes({
