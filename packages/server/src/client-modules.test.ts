@@ -1,9 +1,78 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  computeRenderPlanFingerprint,
   createMemoryVersionedClientModuleRegistry,
+  RENDER_PLAN_GRAMMAR_VERSION,
   renderVersionedClientModuleResponse,
 } from './client-modules.js';
+
+// ─── D1 + DEPLOY-3: render-plan fingerprint & never-empty token ───────────────
+
+describe('render-plan fingerprint and grammar version (D1, DEPLOY-3)', () => {
+  it('RENDER_PLAN_GRAMMAR_VERSION is a non-empty stable string', () => {
+    expect(typeof RENDER_PLAN_GRAMMAR_VERSION).toBe('string');
+    expect(RENDER_PLAN_GRAMMAR_VERSION.length).toBeGreaterThan(0);
+  });
+
+  it('computeRenderPlanFingerprint returns different values for different shape inputs (D1)', () => {
+    const fpA = computeRenderPlanFingerprint({ cart: 'field:id,count', product: 'field:id,name' });
+    const fpB = computeRenderPlanFingerprint({ cart: 'field:id,count', product: 'field:id,price' });
+    expect(fpA).not.toBe(fpB);
+  });
+
+  it('computeRenderPlanFingerprint is deterministic and key-order independent', () => {
+    const fp1 = computeRenderPlanFingerprint({ a: 'x', b: 'y' });
+    const fp2 = computeRenderPlanFingerprint({ b: 'y', a: 'x' });
+    expect(fp1).toBe(fp2);
+  });
+
+  it('buildToken() is never empty even with zero registered modules (DEPLOY-3)', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    const token = registry.buildToken();
+    expect(token).toBeTruthy();
+    expect(token.length).toBeGreaterThan(0);
+  });
+
+  it('two registries with identical modules but different renderPlanFingerprint produce different tokens (D1)', () => {
+    const fp1 = computeRenderPlanFingerprint({ cart: 'field:id,count' });
+    const fp2 = computeRenderPlanFingerprint({ cart: 'field:id,total' });
+
+    const registryA = createMemoryVersionedClientModuleRegistry({ renderPlanFingerprint: fp1 });
+    const registryB = createMemoryVersionedClientModuleRegistry({ renderPlanFingerprint: fp2 });
+
+    // Same module registrations in both
+    for (const r of [registryA, registryB]) {
+      r.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
+    }
+
+    expect(registryA.buildToken()).not.toBe(registryB.buildToken());
+  });
+
+  it('setRenderPlanFingerprint changes buildToken() without re-registering modules (D1)', () => {
+    const registry = createMemoryVersionedClientModuleRegistry();
+    registry.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
+
+    const tokenBefore = registry.buildToken();
+    const fp = computeRenderPlanFingerprint({ cart: 'field:id,count' });
+    registry.setRenderPlanFingerprint?.(fp);
+    const tokenAfter = registry.buildToken();
+
+    expect(tokenBefore).not.toBe(tokenAfter);
+  });
+
+  it('setRenderPlanFingerprint is stable — calling with the same value preserves the token', () => {
+    const fp = computeRenderPlanFingerprint({ cart: 'field:id,count' });
+    const registry = createMemoryVersionedClientModuleRegistry({ renderPlanFingerprint: fp });
+    const token1 = registry.buildToken();
+    registry.setRenderPlanFingerprint?.(fp);
+    const token2 = registry.buildToken();
+    expect(token1).toBe(token2);
+  });
+});
+
+// ─── D1 / DEPLOY-3: module-less app stamps non-empty kovo-build meta ──────────
+// (integration test — requires app-document; lives here for co-location with the registry tests)
 
 describe('versioned client modules', () => {
   it('retains old versioned client module responses after newer deploys register', () => {

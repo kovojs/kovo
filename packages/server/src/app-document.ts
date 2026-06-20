@@ -75,10 +75,17 @@ export async function renderAppRouteDocumentResponse({
   // base (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
 
-  const sessionFingerprint = sessionFingerprintFromRequest(request);
+  // K3 / SPEC §9.3: resolve the session identity for the fingerprint by calling
+  // the app's sessionProvider directly (the same path guards use), so we hash the
+  // session id rather than the entire cookie header.  This prevents non-session
+  // cookie churn (CSRF rotation, theme, analytics) from producing different
+  // fingerprints for the same user across tabs.
+  const sessionFingerprint = await sessionFingerprintFromRequest(request, app);
 
   return renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
-    ...(buildToken !== '' ? { buildToken } : {}),
+    // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
+    // always non-empty so the carve-out is no longer needed (DEPLOY-3).
+    buildToken,
     hints: mergeAppRouteHints(app, route),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
@@ -92,20 +99,84 @@ export async function renderAppRouteDocumentResponse({
 }
 
 /**
- * bugs-1 F13 / SPEC §9.3: an opaque per-principal fingerprint derived from the request's
- * cookie jar (different sessions present different cookies; an anonymous request has none).
- * Hashing (FNV-1a) keeps the raw cookie out of the BroadcastChannel envelope while still
- * letting a receiving tab discard a rebroadcast from a different session.
+ * bugs-1 F13 / K3 / SPEC §9.3: an opaque per-principal fingerprint derived from the
+ * resolved session identity so that non-session cookie churn (CSRF rotation, theme,
+ * analytics) does not produce different fingerprints for the same user across tabs.
+ *
+ * Resolution order (most to least session-anchored):
+ *   1. `app.sessionProvider(request)` — the same resolution path guards use; returns
+ *      the typed session value which typically has an `.id` property.
+ *   2. `request.session?.id` / `request.sessionId` / `request.session?.user?.id` —
+ *      pre-resolved session fields set by an adapter before this call.
+ *   3. Cookie fallback: hash the first cookie value only (not the whole header) to
+ *      reduce false mismatch on non-session cookie churn when no provider is wired.
+ * Returns `undefined` only when the request is genuinely anonymous (no cookies at all).
+ *
+ * The id is hashed (FNV-1a) to keep the raw session token out of the BroadcastChannel
+ * envelope (SPEC §9.3 "opaque").
  */
-function sessionFingerprintFromRequest(request: Request): string | undefined {
+async function sessionFingerprintFromRequest(
+  request: Request,
+  app: KovoApp,
+): Promise<string | undefined> {
+  // 1. Most session-anchored: resolve via the app's sessionProvider (K3 primary fix).
+  if (app.sessionProvider) {
+    try {
+      const session = await app.sessionProvider(request);
+      if (session != null) {
+        const anySession = session as { id?: unknown; user?: { id?: unknown } };
+        const sessionId =
+          (typeof anySession.id === 'string' && anySession.id !== '' ? anySession.id : undefined) ??
+          (typeof anySession.user?.id === 'string' && anySession.user.id !== ''
+            ? anySession.user.id
+            : undefined);
+        if (sessionId !== undefined) return fnv1aHash(sessionId);
+      }
+    } catch {
+      // sessionProvider failure is non-fatal for fingerprinting; fall through to cookie.
+    }
+  }
+
+  // 2. Pre-resolved session id fields set by adapters.
+  const req = request as unknown as {
+    session?: { id?: string; user?: { id?: string } };
+    sessionId?: string;
+  };
+  const resolvedId =
+    (typeof req.session?.id === 'string' && req.session.id !== ''
+      ? req.session.id
+      : undefined) ??
+    (typeof req.sessionId === 'string' && req.sessionId !== '' ? req.sessionId : undefined) ??
+    (typeof req.session?.user?.id === 'string' && req.session.user.id !== ''
+      ? req.session.user.id
+      : undefined);
+
+  if (resolvedId !== undefined) return fnv1aHash(resolvedId);
+
+  // 3. Cookie fallback: hash the first cookie value only (not the whole header) to
+  //    limit false mismatch from non-session cookie churn (K3 partial mitigation).
   const cookie = request.headers.get('cookie');
   if (!cookie) return undefined;
+  const firstValue = firstCookieValue(cookie);
+  return firstValue !== undefined ? fnv1aHash(firstValue) : fnv1aHash(cookie);
+}
+
+/** FNV-1a 32-bit hash — same algorithm as the previous implementation. */
+function fnv1aHash(input: string): string {
   let hash = 2166136261;
-  for (let index = 0; index < cookie.length; index += 1) {
-    hash ^= cookie.charCodeAt(index);
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
+}
+
+/** Extract the value portion of the first `name=value` pair in a cookie header. */
+function firstCookieValue(cookie: string): string | undefined {
+  const eq = cookie.indexOf('=');
+  if (eq < 0) return undefined;
+  const semi = cookie.indexOf(';', eq);
+  return cookie.slice(eq + 1, semi < 0 ? undefined : semi).trim() || undefined;
 }
 
 function appErrorDocumentResponseBody(response: RoutePageResponse): string {
