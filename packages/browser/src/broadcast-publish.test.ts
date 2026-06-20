@@ -199,4 +199,44 @@ describe('mutation broadcast publish', () => {
       globalThis.BroadcastChannel = originalBroadcastChannel;
     }
   });
+
+  it('stamps the principal on publish and discards cross-principal rebroadcasts (bugs-1 F13)', () => {
+    const channel = new FakeBroadcastChannel();
+    const store = createQueryStore();
+    const broadcast = installMutationBroadcast({ channel, principal: 'session-A', store });
+
+    // publish carries the sender's principal fingerprint.
+    broadcast.publish('<kovo-query name="cart">{"count":1}</kovo-query>');
+    expect(channel.messages).toEqual([
+      {
+        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+        changes: [],
+        principal: 'session-A',
+        type: 'kovo:mutation-response',
+      },
+    ]);
+
+    // A rebroadcast from a DIFFERENT principal (e.g. another user on a shared device)
+    // must be discarded — never morphed into this session's store.
+    channel.onmessage?.({
+      data: {
+        body: '<kovo-query name="cart">{"count":99}</kovo-query>',
+        changes: [],
+        principal: 'session-B',
+        type: 'kovo:mutation-response',
+      },
+    });
+    expect(store.get('cart')).toBeUndefined();
+
+    // A rebroadcast from the SAME principal is applied (same-user multi-tab sync).
+    channel.onmessage?.({
+      data: {
+        body: '<kovo-query name="cart">{"count":2}</kovo-query>',
+        changes: [],
+        principal: 'session-A',
+        type: 'kovo:mutation-response',
+      },
+    });
+    expect(store.get('cart')).toEqual({ count: 2 });
+  });
 });

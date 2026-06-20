@@ -66,6 +66,12 @@ export interface DocumentAssemblyOptions {
   hints?: PageHintOptions;
   lang?: string;
   queries?: readonly QueryScriptRenderOptions[];
+  /**
+   * bugs-1 F13 / SPEC §9.3: an opaque per-session fingerprint. When present, stamped as
+   * `<meta name="kovo-session" content="<fingerprint>">` so the client's BroadcastChannel
+   * rebroadcast can discard cross-principal messages on shared devices.
+   */
+  sessionFingerprint?: string;
   template?: DocumentTemplate;
 }
 
@@ -169,7 +175,10 @@ export function renderDeferredDocument(
 }
 
 function assembleDocumentParts(
-  options: Pick<DocumentAssemblyOptions, 'body' | 'buildToken' | 'hints' | 'lang' | 'queries'>,
+  options: Pick<
+    DocumentAssemblyOptions,
+    'body' | 'buildToken' | 'hints' | 'lang' | 'queries' | 'sessionFingerprint'
+  >,
 ): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
   const hints = renderPageHints(options.hints ?? {});
   const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
@@ -186,12 +195,19 @@ function assembleDocumentParts(
       ? `<meta name="kovo-build" content="${escapeAttribute(options.buildToken)}">`
       : '';
 
+  // bugs-1 F13 / SPEC §9.3: stamp the opaque per-session fingerprint for the client's
+  // cross-principal BroadcastChannel discard.
+  const sessionMeta =
+    options.sessionFingerprint !== undefined && options.sessionFingerprint !== ''
+      ? `<meta name="kovo-session" content="${escapeAttribute(options.sessionFingerprint)}">`
+      : '';
+
   return {
     csp,
     earlyHints: hints.earlyHints,
     parts: {
       body: options.body,
-      head: `${buildMeta}${hints.html}${loader.html}`,
+      head: `${buildMeta}${sessionMeta}${hints.html}${loader.html}`,
       lang: options.lang ?? langFromHints(options.hints) ?? 'en',
       queryScripts: queryScripts.map((query) => query.html),
     },

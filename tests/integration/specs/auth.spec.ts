@@ -67,3 +67,22 @@ test('guarded route documents are no-store; unguarded ones are not (bugs-1 F34)'
   expect(unguarded.status()).toBe(200);
   expect(unguarded.headers()['cache-control']).toBeUndefined();
 });
+
+test('documents stamp an opaque per-session fingerprint for broadcast scoping (bugs-1 F13)', async ({
+  page,
+  kovoApp,
+}) => {
+  await kovoApp.login({
+    fields: { email: 'ada@example.com', password: 'correct' },
+    submit: 'Sign in',
+  });
+
+  const html = await (await page.request.get('/account')).text();
+  const match = html.match(/<meta name="kovo-session" content="([^"]+)">/);
+  expect(match, 'document carries a kovo-session fingerprint meta').not.toBeNull();
+  expect((match?.[1] ?? '').length).toBeGreaterThan(0);
+
+  // The fingerprint is stable for the same session (so same-user tabs still sync).
+  const again = await (await page.request.get('/account')).text();
+  expect(again).toContain(`<meta name="kovo-session" content="${match?.[1]}">`);
+});

@@ -29,6 +29,14 @@ export interface InstallMutationBroadcastOptions {
   onError?: RuntimeErrorReporter;
   onChanges?: (changes: readonly MutationChangeRecord[]) => void;
   onAppliedQueries?: (queries: readonly string[]) => void;
+  /**
+   * bugs-1 F13 / SPEC §9.3: an opaque per-session fingerprint. BroadcastChannel is
+   * origin-scoped, not principal-scoped, so a rebroadcast envelope carries the sender's
+   * fingerprint and a receiving tab discards any message whose fingerprint differs from
+   * its own — one session's private query data can never be morphed into another
+   * session's UI on a shared/fast-user-switched device.
+   */
+  principal?: string;
   queryPlans?: CompiledQueryUpdatePlans;
   root?: MorphRoot;
   store: QueryStore;
@@ -41,6 +49,8 @@ export interface DefaultMutationBroadcastOptions {
   broadcastOnError?: RuntimeErrorReporter;
   morph?: MorphFragment;
   onAppliedQueries?: (queries: readonly string[]) => void;
+  /** bugs-1 F13: opaque per-session fingerprint for cross-principal discard (SPEC §9.3). */
+  principal?: string;
   queryPlans?: CompiledQueryUpdatePlans;
   root: MorphRoot;
   store: QueryStore;
@@ -64,6 +74,7 @@ export function withDefaultMutationBroadcast<Options extends DefaultMutationBroa
         onError: options.broadcastOnError,
         morph: options.morph,
         onAppliedQueries: options.onAppliedQueries,
+        principal: options.principal,
         queryPlans: options.queryPlans,
       }),
       root: options.root,
@@ -89,6 +100,9 @@ export function installMutationBroadcast(
 ): MutationBroadcast {
   options.channel.onmessage = (event) => {
     if (!isMutationBroadcastMessage(event.data)) return;
+    // bugs-1 F13 / SPEC §9.3: discard a rebroadcast from a different principal so one
+    // session's private query data is never morphed into another session's UI.
+    if (options.principal !== undefined && event.data.principal !== options.principal) return;
     const changes = event.data.changes.flatMap((change) => {
       const sanitized = sanitizeMutationChangeRecord(change);
       return sanitized ? [sanitized] : [];
@@ -125,6 +139,9 @@ export function installMutationBroadcast(
           const sanitized = sanitizeMutationChangeRecord(change);
           return sanitized ? [sanitized] : [];
         }),
+        // bugs-1 F13: stamp the sender's principal fingerprint so receivers can discard
+        // cross-principal rebroadcasts (SPEC §9.3).
+        ...(options.principal === undefined ? {} : { principal: options.principal }),
         type: 'kovo:mutation-response',
       });
     },

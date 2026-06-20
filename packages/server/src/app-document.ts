@@ -75,6 +75,8 @@ export async function renderAppRouteDocumentResponse({
   // base (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
 
+  const sessionFingerprint = sessionFingerprintFromRequest(request);
+
   return renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
     ...(buildToken !== '' ? { buildToken } : {}),
     hints: mergeAppRouteHints(app, route),
@@ -83,7 +85,27 @@ export async function renderAppRouteDocumentResponse({
     // bugs-1 F34: a guarded route renders session-dependent content; mark its
     // document no-store so a Back/bfcache restore can't show it after logout.
     ...(route.guard === undefined ? {} : { noStore: true }),
+    // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
+    // cross-principal BroadcastChannel discard (SPEC §9.3).
+    ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
   });
+}
+
+/**
+ * bugs-1 F13 / SPEC §9.3: an opaque per-principal fingerprint derived from the request's
+ * cookie jar (different sessions present different cookies; an anonymous request has none).
+ * Hashing (FNV-1a) keeps the raw cookie out of the BroadcastChannel envelope while still
+ * letting a receiving tab discard a rebroadcast from a different session.
+ */
+function sessionFingerprintFromRequest(request: Request): string | undefined {
+  const cookie = request.headers.get('cookie');
+  if (!cookie) return undefined;
+  let hash = 2166136261;
+  for (let index = 0; index < cookie.length; index += 1) {
+    hash ^= cookie.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function appErrorDocumentResponseBody(response: RoutePageResponse): string {

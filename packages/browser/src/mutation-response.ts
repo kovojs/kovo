@@ -36,6 +36,7 @@ export function readMutationChangeHeader(
 export function isMutationBroadcastMessage(value: unknown): value is {
   body: string;
   changes: MutationChangeRecord[];
+  principal?: string;
   type: 'kovo:mutation-response';
 } {
   return (

@@ -104,6 +104,13 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
   const rememberAppliedQueries = (queries: readonly string[]): void => {
     queryRuntime?.rememberAppliedQueries(queries);
   };
+  // bugs-1 F13 / SPEC §9.3: the server stamps an opaque per-session fingerprint as
+  // <meta name="kovo-session">; the broadcast uses it to discard cross-principal
+  // rebroadcasts so shared-device tabs never apply another session's private data.
+  const sessionFingerprint =
+    typeof document === 'undefined'
+      ? undefined
+      : (document.querySelector('meta[name="kovo-session"]')?.getAttribute('content') ?? undefined);
   const enhancedMutationSetup = options.enhancedMutations
     ? withDefaultMutationBroadcast({
         ...options.enhancedMutations,
@@ -115,6 +122,7 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
               }
             : undefined,
           importModule: options.enhancedMutations.importModule ?? options.importModule,
+          principal: sessionFingerprint,
         }),
         onAppliedQueries: rememberAppliedQueries,
       })
