@@ -2,6 +2,7 @@
   <head>
     <meta>
     <meta name="kovo-template">
+    <meta name="kovo-build">
     <title>
       "Custom Document Template"
     <script>

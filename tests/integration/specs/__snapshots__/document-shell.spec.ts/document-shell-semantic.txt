@@ -2,6 +2,7 @@
   <head>
     <meta>
     <meta name="viewport">
+    <meta name="kovo-build">
     <title>
       "Document Shell"
     <script>

@@ -32,7 +32,7 @@ export const signIn = mutation('auth/sign-in', {
     if (input.email !== DEMO.email || input.password !== DEMO.password) {
       return context.fail('INVALID_CREDENTIALS', {});
     }
-    context.setCookie?.(COOKIE, encodeURIComponent(input.email), {
+    context.setCookie?.(COOKIE, input.email, {
       httpOnly: true,
       path: '/',
       sameSite: 'lax',
