@@ -346,7 +346,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C4 (cache + bfcache leak)** — implemented + verified: F35 (`/_q` `private/no-store`+`Vary`)
   and F34 (guarded-doc `no-store`), with integration assertions. _C5 (prod-delta · deploy-skew-422 ·
   minified-name survival) still needs **G‑S1** (prod-build browser harness)._
-- [ ] **C6** queue FIFO · multi-transform rebase · concurrent-distinct lost-update · derived-optimism e2e ← needs A5 impl (+ G‑S2/3 for derived).
+- [~] **C6** ✅ concurrent-distinct lost-update (`concurrent-distinct-writes`, both writes land, no race); _queue FIFO · multi-transform rebase · derived-optimism (needs S2) still TODO_.
 - [ ] **Deferred** F15 + SSE subscribe-then-revoke — lands with the (unbuilt) SSE feature.
 
 ## Governance & proof (per CLAUDE.md / rules)
