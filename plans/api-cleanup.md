@@ -267,7 +267,7 @@ verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless mach
 
 ### 9E — Re-tier the primitive ABI (BLOCKED on a prerequisite)
 
-- [ ] **PREREQ — generated handler ABI + L1 authoring story.** Add an `apiBoundary.generated` tier to `@kovojs/headless-ui` so emitted client modules import handlers from `generated` (not the human-public root), and move the L1 island-authoring path off hand-imported reducers (the gallery currently hand-imports them). Required because `rules/api-surface.md` bars emitted code from `internal`. (Standing blocker per `plans/api-cleanup-leftover.md`.)
+- [ ] **PREREQ — generated handler ABI + L1 authoring story.** Add an `apiBoundary.generated` tier to `@kovojs/headless-ui` so emitted client modules import handlers from `generated` (not the human-public root), and move the L1 island-authoring path off hand-imported reducers (the gallery currently hand-imports them). Required because `rules/api-surface.md` bars emitted code from `internal`. (Standing blocker recorded in the `plans/archive.md` entry for `api-cleanup-leftover`.)
 - [ ] **(blocked by PREREQ) Demote the 100 `@kovoPrimitiveHandler` functions** to the new `generated` tier / tag `@generated` (`switch.ts:81` et al.). Keep importable for the compiler; off the SemVer/docs surface.
 - [ ] **(blocked by PREREQ) Demote the 124 reducers** (`set*`/`toggle*`/`*Move`/`*Typeahead`/`*RovingIndex`) to `@kovojs/headless-ui/internal`. Baseline −124 once unblocked.
 

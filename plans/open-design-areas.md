@@ -3,7 +3,7 @@
 These areas ship with v1 only if resolved; otherwise they are explicitly punted
 with documented workarounds.
 
-- [ ] **13.1 CSS.** Kovo v1 is StyleX-first for app-authored styling through
+- [x] **13.1 CSS.** Kovo v1 is StyleX-first for app-authored styling through
       `@kovojs/style`. Starters, examples, docs, and official UI primitives
       author typed style objects with `style.create(...)`, compose them with the
       JSX `style` prop or the `style.attrs()` lowering target, and reserve
@@ -13,9 +13,9 @@ with documented workarounds.
       cascade-priority `@layer` buckets, and keeps rule attribution so a single
       v1 stylesheet can later split without changing render callers. Raw
       co-located component CSS remains an escape hatch for selectors or
-      third-party theming StyleX cannot express well. App-side CSS auto-collection
-      (removing the manual `emitAtomicCss`/`criticalCss: [...]` registration) is
-      tracked in `plans/css-auto-collection.md`.
+      third-party theming StyleX cannot express well.
+      - Evidence: `plans/archive.md` records app-side CSS auto-collection plus
+        route/fragment CSS delivery as complete.
 - [ ] **13.2 Lists at scale.** Template stamps and the shared `kovo-key` identity
       contract are normative in `SPEC.md` §4.8. Remaining design: cursor
       pagination through URL params, infinite scroll as fragment appends, and
