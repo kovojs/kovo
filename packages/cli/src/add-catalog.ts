@@ -171,6 +171,7 @@ function rewriteUiThemeReferences(source: string): string {
     'uiTheme.color.accentHover': 'style.tokens.sys.color.primaryContainer',
     'uiTheme.color.background': 'style.tokens.sys.color.surface',
     'uiTheme.color.backgroundInverse': 'style.tokens.sys.color.inverseSurface',
+    'uiTheme.color.backgroundMuted': 'style.tokens.sys.color.surfaceContainerHighest',
     'uiTheme.color.backgroundRaised': 'style.tokens.sys.color.surfaceContainerLow',
     'uiTheme.color.backgroundSubtle': 'style.tokens.sys.color.surfaceContainer',
     'uiTheme.color.backgroundSubtleHigh': 'style.tokens.sys.color.surfaceContainerHigh',

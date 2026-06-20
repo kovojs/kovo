@@ -352,6 +352,7 @@ describe('kovo add', () => {
       expect(skeleton).toContain('export const Skeleton = component({');
       expect(skeleton).toContain("import * as style from '@kovojs/style';");
       expect(skeleton).toContain('export const skeletonStyles = style.create');
+      expect(skeleton).toContain('backgroundColor: style.tokens.sys.color.surfaceContainerHighest');
       expect(skeleton).toContain('style?: style.StyleInput');
       expect(slider).toContain('export const Slider = component({');
       expect(slider).toContain("import * as style from '@kovojs/style';");
