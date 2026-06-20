@@ -909,7 +909,7 @@ describe('compiler conformance corpus', () => {
             "[data-bind-list="cart.items"]",
           ],
         },
-        "buttonHidden": "false",
+        "buttonHidden": null,
         "countText": "2",
         "templateHtml": "<li><span data-bind=".qty">1</span> x <span data-bind=".name">&lt;Mug&gt;</span></li><li><span data-bind=".qty">3</span> x <span data-bind=".name">Tea</span></li>",
         "templateKeys": [

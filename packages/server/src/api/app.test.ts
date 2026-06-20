@@ -513,11 +513,21 @@ describe('server app-shell public API barrels', () => {
     // app-shell subpaths stay focused so Vite, static export, and outside adoption paths do not
     // regain an aggregate compatibility surface by accident.
     expect(moduleValueKeys(packageInternalClientModulesApi)).toEqual([
+      // D1/DEPLOY-3: render-plan token preimage now folds in a grammar version + a query-shape
+      // fingerprint (exported on the internal subpath for the build pipeline to wire).
+      'RENDER_PLAN_GRAMMAR_VERSION',
+      'computeRenderPlanFingerprint',
       'createMemoryVersionedClientModuleRegistry',
       'renderVersionedClientModuleResponse',
       'versionedClientModuleHref',
     ]);
-    expect(moduleValueKeys(packageInternalCsrfApi)).toEqual(['renderMutationCsrfField']);
+    // A2: the per-submit Kovo-Idem hidden field is minted/rendered through the internal csrf subpath.
+    expect(moduleValueKeys(packageInternalCsrfApi)).toEqual([
+      'KOVO_IDEM_FIELD_NAME',
+      'mintIdemToken',
+      'renderMutationCsrfField',
+      'renderMutationIdemField',
+    ]);
     expect(packageInternalCsrfApi).toEqual(internalCsrfApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
       'createMemoryMutationReplayStore',
