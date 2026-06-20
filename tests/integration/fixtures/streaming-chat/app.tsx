@@ -130,6 +130,15 @@ export const sendMessage = mutation('chat/send', {
       },
     );
     yield stream.text(`assistant:${result.value.assistantId}`, '\nFinal answer');
+    if (result.value.body === 'xss-probe') {
+      // Model output with HTML metacharacters + a </kovo-text> break-out attempt:
+      // Kovo owns the escaped source buffer (SPEC §9.1), so the <kovo-text> wire
+      // chunk must escape it and it can never end the element or inject markup.
+      yield stream.text(
+        `assistant:${result.value.assistantId}`,
+        '<img src=x onerror=alert(1)></kovo-text><script>alert(2)</script>',
+      );
+    }
     if (result.value.body === 'abort') {
       yield stream.done({ reason: 'error' });
       return;

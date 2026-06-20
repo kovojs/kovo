@@ -76,6 +76,41 @@ test('keeps no-JS and typed failure paths on the ordinary mutation vocabulary', 
   ]);
 });
 
+test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS)', async ({
+  page,
+}) => {
+  // The LLM-output path is the highest-risk modern injection vector and had no
+  // escaping assertion (testing-audit §4; plans/bugs-1.md F8/F10). Kovo owns the
+  // escaped source buffer (SPEC §9.1) and never inserts model output as raw HTML.
+  let dialogFired = false;
+  page.on('dialog', (dialog) => {
+    dialogFired = true;
+    void dialog.dismiss().catch(() => {});
+  });
+
+  await page.goto('/');
+  await page.getByRole('textbox', { name: 'Message' }).fill('xss-probe');
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/_m/chat/send') && response.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Send' }).click();
+  const wire = await (await responsePromise).text();
+
+  // The model payload is HTML-escaped in the <kovo-text> chunk, so </kovo-text>
+  // cannot break out and <img>/<script> cannot inject.
+  expect(wire).toContain(
+    '&lt;img src=x onerror=alert(1)&gt;&lt;/kovo-text&gt;&lt;script&gt;alert(2)&lt;/script&gt;',
+  );
+  expect(wire).not.toContain('<img src=x onerror=alert(1)>');
+  expect(wire).not.toContain('</kovo-text><script>alert(2)');
+
+  // Reconcile to server truth: nothing executed, no element injected.
+  await expect(page.locator('[data-role="assistant"]')).toContainText('Final answer for xss-probe');
+  await expect(page.locator('[kovo-fragment-target="messages"] img')).toHaveCount(0);
+  await expect(page.locator('[kovo-fragment-target="messages"] script')).toHaveCount(0);
+  expect(dialogFired).toBe(false);
+});
+
 test('marks a streamed assistant source failed when the response aborts', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('textbox', { name: 'Message' }).fill('abort');
