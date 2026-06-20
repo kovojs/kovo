@@ -230,9 +230,11 @@ export const AddToCartForm = component({
       '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" kovo-fragment-target={`add-to-cart:${slots.productId}`} kovo-key={slots.productId} class="add"',
     );
     expect(loweredSource).toContain(
-      "import { renderMutationCsrfField as __kovoRenderMutationCsrfField } from '@kovojs/server/internal/csrf';",
+      "import { renderMutationCsrfField as __kovoRenderMutationCsrfField, renderMutationIdemField as __kovoRenderMutationIdemField } from '@kovojs/server/internal/csrf';",
     );
     expect(loweredSource.match(/__kovoRenderMutationCsrfField\(addToCart\)/g)).toHaveLength(1);
+    // A2 (SPEC §10.3): a per-submit Kovo-Idem hidden field is emitted alongside the CSRF field.
+    expect(loweredSource.match(/__kovoRenderMutationIdemField\(\)/g)).toHaveLength(1);
     expect(loweredSource).not.toContain('mutation={addToCart}');
     expect(loweredSource).not.toMatch(/\skey=\{slots\.productId\}/);
     expect(result.outputContextFacts).toEqual(

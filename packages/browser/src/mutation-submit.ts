@@ -166,6 +166,12 @@ export interface EnhancedMutationSubmitOptions {
    */
   onDeltaMiss?: OnDeltaMiss;
   /**
+   * Full-navigation reload invoked when a delta-miss `/_q/` refetch returns a build token that still
+   * differs from the document token — the document is fundamentally skewed (SPEC §14). Defaults to a
+   * guarded `location.reload()`; injectable for tests.
+   */
+  onBuildSkew?: () => void;
+  /**
    * Reports mutation submit/apply failures. Direct submit callers still receive
    * the thrown error; dispatchEnhancedFormSubmit decides whether a form-layer
    * error has been handled.
@@ -248,11 +254,21 @@ function defaultDeltaMissRefetcher(options: EnhancedMutationSubmitOptions): OnDe
     queryStore: options.store,
     ...definedProps({
       applyQuery: options.applyQuery,
+      // SPEC §5.2.1 rule 2d / §14: the refetch compares the /_q Kovo-Build token to the document
+      // token; on a persistent mismatch it escalates to a full reload instead of merging foreign data.
+      expectedBuildToken: options.expectedBuildToken ?? readPageBuildToken(),
+      onBuildSkew: options.onBuildSkew ?? defaultBuildSkewReload,
       onError: options.onError,
       queryPlans: options.queryPlans,
       root: options.root,
     }),
   });
+}
+
+/** @internal Default §14 recovery: full-navigation reload of the current route on a persistent build skew. */
+function defaultBuildSkewReload(): void {
+  const location = (globalThis as { location?: { reload?: () => void } }).location;
+  location?.reload?.();
 }
 
 function stampEnhancedMutationPending(

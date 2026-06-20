@@ -393,6 +393,13 @@ export interface RunMutationOptions<
   DbValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue, DbValue> {
   csrf?: CsrfValidationOptions<Request>;
+  /**
+   * When the caller has already evaluated the session-bound guard chain before the replay
+   * lookup (A1, SPEC §10.3 "re-evaluate the guard chain before re-serving"), `runMutation` must
+   * NOT re-run it — re-running double-executes a stateful guard (e.g. rateLimit). Default false so
+   * direct callers (fixtures, tests) keep the in-handler guard evaluation.
+   */
+  guardResolved?: boolean;
 }
 
 /** App-scoped mutation factory. `createApp()` uses this to contextually type handlers from configured request providers (SPEC §9.5/§10.3). */
@@ -556,14 +563,18 @@ export async function runMutation<
   const input = inputResult.value as InferSchema<InputSchema>;
   const lifecycleRequest = await resolveLifecycleRequest(request, options);
 
-  const guardFailure = await runGuard(definition.guard, lifecycleRequest);
-  if (guardFailure) {
-    return {
-      error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-      ok: false,
-      ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-      status: guardFailure.status,
-    };
+  // A1 (SPEC §10.3): when the dispatch layer already evaluated the guard chain before the replay
+  // lookup, skip it here so a stateful guard (rateLimit) is not double-executed.
+  if (!options.guardResolved) {
+    const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+    if (guardFailure) {
+      return {
+        error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+        ok: false,
+        ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
+        status: guardFailure.status,
+      };
+    }
   }
 
   const manualInvalidations: ChangeRecord[] = [];
@@ -713,7 +724,9 @@ export async function renderMutationResponse<
         },
         wireRequest,
       ),
-      headers: mutationWireResponseHeaders(wireRequest),
+      // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
+      // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
+      headers: { ...mutationWireResponseHeaders(wireRequest), ...retryAfterHeaders(guardFailure) },
       status: guardFailure.status,
     };
   }
@@ -741,7 +754,7 @@ export async function renderMutationResponse<
       definition,
       wireRequest.rawInput,
       wireRequest.request,
-      runMutationOptions(wireRequest.csrf, wireRequest),
+      { ...runMutationOptions(wireRequest.csrf, wireRequest), guardResolved: true },
     );
   } catch (error) {
     // The handler threw before producing a result; release the reservation so a
@@ -1261,7 +1274,10 @@ export async function renderNoJsMutationResponse<
       : undefined);
 
   // A1 (SPEC §10.3:1061) + A2: guard runs before replay check in the no-JS path too.
-  const lifecycleOpts = runMutationOptions(noJsRequest.csrf, noJsRequest);
+  // guardResolved: the no-JS guard chain is evaluated once below (A1) before the replay lookup, so
+  // runMutation must not re-run it (would double-execute a stateful rateLimit guard). The flag is
+  // inert for resolveLifecycleRequest.
+  const lifecycleOpts = { ...runMutationOptions(noJsRequest.csrf, noJsRequest), guardResolved: true };
   const lifecycleRequestForGuard = await resolveLifecycleRequest(noJsRequest.request, lifecycleOpts);
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
@@ -1278,7 +1294,7 @@ export async function renderNoJsMutationResponse<
         });
     return {
       body,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: { 'Content-Type': 'text/html; charset=utf-8', ...retryAfterHeaders(guardFailure) },
       status: guardFailure.status,
     };
   }
