@@ -1,9 +1,5 @@
 import { endpoint } from '@kovojs/server';
-import type {
-  EndpointAuthDeclaration,
-  EndpointDeclaration,
-  EndpointMethod,
-} from '@kovojs/server';
+import type { EndpointAuthDeclaration, EndpointDeclaration, EndpointMethod } from '@kovojs/server';
 
 import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
 

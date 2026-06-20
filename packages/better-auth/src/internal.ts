@@ -17,11 +17,7 @@ import type { BetterAuthSessionPayload } from './session.js';
 // package root by `index.ts` (api-devex-fixes #6). They are re-exported here so the
 // `./internal` subpath — and the colocated tests that import from it — keep resolving
 // the same names; the `@internal` machinery below stays authored in this file.
-export type {
-  BetterAuthRoleRequest,
-  BetterAuthRoleSession,
-  BetterAuthRoleUser,
-} from './guards.js';
+export type { BetterAuthRoleRequest, BetterAuthRoleSession, BetterAuthRoleUser } from './guards.js';
 export { authed, role } from './guards.js';
 export type { BetterAuthMountOptions } from './mount.js';
 export { mount } from './mount.js';
