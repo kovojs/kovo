@@ -12,6 +12,8 @@ import {
   submitOptimisticEnhancedMutation,
 } from '@kovojs/browser/internal/mutation';
 
+import { applyCartDerives } from './cart-derive';
+
 type CartSummary = Record<string, unknown> & {
   count: number;
 };
@@ -36,6 +38,9 @@ installKovoLoader({
 
 store.subscribe<CartSummary>('cart', (cart) => {
   applyCompiledQueryUpdatePlan(document, 'cart', cart);
+  // Derived-optimism (C6): the same store update that drives the optimistic prediction
+  // also recomputes the cart-derived binding, so it predicts + reconciles in lockstep.
+  applyCartDerives(cart, document);
 });
 
 document.getElementById('optimistic-form')?.addEventListener('submit', (event) => {

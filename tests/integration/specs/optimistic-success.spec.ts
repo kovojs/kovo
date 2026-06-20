@@ -74,3 +74,36 @@ test("a sibling island's local state survives an optimistic mutation + morph (mu
   // the whole optimistic + reconcile + morph cycle — no cross-feature interference.
   await expect(toggle).toHaveText('true');
 });
+
+test('an optimistic prediction flows through a derived binding and reconciles (derived-optimism, C6)', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.waitForFunction(
+    () =>
+      (window as typeof window & { __optimisticSuccessReady?: boolean })
+        .__optimisticSuccessReady === true,
+  );
+
+  const count = page.locator('#cart-panel [data-bind="cart.count"]');
+  const double = page.getByTestId('cart-double');
+  await expect(count).toHaveText('1');
+  await expect(double).toHaveText('2'); // derived: count 1 → 2
+
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/_m/optimistic-success/add') && response.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Add optimistically' }).click();
+
+  // The optimistic prediction (count 1→3) flows through the derive (2→6) before server
+  // truth — the derived consumer predicts in lockstep with the direct binding.
+  await expect(count).toHaveText('3');
+  await expect(double).toHaveText('6');
+
+  await responsePromise;
+  // Reconcile to server truth via the kovo-query in the response: the store settles to 4
+  // and the derive reconciles to 8 — predicted derive replaced, not stacked.
+  await expect(count).toHaveText('4');
+  await expect(double).toHaveText('8');
+});

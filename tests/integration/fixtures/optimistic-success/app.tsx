@@ -57,6 +57,9 @@ const homeRoute = route('/', {
     <script type="module" src="/client.ts"></script>
     <main>
       ${await renderCartPanel(request.db)}
+      <!-- Derived-optimism (C6): a client query-derive (count * 2) that must predict and
+           reconcile in lockstep with the optimistic mutation. SSR'd from server truth. -->
+      <output data-testid="cart-double">${cart.count * 2}</output>
       <form id="optimistic-form" method="post" action="/_m/optimistic-success/add">
         <input type="hidden" name="quantity" value="2">
         <button type="submit">Add optimistically</button>
@@ -79,7 +82,18 @@ const app = createApp({
     [addItem.key]: ({ request }) => {
       const db = (request as unknown as KovoFixtureRequest).db;
       return {
-        fragmentRenderers: [{ render: () => renderCartPanel(db), target: 'cart-panel' }],
+        fragmentRenderers: [
+          {
+            // Append a kovo-query WIRE element so the reconcile updates the query STORE
+            // (server truth) via applyQueryChunksToRuntime, not just the DOM fragment —
+            // store-derived consumers (cart-double) reconcile too. The loader extracts the
+            // kovo-query from the wire; the morph applies only the first element (the
+            // cart-panel section), so no stray node lands in the DOM.
+            render: async () =>
+              `${await renderCartPanel(db)}<kovo-query name="cart">${JSON.stringify(await readCart(db))}</kovo-query>`,
+            target: 'cart-panel',
+          },
+        ],
       };
     },
   },
