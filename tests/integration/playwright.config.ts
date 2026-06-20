@@ -27,7 +27,13 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'dot' : 'list',
+  reporter: [
+    // Human-readable per-run output (dot in CI, list locally).
+    [process.env.CI ? 'dot' : 'list'],
+    // Flake gate: prints a clear annotation per test that passed only on retry
+    // and optionally exits non-zero when KOVO_FAIL_ON_FLAKY=1 (plans/bugs-and-testing.md D2).
+    [fileURLToPath(new URL('./flaky-reporter.ts', import.meta.url))],
+  ],
   // Booting a fixture cold-compiles its app through Vite; give workers headroom.
   timeout: 60_000,
   expect: { timeout: 10_000 },
