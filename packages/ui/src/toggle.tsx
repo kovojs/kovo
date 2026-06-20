@@ -53,7 +53,7 @@ const variants = style.create({
     boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
     color: uiTheme.color.foreground,
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundRaised,
@@ -64,7 +64,7 @@ const variants = style.create({
     borderColor: 'transparent',
     color: uiTheme.color.foreground,
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundSubtleHigh,

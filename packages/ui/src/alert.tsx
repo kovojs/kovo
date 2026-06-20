@@ -15,11 +15,21 @@ export interface AlertProps {
 }
 
 const base = style.create({
+  description: {
+    color: uiTheme.color.foregroundMuted,
+  },
   root: {
+    // Neutral bordered card with a colored left accent (variant sets borderLeftColor).
     alignItems: 'start',
+    backgroundColor: uiTheme.color.background,
+    borderBottomWidth: 1,
+    borderColor: uiTheme.color.border,
+    borderLeftWidth: 4,
     borderRadius: uiTheme.radius.lg,
+    borderRightWidth: 1,
     borderStyle: 'solid',
-    borderWidth: 1,
+    borderTopWidth: 1,
+    color: uiTheme.color.foreground,
     display: 'grid',
     fontSize: 14,
     gap: 4,
@@ -34,26 +44,20 @@ const base = style.create({
   },
 });
 
+// Variants set ONLY the left-accent hue (Material status border color); the body
+// stays a neutral card so colored text/fill no longer competes with content.
 const variants = style.create({
   danger: {
-    backgroundColor: uiTheme.color.danger.background,
-    borderColor: uiTheme.color.danger.border,
-    color: uiTheme.color.danger.foreground,
+    borderLeftColor: uiTheme.color.danger.border,
   },
   info: {
-    backgroundColor: uiTheme.color.info.background,
-    borderColor: uiTheme.color.info.border,
-    color: uiTheme.color.info.foreground,
+    borderLeftColor: uiTheme.color.info.border,
   },
   success: {
-    backgroundColor: uiTheme.color.success.background,
-    borderColor: uiTheme.color.success.border,
-    color: uiTheme.color.success.foreground,
+    borderLeftColor: uiTheme.color.success.border,
   },
   warning: {
-    backgroundColor: uiTheme.color.warning.background,
-    borderColor: uiTheme.color.warning.border,
-    color: uiTheme.color.warning.foreground,
+    borderLeftColor: uiTheme.color.warning.border,
   },
 });
 
@@ -66,11 +70,12 @@ export const Alert = component({
   render(props: AlertProps) {
     const attrs = style.attrs(base.root, variants[props.variant ?? 'info'], props.style);
     const titleAttrs = style.attrs(base.title);
+    const descriptionAttrs = style.attrs(base.description);
 
     return (
       <div {...attrs} role={props.role ?? 'status'}>
         {props.title === undefined ? '' : <strong {...titleAttrs}>{props.title}</strong>}
-        <div>{props.children}</div>
+        <div {...descriptionAttrs}>{props.children}</div>
       </div>
     );
   },

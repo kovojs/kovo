@@ -110,7 +110,7 @@ export const contextMenuStyles = style.create({
   item: {
     alignItems: 'center',
     borderRadius: uiTheme.radius.sm,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     columnGap: 8,
     cursor: 'default',
     display: 'flex',
@@ -152,7 +152,7 @@ export const contextMenuStyles = style.create({
     borderRadius: uiTheme.radius.md,
     borderStyle: 'dashed',
     borderWidth: 1,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     fontSize: 14,
     outlineStyle: 'none',
     paddingBlock: 12,
@@ -165,7 +165,7 @@ export const contextMenuStyles = style.create({
       borderColor: uiTheme.color.borderStrong,
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

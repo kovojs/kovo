@@ -134,7 +134,7 @@ export const commandStyles = style.create({
       opacity: 0.5,
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
@@ -146,7 +146,7 @@ export const commandStyles = style.create({
   dialog: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
+    borderRadius: uiTheme.radius.lg,
     borderStyle: 'solid',
     borderWidth: 1,
     boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
@@ -178,9 +178,18 @@ export const commandStyles = style.create({
     fontSize: 14,
     height: 36,
     outlineStyle: 'none',
-    paddingInline: 12,
+    paddingLeft: 32,
+    paddingRight: 12,
+    position: 'relative',
     transitionProperty: 'background-color, border-color, box-shadow',
     width: '100%',
+    '::before': {
+      color: uiTheme.color.foregroundMuted,
+      content: '"\\2315"',
+      left: 12,
+      pointerEvents: 'none',
+      position: 'absolute',
+    },
     '[data-placeholder]': {
       color: uiTheme.color.foregroundMuted,
     },
@@ -274,7 +283,7 @@ export const commandStyles = style.create({
       opacity: 0.5,
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

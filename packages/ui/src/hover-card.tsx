@@ -50,7 +50,7 @@ export const hoverCardStyles = style.create({
     borderRadius: uiTheme.radius.md,
     borderStyle: 'solid',
     borderWidth: 1,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     fontSize: 14,
     marginTop: 4,
     padding: 12,
@@ -84,7 +84,7 @@ export const hoverCardStyles = style.create({
       textDecorationLine: 'underline',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

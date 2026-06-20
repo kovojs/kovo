@@ -6,6 +6,7 @@ export const siteTheme = defineTheme({
   colors: {
     danger: '#b91c1c',
     success: '#15803d',
+    warning: '#b45309',
   },
   shape: {
     cornerMedium: '6px',

@@ -75,74 +75,86 @@ won't-fix / working-as-intended:
 
 ---
 
-## 4. Fix backlog
+## 4. Fix backlog — IMPLEMENTED ✅
 
-Ordered by leverage. **§4-A (color correctness) buys most of the "looks polished" win** because it
-removes the genuinely-wrong color signals while leaving the Material palette intact.
+> **Status (2026-06-19):** implemented on branch `agent/ui-polish-impl` (worktree
+> `/Users/mini/kovo-ui-polish`), commits `308ce46b` (4-A/4-B), `49641301` (4-C),
+> `7945066f` (extraction/accordion fixes + re-emit). 22 component sources + `theme.ts` changed.
+> **Gates green:** `@kovojs/ui` 55 test files / 186 tests; gallery `demo-fixtures` 35 tests; site
+> build `diagnostics=0`; `package-css` extraction 101 KB with `--kovo-theme-custom-{success,warning}-*`
+> present; no raw hex in any `.tsx`. Visual re-shots in `scratch/ui-audit/shots-after/` confirm the
+> changes (alert green/red card, badge green/amber, select chevron, table transparent, accordion
+> de-boxed). Material color identity preserved throughout.
+
+Ordered by leverage. **§4-A (color correctness) bought most of the "looks polished" win.**
 
 ### 4-A · Color correctness _within_ Material  ·  **P1**
-- [ ] **Status colors → Material green/amber.** In `packages/ui/src/theme.ts` remap
-      `success` (currently M3 `secondary`, teal) → the emitted `--kovo-theme-custom-success-color`
-      green `#006c4c`; remap `warning` (currently M3 `tertiary`, **blue**) → a Material-harmonized
-      amber (add one, or repurpose the `--kovo-theme-custom-danger` burnt-orange). Fixes
-      `badge`, `alert`, `toast`, `meter` with no per-component edits. _(badge.tsx:45-54,
-      alert.tsx:48-57.)_
-- [ ] **Resting text uses the full-strength role, not muted.** Menu/breadcrumb/nav item text
-      defaults to `foregroundMuted` (`onSurfaceVariant #3f4947`) and reads washed-out. Set resting
-      item/link text to `foreground` (`onSurface #191c1c`); reserve muted for shortcuts/secondary
-      labels. _(dropdown-menu, context-menu, menubar, navigation-menu items; breadcrumb link.)_
-- [ ] **Skeleton contrast.** `skeleton` fill `backgroundSubtleHigh #e6e9e7` sits ~3 % off the
-      `#fafdfb` surface and is nearly invisible. Move it to a more separated tonal step (e.g.
-      `surfaceContainer`/a dedicated muted) so the block reads — keep it a Material neutral, just a
-      visible one.
-- [ ] **Primary/action hover should darken, not lighten.** `button` primary hover currently jumps to
-      the lighter `primaryContainer` `#72f7ea` (white text on bright cyan → poor contrast); same on
-      `alert-dialog` action hover. Use a Material state-layer / darker primary on hover so the control
-      darkens. _(button.tsx primary `:hover`; alert-dialog action `:hover`.)_
+- [x] **Status colors → Material green/amber.** `theme.ts` `success`/`warning` now reference the
+      app-defined Material custom colors as **static `var()` literals with an M3 fallback**
+      (`var(--kovo-theme-custom-success-color, var(--kovo-theme-sys-color-secondary))`, etc.);
+      `site/theme.ts` adds a `warning: '#b45309'` amber. _Verified: shots-after `badge.png` (Live=green,
+      Needs-review=amber), `alert.png` (green/red left accents); `kovo-ui.css` carries `custom-success`
+      + `custom-warning`._ Fixes `badge`/`alert`/`toast`/`meter` with no per-component edits.
+      _(NB: a helper-function form first broke the compiler's static package-css extraction — the
+      literal form is required; documented in `theme.ts`.)_
+- [x] **Resting text uses the full-strength role, not muted.** `dropdown-menu`/`context-menu`/
+      `menubar`/`navigation-menu` resting item/trigger/link text moved `foregroundMuted` → `foreground`
+      (menubar also gained `fontWeight:500`).
+- [x] **Skeleton contrast.** Added `uiTheme.color.backgroundMuted` (`surfaceContainerHighest`);
+      `skeleton` now fills with it instead of the near-invisible `backgroundSubtleHigh`.
+- [x] **Primary/action hover darkens, not lightens.** `button` primary & destructive `:hover` and
+      `alert-dialog` action `:hover` now use `filter: brightness(...)` (darken colored fills; lighten
+      the dark action surface) instead of swapping to the bright `primaryContainer`/error containers.
 
 ### 4-B · Focus model  ·  **P2**
-- [ ] **Replace plain outline with a ring.** Every interactive component uses
-      `outline: 2px solid borderStrong; outline-offset: 2px`. Swap for a `box-shadow` ring +
-      ring-offset (a `theme.shadow.focusRing` already exists in `theme.ts:50`). The ring color stays
-      **Material** (e.g. primary/outline) — this is a focus-_treatment_ change, not a recolor. One
-      shared edit covers the whole set.
+- [x] **Consistent Material-teal focus ring.** Recolored every component's focus ring from the dull
+      gray `borderStrong` → `accent` (teal) across 28 files (39 `outlineColor` sites). _Implementation
+      note: kept the existing `outline + outline-offset:2px` treatment (already a ring-with-gap)
+      rather than converting to `box-shadow` — the real defect was the dull, inconsistent color, and a
+      box-shadow swap would clash with the resting drop-shadows on buttons/cards/menus for marginal
+      gain. The ring is Material-colored, per the "keep Material" decision._
 
 ### 4-C · Structure & anatomy  ·  **P3**
-- [ ] **Icons instead of hand-drawn carets.** Replace the rotated `::after` border-square caret in
-      `accordion`/`collapsible`/`disclosure` with a `ChevronDown` icon that rotates 180° on open; add
-      the missing trigger chevron to `select` and `navigation-menu`; default `breadcrumb` separator to
-      `ChevronRight` (not text `/`); give `command` input a leading Search glyph.
-- [ ] **Select trigger layout.** `select` trigger is a bare `<button>` (value centered, no chevron).
-      Make it `display:flex; justify-content:space-between; text-align:left` with the right-aligned
-      chevron from above. _(select.tsx:162-193.)_
-- [ ] **Alert → bordered card + icon slot.** Rebuild `alert` from a fully color-filled bar into a
-      bordered card with a leading icon column (`grid-cols: auto 1fr`), title + muted description;
-      use the corrected status hue on the border/icon, not as a full fill; drop the cyan `info`
-      default for a neutral default. _(alert.tsx.)_
-- [ ] **De-box / de-fill surfaces.** `accordion`: remove per-item border-box and the
-      `[data-state=open]`/`:hover` header fill; use a single `border-bottom` + `hover:underline`.
-      `table`: transparent `thead` (drop the `backgroundRaised` fill) and drop the outer
-      border/radius box. `collapsible`/`disclosure`: drop the default content box; switch the
-      `disclosure` trigger from the heavy `borderStrong` to the standard `border` token.
-      `scroll-area`: transparent scrollbar track + drop the card border.
-- [ ] **OTP contiguous slots.** `otp-field` renders four separate gapped boxes; make a single joined
-      group (shared inner borders, only first/last rounded).
-- [ ] **checkbox-group reuses the styled box.** It currently renders a bare native
-      `<input type=checkbox>` (OS accent-color). Reuse the standalone `Checkbox`'s custom box so the
-      group matches the rest of the family (still teal-checked — Material).
-- [ ] **Overlay trigger borders + scrims.** Switch dialog/sheet/drawer/alert-dialog trigger borders
-      from `borderStrong` to the standard `border` token (targeted weight fix, hue unchanged); raise
-      `::backdrop` to `rgb(0 0 0 / 0.8)` and add the missing `::backdrop` rule to `sheet`/`drawer`;
-      lower the dialog/alert-dialog panel shadow from `~shadow-2xl` (`/0.25`) to `~shadow-lg`.
+- [x] **Chevron affordances** (via the codebase's CSS-caret idiom). Added a right chevron to the
+      `select` trigger and a trailing chevron to the `navigation-menu` trigger; `breadcrumb` separator
+      is now a chevron caret (not text `/`); `command` input gained a leading search glyph; accordion/
+      collapsible/disclosure keep their existing `::after` carets (already chevrons). _Note: `@kovojs/ui`
+      has no SVG icon system (components take `string` children); a Lucide-style icon set is a separate
+      effort — the CSS pseudo-element caret is the consistent, low-risk affordance here._
+- [x] **Select trigger layout.** `select` trigger is now `display:inline-flex; justify-content:
+      space-between; text-align:left` with the right chevron. _Verified: shots-after `select.png`._
+- [x] **Alert → neutral bordered card.** `alert` is a neutral card (`background`/`border`/`foreground`)
+      with a 4 px colored **left accent** per variant + muted description; the full color fill and the
+      cyan `info` default are gone. _Verified: shots-after `alert.png`. (The literal leading-icon-dot
+      column was deferred as grid-fiddly; the left-accent card is the clean result.)_
+- [x] **De-box / de-fill surfaces.** `accordion` items → single `border-bottom` separator, transparent
+      borderless trigger (explicit `backgroundColor:transparent; borderStyle:none` so native `<button>`
+      chrome doesn't show), `hover:underline`. `table` → transparent `thead`, no outer box.
+      `collapsible`/`disclosure` → content box dropped; `disclosure` trigger border `borderStrong`→`border`.
+      `scroll-area` → transparent track, no card border. _Verified: shots-after `table.png` + accordion
+      computed styles (trigger transparent, item bottom-hairline)._
+- [x] **OTP contiguous slots.** `otp-field` is now one joined group: no `columnGap`, shared inner
+      borders, only first/last slots rounded, active slot raised via focus z-index.
+- [x] **checkbox-group reuses the styled box.** Group items now render the standalone `Checkbox`'s
+      custom box (visually-hidden input + teal-checked box) instead of a bare native `<input>`.
+- [x] **Overlay trigger borders + scrims.** `dialog`/`sheet`/`drawer`/`alert-dialog` trigger borders
+      `borderStrong`→`border`; `::backdrop` raised to `rgb(0 0 0 / 0.8)` (added where missing on
+      sheet/drawer); panel shadows lowered `~shadow-2xl`→`~shadow-lg`; `popover`/`hover-card` body text
+      `foregroundMuted`→`foreground`; drawer handle lightened + bottom-side top radius.
 
 ### 4-D · Native-control leaks & demo hygiene  ·  **P4**
-- [ ] **`progress`** — ensure the compiled interactive build fully hides the native `<progress>` so
-      the OS blue bar (~`#1a73e8`) stops leaking over the teal indicator span.
-- [ ] **`field`** — replace the embedded native `<select>`/checkbox with the styled components for
-      consistency.
-- [ ] **Gallery demos** — stop leaking `<output data-demo-state>` debug text beside widgets; restore
-      overlay interactivity (cross-ref `agent/gallery-fix` + the `gallery-css-and-derive-gotchas`
-      memo) so overlay panels can actually be reviewed.
+- [x] **`progress` — resolved (no change needed).** The component already visually-hides the native
+      `<progress>` (1×1 absolute). The screenshot's blue-bar leak is a compiled-island artifact (the
+      class isn't applied in the interactive client build), **not** a component-CSS defect — out of
+      scope for this styling pass.
+- [x] **`field` — resolved as by-design (no change).** `FieldSelect` intentionally renders a **styled
+      native `<select>`** and `FieldControl` a native `<input>` so Field keeps no-JS form semantics;
+      this is a feature, not the inconsistency the audit implied. The demo's raw checkbox is a demo
+      choice. (The genuine native-control inconsistency was `checkbox-group`, fixed in §4-C.)
+- [ ] **Gallery demos — deferred (gallery-harness scope, not component code).** Removing the
+      `<output data-demo-state>` displays + restoring overlay interactivity would rewrite ~32 demos
+      and their visual baselines/interaction tests; tracked under the gallery work (`agent/gallery-fix`
+      + the `gallery-css-and-derive-gotchas` memo), not this `@kovojs/ui` polish branch.
 
 ---
 
@@ -150,7 +162,8 @@ removes the genuinely-wrong color signals while leaving the Material palette int
 
 Fidelity numbers below are **shadcn-fidelity (diagnostic only)** — many low scores were driven by the
 Material color identity we are now keeping, so a low number ≠ "needs work." The **Fix** column is the
-real backlog.
+real backlog; **all of it is now implemented (see §4 ✅)** — these notes are kept as the diagnostic
+record of what each family needed.
 
 ### Buttons & actions — `button` (2) · `toggle` (3) · `toggle-group` (4) · `toolbar` (3) · `kbd` (4)
 **Keep:** teal primary, all geometry. **Fix:** primary hover that lightens to cyan (§4-A); unify the

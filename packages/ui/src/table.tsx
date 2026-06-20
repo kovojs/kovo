@@ -58,7 +58,7 @@ export const tableStyles = style.create({
     verticalAlign: 'middle',
   },
   head: {
-    backgroundColor: uiTheme.color.backgroundRaised,
+    backgroundColor: 'transparent',
     borderBottomColor: uiTheme.color.border,
     borderBottomStyle: 'solid',
     borderBottomWidth: 1,
@@ -88,10 +88,6 @@ export const tableStyles = style.create({
     width: '100%',
   },
   wrapper: {
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
     overflowX: 'auto',
     width: '100%',
   },

@@ -75,7 +75,7 @@ export const dialogStyles = style.create({
       pointerEvents: 'none',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
@@ -90,7 +90,7 @@ export const dialogStyles = style.create({
     borderRadius: uiTheme.radius.lg,
     borderStyle: 'solid',
     borderWidth: 1,
-    boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.25), 0 8px 10px -6px rgb(0 0 0 / 0.25)',
+    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     color: uiTheme.color.foreground,
     left: '50%',
     maxWidth: 512,
@@ -104,7 +104,7 @@ export const dialogStyles = style.create({
       display: 'none',
     },
     '::backdrop': {
-      backgroundColor: 'rgb(0 0 0 / 0.3)',
+      backgroundColor: 'rgb(0 0 0 / 0.8)',
     },
   },
   root: {
@@ -117,7 +117,7 @@ export const dialogStyles = style.create({
   trigger: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.borderStrong,
+    borderColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.md,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -135,7 +135,7 @@ export const dialogStyles = style.create({
       pointerEvents: 'none',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

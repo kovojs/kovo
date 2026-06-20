@@ -48,7 +48,7 @@ export const popoverStyles = style.create({
     borderRadius: uiTheme.radius.md,
     borderStyle: 'solid',
     borderWidth: 1,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     fontSize: 14,
     marginTop: 4,
     padding: 12,
@@ -72,7 +72,7 @@ export const popoverStyles = style.create({
   trigger: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.borderStrong,
+    borderColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.md,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -93,7 +93,7 @@ export const popoverStyles = style.create({
       pointerEvents: 'none',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

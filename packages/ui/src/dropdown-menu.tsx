@@ -108,7 +108,7 @@ export const dropdownMenuStyles = style.create({
   item: {
     alignItems: 'center',
     borderRadius: uiTheme.radius.sm,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     columnGap: 8,
     cursor: 'default',
     display: 'flex',
@@ -169,7 +169,7 @@ export const dropdownMenuStyles = style.create({
       opacity: 0.5,
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,

@@ -79,12 +79,10 @@ export const scrollAreaStyles = style.create({
       display: 'none',
     },
   },
+  // No outer card chrome (border/radius removed); the viewport owns the
+  // scrollable surface and padding. Root only positions the overlay scrollbars.
   root: {
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
     color: uiTheme.color.foreground,
     fontSize: 14,
     overflow: 'hidden',
@@ -93,8 +91,9 @@ export const scrollAreaStyles = style.create({
       opacity: 0.5,
     },
   },
+  // Transparent track so only the thumb reads against the content.
   scrollbar: {
-    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    backgroundColor: 'transparent',
     display: 'flex',
     padding: 2,
     position: 'absolute',

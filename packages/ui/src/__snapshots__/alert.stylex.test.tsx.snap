@@ -1,10 +1,11 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`@kovojs/ui Alert StyleX styles > accepts author-last StyleX overrides 1`] = `"<div class="kv-alert-align-1h2s0q kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-app-alert-bg-16nrlb kv-app-alert-bd-6vmi2g kv-app-alert-fg-sutien" data-style-src="alert.tsx#root; alert.tsx#warning; app-alert.tsx#root" role="status"><div>Custom</div></div>"`;
+exports[`@kovojs/ui Alert StyleX styles > accepts author-last StyleX overrides 1`] = `"<div class="kv-alert-align-1h2s0q kv-alert-bd-1datsm kv-alert-bd-1jjjws kv-alert-bd-lc6y2t kv-alert-bd-6yu6j4 kv-alert-bd-17dppo kv-alert-bd-124hy4 kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bd-1ii8hb kv-app-alert-bg-16nrlb kv-app-alert-bd-6vmi2g kv-app-alert-fg-sutien" data-style-src="alert.tsx#root; alert.tsx#warning; app-alert.tsx#root" role="status"><div class="kv-alert-fg-zzbnl3" data-style-src="alert.tsx#description">Custom</div></div>"`;
 
 exports[`@kovojs/ui Alert StyleX styles > exports StyleX style groups instead of variant helpers 1`] = `
 {
   "base": [
+    "description",
     "root",
     "title",
   ],
@@ -30,14 +31,14 @@ exports[`@kovojs/ui Alert StyleX styles > exports StyleX style groups instead of
 exports[`@kovojs/ui Alert StyleX styles > renders default and variant StyleX classes 1`] = `
 {
   "classes": [
-    "kv-alert-align-1h2s0q kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bg-6duh3f kv-alert-variant-bd-1ne9im kv-alert-variant-fg-q4nzx2",
-    "kv-alert-variant-bg-1mzl57 kv-alert-variant-bd-171gf5 kv-alert-variant-fg-1kje95",
-    "kv-alert-variant-bg-4a9nc9 kv-alert-variant-bd-1m0o9z kv-alert-variant-fg-1e7t1n",
-    "kv-alert-variant-bg-1nqe2a kv-alert-variant-bd-1qv6s4 kv-alert-variant-fg-1g8pfe",
+    "kv-alert-align-1h2s0q kv-alert-bg-gz0aiu kv-alert-bd-1datsm kv-alert-bd-1gezg0 kv-alert-bd-1jjjws kv-alert-bd-lc6y2t kv-alert-bd-6yu6j4 kv-alert-bd-17dppo kv-alert-bd-124hy4 kv-alert-fg-18y7qo kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bd-1xm238",
+    "kv-alert-variant-bd-1hv3q7",
+    "kv-alert-variant-bd-1ii8hb",
+    "kv-alert-variant-bd-taqxyk",
     "kv-alert-font-keb3sr kv-alert-letter-k3w7fi kv-alert-line-67hz3n",
   ],
-  "danger": "<div class="kv-alert-align-1h2s0q kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bg-1nqe2a kv-alert-variant-bd-1qv6s4 kv-alert-variant-fg-1g8pfe" data-style-src="alert.tsx#root; alert.tsx#danger" role="alert"><strong class="kv-alert-font-keb3sr kv-alert-letter-k3w7fi kv-alert-line-67hz3n" data-style-src="alert.tsx#title">Billing issue</strong><div>Payment method required.</div></div>",
-  "info": "<div class="kv-alert-align-1h2s0q kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bg-6duh3f kv-alert-variant-bd-1ne9im kv-alert-variant-fg-q4nzx2" data-style-src="alert.tsx#root; alert.tsx#info" role="status"><div>Queued.</div></div>",
-  "success": "<div class="kv-alert-align-1h2s0q kv-alert-bd-lc6y2t kv-alert-bd-17dppo kv-alert-bd-5grtwb kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bg-1mzl57 kv-alert-variant-bd-171gf5 kv-alert-variant-fg-1kje95" data-style-src="alert.tsx#root; alert.tsx#success" role="status"><strong class="kv-alert-font-keb3sr kv-alert-letter-k3w7fi kv-alert-line-67hz3n" data-style-src="alert.tsx#title">Import complete</strong><div>Imported.</div></div>",
+  "danger": "<div class="kv-alert-align-1h2s0q kv-alert-bg-gz0aiu kv-alert-bd-1datsm kv-alert-bd-1gezg0 kv-alert-bd-1jjjws kv-alert-bd-lc6y2t kv-alert-bd-6yu6j4 kv-alert-bd-17dppo kv-alert-bd-124hy4 kv-alert-fg-18y7qo kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bd-taqxyk" data-style-src="alert.tsx#root; alert.tsx#danger" role="alert"><strong class="kv-alert-font-keb3sr kv-alert-letter-k3w7fi kv-alert-line-67hz3n" data-style-src="alert.tsx#title">Billing issue</strong><div class="kv-alert-fg-zzbnl3" data-style-src="alert.tsx#description">Payment method required.</div></div>",
+  "info": "<div class="kv-alert-align-1h2s0q kv-alert-bg-gz0aiu kv-alert-bd-1datsm kv-alert-bd-1gezg0 kv-alert-bd-1jjjws kv-alert-bd-lc6y2t kv-alert-bd-6yu6j4 kv-alert-bd-17dppo kv-alert-bd-124hy4 kv-alert-fg-18y7qo kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bd-1xm238" data-style-src="alert.tsx#root; alert.tsx#info" role="status"><div class="kv-alert-fg-zzbnl3" data-style-src="alert.tsx#description">Queued.</div></div>",
+  "success": "<div class="kv-alert-align-1h2s0q kv-alert-bg-gz0aiu kv-alert-bd-1datsm kv-alert-bd-1gezg0 kv-alert-bd-1jjjws kv-alert-bd-lc6y2t kv-alert-bd-6yu6j4 kv-alert-bd-17dppo kv-alert-bd-124hy4 kv-alert-fg-18y7qo kv-alert-d-1mghfj kv-alert-font-ms8kpd kv-alert-gap-7zd5l5 kv-alert-line-1i7asy kv-alert-pad-1hooi6 kv-alert-pad-1ijbfi kv-alert-variant-bd-1hv3q7" data-style-src="alert.tsx#root; alert.tsx#success" role="status"><strong class="kv-alert-font-keb3sr kv-alert-letter-k3w7fi kv-alert-line-67hz3n" data-style-src="alert.tsx#title">Import complete</strong><div class="kv-alert-fg-zzbnl3" data-style-src="alert.tsx#description">Imported.</div></div>",
 }
 `;

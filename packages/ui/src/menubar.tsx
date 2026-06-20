@@ -90,10 +90,11 @@ export const menubarStyles = style.create({
   item: {
     alignItems: 'center',
     borderRadius: uiTheme.radius.sm,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     cursor: 'default',
     display: 'inline-flex',
     fontSize: 14,
+    fontWeight: 500,
     height: 32,
     outlineStyle: 'none',
     paddingInline: 10,

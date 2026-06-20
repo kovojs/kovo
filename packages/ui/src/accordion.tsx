@@ -77,10 +77,9 @@ export const accordionStyles = style.create({
   },
   item: {
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
+    borderBottomColor: uiTheme.color.border,
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
     '[data-disabled]': {
       opacity: 0.5,
     },
@@ -97,7 +96,11 @@ export const accordionStyles = style.create({
   },
   trigger: {
     alignItems: 'center',
+    // Transparent borderless button so the de-boxed accordion reads as flat rows
+    // (otherwise the native <button> chrome — gray fill + bevel — shows through).
+    backgroundColor: 'transparent',
     borderRadius: uiTheme.radius.md,
+    borderStyle: 'none',
     color: uiTheme.color.foreground,
     display: 'flex',
     fontSize: 14,
@@ -123,9 +126,6 @@ export const accordionStyles = style.create({
     '[data-disabled]': {
       opacity: 0.5,
     },
-    '[data-state=open]': {
-      backgroundColor: uiTheme.color.backgroundRaised,
-    },
     '[data-state=open]::after': {
       transform: 'rotate(-135deg)',
     },
@@ -133,13 +133,13 @@ export const accordionStyles = style.create({
       pointerEvents: 'none',
     },
     ':focus-visible': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
     },
     ':hover': {
-      backgroundColor: uiTheme.color.backgroundRaised,
+      textDecoration: 'underline',
     },
   },
 });

@@ -22,7 +22,7 @@ export const skeletonStyles = style.create({
     animationIterationCount: 'infinite',
     animationName: pulse,
     animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
-    backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    backgroundColor: uiTheme.color.backgroundMuted,
     borderRadius: uiTheme.radius.md,
   },
 });

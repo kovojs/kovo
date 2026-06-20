@@ -3,28 +3,28 @@
 exports[`@kovojs/ui styled package foundation > exports pure-markup button, badge, and card TSX components 1`] = `
 {
   "alertDialogActionClasses": [
-    "kv-alert-dialog-align-bzhsxc kv-alert-dialog-bg-n17iar kv-alert-dialog-bd-nue1z kv-alert-dialog-bd-12jlys kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-bgznwm kv-alert-dialog-fg-3nec04 kv-alert-dialog-d-4hu2a kv-alert-dialog-font-1h16nm kv-alert-dialog-font-11473q kv-alert-dialog-h-jrdi27 kv-alert-dialog-justify-jgpub0 kv-alert-dialog-pad-o183h5 kv-alert-dialog-transition-13klud kv-alert-dialog-opacity-1tcty7 kv-alert-dialog-pointer-kie594 kv-alert-dialog-outline-61tn6w kv-alert-dialog-outline-h73cxm kv-alert-dialog-outline-1olu66 kv-alert-dialog-outline-1ksugu kv-alert-dialog-bg-1xe0rz kv-alert-dialog-fg-2v0h kv-alert-dialog-bg-1mcmyd kv-alert-dialog-fg-1gc1x7 kv-alert-dialog-bg-gj5n5h kv-alert-dialog-fg-1kzbux",
+    "kv-alert-dialog-align-bzhsxc kv-alert-dialog-bg-n17iar kv-alert-dialog-bd-nue1z kv-alert-dialog-bd-12jlys kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-bgznwm kv-alert-dialog-fg-3nec04 kv-alert-dialog-d-4hu2a kv-alert-dialog-font-1h16nm kv-alert-dialog-font-11473q kv-alert-dialog-h-jrdi27 kv-alert-dialog-justify-jgpub0 kv-alert-dialog-pad-o183h5 kv-alert-dialog-transition-13klud kv-alert-dialog-opacity-1tcty7 kv-alert-dialog-pointer-kie594 kv-alert-dialog-outline-ky6ch4 kv-alert-dialog-outline-h73cxm kv-alert-dialog-outline-1olu66 kv-alert-dialog-outline-1ksugu kv-alert-dialog-filter-1waqqt kv-alert-dialog-bg-1mcmyd kv-alert-dialog-fg-1gc1x7 kv-alert-dialog-filter-rllyl8",
   ],
   "alertDialogClasses": [
     "kv-alert-dialog-fg-1xoz2m kv-alert-dialog-d-1578mh kv-alert-dialog-opacity-1wmp2v",
   ],
   "alertDialogContentClasses": [
-    "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-jllngq kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-yxqv5r kv-alert-dialog-fg-1xoz2m kv-alert-dialog-left-1dkzcg kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-position-qymjrz kv-alert-dialog-top-145aer kv-alert-dialog-transform-1c0eiv kv-alert-dialog-w-l5ey9h kv-alert-dialog-z-1ag0ds kv-alert-dialog-d-1que9w kv-alert-dialog-bg-hvkiv5",
+    "kv-alert-dialog-bg-to660c kv-alert-dialog-bd-ekta4l kv-alert-dialog-bd-1o6h6q kv-alert-dialog-bd-1c10d2 kv-alert-dialog-bd-9vb0yd kv-alert-dialog-box-ts27i0 kv-alert-dialog-fg-1xoz2m kv-alert-dialog-left-1dkzcg kv-alert-dialog-max-kcc8f5 kv-alert-dialog-pad-1kfxum kv-alert-dialog-position-qymjrz kv-alert-dialog-top-145aer kv-alert-dialog-transform-1c0eiv kv-alert-dialog-w-l5ey9h kv-alert-dialog-z-1ag0ds kv-alert-dialog-d-1que9w kv-alert-dialog-bg-1v5hde",
   ],
   "autocompleteClasses": [
     "kv-autocomplete-fg-ndg53x kv-autocomplete-d-1mghfj kv-autocomplete-font-1rygq8 kv-autocomplete-position-ojetho kv-autocomplete-row-1m16zq kv-autocomplete-opacity-uz1kyp kv-autocomplete-fg-1j04p9",
   ],
   "autocompleteInputClasses": [
-    "kv-autocomplete-bg-1e8vv7 kv-autocomplete-bd-xuygo5 kv-autocomplete-bd-1oyuq7 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-ndg53x kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-1haook kv-autocomplete-bd-1l3qua kv-autocomplete-bg-19mu96 kv-autocomplete-fg-1m99ep kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-10m2j4 kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn",
+    "kv-autocomplete-bg-1e8vv7 kv-autocomplete-bd-xuygo5 kv-autocomplete-bd-1oyuq7 kv-autocomplete-bd-1qf6xu kv-autocomplete-bd-1wna9r kv-autocomplete-box-1ti0zz kv-autocomplete-fg-ndg53x kv-autocomplete-font-1rygq8 kv-autocomplete-h-1crj27 kv-autocomplete-outline-1ipo24 kv-autocomplete-pad-13ileu kv-autocomplete-transition-1nf16q kv-autocomplete-w-lhhf6b kv-autocomplete-fg-1haook kv-autocomplete-bd-1l3qua kv-autocomplete-bg-19mu96 kv-autocomplete-fg-1m99ep kv-autocomplete-cursor-1puzf0 kv-autocomplete-outline-z4aaho kv-autocomplete-outline-1ag1xs kv-autocomplete-outline-piwjfh kv-autocomplete-outline-1y03xn",
   ],
   "checkboxGroupClasses": [
-    "kv-checkbox-group-fg-tkbfam kv-checkbox-group-d-1mghfj kv-checkbox-group-font-ms8kpd kv-checkbox-group-row-1m16zq kv-checkbox-group-opacity-1icjyx kv-checkbox-group-fg-1j04p9 kv-checkbox-group-align-1p65i1 kv-checkbox-group-d-1b87tr kv-checkbox-group-flex-1m4ool",
+    "kv-checkbox-group-fg-18y7qo kv-checkbox-group-d-1mghfj kv-checkbox-group-font-ms8kpd kv-checkbox-group-row-1m16zq kv-checkbox-group-opacity-1icjyx kv-checkbox-group-fg-1j04p9 kv-checkbox-group-align-1p65i1 kv-checkbox-group-d-1b87tr kv-checkbox-group-flex-1m4ool",
   ],
   "comboboxClasses": [
     "kv-combobox-fg-ndg53x kv-combobox-d-1mghfj kv-combobox-font-1rygq8 kv-combobox-position-ojetho kv-combobox-row-1m16zq kv-combobox-opacity-uz1kyp kv-combobox-fg-1j04p9",
   ],
   "comboboxInputClasses": [
-    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-fg-ndg53x kv-combobox-font-1rygq8 kv-combobox-h-1crj27 kv-combobox-outline-1ipo24 kv-combobox-pad-13ileu kv-combobox-transition-1nf16q kv-combobox-w-lhhf6b kv-combobox-fg-1haook kv-combobox-bd-1l3qua kv-combobox-bg-19mu96 kv-combobox-fg-1m99ep kv-combobox-cursor-1puzf0 kv-combobox-outline-10m2j4 kv-combobox-outline-1ag1xs kv-combobox-outline-piwjfh kv-combobox-outline-1y03xn",
+    "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-1ti0zz kv-combobox-fg-ndg53x kv-combobox-font-1rygq8 kv-combobox-h-1crj27 kv-combobox-outline-1ipo24 kv-combobox-pad-13ileu kv-combobox-transition-1nf16q kv-combobox-w-lhhf6b kv-combobox-fg-1haook kv-combobox-bd-1l3qua kv-combobox-bg-19mu96 kv-combobox-fg-1m99ep kv-combobox-cursor-1puzf0 kv-combobox-outline-z4aaho kv-combobox-outline-1ag1xs kv-combobox-outline-piwjfh kv-combobox-outline-1y03xn",
   ],
   "comboboxListboxClasses": [
     "kv-combobox-bg-1e8vv7 kv-combobox-bd-xuygo5 kv-combobox-bd-1oyuq7 kv-combobox-bd-1qf6xu kv-combobox-bd-1wna9r kv-combobox-box-rsn8w4 kv-combobox-m-nikuj2 kv-combobox-max-1ajqiv kv-combobox-min-qyj00s kv-combobox-overflow-1grxml kv-combobox-pad-spfybb kv-combobox-position-1ncx2x kv-combobox-w-lhhf6b kv-combobox-z-13q0r7 kv-combobox-d-dphzaj kv-combobox-d-y6pz22",
@@ -39,7 +39,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-dialog-fg-1f1he7 kv-dialog-d-1578mh kv-dialog-opacity-1wmp2v",
   ],
   "dialogContentClasses": [
-    "kv-dialog-bg-1noq3u kv-dialog-bd-jllngq kv-dialog-bd-1o6h6q kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-yxqv5r kv-dialog-fg-1f1he7 kv-dialog-left-1dkzcg kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-position-qymjrz kv-dialog-top-145aer kv-dialog-transform-1c0eiv kv-dialog-w-l5ey9h kv-dialog-z-1ag0ds kv-dialog-d-1que9w kv-dialog-bg-qyhm2q",
+    "kv-dialog-bg-1noq3u kv-dialog-bd-jllngq kv-dialog-bd-1o6h6q kv-dialog-bd-1hi42t kv-dialog-bd-6qr8e1 kv-dialog-box-ts27i0 kv-dialog-fg-1f1he7 kv-dialog-left-1dkzcg kv-dialog-max-rbx48h kv-dialog-pad-1kfxum kv-dialog-position-qymjrz kv-dialog-top-145aer kv-dialog-transform-1c0eiv kv-dialog-w-l5ey9h kv-dialog-z-1ag0ds kv-dialog-d-1que9w kv-dialog-bg-1v5hde",
   ],
   "dropdownMenuClasses": [
     "kv-dropdown-menu-fg-16p8sm kv-dropdown-menu-d-14glvo kv-dropdown-menu-font-1cumtw kv-dropdown-menu-position-ojetho kv-dropdown-menu-opacity-1ctby9",
@@ -48,10 +48,10 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-field-fg-tkbfam kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-row-1m16zq kv-field-opacity-r0fqdm kv-field-fg-1j04p9 kv-field-font-tcmj2u",
   ],
   "menubarClasses": [
-    "kv-menubar-bg-gz0aiu kv-menubar-bd-1gezg0 kv-menubar-bd-36tqtr kv-menubar-bd-17dppo kv-menubar-bd-5grtwb kv-menubar-box-7xa7r0 kv-menubar-fg-18y7qo kv-menubar-d-1ks6ev kv-menubar-font-xjds0k kv-menubar-pad-1ky1bx kv-menubar-opacity-1ctby9 kv-menubar-flex-1m6qig",
+    "kv-menubar-bg-gz0aiu kv-menubar-bd-1gezg0 kv-menubar-bd-36tqtr kv-menubar-bd-17dppo kv-menubar-bd-5grtwb kv-menubar-box-7xa7r0 kv-menubar-fg-1hmypb kv-menubar-d-1ks6ev kv-menubar-font-xjds0k kv-menubar-pad-1ky1bx kv-menubar-opacity-1ctby9 kv-menubar-flex-1m6qig",
   ],
   "navigationMenuClasses": [
-    "kv-navigation-menu-fg-18y7qo kv-navigation-menu-font-1cumtw kv-navigation-menu-position-gf7e5z kv-navigation-menu-opacity-1icjyx kv-navigation-menu-w-143m2o",
+    "kv-navigation-menu-fg-5o153j kv-navigation-menu-font-1cumtw kv-navigation-menu-position-gf7e5z kv-navigation-menu-opacity-1icjyx kv-navigation-menu-w-143m2o",
   ],
   "numberFieldClasses": [
     "kv-number-field-fg-ndg53x kv-number-field-d-1mghfj kv-number-field-font-1rwqzl kv-number-field-row-1m16zq kv-number-field-opacity-1wmp2v kv-number-field-fg-1j04p9",
@@ -63,7 +63,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-select-fg-16p8sm kv-select-d-1mghfj kv-select-font-1cumtw kv-select-position-gf7e5z kv-select-row-1m16zq kv-select-opacity-1icjyx kv-select-fg-1j04p9",
   ],
   "selectTriggerClasses": [
-    "kv-select-bg-clz9dn kv-select-bd-jllngq kv-select-bd-1k451q kv-select-bd-1t9yg7 kv-select-bd-1huuni kv-select-box-kdtwje kv-select-fg-16p8sm kv-select-font-1cumtw kv-select-h-ln0fuf kv-select-outline-iqfugm kv-select-pad-raz2zz kv-select-transition-1icn30 kv-select-w-1kcmn8 kv-select-fg-j0urq1 kv-select-bd-5mwy53 kv-select-bg-174e8a kv-select-fg-1xegkn kv-select-cursor-1eaeoz kv-select-outline-1l8onk kv-select-outline-1iz9f5 kv-select-outline-iee2jp kv-select-outline-1bfidg",
+    "kv-select-align-1vxg5e kv-select-bg-clz9dn kv-select-bd-jllngq kv-select-bd-1k451q kv-select-bd-1t9yg7 kv-select-bd-1huuni kv-select-box-kdtwje kv-select-fg-16p8sm kv-select-d-1fob82 kv-select-font-1cumtw kv-select-h-ln0fuf kv-select-justify-enfacc kv-select-outline-iqfugm kv-select-pad-raz2zz kv-select-text-ojrlgz kv-select-transition-1icn30 kv-select-w-1kcmn8 kv-select-bd-xbg9og kv-select-bd-10ssdz kv-select-bd-f6bz8w kv-select-content-m9kl40 kv-select-flex-188jf3 kv-select-h-12fs7n kv-select-m-11dddg kv-select-transform-fl47p4 kv-select-w-xk5nr4 kv-select-fg-j0urq1 kv-select-bd-5mwy53 kv-select-bg-174e8a kv-select-fg-1xegkn kv-select-cursor-1eaeoz kv-select-outline-hj11vo kv-select-outline-1iz9f5 kv-select-outline-iee2jp kv-select-outline-1bfidg",
   ],
   "sliderClasses": [
     "kv-slider-align-pcwyi kv-slider-fg-18y7qo kv-slider-d-13iw1g kv-slider-font-ms8kpd kv-slider-min-13c0yn kv-slider-position-ojetho kv-slider-touch-ru7ktn kv-slider-w-lhhf6b kv-slider-opacity-1wmp2v kv-slider-fg-1j04p9 kv-slider-d-1pvggd kv-slider-h-1051un kv-slider-min-1rr5f8 kv-slider-w-25wd9l",
@@ -72,7 +72,7 @@ exports[`@kovojs/ui styled package foundation > exports pure-markup button, badg
     "kv-slider-cursor-1rtfyn kv-slider-h-i8ke14 kv-slider-left-1hp4pw kv-slider-m-9505pz kv-slider-opacity-1ntpd0 kv-slider-position-1uzy1e kv-slider-top-1or6xt kv-slider-w-lhhf6b kv-slider-z-ev9kh2 kv-slider-cursor-1puzf0",
   ],
   "toastClasses": [
-    "kv-toast-bg-1wqigr kv-toast-bd-1gezg0 kv-toast-bd-12jlys kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-box-16dxlr kv-toast-fg-nxulax kv-toast-d-1mghfj kv-toast-font-1h16nm kv-toast-pad-1uhz8j kv-toast-row-1m16zq kv-toast-opacity-1wmp2v kv-toast-d-kgigk0 kv-toast-bg-1cg7x5 kv-toast-bd-hcmn8o kv-toast-bg-1onn1h kv-toast-bd-1ry346 kv-toast-bg-tietjt kv-toast-bd-gf5zgh kv-toast-bg-e66ch2 kv-toast-bd-1lfh1v",
+    "kv-toast-bg-1wqigr kv-toast-bd-1gezg0 kv-toast-bd-12jlys kv-toast-bd-1c10d2 kv-toast-bd-9vb0yd kv-toast-box-16dxlr kv-toast-fg-nxulax kv-toast-d-1mghfj kv-toast-font-1h16nm kv-toast-pad-1uhz8j kv-toast-row-1m16zq kv-toast-opacity-1wmp2v kv-toast-d-kgigk0 kv-toast-bg-1cg7x5 kv-toast-bd-hcmn8o kv-toast-bg-1onn1h kv-toast-bd-1ry346 kv-toast-bg-xi921s kv-toast-bd-88dcfm kv-toast-bg-1cwyxf kv-toast-bd-a8ys9o",
   ],
   "toastViewportClasses": [
     "kv-toast-d-1mghfj kv-toast-max-deaxyh kv-toast-outline-x8cs7p kv-toast-pad-1uhz8j kv-toast-position-1lh6gn kv-toast-row-1m16zq kv-toast-w-1nzatp kv-toast-z-1q40g6 kv-toast-opacity-1wmp2v kv-toast-bottom-1p0zhn kv-toast-left-m8ec8w kv-toast-bottom-1mp0ju kv-toast-right-ty8wwr kv-toast-bottom-tbzdsb kv-toast-left-i46tzl kv-toast-left-1c220h kv-toast-top-s7hg34 kv-toast-right-ifx2pt kv-toast-top-4qyn5k kv-toast-left-14yl8z kv-toast-top-1bkjkp",

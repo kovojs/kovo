@@ -3,6 +3,11 @@ import { tokens } from '@kovojs/style';
 const color = tokens.sys.color;
 const shape = tokens.sys.shape;
 
+// `success`/`warning` reference the app-defined Material custom-color roles (from
+// `defineTheme({ colors })`) so the styled UI renders true semantic green/amber, with a
+// CSS fallback to the guaranteed M3 system role when the app has not defined them. These
+// MUST be static string literals (not a helper call) so the compiler's package-css
+// extraction can statically resolve every consumer's identity. SPEC.md §13.1, §6.1.1.
 export const uiTheme = Object.freeze({
   color: {
     accent: color.primary,
@@ -14,6 +19,7 @@ export const uiTheme = Object.freeze({
     backgroundRaised: color.surfaceContainerLow,
     backgroundSubtle: color.surfaceContainer,
     backgroundSubtleHigh: color.surfaceContainerHigh,
+    backgroundMuted: color.surfaceContainerHighest,
     border: color.outlineVariant,
     borderStrong: color.outline,
     foregroundInverse: color.inverseOnSurface,
@@ -30,14 +36,18 @@ export const uiTheme = Object.freeze({
       foreground: color.onPrimaryContainer,
     },
     success: {
-      background: color.secondaryContainer,
-      border: color.secondary,
-      foreground: color.onSecondaryContainer,
+      background:
+        'var(--kovo-theme-custom-success-color-container, var(--kovo-theme-sys-color-secondary-container))',
+      border: 'var(--kovo-theme-custom-success-color, var(--kovo-theme-sys-color-secondary))',
+      foreground:
+        'var(--kovo-theme-custom-success-on-color-container, var(--kovo-theme-sys-color-on-secondary-container))',
     },
     warning: {
-      background: color.tertiaryContainer,
-      border: color.tertiary,
-      foreground: color.onTertiaryContainer,
+      background:
+        'var(--kovo-theme-custom-warning-color-container, var(--kovo-theme-sys-color-tertiary-container))',
+      border: 'var(--kovo-theme-custom-warning-color, var(--kovo-theme-sys-color-tertiary))',
+      foreground:
+        'var(--kovo-theme-custom-warning-on-color-container, var(--kovo-theme-sys-color-on-tertiary-container))',
     },
   },
   radius: {

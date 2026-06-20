@@ -79,7 +79,7 @@ export const switchStyles = style.create({
       backgroundColor: uiTheme.color.accent,
     },
     ':focus-within': {
-      outlineColor: uiTheme.color.borderStrong,
+      outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
       outlineStyle: 'solid',
       outlineWidth: 2,
