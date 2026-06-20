@@ -12,8 +12,8 @@ item cites `file:line` and a concrete scenario; each was independently confirmed
 ## How this was produced
 
 A multi-agent adversarial sweep (the same methodology as parts 1–2): **14 subsystem finders** read the real
-implementation, then **each candidate faced two independent verifiers** — an *exploiter* (build the concrete
-repro / prove the path is reachable) and a *refuter* (find the code that already handles it, the test that
+implementation, then **each candidate faced two independent verifiers** — an _exploiter_ (build the concrete
+repro / prove the path is reachable) and a _refuter_ (find the code that already handles it, the test that
 already covers it, or proof it duplicates a tracked item). A completeness critic then named under-covered
 classes and a **second targeted round** (object-storage, mutation→query invalidation matching, route-matcher
 normalization, document hints/speculation, deferred-stream ordering) ran the same gauntlet. All finders were
@@ -22,7 +22,7 @@ deferred items, and the known-open list — so part 3 reports only **distinct** 
 
 **Raw:** 55 candidate findings across two rounds → **26 confirmed** (both verifiers clean), **22 contested**
 (one verifier dissented or down-scoped), 7+ rejected. Confirmed split: **4 critical, 14 high, 5 medium, 3
-low.** Six contested items where the *exploiter confirmed* and the refuter only narrowed scope (not a
+low.** Six contested items where the _exploiter confirmed_ and the refuter only narrowed scope (not a
 refutation) are **promoted into the lanes** below, marked `(promoted)`; the rest are triaged in their own
 section.
 
@@ -31,11 +31,11 @@ section.
 These contradict guarantees the framework markets and "done" claims in earlier ledgers:
 
 1. **The KV414 IDOR gate does not exist for writes, and is bypassable for reads.** `bugs-and-testing.md`
-   marks F12/KV414 "spec + code + test aligned." But the *only* producer of `ScopeAuditFact`,
+   marks F12/KV414 "spec + code + test aligned." But the _only_ producer of `ScopeAuditFact`,
    `scopeAuditsFromQueryFacts` (`drizzle/src/static.ts:180`), hard-codes `kind:'query'` (`:194`,`:199`) and
    never inspects writes — so an owner-table **mutation** keyed by a client arg emits **no KV414** (`kovo
-   check` exit 0). The `ScopeAuditFact.kind` union literally includes `'write'` (`core/src/graph.ts:285`),
-   proving the intent, yet nothing produces it. And the read side only recognizes a *direct* `eq()` callee
+check` exit 0). The `ScopeAuditFact.kind` union literally includes `'write'` (`core/src/graph.ts:285`),
+   proving the intent, yet nothing produces it. And the read side only recognizes a _direct_ `eq()` callee
    (`static.ts:5583`), so wrapping the IDOR predicate in `and(...)` silently disarms the gate — while the
    write touch-extractor already unwraps `and()` via `eqPredicateConjuncts` (`:9736`). → **A1 (critical) +
    A2 (critical) + A3 (high).**
@@ -53,40 +53,40 @@ These contradict guarantees the framework markets and "done" claims in earlier l
 
 This is a fresh audit ledger. No item below is implemented; every checkbox is open. Definition of done per
 item (CLAUDE.md / `rules/`): the cited test goes **red against today's code, green after the fix**; several
-existing tests *codify the bug* (`combobox.stylex.test.tsx.snap` dangling activedescendant; `match.test.ts`
+existing tests _codify the bug_ (`combobox.stylex.test.tsx.snap` dangling activedescendant; `match.test.ts`
 encoded-param family; the `domain:via:key` assertions in `change-record.test.ts`/`mutation.test.ts`) and must
 be inverted, not preserved.
 
 ## Summary (confirmed + promoted, by lane)
 
-| Lane | Theme | Crit | High | Med | Low |
-| --- | --- | --- | --- | --- | --- |
-| **A** | Authorization & invalidation soundness (touch-graph) | 3 | 2¹ | — | — |
-| **B** | Build/compile cache & generated-artifact determinism | 1 | 1¹ | — | 1 |
-| **C** | Static-export pipeline | — | 2 | — | — |
-| **D** | Query delta & client store | — | 2¹ | 1 | — |
-| **E** | Node adapter, request shell & dispatch | — | 2 | 2¹ | — |
-| **F** | Routing & matcher normalization | — | 2 | — | — |
-| **G** | CSP & security headers | — | 2¹ | — | — |
-| **H** | Registry & type-system soundness | — | 1 | — | — |
-| **I** | better-auth adapter | — | 2¹ | — | 1 |
-| **J** | headless-ui primitives | — | 1 | 1 | 1 |
-| **K** | CSS / StyleX emission | — | 1 | 1 | — |
-| **L** | Object-storage capability | — | 1 | 1 | — |
+| Lane  | Theme                                                | Crit | High | Med | Low |
+| ----- | ---------------------------------------------------- | ---- | ---- | --- | --- |
+| **A** | Authorization & invalidation soundness (touch-graph) | 3    | 2¹   | —   | —   |
+| **B** | Build/compile cache & generated-artifact determinism | 1    | 1¹   | —   | 1   |
+| **C** | Static-export pipeline                               | —    | 2    | —   | —   |
+| **D** | Query delta & client store                           | —    | 2¹   | 1   | —   |
+| **E** | Node adapter, request shell & dispatch               | —    | 2    | 2¹  | —   |
+| **F** | Routing & matcher normalization                      | —    | 2    | —   | —   |
+| **G** | CSP & security headers                               | —    | 2¹   | —   | —   |
+| **H** | Registry & type-system soundness                     | —    | 1    | —   | —   |
+| **I** | better-auth adapter                                  | —    | 2¹   | —   | 1   |
+| **J** | headless-ui primitives                               | —    | 1    | 1   | 1   |
+| **K** | CSS / StyleX emission                                | —    | 1    | 1   | —   |
+| **L** | Object-storage capability                            | —    | 1    | 1   | —   |
 
-¹ includes one item promoted from *Contested* after exploiter confirmation. Contested items (16 remaining) +
+¹ includes one item promoted from _Contested_ after exploiter confirmation. Contested items (16 remaining) +
 a deferred-stream-ordering cluster are triaged in their own section.
 
 ---
 
-## Lane A — Authorization & invalidation soundness  *(the standout cluster: 3 criticals; `drizzle/src/static.ts`, `server/src/change-record.ts`, `server/src/generated-query-registry.ts`)*
+## Lane A — Authorization & invalidation soundness _(the standout cluster: 3 criticals; `drizzle/src/static.ts`, `server/src/change-record.ts`, `server/src/generated-query-registry.ts`)_
 
 This lane decides whether the framework's two headline guarantees actually hold: **IDOR cannot pass CI** and
 **no query stays stale after a mutation it reads**. Both are broken in distinct, independently-exploitable ways.
 
 - [ ] **A1 (critical) — KV414 IDOR audit never runs on writes; owner-table mutations keyed by a client arg are unenforced** `spec-impl-divergence` (L4-1)
-  - **Where:** `drizzle/src/static.ts:180-205` (`scopeAuditsFromQueryFacts` emits only `kind:'query'`, `:194`/`:199`); `:432-442` (`extractOwnerAuditFromProject` derives `scopeAudits` *solely* from query facts); CLI gate consumes only `output.scopeAudits` (`cli/src/index.ts:4771-4784`); `ScopeAuditFact.kind` union includes `'write'` (`core/src/graph.ts:285`) but nothing emits it.
-  - **Defect:** §10.3/§11.1 KV414 covers "query **or write** reaches an `owner:`-annotated table" (SPEC.md:1094, table :1304). A handler `db.update(orders).set({…}).where(eq(orders.id, input.id))` against `owner:(t)=>t.userId` lets any authenticated principal mutate another user's rows; `kovo check` emits no KV414 and exits 0. The write predicates *are* extracted (`writeKey`/`eqPredicateConjuncts`, `:5728-5760`) but only feed the invalidation graph, never a `ScopeAuditFact`. The blocking gate SPEC calls "not advisory" simply does not exist for the write half.
+  - **Where:** `drizzle/src/static.ts:180-205` (`scopeAuditsFromQueryFacts` emits only `kind:'query'`, `:194`/`:199`); `:432-442` (`extractOwnerAuditFromProject` derives `scopeAudits` _solely_ from query facts); CLI gate consumes only `output.scopeAudits` (`cli/src/index.ts:4771-4784`); `ScopeAuditFact.kind` union includes `'write'` (`core/src/graph.ts:285`) but nothing emits it.
+  - **Defect:** §10.3/§11.1 KV414 covers "query **or write** reaches an `owner:`-annotated table" (SPEC.md:1094, table :1304). A handler `db.update(orders).set({…}).where(eq(orders.id, input.id))` against `owner:(t)=>t.userId` lets any authenticated principal mutate another user's rows; `kovo check` emits no KV414 and exits 0. The write predicates _are_ extracted (`writeKey`/`eqPredicateConjuncts`, `:5728-5760`) but only feed the invalidation graph, never a `ScopeAuditFact`. The blocking gate SPEC calls "not advisory" simply does not exist for the write half.
   - **Fix:** add a write-side scope-audit producer paralleling `scopeAuditsFromQueryFacts`: per write touch on an owner domain, classify the predicate key as `args` (→ `kind:'write'`), `session`, or neither; wire into `extractOwnerAuditFromProject:436`. The existing CLI gate then enforces it unchanged.
   - **Test:** fixture `orders {key id, owner userId}` + mutation `update(orders).where(eq(orders.id, input.id))` → `extractOwnerAuditFromProject(...).scopeAudits` contains `{domain:'order', kind:'write', scope:'args'}` and the CLI emits `ERROR KV414`. (Existing `index.kovo-explain.test.ts:568` hand-builds a write audit; no producer test exists.)
   - **Verified:** exploiter+refuter both reproduced empty `scopeAudits` for the write; live grep confirms `kind:'query'` is the only emitted kind.
@@ -94,7 +94,7 @@ This lane decides whether the framework's two headline guarantees actually hold:
 - [ ] **A2 (critical) — Query KV414 escapes via `and()`/`or()`-wrapped predicates (combinator-nested `eq` operands never extracted)** `impl-bug` (L4-2)
   - **Where:** `static.ts:5570-5595` — `queryInstanceKeyComparisons` rejects any `where()` whose top-level callee is not the literal identifier `eq` (`:5583 expression.getText() !== 'eq'`). Contrast the write side `eqPredicateConjuncts` (`:9736`) which recursively unwraps `and(...)`.
   - **Defect:** real owner queries combine predicates: `where(and(eq(orders.id, input.id), eq(orders.status,'open')))`. Because the callee is `and`, the function returns `[]` → no instance key → `argKeyed` false → **no KV414**, even though `input.id` keys an owner-table read. Wrapping the IDOR predicate in any combinator disarms the read-side gate the way part-1 KV414 was supposed to cover.
-  - **Fix:** replace the direct-`eq` check with `eqPredicateConjuncts(predicate)` so each `and(...)` conjunct becomes a comparison; keep `or(...)` fail-closed (an arg-keyed owner operand anywhere in the tree is an `args`-scope *candidate*, while only top-level/`and` conjuncts may discharge a unique instance key).
+  - **Fix:** replace the direct-`eq` check with `eqPredicateConjuncts(predicate)` so each `and(...)` conjunct becomes a comparison; keep `or(...)` fail-closed (an arg-keyed owner operand anywhere in the tree is an `args`-scope _candidate_, while only top-level/`and` conjuncts may discharge a unique instance key).
   - **Test:** loader `where(and(eq(orders.id, input.id), eq(orders.status,'open')))` → `scopeAudits` has `{scope:'args'}` (→ KV414); sibling `where(and(eq(orders.userId, req.session.userId), …))` stays `scope:'session'` (no KV414).
   - **Verified:** both verifiers ran `extractOwnerAuditFromProject` on the `and()` form → `scopeAudits === []`; the direct-`eq` form yields `scope:'args'`. Live grep confirms `:5583` vs `:9736` asymmetry.
 
@@ -107,30 +107,30 @@ This lane decides whether the framework's two headline guarantees actually hold:
 
 - [ ] **A4 (critical) — Keyed change-record never reruns a list/aggregate query reading the same domain → silent stale list** `impl-bug` (L2-invalidation-1)
   - **Where:** `server/src/change-record.ts:78-119` (`changeRecordTouchesQueryInstance` / `queryInstanceKeyReadsChangeDomain`, prefix test at `:113`); call path `mutation.ts:1574-1585` (`queryTouchedByChange`) + `:1556-1572` (`queriesToRerun`).
-  - **Defect:** for a key-scoped change (`{domain:'order', keys:['o1'], via:'orders'}`), a query is rerun only if its `instanceKey` equals `domain[:via]:key` (`:83`) or `startsWith(`${domain}:`)` (`:113`). A list/aggregate keyed `orders-page:1` / `cartTotal:u7` / `productsByCat:electronics` fails both → because `instanceKey !== undefined`, it does **not** fall through to the unconditional-rerun branch → excluded from `queriesToRerun`, ships no `<kovo-query>`. After `addItem`/`reserve`, the list view renders pre-mutation data forever. §10.1 makes the domain the cache currency; key granularity may *narrow within a row reader*, never silently exclude a same-domain non-row reader.
-  - **Fix:** only attempt key-narrowing when the `instanceKey` provably parses as a single-row identity of *this change's domain* (matching `change.keys`). For any non-row-identity reader, fall back to `invalidate=true` (the §10.1 over-invalidate-when-uncertain rule the same file already cites at `:115-118`).
+  - **Defect:** for a key-scoped change (`{domain:'order', keys:['o1'], via:'orders'}`), a query is rerun only if its `instanceKey` equals `domain[:via]:key` (`:83`) or `startsWith(`${domain}:`)` (`:113`). A list/aggregate keyed `orders-page:1` / `cartTotal:u7` / `productsByCat:electronics` fails both → because `instanceKey !== undefined`, it does **not** fall through to the unconditional-rerun branch → excluded from `queriesToRerun`, ships no `<kovo-query>`. After `addItem`/`reserve`, the list view renders pre-mutation data forever. §10.1 makes the domain the cache currency; key granularity may _narrow within a row reader_, never silently exclude a same-domain non-row reader.
+  - **Fix:** only attempt key-narrowing when the `instanceKey` provably parses as a single-row identity of _this change's domain_ (matching `change.keys`). For any non-row-identity reader, fall back to `invalidate=true` (the §10.1 over-invalidate-when-uncertain rule the same file already cites at `:115-118`).
   - **Test:** `change-record.test.ts` — `changeRecordTouchesQueryInstance({domain:'order',keys:['o1'],via:'orders'}, 'orders-page:1') === true`; integration via `runMutation` — a list query `reads:[order]` with `instanceKey:'orders-page:1'` appears in `rerunQueries` after an `order` touch (today `[]`).
   - **Verified:** both verifiers executed the three functions verbatim — `match(…,'orders-page:1') === false`, `match(…,'cartTotal:u7') === false`; row-identity control `'order:orders:o1' === true`. Distinct from part-2 C5/settlement (client optimism); this is server-side post-commit rerun selection.
 
 - [ ] **A5 (high, promoted) — `queryWithGeneratedReads` overwrites author-declared `reads:` instead of folding → silent under-invalidation** `spec-impl-divergence` (L12-2)
-  - **Where:** `server/src/generated-query-registry.ts:42-49` (`return { ...definition, reads }` *replaces*; docstring `:15-19` claims it only "populates omitted reads"); applied to every query at `app.ts:171-173`; feeds invalidation at `mutation.ts:1579`.
+  - **Where:** `server/src/generated-query-registry.ts:42-49` (`return { ...definition, reads }` _replaces_; docstring `:15-19` claims it only "populates omitted reads"); applied to every query at `app.ts:171-173`; feeds invalidation at `mutation.ts:1579`.
   - **Defect:** §10.2:1018 says a KV410 opaque projection's declared `reads:` is **folded into** (union) the read set. The impl replaces: if the compiler registered any non-empty reads, the author's `reads` is discarded. A query with a visible base read on `products` plus an opaque `sql<T>` over `inventory` (the exact case KV410 forces an author `reads:[product, inventory]`) gets its reads overwritten to just `[product]` → a mutation touching `inventory` no longer invalidates it. The opaque-projection contract is defeated at runtime.
   - **Fix:** union registered reads with `definition.reads` (dedupe by key); or only inject when `definition.reads` is empty (matches the docstring).
   - **Test:** query with `reads:[product, inventory]` + compiler-registered `[product]` → effective read set is the union; a mutation on `inventory` reruns it.
   - **Verified:** exploiter confirmed the overwrite path end-to-end; refuter agreed on the code (`:46-48`) and narrowed only the framing. Sibling of bugs-1 KV410 (distinct code path: runtime read-set merge, not compile-time emission).
 
-> **Contested sibling (this lane):** keyed-narrowing is also *over*-eager for SPEC §10.2 canonical keys —
+> **Contested sibling (this lane):** keyed-narrowing is also _over_-eager for SPEC §10.2 canonical keys —
 > the matcher hard-codes a non-canonical `domain:via:key` encoding while the wire/store/optimism currency is
 > `name:keyValue` (`product:p1`), so every sibling instance's fragment ships on every keyed mutation. Same
-> file as A4, opposite direction. See *Contested* (L2-invalidation-2).
+> file as A4, opposite direction. See _Contested_ (L2-invalidation-2).
 
 ---
 
-## Lane B — Build/compile cache & generated-artifact determinism  *(`compiler/src/cache-identity.ts`, `persistent-compile-cache.ts`, `emit/bootstrap.ts`)*
+## Lane B — Build/compile cache & generated-artifact determinism _(`compiler/src/cache-identity.ts`, `persistent-compile-cache.ts`, `emit/bootstrap.ts`)_
 
 - [ ] **B1 (critical) — Persistent compile cache survives any compiler upgrade: `compilerBuildId()` is a hardcoded constant** `impl-bug` (L8-1)
   - **Where:** `cache-identity.ts:5` (`compilerPackageVersion = '0.1.0'`), `:24-32` (`sourceFingerprints` defaults `{}`); both production call sites invoke `compilerBuildId()` with **no args** (`vite.ts:430-451`, `cli/src/index.ts:315-327`); read gate `persistent-compile-cache.ts:84` (`entry.compilerBuildId !== compilerBuildId()`).
-  - **Defect:** with no args the build id is a build-invariant constant (`@kovojs/compiler@0.1.0/<hash of {}>`). The on-disk cache (`.kovo/cache/compiler`) is keyed by it and only rejected on mismatch — which never happens across releases. **Live proof:** the literal is `'0.1.0'` while `packages/compiler/package.json` is already `0.1.1`, so the namespace is *already* stale. Ship compiler v1 with a buggy/vulnerable lowering → build → upgrade to v2 that fixes it (without hand-editing the literal) → re-build in the same checkout → every unchanged-source component is a persistent **hit** serving the **old** emitted module. A silent un-applied-fix / wrong-output disaster, contradicting the file's own contract (`:17-22` "a compiler implementation change becomes a clean miss").
+  - **Defect:** with no args the build id is a build-invariant constant (`@kovojs/compiler@0.1.0/<hash of {}>`). The on-disk cache (`.kovo/cache/compiler`) is keyed by it and only rejected on mismatch — which never happens across releases. **Live proof:** the literal is `'0.1.0'` while `packages/compiler/package.json` is already `0.1.1`, so the namespace is _already_ stale. Ship compiler v1 with a buggy/vulnerable lowering → build → upgrade to v2 that fixes it (without hand-editing the literal) → re-build in the same checkout → every unchanged-source component is a persistent **hit** serving the **old** emitted module. A silent un-applied-fix / wrong-output disaster, contradicting the file's own contract (`:17-22` "a compiler implementation change becomes a clean miss").
   - **Fix:** derive `compilerBuildId()` inputs from real artifacts at every call site — read the compiler's own `package.json` version at module load (not a copy-pasted literal) and fold a `dist/` content hash; thread through `compileCacheKey`/persistent read so an upgrade is a guaranteed miss.
   - **Test:** write a persistent entry, stub `compilerBuildId` to a new value (simulating upgrade) → `readPersistentCompileCacheEntry` returns null; `compilerBuildId()` differs after bumping the version source-of-truth.
   - **Verified:** both verifiers traced the no-arg call sites + constant; live grep confirms `'0.1.0'` literal vs `0.1.1` package.
@@ -149,15 +149,15 @@ This lane decides whether the framework's two headline guarantees actually hold:
   - **Test:** write two entries with identical results, prune `maxEntries:1`, read the kept entry → still returns the result (today null).
   - **Verified:** both verifiers reproduced the null-after-prune via a temp test.
 
-> **Contested sibling:** the compile cache key folds source only via a **32-bit FNV-1a** (`compile-cache.ts:179`,`:416-424`) with no stored source preimage, so a collision yields a stale wrong-output hit; SPEC §5.2.1#1 mandates a collision-resistant hash. Cheap fix (swap to the already-imported `sha256`) regardless of adversarial reachability. See *Contested* (L8-2).
+> **Contested sibling:** the compile cache key folds source only via a **32-bit FNV-1a** (`compile-cache.ts:179`,`:416-424`) with no stored source preimage, so a collision yields a stale wrong-output hit; SPEC §5.2.1#1 mandates a collision-resistant hash. Cheap fix (swap to the already-imported `sha256`) regardless of adversarial reachability. See _Contested_ (L8-2).
 
 ---
 
-## Lane C — Static-export pipeline  *(`server/src/static-export-*.ts`)*
+## Lane C — Static-export pipeline _(`server/src/static-export-_.ts`)\*
 
 - [ ] **C1 (high) — `skip`-mode export silently drops every valid sibling page of a param route when one staticPath is non-exportable** `impl-bug` (L1-1)
   - **Where:** `static-export-replay.ts:49-68` (skip predicate `:50 diagnostics.some(d => d.routePath === routeTarget.routePath)`); all param staticPath targets share `routePath=route.path` and all staticPath diagnostics carry that same `routePath` (`static-export-route-plan.ts:94-165`).
-  - **Defect:** for `/products/:id`, one bad staticPath (e.g. `/products/%2f`) poisons *all* siblings: every valid concrete page (`/products/p1`) is skipped, with no per-page diagnostic. `skip` mode exists to publish the exportable subset; instead it ships an incomplete site. A mid-loop replay failure pushing a `routePath='/products/:id'` diagnostic drops not-yet-replayed siblings too.
+  - **Defect:** for `/products/:id`, one bad staticPath (e.g. `/products/%2f`) poisons _all_ siblings: every valid concrete page (`/products/p1`) is skipped, with no per-page diagnostic. `skip` mode exists to publish the exportable subset; instead it ships an incomplete site. A mid-loop replay failure pushing a `routePath='/products/:id'` diagnostic drops not-yet-replayed siblings too.
   - **Fix:** skip per concrete target identity, not per `routePath` — give staticPath diagnostics a concrete-path discriminator and suppress only the exact non-exportable URL.
   - **Test:** `route('/products/:id', { staticPaths:['/products/p1','/products/%2f'] })` + `onNonExportable:'skip'` → artifacts include `/products/p1/index.html` AND diagnostics contain exactly the `%2f` KV229 (today `artifacts=[]`).
   - **Verified:** both verifiers ran `replayStaticExportApp` live → `artifacts=[]`, one diagnostic.
@@ -171,10 +171,10 @@ This lane decides whether the framework's two headline guarantees actually hold:
 
 ---
 
-## Lane D — Query delta & client store  *(`core/src/query-delta.ts`, `browser/src/{query-apply,broadcast,query-store}.ts`)*
+## Lane D — Query delta & client store _(`core/src/query-delta.ts`, `browser/src/{query-apply,broadcast,query-store}.ts`)_
 
 - [ ] **D1 (high) — A dropped top-level non-collection field is silently retained; the KV416 round-trip fails** `spec-impl-divergence` (L2-query-delta-1)
-  - **Where:** `core/src/query-delta.ts:123-132` (`buildQueryDelta` builds `set` from only the fields *present* in the re-run value), `:167-169` (`applyQueryDelta` per-field overwrite leaves absent fields unchanged); production caller `mutation.ts:1636-1646`.
+  - **Where:** `core/src/query-delta.ts:123-132` (`buildQueryDelta` builds `set` from only the fields _present_ in the re-run value), `:167-169` (`applyQueryDelta` per-field overwrite leaves absent fields unchanged); production caller `mutation.ts:1636-1646`.
   - **Defect:** a field the re-run **dropped** (e.g. `{count, coupon, items}` → `{count, items}`) is absent from `set`, so `applyQueryDelta` leaves the stale `coupon` on the client forever (§841: a delta leaves absent fields unchanged). The delta path is chosen exactly when it serializes smaller (large `items` list), so this fires in the realistic case → silent stale wrong output and a hard failure of the §848/KV416 gate `apply_delta(base, Δ) ≡ full`.
   - **Fix:** treat the top-level value as the "parent object sent whole" for non-collection fields — when `set` is present, delete base non-collection keys absent from `set` (i.e. `set` is the authoritative whole-object-minus-collections), or add an explicit removed-field list. Mirror the round-trip gate in tests.
   - **Test:** `core/src/query-delta.test.ts` — base `{count:2,coupon:'SAVE10',items:[…]}`, full `{count:2,items:[…]}` (coupon removed) → `applyQueryDelta(base, buildQueryDelta(full,…))` deep-equals `full` (today retains `coupon`).
@@ -192,16 +192,16 @@ This lane decides whether the framework's two headline guarantees actually hold:
   - **Defect:** the mutation-response apply path correctly converts deltas to misses on build-token mismatch; the broadcast receive path bypasses it. Same device, Tab A on build N, Tab B reloaded onto N+1 after a deploy that moved a query's shape: Tab B submits, rebroadcasts the raw N+1 body, Tab A applies an N+1 delta onto its N base — exactly the long-open-tab skew §847/§14 base-version validation exists to catch. Part-2 D-series fixed the direct path; broadcast is a distinct code path with no token.
   - **Fix:** stamp the sender's `<meta name="kovo-build">` into the broadcast envelope in `publish()`, validate against the receiver's page token in `onmessage`, and thread `expectedBuildToken`/`responseBuildToken` through so delta chunks become misses on mismatch.
   - **Test:** receiver page-token N, message body stamped N+1 with a delta chunk → chunk becomes a miss (→ refetch), store base untouched.
-  - **Verified:** exploiter traced the no-token apply across the redeploy; refuter agreed on the code and only noted SPEC §9.3 doesn't *enumerate* broadcast as a stamping point (a spec-coverage nuance, not a refutation). Sibling of part-2 D, distinct file.
+  - **Verified:** exploiter traced the no-token apply across the redeploy; refuter agreed on the code and only noted SPEC §9.3 doesn't _enumerate_ broadcast as a stamping point (a spec-coverage nuance, not a refutation). Sibling of part-2 D, distinct file.
 
 > **Contested siblings:** the client `query-store` `values` Map grows unbounded across rotating
 > server-controlled keys (no eviction/dispose; L7-2), and `subscribe()` leaks an empty Set per distinct
 > `(name,key)` (L7-1) — both real but reachability hinges on whether a production caller of `subscribe()` /
-> rotating-key bindings exists. See *Contested*.
+> rotating-key bindings exists. See _Contested_.
 
 ---
 
-## Lane E — Node adapter, request shell & dispatch  *(`server/src/{node,shell,app-request,replay}.ts`)*
+## Lane E — Node adapter, request shell & dispatch _(`server/src/{node,shell,app-request,replay}.ts`)_
 
 - [ ] **E1 (high) — Mid-stream response error corrupts a 200 body with "Internal Server Error" instead of aborting the transfer** `impl-bug` (L11-1)
   - **Where:** `node.ts:91-105` (`writeWebResponseToNode` calls `writeHead(200)` then pipes; rejects on stream error) + `:37-52` (`toNodeHandler` catch: `headersSent` guard protects only `writeHead`, then runs `nodeResponse.end('Internal Server Error')`).
@@ -226,14 +226,14 @@ This lane decides whether the framework's two headline guarantees actually hold:
 
 - [ ] **E4 (medium, promoted) — In-flight pending replay reservations bypass `maxEntries` and persist for the full TTL → DoS** `impl-bug` (L7-3)
   - **Where:** `server/src/replay.ts:89-120` (`reserve` enforces `maxEntries` by evicting only committed/expired records, `:99 if (!('pending' in evictRecord))`); pending records reclaimed only by TTL (`:319-326`) or commit/abort after the handler resolves (`mutation.ts:746-796`).
-  - **Defect:** part-2 A6 *correctly* stopped evicting pending slots (no double-execute). The new consequence: while N handlers are concurrently in-flight, the store holds N pending records **regardless of `maxEntries`** (default 1000). An authenticated attacker picks arbitrary client-controlled `Kovo-Idem` values and fires many concurrent slow mutations; each reserves a pending slot that bypasses the cap and lingers up to `ttlMs` (5 min). The documented `maxEntries` bound does not bound peak memory.
+  - **Defect:** part-2 A6 _correctly_ stopped evicting pending slots (no double-execute). The new consequence: while N handlers are concurrently in-flight, the store holds N pending records **regardless of `maxEntries`** (default 1000). An authenticated attacker picks arbitrary client-controlled `Kovo-Idem` values and fires many concurrent slow mutations; each reserves a pending slot that bypasses the cap and lingers up to `ttlMs` (5 min). The documented `maxEntries` bound does not bound peak memory.
   - **Fix:** add a separate `maxPending` cap (when exceeded, `reserve()` returns undefined so the request runs unprotected rather than allocating unbounded) and/or a much shorter pending-reservation timeout independent of the committed `ttlMs`.
   - **Test:** `replay.test.ts` — with `maxEntries:2`, drive >2 concurrent pending reserves under a `maxPending` cap → the cap is enforced (excess returns undefined), not silent unbounded growth.
   - **Verified:** exploiter confirmed the unbounded pending accumulation; refuter agreed it is the intended A6 design and noted the DoS root overlaps known-open F5 — but this specific bypass-the-cap surface is A6-introduced and untracked.
 
 ---
 
-## Lane F — Routing & matcher normalization  *(`server/src/{match,hints,document-core}.ts`)*
+## Lane F — Routing & matcher normalization _(`server/src/{match,hints,document-core}.ts`)_
 
 - [ ] **F1 (high) — Internal `//` runs are not collapsed: an empty path segment silently matches a param and changes the matched route** `impl-bug` (L2-route-matcher-1)
   - **Where:** `match.ts:86-89` (`normalizePathname` collapses only the leading `^[/\\]+` run + trims trailing slashes); `:297-300` (naive `.split('/')`); `:220-249` (empty segment accepted as a param value).
@@ -253,11 +253,11 @@ This lane decides whether the framework's two headline guarantees actually hold:
 > primitive if an app interpolates a param into a filesystem path; the static-export pipeline already rejects
 > these — runtime/build divergence; L2-route-matcher-2), and `renderSpeculationRules` emits prerender URLs
 > with no scheme/origin validation (credentialed off-origin prerender via `prefetch:'conservative'`, which
-> KV419 never gates; L2-early-hints-1). See *Contested*.
+> KV419 never gates; L2-early-hints-1). See _Contested_.
 
 ---
 
-## Lane G — CSP & security headers  *(`server/src/{csp,deferred-stream,document-core}.ts` — never audited by parts 1–2)*
+## Lane G — CSP & security headers _(`server/src/{csp,deferred-stream,document-core}.ts` — never audited by parts 1–2)_
 
 - [ ] **G1 (high) — Deferred-stream inline apply/cleanup `<script>` blocks are unhashed and omitted from `document.csp`, so a strict hash-CSP breaks deferred hydration** `impl-bug` (CSP-1)
   - **Where:** `deferred-stream.ts:56-74` (apply/cleanup scripts emitted as raw `<script>…</script>`, body interpolates `--${boundary}`); `document-core.ts:163-190` (`renderDeferredDocument` returns `csp = assembled.csp` = hints+loader+queries only; never the deferred scripts).
@@ -278,11 +278,11 @@ This lane decides whether the framework's two headline guarantees actually hold:
 > defense), and `renderRouteDocumentResponse` **discards** the computed `document.csp` (the dispatch path
 > can't set CSP even if it wanted to); `renderContentSecurityPolicy`/`cspSha256` aren't on the public API, so
 > apps have no supported way to emit the CSP. Real and actionable but partly overlaps part-2 M1. See
-> *Contested* (CSP-3).
+> _Contested_ (CSP-3).
 
 ---
 
-## Lane H — Registry & type-system soundness  *(`compiler/src/internal-graph.ts`, `server/src/app.ts`)*
+## Lane H — Registry & type-system soundness _(`compiler/src/internal-graph.ts`, `server/src/app.ts`)_
 
 - [ ] **H1 (high) — Duplicate mutation keys have no uniqueness diagnostic; invalidation registry is last-write-wins, server dispatch is first-match-wins** `coverage-gap` (L12-1)
   - **Where:** `internal-graph.ts:582-600` (`deriveInvalidationFactsFromGraph` builds `invalidations[mutation.key]` in a plain Record — last-write-wins); `app.ts:85-96` (no key dedup on `options.mutations`); `app-mutation-request.ts:35` (`.find(c => c.key === mutationKey)` — first-match); no mutation analogue to KV240 (`core/src/diagnostics.ts:437-447`).
@@ -293,7 +293,7 @@ This lane decides whether the framework's two headline guarantees actually hold:
 
 ---
 
-## Lane I — better-auth adapter  *(`packages/better-auth/src/{internal,session}.ts`)*
+## Lane I — better-auth adapter _(`packages/better-auth/src/{internal,session}.ts`)_
 
 - [ ] **I1 (high) — Cookie re-emission silently drops `Partitioned` (CHIPS) and other unmodeled attributes, breaking embedded/cross-site login** `spec-impl-divergence` (L13-2)
   - **Where:** `better-auth/src/internal.ts:1104-1106` (`parseSetCookieHeader` default branch ignores unmodeled attributes); typed builder `server/src/cookies.ts:1-9` (`CookieOptions` has no `partitioned`/`priority`), `serializeCookie:17-55` cannot emit them. Better Auth emits `Partitioned` (`node_modules/better-auth/dist/cookies/cookie-utils.mjs:82-103` via `advanced.defaultCookieAttributes`).
@@ -318,11 +318,11 @@ This lane decides whether the framework's two headline guarantees actually hold:
 
 > **Contested sibling:** `getBetterAuthSetCookie`'s no-`getSetCookie()` fallback collapses a comma-folded
 > multi-cookie header to one and corrupts cookies whose `Expires` contains a comma — real but unreachable on
-> modern runtimes (`getSetCookie()` always present). See *Contested* (L13-3).
+> modern runtimes (`getSetCookie()` always present). See _Contested_ (L13-3).
 
 ---
 
-## Lane J — headless-ui primitives  *(`packages/headless-ui/src/primitives/*` — part 2 only touched compiler wiring)*
+## Lane J — headless-ui primitives _(`packages/headless-ui/src/primitives/_` — part 2 only touched compiler wiring)\*
 
 - [ ] **J1 (high) — Tabs / Accordion / ToggleGroup keyboard nav defaults to `'both'` axes, contradicting their own rendered orientation** `spec-impl-divergence` (L9-1)
   - **Where:** `tabs.ts:263-266`+`:339-343`, `accordion.ts:266-269`+`:314-318`, `toggle-group.ts:243-246`+`:310-312` — each passes `orientation` to `navigationIntentFromKey` only when explicitly set, so it falls back to `'both'` (`lib/keyboard-navigation.ts:30`). Correct peers: `toolbar.ts:147`/`menubar.ts:311` use `state.orientation ?? 'horizontal'`.
@@ -347,7 +347,7 @@ This lane decides whether the framework's two headline guarantees actually hold:
 
 ---
 
-## Lane K — CSS / StyleX emission  *(`packages/style/src/{internal,engine}.ts`, `compiler/src/package-styles.ts`)*
+## Lane K — CSS / StyleX emission _(`packages/style/src/{internal,engine}.ts`, `compiler/src/package-styles.ts`)_
 
 - [ ] **K1 (high) — `cssLengthValue` appends spurious `px` to numeric CSS custom-property (`--var`) values** `impl-bug` (L14-1)
   - **Where:** `style/src/internal.ts:82-87` (`cssLengthValue` decides unitlessness only from `UNITLESS_CSS_PROPERTIES`, no `--` guard) called from `engine.ts:575`; every other engine path special-cases `startsWith('--')` (`engine.ts:532`,`:692`, `internal.ts:23`).
@@ -366,11 +366,11 @@ This lane decides whether the framework's two headline guarantees actually hold:
 > **Contested sibling:** `componentHostSelector` (`compiler/src/css.ts:820`) builds a CSS selector with the
 > **HTML**-attribute escaper (`escapeAttribute`), which entity-encodes `&`/`"` (wrong in CSS) and fails to
 > escape `]`/`}`/backslash; a correct CSS escaper exists at `browser/src/fragment-targets.ts:35`. Unreachable
-> today (component names are TS identifiers), so it's a defense-in-depth/correctness fix. See *Contested*.
+> today (component names are TS identifiers), so it's a defense-in-depth/correctness fix. See _Contested_.
 
 ---
 
-## Lane L — Object-storage capability  *(`packages/core/src/storage.ts`)*
+## Lane L — Object-storage capability _(`packages/core/src/storage.ts`)_
 
 - [ ] **L1 (high) — A user key ending in the sidecar suffix `.kovo-storage.json` collides with another object's filesystem metadata sidecar (cross-object corruption + metadata disclosure)** `impl-bug` (L2-storage-1)
   - **Where:** `core/src/storage.ts:120` (`sidecarSuffix`), `:203-217` (FS put writes blob + `metadataFilePath`), `:385-410` (FS stat reads sidecar), `:412-425` (`storageFilePath`/`metadataFilePath` — no reserved-suffix guard), `:308-319` (`normalizeStorageKey` rejects only empty/`.`/`..`/absolute).
@@ -388,38 +388,38 @@ This lane decides whether the framework's two headline guarantees actually hold:
 
 > **Contested sibling:** S3 `stat()`/`stream()` report `size:0` when the client omits `contentLength`
 > (memory/FS report the true byte length) — a silent under-report that can truncate a download or bypass a
-> size guard; both verifiers agreed the divergence is real but narrow. See *Contested* (L2-storage-3).
+> size guard; both verifiers agreed the divergence is real but narrow. See _Contested_ (L2-storage-3).
 
 ---
 
-## Contested — needs adjudication  *(real per the exploiter; a verifier dissented — usually scope/severity, or current-reachability)*
+## Contested — needs adjudication _(real per the exploiter; a verifier dissented — usually scope/severity, or current-reachability)_
 
 Strong promote candidates (exploiter confirmed; refuter only narrowed scope) have already been pulled into
 the lanes above as `(promoted)`: A5, B2, D3, E4, G2, I2. The remainder:
 
-- [ ] **L2-invalidation-2 (medium)** — keyed-narrowing is *defeated* for SPEC §10.2 canonical instance keys: the matcher hard-codes `domain:via:key` while the wire/store/optimism currency is `name:keyValue` (`product:p1`), so `changeRecordTouchesQueryInstance(change, 'product:p2') === true` — every sibling instance's fragment ships on every keyed mutation. Same file as **A4**, opposite direction (A4 under-invalidates, this over-invalidates). *Refuter: confirmed; exploiter: weaker (over-fetch, not stale).* `change-record.ts:100-119`; tests `mutation.test.ts:564-595`, `change-record.test.ts:46-129` pin the non-canonical form.
-- [ ] **CSP-3 (medium)** — HTML document responses carry no security headers (no `nosniff`/`Referrer-Policy`/frame defense — inconsistent with `response.ts:295` for file/stream), `renderRouteDocumentResponse` discards `document.csp` (`document-core.ts:243-253`), and `renderContentSecurityPolicy`/`cspSha256` aren't on the public API — so apps cannot emit the framework's own CSP. *Exploiter: weaker (overlaps part-2 M1 for nosniff); refuter: confirmed.* Actionable: plumb `document.csp` through + baseline `nosniff` on documents.
-- [ ] **L8-2 (medium)** — compile-cache key folds source via a **32-bit FNV-1a** with no stored preimage (`compile-cache.ts:179`,`:416-424`); a collision yields a stale wrong-output hit, contradicting SPEC §5.2.1#1 ("MUST be a collision-resistant hash"). *Both verifiers: weaker (adversarial reachability debatable).* Fix is a trivial swap to the already-imported `sha256`; recommend doing it regardless.
-- [ ] **L10-1 (medium)** — a throwing `WebhookVerifier.verify()` / HMAC payload-builder is **not fail-closed**: the `verifyWebhook` call (`webhook.ts:206`) is outside the try (`:271`), so an app-authored callback that throws on a malformed signature header propagates an uncaught 500 instead of a 401. *Exploiter: weaker (needs an app callback that throws); refuter: confirmed (no handling).* Wrap the verify call → treat any throw as failure → 401.
-- [ ] **L2-route-matcher-2 (medium)** — decoded `.`/`..` are accepted as literal param values (`match.ts:239-245`; `matchRoute([route('/files/:name')], '/files/..') → {name:'..'}`), a traversal primitive if an app interpolates a param into a filesystem path / cache key. The static-export pipeline already rejects these (`static-export-route-plan.ts:178-187`) — a runtime/build divergence. *Both verifiers: weaker (no framework fs sink takes params today).* Cheap to align runtime with the static-export safety check.
-- [ ] **L2-early-hints-1 (medium)** — `renderSpeculationRules` (`hints.ts:275-298`) emits `prerenderUrls` with no scheme/origin validation; an absolute cross-origin URL prerenders/prefetches off-site with the user's credentials, via `prefetch:'conservative'` which KV419 never gates (SPEC §8:763). *Both verifiers: weaker (note `SAFE_URL_SCHEMES` includes https, so the allowlist alone wouldn't block cross-origin https — needs same-origin check).* Filter to same-origin paths before serializing.
-- [ ] **L7-1 (low)** — `query-store.ts:79-81` `subscribe()`'s unsubscribe deletes the plan but never the now-empty Set, leaking one empty Set per distinct `(name,key)`. *Both verifiers: weaker (no production caller of `subscribe()` found).* One-line prune; add `dispose()/clear()` to `QueryStore`.
-- [ ] **L7-2 (low)** — `query-store.ts:37-64` `values` Map is never evicted/cleared and keys flow from server-authored `<kovo-query key>`; rotating keys (search/pagination/per-row) grow the client heap without bound for the session. *Exploiter: weaker (within-document amplification only); refuter: confirmed (no bound/dispose).* Add a bounded policy or `delete/clear` wired to DOM removal.
-- [ ] **L13-3 (low)** — `getBetterAuthSetCookie`'s no-`getSetCookie()` fallback (`internal.ts:1119-1131`) returns a single string; a comma-folded multi-cookie header drops the second cookie and an `Expires`-comma corrupts the next. *Both verifiers: weaker (unreachable on modern runtimes — `getSetCookie()` always present).* Mandate `getSetCookie()` or use an Expires-aware splitter.
-- [ ] **L14-3 (low)** — `componentHostSelector` (`css.ts:820`) uses the HTML escaper `escapeAttribute` for a CSS selector (entity-encodes `&`/`"`, doesn't escape `]`/`}`/backslash); a correct CSS escaper exists at `fragment-targets.ts:35`. *Both verifiers: weaker (component names are TS identifiers, so unreachable).* Defense-in-depth/correctness.
-- [ ] **L2-storage-3 (low)** — S3 `stat()`/`stream()` pass `fallbackSize=0` (`storage.ts:282`,`:293`), so `size` resolves to `metadata.contentLength ?? 0`; a backend omitting `contentLength` reports `size:0` for a non-empty object while memory/FS report the true length. *Both verifiers: weaker (depends on a content-length-blind client).* Don't fabricate 0 — leave size unknown or require it.
-- [ ] **L10-3 (low)** — webhook idem truthiness is inconsistent: replay **lookup** gates on `idem` (truthy, `webhook.ts:242`) while **reserve**/set gate on `idem !== undefined` (`:254`,`:486`); an empty-string idem skips the fast-path lookup but still reserves — a latent double-execute window under load. *Both verifiers: weaker (reserve still protects).* Use one predicate (`idem !== undefined`) everywhere.
+- [ ] **L2-invalidation-2 (medium)** — keyed-narrowing is _defeated_ for SPEC §10.2 canonical instance keys: the matcher hard-codes `domain:via:key` while the wire/store/optimism currency is `name:keyValue` (`product:p1`), so `changeRecordTouchesQueryInstance(change, 'product:p2') === true` — every sibling instance's fragment ships on every keyed mutation. Same file as **A4**, opposite direction (A4 under-invalidates, this over-invalidates). _Refuter: confirmed; exploiter: weaker (over-fetch, not stale)._ `change-record.ts:100-119`; tests `mutation.test.ts:564-595`, `change-record.test.ts:46-129` pin the non-canonical form.
+- [ ] **CSP-3 (medium)** — HTML document responses carry no security headers (no `nosniff`/`Referrer-Policy`/frame defense — inconsistent with `response.ts:295` for file/stream), `renderRouteDocumentResponse` discards `document.csp` (`document-core.ts:243-253`), and `renderContentSecurityPolicy`/`cspSha256` aren't on the public API — so apps cannot emit the framework's own CSP. _Exploiter: weaker (overlaps part-2 M1 for nosniff); refuter: confirmed._ Actionable: plumb `document.csp` through + baseline `nosniff` on documents.
+- [ ] **L8-2 (medium)** — compile-cache key folds source via a **32-bit FNV-1a** with no stored preimage (`compile-cache.ts:179`,`:416-424`); a collision yields a stale wrong-output hit, contradicting SPEC §5.2.1#1 ("MUST be a collision-resistant hash"). _Both verifiers: weaker (adversarial reachability debatable)._ Fix is a trivial swap to the already-imported `sha256`; recommend doing it regardless.
+- [ ] **L10-1 (medium)** — a throwing `WebhookVerifier.verify()` / HMAC payload-builder is **not fail-closed**: the `verifyWebhook` call (`webhook.ts:206`) is outside the try (`:271`), so an app-authored callback that throws on a malformed signature header propagates an uncaught 500 instead of a 401. _Exploiter: weaker (needs an app callback that throws); refuter: confirmed (no handling)._ Wrap the verify call → treat any throw as failure → 401.
+- [ ] **L2-route-matcher-2 (medium)** — decoded `.`/`..` are accepted as literal param values (`match.ts:239-245`; `matchRoute([route('/files/:name')], '/files/..') → {name:'..'}`), a traversal primitive if an app interpolates a param into a filesystem path / cache key. The static-export pipeline already rejects these (`static-export-route-plan.ts:178-187`) — a runtime/build divergence. _Both verifiers: weaker (no framework fs sink takes params today)._ Cheap to align runtime with the static-export safety check.
+- [ ] **L2-early-hints-1 (medium)** — `renderSpeculationRules` (`hints.ts:275-298`) emits `prerenderUrls` with no scheme/origin validation; an absolute cross-origin URL prerenders/prefetches off-site with the user's credentials, via `prefetch:'conservative'` which KV419 never gates (SPEC §8:763). _Both verifiers: weaker (note `SAFE_URL_SCHEMES` includes https, so the allowlist alone wouldn't block cross-origin https — needs same-origin check)._ Filter to same-origin paths before serializing.
+- [ ] **L7-1 (low)** — `query-store.ts:79-81` `subscribe()`'s unsubscribe deletes the plan but never the now-empty Set, leaking one empty Set per distinct `(name,key)`. _Both verifiers: weaker (no production caller of `subscribe()` found)._ One-line prune; add `dispose()/clear()` to `QueryStore`.
+- [ ] **L7-2 (low)** — `query-store.ts:37-64` `values` Map is never evicted/cleared and keys flow from server-authored `<kovo-query key>`; rotating keys (search/pagination/per-row) grow the client heap without bound for the session. _Exploiter: weaker (within-document amplification only); refuter: confirmed (no bound/dispose)._ Add a bounded policy or `delete/clear` wired to DOM removal.
+- [ ] **L13-3 (low)** — `getBetterAuthSetCookie`'s no-`getSetCookie()` fallback (`internal.ts:1119-1131`) returns a single string; a comma-folded multi-cookie header drops the second cookie and an `Expires`-comma corrupts the next. _Both verifiers: weaker (unreachable on modern runtimes — `getSetCookie()` always present)._ Mandate `getSetCookie()` or use an Expires-aware splitter.
+- [ ] **L14-3 (low)** — `componentHostSelector` (`css.ts:820`) uses the HTML escaper `escapeAttribute` for a CSS selector (entity-encodes `&`/`"`, doesn't escape `]`/`}`/backslash); a correct CSS escaper exists at `fragment-targets.ts:35`. _Both verifiers: weaker (component names are TS identifiers, so unreachable)._ Defense-in-depth/correctness.
+- [ ] **L2-storage-3 (low)** — S3 `stat()`/`stream()` pass `fallbackSize=0` (`storage.ts:282`,`:293`), so `size` resolves to `metadata.contentLength ?? 0`; a backend omitting `contentLength` reports `size:0` for a non-empty object while memory/FS report the true length. _Both verifiers: weaker (depends on a content-length-blind client)._ Don't fabricate 0 — leave size unknown or require it.
+- [ ] **L10-3 (low)** — webhook idem truthiness is inconsistent: replay **lookup** gates on `idem` (truthy, `webhook.ts:242`) while **reserve**/set gate on `idem !== undefined` (`:254`,`:486`); an empty-string idem skips the fast-path lookup but still reserves — a latent double-execute window under load. _Both verifiers: weaker (reserve still protects)._ Use one predicate (`idem !== undefined`) everywhere.
 
-### Deferred-stream ordering cluster *(all contested; mechanisms real, reachability latent — priorities are only ever literals today)*
+### Deferred-stream ordering cluster _(all contested; mechanisms real, reachability latent — priorities are only ever literals today)_
 
 - [ ] **L2-deferred-1 (low)** — `priorityRank` returns a numeric priority verbatim including `NaN` (`deferred-stream.ts:122-123`); the comparator `right.priority - left.priority || index` (`:118`) becomes non-transitive on `NaN`, making chunk/fragment order implementation-defined. Fix: coerce non-finite to the normal floor + a `NaN`-safe compare.
 - [ ] **L2-deferred-2 (low)** — `sortDeferredFragments` (`:62`) priority-sorts fragments **within a chunk**, but the client applies them in array order (`response-fragment-apply.ts:36-40`); two same-target `append` fragments (pagination) or an `append`+`replace` pair get reordered → rows out of order / append-before-cleanup. Fix: don't priority-sort fragments within a chunk (preserve author order).
-- [ ] **L2-deferred-3 (low)** — `sortDeferredChunks` (`:58`) reorders whole chunks by priority, but query-before-consumer is only guaranteed *intra-chunk*; a query in a lower-priority chunk than a fragment consuming it can be emitted after its consumer (SPEC §9:769). Fix: require co-location or hoist all query chunks ahead of all fragment chunks.
+- [ ] **L2-deferred-3 (low)** — `sortDeferredChunks` (`:58`) reorders whole chunks by priority, but query-before-consumer is only guaranteed _intra-chunk_; a query in a lower-priority chunk than a fragment consuming it can be emitted after its consumer (SPEC §9:769). Fix: require co-location or hoist all query chunks ahead of all fragment chunks.
 - [ ] **L2-deferred-4 (low)** — `live-target-registry.ts:6-27` is a process-global Map with last-writer-wins `register`, while the `collect` path (`:52-58`) throws on a duplicate component id — asymmetric; two apps/tenants in one process silently cross-contaminate renderers. Fix: make `register` collision-aware (parity with `collect`) or namespace per app instance.
 
 ---
 
-## Sequencing & ownership  *(CLAUDE.md worktree protocol; ≤5 sub-agents at once)*
+## Sequencing & ownership _(CLAUDE.md worktree protocol; ≤5 sub-agents at once)_
 
 Lanes are largely file-partitioned. Shared hotspots and ordering:
 
@@ -437,7 +437,7 @@ Independent / slot anywhere: C1/C2 (static-export), D1/D2/D3 (query-delta/broadc
 
 ## Governance & proof
 
-- **Definition of done per item:** the cited test goes **red against today's code, green after the fix**. Several existing tests *codify the bug* and must be inverted, not preserved: `ui/src/__snapshots__/combobox.stylex.test.tsx.snap` (dangling activedescendant, J2), the `domain:via:key` assertions in `change-record.test.ts`/`mutation.test.ts` (A4 / L2-invalidation-2), and the `[memory, filesystem]`-only etag loop in `storage.test.ts:126` (L2).
+- **Definition of done per item:** the cited test goes **red against today's code, green after the fix**. Several existing tests _codify the bug_ and must be inverted, not preserved: `ui/src/__snapshots__/combobox.stylex.test.tsx.snap` (dangling activedescendant, J2), the `domain:via:key` assertions in `change-record.test.ts`/`mutation.test.ts` (A4 / L2-invalidation-2), and the `[memory, filesystem]`-only etag loop in `storage.test.ts:126` (L2).
 - Cite the relevant `SPEC.md` section in each change; `SPEC.md` stays normative. Compiler/diagnostic changes (A1–A5, B1–B3, H1) follow `rules/compiler-hard-rules.md`; public-surface changes (I1/I2, G2/CSP-3, L7) follow `rules/api-surface.md`; accessibility claims (J1–J3) follow `rules/accessibility-conformance.md`.
 - Broaden to `tsc` + API gate + `git diff --check` when touching shared boundaries or the diagnostics registry.
 - This is an active ledger: collapse evidence into the checkbox it proves; archive transcripts. Every finding above was confirmed by an independent exploiter **and** refuter; the three headline criticals (A1/A2 IDOR producers, B1 cache build-id) were additionally re-verified against live code by the main thread.

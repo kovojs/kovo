@@ -30,7 +30,7 @@ around fiction and reinvention; this ledger replaces it with the idiomatic patte
       describing a `cart` domain, `CartBadge`/`CartPanel`, and `cart/add` — none of which exist in
       the app (`app.tsx` is a static counter). `graph-assertions.mjs` "verifies" the fiction and CI
       runs it. Contradicts `SPEC.md` §11.1 (graph is compiler-derived, `generated/touch-graph.ts —
-      DO NOT EDIT`; reproduced via `kovo check`/`kovo explain`).
+DO NOT EDIT`; reproduced via `kovo check`/`kovo explain`).
 - [ ] **Reinvented Vite plugin.** `templates/vite.config.ts` (107 lines) hand-rolls
       `starterSharedAppShellDevPlugin` doing an `ssrLoadModule('@kovojs/server')` dance to reach the
       same integration the public `kovo()` plugin already wraps. `examples/crm/vite.config.ts:24`
@@ -50,7 +50,7 @@ around fiction and reinvention; this ledger replaces it with the idiomatic patte
 
 - [ ] Spike real `better-auth@^1.6` wired to PGlite via Drizzle. Add the dep, configure
       `betterAuth({ database: drizzleAdapter(db, …), emailAndPassword: { enabled: true }, secret,
-      baseURL })`, generate its `user`/`account`/`session`/`verification` tables into the same PGlite
+baseURL })`, generate its `user`/`account`/`session`/`verification` tables into the same PGlite
       instance, pass the instance to `@kovojs/better-auth` (`betterAuthSession`,
       `betterAuthSignInEmailMutation`, `betterAuthSignOutMutation`; `mount()` its handler if needed).
       Risk: `better-auth` is not installed in the repo (peer dep `^1.6.0`, absent) and **no repo
@@ -91,7 +91,7 @@ around fiction and reinvention; this ledger replaces it with the idiomatic patte
       rows. Model: `examples/commerce/src/db.ts`.
 - [ ] `src/queries.ts`: one `query('contacts', { load })` reading the table via Drizzle.
 - [ ] `src/mutations.ts` (or inline in `app.tsx`): one `mutation('contacts/add', { input: s.object(…),
-      csrf, guard: authed(), handler })` that writes a row; ensure the create/optimistic edge is
+csrf, guard: authed(), handler })` that writes a row; ensure the create/optimistic edge is
       explicit (`hand-written` or `await-fragment`) so `kovo check` is clean.
 - [ ] `src/app.tsx`: `createApp({ db, queries, mutations, routes })` with one route rendering a
       `@kovojs/ui`-built contacts list + add-contact form (`component()` + `mutationFormAttributes`,
@@ -103,7 +103,7 @@ around fiction and reinvention; this ledger replaces it with the idiomatic patte
       a login form using `@kovojs/ui` (`field`/`button`); seed/document a demo credential; keep CSRF
       via the better-auth sign-in mutation.
 - [ ] **4b (fallback):** `src/auth.ts` provides an `auth` object whose `api.getSession/signInEmail/
-      signOut` run real Drizzle/PGlite queries against own `users`/`sessions` tables (hashed password,
+signOut` run real Drizzle/PGlite queries against own `users`/`sessions` tables (hashed password,
       signed `HttpOnly` cookie), fed to `@kovojs/better-auth`'s adapter. Same guard/CSRF/UI surface as
       4a so the rest of the template is identical.
 - [ ] `create-kovo` keeps generating a per-project `KOVO_CSRF_SECRET` into `.env` (preserve existing
@@ -132,7 +132,7 @@ around fiction and reinvention; this ledger replaces it with the idiomatic patte
 
 - [ ] From a scaffolded copy (`create-kovo` into a temp dir): `vp install`, `vp check`, `vp test`,
       `vp dev` (renders seeded contacts + working add-contact), `kovo build --preset node` + `node
-      dist/server/server.mjs`. Record the commands + outcomes here.
+dist/server/server.mjs`. Record the commands + outcomes here.
 - [ ] `kovo check` clean (real compiler-derived graph; KV310/KV311 covered) and `kovo explain`
       reflects the real `contacts` domain — not a hand-written graph.
 - [ ] `packages/create-kovo` package tests (`src/index.test.ts`) updated and green for the new file
@@ -145,5 +145,5 @@ around fiction and reinvention; this ledger replaces it with the idiomatic patte
   they render server-side in the scaffold without extra config (crm does this with only `kovo({app})`).
 - Keep the scaffold dependency-light enough to stay "simple"; PGlite (WASM) adds install weight —
   acceptable since it's the data building block both reference apps use.
-</content>
-</invoke>
+  </content>
+  </invoke>
