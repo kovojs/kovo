@@ -1,3 +1,8 @@
+/**
+ * Attribute options for a typed `Set-Cookie` header, accepted by the third argument
+ * of `MutationContext.setCookie` (SPEC §6.6 / §9.1.1). Values are serialized and
+ * validated by `serializeCookie`; control characters and semicolons are rejected.
+ */
 export interface CookieOptions {
   domain?: string;
   expires?: Date | string;

@@ -23,6 +23,12 @@ export type WebhookSuccessStatus = 200;
 /** @internal */
 export type WebhookResponseStatus = WebhookFailureStatus | WebhookSuccessStatus;
 
+/**
+ * A typed webhook failure outcome (SPEC §9.1 webhook lifecycle): a declared `error`
+ * `code` and `payload` answered with the chosen 4xx/5xx `status` (optional `retryAfter`)
+ * so provider retry semantics are explicit. Produced via `WebhookHandlerContext.fail`,
+ * which rolls back the transaction.
+ */
 export interface WebhookFail<Code extends string = string, Payload = unknown> {
   error: {
     code: Code;
@@ -33,6 +39,11 @@ export interface WebhookFail<Code extends string = string, Payload = unknown> {
   status: 400 | 401 | 422 | 429 | 500;
 }
 
+/**
+ * Options for `WebhookHandlerContext.recordChange` (SPEC §9.1): the affected `keys`,
+ * an optional override `input`, and a `reason`, used to build the unified
+ * `{domain, keys, input}` change record emitted after commit.
+ */
 export interface WebhookChangeOptions<Input = unknown> {
   input?: Input;
   keys?: readonly string[];
@@ -60,6 +71,11 @@ export interface WebhookReplayReservation {
   commit(response: WebhookWireResponse): void;
 }
 
+/**
+ * The `context` passed to a webhook `handler` (SPEC §9.1 webhook lifecycle): the
+ * transaction handle `tx`, verified `rawBody`, the raw `request`, `fail` to return a
+ * typed {@link WebhookFail}, and `recordChange` to emit a domain change record.
+ */
 export interface WebhookHandlerContext<Input, Tx = unknown> {
   fail<Code extends string, Payload>(
     code: Code,
@@ -75,6 +91,11 @@ export interface WebhookHandlerContext<Input, Tx = unknown> {
   tx: Tx;
 }
 
+/**
+ * The `context` passed to a webhook's `transaction` wrapper (SPEC §9.1 webhook lifecycle),
+ * carrying the parsed `input`, verified `rawBody`, and raw `request` so the app can open
+ * the `BEGIN`/`COMMIT` boundary around the handler.
+ */
 export interface WebhookTransactionContext<Input> {
   input: Input;
   rawBody: Uint8Array;
@@ -108,6 +129,12 @@ interface WebhookNoneDefinition {
   verifyJustification: string;
 }
 
+/**
+ * The definition object accepted by {@link webhook} (SPEC §9.1 webhook lifecycle):
+ * the `verify` scheme (a `WebhookVerifier` or `'none'` with a `verifyJustification`),
+ * loose `input` schema, optional `idempotency`/`replayStore`/`transaction`, and the
+ * `handler`. Types `webhook()`'s parameter.
+ */
 export type WebhookDefinition<
   InputSchema extends Schema<unknown> = Schema<unknown>,
   Value = unknown,
@@ -115,6 +142,11 @@ export type WebhookDefinition<
 > = WebhookDefinitionBase<InputSchema, Value, Tx> &
   (WebhookVerifiedDefinition | WebhookNoneDefinition);
 
+/**
+ * The registry-visible endpoint declaration returned by {@link webhook} (SPEC §9.1):
+ * an `EndpointDeclaration` for a POST exact mount, tagged `webhook: true` with the
+ * resolved `webhookDefinition`, so the webhook appears in the machine-ingress audit.
+ */
 export interface WebhookDeclaration<
   Name extends string = string,
   Path extends string = string,

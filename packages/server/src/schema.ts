@@ -12,11 +12,20 @@ interface AsyncSchema<T> extends Schema<T> {
   parseAsync(input: unknown): Promise<T>;
 }
 
+/**
+ * A single field-level validation failure: a human `message` and the `path` of record
+ * keys/array indices locating it. Carried on `SchemaValidationError.issues` and surfaced
+ * on the mutation 422 typed-error path (SPEC §9.2).
+ */
 export interface ValidationIssue {
   message: string;
   path: readonly string[];
 }
 
+/**
+ * The wire shape of a schema validation failure: the collected per-field `issues`.
+ * Returned on the mutation 422 response so forms can render field errors (SPEC §9.2).
+ */
 export interface ValidationFailurePayload {
   issues: readonly ValidationIssue[];
 }

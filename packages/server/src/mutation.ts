@@ -77,6 +77,11 @@ import {
 export { invalidate } from './change-record.js';
 export type { ChangeRecord, InvalidateOptions, MutationTouchSite } from './change-record.js';
 
+/**
+ * A typed mutation failure outcome (SPEC §9.2): a declared `error` `code` plus its
+ * validated `payload`, served as HTTP 422 (validation/app `fail()`) or 429 (rate limit,
+ * with optional `retryAfter`). Produced via `MutationContext.fail`.
+ */
 export interface MutationFail<Code extends string = string, Payload = unknown> {
   error: {
     code: Code;
@@ -87,6 +92,11 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
   status: 422 | 429;
 }
 
+/**
+ * A successful mutation outcome (SPEC §9.1/§10.3): the returned `value`, the validated
+ * `input`, the emitted `changes`, the query names/instances to rerun, and any
+ * `responseHeaders` to apply (e.g. Set-Cookie).
+ */
 export interface MutationSuccess<Value, Input = unknown> {
   changes: ChangeRecord[];
   input: Input;
@@ -97,6 +107,7 @@ export interface MutationSuccess<Value, Input = unknown> {
   value: Value;
 }
 
+/** The outcome of a mutation: {@link MutationSuccess} or {@link MutationFail} (SPEC §9.1/§9.2). */
 export type MutationResult<Value, Input = unknown> = MutationFail | MutationSuccess<Value, Input>;
 
 /** A server-rendered fragment chunk for a SPEC §9.1 streaming mutation response. */
@@ -211,6 +222,11 @@ export const stream = {
   },
 };
 
+/**
+ * The `context` argument passed to a mutation `handler` (SPEC §9.1/§10.3). Exposes
+ * `fail` to return a typed {@link MutationFail} from the declared `errors`, `invalidate`
+ * to record a domain change, and the typed `setCookie` builder (SPEC §9.1.1).
+ */
 export interface MutationContext<Errors extends Record<string, Schema<unknown>>> {
   fail<const Code extends Extract<keyof Errors, string>>(
     code: Code,
@@ -231,6 +247,11 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
   // setCookie(rawString) must migrate to the (name, value, options) form.
 }
 
+/**
+ * The shape of a reusable write passed to and returned by {@link write} (SPEC §10.3):
+ * a named `key`, the exact domains it `touches`, and the `run` body. Composing mutations
+ * from writes makes the touched-domain set explicit and auditable.
+ */
 export interface WriteDefinition<
   Key extends string,
   Touches extends readonly Domain[],
@@ -333,6 +354,12 @@ export type MutationOptimisticMap<Key extends string, InputSchema extends Schema
   ? Record<string, MutationOptimisticEntry<InferSchema<InputSchema>, any>>
   : KnownMutationOptimisticMap<Key, InputSchema>;
 
+/**
+ * The full definition object passed to {@link mutation} (SPEC §6.3/§9.1/§10.3): the
+ * `key`, `input` schema, optional `errors`, `guard`, `csrf` posture, `optimistic` map,
+ * `redirectTo`/`defaultRedirectTo` POST-redirect-GET targets, `stream`/`transaction`
+ * hooks, and the `handler` body. Typed `mutation()`'s parameter and return shape.
+ */
 export interface MutationDefinition<
   Key extends string = string,
   InputSchema extends Schema<unknown> = Schema<unknown>,
@@ -367,6 +394,11 @@ export interface MutationDefinition<
   ) => Promise<Result>;
 }
 
+/**
+ * The minimal mutation reference ({@link MutationDefinition} `key` plus `csrf` posture)
+ * carried on a {@link MutationFormAttributes} `mutation` field so the server JSX runtime
+ * can inject the CSRF token into an enhanced form (SPEC §6.3/§9.1).
+ */
 export interface MutationFormDefinition<Key extends string = string, Request = unknown> {
   csrf?: CsrfValidationOptions<Request> | false;
   key: Key;

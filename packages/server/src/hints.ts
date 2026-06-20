@@ -7,26 +7,46 @@ import {
 } from './csp.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 
+/**
+ * Per-route Speculation Rules eagerness (SPEC §8). `'conservative'` and `'moderate'`
+ * opt into prefetch/prerender; `false` (the default) emits nothing. `'moderate'` is
+ * compile-gated on guarded/session-dependent routes (KV419).
+ */
 export type RoutePrefetch = 'conservative' | 'moderate' | false;
 
+/** Resolved document `<head>` metadata (title, description, OG image) for a route. */
 export interface RouteMeta {
   description?: string;
   image?: string;
   title?: string;
 }
 
+/**
+ * Query-dependent route metadata source: names the `queries` it reads and `resolve`s
+ * those values into a `RouteMeta` at render time.
+ */
 export interface RouteMetaFactory {
   queries: readonly string[];
   resolve(values: Record<string, unknown>): RouteMeta;
 }
 
+/** A route's `meta`: either a static {@link RouteMeta} or a query-driven {@link RouteMetaFactory}. */
 export type RouteMetaSource = RouteMeta | RouteMetaFactory;
 
+/**
+ * A localization message catalog inlined into the document for a locale. Serialized
+ * into a `kovo-i18n` JSON script tag by the page-hint renderer.
+ */
 export interface I18nCatalog<Messages extends Record<string, string> = Record<string, string>> {
   locale: string;
   messages: Messages;
 }
 
+/**
+ * A resolved stylesheet asset for route/page hints (SPEC §13.1): the linked `href`,
+ * optional inlined `criticalCss` with its `cspHash`, and whether to `preload` it via
+ * Early Hints. Produced by {@link stylesheet} and accepted in {@link PageHintOptions}.
+ */
 export interface StylesheetAsset {
   criticalCss?: string;
   cspHash?: string;
@@ -57,6 +77,12 @@ export interface StylesheetManifestEntry extends StylesheetAsset {
   sourceFileName?: string;
 }
 
+/**
+ * Inputs for rendering a route's document hints: stylesheets and critical CSS (SPEC §13.1),
+ * `<head>` `meta`, i18n catalogs, module preloads, bootstrap script, and Speculation Rules
+ * prefetch/prerender (SPEC §8). Page, mutation-fragment, and deferred-fragment renders share
+ * this stylesheet-delivery shape.
+ */
 // SPEC section 13.1: page, mutation fragment, and deferred fragment renders share stylesheet delivery.
 export interface PageHintOptions {
   bootstrapScript?: string;

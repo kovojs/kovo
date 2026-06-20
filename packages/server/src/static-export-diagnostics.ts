@@ -22,6 +22,12 @@ export interface StaticExportDiagnostic {
 /** Severity label used when formatting static-export diagnostics. */
 export type StaticExportDiagnosticSeverity = 'ERROR' | 'WARN';
 
+/**
+ * A compiler-emitted diagnostic evaluated against the static-export gate (SPEC §11.3):
+ * its `code`, source `fileName`, optional `start` position and `help`, and `message`.
+ * Input to the public {@link assertStaticExportCompileDiagnostics} and
+ * {@link blockingStaticExportDiagnostics}, which fail static export on error-severity codes.
+ */
 export interface StaticExportCompileDiagnostic {
   code: DiagnosticCode;
   fileName: string;

@@ -182,19 +182,38 @@ export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbV
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
 }
 
+/**
+ * Context passed to an `onUnauthenticated` handler when an `authed` guard fails
+ * (SPEC §6.5). `next` is the framework-validated same-origin path to return to after
+ * login; `request` is the failing request.
+ */
 export interface UnauthenticatedContext<Request> {
   next: string;
   request: Request;
 }
 
+/**
+ * App-supplied handler for unauthenticated guard failures (SPEC §6.5). Returns the
+ * `CoreRedirect` to the login route; the default is a 303 to the configured login path
+ * carrying `next`. Used to type the `onUnauthenticated` request-shell option.
+ */
 export type UnauthenticatedHandler<Request> = (
   context: UnauthenticatedContext<Request>,
 ) => CoreRedirect | Promise<CoreRedirect>;
 
+/**
+ * Context passed to a `renderForbidden` renderer when an authenticated-but-unauthorized
+ * guard refinement fails (SPEC §6.5). Carries the failing `request`.
+ */
 export interface ForbiddenContext<Request> {
   request: Request;
 }
 
+/**
+ * App-supplied renderer for the 403 forbidden shell on authorization failure (SPEC §6.5).
+ * Returns the HTML body served with status 403. Used to type the `renderForbidden`
+ * request-shell option.
+ */
 export type ForbiddenRenderer<Request> = (
   context: ForbiddenContext<Request>,
 ) => string | Promise<string>;
