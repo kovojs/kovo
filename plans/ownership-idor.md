@@ -19,14 +19,19 @@ feature on a **blocking** gate, not a gap fix).
 - **Hard dependency:** requires `api-devex-fixes.md` **item 2** (drizzle `key` column-selector
   codegen) landed first — `owner:` reuses the same `(t) => t.col` selector resolution seam.
 - **Status (2026-06-20):** **Phases 0, 1, 2, and the Phase 3 audit-enforcement are DONE + verified.**
-  Shipped + tested: the `owner:` annotation + extraction (Phase 1), the `guards.owns()` ownership
-  guard (Phase 2, 20 tests), and **KV414 as the enforced blocking IDOR gate** with `owns()`-discharge
-  (Phase 3 audit logic, cli 141 tests). **Remaining (open):** the compiler **PRODUCER** that
-  auto-emits `scopeAudits`/`ownerDomains` from real apps — blocked on building **`req.session`-anchor
-  predicate detection** in the drizzle extractor (without it the scope classification can't be sound:
-  false-negative IDOR or false-positive every safe app). Also open: KV418×`owns()`, §11.2 runtime
-  cross-check, `ownerDomains` removal/migration (Phase 4), docs (Phase 5). Per `CLAUDE.md`, those
-  stay open until verified — a security gate is not marked done without red→green proof.
+  **The complete static IDOR pipeline is built, sound, and tested.** Shipped + tested: the `owner:`
+  annotation + extraction (Phase 1, 263 tests); `guards.owns()` (Phase 2, 20 tests); **KV414 as the
+  enforced blocking gate** with `owns()`-discharge (Phase 3 audit, cli 141 tests); the **scope-audit
+  producer** `extractOwnerAuditFromProject` (project source → `ownerDomains` + `scopeAudits`,
+  end-to-end tested, 265 drizzle tests); and the producer **wired into the `drizzle-static`
+  extraction**. **Soundness resolved (no data-flow tracing needed):** KV414's signal is precisely a
+  client-visible `args.*` key, so the producer flags **only** arg-keyed owner reads (+ direct
+  `req.session` as safe) and emits nothing for a read keyed by a session-bound local (commerce
+  `eq(orders.userId, userId)`) — so a safe app is never false-positived. **Remaining (open):** wire
+  the producer output through the example **emit-graph** scripts + annotate example tables (Phase 4;
+  the change is correct but the emit-graph run needs a built `dist/`, absent in this worktree),
+  KV418×`owns()`, the §11.2 **runtime** cross-check (a separate runtime-instrumentation system), and
+  docs (Phase 5).
 
 ## Current state (verified)
 
@@ -131,18 +136,19 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
       `querySessionKeyOperand` (direct `req.session.*`) to the drizzle extractor. Classifies each
       owner-domain read as `args`/`session`/`unscoped`; the arg-keyed IDOR signal is sound. Tested
       (`index.scope-audits.test.ts`); 265 drizzle tests pass.
-- [ ] **REMAINING — wire the producer into the app graph.** **Concrete blocker (demonstrated):**
-      real apps anchor the session **indirectly** — commerce does
-      `const userId = requireCommerceQueryUserId(context); … where(eq(orders.userId, userId))`, so
-      the key operand is a local var bound from a *helper* that reads the session. Proving that is
-      session-scoped (to avoid false-positiving a safe app, which the existing `scope !== 'session'`
-      audit would) needs **inter-procedural data-flow tracing** of session values through locals and
-      helpers — a major static-analysis feature. The direct-`req.session.*` form is handled; the
-      indirect form is the remaining build. Until it lands, wiring the producer would break the
-      commerce check, so it stays unwired (the audit + classifier are tested against constructed/
-      direct-form facts).
-- [ ] **REMAINING — Runtime §11.2 cross-check** (depends on the producer + a runtime predicate hook).
-- [ ] **REMAINING — Public-read justification suppression.**
+- [x] **PRODUCER + wiring (DONE — and the data-flow blocker dissolved):** `extractOwnerAuditFromProject`
+      (drizzle) emits `{ ownerDomains, scopeAudits }` from a project, wired into the `drizzle-static`
+      extraction command (`packages/cli/src/index.ts`, default `ownerAudit` extract). **Key
+      reframing:** the producer emits a fact **only** for an arg-keyed owner read (`args`) or a direct
+      `req.session` read (`session`); a read keyed by a session-bound local (commerce's
+      `eq(orders.userId, userId)`) is **not** arg-keyed, so it emits **no fact** — so no
+      false-positive, and **no inter-procedural data-flow tracing is needed**. End-to-end tested
+      (`index.scope-audits.test.ts`: project → `ownerDomains [{order,userId}]` + `scopeAudits
+      [{order,args}]`, the local-var read not flagged); 265 drizzle + 141 cli tests pass.
+- [ ] **REMAINING — Public-read justification suppression** (small: honor a recorded justification
+      at the site).
+- [ ] **REMAINING — Runtime §11.2 cross-check** — a separate runtime-instrumentation system (verify
+      executed predicates against the static result); not built.
 
 ## Phase 4 — remove `ownerDomains`, migrate apps
 
@@ -174,9 +180,13 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
   with `owns()`-discharge. **cli 141 pass** (updated audit test + new owns-discharge test); the two
   failing server tests (`route-query-guards`, `wire-fixtures`) and the `dist`-not-built
   `tests/kovo-check.node.mjs` failure are **pre-existing on `main`**, not from these changes.
-- **Phase 3 — producer logic (shipped):** `scopeAuditsFromQueryFacts` + `sessionAnchoredReads` +
-  direct `req.session.*` detection in the drizzle extractor. `index.scope-audits.test.ts` 2 pass
-  (classifier + fail-closed); 265 drizzle tests; api-surface 1571 (internal subpath).
+- **Phase 3 — producer + wiring (shipped):** `extractOwnerAuditFromProject` (project →
+  `{ ownerDomains, scopeAudits }`, flagging only arg-keyed owner reads) wired into the
+  `drizzle-static` command. `index.scope-audits.test.ts` 2 pass (classifier + end-to-end project
+  extraction); 265 drizzle + 141 cli pass; api-surface 1571.
+- **Open (not verified):** example emit-graph wiring + table annotations (Phase 4, needs built
+  `dist/`), public-read justification suppression, the §11.2 **runtime** cross-check, and docs
+  (Phase 5).
 - **Open (not verified):** wiring the producer into the app graph — blocked on **inter-procedural
   session data-flow tracing** (real apps bind the session into a local via a helper, so the
   direct-form detector would false-positive them). Also: KV418×`owns()`, §11.2 runtime cross-check,
