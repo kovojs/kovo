@@ -337,7 +337,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C8a** no-JS degradation in a real browser (`counter-no-js`). Passes.
 - [x] **C8b** keyed-morph at scale, 300 rows (`scale-keyed-list`). Passes.
 - [x] **C8c** morph native-element-state survival (`morph-native-state`) — **expected-fail**, documents a real impl gap + F39 SPEC-vs-impl divergence (alerts when fixed).
-- [ ] **C8d** F39 child-island-state-in-fragment (KV314 compile-error) · F40 isomorphic render-equivalence · multi-feature interaction page · `layout()` e2e.
+- [~] **C8d** ✅ multi-feature interaction page (optimism+morph+sibling island, `optimistic-success`) + `layout()` e2e (`layout-primitive-nested`) done. _F39/F40 (KV420/KV316 compiler checks) need new lowering analysis._
 - [x] **C9a** HEAD empty-body + Content-Length (`http-methods`). Passes.
 - [x] **C9b-i** KV-code surfacing — KV227/KV242/KV302 each surface as a blocking 500 teaching document (`diagnostic-dev-document`); KV242 had zero prior coverage. Passes.
 - [ ] **C9b-ii** KV234 cross-pkg prefix · explain-from-extracted-graph (needs S2) · clock freshness (needs `clocks` impl).
