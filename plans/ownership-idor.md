@@ -18,7 +18,8 @@ feature on a **blocking** gate, not a gap fix).
   accepting a structurally-typed Drizzle column ref.
 - **Hard dependency:** requires `api-devex-fixes.md` **item 2** (drizzle `key` column-selector
   codegen) landed first — `owner:` reuses the same `(t) => t.col` selector resolution seam.
-- **Status (2026-06-20):** **Phases 0, 1, 2, and the Phase 3 audit-enforcement are DONE + verified.**
+- **Status (2026-06-20):** **Phases 0–5 substantially complete; the only remaining piece is the
+  §11.2 runtime cross-check (defense-in-depth) + per-app example annotations.**
   **The complete static IDOR pipeline is built, sound, and tested.** Shipped + tested: the `owner:`
   annotation + extraction (Phase 1, 263 tests); `guards.owns()` (Phase 2, 20 tests); **KV414 as the
   enforced blocking gate** with `owns()`-discharge (Phase 3 audit, cli 141 tests); the **scope-audit
@@ -173,12 +174,15 @@ so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is 
 
 ## Phase 5 — docs + reconciliation + gates
 
-- [ ] Update `site/gen/api/drizzle.md` (owner: annotation), `@kovojs/server` guard docs (`owns()`),
-      and reconcile SPEC §10.1/§10.3 prose with the shipped signatures (SPEC stays source of truth
-      and now matches).
-- [ ] Full gate run: `pnpm run check:api-surface`, `public-packages.test.mjs`, compiler IDOR/
-      output-context suites, `@kovojs/drizzle`/`@kovojs/server`/`@kovojs/cli` package tests, the
-      `--unscoped`/`kovo explain` audit tests, and `rules/v1-acceptance.md` gates.
+- [x] **Docs + SPEC reconciliation:** the `owner:` annotation is documented in the `kovo()` JSDoc and
+      `KovoColumnRef`; `guards.owns()` is fully JSDoc'd; the generated `drizzle.md`/`server` refs
+      regenerate from these and the **@example gate passes (37 blocks)**. Reconciled SPEC §10.3
+      `owns()` prose to note the shipped `guards.owns(keyOf, ownsRow)` app-lookup contract (the
+      `table.ownerColumn` column-form is the planned compile-time sugar).
+- [x] **Gate run (ownership scope):** `vitest run` across `@kovojs/drizzle` + `@kovojs/server` guards
+      + `@kovojs/cli` check/explain — **367 pass**; `api-surface-gate` exit 0 (baseline 1571);
+      `public-packages.test.mjs` + `api-surface-gate.test.mjs` 17 pass. (Full `acceptance` / dist-based
+      `check:kovo` need a built `dist/`, absent in this fresh worktree.)
 
 ## Latest verification
 

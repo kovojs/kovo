@@ -1066,7 +1066,7 @@ This ordering closes the read-your-writes hazard: responses can never render pre
 
 **Guards (arg-aware, normative).** A guard is a refinement run before `page`/`load`/`handler`. Beyond `req.session`, every guard receives the query's or mutation's **validated args / resolved instance key** — the same `s.*`-coerced values the loader and handler see (§9.4, §10.2). A guard may therefore express ownership over a client-visible key, not only session-wide roles. Guards run after schema parse/coerce so the args they inspect are already validated (§10.3 lifecycle).
 
-**`owns()` ownership combinator.** `owns((args) => args.id, table.ownerColumn)` is the sanctioned ownership guard: it passes only when the principal (`req.session`, the column declared by the table's `owner:` annotation, §10.1) owns the row the key selects. `owns()` is composable with the other combinators (`all(authed, owns(...))`) and discharges the KV414 IDOR obligation for the key it covers.
+**`owns()` ownership combinator.** `owns((args) => args.id, table.ownerColumn)` is the sanctioned ownership guard: it passes only when the principal (`req.session`, the column declared by the table's `owner:` annotation, §10.1) owns the row the key selects. `owns()` is composable with the other combinators (`all(authed, owns(...))`) and discharges the KV414 IDOR obligation for the key it covers. The shipped runtime contract is `guards.owns(keyOf, ownsRow)` where `ownsRow(req, key)` is an app-provided ownership predicate (so `@kovojs/server` stays decoupled from the data layer); the `table.ownerColumn` column-form above is the planned compile-time sugar that lowers to it.
 
 ```ts
 export const adminRefund = mutation('admin/refund', { guard: role('admin') /*…*/ });
