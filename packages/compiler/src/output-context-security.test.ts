@@ -238,4 +238,76 @@ export const TrustedPromo = component({
     );
     expect(safe.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
   });
+
+  // F2: KV236 must flag on*, srcdoc, dynamic formaction sinks (KV236/SPEC §4.8:348)
+  it('flags data-bind:onclick and data-bind:srcdoc as KV236 unsafe sinks', () => {
+    const result = compileComponentModule({
+      fileName: 'handler-sinks.tsx',
+      source: `
+export const HandlerSinks = component({
+  render: ({ state }) => (
+    <div>
+      <button data-bind:onclick="state.h">click</button>
+      <iframe data-bind:srcdoc="state.html"></iframe>
+    </div>
+  ),
+});
+`,
+    });
+
+    const kv236Diagnostics = result.diagnostics.filter((d) => d.code === 'KV236');
+    expect(kv236Diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: expect.stringContaining('data-bind:onclick is a dynamic event-handler sink'),
+        }),
+        expect.objectContaining({
+          code: 'KV236',
+          message: expect.stringContaining('data-bind:srcdoc is a dynamic srcdoc sink'),
+        }),
+      ]),
+    );
+  });
+
+  it('flags dynamic formaction binding as KV236 unsafe sink', () => {
+    const result = compileComponentModule({
+      fileName: 'form-sinks.tsx',
+      source: `
+export const FormSinks = component({
+  render: ({ state }) => (
+    <form>
+      <button data-bind:formaction="state.url">submit</button>
+    </form>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: expect.stringContaining('data-bind:formaction is a dynamic formaction sink'),
+        }),
+      ]),
+    );
+  });
+
+  // F4: ftp must be in the compiler URL-scheme allowlist (SPEC §4.8:347)
+  it('allows ftp: literal URL attributes without KV236', () => {
+    const result = compileComponentModule({
+      fileName: 'ftp-link.tsx',
+      source: `
+export const FtpLink = component({
+  render: () => (
+    <a href="ftp://example.com/x" external>FTP resource</a>
+  ),
+});
+`,
+    });
+
+    const kv236Diagnostics = result.diagnostics.filter((d) => d.code === 'KV236');
+    expect(kv236Diagnostics).toEqual([]);
+  });
 });

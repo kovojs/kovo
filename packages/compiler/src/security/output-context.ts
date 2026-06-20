@@ -117,6 +117,49 @@ function validateElementAttributes(
 
     if (isRawHtmlAttribute(attribute.name)) {
       diagnostics.push(...validateRawHtmlAttribute(source, attribute, fileName));
+      continue;
+    }
+
+    // KV236: dynamic event-handler attributes (data-bind:on* or data-derive-attr on*)
+    if (isDynamicEventHandlerAttribute(attribute)) {
+      diagnostics.push(
+        outputContextDiagnostic({
+          detail: `${attribute.name} is a dynamic event-handler sink (on* attribute)`,
+          fileName,
+          length: attribute.end - attribute.start,
+          source,
+          start: attribute.start,
+        }),
+      );
+      continue;
+    }
+
+    // KV236: dynamic srcdoc attribute (data-bind:srcdoc or data-derive-attr srcdoc)
+    if (isDynamicSrcdocAttribute(attribute)) {
+      diagnostics.push(
+        outputContextDiagnostic({
+          detail: `${attribute.name} is a dynamic srcdoc sink`,
+          fileName,
+          length: attribute.end - attribute.start,
+          source,
+          start: attribute.start,
+        }),
+      );
+      continue;
+    }
+
+    // KV236: dynamic formaction attribute (data-bind:formaction or data-derive-attr formaction)
+    if (isDynamicFormactionAttribute(attribute)) {
+      diagnostics.push(
+        outputContextDiagnostic({
+          detail: `${attribute.name} is a dynamic formaction sink`,
+          fileName,
+          length: attribute.end - attribute.start,
+          source,
+          start: attribute.start,
+        }),
+      );
+      continue;
     }
   }
 
@@ -253,6 +296,39 @@ function literalAttributeStringValue(attribute: JsxAttributeModel): string | nul
     : null;
 }
 
+/**
+ * Returns the bound or derived attribute name for dynamic attribute sinks.
+ * For `data-bind:foo` the dynamic name is "foo".
+ * For `data-derive-attr` with value "foo" the dynamic name is "foo".
+ */
+function dynamicAttributeName(attribute: JsxAttributeModel): string | null {
+  if (attribute.name.startsWith('data-bind:')) {
+    return attribute.name.slice('data-bind:'.length);
+  }
+  if (attribute.name === 'data-derive-attr' && typeof attribute.value === 'string') {
+    return attribute.value;
+  }
+  return null;
+}
+
+/** Returns true when the attribute dynamically targets an on* event-handler sink. */
+function isDynamicEventHandlerAttribute(attribute: JsxAttributeModel): boolean {
+  const name = dynamicAttributeName(attribute);
+  return name !== null && /^on/i.test(name);
+}
+
+/** Returns true when the attribute dynamically targets the srcdoc sink. */
+function isDynamicSrcdocAttribute(attribute: JsxAttributeModel): boolean {
+  const name = dynamicAttributeName(attribute);
+  return name === 'srcdoc';
+}
+
+/** Returns true when the attribute dynamically targets the formaction sink. */
+function isDynamicFormactionAttribute(attribute: JsxAttributeModel): boolean {
+  const name = dynamicAttributeName(attribute);
+  return name === 'formaction';
+}
+
 function isRawHtmlAttribute(name: string): boolean {
   return (
     name === 'dangerouslySetInnerHTML' ||
@@ -279,7 +355,7 @@ const URL_ATTRIBUTES = new Set([
   'xlink:href',
 ]);
 
-const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
 
 function hasUnsafeUrlScheme(value: string): boolean {
   const normalized = stripAsciiControlAndSpace(value).toLowerCase();

@@ -89,8 +89,11 @@ export function kovoSafeUrl(value: unknown): string {
 
 /**
  * Formats a generated bound attribute value with URL attributes sanitized.
+ * Returns null when the attribute write must be suppressed entirely (on*, srcdoc).
  */
-export function kovoBoundAttributeValue(name: string, value: unknown): string {
+export function kovoBoundAttributeValue(name: string, value: unknown): string | null {
+  // KV236: refuse event-handler and srcdoc sinks at runtime regardless of value.
+  if (/^on/i.test(name) || name.toLowerCase() === 'srcdoc') return null;
   const rendered = formatOutputValue(value);
   return isUrlAttributeName(name) ? kovoSafeUrl(rendered) : rendered;
 }
@@ -153,7 +156,7 @@ const URL_BOUND_ATTRIBUTES = new Set([
   'xlink:href',
 ]);
 
-const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
 
 function isUrlAttributeName(name: string): boolean {
   return URL_BOUND_ATTRIBUTES.has(name.toLowerCase());
