@@ -557,7 +557,8 @@ function renderSemanticExpression(model: ComponentModuleModel, container: Source
 function normalizeGeneratedSemanticExpression(expression: string): string {
   return expression
     .replace(/\bescapeText\(([^()]+)\)/g, '$1')
-    .replace(/\b__kovoRenderMutationCsrfField\([^()]+\)/g, '');
+    .replace(/\b__kovoRenderMutationCsrfField\([^()]*\)/g, '')
+    .replace(/\b__kovoRenderMutationIdemField\(\)/g, '');
 }
 
 function hasGeneratedMutationFormAttributes(element: JsxElementModel): boolean {
@@ -1089,8 +1090,10 @@ function enhancedMutationFormRenderLowering(
     const start = compilerHelperImportInsertionOffset(options.source);
     replacements.push({
       end: start,
+      // SPEC.md §10.3:1063/1065: also import renderMutationIdemField so each
+      // emitted form body includes a per-submit idempotency token alongside CSRF.
       replacement:
-        "import { renderMutationCsrfField as __kovoRenderMutationCsrfField } from '@kovojs/server/internal/csrf';\n",
+        "import { renderMutationCsrfField as __kovoRenderMutationCsrfField, renderMutationIdemField as __kovoRenderMutationIdemField } from '@kovojs/server/internal/csrf';\n",
       start,
     });
   }
@@ -1372,9 +1375,11 @@ function submittedFormCsrfReplacement(
   const position = element.childBody
     ? element.childBody.offset + element.childBody.source.length
     : element.closingStart;
+  // SPEC.md §10.3:1063/1065: emit both the CSRF token and a per-submit idem field
+  // so the server replay store can deduplicate no-JS double-submits / Back-resubmits.
   return {
     end: position,
-    replacement: `{__kovoRenderMutationCsrfField(${localName})}`,
+    replacement: `{__kovoRenderMutationCsrfField(${localName})}{__kovoRenderMutationIdemField()}`,
     start: position,
   };
 }

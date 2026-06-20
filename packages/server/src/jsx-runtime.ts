@@ -12,8 +12,12 @@ import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/browser/inter
 import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
 
 import { componentMutationFailureSlots } from './component-render.js';
-import { renderMutationCsrfField, type CsrfValidationOptions } from './csrf.js';
-import { escapeAttribute } from './html.js';
+import {
+  renderMutationCsrfField,
+  renderMutationIdemField,
+  type CsrfValidationOptions,
+} from './csrf.js';
+import { escapeAttribute, safeUrlAttribute } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 
@@ -206,8 +210,11 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       continue;
     }
 
+    // SPEC.md §4.8 + §5.2#10: URL-bearing attribute names are scheme-checked so
+    // dynamic DB/query values like `href={row.url}` cannot render as `javascript:`
+    // sinks on first paint. `safeUrlAttribute` returns '#' for unsafe schemes.
     rendered +=
-      value === true ? ` ${name}` : ` ${name}="${escapeAttribute(attributeText(name, value))}"`;
+      value === true ? ` ${name}` : ` ${name}="${safeUrlAttribute(name, attributeText(name, value))}"`;
   }
 
   if (styleAttrs?.class && !renderedClass)
@@ -260,7 +267,9 @@ function renderFormKeyContent(props: JsxProps, jsxKey?: unknown): string {
 
 function renderFormCsrfContent(props: JsxProps): string {
   if (!isMutationDefinitionLike(props.mutation)) return '';
-  return renderMutationCsrfField(props.mutation);
+  // SPEC.md §10.3:1063/1065: no-JS forms must carry a per-submit idem field so
+  // the server can dedup double-submits and Back-resubmit via the replay store.
+  return renderMutationCsrfField(props.mutation) + renderMutationIdemField();
 }
 
 function isMutationDefinitionLike(

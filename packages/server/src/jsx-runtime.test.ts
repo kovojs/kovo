@@ -38,33 +38,33 @@ describe('server jsx runtime', () => {
     // value instead of hard-coding the `/_m/*` endpoint string.
     const addToCart = { key: 'cart/add' } as const;
 
-    expect(
-      jsx('form', {
-        enhance: true,
-        mutation: addToCart,
-        class: 'add',
-        children: '',
-      }),
-    ).toBe(
-      '<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add" class="add"></form>',
-    );
+    const formHtml = jsx('form', {
+      enhance: true,
+      mutation: addToCart,
+      class: 'add',
+      children: '',
+    });
+    // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field.
+    expect(formHtml).toContain('action="/_m/cart/add" data-mutation="cart/add" class="add"');
+    expect(formHtml).toMatch(/name="Kovo-Idem" value="[^"]+"/);
   });
 
   it('renders JSX key identity as kovo-key for direct server JSX forms', () => {
     const addToCart = { key: 'cart/add' } as const;
 
-    expect(
-      jsx(
-        'form',
-        {
-          enhance: true,
-          mutation: addToCart,
-          children: '',
-        },
-        'p1',
-      ),
-    ).toBe(
-      '<form kovo-key="p1" enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="kovo-form-key" value="p1"></form>',
+    const formHtml = jsx(
+      'form',
+      {
+        enhance: true,
+        mutation: addToCart,
+        children: '',
+      },
+      'p1',
+    );
+    // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
+    // (value is a fresh UUID each render, so we match the structure not the exact value).
+    expect(formHtml).toMatch(
+      /^<form kovo-key="p1" enhance method="post" action="\/_m\/cart\/add" data-mutation="cart\/add"><input type="hidden" name="kovo-form-key" value="p1"><input type="hidden" name="Kovo-Idem" value="[^"]+"><\/form>$/,
     );
     expect(jsx('form', { key: 'p2', enhance: true, children: '' })).toBe(
       '<form kovo-key="p2" enhance></form>',
@@ -89,16 +89,18 @@ describe('server jsx runtime', () => {
     );
     if (typeof html !== 'string') throw new TypeError('expected synchronous JSX HTML');
 
-    expect(html).toBe(
-      `<form enhance method="post" action="/_m/cart/add" data-mutation="cart/add"><input type="hidden" name="csrf" value="${csrfToken(
-        request,
-        csrf,
-      )}"></form>`,
+    // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
+    // alongside the CSRF field. The idem value is a fresh UUID each render.
+    expect(html).toContain(
+      `<input type="hidden" name="csrf" value="${csrfToken(request, csrf)}">`,
     );
+    expect(html).toMatch(/name="Kovo-Idem" value="[^"]+"/);
+    expect(html).toContain('action="/_m/cart/add"');
     expect(html.match(/name="csrf"/g)).toHaveLength(1);
+    expect(html.match(/name="Kovo-Idem"/g)).toHaveLength(1);
   });
 
-  it('does not render CSRF fields for csrf:false mutation forms', () => {
+  it('does not render CSRF fields for csrf:false mutation forms but does render Kovo-Idem', () => {
     const html = runWithJsxRequestContext({ session: { id: 's1' } }, () =>
       jsx('form', {
         enhance: true,
@@ -108,6 +110,9 @@ describe('server jsx runtime', () => {
     );
 
     expect(html).not.toContain('name="kovo-csrf"');
+    // SPEC.md §10.3:1063/1065: idem field is always emitted for mutation forms
+    // (dedup is orthogonal to CSRF).
+    expect(html).toMatch(/name="Kovo-Idem" value="[^"]+"/);
   });
 
   it('renders CSRF for mutationFormAttributes spreads through the retained mutation value', () => {
@@ -134,6 +139,46 @@ describe('server jsx runtime', () => {
 
   it('escapes attribute values', () => {
     expect(jsx('input', { value: 'a"b<c&d' })).toBe('<input value="a&quot;b&lt;c&amp;d">');
+  });
+
+  // F1 — server URL-scheme sanitizer (SPEC.md §4.8 + §5.2#10).
+  // A dynamic URL value like `href={row.url}` must be scheme-checked at server render
+  // time so `javascript:` sinks cannot appear in first-paint HTML.
+  it('F1: neutralizes a dynamic javascript: href to "#" in server JSX', () => {
+    // Red path (pre-fix): would have rendered `href="javascript:alert(1)"`.
+    expect(jsx('a', { href: 'javascript:alert(1)', children: 'click' })).toBe(
+      '<a href="#">click</a>',
+    );
+  });
+
+  it('F1: neutralizes javascript: src attributes', () => {
+    expect(jsx('img', { src: 'javascript:alert(1)' })).toBe('<img src="#">');
+  });
+
+  it('F1: neutralizes javascript: with embedded control chars (bypass attempt)', () => {
+    expect(jsx('a', { href: 'java\nscript:alert(1)', children: 'x' })).toBe(
+      '<a href="#">x</a>',
+    );
+  });
+
+  it('F1: passes safe https:// href through unchanged', () => {
+    expect(jsx('a', { href: 'https://example.com/pricing', external: true, children: 'go' })).toBe(
+      '<a href="https://example.com/pricing" external>go</a>',
+    );
+  });
+
+  it('F1: passes relative href through unchanged', () => {
+    expect(jsx('a', { href: '/cart', children: 'cart' })).toBe('<a href="/cart">cart</a>');
+  });
+
+  it('F1: passes fragment href through unchanged', () => {
+    expect(jsx('a', { href: '#section', children: 'sec' })).toBe('<a href="#section">sec</a>');
+  });
+
+  it('F1: passes ftp:// href through unchanged (SPEC §4.8:347 includes ftp)', () => {
+    expect(jsx('a', { href: 'ftp://files.example.com/path', children: 'ftp' })).toBe(
+      '<a href="ftp://files.example.com/path">ftp</a>',
+    );
   });
 
   it('renders style objects through property-level sanitizers', () => {
@@ -240,5 +285,38 @@ describe('server jsx runtime', () => {
   it('aliases jsxs and jsxDEV to jsx for static and dev transforms', () => {
     expect(jsxs('span', { children: ['a', 'b'] })).toBe('<span>ab</span>');
     expect(jsxDEV('span', { children: 'a' })).toBe('<span>a</span>');
+  });
+
+  // A2 — per-submit Kovo-Idem hidden field (SPEC.md §10.3:1063/1065).
+  // No-JS forms must carry a fresh idem token each render so the server replay
+  // store can dedup Back-resubmit / double-submit.
+  it('A2: emits a Kovo-Idem hidden field for every mutation form', () => {
+    const addToCart = { key: 'cart/add' } as const;
+    const html = jsx('form', { mutation: addToCart, children: '' });
+    expect(html).toMatch(/name="Kovo-Idem" value="[^"]+"/);
+  });
+
+  it('A2: the Kovo-Idem value is a non-empty cryptographic UUID', () => {
+    const addToCart = { key: 'cart/add' } as const;
+    const html = jsx('form', { mutation: addToCart, children: '' });
+    const match = /name="Kovo-Idem" value="([^"]+)"/.exec(html as string);
+    expect(match).not.toBeNull();
+    // RFC 4122 UUID format — 128 bits, cryptographically sourced.
+    expect(match![1]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+  });
+
+  it('A2: each render mints a distinct Kovo-Idem value (per-submit freshness)', () => {
+    const addToCart = { key: 'cart/add' } as const;
+    const html1 = jsx('form', { mutation: addToCart, children: '' });
+    const html2 = jsx('form', { mutation: addToCart, children: '' });
+    const match1 = /name="Kovo-Idem" value="([^"]+)"/.exec(html1 as string);
+    const match2 = /name="Kovo-Idem" value="([^"]+)"/.exec(html2 as string);
+    expect(match1![1]).not.toBe(match2![1]);
+  });
+
+  it('A2: does not emit a Kovo-Idem field for non-mutation forms', () => {
+    expect(jsx('form', { action: '/search', children: '' })).not.toContain('Kovo-Idem');
   });
 });
