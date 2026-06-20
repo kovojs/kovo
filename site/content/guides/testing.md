@@ -56,14 +56,13 @@ The `kovoTest` wrapper packages the same thing as named cases:
 import { kovoTest } from '@kovojs/test/test-case';
 import { it } from 'vitest';
 
-const cartMutations = kovoTest(
-  'cart mutations',
-  async ({ exec, page }) => {
-    const res = await exec(addToCart, { productId: 'p1', quantity: 2 });
-    expect(res.ok).toBe(true);
-  },
-  harnessOptions,
-);
+// Bind the harness once, then write `test(name, fn)` per case.
+const test = kovoTest.configure(harnessOptions);
+
+const cartMutations = test('cart mutations', async ({ exec, page }) => {
+  const res = await exec(addToCart, { productId: 'p1', quantity: 2 });
+  expect(res.ok).toBe(true);
+});
 it(cartMutations.name, cartMutations.run);
 ```
 

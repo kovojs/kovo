@@ -92,14 +92,21 @@ two args (`SPEC.md:1336`); the shipped function requires a third positional `opt
 **Decided 2026-06-19 — change the code so `kovoTest(name, fn)` works.** Bonus: this makes the SPEC
 §12 two-arg snippet compile **as written**, so no spec edit is needed.
 
-- [ ] **Mechanism:** either make `options` optional with a zero-config default harness
-      (auto-provisioned PGlite db + default page context) so `kovoTest(name, fn)` provisions a
-      context, **or** add a `kovoTest.configure(options)` factory returning a pre-bound `kovoTest`.
-- [ ] **Implement** in `packages/test/src/test-case.ts`; ensure `createKovoTestHarness` runs with
-      defaults / configured options.
-- [ ] **Verify** the `@example` typecheck gate stays green and the SPEC §12 snippet now compiles
-      unchanged. (The §12 `res.queries.*` / `.error.code` / `html.fragment()` result-shape finding
-      is tracked separately in `plans/api-devex.md`.)
+- [x] **Mechanism: `kovoTest.configure(options)`** (the zero-config-default path is unsound — the
+      harness `db` is genuinely required). `configure` binds the harness once and returns a typed
+      `test(name, fn, runner?)`; the bare `options` arg is now optional so `kovoTest(name, fn)` is
+      also a legal call. Both keep full back-compat with the existing 3-arg callers.
+- [x] **Implemented** in `packages/test/src/test-case.ts` (added `configure`, made `options?`
+      optional; `createKovoTestHarness` called with `options ?? {}`). Guide
+      `site/content/guides/testing.md` updated to the `kovoTest.configure(...)` per-case form.
+- [x] **Verified:** `vitest run packages/test/src/test-case.test.ts` 4/4 (back-compat); `vp check`
+      typecheck clean (no errors in `test-case.ts`/`harness.ts`); `api-surface-gate.mjs` exit 0
+      (baseline 1571 — `configure` is documented, no new undocumented export); `@kovojs/site`
+      `api:check` green (37 @example blocks typecheck). **SPEC.md left unchanged** (per the
+      decision): the bare 2-arg `kovoTest(name, fn)` call now compiles; the *typed* per-case
+      ergonomic form is `kovoTest.configure(opts)` (a fully-typed `ctx` needs `options`, so the
+      typed body uses `configure`, demonstrated in the guide). §12 result-shape finding stays in
+      `plans/api-devex.md`.
 
 ## 5. Drop the empty `@kovojs/headless-ui` `.` barrel — **Low (packaging)** · no decision
 
