@@ -35,7 +35,9 @@ describe('commerce enhanced navigation', () => {
     await page.goto(`${origin}/`, { waitUntil: 'networkidle' });
 
     await page.evaluate(() => {
-      const layout = document.querySelector('main') as HTMLElement & { __kovoTestPersist?: true };
+      const layout = document.querySelector('[data-commerce-shell]') as HTMLElement & {
+        __kovoTestPersist?: true;
+      };
       layout.__kovoTestPersist = true;
       const link = document.createElement('a');
       link.href = '/cart';
@@ -49,8 +51,11 @@ describe('commerce enhanced navigation', () => {
 
     const layoutPersisted = await page.evaluate(
       () =>
-        (document.querySelector('main') as (HTMLElement & { __kovoTestPersist?: true }) | null)
-          ?.__kovoTestPersist === true,
+        (
+          document.querySelector('[data-commerce-shell]') as (HTMLElement & {
+            __kovoTestPersist?: true;
+          }) | null
+        )?.__kovoTestPersist === true,
     );
     await page.evaluate(() => {
       document.querySelector('#test-cart-link')?.remove();
@@ -60,6 +65,9 @@ describe('commerce enhanced navigation', () => {
       clone.querySelectorAll('[tabindex="-1"]').forEach((element) => {
         element.removeAttribute('tabindex');
       });
+      clone.querySelectorAll<HTMLInputElement>('input[name="Kovo-Idem"]').forEach((input) => {
+        input.value = '<idem>';
+      });
       return clone.innerHTML;
     });
     const fullBody = await page.evaluate((html) => {
@@ -67,6 +75,9 @@ describe('commerce enhanced navigation', () => {
       const clone = doc.body.cloneNode(true) as HTMLElement;
       clone.querySelectorAll('[tabindex="-1"]').forEach((element) => {
         element.removeAttribute('tabindex');
+      });
+      clone.querySelectorAll<HTMLInputElement>('input[name="Kovo-Idem"]').forEach((input) => {
+        input.value = '<idem>';
       });
       return clone.innerHTML;
     }, targetHtml);

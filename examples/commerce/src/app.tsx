@@ -82,13 +82,13 @@ function CommerceCartShell({ children }: { children?: unknown }): string {
 
 function CommerceCartPage({ request }: { request: CommerceRouteRequest }): string {
   return (
-    <>
+    <section data-commerce-page="cart">
       <CartBadge />
       <ErrorBoundary fallback={<ProductGridError />}>
         <ProductGrid />
       </ErrorBoundary>
       {request.session?.user?.id ? <OrderHistory /> : renderOrderHistory({ items: [] })}
-    </>
+    </section>
   );
 }
 

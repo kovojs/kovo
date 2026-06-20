@@ -15,13 +15,9 @@ const authFormStyles = style.create({
     borderRadius: style.tokens.sys.shape.cornerMedium,
     borderStyle: 'solid',
     borderWidth: 1,
-    boxSizing: 'border-box',
     color: style.tokens.sys.color.onSurface,
     paddingBlock: 6,
     paddingInline: 10,
-  },
-  formInline: {
-    display: 'inline',
   },
   formLabel: {
     color: style.tokens.sys.color.onSurfaceVariant,
@@ -42,7 +38,6 @@ const authFormStyles = style.create({
   },
   primaryButton: {
     backgroundColor: style.tokens.sys.color.primary,
-    borderColor: style.tokens.sys.color.primary,
     borderRadius: style.tokens.sys.shape.cornerMedium,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -98,10 +93,8 @@ export function LoginForm({ next = '/cart' }: { next?: string }): string {
 
 export function LogoutForm(): string {
   return (
-    <form style={authFormStyles.formInline} mutation={commerceSignOut}>
-      <button style={authFormStyles.textButton} type="submit">
-        Sign out
-      </button>
+    <form mutation={commerceSignOut}>
+      <button type="submit">Sign out</button>
     </form>
   );
 }
