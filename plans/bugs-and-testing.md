@@ -300,7 +300,10 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 
 ### Keystones & cheap wins (Wave 1)
 - [x] **B0** `vite.config.ts` integration input broadened to `packages/test/src/**` (verifier now an input) — _meta-test (assert every importable src dir is represented) still TODO_
-- [ ] **S1** prod-build-served fixture driven in a real browser. **Scoping (done):** `kovo build`
+- [x] **S1 ✅ DONE** — prod-build-served interactive island driven in headless Chromium
+  (`packages/cli/src/index.kovo-build-browser.test.ts`): `kovo build`→`createKovoNodeServer`→browser
+  →click→inline-loader delegation→import() versioned `/c/` module→handler→`data-bind` 0→1. Green.
+  _Original scoping:_ `kovo build`
   → `createKovoNodeServer()` → serve is the pattern in `packages/cli/src/index.kovo-build.test.ts`,
   which **already** asserts at HTTP/fetch level: page 200, `/_m/` 303, `/_q/` query, **`/c/__v/<hash>/`
   client module 200 + `cache-control: immutable` + `text/javascript`**, and immutable stylesheet.
@@ -310,7 +313,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
   Playwright spec on the CLI test's build+serve, but with a real interactive TSX island and
   `chromium` driving a click. Obstacle to design around: a prod server with a query/mutation needs a
   data source (use an in-memory/no-DB app like the CLI test's `appModuleSource`, not commerce).
-- [ ] **B1 / G‑S1** prod-build-served fixture driven in Playwright (`kovo build` → `dist/server/server.mjs` → click a `/c/__v/` island, submit a mutation, assert immutable hashed assets, interactive)
+- [x] **B1 / G‑S1 ✅** prod-build-served island driven in a real browser (S1 test, green) (`kovo build` → `dist/server/server.mjs` → click a `/c/__v/` island, submit a mutation, assert immutable hashed assets, interactive)
 - [ ] **B2 / G‑S2/3** real-TSX canonical fixtures via public client API + `fixtures/realistic-app` (drizzle extracted graph → `createDbVerifier`, better-auth `sessionProvider`, `@kovojs/style`, `@kovojs/ui` Dialog)
 
 ### Spec contracts (bugs-1) → SPEC.md — ✅ ALL APPLIED + VERIFIED (Phase 1)
