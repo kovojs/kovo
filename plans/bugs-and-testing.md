@@ -35,6 +35,21 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     enhanced form degrades to native POST→303 PRG→full re-render, count accumulates as server
     truth. **Passes.** (SPEC §8 "degrades to a website"; testing-audit §5.3.)
   - **Security tier + no-JS degradation complete** (Phase 1 contracts + all P0 security fixtures).
+  - ✅ Coverage-breadth wave: `multi-domain-write` (KV402), `pg-constraint-failure` (real-PG
+    rollback), HEAD empty-body, `scale-keyed-list` (300-row morph), `morph-native-state`
+    (expected-fail gap), Firefox/WebKit cross-engine matrix, `layout-primitive-nested`, auth
+    login→logout round-trip. **All 18 session specs pass together (15.1s).**
+  - **What genuinely remains, by blocker:**
+    - **Blocked on contract IMPLEMENTATION** (SPEC-only so far — can't test what isn't built):
+      C3 (KV414 IDOR gate + owns()), C8d F39 (KV314 compile-error), C8d F40 (isomorphic feature),
+      C6 (A5 settlement/queue), clock freshness (KV312/315 `clocks` input). These need the bugs-1
+      contracts written into compiler/runtime code first.
+    - **Blocked on the S1/S2/S3 harness keystones:** C4/C5 (cache/bfcache, prod-delta, deploy-skew,
+      minified-name — need a prod-build browser harness), derived-optimism (needs compiler-emit S2).
+    - **Bounded coverage still open** (testable now, no new infra): multi-feature interaction page,
+      KV-code surfacing + severity-fidelity, page-render read verification, KV234 cross-pkg,
+      handler-vs-framework header precedence, flake gate / module-scope reset / snapshot-meta /
+      CSS-clear / B0 meta-test.
   - **⚠ Tracked impl gap (F10):** SPEC sink-renderer signature `(escaped) => string | TrustedHtml`
     diverges from the impl's `(target, source, options) => void`. Enforcing the constrained
     signature is a code change (would alter the `data-stream-renderer` contract) — follow-up.
@@ -232,7 +247,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **C1a** XSS/escaping fixture (`xss-escaping`) — text/attr/JSON-island/wire/URL-scheme. Passes.
 - [x] **C1b** LLM-output streamed `<kovo-text>` escaping (`streaming-chat` xss-probe). Passes.
 - [x] **C2a** cookie hardening — `HttpOnly`/`SameSite=Strict` on enhanced + no-JS. Passes.
-- [ ] **C2b** login→authed-request→logout cookie round-trip; framework-vs-handler header precedence.
+- [x] **C2b** login→authed-request→logout session round-trip (`auth`). Passes. _(handler-vs-framework header precedence still TODO)_
 - [x] **C7a** multi-domain write fan-out + KV402 names the missing domain (`multi-domain-write`). Passes.
 - [x] **C7b** real-PG unique-violation rollback + sanitized error (`pg-constraint-failure`). Passes.
 - [ ] **C7c** KV405/KV408 fire at integration; page-render (`route.page`) read verification.
