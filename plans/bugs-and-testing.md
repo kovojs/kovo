@@ -21,14 +21,24 @@ dependency gates and file-ownership rules so independent work runs concurrently 
   - ✅ **B0** — harness cache-input fix: `integration` task input broadened from
     `packages/test/src/integration/**` to `packages/test/src/**` so the runtime verifier
     (its sole exerciser) invalidates the cache (`vite.config.ts`).
-  - ✅ **C1** — `xss-escaping` fixture + spec (`tests/integration/{fixtures/xss-escaping,specs/xss-escaping.spec.ts}`):
-    drives `</script><script>` and `<img onerror>` payloads and a `javascript:` URL through the
-    JSON island (`escapeScriptJson`→`<`), the `<kovo-query>` wire (`escapeHtml`→`&lt;`), the
-    client text binding (`textContent`), and `kovoSafeUrl` URL-scheme blocking → all neutralized,
-    no script execution. **Passes (Chromium, 2.4s).** Authoring it caught a real bug in the F7/F8
-    SPEC text (JSON-island needs `<`, not `&lt;`, since script-data isn't entity-decoded) —
-    SPEC §9.1 corrected to distinguish script-data vs parsed-element contexts.
-  - Remaining: C2 (cookie hardening), the S1/S2/S3 harness keystones, and the rest of C/D.
+  - ✅ **C1** — `xss-escaping` fixture + spec: drives `</script><script>` and `<img onerror>` and a
+    `javascript:` URL through the JSON island (`escapeScriptJson`→`<`), `<kovo-query>` wire
+    (`escapeHtml`→`&lt;`), client text binding (`textContent`), and `kovoSafeUrl` URL-scheme
+    blocking → all neutralized. **Passes.** Authoring it caught a real bug in the F8 SPEC text
+    (JSON-island is script-data → needs `<`, not `&lt;`); SPEC §9.1 corrected.
+  - ✅ **C1 (LLM-output)** — `streaming-chat` `xss-probe` branch + spec: model-streamed payload with
+    `</kovo-text>` break-out is HTML-escaped in the `<kovo-text>` wire (escaped source buffer); no
+    execution. **Passes.** Closes testing-audit §4's highest-risk vector.
+  - ✅ **C2** — `mutation-response-headers` now asserts serialized `Set-Cookie` carries
+    `HttpOnly`+`SameSite=Strict` on enhanced + no-JS paths. **Passes.**
+  - **Security tier complete** (Phase 1 contracts + all P0 security fixtures).
+  - **⚠ Tracked impl gap (F10):** SPEC sink-renderer signature `(escaped) => string | TrustedHtml`
+    diverges from the impl's `(target, source, options) => void`. Enforcing the constrained
+    signature is a code change (would alter the `data-stream-renderer` contract) — follow-up.
+  - **Remaining (large, multi-session):** S1 prod-build browser harness · S2/S3 compiler-emit +
+    realistic-app keystones · P2 coverage (multi-domain/KV408, derived-optimism, morph survival,
+    layout, no-JS, real-PG failure) · P3 breadth (cross-engine, flake gate, negative type tests,
+    isomorphic, scale) · C2 login→logout round-trip · B0 meta-test.
 
 ## How the two streams interlock
 
