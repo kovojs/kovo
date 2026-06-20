@@ -63,5 +63,7 @@ function assertCookieOctets(value: string, label: string): void {
 }
 
 function assertNoHeaderControlCharacters(value: string, label: string): void {
-  if (/[\r\n]/.test(value)) throw new Error(`${label} must not contain CR or LF`);
+  // SPEC §9.1.1 / bugs-1 F9: reject CR, LF, and NUL so a handler-set cookie/header value
+  // cannot inject additional response headers or split the response.
+  if (/[\r\n\0]/.test(value)) throw new Error(`${label} must not contain CR, LF, or NUL`);
 }

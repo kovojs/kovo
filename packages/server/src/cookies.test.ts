@@ -28,7 +28,19 @@ describe('cookie header helpers', () => {
       'Cookie maxAge must be an integer',
     );
     expect(() => serializeCookie('name', 'value', { path: '/\r\nSet-Cookie: x=y' })).toThrow(
-      'cookie path must not contain CR or LF',
+      'cookie path must not contain CR, LF, or NUL',
+    );
+  });
+
+  it('rejects CR/LF/NUL in cookie values to prevent header injection (bugs-1 F9)', () => {
+    expect(() => serializeCookie('name', 'a\r\nSet-Cookie: evil=1')).toThrow(
+      'cookie value must not contain CR, LF, or NUL',
+    );
+    expect(() => serializeCookie('name', 'a\nb')).toThrow(
+      'cookie value must not contain CR, LF, or NUL',
+    );
+    expect(() => serializeCookie('name', 'a\0b')).toThrow(
+      'cookie value must not contain CR, LF, or NUL',
     );
   });
 
@@ -37,7 +49,10 @@ describe('cookie header helpers', () => {
       'ctx.setCookie requires a non-empty Set-Cookie value',
     );
     expect(() => validateRawSetCookie('a=b\nSet-Cookie: c=d')).toThrow(
-      'Set-Cookie must not contain CR or LF',
+      'Set-Cookie must not contain CR, LF, or NUL',
+    );
+    expect(() => validateRawSetCookie('a=b\0')).toThrow(
+      'Set-Cookie must not contain CR, LF, or NUL',
     );
   });
 });
