@@ -171,7 +171,16 @@ export const DisclosureContent = component({
     const styleAttrs = style.attrs(disclosureStyles.content, props.styles?.content);
 
     return (
-      <div {...styleAttrs} data-state={attrs['data-state']} hidden={attrs.hidden} id={attrs.id}>
+      // passThroughProps forwards the compiler-emitted data-bind:* reactive stamps
+      // (data-bind:data-state / data-bind:hidden) so the panel reveals client-side;
+      // without it the SSR closed value stays frozen and clicking does nothing.
+      <div
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-state={attrs['data-state']}
+        hidden={attrs.hidden}
+        id={attrs.id}
+      >
         {props.children}
       </div>
     );

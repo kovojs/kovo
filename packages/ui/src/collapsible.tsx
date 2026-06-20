@@ -162,7 +162,10 @@ export const CollapsibleContent = component({
     const styleAttrs = style.attrs(collapsibleStyles.content, props.styles?.content);
 
     return (
-      <div {...styleAttrs} data-state={attrs['data-state']} id={attrs.id}>
+      // passThroughProps forwards the compiler-emitted data-bind:* reactive stamps
+      // (e.g. data-bind:data-state) so the panel re-renders open/closed client-side;
+      // without it the SSR value stays frozen and the content never reveals.
+      <div {...styleAttrs} {...passThroughProps(props)} data-state={attrs['data-state']} id={attrs.id}>
         {props.children}
       </div>
     );
