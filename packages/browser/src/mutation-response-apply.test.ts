@@ -305,6 +305,41 @@ describe('decoded mutation response apply', () => {
     expect(applied.streams).toEqual(['assistant:a1']);
   });
 
+  it('marks the stream target failed on a terminal <kovo-done reason="error"> (no silent partial)', async () => {
+    // SPEC §9.1: the modular streaming runtime must honor <kovo-done reason!="complete"> and mark
+    // the partial assistant answer failed — not silently flush it as confirmed (parity with the
+    // inline loader). The stream ends cleanly (HTTP 200, no thrown reader error).
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const onError = vi.fn();
+    const streamTarget = new FakeQueryBindingElement(
+      { 'data-stream-text': 'assistant:a1' },
+      { textContent: '' },
+    );
+    root.targets.set('messages', new FakeMorphTarget());
+    root.querySelectorAll = (selector: string) =>
+      selector === '[data-stream-text="assistant:a1"]' ? [streamTarget] : [];
+
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(
+          encoder.encode(
+            '<kovo-fragment target="messages" mode="append"><article data-stream-text="assistant:a1"></article></kovo-fragment>',
+          ),
+        );
+        controller.enqueue(encoder.encode('<kovo-text target="assistant:a1">partial</kovo-text>'));
+        controller.enqueue(encoder.encode('<kovo-done reason="error"></kovo-done>'));
+        controller.close();
+      },
+    });
+
+    await applyStreamingMutationResponseBodyToRuntime({ body, onError, root, store });
+
+    expect(streamTarget.getAttribute('data-stream-state')).toBe('error');
+    expect(onError).toHaveBeenCalled();
+  });
+
   it('buffers stream text until threshold, checkpoint, timer, or completion flushes it', async () => {
     vi.useFakeTimers();
     try {

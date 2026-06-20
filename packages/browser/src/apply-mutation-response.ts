@@ -22,6 +22,8 @@ import {
   type StreamTextRoot,
 } from './stream-text.js';
 import type { ImportHandlerModule } from './handlers.js';
+import { reportRuntimeError } from './error-policy.js';
+import { readAttribute } from './wire-html.js';
 
 type RuntimeStreamTextOptions = StreamTextBufferOptions & {
   buffer?: StreamTextBuffer;
@@ -217,13 +219,19 @@ export async function applyStreamingMutationResponseBodyToRuntime(
         })
       : options.streamText?.buffer;
   let pending = '';
+  // SPEC §9.1: scan the full streamed body for a terminal <kovo-done reason="..."> marker so the
+  // modular path can detect an aborted/failed stream (reason !== 'complete') and mark it failed
+  // rather than silently flushing the partial as confirmed (parity with the inline loader).
+  let rawForDone = '';
   let aggregate: AppliedMutationResponse | AppliedMutationResponseWithRoot | undefined;
 
   try {
     while (true) {
       const read = await reader.read();
       if (read.done) break;
-      pending += decoder.decode(read.value, { stream: true });
+      const chunk = decoder.decode(read.value, { stream: true });
+      rawForDone += chunk;
+      pending += chunk;
       const result = flushCompleteMutationResponsePrefix(
         pending,
         applyOptionsWithStreamTextBuffer(applyOptions, streamTextBuffer),
@@ -232,7 +240,9 @@ export async function applyStreamingMutationResponseBodyToRuntime(
       aggregate = mergeAppliedMutationResponses(aggregate, result.applied);
     }
 
-    pending += decoder.decode();
+    const tail = decoder.decode();
+    rawForDone += tail;
+    pending += tail;
     if (pending.length > 0) {
       aggregate = mergeAppliedMutationResponses(
         aggregate,
@@ -242,7 +252,17 @@ export async function applyStreamingMutationResponseBodyToRuntime(
         ),
       );
     }
-    await streamTextBuffer?.flush('completion');
+
+    const doneReason = readStreamDoneReason(rawForDone);
+    if (doneReason !== undefined && doneReason !== 'complete') {
+      const error = new Error(
+        `Streaming mutation ended with <kovo-done reason="${doneReason}">; the partial response is not confirmed.`,
+      );
+      reportRuntimeError(options.onError, error);
+      await streamTextBuffer?.fail(error);
+    } else {
+      await streamTextBuffer?.flush('completion');
+    }
   } catch (error) {
     streamAbortController?.abort();
     await streamTextBuffer?.fail(error);
@@ -252,6 +272,22 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   }
 
   return aggregate ?? emptyAppliedMutationResponse(options.root);
+}
+
+/**
+ * Read the reason of the last `<kovo-done reason="...">` terminator in a streamed mutation body
+ * (SPEC §9.1). Returns `undefined` when no done marker is present (an interrupted stream), the
+ * reason string otherwise. A missing `reason` attribute is treated as `'complete'` (parity with
+ * the inline loader's `reason && reason !== 'complete'` check).
+ */
+function readStreamDoneReason(body: string): string | undefined {
+  const pattern = /<kovo-done\b([^>]*)>/gi;
+  let match: RegExpExecArray | null;
+  let reason: string | undefined;
+  while ((match = pattern.exec(body)) !== null) {
+    reason = readAttribute(match[1] ?? '', 'reason') ?? 'complete';
+  }
+  return reason;
 }
 
 function applyOptionsWithStreamTextBuffer(
