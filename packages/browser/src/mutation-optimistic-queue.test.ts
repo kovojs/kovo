@@ -78,9 +78,14 @@ describe('optimistic enhanced mutation queueing', () => {
 
     await Promise.resolve();
 
-    expect(order).toEqual(['1:optimistic', '1:fetch']);
+    // SPEC.md §10.4 line 1121 (normative): a queued mutation applies its optimistic transform on
+    // ENQUEUE — immediately, against the current optimistic value including earlier queued-but-unsent
+    // transforms — NOT on dequeue. So BOTH predictions ('1:optimistic' then '2:optimistic') land
+    // before the blocked head's fetch resolves, and the cart badge reflects the full queued intent
+    // (count 3 = 0 + 1 + 2) while only the head is in flight. The SEND stays a serial FIFO (one fetch).
+    expect(order).toEqual(['1:optimistic', '2:optimistic', '1:fetch']);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(store.get('cart')).toEqual({ count: 3 });
     expect(queue.pending('cart')).toBe(true);
 
     releaseFirst?.();
@@ -89,7 +94,16 @@ describe('optimistic enhanced mutation queueing', () => {
       { idem: 'idem_first', queries: ['cart'] },
       { idem: 'idem_second', queries: ['cart'] },
     ]);
-    expect(order).toEqual(['1:optimistic', '1:fetch', '1:released', '2:optimistic', '2:fetch']);
+    // Predictions applied on enqueue; the head drains and reconciles (re-applying the still-pending
+    // tail transform over the head's truth — the extra '2:optimistic'), then the tail's fetch sends.
+    expect(order).toEqual([
+      '1:optimistic',
+      '2:optimistic',
+      '1:fetch',
+      '1:released',
+      '2:optimistic',
+      '2:fetch',
+    ]);
     expect(store.get('cart')).toEqual({ count: 3 });
     expect(queue.pending('cart')).toBe(false);
   });

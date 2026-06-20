@@ -1,6 +1,7 @@
 import { domain, endpoint, guards, mutation, s } from '@kovojs/server';
 import type {
   AuthenticatedRequest,
+  CookieOptions,
   CsrfValidationOptions,
   Domain,
   EndpointAuthDeclaration,
@@ -1287,10 +1288,79 @@ export function betterAuthSignOutMutation<
 // through the current mutation response-header channel.
 export function forwardBetterAuthSetCookie(
   headers: Headers,
-  context: { setCookie?: (rawSetCookie: string) => void },
+  context: { setCookie?: (name: string, value: string, options?: CookieOptions) => void },
 ): void {
+  // bug-and-testing-part2 B3: the public Set-Cookie channel is the typed builder only (no raw
+  // free-string overload). Better Auth emits standard URL-encoded Set-Cookie strings, so parse each
+  // into (name, value, attributes) and re-emit through the typed builder. The value is decoded once
+  // (Better Auth URL-encodes it) so the typed builder re-encodes it to the identical wire bytes.
+  const setCookie = context.setCookie;
+  if (!setCookie) return;
   for (const cookie of getBetterAuthSetCookie(headers)) {
-    context.setCookie?.(cookie);
+    const parsed = parseSetCookieHeader(cookie);
+    if (parsed) setCookie(parsed.name, parsed.value, parsed.options);
+  }
+}
+
+/** @internal Parse a standard `Set-Cookie` header string into a typed cookie-builder call. */
+function parseSetCookieHeader(
+  raw: string,
+): { name: string; options: CookieOptions; value: string } | undefined {
+  const segments = raw.split(';');
+  const first = segments[0] ?? '';
+  const separator = first.indexOf('=');
+  if (separator <= 0) return undefined;
+  const name = first.slice(0, separator).trim();
+  if (!name) return undefined;
+  const value = decodeCookieOctet(first.slice(separator + 1).trim());
+
+  const options: CookieOptions = {};
+  for (let index = 1; index < segments.length; index += 1) {
+    const segment = segments[index]?.trim();
+    if (!segment) continue;
+    const attrSeparator = segment.indexOf('=');
+    const attr = (attrSeparator === -1 ? segment : segment.slice(0, attrSeparator)).trim().toLowerCase();
+    const attrValue = attrSeparator === -1 ? '' : segment.slice(attrSeparator + 1).trim();
+    switch (attr) {
+      case 'httponly':
+        options.httpOnly = true;
+        break;
+      case 'secure':
+        options.secure = true;
+        break;
+      case 'path':
+        options.path = attrValue;
+        break;
+      case 'domain':
+        options.domain = attrValue;
+        break;
+      case 'max-age': {
+        const maxAge = Number(attrValue);
+        if (!Number.isNaN(maxAge)) options.maxAge = maxAge;
+        break;
+      }
+      case 'expires':
+        options.expires = attrValue;
+        break;
+      case 'samesite': {
+        const sameSite = attrValue.toLowerCase();
+        if (sameSite === 'lax' || sameSite === 'none' || sameSite === 'strict') {
+          options.sameSite = sameSite;
+        }
+        break;
+      }
+      default:
+        break; // ignore attributes the typed builder does not model (Priority, Partitioned, …)
+    }
+  }
+  return { name, options, value };
+}
+
+function decodeCookieOctet(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
 }
 
@@ -1387,7 +1457,7 @@ async function isBetterAuthTwoFactorPendingResponse(
 // failure. See SECURITY_FINDINGS.md M2.
 async function resolveBetterAuthCredentialSuccess<Status extends string>(
   response: BetterAuthResponseLike,
-  context: { setCookie?: (rawSetCookie: string) => void },
+  context: { setCookie?: (name: string, value: string, options?: CookieOptions) => void },
   success: BetterAuthCredentialMutationValue<Status>,
 ): Promise<BetterAuthCredentialMutationValue<Status> | null> {
   if (!isSuccessStatus(response.status)) return null;

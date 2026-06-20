@@ -67,7 +67,12 @@ describe('route and query guard responses', () => {
       }),
     ).resolves.toEqual({
       body: '<kovo-query name="account">{"userId":"u1"}</kovo-query>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      // H3 fix: /_q/ 200 responses now carry the private cache posture (SPEC §9.4:895).
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 200,
     });
     expect(events).toEqual([
@@ -181,6 +186,7 @@ describe('route and query guard responses', () => {
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 403,
     });
+    // H3 fix: /_q/ guard-failure responses also carry the private cache posture (SPEC §9.4:895).
     await expect(
       renderQueryEndpointResponse(accountQuery, {
         request: { session: null },
@@ -188,7 +194,11 @@ describe('route and query guard responses', () => {
       }),
     ).resolves.toEqual({
       body: '',
-      headers: { Location: '/login?next=%2F_q%2Faccount%3Fid%3Du1' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        Location: '/login?next=%2F_q%2Faccount%3Fid%3Du1',
+        Vary: 'Cookie',
+      },
       status: 303,
     });
     await expect(
@@ -198,7 +208,11 @@ describe('route and query guard responses', () => {
       }),
     ).resolves.toEqual({
       body: '<main>Query forbidden</main>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 403,
     });
   });

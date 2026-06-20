@@ -167,6 +167,10 @@ export function installExecutionTriggers(
 ): () => void {
   if (!options.root.querySelectorAll) return () => undefined;
 
+  // K5: track disposed state so a queued idle callback that fires after dispose()
+  // cannot run the handler against a torn-down loader.
+  let disposed = false;
+
   for (const element of options.root.querySelectorAll(
     '[on\\:load]',
   ) as Iterable<EventElementLike>) {
@@ -187,6 +191,8 @@ export function installExecutionTriggers(
     '[on\\:idle]',
   ) as Iterable<EventElementLike>) {
     requestIdle(() => {
+      // K5: guard against post-dispose idle callbacks.
+      if (disposed) return;
       dispatchExecutionTrigger({ target: element, type: 'idle' }, options, islandSignalScope);
     });
   }
@@ -194,7 +200,14 @@ export function installExecutionTriggers(
   const visibleElements = [
     ...(options.root.querySelectorAll('[on\\:visible]') as Iterable<EventElementLike>),
   ];
-  if (visibleElements.length === 0) return () => undefined;
+
+  // K5: always return a real disposer that flips the disposed flag so pending idle
+  // callbacks are suppressed even when there are no visible elements.
+  if (visibleElements.length === 0) {
+    return () => {
+      disposed = true;
+    };
+  }
 
   const createObserver =
     options.visibleObserver ??
@@ -231,6 +244,7 @@ export function installExecutionTriggers(
   }
 
   return () => {
+    disposed = true;
     for (const element of new Set([...seen, ...visibleElements])) {
       observer.unobserve(element);
     }

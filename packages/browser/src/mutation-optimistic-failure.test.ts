@@ -274,6 +274,52 @@ describe('optimistic enhanced mutation failure handling', () => {
     );
   });
 
+  it('rolls back only the failed mutation, preserving a co-pending sibling prediction', async () => {
+    // SPEC.md §10.4 line 1118: the per-query pending log rebases only the not-yet-committed
+    // transforms; a single mutation failure must roll back ONLY its own transform and leave a
+    // concurrent in-flight sibling's prediction (and pending-log entry) intact — not wipe the
+    // whole query's pending log.
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const root = new FakeMorphRoot();
+    store.set('cart', { count: 0 });
+    const optimistic = {
+      transforms: {
+        cart(current: unknown, input: { quantity: number }) {
+          const cart = current as { count: number };
+          return { count: cart.count + input.quantity };
+        },
+      },
+    };
+
+    // m1 is a still-in-flight sibling on the same query (predicts +1 → count 1).
+    rebaser.add('m1', { quantity: 1 }, optimistic);
+    expect(store.get('cart')).toEqual({ count: 1 });
+
+    // m2 predicts +5 on enqueue (→ 6), then the server rejects it (422).
+    await submitOptimisticEnhancedMutation({
+      fetch: vi.fn(async () => ({
+        ok: false,
+        status: 422,
+        async text() {
+          return '';
+        },
+      })),
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'm2',
+      input: { quantity: 5 },
+      optimistic,
+      rebaser,
+      root,
+      store,
+    });
+
+    // m2's prediction is rolled back; m1's +1 survives (store 1, one pending), NOT wiped to 0/0.
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(rebaser.pendingCount('cart')).toBe(1);
+  });
+
   it('discards optimistic state on enhanced mutation errors and applies the error fragment', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);

@@ -537,7 +537,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
               code: 'KV406',
               message:
                 'Statically un-analyzable write site; manual touches required. Query projection product.location could not be resolved to a Drizzle column or typed sql<T> expression.',
-              severity: 'warn',
+              severity: 'error',
               site: 'product.queries.ts:12',
             },
           ],
@@ -928,14 +928,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product.displayName could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:7',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product.stock could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:7',
           },
         ],
@@ -981,7 +981,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product.unresolved:value,raw could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:7',
           },
         ],
@@ -1063,7 +1063,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product.count could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:6',
           },
         ],
@@ -1105,7 +1105,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product.id could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:6',
           },
         ],
@@ -1142,7 +1142,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses db.select() without an explicit projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:4',
           },
         ],
@@ -1157,7 +1157,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Query uses db.select() without an explicit projection.',
-        severity: 'warn',
+        severity: 'error',
         site: 'product.queries.ts:4',
       },
     ]);
@@ -1188,7 +1188,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:4',
           },
         ],
@@ -1229,7 +1229,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db[method]().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:4',
           },
         ],
@@ -1266,7 +1266,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'user.queries.ts:4',
           },
         ],
@@ -1281,7 +1281,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-        severity: 'warn',
+        severity: 'error',
         site: 'user.queries.ts:4',
       },
     ]);
@@ -1312,7 +1312,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'user.queries.ts:4',
           },
         ],
@@ -1355,7 +1355,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'user.queries.ts:4',
           },
         ],
@@ -1392,14 +1392,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'user.queries.ts:4',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query relational read source could not be resolved to a Drizzle table.',
-            severity: 'warn',
+            severity: 'error',
             site: 'user.queries.ts:4',
           },
         ],

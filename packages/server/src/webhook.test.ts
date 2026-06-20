@@ -246,4 +246,39 @@ describe('server webhook primitive', () => {
     expect(assertNoAmbientSession).toBeTypeOf('function');
     expect(assertNoneVerifierRequiresJustification).toBeTypeOf('function');
   });
+
+  // A4 (SPEC §9.1:850): an unexpected handler exception must abort the reservation so
+  // a provider retry re-runs the handler, not re-serve a cached 500.
+  it('A4: does not commit a 500 to replay on unexpected exception; retry reruns the handler', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let callCount = 0;
+    const flakyWebhook = webhook('flaky', {
+      handler(input: { id: string }) {
+        callCount += 1;
+        if (callCount === 1) throw new Error('transient DB blip');
+        return { received: input.id };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      path: '/webhooks/flaky',
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only test webhook',
+    });
+
+    const body = JSON.stringify({ id: 'evt_flaky' });
+    const makeRequest = () =>
+      new Request('https://example.test/webhooks/flaky', { body, method: 'POST' });
+
+    // First call: handler throws.
+    const first = await runWebhook(flakyWebhook, makeRequest());
+    expect(first.response.status).toBe(500);
+    expect(first.replayed).toBe(false);
+
+    // Second call: same event id — must NOT replay the cached 500; handler runs again.
+    const second = await runWebhook(flakyWebhook, makeRequest());
+    expect(second.replayed).toBe(false);
+    expect(second.response.status).toBe(200);
+    expect(callCount).toBe(2);
+  });
 });

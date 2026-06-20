@@ -1,12 +1,12 @@
 import { request as httpRequest, createServer } from 'node:http';
-import type { IncomingHttpHeaders, IncomingMessage, RequestListener } from 'node:http';
+import type { IncomingHttpHeaders, IncomingMessage, RequestListener, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
 import { domain } from './domain.js';
 import { mutation } from './mutation.js';
-import { toNodeHandler } from './node.js';
+import { toNodeHandler, writeWebResponseToNode } from './node.js';
 import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
@@ -186,6 +186,37 @@ describe('server node adapter', () => {
     } finally {
       await server.close();
     }
+  });
+});
+
+describe('responseHeadersToNodeHeaders (B1)', () => {
+  // SPEC §9.4/§9.1.1: multiple Set-Cookie headers must not be collapsed to the last.
+  it('preserves multiple Set-Cookie headers as a string array (B1)', async () => {
+    const response = new Response(null, { status: 200 });
+    response.headers.append('set-cookie', 'session=abc; HttpOnly; Path=/');
+    response.headers.append('set-cookie', 'csrf=xyz; SameSite=Strict; Path=/');
+
+    let capturedSetCookie: string | string[] | undefined;
+    const fakeNodeResponse = {
+      writeHead: vi.fn(
+        (
+          _status: number,
+          _statusText: string,
+          headers: Record<string, string | string[]>,
+        ) => {
+          capturedSetCookie = headers['set-cookie'];
+        },
+      ),
+      end: vi.fn(),
+    } as unknown as ServerResponse;
+
+    await writeWebResponseToNode(response, fakeNodeResponse, 'GET');
+
+    expect(Array.isArray(capturedSetCookie)).toBe(true);
+    const cookies = capturedSetCookie as string[];
+    expect(cookies).toHaveLength(2);
+    expect(cookies[0]).toBe('session=abc; HttpOnly; Path=/');
+    expect(cookies[1]).toBe('csrf=xyz; SameSite=Strict; Path=/');
   });
 });
 

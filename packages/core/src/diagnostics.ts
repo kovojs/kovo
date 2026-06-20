@@ -40,6 +40,7 @@ export type DiagnosticCode =
   | 'KV314'
   | 'KV315'
   | 'KV316'
+  | 'KV317'
   | 'KV320'
   | 'KV330'
   | 'KV402'
@@ -164,6 +165,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV314: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV315: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV316: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
+  KV317: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
@@ -585,6 +587,17 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message: 'isomorphic: true on a children/slot-accepting component would drift on self-render.',
   },
+  KV317: {
+    code: 'KV317',
+    help: [
+      'Would lower to: a static state-bearing ARIA attribute whose author value contradicts the primitive\'s render-time state.',
+      'Blocked reason: state aria-* (aria-expanded/selected/checked/pressed/current, state-driven aria-disabled) is primitive-wins; the primitive\'s runtime derive keeps writing it, so a static author value that disagrees with the render-time state is a frozen-vs-clobbered ambiguity the author cannot have meant — distinct from the visible-override lint KV232.',
+      'Fixes: drop the contradicting static value (let the primitive own it) or set it to match the primitive\'s render-time state.',
+      'SPEC §4.6 makes a contradicting static state aria-* an error (KV317), not the override lint (KV232).',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Static state-bearing aria-* value contradicts the primitive\'s render-time state.',
+  },
   KV320: {
     code: 'KV320',
     help: [
@@ -622,12 +635,16 @@ export const diagnosticDefinitions = {
   },
   KV405: {
     code: 'KV405',
-    severity: 'warn',
+    // SPEC §11.2/§11.3: an unexercised conditional write branch is no longer advisory — it is a
+    // CI-gating error (the static touch set is unproven for that branch).
+    severity: 'error',
     message: 'Conditional write branch was never executed under instrumentation.',
   },
   KV406: {
     code: 'KV406',
-    severity: 'warn',
+    // SPEC §11.2/§11.3: a statically un-analyzable write site is a build-failing error (not a warn) —
+    // the analyzer cannot prove the touch set, so it must be annotated or the write made analyzable.
+    severity: 'error',
     message: 'Statically un-analyzable write site; manual touches required.',
   },
   KV407: {

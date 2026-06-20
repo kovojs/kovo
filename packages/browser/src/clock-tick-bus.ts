@@ -50,9 +50,26 @@ export function installClockUpdatePlans(
   scheduleClockFrame();
   restartTimer();
 
+  // K7 / SPEC freshness: when the page returns from the background the interval
+  // and rAF may not have fired since the last visible state, so relative-time
+  // labels stay stale. Drive an immediate catch-up frame on visibility restore.
+  const onVisibilityChange = (): void => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      scheduleClockFrame();
+    }
+  };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    document.addEventListener('pageshow', onVisibilityChange);
+  }
+
   return () => {
     for (const subscription of installed) subscriptions.delete(subscription);
     restartTimer();
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      document.removeEventListener('pageshow', onVisibilityChange);
+    }
   };
 }
 

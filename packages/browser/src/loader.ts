@@ -5,6 +5,7 @@ import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
 import { abortIslandSignalScope, createIslandSignalScope } from './handler-context.js';
+import type { IslandSignalScope } from './handler-context.js';
 import type { ImportHandlerModule } from './handlers.js';
 import { installDelegatedEventLifecycle, installExecutionTriggers } from './loader-lifecycle.js';
 import type {
@@ -56,11 +57,14 @@ export interface KovoLoaderOptions {
 }
 
 /**
- * A running loader instance: the delegated `events` it listens for and a `dispose` to tear it down.
+ * A running loader instance: the delegated `events` it listens for, a `dispose` to tear it down,
+ * and the `islandSignalScope` for threading into deferred-stream applies (K4 / SPEC §4.7).
  */
 export interface KovoLoader {
   dispose(): void;
   events: readonly string[];
+  /** K4 / SPEC §4.7: the loader's island signal scope for passing to applyDeferredStreamResponseToRuntime. */
+  islandSignalScope: IslandSignalScope;
 }
 
 // SPEC.md §4.4: delegate (capture phase) every on:* event the app may use. focus/blur
@@ -125,6 +129,9 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
               }
             : undefined,
           importModule: options.enhancedMutations.importModule ?? options.importModule,
+          // K4 / SPEC §4.7: thread the loader's islandSignalScope into the broadcast
+          // so a broadcast morph that removes an island correctly aborts its ctx.signal.
+          islandSignalScope,
           principal: sessionFingerprint,
         }),
         onAppliedQueries: rememberAppliedQueries,
@@ -189,6 +196,9 @@ export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
       for (const dispose of disposers.splice(0).reverse()) dispose();
     },
     events,
+    // K4 / SPEC §4.7: expose so deferred-stream apply calls can pass the scope
+    // and abort island signals when a morph removes an island's fragment target.
+    islandSignalScope,
   };
 }
 

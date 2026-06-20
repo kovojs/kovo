@@ -5,7 +5,7 @@ import { literalValue, type StaticLiteralValue } from '../scan/object.js';
 import type { JsxAttributeModel, ObjectLiteralEntry } from '../scan/parse.js';
 import { dedupeBy, escapeAttribute, splitDepValue } from '../shared.js';
 
-export type AttributeMergeDiagnosticCode = 'KV231' | 'KV232' | 'KV233';
+export type AttributeMergeDiagnosticCode = 'KV231' | 'KV232' | 'KV233' | 'KV317';
 
 /**
  * A single attribute participating in primitive/author attribute merging: its name, the
@@ -57,6 +57,20 @@ const idrefAttributes = new Set([
 ]);
 
 const logicalOrAttributes = new Set(['aria-disabled', 'disabled', 'readonly', 'required']);
+
+// SPEC.md §4.6: state-bearing aria-* attributes are primitive-wins (not author-wins).
+// The primitive's runtime derive overwrites them on every render, so an author static
+// value that contradicts the primitive's render-time value is a KV317 error.
+// Descriptive aria-* (label / labelledby / describedby / roledescription, role) stay
+// author-wins under the KV232 lint, identical to today's behaviour.
+const stateAriaAttributes = new Set([
+  'aria-checked',
+  'aria-current',
+  'aria-disabled',
+  'aria-expanded',
+  'aria-pressed',
+  'aria-selected',
+]);
 
 export function primitiveObjectEntryAttributes(
   entries: readonly ObjectLiteralEntry[],
@@ -244,6 +258,41 @@ function mergeAttribute(
     return author;
   }
 
+  // SPEC.md §4.6: state-bearing aria-* → primitive-wins; check BEFORE the generic
+  // aria-* branch so these never fall through to author.  When the author static
+  // value contradicts the primitive's static render-time value, raise KV317 (error);
+  // otherwise the usual KV232 lint is enough.
+  // aria-disabled is also in logicalOrAttributes — the state-aria check runs first
+  // here, so its OR-merge is handled in this branch instead of below.
+  if (stateAriaAttributes.has(name)) {
+    const primitiveStatic = staticString(primitive.value);
+    const authorStatic = staticString(author.value);
+    // KV317 only when both values are boolean state-aria values ('true'/'false') and
+    // they contradict: e.g. primitive says "true" but author hard-codes "false".
+    // An author value that is not a valid state-aria boolean (e.g. 'author-aria') is
+    // not a frozen-vs-clobbered contradiction — it is simply an invalid override, which
+    // the ordinary KV232 lint already covers.
+    const booleanStateValues = new Set(['true', 'false']);
+    if (
+      primitiveStatic !== undefined &&
+      authorStatic !== undefined &&
+      primitiveStatic !== authorStatic &&
+      booleanStateValues.has(primitiveStatic) &&
+      booleanStateValues.has(authorStatic)
+    ) {
+      diagnostics.push(attributeMergeDiagnostic(options, 'KV317', name, author));
+    } else {
+      diagnostics.push(attributeMergeDiagnostic(options, 'KV232', name, author));
+    }
+    // aria-disabled uses logical-OR in the state-aria path (SPEC.md §4.6):
+    // if either primitive or author is "true", the result is "true".
+    // aria-disabled takes string values ("true"/"false"), not boolean presence.
+    if (name === 'aria-disabled') {
+      return authorValue(name, ariaDisabledOr(primitive.value, author.value), author);
+    }
+    return primitive;
+  }
+
   if (name.startsWith('aria-') || name === 'role') {
     diagnostics.push(attributeMergeDiagnostic(options, 'KV232', name, author));
     return author;
@@ -372,6 +421,20 @@ function logicalOr(
   const right = booleanish(second);
   if (left === undefined || right === undefined) return undefined;
   return left || right ? { kind: 'boolean', value: true } : undefined;
+}
+
+// SPEC.md §4.6 / logicalOrAttributes: aria-disabled uses string "true"/"false" (not
+// boolean presence) so logical-OR must produce the string "true" when either value
+// is truthy, rather than the boolean `true` that renderMergedAttribute renders without
+// a value ("aria-disabled" vs "aria-disabled=\"true\"").
+function ariaDisabledOr(
+  first: MergeableAttributeValue,
+  second: MergeableAttributeValue,
+): MergeableAttributeValue | undefined {
+  const left = booleanish(first);
+  const right = booleanish(second);
+  if (left === undefined || right === undefined) return undefined;
+  return { kind: 'string', value: left || right ? 'true' : 'false' };
 }
 
 function booleanish(value: MergeableAttributeValue): boolean | undefined {

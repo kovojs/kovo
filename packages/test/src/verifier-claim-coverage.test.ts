@@ -114,7 +114,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
           code: 'KV405',
           domain: 'product',
           message: expectedDiagnosticMessage('KV405'),
-          severity: 'warn',
+          severity: 'error',
           site: 'cart.domain.ts:12',
         },
         {
@@ -173,7 +173,7 @@ describe('@kovojs/test verifier declared-claim coverage (KV403/KV405/KV408)', ()
           code: 'KV405',
           domain: 'product',
           message: expectedDiagnosticMessage('KV405'),
-          severity: 'warn',
+          severity: 'error',
           site: 'cart.domain.ts:12',
         },
         {

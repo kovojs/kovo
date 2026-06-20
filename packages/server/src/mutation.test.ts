@@ -274,10 +274,15 @@ describe('server mutation lifecycle', () => {
   });
 
   it('forwards committed mutation Set-Cookie headers in enhanced responses', async () => {
+    // B3: raw single-string overload removed; use typed (name, value, options) builder.
     const signIn = mutation('auth/sign-in', {
       input: s.object({ email: s.string() }),
       handler(input, _request, context) {
-        context.setCookie?.('kovo_session=s1; Path=/; HttpOnly; SameSite=Lax');
+        context.setCookie?.('kovo_session', 's1', {
+          httpOnly: true,
+          path: '/',
+          sameSite: 'lax',
+        });
         context.setCookie?.('kovo_csrf', 'c1', {
           httpOnly: true,
           path: '/',
@@ -309,10 +314,15 @@ describe('server mutation lifecycle', () => {
   });
 
   it('forwards committed mutation Set-Cookie headers in no-JS PRG responses', async () => {
+    // B3: raw single-string overload removed; use typed (name, value, options) builder.
     const signOut = mutation('auth/sign-out', {
       input: s.object({}),
       handler(_input, _request, context) {
-        context.setCookie?.('kovo_session=; Path=/; Max-Age=0; HttpOnly');
+        context.setCookie?.('kovo_session', '', {
+          httpOnly: true,
+          maxAge: 0,
+          path: '/',
+        });
         return 'signed-out';
       },
     });
@@ -328,20 +338,21 @@ describe('server mutation lifecycle', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['kovo_session=; Path=/; Max-Age=0; HttpOnly'],
+        'Set-Cookie': ['kovo_session=; Max-Age=0; Path=/; HttpOnly'],
       },
       status: 303,
     });
   });
 
   it('does not leak mutation Set-Cookie headers when the handler returns a typed failure', async () => {
+    // B3: raw single-string overload removed; use typed (name, value, options) builder.
     const signIn = mutation('auth/sign-in', {
       errors: {
         INVALID_CREDENTIALS: s.object({}),
       },
       input: s.object({ email: s.string() }),
       handler(_input, _request, context) {
-        context.setCookie?.('kovo_session=s1; Path=/; HttpOnly');
+        context.setCookie?.('kovo_session', 's1', { httpOnly: true, path: '/' });
         return context.fail('INVALID_CREDENTIALS', {});
       },
     });
@@ -356,6 +367,30 @@ describe('server mutation lifecycle', () => {
       headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
       status: 422,
     });
+  });
+
+  // B3 (SPEC §9.1.1:846): the raw single-string setCookie overload is removed;
+  // only the typed (name, value, options) builder is exposed.
+  it('B3: setCookie typed builder sets cookies correctly via (name, value, options)', async () => {
+    const signIn = mutation('auth/sign-in', {
+      input: s.object({ email: s.string() }),
+      handler(input, _request, context) {
+        context.setCookie?.('kovo_session', 's1', { httpOnly: true, path: '/', sameSite: 'lax' });
+        return input.email;
+      },
+    });
+
+    const result = await renderMutationResponse(signIn, {
+      rawInput: { email: 'ada@example.test' },
+      request: {},
+    });
+    // Typed builder correctly serializes the cookie.
+    const setCookieHeader = Array.isArray(result.headers['Set-Cookie'])
+      ? result.headers['Set-Cookie'].join('')
+      : String(result.headers['Set-Cookie']);
+    expect(setCookieHeader).toContain('kovo_session=s1');
+    expect(setCookieHeader).toContain('HttpOnly');
+    expect(result.status).toBe(200);
   });
 
   it('derives post-commit rerun queries from declared touches', async () => {

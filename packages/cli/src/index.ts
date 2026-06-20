@@ -3975,6 +3975,7 @@ export function kovoCheck(
       graph.mutations ?? [],
       graph.queries ?? [],
       graph.optimistic ?? [],
+      graph.touchGraph ?? {},
     )) {
       pushFinding(warning, true);
     }
@@ -4013,6 +4014,17 @@ export function kovoCheck(
 
     for (const missed of staticSupersetFailures(graph)) {
       pushFinding(staticSupersetFailureLine(missed), true);
+    }
+
+    // SPEC §11.1/§11.2: KV402 derived-superset cross-check wired to the touch graph.
+    // staticSupersetFailures consumes derivedMutations which the compile pipeline may not
+    // populate; this direct check fires KV402 whenever the touch graph entry for a mutation
+    // key touches a domain that is absent from the mutation's declared domain set (E3 fix).
+    for (const failure of touchGraphMutationSupersetFailures(
+      graph.mutations ?? [],
+      graph.touchGraph ?? {},
+    )) {
+      pushFinding(staticSupersetFailureLine(failure), true);
     }
 
     for (const missed of missedQueryInvalidations(
@@ -4591,6 +4603,7 @@ function optimisticCoverageWarnings(
   mutations: readonly CoreGraph.MutationExplain[],
   queries: readonly CoreGraph.QueryReadSet[],
   coverages: readonly CoreGraph.OptimisticCoverage[],
+  touchGraph: CoreGraph.TouchGraph,
 ): string[] {
   const covered = new Map(
     coverages.map((coverage) => [`${coverage.mutation}\0${coverage.query}`, coverage.status]),
@@ -4604,7 +4617,14 @@ function optimisticCoverageWarnings(
   }
 
   for (const mutation of mutations) {
-    const domains = mutationAffectedDomains(mutation);
+    // SPEC §10.6: KV310 must consult the derived touch graph, not only declared
+    // invalidates/writes. A mutation's touch-graph entry (keyed by mutation.key)
+    // may expose domains that are absent from the declared invalidates/writes sets.
+    const touchEntry = touchGraph[mutation.key];
+    const touchDomains = touchEntry
+      ? new Set(touchEntry.touches.map((touch) => touch.domain))
+      : new Set<string>();
+    const domains = new Set([...mutationAffectedDomains(mutation), ...touchDomains]);
     if (domains.size === 0) continue;
 
     for (const query of queries) {
@@ -4883,6 +4903,41 @@ function missedQueryInvalidations(
       .filter((domain) => !touchedDomains.has(domain) && !mutationDomains.has(domain))
       .map((domain) => ({ domain, query: query.query })),
   );
+}
+
+/**
+ * Direct touch-graph-vs-declared-invalidates superset check (KV402). Fires when a
+ * touch-graph entry whose key matches a declared mutation key touches a domain not
+ * covered by the mutation's declared writes ∪ invalidates ∪ manualInvalidates.
+ * This wires the KV402/KV407 gate to the touch graph end-to-end, bypassing the
+ * derivedMutations compile-pipeline path that is currently unpopulated (E3 fix).
+ * SPEC §11.1/§11.2.
+ */
+function touchGraphMutationSupersetFailures(
+  mutations: readonly CoreGraph.MutationExplain[],
+  touchGraph: CoreGraph.TouchGraph,
+): StaticSupersetFailure[] {
+  const declaredByMutation = new Map(
+    mutations.map((mutation) => [mutation.key, mutationAffectedDomains(mutation)]),
+  );
+  const failures: StaticSupersetFailure[] = [];
+
+  for (const [writeName, entry] of Object.entries(touchGraph)) {
+    const declaredDomains = declaredByMutation.get(writeName);
+    if (declaredDomains === undefined) continue; // not a mutation key entry — skip
+
+    for (const touch of entry.touches) {
+      if (!declaredDomains.has(touch.domain)) {
+        failures.push({ code: 'KV402', domain: touch.domain, mutation: writeName });
+      }
+    }
+  }
+
+  return failures.sort((left, right) => {
+    const leftKey = 'query' in left ? left.query : left.mutation;
+    const rightKey = 'query' in right ? right.query : right.mutation;
+    return left.code.localeCompare(right.code) || leftKey.localeCompare(rightKey) || left.domain.localeCompare(right.domain);
+  });
 }
 
 type StaticSupersetFailure =

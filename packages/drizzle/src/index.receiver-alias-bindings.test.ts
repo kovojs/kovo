@@ -717,14 +717,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses project Drizzle receiver container surface readerRest.select().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.domain.ts:22',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses project Drizzle receiver container surface objectRest.select().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.domain.ts:22',
           },
         ],

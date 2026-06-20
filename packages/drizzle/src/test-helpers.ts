@@ -41,7 +41,7 @@ export function unresolvedQueryLoadFact(query: string, site: string) {
         code: 'KV406',
         message:
           'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-        severity: 'warn',
+        severity: 'error',
         site,
       },
     ],

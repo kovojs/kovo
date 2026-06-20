@@ -121,6 +121,25 @@ describe('route primitives', () => {
     });
   });
 
+  // I1 (ROUTING-NAV-1 / SPEC §6.4): page returning redirect() must produce 303 + Location,
+  // not a 200 "[object Object]" (the pre-fix behaviour).
+  it('returns 303 + Location when a route page returns redirect() (I1 ROUTING-NAV-1)', async () => {
+    // Build the Redirect value directly (redirect() requires a registered route key,
+    // so we construct the { location, status: 303 } shape to match the Redirect interface).
+    const redirectValue: ReturnType<typeof redirect> = { location: '/new-home', status: 303 };
+    const homeRoute = route('/home', {
+      page: () => redirectValue,
+    });
+
+    await expect(
+      renderRoutePageResponse(homeRoute, {}, {}),
+    ).resolves.toEqual({
+      body: '',
+      headers: { Location: '/new-home' },
+      status: 303,
+    });
+  });
+
   it('renders route page and renderer exceptions as stable 500 HTML', async () => {
     const loadError = new Error('private route load detail');
     const renderError = new Error('private render detail');

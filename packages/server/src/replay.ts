@@ -91,10 +91,16 @@ export function createMemoryMutationReplayStore<
       const key = mutationReplayKey(scope, idem);
       if (responses.has(key)) return undefined;
 
-      while (responses.size >= maxEntries) {
-        const oldest = responses.keys().next().value;
-        if (oldest === undefined) break;
-        responses.delete(oldest);
+      // A6 (SPEC §10.3:1063/1065): only evict committed/expired records, never
+      // in-flight pending reservations (evicting a pending slot re-opens the M4
+      // double-execute hazard).
+      if (responses.size >= maxEntries) {
+        for (const [evictKey, evictRecord] of responses) {
+          if (!('pending' in evictRecord)) {
+            responses.delete(evictKey);
+            break;
+          }
+        }
       }
 
       let resolvePending: (response: Response) => void = () => undefined;
@@ -227,8 +233,21 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
-  // The record vanished (expired/evicted/aborted) before we could read it; fall
-  // through to running without a reservation rather than dropping the request.
+  // A6: The record vanished (expired/evicted/aborted) before we could read it.
+  // Re-reserve so this request runs with a proper reservation rather than falling
+  // through unprotected (which would re-open the M4 double-execute hazard).
+  const retryReservation = replay.replayStore.reserve(replay.scope, replay.idem);
+  if (retryReservation) return { kind: 'reserved', reservation: retryReservation };
+
+  // Another request snuck in again — await that one.
+  try {
+    const pending = await replay.replayStore.get(replay.scope, replay.idem);
+    if (pending) return { kind: 'replayed', response: pending };
+  } catch (error) {
+    if (!(error instanceof MutationReplayAbortedError)) throw error;
+  }
+
+  // Still can't reserve; run unprotected rather than dropping.
   return { kind: 'disabled' };
 }
 

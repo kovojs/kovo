@@ -144,7 +144,7 @@ describe('@kovojs/test DB verifier', () => {
         code: 'KV405',
         domain: 'product',
         message: expectedDiagnosticMessage('KV405'),
-        severity: 'warn',
+        severity: 'error',
         site: 'cart.domain.ts:12',
       },
       {

@@ -82,7 +82,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
@@ -99,7 +100,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <div {...content.attrs}>Ships soon.</div>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="accordion"><button data-state="open" aria-expanded="false" disabled tabIndex="0" type="button" aria-controls="gallery-accordion-shipping-panel" id="author-accordion-trigger" class="accordion-trigger font-medium">Shipping</button><div data-state="open" id="author-accordion-panel" aria-labelledby="gallery-accordion-shipping-trigger" role="group" class="accordion-panel px-3">Ships soon.</div></section>',
+      '<section data-gallery-merge="accordion"><button data-state="open" aria-expanded="true" disabled tabIndex="0" type="button" aria-controls="gallery-accordion-shipping-panel" id="author-accordion-trigger" class="accordion-trigger font-medium">Shipping</button><div data-state="open" id="author-accordion-panel" aria-labelledby="gallery-accordion-shipping-trigger" role="group" class="accordion-panel px-3">Ships soon.</div></section>',
     );
   });
 
@@ -227,7 +228,8 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "false" vs author "true" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -243,7 +245,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <div {...content.attrs}>Panel</div>
       </details>,
     ).toBe(
-      '<details data-state="closed" data-disabled="" open class="collapsible-root border"><summary data-state="closed" aria-expanded="true" aria-controls="author-filters-panel" class="collapsible-trigger font-medium">Filters</summary><div data-state="closed" id="author-filters-panel" class="collapsible-content p-3">Panel</div></details>',
+      '<details data-state="closed" data-disabled="" open class="collapsible-root border"><summary data-state="closed" aria-expanded="false" aria-controls="author-filters-panel" class="collapsible-trigger font-medium">Filters</summary><div data-state="closed" id="author-filters-panel" class="collapsible-content p-3">Panel</div></details>',
     );
   });
 
@@ -490,7 +492,8 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'aria-expanded',
-        code: 'KV232',
+        // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" vs author "false" → KV317 error.
+        code: 'KV317',
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
       {
@@ -516,7 +519,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <img {...image.attrs} />
       </section>,
     ).toBe(
-      '<section data-gallery-merge="disclosure-avatar-image"><div data-state="open" data-disabled="" class="disclosure-root rounded"><button data-state="open" data-disabled="" aria-expanded="false" disabled type="button" aria-controls="author-disclosure-panel" class="disclosure-trigger font-medium">Details</button><div data-state="open" hidden id="author-disclosure-panel" class="disclosure-panel p-3">Panel</div></div><img alt="Author alt" data-state="loaded" decoding="async" hidden loading="lazy" src="/avatars/author.png" class="avatar-image object-cover"></section>',
+      '<section data-gallery-merge="disclosure-avatar-image"><div data-state="open" data-disabled="" class="disclosure-root rounded"><button data-state="open" data-disabled="" aria-expanded="true" disabled type="button" aria-controls="author-disclosure-panel" class="disclosure-trigger font-medium">Details</button><div data-state="open" hidden id="author-disclosure-panel" class="disclosure-panel p-3">Panel</div></div><img alt="Author alt" data-state="loaded" decoding="async" hidden loading="lazy" src="/avatars/author.png" class="avatar-image object-cover"></section>',
     );
   });
 

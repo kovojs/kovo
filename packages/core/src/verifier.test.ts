@@ -27,6 +27,8 @@ const standardHeaders = {
 
 describe('webhook verifier kit', () => {
   it('verifies a generic HMAC signature with constant-time comparison inputs', async () => {
+    // B5 fix: tolerance is set and timestampBound is not false, so the timestamp is
+    // prepended to the signed bytes: hmacSha256('secret', '1674087231.hello') → new sig.
     const verifier = hmacSignature({
       encoding: 'hex',
       header: 'x-signature',
@@ -39,7 +41,7 @@ describe('webhook verifier kit', () => {
     });
     const request = {
       headers: {
-        'x-signature': '88aab3ede8d3adf94d26ab90d3bafd4a2083070c3bcce9c014ee04a443847c0b',
+        'x-signature': '78509988eaa146d55bb90115e984b947f415366dffed63fa0aa0907f7b801a0e',
         'x-timestamp': '1674087231',
       },
       now: 1674087231 * 1000,
@@ -158,6 +160,51 @@ describe('webhook verifier kit', () => {
     await expect(verifier.verify({ ...request, now: providerNow - 301_000 })).resolves.toBe(false);
   });
 
+  // B5: SPEC §9.1.1:846 — when tolerance is set, the timestamp must be bound into
+  // the signed bytes so that a captured (signature, body) cannot be replayed with a
+  // different fresh x-timestamp. Without the fix, the same sig + body passes with any
+  // fresh timestamp; after the fix, replaying with a different timestamp is rejected.
+  it('rejects replay with a forged-fresh timestamp when tolerance is configured (B5)', async () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      // body-only payload — does NOT embed the timestamp, the natural default
+      payload: ({ payload }) => payload,
+      secret: 'replay-test-secret',
+      tolerance: {
+        header: 'x-timestamp',
+        seconds: 300,
+      },
+    });
+
+    const originalTimestamp = '1700000000';
+    // signature over '1700000000.test-body' (timestamp auto-prepended by B5 fix)
+    const capturedSignature = 'cf0bf7a18251437c4e0cef93f992afa1f5b63492d999e5813ea445bd0d135670';
+    const originalRequest = {
+      headers: {
+        'x-signature': capturedSignature,
+        'x-timestamp': originalTimestamp,
+      },
+      now: 1700000000 * 1000,
+      payload: 'test-body',
+    } satisfies WebhookVerificationRequest;
+
+    // Valid request with the correct timestamp → must pass
+    await expect(verifier.verify(originalRequest)).resolves.toBe(true);
+
+    // Replay: same (signature, body) but a DIFFERENT fresh timestamp → must be REJECTED.
+    // Before the B5 fix the timestamp was not signed and this wrongly passed.
+    const replayedWithFreshTimestamp = {
+      ...originalRequest,
+      headers: {
+        'x-signature': capturedSignature,
+        'x-timestamp': '1700000100', // fresh-looking, within tolerance window
+      },
+      now: 1700000100 * 1000,
+    };
+    await expect(verifier.verify(replayedWithFreshTimestamp)).resolves.toBe(false);
+  });
+
   it('supports custom verifier escapes for non-HMAC schemes', async () => {
     const verifier = customVerifier('provider-ed25519', (request) =>
       request.headers instanceof Headers
@@ -188,6 +235,9 @@ function timestampedProviderSignature(options: {
     },
     scheme: 'timestamped-provider:v1:hmac-sha256',
     secret: options.secret,
+    // timestamp is already embedded in the payload above; opt out of automatic
+    // timestamp-prefix folding introduced by B5 fix to avoid double-binding.
+    timestampBound: false,
     tolerance: {
       seconds: 300,
       timestamp: (_request, context) => parseProviderSignature(context.signatureHeader).timestamp,

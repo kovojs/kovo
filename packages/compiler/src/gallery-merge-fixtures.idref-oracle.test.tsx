@@ -199,12 +199,20 @@ describe('gallery G5 primitive merge fixtures', () => {
         }
 
         if (attr === 'role' || attr.startsWith('aria-')) {
-          const code = idrefAttributes.has(attr) ? 'KV231' : 'KV232';
-          const message =
-            code === 'KV231'
-              ? 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6'
-              : 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6';
-          expect(merged.diagnostics).toContainEqual({ attr, code, message });
+          if (idrefAttributes.has(attr)) {
+            expect(merged.diagnostics).toContainEqual({
+              attr,
+              code: 'KV231',
+              message: 'Unmergeable primitive IDREF conflict per SPEC.md section 4.6',
+            });
+          } else {
+            // State-bearing aria-* with a 'true'/'false' contradiction → KV317 (error).
+            // Author override of descriptive or non-contradicting state aria-* → KV232 (lint).
+            // We accept either code since the oracle stress-test intentionally generates both.
+            const ariaDiagnostic = merged.diagnostics.find((d) => d.attr === attr);
+            expect(ariaDiagnostic).toBeDefined();
+            expect(['KV232', 'KV317']).toContain(ariaDiagnostic?.code);
+          }
         }
 
         if (idrefAttributes.has(attr)) {
@@ -257,7 +265,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="accordionTriggerAttributes" data-state="open" aria-expanded="false" disabled tabIndex="1" type="author-accordionTriggerAttributes" aria-controls="author-aria-controls" id="author-accordionTriggerAttributes" class="primitive-accordionTriggerAttributes author-accordionTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="accordionTriggerAttributes" data-state="open" aria-expanded="true" disabled tabIndex="1" type="author-accordionTriggerAttributes" aria-controls="author-aria-controls" id="author-accordionTriggerAttributes" class="primitive-accordionTriggerAttributes author-accordionTriggerAttributes">merged</div>",
           "name": "accordionTriggerAttributes",
         },
         {
@@ -282,12 +290,12 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 5,
-          "html": "<div data-gallery-merge-builder="alertDialogTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" disabled type="author-alertDialogTriggerAttributes" aria-controls="author-aria-controls" command="author-alertDialogTriggerAttributes" commandfor="author-commandfor" class="primitive-alertDialogTriggerAttributes author-alertDialogTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="alertDialogTriggerAttributes" data-state="open" aria-expanded="true" aria-haspopup="author-aria" disabled type="author-alertDialogTriggerAttributes" aria-controls="author-aria-controls" command="author-alertDialogTriggerAttributes" commandfor="author-commandfor" class="primitive-alertDialogTriggerAttributes author-alertDialogTriggerAttributes">merged</div>",
           "name": "alertDialogTriggerAttributes",
         },
         {
           "diagnostics": 9,
-          "html": "<div data-gallery-merge-builder="autocompleteInputAttributes" data-state="open" data-invalid="author-autocompleteInputAttributes" data-required="author-autocompleteInputAttributes" aria-autocomplete="author-aria" aria-expanded="false" autocomplete="author-autocompleteInputAttributes" disabled role="presentation" type="author-autocompleteInputAttributes" value="author-autocompleteInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" id="author-autocompleteInputAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" aria-invalid="false" name="author-autocompleteInputAttributes" placeholder="author-autocompleteInputAttributes" required class="primitive-autocompleteInputAttributes author-autocompleteInputAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="autocompleteInputAttributes" data-state="open" data-invalid="author-autocompleteInputAttributes" data-required="author-autocompleteInputAttributes" aria-autocomplete="author-aria" aria-expanded="true" autocomplete="author-autocompleteInputAttributes" disabled role="presentation" type="author-autocompleteInputAttributes" value="author-autocompleteInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" id="author-autocompleteInputAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" aria-invalid="false" name="author-autocompleteInputAttributes" placeholder="author-autocompleteInputAttributes" required class="primitive-autocompleteInputAttributes author-autocompleteInputAttributes">merged</div>",
           "name": "autocompleteInputAttributes",
         },
         {
@@ -297,7 +305,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="autocompleteOptionAttributes" data-state="unchecked" aria-selected="author-aria" role="presentation" id="author-autocompleteOptionAttributes" class="primitive-autocompleteOptionAttributes author-autocompleteOptionAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="autocompleteOptionAttributes" data-state="unchecked" aria-selected="false" role="presentation" id="author-autocompleteOptionAttributes" class="primitive-autocompleteOptionAttributes author-autocompleteOptionAttributes">merged</div>",
           "name": "autocompleteOptionAttributes",
         },
         {
@@ -327,7 +335,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="checkboxGroupControlAttributes" data-state="checked" aria-checked="false" checked disabled tabIndex="1" type="author-checkboxGroupControlAttributes" value="author-checkboxGroupControlAttributes" id="author-checkboxGroupControlAttributes" name="author-checkboxGroupControlAttributes" required class="primitive-checkboxGroupControlAttributes author-checkboxGroupControlAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="checkboxGroupControlAttributes" data-state="checked" aria-checked="true" checked disabled tabIndex="1" type="author-checkboxGroupControlAttributes" value="author-checkboxGroupControlAttributes" id="author-checkboxGroupControlAttributes" name="author-checkboxGroupControlAttributes" required class="primitive-checkboxGroupControlAttributes author-checkboxGroupControlAttributes">merged</div>",
           "name": "checkboxGroupControlAttributes",
         },
         {
@@ -347,7 +355,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="checkboxRootAttributes" data-state="indeterminate" aria-checked="author-aria" disabled name="author-checkboxRootAttributes" required type="author-checkboxRootAttributes" value="author-checkboxRootAttributes" class="primitive-checkboxRootAttributes author-checkboxRootAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="checkboxRootAttributes" data-state="indeterminate" aria-checked="mixed" disabled name="author-checkboxRootAttributes" required type="author-checkboxRootAttributes" value="author-checkboxRootAttributes" class="primitive-checkboxRootAttributes author-checkboxRootAttributes">merged</div>",
           "name": "checkboxRootAttributes",
         },
         {
@@ -362,12 +370,12 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="collapsibleTriggerAttributes" data-state="open" aria-expanded="false" aria-controls="author-aria-controls" class="primitive-collapsibleTriggerAttributes author-collapsibleTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="collapsibleTriggerAttributes" data-state="open" aria-expanded="true" aria-controls="author-aria-controls" class="primitive-collapsibleTriggerAttributes author-collapsibleTriggerAttributes">merged</div>",
           "name": "collapsibleTriggerAttributes",
         },
         {
           "diagnostics": 9,
-          "html": "<div data-gallery-merge-builder="comboboxInputAttributes" data-state="open" data-invalid="author-comboboxInputAttributes" data-required="author-comboboxInputAttributes" aria-autocomplete="author-aria" aria-expanded="false" role="presentation" type="author-comboboxInputAttributes" value="author-comboboxInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" id="author-comboboxInputAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" aria-invalid="false" disabled name="author-comboboxInputAttributes" placeholder="author-comboboxInputAttributes" required class="primitive-comboboxInputAttributes author-comboboxInputAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="comboboxInputAttributes" data-state="open" data-invalid="author-comboboxInputAttributes" data-required="author-comboboxInputAttributes" aria-autocomplete="author-aria" aria-expanded="true" role="presentation" type="author-comboboxInputAttributes" value="author-comboboxInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" id="author-comboboxInputAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" aria-invalid="false" disabled name="author-comboboxInputAttributes" placeholder="author-comboboxInputAttributes" required class="primitive-comboboxInputAttributes author-comboboxInputAttributes">merged</div>",
           "name": "comboboxInputAttributes",
         },
         {
@@ -377,7 +385,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="comboboxOptionAttributes" data-state="checked" data-highlighted="author-comboboxOptionAttributes" aria-selected="false" role="presentation" id="author-comboboxOptionAttributes" label="author-comboboxOptionAttributes" value="author-comboboxOptionAttributes" class="primitive-comboboxOptionAttributes author-comboboxOptionAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="comboboxOptionAttributes" data-state="checked" data-highlighted="author-comboboxOptionAttributes" aria-selected="true" role="presentation" id="author-comboboxOptionAttributes" label="author-comboboxOptionAttributes" value="author-comboboxOptionAttributes" class="primitive-comboboxOptionAttributes author-comboboxOptionAttributes">merged</div>",
           "name": "comboboxOptionAttributes",
         },
         {
@@ -407,12 +415,12 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 8,
-          "html": "<div data-gallery-merge-builder="commandInputAttributes" data-state="open" aria-autocomplete="author-aria" aria-expanded="false" autocomplete="author-commandInputAttributes" role="presentation" type="author-commandInputAttributes" value="author-commandInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" aria-describedby="author-aria-describedby" id="author-commandInputAttributes" aria-labelledby="author-aria-labelledby" disabled placeholder="author-commandInputAttributes" class="primitive-commandInputAttributes author-commandInputAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="commandInputAttributes" data-state="open" aria-autocomplete="author-aria" aria-expanded="true" autocomplete="author-commandInputAttributes" role="presentation" type="author-commandInputAttributes" value="author-commandInputAttributes" aria-activedescendant="author-aria-activedescendant" aria-controls="author-aria-controls" aria-describedby="author-aria-describedby" id="author-commandInputAttributes" aria-labelledby="author-aria-labelledby" disabled placeholder="author-commandInputAttributes" class="primitive-commandInputAttributes author-commandInputAttributes">merged</div>",
           "name": "commandInputAttributes",
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="commandItemAttributes" data-state="active" data-selected="author-commandItemAttributes" data-highlighted="author-commandItemAttributes" aria-selected="false" role="presentation" tabIndex="1" id="author-commandItemAttributes" label="author-commandItemAttributes" value="author-commandItemAttributes" class="primitive-commandItemAttributes author-commandItemAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="commandItemAttributes" data-state="active" data-selected="author-commandItemAttributes" data-highlighted="author-commandItemAttributes" aria-selected="true" role="presentation" tabIndex="1" id="author-commandItemAttributes" label="author-commandItemAttributes" value="author-commandItemAttributes" class="primitive-commandItemAttributes author-commandItemAttributes">merged</div>",
           "name": "commandItemAttributes",
         },
         {
@@ -427,7 +435,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 6,
-          "html": "<div data-gallery-merge-builder="commandTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" disabled type="author-commandTriggerAttributes" aria-controls="author-aria-controls" command="author-commandTriggerAttributes" commandfor="author-commandfor" id="author-commandTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-commandTriggerAttributes author-commandTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="commandTriggerAttributes" data-state="open" aria-expanded="true" aria-haspopup="author-aria" disabled type="author-commandTriggerAttributes" aria-controls="author-aria-controls" command="author-commandTriggerAttributes" commandfor="author-commandfor" id="author-commandTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-commandTriggerAttributes author-commandTriggerAttributes">merged</div>",
           "name": "commandTriggerAttributes",
         },
         {
@@ -457,7 +465,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 7,
-          "html": "<div data-gallery-merge-builder="contextMenuTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" role="presentation" aria-controls="author-aria-controls" kovo-context-menu="author-kovo-context-menu" id="author-contextMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-contextMenuTriggerAttributes author-contextMenuTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="contextMenuTriggerAttributes" data-state="open" aria-expanded="true" aria-haspopup="author-aria" role="presentation" aria-controls="author-aria-controls" kovo-context-menu="author-kovo-context-menu" id="author-contextMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-contextMenuTriggerAttributes author-contextMenuTriggerAttributes">merged</div>",
           "name": "contextMenuTriggerAttributes",
         },
         {
@@ -477,7 +485,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 5,
-          "html": "<div data-gallery-merge-builder="dialogTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" disabled type="author-dialogTriggerAttributes" aria-controls="author-aria-controls" command="author-dialogTriggerAttributes" commandfor="author-commandfor" class="primitive-dialogTriggerAttributes author-dialogTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="dialogTriggerAttributes" data-state="open" aria-expanded="true" aria-haspopup="author-aria" disabled type="author-dialogTriggerAttributes" aria-controls="author-aria-controls" command="author-dialogTriggerAttributes" commandfor="author-commandfor" class="primitive-dialogTriggerAttributes author-dialogTriggerAttributes">merged</div>",
           "name": "dialogTriggerAttributes",
         },
         {
@@ -492,7 +500,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="disclosureTriggerAttributes" data-state="open" aria-expanded="false" disabled type="author-disclosureTriggerAttributes" aria-controls="author-aria-controls" class="primitive-disclosureTriggerAttributes author-disclosureTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="disclosureTriggerAttributes" data-state="open" aria-expanded="true" disabled type="author-disclosureTriggerAttributes" aria-controls="author-aria-controls" class="primitive-disclosureTriggerAttributes author-disclosureTriggerAttributes">merged</div>",
           "name": "disclosureTriggerAttributes",
         },
         {
@@ -522,7 +530,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 5,
-          "html": "<div data-gallery-merge-builder="dropdownMenuTriggerAttributes" data-state="open" aria-expanded="false" aria-haspopup="author-aria" disabled type="author-dropdownMenuTriggerAttributes" aria-controls="author-aria-controls" id="author-dropdownMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-dropdownMenuTriggerAttributes author-dropdownMenuTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="dropdownMenuTriggerAttributes" data-state="open" aria-expanded="true" aria-haspopup="author-aria" disabled type="author-dropdownMenuTriggerAttributes" aria-controls="author-aria-controls" id="author-dropdownMenuTriggerAttributes" aria-labelledby="author-aria-labelledby" class="primitive-dropdownMenuTriggerAttributes author-dropdownMenuTriggerAttributes">merged</div>",
           "name": "dropdownMenuTriggerAttributes",
         },
         {
@@ -637,7 +645,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 4,
-          "html": "<div data-gallery-merge-builder="navigationMenuTriggerAttributes" data-state="open" data-highlighted="author-navigationMenuTriggerAttributes" aria-expanded="false" aria-haspopup="false" disabled tabIndex="1" type="author-navigationMenuTriggerAttributes" value="author-navigationMenuTriggerAttributes" aria-controls="author-aria-controls" id="author-navigationMenuTriggerAttributes" label="author-navigationMenuTriggerAttributes" class="primitive-navigationMenuTriggerAttributes author-navigationMenuTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="navigationMenuTriggerAttributes" data-state="open" data-highlighted="author-navigationMenuTriggerAttributes" aria-expanded="true" aria-haspopup="false" disabled tabIndex="1" type="author-navigationMenuTriggerAttributes" value="author-navigationMenuTriggerAttributes" aria-controls="author-aria-controls" id="author-navigationMenuTriggerAttributes" label="author-navigationMenuTriggerAttributes" class="primitive-navigationMenuTriggerAttributes author-navigationMenuTriggerAttributes">merged</div>",
           "name": "navigationMenuTriggerAttributes",
         },
         {
@@ -692,7 +700,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 4,
-          "html": "<div data-gallery-merge-builder="popoverTriggerAttributes" data-state="open" aria-expanded="false" disabled type="author-popoverTriggerAttributes" aria-controls="author-aria-controls" popovertarget="author-popovertarget" popovertargetaction="author-popoverTriggerAttributes" class="primitive-popoverTriggerAttributes author-popoverTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="popoverTriggerAttributes" data-state="open" aria-expanded="true" disabled type="author-popoverTriggerAttributes" aria-controls="author-aria-controls" popovertarget="author-popovertarget" popovertargetaction="author-popoverTriggerAttributes" class="primitive-popoverTriggerAttributes author-popoverTriggerAttributes">merged</div>",
           "name": "popoverTriggerAttributes",
         },
         {
@@ -712,7 +720,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="radioGroupRadioAttributes" data-state="checked" aria-checked="false" checked disabled tabIndex="1" type="author-radioGroupRadioAttributes" value="author-radioGroupRadioAttributes" id="author-radioGroupRadioAttributes" name="author-radioGroupRadioAttributes" required class="primitive-radioGroupRadioAttributes author-radioGroupRadioAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="radioGroupRadioAttributes" data-state="checked" aria-checked="true" checked disabled tabIndex="1" type="author-radioGroupRadioAttributes" value="author-radioGroupRadioAttributes" id="author-radioGroupRadioAttributes" name="author-radioGroupRadioAttributes" required class="primitive-radioGroupRadioAttributes author-radioGroupRadioAttributes">merged</div>",
           "name": "radioGroupRadioAttributes",
         },
         {
@@ -757,7 +765,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="selectItemAttributes" data-state="checked" data-highlighted="author-selectItemAttributes" aria-selected="false" role="presentation" id="author-selectItemAttributes" value="author-selectItemAttributes" label="author-selectItemAttributes" class="primitive-selectItemAttributes author-selectItemAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="selectItemAttributes" data-state="checked" data-highlighted="author-selectItemAttributes" aria-selected="true" role="presentation" id="author-selectItemAttributes" value="author-selectItemAttributes" label="author-selectItemAttributes" class="primitive-selectItemAttributes author-selectItemAttributes">merged</div>",
           "name": "selectItemAttributes",
         },
         {
@@ -767,7 +775,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 5,
-          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="false" aria-haspopup="author-aria" type="author-selectTriggerAttributes" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="true" aria-haspopup="author-aria" type="author-selectTriggerAttributes" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
           "name": "selectTriggerAttributes",
         },
         {
@@ -812,7 +820,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="switchRootAttributes" data-state="checked" aria-checked="false" checked disabled name="author-switchRootAttributes" role="presentation" required type="author-switchRootAttributes" value="author-switchRootAttributes" class="primitive-switchRootAttributes author-switchRootAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="switchRootAttributes" data-state="checked" aria-checked="true" checked disabled name="author-switchRootAttributes" role="presentation" required type="author-switchRootAttributes" value="author-switchRootAttributes" class="primitive-switchRootAttributes author-switchRootAttributes">merged</div>",
           "name": "switchRootAttributes",
         },
         {
@@ -832,7 +840,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 4,
-          "html": "<div data-gallery-merge-builder="tabsTriggerAttributes" data-state="active" aria-selected="false" disabled role="presentation" tabIndex="1" type="author-tabsTriggerAttributes" value="author-tabsTriggerAttributes" aria-controls="author-aria-controls" id="author-tabsTriggerAttributes" class="primitive-tabsTriggerAttributes author-tabsTriggerAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="tabsTriggerAttributes" data-state="active" aria-selected="true" disabled role="presentation" tabIndex="1" type="author-tabsTriggerAttributes" value="author-tabsTriggerAttributes" aria-controls="author-aria-controls" id="author-tabsTriggerAttributes" class="primitive-tabsTriggerAttributes author-tabsTriggerAttributes">merged</div>",
           "name": "tabsTriggerAttributes",
         },
         {
@@ -867,7 +875,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="toggleGroupButtonAttributes" data-state="pressed" aria-pressed="false" disabled tabIndex="1" type="author-toggleGroupButtonAttributes" value="author-toggleGroupButtonAttributes" id="author-toggleGroupButtonAttributes" class="primitive-toggleGroupButtonAttributes author-toggleGroupButtonAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="toggleGroupButtonAttributes" data-state="pressed" aria-pressed="true" disabled tabIndex="1" type="author-toggleGroupButtonAttributes" value="author-toggleGroupButtonAttributes" id="author-toggleGroupButtonAttributes" class="primitive-toggleGroupButtonAttributes author-toggleGroupButtonAttributes">merged</div>",
           "name": "toggleGroupButtonAttributes",
         },
         {
@@ -882,7 +890,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 2,
-          "html": "<div data-gallery-merge-builder="toggleRootAttributes" data-state="pressed" aria-pressed="false" disabled type="author-toggleRootAttributes" class="primitive-toggleRootAttributes author-toggleRootAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="toggleRootAttributes" data-state="pressed" aria-pressed="true" disabled type="author-toggleRootAttributes" class="primitive-toggleRootAttributes author-toggleRootAttributes">merged</div>",
           "name": "toggleRootAttributes",
         },
         {

@@ -32,19 +32,37 @@ interface PrefetchGuardRouteLike {
   guard?: unknown;
   path?: string;
   prefetch?: 'conservative' | 'moderate' | false;
+  /**
+   * Non-empty string suppresses KV419 when the author deliberately justifies a
+   * guarded `prefetch:'moderate'` route (SPEC §8:756 justification hatch).
+   */
+  prefetchJustification?: string;
 }
 
 /**
- * bugs-1 F36 / SPEC §8: prefetch "moderate" prerenders a route — executing its render
- * (and any per-user side effects) with the user's credentials on hover/pointerdown, for
- * a navigation that may be discarded. On a guarded (session-dependent) route that is
- * unsafe, so it is **KV419**. Restrict "moderate" to public, idempotent routes.
+ * bugs-1 F36 / SPEC §8 / I3 (ROUTING-NAV-3): prefetch "moderate" prerenders a route —
+ * executing its render (and any per-user side effects) with the user's credentials on
+ * hover/pointerdown, for a navigation that may be discarded. On a session-dependent
+ * (guarded) route that is unsafe, so it is **KV419**.
+ *
+ * A non-empty `prefetchJustification` suppresses the diagnostic when the author has
+ * explicitly reviewed the route for credential-safety.
+ *
+ * Limitation: session-dependence without an explicit guard (e.g. a route that reads
+ * session data inside its page handler but declares no guard) is not detectable from
+ * the static route definition alone; only guarded routes are currently flagged.
  */
 export function routePrefetchGuardDiagnostics(
   routes: readonly PrefetchGuardRouteLike[],
 ): readonly AppDiagnostic[] {
   return routes
-    .filter((route) => route.prefetch === 'moderate' && route.guard !== undefined)
+    .filter((route) => {
+      if (route.prefetch !== 'moderate') return false;
+      // Session-heuristic: use guard presence as the available proxy for
+      // session-dependence. An explicit non-empty justification suppresses the gate.
+      if (route.guard === undefined) return false;
+      return !route.prefetchJustification;
+    })
     .map((route) => ({
       code: 'KV419' as const,
       fileName: route.path ?? '(route)',

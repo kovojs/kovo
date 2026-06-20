@@ -113,14 +113,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product/fake-barrel-factories.id could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'packages/drizzle/src/catalog.domain.fixture.ts:20',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
-            severity: 'warn',
+            severity: 'error',
             site: 'packages/drizzle/src/catalog.domain.fixture.ts:20',
           },
         ],
@@ -181,14 +181,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query projection product/fake-factory.id could not be resolved to a Drizzle column or typed sql<T> expression.',
-            severity: 'warn',
+            severity: 'error',
             site: 'catalog.domain.ts:14',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
-            severity: 'warn',
+            severity: 'error',
             site: 'catalog.domain.ts:14',
           },
         ],
@@ -804,14 +804,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query local helper has unresolved Drizzle inspect().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.domain.ts:24',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query local helper has unresolved Drizzle execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.domain.ts:25',
           },
         ],
@@ -1016,7 +1016,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.domain.ts:18',
           },
         ],

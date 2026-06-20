@@ -542,15 +542,42 @@ function shouldClearRemovedValueProperty(element: QueryBindingElement): boolean 
   return element.tagName?.toLowerCase() !== 'progress';
 }
 
+// HTML boolean-presence attributes: falsy value → removeAttribute, truthy → setAttribute('', '').
+// Covers query-source bindings/derives/stamps that emit raw booleans (J3, SPEC §4.6/§4.8).
+const BOOLEAN_PRESENCE_ATTRIBUTES = new Set([
+  'checked',
+  'disabled',
+  'hidden',
+  'indeterminate',
+  'multiple',
+  'open',
+  'readonly',
+  'required',
+  'selected',
+]);
+
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
-  if ((name === 'checked' || name === 'indeterminate') && value === false) {
-    removeBoundAttribute(element, name);
+  // J3 (SPEC §4.6/§4.8): HTML boolean-presence attributes must remove on false/null/undefined,
+  // and set to '' (present) on any other value including true, '', and non-null strings.
+  // This covers both query-source raw booleans and state-derive '' / null patterns.
+  if (BOOLEAN_PRESENCE_ATTRIBUTES.has(name)) {
+    if (value === false || value == null) {
+      removeBoundAttribute(element, name);
+    } else {
+      element.setAttribute?.(name, '');
+      // Sync property mirrors for checked and indeterminate.
+      if (name === 'checked' && element.checked !== undefined) element.checked = true;
+      if (name === 'indeterminate' && element.indeterminate !== undefined)
+        element.indeterminate = true;
+    }
     return;
   }
 
   // SPEC §1 and §5.2: generated/client-updated attributes use the shared output-context model so
   // security behavior remains auditable in emitted code and in the live update path.
+  // F2: kovoBoundAttributeValue returns null for on*/srcdoc sinks — skip the setAttribute entirely.
   const rendered = kovoBoundAttributeValue(name, value);
+  if (rendered === null) return;
   element.setAttribute?.(name, rendered);
   if (name === 'value' && element.value !== undefined) {
     element.value = rendered;
@@ -560,12 +587,6 @@ function setBoundAttribute(element: QueryBindingElement, name: string, value: un
   }
   if ((name === 'scrollTop' || name === 'scrolltop') && element.scrollTop !== undefined) {
     element.scrollTop = Number(value) || 0;
-  }
-  if (name === 'checked' && element.checked !== undefined) {
-    element.checked = true;
-  }
-  if (name === 'indeterminate' && element.indeterminate !== undefined) {
-    element.indeterminate = true;
   }
 }
 

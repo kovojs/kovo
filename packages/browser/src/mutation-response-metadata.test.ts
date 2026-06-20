@@ -31,7 +31,10 @@ describe('mutation response metadata', () => {
     );
   });
 
-  it('creates mutation idempotency keys from crypto or the local fallback', () => {
+  it('mints Kovo-Idem from a cryptographic source (≥128-bit), never a predictable fallback', () => {
+    // SPEC.md §10.3 line 1065 (normative): the client MUST mint a fresh high-entropy token
+    // (≥128 bits from a cryptographic source) per logical submit. randomUUID is preferred; absent
+    // it, getRandomValues must be used — NEVER a predictable Date.now()+counter.
     const cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
 
@@ -40,20 +43,26 @@ describe('mutation response metadata', () => {
         configurable: true,
         value: { randomUUID: () => 'crypto-idem' },
       });
-
       expect(createMutationIdem()).toBe('crypto-idem');
 
+      // No randomUUID, but getRandomValues present → 16 random bytes as hex (≥128 bits), and the
+      // value must NOT be the old predictable timestamp/counter format.
       Object.defineProperty(globalThis, 'crypto', {
         configurable: true,
-        value: undefined,
+        value: {
+          getRandomValues: (array: Uint8Array) => {
+            for (let index = 0; index < array.length; index += 1) array[index] = (index * 37 + 11) & 0xff;
+            return array;
+          },
+        },
       });
+      const fallback = createMutationIdem();
+      expect(fallback).toMatch(/^idem_[0-9a-f]{32}$/); // 16 bytes = 128 bits of hex
+      expect(fallback).not.toMatch(/loyw3v28/); // not Date.now()-derived
 
-      // SPEC.md §9.1: generated enhanced mutation requests always carry Kovo-Idem.
-      const firstFallback = createMutationIdem();
-      const secondFallback = createMutationIdem();
-      expect(firstFallback).toMatch(/^idem_loyw3v28_[0-9a-z]+$/);
-      expect(secondFallback).toMatch(/^idem_loyw3v28_[0-9a-z]+$/);
-      expect(secondFallback).not.toBe(firstFallback);
+      // No cryptographic source at all → throw rather than degrade to a predictable token.
+      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
+      expect(() => createMutationIdem()).toThrow(/cryptographic source/);
     } finally {
       now.mockRestore();
       if (cryptoDescriptor) {

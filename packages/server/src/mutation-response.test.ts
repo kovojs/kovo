@@ -1073,8 +1073,13 @@ describe('server mutation primitives', () => {
     expect(first.body).toBeInstanceOf(ReadableStream);
     await expect(readResponseBody(first.body)).resolves.toContain('first response only');
 
+    // A3 (SPEC §10.3:1063 + §9): the replayed body must contain the full settled stream
+    // (streamed chunks + <kovo-done>), not the head-only empty body committed before the
+    // stream ran. This inverts the previous `toBe('')` assertion that codified the loss.
     const second = await renderMutationEndpointResponse(sendMessage, request);
-    expect(second.body).toBe('');
+    expect(typeof second.body).toBe('string');
+    expect(second.body).toContain('first response only');
+    expect(second.body).toContain('<kovo-done>');
     expect(handlerSpy).toHaveBeenCalledOnce();
     expect(streamSpy).toHaveBeenCalledOnce();
   });
@@ -1122,6 +1127,53 @@ describe('server mutation primitives', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // H4 (SPEC §9): the streaming ReadableStream must have a cancel() handler that
+  // calls return() on the source iterator so generator cleanup (finally) runs on
+  // client disconnect. Uses a sync generator because calling return() on an async
+  // generator that is suspended at an internal `await` (not a `yield`) cannot be
+  // interrupted by V8's async generator protocol.
+  it('H4: reader.cancel() propagates to the source iterator via the cancel handler', async () => {
+    let finallyRan = false;
+
+    const sendMessage = mutation('chat/h4', {
+      input: s.object({ body: s.string() }),
+      handler: (input) => input,
+      *stream() {
+        try {
+          yield stream.text('assistant:a1', 'chunk 1');
+          // chunk 2 is never reached after cancel().
+          yield stream.text('assistant:a1', 'chunk 2 (unreachable)');
+        } finally {
+          finallyRan = true;
+        }
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Stream': 'true' },
+      rawInput: { body: 'hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+
+    // Read the first chunk (generator advances past first yield).
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+
+    // Cancel the stream before reading chunk 2 — simulates client disconnect.
+    // The ReadableStream cancel() handler calls sourceIterator.return(), which
+    // causes the sync generator's finally block to run immediately.
+    await reader.cancel();
+
+    // Flush pending microtasks.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    expect(finallyRan).toBe(true);
   });
 });
 

@@ -747,4 +747,105 @@ describe('server mutation response replay', () => {
     });
     expect(second).toEqual(first);
   });
+
+  // A1 (SPEC §10.3:1061): a replay hit must re-evaluate the session-bound guard chain
+  // against the current principal before re-serving the cached response.
+  it('A1: re-runs the guard before serving a replay hit, rejecting a now-unauthorized principal', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let handlerCalls = 0;
+    const protectedMutation = mutation('cart/add', {
+      guard(request: { authed: boolean; sessionId?: string }) {
+        return request.authed;
+      },
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+
+    // First request: authorized — handler runs, response committed to replay.
+    const first = await renderMutationResponse(protectedMutation, {
+      idem: 'idem_a1',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { authed: true, sessionId: 's1' },
+    });
+    expect(first.status).toBe(200);
+    expect(handlerCalls).toBe(1);
+
+    // Second request: same idem, now unauthorized — must NOT replay the cached 200.
+    const second = await renderMutationResponse(protectedMutation, {
+      idem: 'idem_a1',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { authed: false, sessionId: 's1' },
+    });
+    // Guard rejected — must return 422 UNAUTHORIZED, not the stored 200.
+    expect(second.status).toBe(422);
+    expect(second.body).toContain('UNAUTHORIZED');
+    // Handler must not have run a second time.
+    expect(handlerCalls).toBe(1);
+  });
+
+  // A5 (SPEC §9.1.1:904): a transient 429 (RATE_LIMITED from the handler) must abort the
+  // reservation, not be committed to replay, so a post-window retry re-runs the handler.
+  it('A5: aborts the reservation on 429 so a post-window retry re-runs the handler', async () => {
+    const replayStore = createMemoryMutationReplayStore();
+    let rateLimited = true;
+    let handlerCalls = 0;
+    const rateLimitedMutation = mutation('cart/add', {
+      errors: { RATE_LIMITED: s.object({}) },
+      input: s.object({ productId: s.string() }),
+      handler(input, _request, context) {
+        handlerCalls += 1;
+        if (rateLimited) {
+          // Handler emits a 429 RATE_LIMITED failure (transient shed).
+          return { error: { code: 'RATE_LIMITED', payload: {} }, ok: false as const, status: 429 as const };
+        }
+        return input;
+      },
+    });
+    const base = {
+      idem: 'idem_a5',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's5' },
+    };
+
+    const first = await renderMutationResponse(rateLimitedMutation, base);
+    expect(first.status).toBe(429);
+    expect(handlerCalls).toBe(1);
+
+    // Simulate the rate-limit window passing.
+    rateLimited = false;
+
+    // Post-window retry with the same idem: must NOT replay the stale 429.
+    // The reservation was aborted, so the handler runs again fresh.
+    const second = await renderMutationResponse(rateLimitedMutation, base);
+    expect(second.status).toBe(200);
+    expect(handlerCalls).toBe(2);
+  });
+
+  // A6 (SPEC §10.3:1063/1065): reserve() must never FIFO-evict in-flight pending
+  // reservations; a second reserve() for the same key must return undefined (already taken).
+  it('A6: does not evict in-flight pending reservations under maxEntries pressure', async () => {
+    const replayStore = createMemoryMutationReplayStore({ maxEntries: 2 });
+
+    // Reserve A (pending).
+    const reservationA = replayStore.reserve('scope-a', 'idem_a');
+    expect(reservationA).toBeDefined();
+
+    // Drive 2 more reserves to fill/overflow the store.
+    replayStore.reserve('scope-b', 'idem_b');
+    replayStore.reserve('scope-c', 'idem_c');
+
+    // A must still be present (not evicted) — get() returns a Promise (the pending record).
+    const getA = replayStore.get('scope-a', 'idem_a');
+    expect(getA).toBeDefined();
+
+    // A second reserve for A must return undefined (slot still occupied by the pending reservation).
+    const secondReserveA = replayStore.reserve('scope-a', 'idem_a');
+    expect(secondReserveA).toBeUndefined();
+  });
 });

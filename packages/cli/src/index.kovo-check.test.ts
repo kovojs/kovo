@@ -510,7 +510,8 @@ describe('kovo check', () => {
     });
   });
 
-  it('reports unresolved touch graph sites as KV406', () => {
+  it('fails kovo check on an unresolved (KV406) touch graph site', () => {
+    // SPEC §11.2/§11.3: a statically un-analyzable write site is a build-failing error, not a warn.
     expect(
       kovoCheck({
         touchGraph: {
@@ -527,9 +528,9 @@ describe('kovo check', () => {
         },
       }),
     ).toEqual({
-      exitCode: 0,
+      exitCode: 1,
       output:
-        'kovo-check/v1\nWARN KV406 cart.domain.ts:20 Statically un-analyzable write site; manual touches required.\n',
+        'kovo-check/v1\nERROR KV406 cart.domain.ts:20 Statically un-analyzable write site; manual touches required.\n',
     });
   });
 
@@ -648,7 +649,7 @@ describe('kovo check', () => {
       exitCode: 1,
       output: [
         'kovo-check/v1',
-        'WARN KV405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
+        'ERROR KV405 cart.domain.ts:2 Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
         'ERROR KV402 domain:audit Write touched an undeclared domain. domain=audit observed table audit_log',
         'ERROR KV408 product.domain.ts:9 Declared row key differs from observed row predicate. domain=product expected id observed sku',
         'WARN KV403 domain:order Declared domain was never observed written. domain=order',
@@ -1285,5 +1286,136 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(`kovo: input JSON field touchGraph must be an object: ${graphPath}\n`);
+  });
+
+  // E2 (high) — KV310 optimistic-exhaustiveness must consult the derived touch graph.
+  // SPEC §10.6: KV310 is tied to the *derived* invalidation set, not only declared
+  // invalidates/writes. A mutation with empty declared domains but a cart touch-graph
+  // edge keyed by the mutation key must emit WARN KV310 for any uncovered cart-reading
+  // query. Because the declared domain set is empty while the touch graph shows cart, the
+  // E3 KV402 check also fires (underdeclared touch set) — both are correct.
+  it('derives KV310 gap from touch-graph entry when mutation has no declared invalidates or writes (E2)', () => {
+    expect(
+      kovoCheck({
+        mutations: [{ guards: ['authed'], key: 'cart/add' }], // no writes, no invalidates
+        queries: [{ domains: ['cart'], query: 'cartQuery' }],
+        touchGraph: {
+          'cart/add': {
+            touches: [{ domain: 'cart', keys: null, site: 'a.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'WARN KV310 cart/add -> cartQuery Invalidated query lacks optimistic transform.',
+        'ERROR KV402 cart/add touches cart. Write touched an undeclared domain. Derived touch set is not covered by declared mutation domains.',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  // When the mutation explicitly declares the cart domain in its invalidates, the touch-graph
+  // domain is covered → KV402 absent, KV310 absent (covered by optimistic entry).
+  it('does not emit KV310 when declared invalidates cover the touch-graph domain and optimistic entry exists (E2)', () => {
+    expect(
+      kovoCheck({
+        mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
+        optimistic: [{ mutation: 'cart/add', query: 'cartQuery', status: 'hand-written' }],
+        queries: [{ domains: ['cart'], query: 'cartQuery' }],
+        touchGraph: {
+          'cart/add': {
+            touches: [{ domain: 'cart', keys: null, site: 'a.ts:1', via: 'cart_items' }],
+            unresolved: [],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
+  // E3 (medium) — KV402/KV407 derived-superset cross-check wired to touch graph.
+  // SPEC §11.1/§11.2: when a mutation's touch-graph entry touches a domain absent from
+  // its declared writes ∪ invalidates ∪ manualInvalidates, kovoCheck must emit KV402.
+  // Previously staticSupersetFailures was a no-op because derivedMutations was never
+  // populated by the pipeline; the direct touch-graph check now fires it end-to-end.
+  it('emits KV402 when touch-graph entry for a mutation key touches an undeclared domain (E3)', () => {
+    expect(
+      kovoCheck({
+        mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
+        queries: [
+          { domains: ['cart'], query: 'cartQuery' },
+          { domains: ['audit'], query: 'auditLog' },
+        ],
+        touchGraph: {
+          'cart/add': {
+            touches: [
+              { domain: 'cart', keys: null, site: 'cart.ts:1', via: 'cart_items' },
+              { domain: 'audit', keys: null, site: 'cart.ts:2', via: 'audit_log' },
+            ],
+            unresolved: [],
+          },
+        },
+        optimistic: [
+          { mutation: 'cart/add', query: 'cartQuery', status: 'hand-written' },
+          { mutation: 'cart/add', query: 'auditLog', status: 'await-fragment' },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR KV402 cart/add touches audit. Write touched an undeclared domain. Derived touch set is not covered by declared mutation domains.\n',
+    });
+  });
+
+  it('does not emit KV402 when all touch-graph domains are covered by declared mutation domains (E3)', () => {
+    expect(
+      kovoCheck({
+        mutations: [{ guards: ['authed'], invalidates: ['cart', 'audit'], key: 'cart/add' }],
+        queries: [{ domains: ['cart'], query: 'cartQuery' }],
+        touchGraph: {
+          'cart/add': {
+            touches: [
+              { domain: 'cart', keys: null, site: 'cart.ts:1', via: 'cart_items' },
+              { domain: 'audit', keys: null, site: 'cart.ts:2', via: 'audit_log' },
+            ],
+            unresolved: [],
+          },
+        },
+        optimistic: [
+          { mutation: 'cart/add', query: 'cartQuery', status: 'hand-written' },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
+  });
+
+  it('does not emit KV402 for touch-graph entries whose key is not a declared mutation key (E3)', () => {
+    // cart.addItem is a write-function name, not a mutation key — must not produce spurious KV402
+    expect(
+      kovoCheck({
+        mutations: [{ guards: ['authed'], invalidates: ['cart'], key: 'cart/add' }],
+        queries: [{ domains: ['cart'], query: 'cartQuery' }],
+        touchGraph: {
+          'cart.addItem': {
+            touches: [
+              { domain: 'cart', keys: null, site: 'cart.ts:1', via: 'cart_items' },
+              { domain: 'product', keys: null, site: 'cart.ts:2', via: 'products' },
+            ],
+            unresolved: [],
+          },
+        },
+        optimistic: [{ mutation: 'cart/add', query: 'cartQuery', status: 'hand-written' }],
+      }),
+    ).toEqual({
+      exitCode: 0,
+      output: 'kovo-check/v1\nOK\n',
+    });
   });
 });

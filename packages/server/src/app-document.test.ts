@@ -5,6 +5,198 @@ import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from '
 import { guards } from './guards.js';
 import { stylesheet } from './hints.js';
 import { layout, notFound, route } from './route.js';
+import { computeRenderPlanFingerprint, createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+
+// ─── DEPLOY-3: module-less app always stamps kovo-build ───────────────────────
+
+describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {
+  it('a module-less app stamps a non-empty kovo-build meta (DEPLOY-3)', async () => {
+    // SPEC §5.2.1 rule 2(b): every full page render must carry the build token.
+    // Before the fix, buildToken() returned '' for apps with no client modules,
+    // and the meta was omitted entirely.
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    const app = createApp({ routes: [homeRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    const body = response.body as string;
+    // The meta MUST be present and its content must be non-empty.
+    const match = body.match(/<meta name="kovo-build" content="([^"]*)"/);
+    expect(match).not.toBeNull();
+    expect(match![1]).toBeTruthy();
+  });
+
+  it('render-plan fingerprint flows through registry into the kovo-build meta (D1)', async () => {
+    // Two identical apps whose registries differ only by renderPlanFingerprint must
+    // emit different kovo-build meta content values.
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+
+    const makeApp = (fingerprint: string) => {
+      const registry = createMemoryVersionedClientModuleRegistry({
+        renderPlanFingerprint: fingerprint,
+      });
+      registry.put({ path: '/c/cart.client.js', source: 'export {}', version: 'v1' });
+      const app = createApp({ routes: [homeRoute] });
+      app.clientModules = registry;
+      return app;
+    };
+
+    const fp1 = computeRenderPlanFingerprint({ cart: 'field:id,count' });
+    const fp2 = computeRenderPlanFingerprint({ cart: 'field:id,total' });
+
+    const [resA, resB] = await Promise.all([
+      renderAppRouteDocumentResponse({
+        app: makeApp(fp1),
+        params: {},
+        request: new Request('https://example.test/'),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+      renderAppRouteDocumentResponse({
+        app: makeApp(fp2),
+        params: {},
+        request: new Request('https://example.test/'),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+    ]);
+
+    const extract = (body: string) =>
+      body.match(/<meta name="kovo-build" content="([^"]*)"/)?.[1];
+
+    const tokenA = extract(resA.body as string);
+    const tokenB = extract(resB.body as string);
+
+    expect(tokenA).toBeTruthy();
+    expect(tokenB).toBeTruthy();
+    expect(tokenA).not.toBe(tokenB);
+  });
+});
+
+// ─── K3: session fingerprint derives from session identity, not cookie header ──
+
+describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', () => {
+  it('two requests with the same session id but different extra cookies produce the same fingerprint (K3)', async () => {
+    // SPEC §9.3: fingerprint must be derived from session identity, not full cookie header.
+    // Before the fix, any CSRF/theme cookie churn produced a different fingerprint.
+    const homeRoute = route('/', {
+      page: () => '<main>Home</main>',
+    });
+
+    const makeRequest = (cookies: string) =>
+      new Request('https://example.test/', { headers: { cookie: cookies } });
+
+    // Both requests carry the same session id but different extra cookies.
+    const reqSameSessionA = makeRequest('session=sess-abc; csrf=tok1; theme=dark');
+    const reqSameSessionB = makeRequest('session=sess-abc; csrf=tok2; theme=light');
+
+    // Set up a simple session provider that reads session.id from the cookie.
+    const sessionProvider = (req: Request) => {
+      const cookie = req.headers.get('cookie') ?? '';
+      const match = cookie.match(/session=([^;]+)/);
+      return match ? { id: match[1] } : null;
+    };
+
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider,
+    });
+
+    const [resA, resB] = await Promise.all([
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: reqSameSessionA,
+        route: homeRoute,
+        url: new URL(reqSameSessionA.url),
+      }),
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: reqSameSessionB,
+        route: homeRoute,
+        url: new URL(reqSameSessionB.url),
+      }),
+    ]);
+
+    const extractSession = (body: string) =>
+      body.match(/<meta name="kovo-session" content="([^"]*)"/)?.[1];
+
+    const fpA = extractSession(resA.body as string);
+    const fpB = extractSession(resB.body as string);
+
+    // Same session id → same fingerprint even with different extra cookies.
+    expect(fpA).toBeDefined();
+    expect(fpB).toBeDefined();
+    expect(fpA).toBe(fpB);
+  });
+
+  it('different session ids produce different fingerprints (K3)', async () => {
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+
+    const makeReq = (sessionId: string) =>
+      new Request('https://example.test/', {
+        headers: { cookie: `session=${sessionId}; extra=same` },
+      });
+
+    const sessionProvider = (req: Request) => {
+      const cookie = req.headers.get('cookie') ?? '';
+      const match = cookie.match(/session=([^;]+)/);
+      return match ? { id: match[1] } : null;
+    };
+
+    const app = createApp({ routes: [homeRoute], sessionProvider });
+
+    const [resA, resB] = await Promise.all([
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: makeReq('user-1'),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: makeReq('user-2'),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+    ]);
+
+    const extract = (body: string) =>
+      body.match(/<meta name="kovo-session" content="([^"]*)"/)?.[1];
+
+    const fpA = extract(resA.body as string);
+    const fpB = extract(resB.body as string);
+
+    expect(fpA).toBeDefined();
+    expect(fpB).toBeDefined();
+    expect(fpA).not.toBe(fpB);
+  });
+
+  it('anonymous request (no cookies) produces no kovo-session meta (K3)', async () => {
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    const app = createApp({ routes: [homeRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.body).not.toContain('kovo-session');
+  });
+});
 
 describe('server app document boundary', () => {
   it('assembles matched route documents through app render options', async () => {

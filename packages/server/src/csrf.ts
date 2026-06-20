@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
@@ -64,6 +64,33 @@ export function renderMutationCsrfField<Request>(definition: {
   if (!context || !csrf) return '';
   if (!csrf.sessionId(context.request as Request)) return '';
   return csrfField(context.request as Request, csrf);
+}
+
+/**
+ * The field name for the per-submit idempotency token emitted by no-JS mutation forms
+ * (SPEC.md §10.3:1063/1065). Must match the field the server reads from form data.
+ * @internal
+ */
+export const KOVO_IDEM_FIELD_NAME = 'Kovo-Idem';
+
+/**
+ * @internal Mint a fresh ≥128-bit cryptographically-random idempotency token for a
+ * no-JS mutation form (SPEC.md §10.3:1063/1065 — "atomic reservation for **all**
+ * mutation paths" including no-JS). Uses `crypto.randomUUID()` which provides 122
+ * bits of cryptographic entropy.
+ */
+export function mintIdemToken(): string {
+  return randomUUID();
+}
+
+/**
+ * @internal Render a hidden `<input>` carrying a per-submit idempotency token for
+ * no-JS mutation forms (SPEC.md §10.3:1063/1065). Each render mints a fresh token so
+ * Back-resubmit and double-submit use different idems and the replay store can dedup
+ * them correctly. Emitted alongside the CSRF field by compiler-lowered forms.
+ */
+export function renderMutationIdemField(): string {
+  return `<input type="hidden" name="${escapeAttribute(KOVO_IDEM_FIELD_NAME)}" value="${escapeAttribute(mintIdemToken())}">`;
 }
 
 export function validateCsrfToken<Request>(

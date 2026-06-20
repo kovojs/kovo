@@ -176,7 +176,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses an un-provable destructured Drizzle receiver surface select() without project type proof.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:6',
           },
         ],
@@ -215,7 +215,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses an un-provable destructured Drizzle receiver surface select() without project type proof.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:5',
           },
         ],
@@ -457,7 +457,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query read source for db.from() could not be resolved to a Drizzle table.',
-            severity: 'warn',
+            severity: 'error',
             site: 'queries.ts:6',
           },
         ],
