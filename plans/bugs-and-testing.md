@@ -17,17 +17,28 @@ dependency gates and file-ownership rules so independent work runs concurrently 
   reused at two severities → split to new error KV317) and 5 minors (F2 punctuation; §6.2 `reads:`
   row; §5.2.1/§5.2.2 moved under their §5.2 parent; §13 pointer-list reordered; §13→§14 and
   §5.2.2 numbering gaps closed) are resolved. All cross-refs resolve; `git diff --check` clean.
-- **Contract IMPLEMENTATION (moving bugs-1 from SPEC-only to code): STARTED.**
+- **Contract IMPLEMENTATION (moving bugs-1 from SPEC-only to code): 4 done.**
   - ✅ **F35** — `/_q` reads emit `Cache-Control: private, no-store` + `Vary: Cookie` (`query.ts`);
     unit + integration verified. Closes the shared-cache cross-user leak without the S1 harness.
-  - ✅ **F9** — cookie/header channel rejects CR/LF **and NUL** (`cookies.ts`); the typed cookie
-    builder + CRLF guard were already present, residual (NUL) closed; unit-tested.
-  - ✅ **F2** — the framework never emits an open-redirect `next` (`guards.ts` `sanitizeNext`);
-    unit-tested.
-  - Next contract candidates (each a real medium effort — dispatch/pipeline threading or a
-    browser-loader change): F34 (bfcache `no-store` on guarded docs + `pageshow`), F1 (csrf:false
-    ambient-session strip), F6 (mutation auth-failure 401/`Kovo-Reauth`), F17/F22/F19/F27 (optimistic
-    runtime), F13/F29 (browser delta/rebroadcast). Deep analyzer: KV414, KV314, F36, F30 token.
+  - ✅ **F9** — cookie/header channel rejects CR/LF **and NUL** (`cookies.ts`); typed cookie builder +
+    CRLF guard were already present, residual (NUL) closed; unit-tested.
+  - ✅ **F2** — the framework never emits an open-redirect `next` (`guards.ts` `sanitizeNext`); unit-tested.
+  - ✅ **F34** — guarded route documents carry `Cache-Control: no-store` (`document-core.ts` +
+    `app-document.ts`, keyed on `route.guard`); tsc-clean, unit + integration verified. (The
+    `pageshow`+persisted loader reload is belt-and-suspenders, since no-store already disqualifies
+    bfcache in Chrome/WebKit.)
+  - ✅ **KV314→KV420 collision FIXED** — discovered while wiring the new diagnostics: the Phase-1
+    reconciliation only de-duped within SPEC.md, not against the impl registry
+    (`packages/core/src/diagnostics.ts`), which already defines KV314 ("renderOnce reads an
+    invalidated query"). Renumbered the island-state code to KV420 SPEC-wide; verified the other 9
+    new codes (KV313/316/317/414–419) are free in the impl.
+  - **Structural blocker for the new-diagnostic contracts (KV414/416/417/418/419/420, KV313/316/317):**
+    they are SPEC-only. Each must first be **registered** in `core/src/diagnostics.ts` — the
+    `DiagnosticCode` union **and** the exhaustive definitions `Record` (a missing def breaks tsc) —
+    then its **check** implemented (route-validation for KV419 at `app.ts:91`; analyzer for KV414;
+    compiler-lowering for KV314-class). Also: impl `KV243` is absent from the SPEC §11.3 table.
+  - Next runtime candidates (medium, dispatch/loader): F1 (csrf:false session strip), F6 (auth-redirect
+    401/`Kovo-Reauth` + loader), F17/F22/F19/F27 (optimistic), F13/F29 (browser delta/rebroadcast).
 - **Phase 2 — Test + harness half (Lanes B/C/D): IN PROGRESS.**
   - ✅ **B0** — harness cache-input fix: `integration` task input broadened from
     `packages/test/src/integration/**` to `packages/test/src/**` so the runtime verifier
