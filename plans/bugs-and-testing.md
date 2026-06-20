@@ -342,7 +342,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [~] **C8d** ✅ multi-feature page + `layout()` e2e + **KV316 (F40) implemented** (isomorphic-children compile error, `validateIsomorphicSlotComposition`, 4 tests). _KV420 (F39) registered but blocked: detection is cross-module (parent fragment-target + stateful child island in another file); `compileComponentModule` is single-module with no child-local-state channel — needs a `component→declares-state` RegistryFact + parent JSX-child resolution. Honest blocker, not faked._
 - [x] **C9a** HEAD empty-body + Content-Length (`http-methods`). Passes.
 - [x] **C9b-i** KV-code surfacing — KV227/KV242/KV302 each surface as a blocking 500 teaching document (`diagnostic-dev-document`); KV242 had zero prior coverage. Passes.
-- [ ] **C9b-ii** KV234 cross-pkg prefix · explain-from-extracted-graph (needs S2) · clock freshness (needs `clocks` impl).
+- [~] **C9b-ii** ✅ KV234 package-prefix conflict tested (`package-prefixes.test.ts`); ✅ explain-against-a-real-graph tested (`examples/gallery/src/kovo-explain-contracts.test.ts` writes a real graph + runs `main([explain,...])`). _Clock-freshness gated on the `clocks` feature being built in the separate `agent/kv312-clocks` / `agent/clock-tickbus` / `agent/t2-temporal-kv315` worktrees._
 - [x] **D1** Firefox/WebKit cross-engine matrix (degradation + counter + binding-text-attr). Verified on all 3 engines.
 - [x] **D2** ✅ flake gate (`flaky-reporter.ts` surfaces retried-but-passed; `KOVO_FAIL_ON_FLAKY=1` hard-gates) + B0 input meta-test + snapshot-allowlist meta-test (`tests/*.meta.test.ts`). _Finding: `data-bind-list` is in `KOVO_SEMANTIC_ATTRS` but absent from `isGeneratedOnlyRenderAttribute` — documented gap to fix in `emit/server.ts`._
 - [x] **C3 (IDOR gate)** — KV414 registered in the impl registry; the blocking owner-table gate
@@ -352,7 +352,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
   and F34 (guarded-doc `no-store`), with integration assertions. _C5 (prod-delta · deploy-skew-422 ·
   minified-name survival) still needs **G‑S1** (prod-build browser harness)._
 - [~] **C6** ✅ concurrent-distinct lost-update (`concurrent-distinct-writes`, both writes land, no race); _queue FIFO · multi-transform rebase · derived-optimism (needs S2) still TODO_.
-- [ ] **Deferred** F15 + SSE subscribe-then-revoke — lands with the (unbuilt) SSE feature.
+- [ ] **Deferred** F15 + SSE subscribe-then-revoke — gated on the SSE subscription feature being built in the separate `agent/stream-server` / `agent/stream-browser` / `agent/stream-compiler` worktrees (mutation-response streaming exists + is tested via `streaming-chat.spec.ts`; the subscribe/revoke primitive is the unbuilt piece).
 
 ## Governance & proof (per CLAUDE.md / rules)
 
