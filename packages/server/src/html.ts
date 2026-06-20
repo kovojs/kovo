@@ -18,6 +18,64 @@ export function escapeAttribute(value: string): string {
 }
 
 /**
+ * @internal URL-bearing attribute names whose values must be scheme-checked.
+ * Mirrors `URL_BOUND_ATTRIBUTES` in `packages/browser/src/security-output.ts`
+ * (SPEC.md §4.8, §5.2#10 — server and client must encode identically).
+ */
+const URL_ATTRIBUTE_NAMES = new Set([
+  'href',
+  'src',
+  'action',
+  'formaction',
+  'poster',
+  'background',
+  'cite',
+  'data',
+  'ping',
+  'xlink:href',
+]);
+
+/**
+ * @internal Allowlist of safe URL schemes. Includes `ftp` per SPEC.md §4.8:347
+ * (the browser-side list currently omits `ftp` — the OUT-SINK lane adds it there;
+ * both sides must agree per §5.2#10).
+ */
+const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
+
+/**
+ * Returns true when the URL string carries an unsafe scheme.
+ * Strips control characters ≤ U+0020 (the same normalisation the client uses)
+ * before extracting the scheme so `java\nscript:` is caught.
+ */
+function hasUnsafeUrlScheme(value: string): boolean {
+  const normalized = Array.from(value)
+    .filter((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint > 0x20;
+    })
+    .join('')
+    .toLowerCase();
+  const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
+  if (!match) return false;
+  return !SAFE_URL_SCHEMES.has(match[1] ?? '');
+}
+
+/**
+ * @internal Sanitize and escape a URL-bearing attribute value for server HTML output
+ * (SPEC.md §4.8 + §5.2#10). For URL-bearing attribute names (href, src, action,
+ * formaction, poster, background, cite, data, ping, xlink:href) this returns `'#'`
+ * when the value carries an unsafe scheme, otherwise the standard `escapeAttribute`
+ * result. For all other attribute names it falls through to plain `escapeAttribute`.
+ * Exported only for compiler-emitted code and in-repo callers, not app authors.
+ */
+export function safeUrlAttribute(name: string, value: string): string {
+  if (URL_ATTRIBUTE_NAMES.has(name.toLowerCase()) && hasUnsafeUrlScheme(value)) {
+    return '#';
+  }
+  return escapeAttribute(value);
+}
+
+/**
  * @internal HTML-coercion helper the compiler injects into emitted server modules
  * (SPEC.md §6.x rendering). SECURITY (SECURITY_FINDINGS.md C1): safe coercion for an
  * interpolated text child. Mirrors the jsx runtime's renderJsxChildren coercion
