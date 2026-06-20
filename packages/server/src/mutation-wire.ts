@@ -193,9 +193,17 @@ export interface NoJsMutationRequest<
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
   csrf?: CsrfValidationOptions<Request>;
+  /**
+   * Idempotency key for dedup of no-JS form submissions (A2, SPEC §10.3:1063).
+   * Read from the hidden `Kovo-Idem` form field emitted by the SRV-OUTPUT lane.
+   * Falls back to the `Kovo-Idem` header if the field is absent.
+   */
+  idem?: string;
   rawInput: unknown;
   redirectTo: string | ((result: MutationSuccess<Value>) => string);
   renderFailurePage?: (failure: MutationFail) => string | Promise<string>;
+  /** Replay store for no-JS dedup (A2, SPEC §10.3:1063). Typed as a separate interface to allow 303 responses. */
+  replayStore?: NoJsMutationReplayStore;
   request: Request;
 }
 
@@ -209,6 +217,22 @@ export interface NoJsMutationResponse extends ServerResponseBase<
   MutationResponseHeaders,
   303 | 422 | 429 | 500
 > {}
+
+/**
+ * @internal Replay store for no-JS form submissions (A2, SPEC §10.3:1063).
+ * Typed separately from the enhanced path's `MutationReplayStore` to accommodate
+ * 303 redirect responses in addition to 422/429/500 failures.
+ */
+export interface NoJsMutationReplayStore {
+  get(scope: string, idem: string): Promise<NoJsMutationResponse | undefined> | NoJsMutationResponse | undefined;
+  reserve(scope: string, idem: string): NoJsMutationReplayReservation | undefined;
+}
+
+/** @internal Reservation handle for a no-JS replay record. */
+export interface NoJsMutationReplayReservation {
+  abort?(): void;
+  commit(response: NoJsMutationResponse): void;
+}
 
 /**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). The unified mutation-endpoint

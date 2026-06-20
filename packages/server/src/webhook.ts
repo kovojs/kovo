@@ -55,6 +55,8 @@ export interface WebhookReplayStore {
 
 /** @internal */
 export interface WebhookReplayReservation {
+  /** Release a pending reservation without committing, so a retry can re-run the handler (A4). */
+  abort?(): void;
   commit(response: WebhookWireResponse): void;
 }
 
@@ -314,22 +316,15 @@ export async function runWebhook<
       };
     }
 
-    const response = storeWebhookReplay(
-      declaration.webhookDefinition.replayStore,
-      replayScope,
-      idem,
-      {
-        body: 'Internal Server Error',
-        headers: webhookResponseHeaders(idem),
-        status: 500,
-      },
-      reservation,
-    );
+    // A4 (SPEC §9.1:850): on an unexpected exception, abort the reservation so
+    // a provider retry can re-run the handler fresh. Only explicit fail()/
+    // WebhookRollback results and successes get committed to the replay store.
+    reservation?.abort?.();
 
     return {
       changes: [],
       replayed: false,
-      response: responseFromWire(response),
+      response: webhookResponse(500, 'Internal Server Error'),
     };
   }
 }

@@ -5,7 +5,7 @@ import type {
   QueryRegistry,
 } from '@kovojs/core';
 import { buildQueryDelta, queryDeltaIsSmaller } from '@kovojs/core/internal/query-delta';
-import { serializeCookie, validateRawSetCookie, type CookieOptions } from './cookies.js';
+import { serializeCookie, type CookieOptions } from './cookies.js';
 import { mutationCsrfOptions, validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import {
   changeRecordTouchesQueryInstance,
@@ -65,6 +65,7 @@ import {
   mutationReplayContext,
   readMutationReplay,
   reserveMutationReplayBeforeRun,
+  type MutationReplayReservation,
 } from './replay.js';
 import {
   isSchemaValidationError,
@@ -219,10 +220,15 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
     domain: Domain<DomainKey>,
     options?: InvalidateOptions<Input>,
   ): ChangeRecord<DomainKey, Input>;
-  setCookie?: {
-    (rawSetCookie: string): void;
-    (name: string, value: string, options?: CookieOptions): void;
-  };
+  /**
+   * Set a typed `Set-Cookie` header via the safe typed builder (SPEC §9.1.1:846).
+   * Pass `(name, value, options?)`. The raw single-string overload has been removed
+   * (B3) — the typed builder is the only supported call form.
+   */
+  setCookie?: (name: string, value: string, options?: CookieOptions) => void;
+  // NOTE: `value` is not optional in the type to prevent raw-string abuse; the
+  // runtime implementation enforces this. External code that previously called
+  // setCookie(rawString) must migrate to the (name, value, options) form.
 }
 
 export interface WriteDefinition<
@@ -562,13 +568,10 @@ export async function runMutation<
 
   const manualInvalidations: ChangeRecord[] = [];
   const responseHeaders: MutationResponseHeaders = {};
-  function setCookie(rawSetCookie: string): void;
-  function setCookie(name: string, value: string, options?: CookieOptions): void;
-  function setCookie(nameOrRawSetCookie: string, value?: string, options?: CookieOptions): void {
-    const cookie =
-      value === undefined
-        ? validateRawSetCookie(nameOrRawSetCookie)
-        : serializeCookie(nameOrRawSetCookie, value, options);
+  // B3 (SPEC §9.1.1:846): only the typed (name, value, options) builder is exposed;
+  // the raw single-string overload has been removed to prevent arbitrary attribute injection.
+  function setCookie(name: string, value: string, options?: CookieOptions): void {
+    const cookie = serializeCookie(name, value, options);
     appendResponseHeader(responseHeaders, 'Set-Cookie', cookie);
   }
 
@@ -689,6 +692,32 @@ export async function renderMutationResponse<
     };
   }
 
+  // A1 (SPEC §10.3:1061): evaluate the session-bound guard chain against the
+  // *current* principal BEFORE checking the replay store. A replay hit must not
+  // bypass authorization — the cached response was produced for an authorized
+  // principal; if that principal's role has since been revoked, we must reject.
+  // Order: CSRF (above) → lifecycle/guard → replay reserve/lookup → handler.
+  const lifecycleRequestForGuard = await resolveLifecycleRequest(
+    wireRequest.request,
+    runMutationOptions(wireRequest.csrf, wireRequest),
+  );
+  const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
+  if (guardFailure) {
+    return {
+      body: await renderFailureFragment(
+        {
+          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+          ok: false,
+          ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
+          status: guardFailure.status,
+        },
+        wireRequest,
+      ),
+      headers: mutationWireResponseHeaders(wireRequest),
+      status: guardFailure.status,
+    };
+  }
+
   // Security finding M4: reserve the replay record BEFORE running the handler
   // (mirroring the webhook get→reserve→run order) so concurrent Kovo-Idem
   // duplicates coalesce onto one handler execution. The replay scope folds in the
@@ -728,9 +757,10 @@ export async function renderMutationResponse<
   }
 
   if (!result.ok) {
-    if (result.error.code === 'VALIDATION') {
-      // Pure schema validation failures are not replayable: abandon the
-      // reservation so a corrected retry runs the handler.
+    if (result.error.code === 'VALIDATION' || result.status === 429) {
+      // Pure schema validation failures and transient 429 rate-limits are not
+      // replayable (SPEC §9.1.1:904, A5): abandon the reservation so a corrected
+      // retry or post-window retry runs the handler fresh.
       reservation?.abort?.();
       return {
         body: await renderFailureFragment(result, wireRequest),
@@ -774,7 +804,10 @@ export async function renderMutationResponse<
   }
 
   if (wireRequest.stream === true && definition.stream) {
-    reservation?.commit(finalResponse);
+    // A3 (SPEC §10.3:1063 + §9): do NOT commit the head-only finalResponse before
+    // the stream runs — that would replay an unterminated empty body to duplicates.
+    // Instead pass the reservation into the streamer so it can commit the full
+    // settled body (head + streamed chunks + <kovo-done>) after the stream completes.
     return renderStreamingMutationWireResponse(
       definition.stream({
         input: result.input,
@@ -782,6 +815,7 @@ export async function renderMutationResponse<
         result,
       }),
       finalResponse,
+      reservation,
     );
   }
 
@@ -856,27 +890,73 @@ async function renderSuccessfulMutationWireResponse<
 function renderStreamingMutationWireResponse(
   chunks: MutationStreamSource<unknown, unknown, unknown>,
   finalResponse: BufferedMutationWireResponse,
+  reservation?: MutationReplayReservation<BufferedMutationWireResponse>,
 ): MutationWireResponse {
   const encoder = new TextEncoder();
-  const source = coalesceMutationStreamChunks(chunks);
+  // H4 (SPEC §9): retain a reference to the raw source iterator so the cancel
+  // handler can call return() on it directly — the coalesce layer's inner await
+  // on a pending read won't propagate the cancel signal automatically.
+  const sourceIterator = toAsyncIterator(chunks);
+  const sourceIterable: AsyncIterable<MutationStreamChunk> = {
+    [Symbol.asyncIterator]: () => sourceIterator,
+  };
+  const source = coalesceMutationStreamChunks(sourceIterable);
+  const iterator = source[Symbol.asyncIterator]();
 
   return {
     body: new ReadableStream<Uint8Array>({
       async start(controller) {
+        // A3 (SPEC §10.3:1063): buffer all emitted bytes so we can commit the full
+        // settled body (stream chunks + finalResponse.body + <kovo-done>) to the
+        // replay store after the stream completes, not the head-only body before.
+        const buffered: string[] = [];
+
+        const enqueue = (text: string): void => {
+          const line = `${text}\n`;
+          buffered.push(line);
+          controller.enqueue(encoder.encode(line));
+        };
+
         try {
-          for await (const chunk of source) {
-            controller.enqueue(encoder.encode(`${renderMutationStreamChunk(chunk)}\n`));
+          for (;;) {
+            const { done, value: chunk } = await iterator.next();
+            if (done) break;
+            enqueue(renderMutationStreamChunk(chunk));
             if (chunk.kind === 'done') {
               controller.close();
+              // Commit the full settled body so replays re-serve the complete stream.
+              reservation?.commit({
+                body: buffered.join(''),
+                headers: finalResponse.headers,
+                status: finalResponse.status,
+              });
               return;
             }
           }
-          if (finalResponse.body) controller.enqueue(encoder.encode(`${finalResponse.body}\n`));
-          controller.enqueue(encoder.encode(`${renderDoneWireHtml()}\n`));
+          // Generator exhausted without an explicit done chunk; emit the reconciled
+          // fragment body (pre-rendered query/fragment HTML) and kovo-done.
+          if (finalResponse.body) enqueue(finalResponse.body);
+          enqueue(renderDoneWireHtml());
           controller.close();
+          // Commit after the generator exhausted (no explicit done chunk).
+          reservation?.commit({
+            body: buffered.join(''),
+            headers: finalResponse.headers,
+            status: finalResponse.status,
+          });
         } catch (error) {
           controller.error(error);
+          // Do not commit on error; let the reservation remain pending/aborted.
+          reservation?.abort?.();
         }
+      },
+      cancel() {
+        // H4 (SPEC §9): propagate client disconnect to the author generator so its
+        // finally block runs. We call return() on the raw sourceIterator (not the
+        // coalesced iterator) because the coalesce layer holds a pending .next() call
+        // that won't resolve until the source yields — the return() must reach the
+        // source generator directly to interrupt it.
+        void sourceIterator.return?.();
       },
     }),
     headers: finalResponse.headers,
@@ -1148,6 +1228,10 @@ function mergeMutationRegistryFacts(
  * redirect on success, or a re-rendered failure page. The fallback half of
  * `renderMutationEndpointResponse` (SPEC §6.3).
  *
+ * Wires the replay reservation lifecycle so duplicate no-JS form submissions
+ * (Back-resubmit / double-click) are deduplicated via the `Kovo-Idem` hidden
+ * field (A2, SPEC §10.3:1063).
+ *
  * @param definition - The mutation to run.
  * @param noJsRequest - Raw input, request, `redirectTo`, and optional failure-page renderer.
  * @returns A `NoJsMutationResponse` (redirect or document).
@@ -1164,13 +1248,111 @@ export async function renderNoJsMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   noJsRequest: NoJsMutationRequest<Request, Value>,
 ): Promise<NoJsMutationResponse> {
+  // A2 (SPEC §10.3:1063): derive the idem from the hidden `Kovo-Idem` form field
+  // (emitted by SRV-OUTPUT) or from the explicit `idem` option; also accept it from
+  // the raw input object for callers that pre-parse form bodies.
+  const csrf = mutationCsrfOptions(definition, noJsRequest.csrf);
+  const idem =
+    noJsRequest.idem ??
+    (typeof noJsRequest.rawInput === 'object' &&
+    noJsRequest.rawInput !== null &&
+    'Kovo-Idem' in noJsRequest.rawInput
+      ? String((noJsRequest.rawInput as Record<string, unknown>)['Kovo-Idem'])
+      : undefined);
+
+  // A1 (SPEC §10.3:1061) + A2: guard runs before replay check in the no-JS path too.
+  const lifecycleOpts = runMutationOptions(noJsRequest.csrf, noJsRequest);
+  const lifecycleRequestForGuard = await resolveLifecycleRequest(noJsRequest.request, lifecycleOpts);
+  const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
+  if (guardFailure) {
+    const body = noJsRequest.renderFailurePage
+      ? await noJsRequest.renderFailurePage({
+          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+          ok: false,
+          status: guardFailure.status,
+        })
+      : renderDefaultFailurePage({
+          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+          ok: false,
+          status: guardFailure.status,
+        });
+    return {
+      body,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: guardFailure.status,
+    };
+  }
+
+  // A2 + GAP4-2: derive the replay scope and run reserve/replay lifecycle.
+  // For `csrf:false` mutations with no session, use the mutation key as the scope
+  // so a stable Kovo-Idem still dedups duplicate external POSTs (SPEC §10.3:1062-1066).
+  const noJsScope = noJsReplayScopeFor(csrf, definition.key, noJsRequest.request);
+
+  if (idem && noJsRequest.replayStore) {
+    const replayed = await noJsRequest.replayStore.get(noJsScope, idem);
+    if (replayed) return replayed;
+
+    const reservation = noJsRequest.replayStore.reserve(noJsScope, idem);
+
+    let result: MutationResult<Value>;
+    try {
+      result = await runMutation(
+        definition,
+        noJsRequest.rawInput,
+        noJsRequest.request,
+        lifecycleOpts,
+      );
+    } catch (error) {
+      reservation?.abort?.();
+      reportServerError(noJsRequest.onError, error, {
+        mutationKey: definition.key,
+        operation: 'no-js-mutation-handler',
+        request: noJsRequest.request,
+      });
+      return noJsMutationServerErrorResponse();
+    }
+
+    if (!result.ok) {
+      reservation?.abort?.();
+      const body = noJsRequest.renderFailurePage
+        ? await noJsRequest.renderFailurePage(result)
+        : renderDefaultFailurePage(result);
+      return {
+        body,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          ...retryAfterHeaders(result),
+        },
+        status: result.status,
+      };
+    }
+
+    const successResponse: NoJsMutationResponse = {
+      body: '',
+      headers: mergeMutationResponseHeaders(
+        {
+          'Cache-Control': 'no-store',
+          Location:
+            typeof noJsRequest.redirectTo === 'function'
+              ? noJsRequest.redirectTo(result)
+              : noJsRequest.redirectTo,
+        },
+        result.responseHeaders,
+      ),
+      status: 303,
+    };
+    reservation?.commit(successResponse);
+    return successResponse;
+  }
+
+  // No replay store or idem — plain path (no dedup protection).
   let result: MutationResult<Value>;
   try {
     result = await runMutation(
       definition,
       noJsRequest.rawInput,
       noJsRequest.request,
-      runMutationOptions(noJsRequest.csrf, noJsRequest),
+      lifecycleOpts,
     );
   } catch (error) {
     reportServerError(noJsRequest.onError, error, {
@@ -1210,6 +1392,44 @@ export async function renderNoJsMutationResponse<
     ),
     status: 303,
   };
+}
+
+/**
+ * Derive the replay scope for the no-JS form path (A2 + GAP4-2, SPEC §10.3:1062-1066).
+ *
+ * Scopes by (mutation-key, session-id) when a session is available; for `csrf:false`
+ * or sessionless mutations, falls back to a mutation-key namespace so a stable
+ * `Kovo-Idem` still dedups duplicate external POSTs.
+ */
+function noJsReplayScopeFor<Request>(
+  csrf: CsrfValidationOptions<Request> | false | undefined,
+  mutationKey: string,
+  request: Request,
+): string {
+  let sessionScope: string | null = null;
+
+  if (csrf !== false && csrf !== undefined && 'sessionId' in csrf) {
+    const id = (csrf as { sessionId(r: Request): string | undefined }).sessionId(request);
+    if (id) sessionScope = id;
+  }
+
+  if (!sessionScope && typeof request === 'object' && request !== null) {
+    const req = request as Record<string, unknown>;
+    if (typeof req['sessionId'] === 'string' && req['sessionId'] !== '') {
+      sessionScope = req['sessionId'];
+    } else if (
+      typeof req['session'] === 'object' &&
+      req['session'] !== null &&
+      typeof (req['session'] as Record<string, unknown>)['id'] === 'string' &&
+      (req['session'] as Record<string, unknown>)['id'] !== ''
+    ) {
+      sessionScope = (req['session'] as Record<string, unknown>)['id'] as string;
+    }
+  }
+
+  return sessionScope !== null
+    ? `${mutationKey}\0${sessionScope}`
+    : `nojs:${mutationKey}`;
 }
 
 function isMutationFail(value: unknown): value is MutationFail {
