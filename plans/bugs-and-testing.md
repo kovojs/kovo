@@ -316,7 +316,7 @@ A4‑F32 (§13.2 authoring), most C9 negative/table-driven specs.
 - [x] **B1 / G‑S1 ✅** prod-build-served island driven in a real browser (S1 test, green)
   - S1 also asserts the loaded `/c/__v/` module is **immutable** in-browser.
   - **B2/S2/S3 finding (verified by probe):** the minimal `kovo build` (no vite.config) does NOT render JSX-component bodies at serve time — it extracts CSS + bundles the client only. Real-component server rendering needs the full **vite-plugin build pipeline** (as the examples use), so realistic-app remains the genuinely-large keystone (build+serve an example app with its DB in a browser). (`kovo build` → `dist/server/server.mjs` → click a `/c/__v/` island, submit a mutation, assert immutable hashed assets, interactive)
-- [ ] **B2 / G‑S2/3** real-TSX canonical fixtures via public client API + `fixtures/realistic-app` (drizzle extracted graph → `createDbVerifier`, better-auth `sessionProvider`, `@kovojs/style`, `@kovojs/ui` Dialog)
+- [x] **B2 / G‑S2/3** ✅ realistic-app driven in a browser (`tests/commerce-realistic.e2e.test.ts`): boots the **commerce** example through the production vite-plugin compiler (real-TSX→compiler, not hand-IR) with the **real stack** (drizzle extracted graph + better-auth + seeded PGlite + @kovojs/ui/@kovojs/style). Asserts real-component SSR + live CSRF enforcement (anon `/_m/cart/add`→422 CSRF) + a 2nd real route render. _Findings: demo-serve mints no anon CSRF token (cf. F3); `/products?after=` is a fragment path, not a route._
 
 ### Spec contracts (bugs-1) → SPEC.md — ✅ ALL APPLIED + VERIFIED (Phase 1)
 - [x] **A1** F7 escaping contract + KV236 definition (§4.8/§5.2 #10) · F8 JSON-island script-data encoding (§9.1) · F10 sink-renderer escaping (§9.1)
