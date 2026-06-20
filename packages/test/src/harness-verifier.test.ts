@@ -87,7 +87,7 @@ describe('@kovojs/test harness verifier integration', () => {
         code: 'KV405',
         domain: 'product',
         message: expectedDiagnosticMessage('KV405'),
-        severity: 'warn',
+        severity: 'error',
         site: 'cart.domain.ts:2',
       },
       {

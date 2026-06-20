@@ -40,7 +40,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.update().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:6',
           },
         ],
@@ -239,7 +239,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:20',
           },
         ],
@@ -293,7 +293,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:12',
           },
         ],
@@ -342,7 +342,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:16',
           },
         ],
@@ -394,7 +394,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:16',
           },
         ],
@@ -445,7 +445,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:15',
           },
         ],
@@ -495,7 +495,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query load callback could not be statically resolved.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:16',
           },
         ],

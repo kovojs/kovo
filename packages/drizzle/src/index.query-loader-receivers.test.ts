@@ -84,21 +84,21 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.update().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
         ],
@@ -156,35 +156,35 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses Drizzle relational query API without static projection.',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.update().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver nested to helper runReport().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
         ],
@@ -242,35 +242,35 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:12',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method update().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:12',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:12',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method $count().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:12',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method query().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:12',
           },
         ],
@@ -313,7 +313,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:7',
           },
         ],
@@ -369,14 +369,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:5',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:5',
           },
         ],
@@ -422,14 +422,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method execute().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:6',
           },
           {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query uses detached Drizzle receiver method <computed>().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:6',
           },
         ],
@@ -579,7 +579,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver db to helper loadProducts().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:9',
           },
         ],
@@ -625,7 +625,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver db to helper productServices.loadProducts().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
         ],
@@ -674,7 +674,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver db to helper loadProducts().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:14',
           },
         ],
@@ -717,7 +717,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to helper loadProducts().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:7',
           },
         ],
@@ -766,7 +766,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to local helper runReport().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
         ],
@@ -817,7 +817,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query passes Drizzle receiver context to local helper runReport().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:11',
           },
         ],
@@ -1023,7 +1023,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             code: 'KV406',
             message:
               'Statically un-analyzable write site; manual touches required. Query local helper touches Drizzle table via update().',
-            severity: 'warn',
+            severity: 'error',
             site: 'product.queries.ts:8',
           },
         ],
