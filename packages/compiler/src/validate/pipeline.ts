@@ -11,6 +11,7 @@ import {
   validateFragmentTargetInputs,
   validateHandAuthoredFragmentTargetStamp,
   validateIsomorphicSlotComposition,
+  validateNestedStatefulIslandInRefreshTarget,
   validateRemovedFragmentTargetOption,
   validateReservedQueryNames,
   validateServerFactsInLocalState,
@@ -68,6 +69,8 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ model, options, source }) =>
     validateIsomorphicSlotComposition(source, model, options.fileName),
   ({ model, options, source }) => validateFragmentTargetChildren(source, model, options.fileName),
+  ({ model, options, source }) =>
+    validateNestedStatefulIslandInRefreshTarget(source, model, options.fileName),
   ({ model, options, source }) => validateDataBindings(source, model, options),
   ({ options, originalModel }) =>
     validateStampExpressionDrift(options.source, originalModel, options),

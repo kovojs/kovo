@@ -5,7 +5,9 @@ import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.j
 import { capturesUnserializableReferences } from '../lower/handlers.js';
 import {
   callExpressions,
+  componentDeclaresMutableLocalState,
   componentFragmentTargetNames,
+  componentHasInferredFragmentTarget,
   componentOptionObjectKeys,
   componentOptionStaticValue,
   componentHasInferredServerRefreshTarget,
@@ -16,8 +18,10 @@ import {
   jsxExpressions,
   jsxElementChildBody,
   mutationHandlers,
+  type ComponentModel,
   type ComponentModuleModel,
   type JsxElementChildBody,
+  type JsxElementModel,
   jsxElements,
   type PropertyAccessPathModel,
   type RenderInputModel,
@@ -232,6 +236,89 @@ export function validateFragmentTargetChildren(
       .filter((body) => fragmentTargetChildCapturesUnserializableValue(model, body))
       .map((body) => kv230Diagnostic(fileName, source, name, body)),
   );
+}
+
+// SPEC §4.5/§4.9/§9.1 (KV420): a fragment morph carries no serialization of island-local
+// `kovo-state`, so when a parent's inferred server-refreshable target re-renders its full subtree
+// from (declared queries ∪ stamped props), any nested island that declares mutable local `state` is
+// re-emitted at its render-time default and its live value is clobbered. The compiler therefore
+// forbids the position: an island declaring local `state` may not render inside another component's
+// server-refreshable fragment target.
+//
+// SCOPE (same-module): this validator resolves child component tags inside a refresh target only
+// against sibling components declared in the SAME module — `RegistryFacts.components` carries no
+// per-component "declares-local-state" fact, so a stateful child imported from another module cannot
+// be classified here. The cross-module case is intentionally left for a registry-facts extension
+// (see the F39/KV420 plan note); a precise same-module rule is preferred over a broad one that would
+// false-positive on imported components whose state we cannot see.
+export function validateNestedStatefulIslandInRefreshTarget(
+  source: string,
+  model: ComponentModuleModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  const statefulSiblingsByName = new Map<string, ComponentModel>();
+  for (const component of model.components) {
+    if (component.localName === undefined) continue;
+    if (componentDeclaresMutableLocalState(component, model)) {
+      statefulSiblingsByName.set(component.localName, component);
+    }
+  }
+  if (statefulSiblingsByName.size === 0) return [];
+
+  const diagnostics: CompilerDiagnostic[] = [];
+  for (const parent of model.components) {
+    if (!componentHasInferredFragmentTarget(parent)) continue;
+
+    for (const childTag of componentRefreshTargetChildComponentTags(model, parent)) {
+      const childComponent = statefulSiblingsByName.get(childTag.tag);
+      // A component never trips KV420 against its own recursive render-time reference.
+      if (!childComponent || childComponent.localName === parent.localName) continue;
+
+      diagnostics.push({
+        ...diagnosticFor(
+          fileName,
+          'KV420',
+          source,
+          childTag.openingTagNameStart,
+          childTag.openingTagNameEnd - childTag.openingTagNameStart,
+        ),
+        message: `${diagnosticDefinitions.KV420.message} ${childTag.tag} inside ${
+          parent.localName ?? 'the enclosing'
+        }.`,
+      });
+    }
+  }
+
+  return diagnostics;
+}
+
+// Capitalized child component references nested strictly inside a parent's render subtree — the
+// subtree the inferred server-refresh target morphs. Scoped by the parent's declaration source span;
+// the parent's own render host root tag is excluded (only descendants are server-refreshed
+// positions), as is any tag that is not a component reference (`/^[A-Z]/`, SPEC §4.5 lowering).
+function componentRefreshTargetChildComponentTags(
+  model: ComponentModuleModel,
+  parent: ComponentModel,
+): JsxElementModel[] {
+  // Precise span attribution requires the component's declaration bounds; without a localNameSpan we
+  // cannot tell this parent's render JSX from a sibling's, so we skip rather than over-attribute.
+  if (parent.localNameSpan === undefined) return [];
+
+  const spanStart = parent.localNameSpan.start;
+  const spanEnd = parent.declarationEnd;
+  const hostStart = parent.renderHost?.start;
+
+  return jsxElements(model).filter(
+    (element) =>
+      element.start >= spanStart &&
+      element.end <= spanEnd &&
+      element.start !== hostStart &&
+      isComponentReferenceTag(element.tag),
+  );
+}
+
+function isComponentReferenceTag(tag: string): boolean {
+  return /^[A-Z]/.test(tag);
 }
 
 export function validateEventPayloads(

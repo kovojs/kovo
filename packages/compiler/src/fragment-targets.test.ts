@@ -598,3 +598,182 @@ export const Card = component({
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV316')).toEqual([]);
   });
 });
+
+// SPEC §4.5/§4.9/§9.1 (KV420): an island declaring mutable local `state` may not render inside
+// another component's inferred server-refreshable fragment target — the morph carries no
+// island-local kovo-state serialization and would clobber the child's live value on refresh.
+const kv420 = diagnosticDefinitions.KV420;
+
+describe('KV420 nested stateful island in a server-refreshable fragment target', () => {
+  it('reports a same-module stateful child rendered inside a query-backed parent', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-page.tsx',
+      source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <section>
+      <p>{cart.total}</p>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+    });
+
+    const kv420Diagnostics = result.diagnostics.filter((d) => d.code === 'KV420');
+    expect(kv420Diagnostics).toHaveLength(1);
+    expect(kv420Diagnostics[0]).toMatchObject({
+      code: 'KV420',
+      fileName: 'cart-page.tsx',
+      help: kv420.help,
+      severity: 'error',
+    });
+    expect(kv420Diagnostics[0]?.message).toContain('Stepper');
+    expect(kv420Diagnostics[0]?.message).toContain('CartPanel');
+  });
+
+  it('does not report when the stateful child is NOT inside a refreshable target (no queries)', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-page.tsx',
+      source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+
+export const CartPanel = component({
+  render: () => (
+    <section>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV420')).toEqual([]);
+  });
+
+  it('does not report when the parent sets disableServerRefresh: true', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-page.tsx',
+      source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: ({ cart }) => (
+    <section>
+      <p>{cart.total}</p>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV420')).toEqual([]);
+  });
+
+  it('does not report when the nested child declares no local state', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-page.tsx',
+      source: `
+export const Stepper = component({
+  props: { label: String },
+  render: ({ label }) => <span>{label}</span>,
+});
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <section>
+      <p>{cart.total}</p>
+      <Stepper label="step" />
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV420')).toEqual([]);
+  });
+
+  it('does not report when the nested stateful child is marked isomorphic (it self-renders)', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-page.tsx',
+      source: `
+export const Stepper = component({
+  isomorphic: true,
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <section>
+      <p>{cart.total}</p>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV420')).toEqual([]);
+  });
+
+  it('does not report when the child local state is renderOnce (document-lifetime-immutable)', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-page.tsx',
+      source: `
+export const Stepper = component({
+  state: () => ({ id: crypto.randomUUID() }),
+  render: (_, state) => <span>{renderOnce(state.id)}</span>,
+});
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <section>
+      <p>{cart.total}</p>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV420')).toEqual([]);
+  });
+
+  it('does not report a stateful sibling that the refreshable parent never renders', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-page.tsx',
+      source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => <section><p>{cart.total}</p></section>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV420')).toEqual([]);
+  });
+});

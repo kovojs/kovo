@@ -853,7 +853,10 @@ function componentOptions(
   });
 }
 
-function componentHasInferredFragmentTarget(component: ComponentModel): boolean {
+// SPEC §4.9: a query-backed component without disableServerRefresh infers a server-refreshable
+// fragment target. Exposed per-`ComponentModel` (not just the module's first component) so KV420 can
+// classify every parent in a multi-component module, not only `firstComponentModel`.
+export function componentHasInferredFragmentTarget(component: ComponentModel): boolean {
   if (
     component.options.find((option) => option.key === 'disableServerRefresh')?.staticValue === true
   ) {
@@ -862,6 +865,49 @@ function componentHasInferredFragmentTarget(component: ComponentModel): boolean 
 
   const queries = component.options.find((option) => option.key === 'queries')?.objectEntries ?? [];
   return queries.length > 0;
+}
+
+// SPEC §4.5/§4.9 (KV420): a component declares mutable island-local `state` when its `state` arrow
+// returns at least one entry that is not frozen to a document-lifetime-immutable `renderOnce`
+// value. The `renderOnce` escape is scoped to this component's source span so a `renderOnce` call in
+// a sibling component never masks this one's live state. An isomorphic island self-renders (§4.8)
+// and so is never clobbered by an enclosing fragment morph — it does not declare a KV420-relevant
+// state position.
+export function componentDeclaresMutableLocalState(
+  component: ComponentModel,
+  model: ComponentModuleModel,
+): boolean {
+  if (component.options.find((option) => option.key === 'isomorphic')?.staticValue === true) {
+    return false;
+  }
+
+  const entries = component.stateReturnObject?.entries ?? [];
+  if (entries.length === 0) return false;
+
+  const renderOnceStateKeys = renderOnceStateKeysInSpan(
+    model,
+    component.localNameSpan?.start ?? component.declarationEnd,
+    component.declarationEnd,
+  );
+  return entries.some((entry) => !renderOnceStateKeys.has(entry.key));
+}
+
+function renderOnceStateKeysInSpan(
+  model: ComponentModuleModel,
+  spanStart: number,
+  spanEnd: number,
+): Set<string> {
+  const keys = new Set<string>();
+  for (const call of model.calls) {
+    if (call.name !== 'renderOnce') continue;
+    if (call.start < spanStart || call.end > spanEnd) continue;
+    for (const access of call.argumentPropertyAccesses.flat()) {
+      if (!access.path.startsWith('state.')) continue;
+      const key = access.path.slice('state.'.length).split('.')[0];
+      if (key) keys.add(key);
+    }
+  }
+  return keys;
 }
 
 function componentOptionStaticValueEntry(
