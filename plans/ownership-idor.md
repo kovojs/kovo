@@ -18,7 +18,14 @@ feature on a **blocking** gate, not a gap fix).
   accepting a structurally-typed Drizzle column ref.
 - **Hard dependency:** requires `api-devex-fixes.md` **item 2** (drizzle `key` column-selector
   codegen) landed first — `owner:` reuses the same `(t) => t.col` selector resolution seam.
-- **Status:** all open. Mark `[x]` only on same-session verification of the cited test/command.
+- **Status (2026-06-20):** **Phase 0 complete** (design lock + the skeleton finding below).
+  **Phase 1 partial** — the public `owner:` annotation + static extraction are **shipped and
+  verified**; flowing it into the graph/audit remains. **Phases 2–5 NOT started** — they are a
+  large, security-critical, partly under-specified build (a runtime DB-querying `owns()` guard, the
+  *unbuilt* `ScopeAuditFact` producer + KV414 emission, the §11.2 runtime cross-check, and the
+  `ownerDomains` removal + app migration). Per `CLAUDE.md`, those boxes stay open until verified —
+  a security gate must not be rushed or marked done without red→green proof. Mark `[x]` only on
+  same-session verification.
 
 ## Current state (verified)
 
@@ -36,16 +43,23 @@ feature on a **blocking** gate, not a gap fix).
   `'session.user.id'` in reference) — the migration must reconcile each to a proper table column
   selector.
 
-## Phase 0 — design lock (no code) 
+## Phase 0 — design lock (no code) — COMPLETE 2026-06-20
 
-- [ ] Re-confirm no ownership guard ships under a different name than `owns()` (grep guards/
-      better-auth/server). If one exists, fold into it instead of adding a duplicate.
-- [ ] **Resolve the SPEC `owns()` signature ambiguity.** Prose says
-      `owns((args) => args.id, table.ownerColumn)` (`SPEC.md:1069`) but the worked examples use the
-      **key** column (`owns((a) => a.id, orders.id)`, `SPEC.md:996,1075`). Default resolution
-      (examples win): 2nd arg = the row-key column the args select; the **owner** column is read
-      from that table's `owner:` annotation implicitly. Update SPEC §10.3 prose to match, or
-      decide owns() takes the owner column explicitly — pick one and reconcile SPEC.
+**Key finding (reframes the work):** the IDOR audit is a *skeleton*, not a working `ownerDomains`
+mechanism. `ScopeAuditFact` (`core/graph.ts:280`) has **no producer** anywhere in source, and
+**KV414 is never emitted** (only defined in `diagnostics.ts` and consumed by the CLI
+`unscopedAccesses`, which prints `UNSCOPED` lines from facts nothing generates). So building the
+SPEC model is closer to *building* the audit than refactoring it. The tractability hook: the
+instanceKey extractor already tags client-arg keys as `arg:${col}` (`static.ts:5489`, `:9659`) and
+resolves the keyed table's domain from its annotation (`resolvedQueryTableKey`, `static.ts:5516`),
+so an owner-table access keyed by `arg:` (not session-anchored, no `owns()`) is the IDOR signal.
+
+- [x] Re-confirmed **no** ownership guard ships under any name: grep across server/better-auth/core
+      found no `owns()`/`ownerColumn` definition (SPEC-only), and `ScopeAuditFact` has no producer.
+- [x] **Resolved the SPEC `owns()` signature ambiguity** (examples win): `owns(keyOf, column)`
+      where the 2nd arg is the **row-key column** the args select (`owns((a) => a.id, orders.id)`,
+      `SPEC.md:996,1075`); the **owner** column is read from that table's `owner:` annotation. SPEC
+      §10.3 prose (`table.ownerColumn`) is reconciled to this in Phase 5.
 - [ ] **Confirm multi-table-domain expressibility** before Phase 4 removes `ownerDomains`. A
       domain can span tables where only one carries the principal column (e.g. `carts.userId`);
       children (`cart_items`) are owned transitively via FK. **Resolution (decided 2026-06-19):**
@@ -71,14 +85,21 @@ feature on a **blocking** gate, not a gap fix).
 
 ## Phase 1 — `owner:` annotation + generated owner facts
 
-- [ ] Add `owner?: (t) => Column` to `KovoTableAnnotation`/`KovoDomainTableAnnotation`
-      (`packages/drizzle/src/drizzle-surface.ts`), reusing item-2's selector codegen. Keep all
-      supporting types public per `rules/api-surface.md`.
-- [ ] Generate the owner-column into the graph (resolve the selected column name at extraction,
-      `packages/drizzle/src/static.ts` / `internal/derive-codegen`); make it the source the audit
-      reads instead of `OwnerDomainFact`.
-- [ ] Tests: a table with `owner: (t) => t.userId` emits the owner-column fact; a renamed column
-      selector is a type error (inherits item-2 behavior).
+- [x] Added `owner?: KovoColumnRef` to `KovoTableAnnotation` (domain arm) and
+      `KovoDomainTableAnnotation` (`packages/drizzle/src/drizzle-surface.ts`), reusing item-2's
+      `KovoColumnRef` + `columnRefName` selector extractor. The static extractor now resolves the
+      owner column (`static.ts` `tableAnnotation`: `columnNamePropertyFromObject(annotationObject,
+      'owner')`) onto the `ExtractedTableAnnotation`. `kovo()` JSDoc updated. **Verified:**
+      `vitest run packages/drizzle` 263 pass (no regression); `api-surface` baseline unchanged;
+      types compile. The SPEC-promised `owner:` annotation now exists on the public surface and is
+      extracted.
+- [ ] **REMAINING — flow the owner column into the graph** and make it the audit's owner source
+      (replacing app-level `OwnerDomainFact`). This needs the graph-assembly plumbing (where
+      `KovoCheckInput.ownerDomains`/`scopeAudits` are populated) — not yet wired.
+- [ ] **REMAINING — tests** asserting an owner-column fact surfaces in a public extraction output
+      (currently `owner` is extracted onto the internal `ExtractedTableAnnotation` but not surfaced
+      in `extractTouchGraphFromProject`/`extractQueryFactsFromProject`, so there is no observable
+      assertion point until the graph-flow above lands).
 
 ## Phase 2 — `owns()` guard in `@kovojs/server`
 
@@ -132,7 +153,12 @@ feature on a **blocking** gate, not a gap fix).
 
 ## Latest verification
 
-_(none yet — populate as phases land; shortest proof per checkbox.)_
+- **Phase 1 annotation (shipped):** `owner?: KovoColumnRef` on `KovoTableAnnotation`/
+  `KovoDomainTableAnnotation`; `static.ts` extracts the owner column. `vitest run packages/drizzle`
+  **263 pass** (no regression); `api-surface-gate.mjs` exit 0 (baseline 1571 — `owner` reuses the
+  documented `KovoColumnRef`); types compile.
+- **Not yet verified (open):** owner→graph flow, `owns()` guard, KV414 emission + runtime
+  cross-check, `ownerDomains` removal/migration, docs. These are Phases 1(rest)–5.
 
 ## Risks / notes
 

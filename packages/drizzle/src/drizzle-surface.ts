@@ -30,12 +30,13 @@ export interface KovoViewAnnotation {
   refresh?: 'async' | 'sync';
 }
 
-/** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key`), or an `exempt` marker. */
+/** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
       domain: string;
       fans?: readonly KovoFanAnnotation[];
       key?: KovoColumnRef;
+      owner?: KovoColumnRef;
     }
   | {
       exempt: true;
@@ -48,11 +49,12 @@ export interface KovoViewExtraConfigAnnotation {
 
 export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation;
 
-/** The domain-bearing form of a table annotation: its `domain` and optional `key` column. */
+/** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
 export interface KovoDomainTableAnnotation {
   domain: string;
   fans?: readonly KovoFanAnnotation[];
   key?: KovoColumnRef;
+  owner?: KovoColumnRef;
 }
 
 /** The value `kovo(...)` returns: a Drizzle extra-config callback carrying the annotation. */
@@ -71,7 +73,8 @@ export type KovoViewExtraConfig = KovoViewExtraConfigAnnotation & ((self: unknow
  * facts from queries and writes — the Drizzle-blessed path to
  * schema-as-domain-registry (SPEC §10.1).
  *
- * @param annotation - A `{ domain, key? }` binding, `{ exempt: true }`, or
+ * @param annotation - A `{ domain, key?, owner? }` binding (`owner` names the
+ *   principal-owning column for the §10.3 IDOR audit), `{ exempt: true }`, or
  *   `{ view: { of, refresh? } }` binding.
  * @returns A Drizzle extra-config callback carrying the Kovo annotation.
  * @example

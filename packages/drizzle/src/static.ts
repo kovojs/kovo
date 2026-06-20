@@ -5950,11 +5950,13 @@ function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   const domain = stringPropertyFromObject(annotationObject, 'domain');
   if (!domain) return null;
   const key = columnNamePropertyFromObject(annotationObject, 'key');
+  const owner = columnNamePropertyFromObject(annotationObject, 'owner');
   const fans = fanAnnotationsFromObject(annotationObject);
   return {
     domain,
     ...(fans.length > 0 ? { fans } : {}),
     ...(key ? { key } : {}),
+    ...(owner ? { owner } : {}),
     name: tableName,
   };
 }
