@@ -31,7 +31,10 @@ dependency gates and file-ownership rules so independent work runs concurrently 
     execution. **Passes.** Closes testing-audit §4's highest-risk vector.
   - ✅ **C2** — `mutation-response-headers` now asserts serialized `Set-Cookie` carries
     `HttpOnly`+`SameSite=Strict` on enhanced + no-JS paths. **Passes.**
-  - **Security tier complete** (Phase 1 contracts + all P0 security fixtures).
+  - ✅ **C8 (no-JS)** — `counter-no-js.spec.ts`: first browser-level `javaScriptEnabled:false` test;
+    enhanced form degrades to native POST→303 PRG→full re-render, count accumulates as server
+    truth. **Passes.** (SPEC §8 "degrades to a website"; testing-audit §5.3.)
+  - **Security tier + no-JS degradation complete** (Phase 1 contracts + all P0 security fixtures).
   - **⚠ Tracked impl gap (F10):** SPEC sink-renderer signature `(escaped) => string | TrustedHtml`
     diverges from the impl's `(target, source, options) => void`. Enforcing the constrained
     signature is a code change (would alter the `data-stream-renderer` contract) — follow-up.
