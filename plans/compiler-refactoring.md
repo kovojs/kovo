@@ -6,9 +6,16 @@ authoring/verification/perf capabilities that the Part-1 substrate makes cheap a
 (Compiler) and `rules/compiler-hard-rules.md` are normative; every item below preserves the §5.2 hard
 rules unless it is an explicit Part-2 capability that adds new accepted/emitted behavior.
 
-All checkboxes are **open** (`- [ ]`). File:line citations were spot-checked this session via grep
-(see "Verification provenance"); the _work itself_ is unimplemented. Mark an item `[x]` only after the
-same session proves it against the gates named under "Neutrality gates".
+Mark an item `[x]` only after the same session proves it against the gates named under "Neutrality
+gates". File:line citations were spot-checked via grep (see "Verification provenance").
+
+**Implementation status (2026-06-20)** — merged to `main`: **FN1, FN2, FN3, FN4, FN8, FN12** (all of
+Wave 0 + the dead-code/orchestrator-shrink Wave 1 items), each verified by tsc + the golden/conformance/
+render-equivalence oracles + api-surface and committed as its own checkpoint on `agent/compiler-refactoring`.
+**Open / not yet implemented**: FN5 (keystone pass framework — large, and see its YAGNI caveat), FN6
+(split `emit/server.ts` — large), FN7/FN9/FN10/FN11 (typed-fact-boundary + analyze decomposition),
+FN13/FN14 (P2 cleanup), and all of Part 2 (capability features). These remain a deliberate multi-session
+effort on the now-merged substrate.
 
 ## Thesis
 
