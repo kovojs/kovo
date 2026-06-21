@@ -164,7 +164,7 @@ describe('server change records', () => {
       rerunQueries: ['catalog', 'priceDetail'],
       rerunQueryInstances: [
         { instanceKey: 'catalog:p1', key: 'catalog' },
-        { instanceKey: 'priceDetail:p2', key: 'priceDetail' },
+        { instanceKey: 'priceDetail:p2', key: 'priceDetail', whole: true },
       ],
       value: 'p1',
     });
@@ -241,7 +241,7 @@ describe('server change records', () => {
       ],
       ok: true,
       rerunQueries: ['orderList'],
-      rerunQueryInstances: [{ instanceKey: 'orderList:active', key: 'orderList' }],
+      rerunQueryInstances: [{ instanceKey: 'orderList:active', key: 'orderList', whole: true }],
       value: 'o1',
     });
   });
