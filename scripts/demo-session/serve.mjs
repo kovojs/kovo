@@ -139,13 +139,24 @@ async function tryServeBuiltAsset(req, res, distDir) {
     if (!info.isFile()) return false;
     res.writeHead(200, {
       'content-type': STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream',
-      'cache-control': 'public, max-age=31536000, immutable',
+      'cache-control': cacheControlForAsset(pathname),
     });
     createReadStream(filePath).pipe(res);
     return true;
   } catch {
     return false;
   }
+}
+
+function cacheControlForAsset(pathname) {
+  const fileName = path.basename(pathname);
+  return hasContentHash(fileName)
+    ? 'public, max-age=31536000, immutable'
+    : 'public, max-age=0, must-revalidate';
+}
+
+function hasContentHash(fileName) {
+  return /(?:[.-])[a-f0-9]{8,}(?=\.)/i.test(fileName);
 }
 
 function failRequest(res, error, label) {
