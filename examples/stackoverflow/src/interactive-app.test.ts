@@ -32,6 +32,57 @@ function liveHeader(
   return `${target}#${component}:${JSON.stringify(props)}`;
 }
 
+function browserCollectedLiveHeaders(html: string): { targets: string; liveTargets: string } {
+  const targets = new Set<string>();
+  const liveTargets = new Map<string, string>();
+
+  for (const tag of html.matchAll(/<[^>]*\bkovo-deps=(?:"[^"]*"|'[^']*')[^>]*>/g)) {
+    const attrs = readTagAttributes(tag[0]);
+    const deps = readDeps(attrs['kovo-deps']);
+    const target = attrs['kovo-fragment-target'] ?? attrs.id ?? attrs['kovo-c'];
+    if (!target) continue;
+
+    targets.add(deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
+    if (!liveTargets.has(target)) {
+      liveTargets.set(
+        target,
+        `${target}#${attrs['kovo-live-component'] ?? attrs['kovo-c'] ?? target}:${decodeHtmlAttribute(attrs['kovo-props'] ?? '{}')}`,
+      );
+    }
+  }
+
+  return {
+    liveTargets: [...liveTargets.values()].join('; '),
+    targets: [...targets].join('; '),
+  };
+}
+
+function readDeps(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
+}
+
+function readTagAttributes(tag: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const match of tag.matchAll(/\s([A-Za-z_:][\w:.-]*)=(?:"([^"]*)"|'([^']*)')/g)) {
+    const name = match[1];
+    if (!name) continue;
+    attrs[name] = decodeHtmlAttribute(match[2] ?? match[3] ?? '');
+  }
+  return attrs;
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
+}
+
 async function postForm(
   handler: (request: Request) => Promise<Response>,
   key: string,
@@ -75,7 +126,7 @@ describe('stackoverflow interactive app', () => {
         target: questionListTarget,
       },
       {
-        deps: 'answers question',
+        deps: 'questionAnswers questionDetail',
         route: '/questions/q1',
         target: questionDetailTarget,
       },
@@ -163,6 +214,40 @@ describe('stackoverflow interactive app', () => {
     expect(inserted).toHaveLength(1);
     const [after] = await db.select().from(questions).where(eq(questions.id, question.id)).limit(1);
     expect(after?.answerCount).toBe(beforeCount + 1);
+  });
+
+  it('postAnswer refreshes when submitted with the live headers collected from the full document', async () => {
+    const { db, handler } = await buildSoInteractiveApp();
+    const [question] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
+    if (!question) throw new Error('seed produced no questions');
+
+    const page = await handler(
+      new Request(`http://example.test/questions/${question.id}`, {
+        headers: { Accept: 'text/html' },
+      }),
+    );
+    const headers = browserCollectedLiveHeaders(await page.text());
+    expect(headers.targets).toContain(`${questionDetailTarget}=questionAnswers questionDetail`);
+    expect(headers.liveTargets).toContain(
+      liveHeader(questionDetailTarget, questionDetailComponent, { questionId: question.id }),
+    );
+
+    const { status, html } = await postForm(
+      handler,
+      'postAnswer',
+      withCsrf({
+        id: 'a-browser-header-1',
+        questionId: question.id,
+        body: 'Visible without refresh.',
+        authorId: 'demo-viewer',
+      }),
+      headers.targets,
+      headers.liveTargets,
+    );
+
+    expect(status).toBe(200);
+    expect(html).toContain(`<kovo-fragment target="${questionDetailTarget}"`);
+    expect(html).toContain('Visible without refresh.');
   });
 
   it('postQuestion inserts the question and re-renders the list region', async () => {

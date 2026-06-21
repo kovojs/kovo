@@ -382,6 +382,42 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
   });
 
+  it('opens the combobox listbox by clicking the input and selects by clicking the current option', async () => {
+    // Reproduces the reported bug: the listbox starts hidden, so without an
+    // open-on-pointer affordance a mouse user can never reach an option to click
+    // it (including re-selecting the current value).
+    const root = await mountInteractiveDemo(GalleryComboboxDemo);
+    const input = required(root.querySelector<HTMLInputElement>('#gallery-combobox-input'));
+    const listbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
+    installInteractiveGalleryLoader(root, { events: ['click', 'input', 'keydown'] });
+
+    expect(listbox.hidden).toBe(true);
+
+    // Clicking the input opens the listbox and highlights the current value.
+    input.click();
+    await vi.waitFor(() => {
+      const currentInput = required(
+        root.querySelector<HTMLInputElement>('#gallery-combobox-input'),
+      );
+      const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
+      expect(currentListbox.hidden).toBe(false);
+      expect(currentInput.getAttribute('aria-expanded')).toBe('true');
+      expect(currentInput.getAttribute('aria-activedescendant')).toBe(
+        'gallery-combobox-listbox-option-0',
+      );
+    });
+
+    // Clicking the currently selected option (Austin) closes the listbox.
+    required(root.querySelector<HTMLButtonElement>('#gallery-combobox-listbox-option-0')).click();
+    await vi.waitFor(() => {
+      const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
+      expect(currentListbox.hidden).toBe(true);
+      expect(root.getAttribute('kovo-state')).toBe(
+        '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
+      );
+    });
+  });
+
   it('updates autocomplete listbox suggestions and value through generated handlers', async () => {
     const root = await mountInteractiveDemo(GalleryAutocompleteDemo);
     const input = required(root.querySelector<HTMLInputElement>('#gallery-autocomplete-input'));
@@ -928,6 +964,52 @@ describe('compiled interactive gallery demos in the browser', () => {
     // SPEC §12.1: the OTP filled/complete aggregate end-state (all slots filled, group
     // data-complete set, hidden aggregate input carrying the value) must stay axe-clean.
     await expectNoAxeViolations(root);
+  });
+
+  it('moves real DOM focus across OTP slots on type/arrow and deletes across slots', async () => {
+    // Reproduces the reported bug: typing only flipped tabIndex; DOM focus stayed
+    // on the current slot so the user could neither continue typing nor delete
+    // across slots.
+    const root = await mountInteractiveDemo(GalleryOtpFieldDemo);
+    const third = required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2'));
+    const hidden = required(
+      root.querySelector<HTMLInputElement>('#gallery-interactive-otp-hidden'),
+    );
+    installInteractiveGalleryLoader(root, { events: ['input', 'keydown'] });
+
+    third.focus();
+    expect(document.activeElement).toBe(third);
+
+    // Typing a digit advances DOM focus to the next slot.
+    third.value = '3';
+    third.dispatchEvent(new Event('input', { bubbles: true }));
+    await vi.waitFor(() => {
+      const fourth = required(
+        root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-3'),
+      );
+      expect(document.activeElement).toBe(fourth);
+    });
+
+    // ArrowLeft moves DOM focus back to the previous slot.
+    required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-3')).dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowLeft' }),
+    );
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(
+        required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2')),
+      );
+    });
+
+    // Backspace on the now-focused filled slot deletes that digit.
+    required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2')).dispatchEvent(
+      new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Backspace' }),
+    );
+    await vi.waitFor(() => {
+      expect(hidden.value).toBe('12');
+      expect(
+        required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2')).value,
+      ).toBe('');
+    });
   });
 
   it('keeps generated OTP delete and paste states accessible', async () => {

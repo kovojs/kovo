@@ -68,7 +68,7 @@ describe('query endpoints', () => {
         ]),
       }),
     ).resolves.toEqual({
-      body: '<kovo-query name="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
+      body: '<kovo-query name="productDetail" key="product:p1" version="3">{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',
@@ -215,7 +215,7 @@ describe('query endpoints', () => {
         search: new URLSearchParams([['id', 'p1']]),
       }),
     ).resolves.toEqual({
-      body: '<kovo-query name="product:p1">{"id":"p1","name":"Mug"}</kovo-query>',
+      body: '<kovo-query name="product" key="product:p1">{"id":"p1","name":"Mug"}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/html; charset=utf-8',

@@ -254,8 +254,10 @@ export class FakeQueryBindingElement {
   attributes: { name: string; value: string }[];
   checked?: boolean;
   indeterminate?: boolean;
+  open?: boolean;
   scrollLeft?: number;
   scrollTop?: number;
+  selected?: boolean;
   textContent: string | null;
   value?: string;
 
@@ -265,8 +267,10 @@ export class FakeQueryBindingElement {
       | {
           checked?: boolean;
           indeterminate?: boolean;
+          open?: boolean;
           scrollLeft?: number;
           scrollTop?: number;
+          selected?: boolean;
           textContent?: string | null;
           value?: string;
         }
@@ -284,11 +288,17 @@ export class FakeQueryBindingElement {
     if (normalizedOptions.indeterminate !== undefined) {
       this.indeterminate = normalizedOptions.indeterminate;
     }
+    if (normalizedOptions.open !== undefined) {
+      this.open = normalizedOptions.open;
+    }
     if (normalizedOptions.scrollLeft !== undefined) {
       this.scrollLeft = normalizedOptions.scrollLeft;
     }
     if (normalizedOptions.scrollTop !== undefined) {
       this.scrollTop = normalizedOptions.scrollTop;
+    }
+    if (normalizedOptions.selected !== undefined) {
+      this.selected = normalizedOptions.selected;
     }
     if (normalizedOptions.value !== undefined) {
       this.value = normalizedOptions.value;
@@ -333,9 +343,11 @@ export class FakeStatefulBindingElement extends FakeQueryBindingElement {
     options: {
       checked?: boolean;
       indeterminate?: boolean;
+      open?: boolean;
       parent?: FakeStatefulBindingElement;
       scrollLeft?: number;
       scrollTop?: number;
+      selected?: boolean;
       textContent?: string | null;
       value?: string;
     } = {},

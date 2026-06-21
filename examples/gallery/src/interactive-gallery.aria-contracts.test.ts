@@ -91,33 +91,41 @@ describe('compiled interactive gallery demos', () => {
 
       const checkboxGroup = evaluateClientModule('checkbox-group-demo.client.js', { document });
       const checkboxState = { activeValue: 'updates', value: 'updates' };
-      clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$input_click_3')(new Event('click'), {
-        params: {},
-        signal,
-        state: checkboxState,
-      });
+      // C unblock: the select-all is now the styled `Checkbox`; the per-item
+      // controls are `CheckboxGroupControl`. Click the billing item control.
+      clientHandler(checkboxGroup, 'GalleryCheckboxGroupDemo$CheckboxGroupControl_click_2')(
+        new Event('click'),
+        {
+          params: {},
+          signal,
+          state: checkboxState,
+        },
+      );
       expect(checkboxState).toEqual({ activeValue: 'billing', value: 'updates,billing' });
+      // Select-all Checkbox derives: aria-checked true, .checked present, and
+      // .indeterminate false now that both items are selected (SPEC §4.8).
       expect(
         deriveRun(
           checkboxGroup,
-          'GalleryCheckboxGroupDemo$input_aria_checked_derive',
+          'GalleryCheckboxGroupDemo$Checkbox_aria_checked_derive',
           checkboxState,
         ),
       ).toBe('true');
       expect(
-        deriveRun(checkboxGroup, 'GalleryCheckboxGroupDemo$input_checked_derive', checkboxState),
+        deriveRun(checkboxGroup, 'GalleryCheckboxGroupDemo$Checkbox_checked_derive', checkboxState),
       ).toBe('');
       expect(
         deriveRun(
           checkboxGroup,
-          'GalleryCheckboxGroupDemo$input_indeterminate_derive',
+          'GalleryCheckboxGroupDemo$Checkbox_indeterminate_derive',
           checkboxState,
         ),
-      ).toBe(false);
+      ).toBe(null);
+      // Billing item control reflects checked.
       expect(
         deriveRun(
           checkboxGroup,
-          'GalleryCheckboxGroupDemo$input_aria_checked_derive_3',
+          'GalleryCheckboxGroupDemo$CheckboxGroupControl_aria_checked_derive_2',
           checkboxState,
         ),
       ).toBe('true');

@@ -40,11 +40,17 @@ describe('inline loader minified artifact', () => {
     expect(inlineKovoLoaderInstallerSource).toContain(
       "el.getAttribute('kovo-fragment-target')??el.getAttribute('id')??el.getAttribute('kovo-c')",
     );
-    // Security finding M10: the fragment-target lookup guards its querySelector
-    // calls so a malformed wire target degrades to "no target found" instead of
-    // throwing and aborting the apply pass.
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "const ft=(target)=>{try{return(doc.querySelector('[kovo-c=\"'+target+'\"]')??doc.getElementById(target)??doc.querySelector('[kovo-fragment-target=\"'+target+'\"]')??doc.querySelector('kovo-defer[target=\"'+target+'\"]'));}catch{return;}};",
+      'const hsaf=(value)=>value&&!/[\\x00-\\x1f\\x7f\\s;,#=]/.test(value);',
+    );
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "const hsc=(value)=>hsaf(value)&&!value.includes(':');",
+    );
+    // SPEC.md §9.1 + security finding M10: the fragment-target lookup uses the
+    // same escaped precedence as the modular runtime and still guards
+    // querySelector so malformed selectors cannot abort the apply pass.
+    expect(inlineKovoLoaderInstallerSource).toContain(
+      "const ft=(target)=>{try{const selectorTarget=sq(target);return(doc.querySelector('[kovo-fragment-target=\"'+selectorTarget+'\"]')??doc.getElementById(target)??doc.querySelector('[id=\"'+selectorTarget+'\"]')??doc.querySelector('[kovo-c=\"'+selectorTarget+'\"]')??doc.querySelector('kovo-defer[target=\"'+selectorTarget+'\"]'));}catch{return;}};",
     );
     expect(inlineKovoLoaderInstallerSource).toContain("getAttribute('kovo-param-types')");
     expect(inlineKovoLoaderInstallerSource).toContain('new DOMParser().parseFromString');

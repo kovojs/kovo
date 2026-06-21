@@ -230,6 +230,7 @@ export default defineConfig({
       'packages/core/src/internal/graph.ts',
       'packages/core/src/internal/package-prefix.ts',
       'packages/core/src/internal/query-delta.ts',
+      'packages/core/src/internal/render-plan-token.ts',
       'packages/core/src/internal/storage.ts',
       'packages/browser/src/client.ts',
       'packages/browser/src/generated.ts',

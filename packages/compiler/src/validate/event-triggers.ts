@@ -1,6 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { jsxComments, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 
 const declaredExecutionTriggers = new Set(['idle', 'load', 'visible']);
@@ -33,17 +31,16 @@ const delegatedDomEvents = new Set([
 ]);
 
 export function validateEventTriggerNames(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   return eventTriggerAttributes(model).flatMap((attribute) => {
     if (!isKnownEventOrTrigger(attribute.name)) {
-      return [eventTriggerDiagnostic(fileName, source, 'KV212', attribute)];
+      return [eventTriggerDiagnostic(diagnostics, 'KV212', attribute)];
     }
 
     if (attribute.name === 'load' && !hasKv211Justification(model, attribute.index)) {
-      return [eventTriggerDiagnostic(fileName, source, 'KV211', attribute)];
+      return [eventTriggerDiagnostic(diagnostics, 'KV211', attribute)];
     }
 
     return [];
@@ -76,13 +73,13 @@ function hasKv211Justification(model: ComponentModuleModel, index: number): bool
 }
 
 function eventTriggerDiagnostic(
-  fileName: string,
-  source: string,
+  diagnostics: DiagnosticFactory,
   code: 'KV211' | 'KV212',
   attribute: { index: number; name: string },
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, code, source, attribute.index, attribute.name.length + 3),
-    message: `${diagnosticDefinitions[code].message} on:${attribute.name}`,
-  };
+  return diagnostics.at(
+    code,
+    { start: attribute.index, length: attribute.name.length + 3 },
+    `on:${attribute.name}`,
+  );
 }

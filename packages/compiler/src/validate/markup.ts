@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { deriveComponentNames } from '../component-names.js';
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   componentOptionObjectKeys,
   jsxElements,
@@ -38,56 +38,51 @@ const navigationSegmentStampAttributes = new Set([
 ]);
 
 export function validateIdrefs(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[],
 ): CompilerDiagnostic[] {
-  const diagnostics = componentElementScopes(model).flatMap((elements) =>
-    validateIdrefsInElementScope(source, fileName, elements, packageComponentPrefixes),
+  const found = componentElementScopes(model).flatMap((elements) =>
+    validateIdrefsInElementScope(diagnostics, elements, packageComponentPrefixes),
   );
-  return dedupeBy(diagnostics, diagnosticKey);
+  return dedupeBy(found, diagnosticKey);
 }
 
 export function validateStaticIds(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   const seen = new Set<string>();
 
   for (const id of literalIdValues(model)) {
     if (seen.has(id.value)) {
-      diagnostics.push(kv224Diagnostic(fileName, source, `duplicate id="${id.value}"`, id));
+      found.push(kv224Diagnostic(diagnostics, `duplicate id="${id.value}"`, id));
     }
     seen.add(id.value);
   }
 
   for (const id of repeatableLiteralIds(model)) {
-    diagnostics.push(kv224Diagnostic(fileName, source, `repeatable id="${id.value}"`, id));
+    found.push(kv224Diagnostic(diagnostics, `repeatable id="${id.value}"`, id));
   }
 
-  return dedupeBy(diagnostics, diagnosticKey);
+  return dedupeBy(found, diagnosticKey);
 }
 
 export function validateHandAuthoredNavigationSegmentStamps(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const element of jsxElements(model)) {
     for (const attribute of element.attributes) {
       if (!navigationSegmentStampAttributes.has(attribute.name)) continue;
-      diagnostics.push({
-        ...diagnosticFor(
-          fileName,
+      found.push({
+        ...diagnostics.at(
           'KV235',
-          source,
-          attribute.start,
-          attribute.end - attribute.start,
+          { start: attribute.start, length: attribute.end - attribute.start },
+          `hand-authored navigation segment stamp ${attribute.name}.`,
         ),
         help: [
           diagnosticDefinitions.KV235.help,
@@ -95,12 +90,11 @@ export function validateHandAuthoredNavigationSegmentStamps(
           'Fix: remove the kovo-nav-* attribute and keep the route/layout/component source as authored JSX.',
           'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
         ].join('\n'),
-        message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${attribute.name}.`,
       });
     }
   }
 
-  return dedupeBy(diagnostics, diagnosticKey);
+  return dedupeBy(found, diagnosticKey);
 }
 
 const blockTagsThatCloseParagraph = new Set([
@@ -132,11 +126,10 @@ const blockTagsThatCloseParagraph = new Set([
 ]);
 
 export function validateHtmlContentModel(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   const elements = jsxElements(model);
 
   for (const element of elements) {
@@ -144,8 +137,8 @@ export function validateHtmlContentModel(
     if (!isNativeHtmlTag(tag)) continue;
 
     if (blockTagsThatCloseParagraph.has(tag) && hasJsxAncestor(element, 'p')) {
-      diagnostics.push(
-        htmlContentModelDiagnostic(source, fileName, element, `<${tag}> cannot appear inside <p>`),
+      found.push(
+        htmlContentModelDiagnostic(diagnostics, element, `<${tag}> cannot appear inside <p>`),
       );
     }
 
@@ -154,10 +147,9 @@ export function validateHtmlContentModel(
       !hasJsxAttribute(element, 'kovo-c') &&
       !hasAnyJsxAncestor(element, ['table', 'tbody', 'thead', 'tfoot'])
     ) {
-      diagnostics.push(
+      found.push(
         htmlContentModelDiagnostic(
-          source,
-          fileName,
+          diagnostics,
           element,
           '<tr> must be inside a table section or table',
         ),
@@ -165,15 +157,15 @@ export function validateHtmlContentModel(
     }
   }
 
-  return diagnostics;
+  return found;
 }
 
 export function validateResidualStamps(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: ResidualStampValidationOptions,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   const knownQueries = new Set([
     ...Object.keys(options.registryFacts?.queries ?? {}),
     ...componentQueryNames(model),
@@ -188,10 +180,9 @@ export function validateResidualStamps(
     if (attribute.name === 'kovo-c') {
       const component = attribute.value;
       if (component && !knownComponents.has(component)) {
-        diagnostics.push(
+        found.push(
           kv226Diagnostic(
-            options.fileName,
-            source,
+            diagnostics,
             `kovo-c="${component}"`,
             attribute.start,
             attribute.end - attribute.start,
@@ -205,10 +196,9 @@ export function validateResidualStamps(
     for (const dep of splitDepValue(attribute.value ?? '')) {
       const query = dep.split(':', 1)[0] ?? dep;
       if (!knownQueries.has(query)) {
-        diagnostics.push(
+        found.push(
           kv226Diagnostic(
-            options.fileName,
-            source,
+            diagnostics,
             `kovo-deps="${dep}"`,
             attribute.start,
             attribute.end - attribute.start,
@@ -218,7 +208,7 @@ export function validateResidualStamps(
     }
   }
 
-  return dedupeBy(diagnostics, diagnosticKey);
+  return dedupeBy(found, diagnosticKey);
 }
 
 const ambiguousRelationshipAttributes = new Set([
@@ -236,11 +226,10 @@ const ambiguousRelationshipAttributes = new Set([
 const primitiveOwnedOverrideAttributes = new Set(['role', 'data-state']);
 
 export function validateAttributeMergeConflicts(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const element of jsxElements(model)) {
     const attrs = element.attributes.map((attribute) => attribute.name);
@@ -253,7 +242,7 @@ export function validateAttributeMergeConflicts(
       if (!attribute) continue;
 
       if (isBindingAttribute(name)) {
-        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'KV233', name, attribute));
+        found.push(attributeMergeDiagnostic(diagnostics, 'KV233', name, attribute));
         continue;
       }
 
@@ -263,25 +252,19 @@ export function validateAttributeMergeConflicts(
         name === 'kovo-c' ||
         name === 'kovo-state'
       ) {
-        diagnostics.push(attributeMergeDiagnostic(source, fileName, 'KV231', name, attribute));
+        found.push(attributeMergeDiagnostic(diagnostics, 'KV231', name, attribute));
         continue;
       }
 
       if (name.startsWith('aria-') || primitiveOwnedOverrideAttributes.has(name)) {
-        diagnostics.push(
-          attributeMergeDiagnostic(
-            source,
-            fileName,
-            'KV232',
-            name,
-            duplicateAttributes[1] ?? attribute,
-          ),
+        found.push(
+          attributeMergeDiagnostic(diagnostics, 'KV232', name, duplicateAttributes[1] ?? attribute),
         );
       }
     }
   }
 
-  return dedupeBy(diagnostics, diagnosticKey);
+  return dedupeBy(found, diagnosticKey);
 }
 
 function literalIdValues(model: ComponentModuleModel, offset = 0): LiteralIdValue[] {
@@ -306,8 +289,7 @@ function literalIdValuesForElements(
 }
 
 function validateIdrefsInElementScope(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   elements: readonly JsxElementModel[],
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[],
 ): CompilerDiagnostic[] {
@@ -316,7 +298,7 @@ function validateIdrefsInElementScope(
   const missing = ids.size === 0 ? values : values.filter((value) => !ids.has(value.value));
 
   return dedupeBy(missing, (value) => `${value.index}\0${value.value}`).map((value) =>
-    kv221Diagnostic(fileName, source, value),
+    kv221Diagnostic(diagnostics, value),
   );
 }
 
@@ -342,27 +324,23 @@ function repeatableLiteralIds(model: ComponentModuleModel): LiteralIdValue[] {
 }
 
 function kv224Diagnostic(
-  fileName: string,
-  source: string,
+  diagnostics: DiagnosticFactory,
   detail: string,
   id: LiteralIdValue,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV224', source, id.index, id.length),
-    message: `${diagnosticDefinitions.KV224.message} ${detail}`,
-  };
+  return diagnostics.at('KV224', { start: id.index, length: id.length }, detail);
 }
 
 function htmlContentModelDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   element: JsxElementModel,
   detail: string,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV225', source, element.start, element.openingEnd - element.start),
-    message: `${diagnosticDefinitions.KV225.message} ${detail}`,
-  };
+  return diagnostics.at(
+    'KV225',
+    { start: element.start, length: element.openingEnd - element.start },
+    detail,
+  );
 }
 
 function componentQueryNames(model: ComponentModuleModel): string[] {
@@ -384,40 +362,33 @@ function isBindingAttribute(name: string): boolean {
 }
 
 function attributeMergeDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   code: 'KV231' | 'KV232' | 'KV233',
   detail: string,
   attribute: JsxAttributeModel,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, code, source, attribute.start, attribute.end - attribute.start),
-    message: `${diagnosticDefinitions[code].message} ${detail}`,
-  };
+  return diagnostics.at(
+    code,
+    { start: attribute.start, length: attribute.end - attribute.start },
+    detail,
+  );
 }
 
 function kv226Diagnostic(
-  fileName: string,
-  source: string,
+  diagnostics: DiagnosticFactory,
   detail: string,
   index: number,
   length: number,
 ): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV226', source, index, length),
-    message: `${diagnosticDefinitions.KV226.message} ${detail}`,
-  };
+  return diagnostics.at('KV226', { start: index, length }, detail);
 }
 
 function diagnosticKey(diagnostic: CompilerDiagnostic): string {
   return `${diagnostic.code}\0${diagnostic.message}`;
 }
 
-function kv221Diagnostic(fileName: string, source: string, value: IdrefValue): CompilerDiagnostic {
-  return {
-    ...diagnosticFor(fileName, 'KV221', source, value.index, value.length),
-    message: `${diagnosticDefinitions.KV221.message} ${value.value}`,
-  };
+function kv221Diagnostic(diagnostics: DiagnosticFactory, value: IdrefValue): CompilerDiagnostic {
+  return diagnostics.at('KV221', { start: value.index, length: value.length }, value.value);
 }
 
 function idrefValuesForElements(

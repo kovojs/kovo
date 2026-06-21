@@ -59,10 +59,13 @@ export function componentLiveTargetRenderer<
   const queryBindings =
     options.queries ?? componentLiveTargetQueryBindings<Request>(options.component);
 
-  return {
+  const renderer: LiveTargetRenderer<Request> & {
+    queryBindings: readonly ComponentLiveTargetQueryBinding<Request>[];
+  } = {
     component: options.componentId,
     ...componentLiveTargetErrorBoundary(options),
     queries: queryBindings.map((binding) => binding.query.key),
+    queryBindings,
     queryDefinitions: queryBindings.map((binding) => binding.query),
     async render(context) {
       const queries = await loadLiveTargetQueries(queryBindings, context);
@@ -86,6 +89,8 @@ export function componentLiveTargetRenderer<
       );
     },
   };
+
+  return renderer;
 }
 
 function componentLiveTargetErrorBoundary<

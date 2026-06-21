@@ -102,7 +102,7 @@ export function jsx(
   if (isMutationFormHelperComponent(type, FormError, 'FormError')) {
     return renderMutationFormHelper('form', props);
   }
-  if (isKovoComponent(type)) return renderKovoComponent(type, props);
+  if (isKovoComponent(type)) return renderKovoComponent(type, props, key);
   if (typeof type === 'function') return type(props);
 
   const attributes = renderJsxAttributes(type, props, key);
@@ -485,7 +485,11 @@ function renderJsxChildren(children: JsxNode): MaybePromise<string> {
   return String(children);
 }
 
-async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps): Promise<string> {
+async function renderKovoComponent(
+  component: KovoJsxComponent,
+  props: JsxProps,
+  jsxKey?: unknown,
+): Promise<string> {
   const request = currentJsxRequestContext();
   const queries = await loadComponentQueries(component, props, request);
   const state = component.definition.state?.() as JsonValue | undefined;
@@ -497,15 +501,16 @@ async function renderKovoComponent(component: KovoJsxComponent, props: JsxProps)
   ) => unknown;
   const rendered = render({ ...props, ...queries }, state, slots) as JsxNode;
   const html = await renderJsxChildren(rendered);
-  return stampKovoComponentRoot(component, props, html);
+  return stampKovoComponentRoot(component, props, html, jsxKey);
 }
 
 function stampKovoComponentRoot(
   component: KovoJsxComponent,
   props: JsxProps,
   html: string,
+  jsxKey?: unknown,
 ): string {
-  const metadata = componentRootStampMetadata(component, props);
+  const metadata = componentRootStampMetadata(component, props, jsxKey);
   if (!metadata) return html;
 
   const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
@@ -522,7 +527,7 @@ function stampKovoComponentRoot(
     'kovo-deps',
     mergeAttributeTokens(attributeValue(attrs, 'kovo-deps'), metadata.deps).join(' '),
   );
-  attrs = setOrAppendAttribute(attrs, 'kovo-fragment-target', metadata.domName);
+  attrs = setOrAppendAttribute(attrs, 'kovo-fragment-target', metadata.target);
   attrs = setOrAppendAttribute(attrs, 'kovo-live-component', metadata.componentName);
   if (metadata.props !== undefined) {
     attrs = setOrAppendAttribute(attrs, 'kovo-props', JSON.stringify(metadata.props));
@@ -534,17 +539,22 @@ function stampKovoComponentRoot(
 function componentRootStampMetadata(
   component: KovoJsxComponent,
   props: JsxProps,
+  jsxKey?: unknown,
 ): {
   componentName: string;
   deps: string[];
   domName: string;
   props?: Record<string, unknown>;
+  target: string;
 } | null {
   if (component.definition.disableServerRefresh) return null;
   if (typeof component.name !== 'string' || component.name.length === 0) return null;
   if (!isRecord(component.definition.queries)) return null;
 
-  const deps = Object.keys(component.definition.queries);
+  const deps = Object.values(component.definition.queries).flatMap((binding) => {
+    const query = componentQueryDefinition(binding);
+    return query ? [query.key] : [];
+  });
   if (deps.length === 0) return null;
 
   const domName = component.name.split('/').filter(Boolean).at(-1);
@@ -555,13 +565,90 @@ function componentRootStampMetadata(
     propKeys.length === 0
       ? undefined
       : Object.fromEntries(propKeys.map((key) => [key, props[key]]));
+  const target = componentFragmentTarget(domName, props, stampedProps, jsxKey);
 
   return {
     componentName: component.name,
     deps,
     domName,
     ...(stampedProps === undefined ? {} : { props: stampedProps }),
+    target,
   };
+}
+
+function componentFragmentTarget(
+  domName: string,
+  props: JsxProps,
+  stampedProps: Record<string, unknown> | undefined,
+  jsxKey?: unknown,
+): string {
+  const key = componentAuthoredKey(props, jsxKey);
+  if (key !== undefined) {
+    // SPEC.md §4.8/§13.2: authored `key` lowers to the shared runtime identity
+    // used by inferred fragment-target instance suffixes.
+    return `${domName}:${attributeText('kovo-key', key)}`;
+  }
+
+  const suffix =
+    stampedProps === undefined ? undefined : componentPropsInstanceSuffix(stampedProps);
+  return suffix === undefined ? domName : `${domName}:${suffix}`;
+}
+
+function componentAuthoredKey(props: JsxProps, jsxKey?: unknown): unknown {
+  const key = props['kovo-key'] ?? props.key ?? jsxKey;
+  return key === false || key === null || key === undefined ? undefined : key;
+}
+
+function componentPropsInstanceSuffix(props: Record<string, unknown>): string | undefined {
+  const entries = Object.entries(props).filter(([, value]) => value !== undefined);
+  if (entries.length === 0) return undefined;
+
+  if (entries.length === 1) {
+    const [, value] = entries[0]!;
+    if (
+      typeof value === 'string' ||
+      typeof value === 'number' ||
+      typeof value === 'bigint' ||
+      typeof value === 'boolean'
+    ) {
+      return attributeText('kovo-props', value);
+    }
+  }
+
+  const serialized = stableJsonStringify(props);
+  return serialized === undefined || serialized === '{}'
+    ? undefined
+    : encodeURIComponent(serialized);
+}
+
+function stableJsonStringify(value: unknown): string | undefined {
+  const seen = new WeakSet<object>();
+  const normalized = stableJsonValue(value, seen);
+  return normalized === undefined ? undefined : JSON.stringify(normalized);
+}
+
+function stableJsonValue(value: unknown, seen: WeakSet<object>): unknown {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => stableJsonValue(item, seen) ?? null);
+  }
+  if (typeof value !== 'object') return undefined;
+  if (seen.has(value)) return undefined;
+  seen.add(value);
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .map(([key, entryValue]) => [key, stableJsonValue(entryValue, seen)] as const)
+    .filter((entry): entry is readonly [string, unknown] => entry[1] !== undefined)
+    .sort(([left], [right]) => left.localeCompare(right));
+  seen.delete(value);
+  return Object.fromEntries(entries);
 }
 
 function componentPropKeys(component: KovoJsxComponent): string[] {
@@ -601,6 +688,12 @@ function componentQueryBinding(
 ): { input: unknown; query: QueryDefinition } | undefined {
   if (isQueryDefinition(binding)) return { input: undefined, query: binding };
   if (isQueryArgsBinding(binding)) return { input: binding.args(props), query: binding.query };
+  return undefined;
+}
+
+function componentQueryDefinition(binding: unknown): QueryDefinition | undefined {
+  if (isQueryDefinition(binding)) return binding;
+  if (isQueryArgsBinding(binding)) return binding.query;
   return undefined;
 }
 

@@ -72,12 +72,31 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
     // is mis-resolving the exports map.
     expect(result.sourceFiles.length).toBeGreaterThan(40);
     // Every @kovojs/ui component must emit extractable CSS. The former gap —
-    // progress.tsx / skeleton.tsx referenced a `style.keyframes(...)` const by
-    // identifier, which the static extractor cannot resolve, so they emitted no
-    // CSS and rendered unstyled — is now closed: both use static StyleX (no
-    // keyframes), so the coverage report is empty. Any name appearing here is a
-    // regression that would ship an unstyled component.
+    // progress.tsx / skeleton.tsx / tabs.tsx referenced a `style.keyframes(...)`
+    // const by identifier, which the static extractor could not resolve, so they
+    // emitted no CSS and rendered unstyled (KV236) — is now closed: the extractor
+    // recognizes `style.keyframes`, binds its name, and emits the @keyframes
+    // block. Any name appearing here is a regression that ships an unstyled
+    // component.
     expect(result.diagnostics.map((d) => d.fileName).sort()).toEqual([]);
+  });
+
+  it('emits each @keyframes block once for keyframes-using components (SPEC §13.1)', () => {
+    const css = uiExtraction().css ?? '';
+    // skeleton pulse, progress indeterminate slide, tabs panel fade are restored.
+    for (const prefix of [
+      'kv-skeleton-pulse-',
+      'kv-progress-indeterminate-',
+      'kv-tabs-panel-fade-',
+    ]) {
+      const blocks = [...css.matchAll(new RegExp(`@keyframes (${prefix}[a-z0-9]+)\\{`, 'g'))];
+      expect(blocks.length, prefix).toBe(1);
+      // Each is defined exactly once across the combined, deduped stylesheet.
+      const name = blocks[0]?.[1] ?? '';
+      expect(css.split(`@keyframes ${name}{`).length - 1, name).toBe(1);
+    }
+    // Keyframes carry no cascade priority, so they are emitted outside @layer.
+    expect(css).toMatch(/@keyframes kv-skeleton-pulse-[a-z0-9]+\{0%, 100%\{opacity:1\}/);
   });
 });
 

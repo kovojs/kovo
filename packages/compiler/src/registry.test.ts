@@ -11,7 +11,7 @@ import {
   appGraphContributionHash,
   deriveRegistryFactsFromGraph,
   IncrementalAppGraphCache,
-} from './internal-graph.js';
+} from './app-graph.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';
@@ -592,6 +592,55 @@ export const cart = route('/cart', {
         queries: ['cart', 'productGrid'],
         route: '/cart',
         stylesheets: ['/assets/styles.css'],
+      },
+    ]);
+  });
+
+  it('derives page query facts from aliased compiled route component imports', () => {
+    const cartBadge = compileComponentModule({
+      fileName: 'src/components/cart-badge.tsx',
+      source: cartBadgeSource,
+    });
+    const routes = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route } from '@kovojs/server';
+import { CartBadge as Badge } from './components/cart-badge.js';
+
+export const cart = route('/cart', {
+  page: () => <Badge />,
+});
+`,
+    });
+
+    const derived = deriveAppGraph({
+      components: [cartBadge],
+      routePages: [routes],
+    });
+
+    expect(routes.routePageFacts).toEqual([
+      expect.objectContaining({
+        components: [
+          expect.objectContaining({
+            exportName: 'CartBadge',
+            localName: 'Badge',
+          }),
+        ],
+      }),
+    ]);
+    expect(derived.graph.pages).toEqual([
+      {
+        navigationSegments: [
+          {
+            components: ['Badge'],
+            id: 'page:/cart',
+            kind: 'page',
+            name: 'page',
+            queries: ['cart'],
+          },
+        ],
+        queries: ['cart'],
+        route: '/cart',
       },
     ]);
   });

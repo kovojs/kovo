@@ -1,3 +1,4 @@
+import { applyBindProp, BIND_PROP_PREFIX } from './bind-prop.js';
 import { domAttributes } from './dom-like.js';
 import type {
   AttributeElementLike,
@@ -13,8 +14,12 @@ export interface QueryBindingElement
   extends AttributeElementLike, ClosestElementLike<QueryBindingElement> {
   checked?: boolean;
   indeterminate?: boolean;
+  // SPEC §4.8 data-bind-prop: property-authoritative state set by the live
+  // property write (in addition to the companion attribute).
+  open?: boolean;
   scrollLeft?: number;
   scrollTop?: number;
+  selected?: boolean;
   tagName?: string;
   textContent?: string | null;
   value?: string;
@@ -176,6 +181,19 @@ function applyRootBindings(
       } else {
         setBoundAttribute(element, boundAttribute, boundValue);
       }
+      applied.push(path);
+    }
+
+    // SPEC §4.8 data-bind-prop: assign the live property for path-bound stamps.
+    for (const attribute of bindPropAttributes(element)) {
+      const path = attribute.value;
+      if (!path.startsWith(`${rootName}.`)) continue;
+
+      applyBindProp(
+        element,
+        attribute.name.slice(BIND_PROP_PREFIX.length),
+        valueAtPath(value, path.slice(rootName.length + 1)),
+      );
       applied.push(path);
     }
   }
@@ -348,6 +366,17 @@ function applyItemRelativeBindings(root: Element, value: unknown): void {
         setBoundAttribute(element, boundAttribute, selected);
       }
     }
+
+    // SPEC §4.8 data-bind-prop: item-relative live-property assignment.
+    for (const attribute of bindPropAttributes(element)) {
+      if (!attribute.value.startsWith('.')) continue;
+
+      applyBindProp(
+        element,
+        attribute.name.slice(BIND_PROP_PREFIX.length),
+        valueAtPath(value, attribute.value.slice(1)),
+      );
+    }
   }
 }
 
@@ -382,7 +411,7 @@ function valueAtPath(value: unknown, path: string): unknown {
 function queryAttributeBindingElements(root: QueryBindingRoot): QueryBindingElement[] {
   try {
     return Array.from(root.querySelectorAll('*')).filter(
-      (element) => bindingAttributes(element).length > 0,
+      (element) => bindingAttributes(element).length > 0 || bindPropAttributes(element).length > 0,
     );
   } catch {
     return [];
@@ -406,7 +435,10 @@ function attributeBindingElements(
 ): readonly QueryBindingElement[] {
   const elements =
     options.bindingIndex?.attributeBindingElements ?? queryAttributeBindingElements(root);
-  if (isQueryBindingElement(root) && bindingAttributes(root).length > 0) {
+  if (
+    isQueryBindingElement(root) &&
+    (bindingAttributes(root).length > 0 || bindPropAttributes(root).length > 0)
+  ) {
     return [root, ...elements];
   }
 
@@ -452,6 +484,18 @@ async function applyStateDeriveBindings(
       } else {
         setBoundAttribute(element, boundAttribute, value);
       }
+      applied.push(attribute.value);
+    }
+
+    // SPEC §4.8 data-bind-prop: assign the live property for derive-bound stamps.
+    for (const attribute of bindPropAttributes(element)) {
+      const ref = parseDeriveReference(attribute.value);
+      if (!ref) continue;
+
+      const mod = await importModule(ref.url);
+      const derive = mod[ref.exportName];
+      const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
+      applyBindProp(element, attribute.name.slice(BIND_PROP_PREFIX.length), value);
       applied.push(attribute.value);
     }
   }
@@ -508,6 +552,15 @@ function isQueryBindingElement(value: unknown): value is QueryBindingElement {
 function bindingAttributes(element: QueryBindingElement): Array<{ name: string; value: string }> {
   return domAttributes(element.attributes).filter(
     (attribute) => attribute.name.startsWith('data-bind:') && attribute.value !== '',
+  );
+}
+
+// SPEC §4.8 data-bind-prop: live-property binding stamps. Kept separate from
+// `data-bind:` so the property write runs in addition to (never instead of) the
+// companion attribute write.
+function bindPropAttributes(element: QueryBindingElement): Array<{ name: string; value: string }> {
+  return domAttributes(element.attributes).filter(
+    (attribute) => attribute.name.startsWith(BIND_PROP_PREFIX) && attribute.value !== '',
   );
 }
 

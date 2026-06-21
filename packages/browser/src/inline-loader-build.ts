@@ -205,6 +205,43 @@ function installInlineKovoLoader(im) {
       el.textContent = fb(val);
     }
   };
+  // SPEC.md §4.8 data-bind-prop: closed allowlist of property-authoritative
+  // props (lowercased suffix -> [cased prop, kind]); 0=bool,1=number,2=string.
+  // The property write complements the SSR attribute and never reaches an unsafe
+  // sink (KV236). bp(el) collects the stamps; wp writes one with coercion.
+  const pa = {
+    checked: ['checked', 0],
+    indeterminate: ['indeterminate', 0],
+    selected: ['selected', 0],
+    open: ['open', 0],
+    scrolltop: ['scrollTop', 1],
+    scrollleft: ['scrollLeft', 1],
+    value: ['value', 2],
+  };
+  const bp = (el) =>
+    [...(el.attributes || [])].filter(
+      (attr) => attr.name.startsWith('data-bind-prop:') && attr.value,
+    );
+  const wp = (el, suffix, val) => {
+    const spec = pa[suffix] || pa[suffix.toLowerCase()];
+    if (!spec) return;
+    const prop = spec[0];
+    if (el[prop] === undefined) return;
+    // <progress>.value is not dirty/user-interactive; null=indeterminate (no attr),
+    // so skip the string write (data-bind:value owns progress). Mirrors wa().
+    if (spec[1] === 2 && el.localName == 'progress') return;
+    el[prop] = spec[1] === 0 ? val != null && val !== false : spec[1] === 1 ? Number(val) || 0 : fb(val);
+  };
+  const wpd = async (el, ref, suffix, state) => {
+    if (ref.includes('#')) {
+      const hi = ref.lastIndexOf('#');
+      if (hi <= 0 || hi === ref.length - 1) return;
+      const mod = await im(ref.slice(0, hi));
+      wp(el, suffix, mod[ref.slice(hi + 1)]?.run?.(state));
+    } else if (ref.startsWith('state.')) {
+      wp(el, suffix, vp(state, ref.slice(6)));
+    }
+  };
   const as = async (host, state) => {
     const hb = host.getAttribute?.('data-bind');
     if (hb?.includes('#')) await wd(host, hb, undefined, state);
@@ -238,6 +275,10 @@ function installInlineKovoLoader(im) {
           state,
         );
       }
+      // SPEC.md §4.8 data-bind-prop: live property write after the attribute pass.
+      for (const attr of bp(el)) {
+        await wpd(el, attr.value, attr.name.slice('data-bind-prop:'.length), state);
+      }
     }
   };
   const rd = (val) =>
@@ -245,6 +286,15 @@ function installInlineKovoLoader(im) {
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
       .filter(Boolean);
+  const sq = (value) =>
+    value.replace(/[\n\r\f"\\]/g, (char) => {
+      if (char === '\n') return '\\a ';
+      if (char === '\r') return '\\d ';
+      if (char === '\f') return '\\c ';
+      return '\\' + char;
+    });
+  const hsaf = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
+  const hsc = (value) => hsaf(value) && !value.includes(':');
   const targetIdentity = (el) =>
     el.getAttribute('kovo-fragment-target') ??
     el.getAttribute('id') ??
@@ -266,6 +316,7 @@ function installInlineKovoLoader(im) {
         .map((el) => {
           const deps = rd(el.getAttribute('kovo-deps'));
           const target = targetIdentity(el);
+          if (!hsaf(target) || !deps.every(hsaf)) return '';
           return target && (deps.length ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
@@ -276,24 +327,25 @@ function installInlineKovoLoader(im) {
     const targets = [];
     for (const el of doc.querySelectorAll('[kovo-deps]')) {
       const target = targetIdentity(el);
+      const component = liveTargetIdentity(el);
+      if (!hsaf(target) || !hsc(component)) continue;
       if (!target || seen.has(target)) continue;
       seen.add(target);
-      targets.push(target + '#' + liveTargetIdentity(el) + ':' + JSON.stringify(liveProps(el)));
+      targets.push(target + '#' + component + ':' + JSON.stringify(liveProps(el)));
     }
     return targets;
   };
-  // SPEC.md §9.1 + security finding M10: fragment targets round-trip un-escaped
-  // wire data into CSS selectors, so a malformed target containing quote/bracket
-  // characters throws a SyntaxError that would abort the whole apply pass. Guard
-  // the lookups so a malformed selector degrades to "no target found" instead of
-  // throwing.
+  // SPEC.md §9.1: inline fragment apply uses the same escaped target lookup
+  // precedence as the modular runtime and Kovo-Targets collection.
   const ft = (target) => {
     try {
+      const selectorTarget = sq(target);
       return (
-        doc.querySelector('[kovo-c="' + target + '"]') ??
+        doc.querySelector('[kovo-fragment-target="' + selectorTarget + '"]') ??
         doc.getElementById(target) ??
-        doc.querySelector('[kovo-fragment-target="' + target + '"]') ??
-        doc.querySelector('kovo-defer[target="' + target + '"]')
+        doc.querySelector('[id="' + selectorTarget + '"]') ??
+        doc.querySelector('[kovo-c="' + selectorTarget + '"]') ??
+        doc.querySelector('kovo-defer[target="' + selectorTarget + '"]')
       );
     } catch {
       return;
@@ -485,12 +537,6 @@ function installInlineKovoLoader(im) {
     at(chunks.texts);
   };
   globalThis.__kovo_a = ab;
-  const sq = (value) => value.replace(/[\n\r\f"\\]/g, (char) => {
-    if (char === '\n') return '\\a ';
-    if (char === '\r') return '\\d ';
-    if (char === '\f') return '\\c ';
-    return '\\' + char;
-  });
   const st = {};
   const se = {};
   const sft = (target) => {
@@ -610,6 +656,18 @@ function installInlineKovoLoader(im) {
     const el = event.target?.closest?.('[on\\:' + event.type + ']');
     const refs = el?.getAttribute('on:' + event.type);
     if (!el || !refs) return;
+    // SPEC.md §4.4: cancel the native context menu synchronously, in this
+    // capture-phase prefix, before the awaited handler import below. An
+    // on:contextmenu element opts into a custom menu, and deferring
+    // preventDefault until after the await-import misses the dispatch window and
+    // leaks the browser menu (the handler's own preventDefault runs too late).
+    // The marker lets the chained primitive (SPEC.md §4.6 contextMenu open) tell
+    // this framework native-suppression apart from a genuine author preventDefault
+    // so it still opens the styled menu rather than treating itself as superseded.
+    if (event.type === 'contextmenu' && event.cancelable && !event.defaultPrevented) {
+      event.preventDefault();
+      event.kovoNativeDefaultManaged = true;
+    }
     const params = {};
     const pt = rp(el);
     const state = rs(el);

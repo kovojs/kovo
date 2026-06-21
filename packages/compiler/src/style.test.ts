@@ -194,6 +194,49 @@ export const Button = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('extracts a style.keyframes const into an @keyframes block (lifts KV236)', () => {
+    const result = compileComponentModule({
+      fileName: 'components/spinner.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const pulse = style.keyframes(
+  {
+    '0%, 100%': { opacity: 1 },
+    '50%': { opacity: 0.5, transform: 'translateX(40px)' },
+  },
+  { namespace: 'spinnerPulse', source: 'spinner.tsx' },
+);
+
+const base = style.create({
+  root: {
+    animationDuration: '2s',
+    animationName: pulse,
+    opacity: 1,
+  },
+});
+
+export const Spinner = component({
+  render: () => <div style={base.root} />,
+});
+`,
+    });
+
+    const cssSource = result.files.find((file) => file.kind === 'css')?.source ?? '';
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    // The keyframes const resolves to its deterministic name (no KV236), and the
+    // matching @keyframes block is emitted with declarations normalized like
+    // atomic rules (kebab-case property + bare-number length -> px).
+    expect(cssSource).toMatch(/@keyframes kv-spinner-pulse-[a-z0-9]+\{/);
+    expect(cssSource).toContain('0%, 100%{opacity:1}');
+    expect(cssSource).toContain('transform:translateX(40px)');
+    // animationName lowered to the literal keyframes name (a kv-spinner-* atom).
+    expect(serverSource).toContain('kv-spinner-animation-');
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('resolves public theme token imports in static style.create objects', () => {
     const result = compileComponentModule({
       fileName: 'components/token-button.tsx',

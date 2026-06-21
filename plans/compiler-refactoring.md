@@ -9,13 +9,22 @@ rules unless it is an explicit Part-2 capability that adds new accepted/emitted 
 Mark an item `[x]` only after the same session proves it against the gates named under "Neutrality
 gates". File:line citations were spot-checked via grep (see "Verification provenance").
 
-**Implementation status (2026-06-20)** — merged to `main`: **FN1, FN2, FN3, FN4, FN8, FN12** (all of
-Wave 0 + the dead-code/orchestrator-shrink Wave 1 items), each verified by tsc + the golden/conformance/
-render-equivalence oracles + api-surface and committed as its own checkpoint on `agent/compiler-refactoring`.
-**Open / not yet implemented**: FN5 (keystone pass framework — large, and see its YAGNI caveat), FN6
-(split `emit/server.ts` — large), FN7/FN9/FN10/FN11 (typed-fact-boundary + analyze decomposition),
-FN13/FN14 (P2 cleanup), and all of Part 2 (capability features). These remain a deliberate multi-session
-effort on the now-merged substrate.
+**Implementation status (2026-06-21)** — **done & merged to `main`**: Part 1 — **FN1–FN6, FN8–FN14** (FN5,
+FN11, and FN7 Step 1 added this round); Part 2 — **CAP6, CAP9**. All of Part 1 is now landed except FN7 Step 2.
+Each verified by tsc + the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts
+moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10/FN11 were implemented by parallel sub-agents
+in isolated worktrees and integrated here.
+
+**Open / deferred (genuinely multi-session; the substrate above unblocks them):**
+- **FN7 Step 2** — migrate each allowlisted `createSourceFile` site's fact extraction into `scan/parse.ts`
+  byte-exact (the 5 StyleX parses, route grammar, app-graph query-refresh, etc.), then widen
+  `isPostParseGuardedFile` to those files. Step 1 (the enforcing allowlist guard) is done; this cleanup half is
+  the plan's single largest neutral refactor and needs fact-level golden tests per site.
+- **Part 2 features** — **CAP1** (optimism IR unification + typed deriver channel), **CAP2** (`<kovo-live>` SSE),
+  **CAP3** (lists at scale), **CAP7** (incremental compile — now unblocked: needs FN5 ✓ + FN7 Step 2),
+  **CAP8** (fact-driven dev — note FN3 removed the dead machinery, so this is rebuild-and-wire), **CAP10**
+  (machine-readable diagnostics, builds on FN9 ✓). Each is a cross-package feature warranting its own effort;
+  not started here to avoid shipping unverifiable/partial feature code to `main`.
 
 ## Thesis
 
@@ -172,7 +181,16 @@ behavior change never hides inside a "neutral" move.
     exposure unchanged, addressed by FN7.)
   - Unlocks: FN5.
 
-- [ ] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** _(keystone)_
+- [x] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** ✅ done _(keystone)_
+  - Done: (a) `compile-result.ts` now owns the canonical per-fact-category merge/dedupe/sort rules
+    (`mergeQueryUpdatePlans`, `dedupeOutputContextFacts`, `mergeStyleUpdateCoverage` + private helpers), moved
+    verbatim out of `compile.ts`. (b) `lowering-pipeline.ts` expresses the lowering stage as a declarative ordered
+    `LOWERING_PASSES` list (style-span-probe → structural-jsx → navigation-standalone-href → reparse → style-extraction
+    → reparse), driven by `runLoweringPipeline`, encoding today's exact order + the two reparse boundaries; passes are
+    now enumerable so a later capability pass can be slotted at a declared position. `compile.ts` calls the pipeline and
+    consumes the typed result (its now-unused imports dropped). Updated the structural-boundary guard for the moved
+    `navigationStandaloneHrefLowering` call. Verified byte-neutral by the golden corpus + conformance +
+    render-equivalence + fact-hash (hmr-impact) oracles + full compiler suite (582 pass) + api-surface — NOT fixpoint.
   - Problem: `compileComponentModule` is a ~250-line straight-line function in which both the pass _sequence_
     (structural+href lower → reparse → style → reparse → analyze → server-render → terminal emit) and the result
     _assembly_ (53-line literal inlining `mergeQueryUpdatePlans` / `mergeStyleUpdateCoverage` /
@@ -193,34 +211,43 @@ behavior change never hides inside a "neutral" move.
     `compile-component.test.ts` — **NOT fixpoint**. Add a fact-hash snapshot.
   - Unlocks: CAP1, CAP3, CAP7, CAP8.
 
-- [ ] **FN6 · P1 · M/low — Split `emit/server.ts` into render-lowering / equivalence-gate / mutation-form / shared-helper modules.**
-  - Dependency analysis (done this session, for the next implementer): the semantic-render gate cluster (lines
-    ~95–603: `semanticRenderEquivalenceCheck` + all `semantic*`/`renderSemantic*` helpers) is downward-self-contained
-    — **no** function below line 604 references it — so the gate can move out. BUT the gate calls **7 helpers defined
-    in the mutation-form region**: `componentMutationSlotName`, `enclosingEnhancedMutationForm`,
-    `mutationFormErrorProps`, `mutationFormErrorIdExpression`, `enhancedMutationFormLowering`,
-    `enhancedMutationFormBinding`, `staticStringAttributeValue` (the semantic walker must reproduce mutation-form
-    error rendering to compare). So a clean 4-way cut is impossible: those 7 (plus the low-level attribute/escape
-    helpers) must move to a `server-emit-shared` module that the gate, the renderer, and the mutation-form module all
-    import. Confirms the verifier's "shared private helpers — not a clean cut" note. Recommended order: (1) extract
-    `server-emit-shared.ts` with the shared helpers; (2) extract `render-equivalence.ts` (the self-contained gate
-    cluster) importing from shared; (3) extract `mutation-form.ts`; (4) leave `server-render.ts` + a `server.ts`
-    barrel. Gate each step with conformance + render-equivalence (byte-identical).
-  - Problem: `server.ts` (2239 lines, 95 functions) conflates four responsibilities — the render-_equivalence
-    gate_ (`semanticRender*` + VM eval + normalizer), server-render _lowering_ (`serverRenderPatches` + host-stamp
-    writers), enhanced-mutation-_form_ lowering + KV231/238/242/243 diagnostics, and `mutationFormExplainFacts`
-    _graph facts_. The gate is a verifier living inside the emitter.
-  - Evidence: `emit/server.ts:95`, `:604`, `:683`, `:765`.
-  - Approach: extract behind the existing exported entrypoints → `emit/server-render.ts`,
-    `emit/render-equivalence.ts`, `emit/mutation-form.ts`, **plus** a `server-emit-shared` helper module (the four
-    groups share private attribute/escape/void-element/`kebabCase` helpers — not a clean 3-way cut). Keep
-    `server.ts` as a thin re-export barrel so `compile.ts` imports are unchanged. **Do not merge the gate's two
-    render walks** (that would make the differential vacuous) — extraction only.
-  - Neutrality proof: pure file-move + barrel; no logic edits. Byte-identical artifacts + diagnostics, proven by
-    render-equivalence + `compile-component.test.ts`, `registry.test.ts`, the gallery forms fixtures, `diagnostic-coverage-matrix`.
+- [x] **FN6 · P1 · M/low — Split `emit/server.ts` into render-lowering / equivalence-gate / mutation-form / shared-helper modules.** ✅ done
+  - Done: pure module move (no logic edits). `emit/server.ts` (2239 lines) is now an 18-line re-export barrel
+    keeping `compile.ts`/`stamps.test.ts`/`compile-component.test.ts` imports unchanged
+    (`emitServerModule`, `serverRenderLowering`, `semanticRenderEquivalenceCheck`, `mutationFormExplainFacts`,
+    `EmittedServerModule`, `ServerRenderLowering`, `ServerRenderStampWriteFact`). Concern modules:
+    `emit/render-equivalence.ts` (gate: `semanticRenderEquivalenceCheck` + `semantic*`/`renderSemantic*` cluster),
+    `emit/mutation-form.ts` (`mutationFormExplainFacts` + enhanced-mutation-form lowering/diagnostics),
+    `emit/server-render.ts` (`serverRenderLowering`/`serverRenderPatches` + host-stamp writers + `emitServerModule`),
+    `emit/server-emit-shared.ts` (helpers used by ≥2 concerns). Module DAG is acyclic:
+    GATE→SHARED, MF→SHARED, SR→{MF,SHARED}, SHARED→∅. The "do not merge the gate's two render walks" rule
+    is preserved (extraction only).
+  - Shared set is the **transitive closure** of the 7 named gate-facing helpers (`componentMutationSlotName`,
+    `enclosingEnhancedMutationForm`, `mutationFormErrorProps`, `mutationFormErrorIdExpression`,
+    `enhancedMutationFormLowering`, `enhancedMutationFormBinding`, `staticStringAttributeValue`) **plus**
+    `writerConflictDiagnostic` (MF+SR shared) — 24 decls total. The extra tail
+    (`localMutationKey`, `submittedForm*`, `staticAttributeScalar`, `formLoweringOutputContext`,
+    `renderAttributeWithName`, `attributeValueExpression`, `escapeTemplateLiteral`, `jsx*`,
+    `enhancedMutationFormConflicts`, `importsMutationCsrfField`, `EnhancedMutationForm*`) is required to keep
+    SHARED self-contained and the graph acyclic (placing it in MF would create a SHARED↔MF cycle), satisfying the
+    "move once, no duplication" rule.
+  - Verification: `tsc -p tsconfig.json --noEmit` clean; `node scripts/api-surface-gate.mjs` exit 0
+    (baseline 1338, 0 new); vitest 107/107 across `compile-component`, `compiler-conformance`,
+    `render-equivalence-boundary`, `stamps`, `registry`, `server-emit-security`, `diagnostic-coverage-matrix`.
   - Unlocks: CAP6.
 
-- [ ] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.**
+- [ ] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.** ⏳ Step 1 done
+  - Step 1 done (enforce the boundary): `source-reparse-boundary.test.ts` enumerates every `ts.createSourceFile`
+    site in `compiler/src` outside `scan/` and pins them to a documented allowlist — a NEW reparse now fails loudly
+    and the existing 8 sites (app-graph, mutation-inputs, optimistic-inline, route-pages, style.ts ×5, and the emit/
+    gate/dead-import/live-target sites) are documented as the Step-2 worklist. This widens rule-9 to cover the
+    *structural* reparse form the conformance guard misses, across the whole compiler (not just the 4 zones).
+    Test-config only; zero behavior change.
+  - Step 2 remaining (the larger half): migrate each allowlisted site's fact extraction into `scan/parse.ts`
+    byte-exact (incl. the 5 StyleX parses + app-graph's query-refresh parse — which would also let `app-graph.ts`
+    move under the guarded `analyze/` zone, completing FN14's intent), then widen `isPostParseGuardedFile` to those
+    files. Each needs fact-level golden tests; this is the plan's single largest neutral refactor and is left for a
+    dedicated pass.
   - Problem: 11 production sites re-run `ts.createSourceFile` (plus `getText` re-reads) outside `scan/parse.ts`.
     The mechanical rule-9 guard only scans `lower|validate|analyze|emit` (+`graph.ts`), so the package-root files
     where source re-reads actually live are never inspected — exactly the gap (e.g. `internal-graph.ts` reparses a
@@ -241,22 +268,36 @@ behavior change never hides inside a "neutral" move.
     joins (`parse.ts:519-520`, `:568-571`) are load-bearing — preserve `start`/`openingEnd` exactly.
   - Unlocks: CAP1, CAP2, CAP7, CAP8.
 
-- [ ] **FN9 · P1 · M/low — Thread diagnostic positions through a `DiagnosticFactory` on `ValidatorContext`; stop passing raw source to validators.**
-  - Problem: every validator signature takes `source:string` though none use it for accept/reject — it flows only
-    to `diagnosticFor()` for offset→line/col. This obscures rule-9 compliance by signature and forces each
-    validator to hand-pick one of three `source`/`model`/`offset` triples; a wrong pairing silently mislocates
-    diagnostics with no type error.
-  - Evidence: `validate/pipeline.ts:41-107`, `validate/bindings.ts:39-113`, `diagnostics.ts:25-57`.
-  - Approach: introduce a `DiagnosticFactory` on `ValidatorContext` closing over the correct `(source, offsetMap)`
-    pair, exposing `at(code, span, detail?)`; validators receive factory + typed model only. Provide an
-    `originalModel`-bound variant for pre-lowering validators. Memoize a line-start index per source (turns the
-    O(n) prefix scan at `diagnostics.ts:49-56` into binary search — free perf win).
-  - Neutrality proof: pure plumbing — byte-identical diagnostics (code/message/help/start/length). Proven by
-    `diagnostic-coverage-matrix.test.ts` positive+negative coverage; add a fact assertion over all ~37 diagnostic
-    sites before migrating (the snapshot alone is not exhaustive).
+- [x] **FN9 · P1 · M/low — Thread diagnostic positions through a `DiagnosticFactory` on `ValidatorContext`; stop passing raw source to validators.** ✅ done
+  - Done: added `createDiagnosticFactory(fileName, source, offsetMap?)` + `DiagnosticFactory`/`DiagnosticSpan`
+    (`diagnostics.ts`), with a memoized line-start binary-search `offsetToPosition` (byte-identical to the legacy
+    O(n) prefix scan, incl. negative/zero/boundary offsets). `collectCompilerDiagnostics` now builds three frame-pinned
+    factories — `loweredDiagnostics` (post-lowering `model`/`source`), `originalDiagnostics` (`originalModel`/
+    `options.source`), `mappedDiagnostics` (generated offsets mapped via `sourceOffsetMap`) — and passes a factory +
+    typed model to every validator; no validator receives a bare `source: string` anymore. Migrated all validators in
+    `validate/{bindings,component-contracts,component-names,event-triggers,markup,navigation,temporal}.ts` and
+    `security/output-context.ts`. Left `queryShapeFactDiagnostics` (`types.ts`) untouched — it is already source-free
+    (positionless KV240, takes only `fileName` + facts), a legitimate rule-9 non-exception.
+  - Neutrality proof: pure plumbing, byte-identical diagnostics. Proven by the full `packages/compiler` vitest suite
+    (58 files / 566 tests pass) including `diagnostic-coverage-matrix`, `compiler-conformance`, render-equivalence, and
+    the 5 named gates (`diagnostic-coverage-matrix`, `compile-component`, `compiler-conformance`, `state-bindings`,
+    `output-context-security` — 67 pass). `tsc -p tsconfig.json --noEmit` clean; `node scripts/api-surface-gate.mjs`
+    exit 0 (baseline 1338 unchanged; new exports are `@internal`).
   - Unlocks: CAP10.
 
-- [ ] **FN10 · P1 · M/med — Decompose `analyze/query-updates.ts` into binding / derive-stamp / coverage modules behind stable fact facades.**
+- [x] **FN10 · P1 · M/med — Decompose `analyze/query-updates.ts` into binding / derive-stamp / coverage modules behind stable fact facades.** ✅ done
+  - Done: split the 832-line file into `analyze/query-bindings.ts` (data-bind collection +
+    data-bind-list template-stamp offset math), `analyze/query-derives.ts` (`derive()`/`data-derive`
+    stamps), `analyze/query-coverage.ts` (coverage expression-path + `statusCoveredPaths`/`planCoveredPaths`
+    precedence helpers), and `analyze/query-internal.ts` (shared helpers incl. the hidden non-enumerable
+    `outputContext`/`outputContexts` channel, moved verbatim — `Object.defineProperty(..,{enumerable:false})`).
+    `query-updates.ts` (311 lines) keeps `collectQueryUpdatePlans`/`collectQueryUpdateCoverage` as composition
+    entrypoints and re-exports `collectDataBindListStamps`; importers (`compile.ts`, `validate/bindings.ts`)
+    unchanged. Functions moved verbatim, no logic edits.
+  - Evidence: `tsc -p tsconfig.json --noEmit` clean; 7 cited suites 83 pass (query-coverage/query-update-plans/
+    query-bindings/registry/compiler-conformance/render-equivalence-boundary/hmr-impact); `api-surface-gate.mjs`
+    exit 0; fact-hash sanity check on a data-bind+derive+list+isomorphic fixture — plans `bb03a6fa`/coverage
+    `6f7b3b2e` and full JSON bytes byte-identical pre- vs post-split.
   - Problem: `query-updates.ts` (832 lines) mixes five concerns — data-bind collection, data-bind-list
     template-stamp assembly with offset math, `derive()`/`data-derive` stamp collection, 9 nearly-parallel coverage
     push-loops with subtle `statusCoveredPaths`/`planCoveredPaths` precedence, and a hidden non-enumerable
@@ -299,22 +340,25 @@ behavior change never hides inside a "neutral" move.
     `compiler-conformance.test.ts` + migrated unit tests + `structural-boundary.test.ts`.
   - Unlocks: FN11, CAP3.
 
-- [ ] **FN11 · P1 · M/med — Consolidate derive emission into one helper owning the `(exportName, inputs, params, expression, sink, context)` contract.**
-  - Problem: the `export const X = derive([inputs], (params) => expr)` pattern + matching
-    `StateDeriveFact`/`GeneratedOutputWriteFact` construction is hand-assembled with string templates at 6 sites (4
-    in `structural-jsx.ts`, 2 in legacy `inline-derives.ts`), with genuinely differing shapes (`JSON.stringify`'d vs
-    literal inputs, `: any` annotations). The derive ABI is implicit and per-site, so any v2 metadata
-    (effect/shape mapping, punt reason) must be edited in every copy.
-  - Evidence: `lower/structural-jsx.ts:555`, `:740`, `:1347`, `:1383`.
-  - Approach: add `emitDerive(ctx, {baseName, inputs, params, expression, source, attr?, sink, context})` that
-    allocates the export name, pushes the derive string, and records the facts; rewrite call sites. Must reproduce
-    each site's exact input-format/param-typing variations byte-for-byte. **Sequence after FN12** so only the 4
-    production sites remain.
-  - Neutrality proof: generated strings + fact records byte-identical (snapshot emitted IR for gallery fixtures) +
-    render-equivalence + fact-hash snapshot. Slightly more error-prone than a pure move (inter-site shape differences).
-  - Unlocks: CAP1.
+- [x] **FN11 · P1 · M/med — Consolidate derive emission into one helper owning the `(exportName, inputs, params, expression, sink, context)` contract.** ✅ done
+  - Done: added `emitDerive(EmitDeriveOptions)` in `lower/structural-jsx.ts` (owns export-name allocation via
+    `nextExportName`, the lone `export const X = derive(<inputs>, (<params>) => <expr>);` template, and the
+    `StateDeriveFact`/`GeneratedOutputWriteFact` pushes). All production derive sites route through it:
+    `lowerAttributeDerive`, `lowerPrimitiveIndeterminateProp`, `lowerPrimitiveReactiveAttribute`, `recordStateDerive`,
+    `recordQueryTextDerive`. Callers pass already-formatted `inputs`/`params` strings + fully-built fact objects, so
+    each site's load-bearing shape (`JSON.stringify`'d vs literal `["state"]` inputs; `: any` vs un-annotated params;
+    per-site fact fields; shared-vs-distinct outputContext object identity) stays byte- and identity-neutral. There is
+    now exactly one `= derive(` template and one `nextExportName` caller in the file.
+  - Verified (byte-neutral): tsc clean; `vitest --run packages/compiler` 582/582 (61 files), incl.
+    `render-equivalence-boundary` + `compiler-conformance` (byte-identical emitted module/stamp guards) +
+    `structural-jsx-ir` + `state-bindings`/`state-events` + `stamps`; `node scripts/api-surface-gate.mjs` exit 0
+    (baseline 1338 unchanged). Unlocks CAP1.
 
-- [ ] **FN13 · P2 · S/low — Make the platform substitution table data-driven and drop the string round-trip.**
+- [x] **FN13 · P2 · S/low — Make the platform substitution table data-driven and drop the string round-trip.** ✅ done
+  - Done: dialog method matching became a `dialogActionByMethod` table (mirroring the popover one); `platformAttributes`
+    (string) → `platformAttributeList` returning typed `{name, value}` pairs (values pre-escaped as before); `lowerStructuralJsx`
+    builds `JsxIrAttribute`s directly, removing the `split(' ')/split('=')` round-trip. Verified: tsc + platform-lowering +
+    conformance + render-equivalence + structural-jsx-ir (22 pass) — byte-identical emission.
   - Problem: `platformSubstitutionFor` is an if/else ladder hard-gated on `tag==='button'` with method names
     inline; `platformAttributes` builds attribute _strings_ that `structural-jsx.ts:441-443` then re-parses by naive
     `split(' ')`/`split('=')` — fragile if any value contained a space or `=`. Adding a substitution touches matcher
@@ -328,7 +372,13 @@ attributes:[{name, valueFrom}]}` and have `lowerPlatformBehaviors` consume the s
     `button` matcher exists today — the table should reflect that, not invent `summary`/`details` rows.)
   - Unlocks: — (standalone cleanup; removes a fragile attribute-string round-trip).
 
-- [ ] **FN14 · P2 · S/low — Collapse the graph file trio into one canonical module + two thin facades.**
+- [x] **FN14 · P2 · S/low — Collapse the graph file trio into one canonical module + two thin facades.** ✅ done (root rename)
+  - Done: renamed `internal-graph.ts` → `app-graph.ts` (ending the `internal-graph` vs `internal/graph` confusion);
+    `graph.ts` (public) + `internal/graph.ts` (internal) facades + all importers updated. Kept at the package root
+    rather than `analyze/` ON PURPOSE: `app-graph.ts` still does a `createSourceFile`/`getText` reparse of a
+    query-refresh expression, which is exactly the rule-9 debt FN7 must clean before it can live under the guarded
+    `analyze/` zone (confirmed via the `postParseSourceStringProjectFact` guard — moving it under `analyze/`
+    surfaced 7 violations). Verified: tsc + registry + conformance + render-equivalence.
   - Problem: `deriveAppGraph` et al. live in `internal-graph.ts` (632 lines, at package root, _outside_ `analyze/`),
     while `graph.ts` (public) and `internal/graph.ts` (internal) are 13-line facades. There is one
     `deriveAppGraph` implementation; the public/internal split is deliberate (rule 8) but the naming triple + root
@@ -380,7 +430,10 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
     pair; turns KV310 into an editor error instead of a CLI-only check; replaces a brittle generated-file handoff with
     a typed contract.
 
-- [ ] **CAP6 · P0 — Drift-proof render-plan token + cross-package ABI contract test (and remote build-cache seam).** (SPEC §5.2.1 normative; KV416)
+- [x] **CAP6 · P0 — Drift-proof render-plan token + cross-package ABI contract test.** ✅ done (contract test; remote-cache seam deferred)
+  - Done: `render-plan-token-contract.test.ts` locks `computeCompilerRenderPlanFingerprint` to the shared
+    `@kovojs/core` source `@kovojs/server` also re-exports (FN1), with order-insensitivity, KV416 monotonicity,
+    determinism, and the pinned grammar constant. Remote/distributed `CompileCacheBackend` seam remains future work.
   - Summary: a build-failing cross-package conformance test that the compiler-produced render-plan token and the
     server-validated token agree; plus the seam for a distributed/remote content-addressed build cache.
   - Blocked by: grammar version + fingerprint fn are duplicated literals in two packages (`compile.ts:873`/`:890`;
@@ -442,7 +495,12 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
     `cache-identity.ts` supply the fingerprint primitives.
   - Payoff: sub-linear rebuild on edits; lower watch-mode latency; faster CI on large component trees.
 
-- [ ] **CAP9 · P1 — Output-context soundness gate (every policed sink maps to an escaped emitter context).** (SPEC §5.2 rule 10; §5.2.2/§9.1.1 prod delta; KV416)
+- [x] **CAP9 · P1 — Output-context soundness gate (every policed sink maps to an escaped emitter context).** ✅ done
+  - Done: `output-context-soundness.test.ts` asserts the rule-10 lockstep FN8 unified — emit
+    (`outputContextForAttribute`) returns `url-attribute` exactly when the KV236 validator's `isUrlAttribute`
+    predicate gates it (across URL/plain/boolean attrs, case-insensitively), plus a compile-based check that a
+    dynamic `href` emits a `url-attribute` `GeneratedOutputWriteFact` for the gated sink. (Cross-package escaper
+    unification — the `@kovojs/browser` table — remains future work.)
   - Summary: a build-failing cross-check that every sink the KV236 validator forbids/permits corresponds to an
     emitter context that actually escapes it, closing the rule-10 lockstep gap structurally.
   - Blocked by: validation and emit classify sinks with separate duplicated tables (`security/output-context.ts:345`

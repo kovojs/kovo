@@ -38,10 +38,15 @@ describe('structural IR ownership boundary', () => {
   });
 
   it('keeps production href attribute lowering on the JSX IR path', () => {
+    // FN5 (plans/compiler-refactoring.md): the production lowering sequence — including the
+    // terminal `navigationStandaloneHrefLowering` call — moved out of compile.ts into the
+    // declarative `lowering-pipeline.ts`. The legacy `navigationHrefLowering` must appear in neither.
     const compileSource = readFileSync(join(compilerSrcDir, 'compile.ts'), 'utf8');
+    const pipelineSource = readFileSync(join(compilerSrcDir, 'lowering-pipeline.ts'), 'utf8');
 
     expect(compileSource).not.toContain('navigationHrefLowering');
-    expect(compileSource).toContain('navigationStandaloneHrefLowering');
+    expect(pipelineSource).not.toContain('navigationHrefLowering');
+    expect(pipelineSource).toContain('navigationStandaloneHrefLowering');
   });
 });
 

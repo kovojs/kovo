@@ -64,4 +64,84 @@ describe('browser inline loader response apply', () => {
     expect(root.querySelector('[kovo-key="panel"]')).toBe(panel);
     expect(panel.scrollTop).toBeCloseTo(4, 0);
   });
+
+  it('applies fragments to explicit fragment targets before conflicting component stamps', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<form enhance action="/cart" method="post">',
+      '<section kovo-fragment-target="cart" kovo-deps="cart">old cart</section>',
+      '<aside kovo-c="cart">wrong target</aside>',
+      '</form>',
+    ].join('');
+    document.body.append(root);
+
+    const form = root.querySelector('form');
+    if (!form) throw new Error('missing inline conflict fixture');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        async text() {
+          return [
+            '<kovo-fragment target="cart">',
+            '<section kovo-fragment-target="cart" kovo-deps="cart">fresh cart</section>',
+            '</kovo-fragment>',
+          ].join('');
+        },
+      })),
+    );
+
+    installInlineKovoLoader(async () => ({}));
+    form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() =>
+      expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('fresh cart'),
+    );
+    expect(root.querySelector('[kovo-c="cart"]')?.textContent).toBe('wrong target');
+  });
+
+  it('applies selector-invalid id and fragment-target values through escaped lookup', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<form enhance action="/cart" method="post">',
+      "<section id='target\"bad-id'>old id</section>",
+      "<section kovo-fragment-target='target\"bad-fragment'>old fragment target</section>",
+      '</form>',
+    ].join('');
+    document.body.append(root);
+
+    const form = root.querySelector('form');
+    if (!form) throw new Error('missing inline selector fixture');
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        async text() {
+          return [
+            "<kovo-fragment target='target\"bad-id'>",
+            "<section id='target\"bad-id'>fresh id</section>",
+            '</kovo-fragment>',
+            "<kovo-fragment target='target\"bad-fragment'>",
+            "<section kovo-fragment-target='target\"bad-fragment'>fresh fragment target</section>",
+            '</kovo-fragment>',
+          ].join('');
+        },
+      })),
+    );
+
+    installInlineKovoLoader(async () => ({}));
+    form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      const sections = [...root.querySelectorAll('section')];
+      expect(
+        sections.find((section) => section.getAttribute('id') === 'target"bad-id')?.textContent,
+      ).toBe('fresh id');
+      expect(
+        sections.find(
+          (section) => section.getAttribute('kovo-fragment-target') === 'target"bad-fragment',
+        )?.textContent,
+      ).toBe('fresh fragment target');
+    });
+  });
 });

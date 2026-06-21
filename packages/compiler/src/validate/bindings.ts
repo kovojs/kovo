@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { collectDataBindListStamps } from '../analyze/query-updates.js';
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { dedupeBy } from '../shared.js';
 import {
   callExpressions,
@@ -37,7 +37,7 @@ interface DataBindAttribute {
 }
 
 export function validateDataBindings(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
@@ -53,15 +53,12 @@ export function validateDataBindings(
       const result = validatePathInQueryShapes(binding.path, queryShapes ?? {});
       if (!result.exists) {
         return [
-          {
-            ...diagnosticFor(options.fileName, 'KV302', source, binding.index, binding.length),
-            message: `${diagnosticDefinitions.KV302.message} ${binding.path}`,
-          },
+          diagnostics.at('KV302', { start: binding.index, length: binding.length }, binding.path),
         ];
       }
 
       return result.nullableTraversal
-        ? [kv227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
+        ? [kv227Diagnostic(diagnostics, binding, result.nullableTraversal)]
         : [];
     });
 
@@ -72,10 +69,7 @@ export function validateDataBindings(
       if (result.exists) return [];
 
       return [
-        {
-          ...diagnosticFor(options.fileName, 'KV302', source, binding.index, binding.length),
-          message: `${diagnosticDefinitions.KV302.message} ${binding.path}`,
-        },
+        diagnostics.at('KV302', { start: binding.index, length: binding.length }, binding.path),
       ];
     });
 
@@ -85,35 +79,25 @@ export function validateDataBindings(
         const result = validateListStampInQueryShapes(stamp, queryShapes);
         if (!result.exists) {
           return [
-            {
-              ...diagnosticFor(options.fileName, 'KV302', source, binding?.index, binding?.length),
-              message: `${diagnosticDefinitions.KV302.message} ${stamp.list}`,
-            },
+            diagnostics.at('KV302', { start: binding?.index, length: binding?.length }, stamp.list),
           ];
         }
 
         return result.nullableTraversal && binding
-          ? [kv227Diagnostic(source, options.fileName, binding, result.nullableTraversal)]
+          ? [kv227Diagnostic(diagnostics, binding, result.nullableTraversal)]
           : [];
       })
     : [];
 
   const itemDiagnostics = queryShapes
-    ? nullableItemBindingDiagnostics(
-        source,
-        model,
-        bindingAttributes,
-        listStamps,
-        queryShapes,
-        options.fileName,
-      )
+    ? nullableItemBindingDiagnostics(diagnostics, model, bindingAttributes, listStamps, queryShapes)
     : [];
 
   return bindingDiagnostics.concat(stateDiagnostics, listDiagnostics, itemDiagnostics);
 }
 
 export function validateStampExpressionDrift(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
@@ -128,10 +112,11 @@ export function validateStampExpressionDrift(
     .map((stamp) => {
       const code = stamp.binding === stamp.expression ? 'KV223' : 'KV222';
 
-      return {
-        ...diagnosticFor(options.fileName, code, source, stamp.index, stamp.length),
-        message: `${diagnosticDefinitions[code].message} data-bind="${stamp.binding}" wraps {${stamp.expression}}`,
-      };
+      return diagnostics.at(
+        code,
+        { start: stamp.index, length: stamp.length },
+        `data-bind="${stamp.binding}" wraps {${stamp.expression}}`,
+      );
     });
 }
 
@@ -223,15 +208,14 @@ function exportedStateDeriveNames(model: ComponentModuleModel): string[] {
 }
 
 function nullableItemBindingDiagnostics(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   bindingAttributes: readonly DataBindAttribute[],
   listStamps: readonly QueryTemplateStampFact[],
   queryShapes: Record<string, QueryShape>,
-  fileName: string,
 ): CompilerDiagnostic[] {
   const elements = jsxElements(model);
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const stamp of listStamps) {
     const itemShape = listItemShapeAtBindingPath(stamp.list, queryShapes);
@@ -260,13 +244,13 @@ function nullableItemBindingDiagnostics(
           parseBindingPath(binding.relativeReadPath ?? ''),
         );
         if (result.exists && result.nullableTraversal) {
-          diagnostics.push(kv227Diagnostic(source, fileName, binding, result.nullableTraversal));
+          found.push(kv227Diagnostic(diagnostics, binding, result.nullableTraversal));
         }
       }
     }
   }
 
-  return dedupeBy(diagnostics, (diagnostic) =>
+  return dedupeBy(found, (diagnostic) =>
     [diagnostic.code, diagnostic.fileName, diagnostic.start?.line, diagnostic.start?.column].join(
       ':',
     ),
@@ -274,15 +258,17 @@ function nullableItemBindingDiagnostics(
 }
 
 function kv227Diagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   binding: DataBindAttribute,
   traversal: { segment: string },
 ): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'KV227', source, binding.index, binding.length),
+    ...diagnostics.at(
+      'KV227',
+      { start: binding.index, length: binding.length },
+      `${binding.path} (segment: ${traversal.segment})`,
+    ),
     help: diagnosticDefinitions.KV227.help,
-    message: `${diagnosticDefinitions.KV227.message} ${binding.path} (segment: ${traversal.segment})`,
   };
 }
 

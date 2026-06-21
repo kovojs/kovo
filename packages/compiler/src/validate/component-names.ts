@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { deriveComponentNames } from '../component-names.js';
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   jsxElements,
   type ComponentModel,
@@ -33,11 +33,11 @@ interface ViewTransitionRegistration {
 }
 
 export function validateDuplicateComponentNames(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   const byName = new Map<string, ComponentNameRegistration>();
   const registryNames = new Set(options.registryFacts?.components ?? []);
   const previousRegistryNames = new Set(options.previousRegistryFacts?.components ?? []);
@@ -45,7 +45,7 @@ export function validateDuplicateComponentNames(
   for (const component of model.components) {
     const registration = componentNameRegistration(component, options.fileName);
     if (registryNames.has(registration.effectiveName)) {
-      diagnostics.push(registryComponentNameDiagnostic(source, options.fileName, registration));
+      found.push(registryComponentNameDiagnostic(diagnostics, registration));
     }
     if (previousRegistryNames.size > 0 && !previousRegistryNames.has(registration.effectiveName)) {
       const previousName = previousRegistryNameForDomLeaf(
@@ -53,9 +53,7 @@ export function validateDuplicateComponentNames(
         registration.domName,
       );
       if (previousName) {
-        diagnostics.push(
-          changedComponentNameDiagnostic(source, options.fileName, previousName, registration),
-        );
+        found.push(changedComponentNameDiagnostic(diagnostics, previousName, registration));
       }
     }
 
@@ -65,28 +63,24 @@ export function validateDuplicateComponentNames(
       continue;
     }
 
-    diagnostics.push(
-      duplicateComponentNameDiagnostic(source, options.fileName, previous, registration),
-    );
+    found.push(duplicateComponentNameDiagnostic(diagnostics, previous, registration));
   }
 
-  return diagnostics;
+  return found;
 }
 
 export function validateDuplicateFragmentTargetNames(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   const byName = new Map<string, FragmentTargetRegistration>();
   const registryNames = new Set(options.registryFacts?.fragmentTargets ?? []);
 
   for (const registration of fragmentTargetRegistrations(model, options.fileName)) {
     if (registryNames.has(registration.targetName)) {
-      diagnostics.push(
-        registryFragmentTargetNameDiagnostic(source, options.fileName, registration),
-      );
+      found.push(registryFragmentTargetNameDiagnostic(diagnostics, registration));
     }
 
     const previous = byName.get(registration.targetName);
@@ -95,28 +89,24 @@ export function validateDuplicateFragmentTargetNames(
       continue;
     }
 
-    diagnostics.push(
-      duplicateFragmentTargetNameDiagnostic(source, options.fileName, previous, registration),
-    );
+    found.push(duplicateFragmentTargetNameDiagnostic(diagnostics, previous, registration));
   }
 
-  return diagnostics;
+  return found;
 }
 
 export function validateDuplicateStaticViewTransitionNames(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   const byName = new Map<string, ViewTransitionRegistration>();
   const registryNames = new Set(options.registryFacts?.viewTransitions ?? []);
 
   for (const registration of viewTransitionRegistrations(model)) {
     if (registryNames.has(registration.name)) {
-      diagnostics.push(
-        registryViewTransitionNameDiagnostic(source, options.fileName, registration),
-      );
+      found.push(registryViewTransitionNameDiagnostic(diagnostics, registration));
     }
 
     const previous = byName.get(registration.name);
@@ -125,12 +115,10 @@ export function validateDuplicateStaticViewTransitionNames(
       continue;
     }
 
-    diagnostics.push(
-      duplicateViewTransitionNameDiagnostic(source, options.fileName, previous, registration),
-    );
+    found.push(duplicateViewTransitionNameDiagnostic(diagnostics, previous, registration));
   }
 
-  return diagnostics;
+  return found;
 }
 
 function componentNameRegistration(
@@ -206,21 +194,17 @@ function viewTransitionRegistrations(model: ComponentModuleModel): ViewTransitio
 }
 
 function duplicateComponentNameDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   first: ComponentNameRegistration,
   duplicate: ComponentNameRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV237;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnosticFor(
-      fileName,
-      'KV237',
-      source,
-      duplicateSpan?.start,
-      duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
-    ),
+    ...diagnostics.at('KV237', {
+      start: duplicateSpan?.start,
+      length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
+    }),
     help: [
       definition.help,
       `Effective name: ${duplicate.effectiveName}`,
@@ -233,20 +217,16 @@ function duplicateComponentNameDiagnostic(
 }
 
 function registryComponentNameDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   duplicate: ComponentNameRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV237;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnosticFor(
-      fileName,
-      'KV237',
-      source,
-      duplicateSpan?.start,
-      duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
-    ),
+    ...diagnostics.at('KV237', {
+      start: duplicateSpan?.start,
+      length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
+    }),
     help: [
       definition.help,
       `Effective name: ${duplicate.effectiveName}`,
@@ -259,21 +239,17 @@ function registryComponentNameDiagnostic(
 }
 
 function changedComponentNameDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   previousName: string,
   current: ComponentNameRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV241;
   const span = current.span;
   return {
-    ...diagnosticFor(
-      fileName,
-      'KV241',
-      source,
-      span?.start,
-      span ? span.end - span.start : undefined,
-    ),
+    ...diagnostics.at('KV241', {
+      start: span?.start,
+      length: span ? span.end - span.start : undefined,
+    }),
     help: [
       definition.help,
       `Previous registry key: ${previousName}`,
@@ -286,21 +262,17 @@ function changedComponentNameDiagnostic(
 }
 
 function duplicateFragmentTargetNameDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   first: FragmentTargetRegistration,
   duplicate: FragmentTargetRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV238;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnosticFor(
-      fileName,
-      'KV238',
-      source,
-      duplicateSpan?.start,
-      duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
-    ),
+    ...diagnostics.at('KV238', {
+      start: duplicateSpan?.start,
+      length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
+    }),
     help: [
       definition.help,
       `Fragment target: ${duplicate.targetName}`,
@@ -313,20 +285,16 @@ function duplicateFragmentTargetNameDiagnostic(
 }
 
 function registryFragmentTargetNameDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   duplicate: FragmentTargetRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV238;
   const duplicateSpan = duplicate.span;
   return {
-    ...diagnosticFor(
-      fileName,
-      'KV238',
-      source,
-      duplicateSpan?.start,
-      duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
-    ),
+    ...diagnostics.at('KV238', {
+      start: duplicateSpan?.start,
+      length: duplicateSpan ? duplicateSpan.end - duplicateSpan.start : undefined,
+    }),
     help: [
       definition.help,
       `Fragment target: ${duplicate.targetName}`,
@@ -339,20 +307,16 @@ function registryFragmentTargetNameDiagnostic(
 }
 
 function duplicateViewTransitionNameDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   first: ViewTransitionRegistration,
   duplicate: ViewTransitionRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV239;
   return {
-    ...diagnosticFor(
-      fileName,
-      'KV239',
-      source,
-      duplicate.attribute.start,
-      duplicate.attribute.end - duplicate.attribute.start,
-    ),
+    ...diagnostics.at('KV239', {
+      start: duplicate.attribute.start,
+      length: duplicate.attribute.end - duplicate.attribute.start,
+    }),
     help: [
       definition.help,
       `View-transition name: ${duplicate.name}`,
@@ -366,19 +330,15 @@ function duplicateViewTransitionNameDiagnostic(
 }
 
 function registryViewTransitionNameDiagnostic(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   duplicate: ViewTransitionRegistration,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV239;
   return {
-    ...diagnosticFor(
-      fileName,
-      'KV239',
-      source,
-      duplicate.attribute.start,
-      duplicate.attribute.end - duplicate.attribute.start,
-    ),
+    ...diagnostics.at('KV239', {
+      start: duplicate.attribute.start,
+      length: duplicate.attribute.end - duplicate.attribute.start,
+    }),
     help: [
       definition.help,
       `View-transition name: ${duplicate.name}`,

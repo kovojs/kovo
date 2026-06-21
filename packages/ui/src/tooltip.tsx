@@ -42,28 +42,41 @@ export interface TooltipContentProps extends TooltipStateProps {
 }
 
 export const tooltipStyles = style.create({
+  // Rotated-square arrow at the bottom center of the content, pointing down to
+  // the trigger. Same fill as the content so the two read as one shape.
+  arrow: {
+    backgroundColor: uiTheme.color.backgroundInverse,
+    borderBottomRightRadius: 2,
+    bottom: -3,
+    height: 8,
+    left: '50%',
+    marginLeft: -4,
+    position: 'absolute',
+    transform: 'rotate(45deg)',
+    width: 8,
+  },
   content: {
     backgroundColor: uiTheme.color.backgroundInverse,
-    borderRadius: uiTheme.radius.sm,
+    borderRadius: uiTheme.radius.md,
     color: uiTheme.color.foregroundInverse,
     fontSize: 12,
-    // better-components-ux: the tooltip content already resolves against the
-    // relative root (it does not use the native popover top layer), so add CSS
-    // anchor positioning as basic, future-proof collision-aware placement that
-    // also keeps it centered below the trigger when the anchor is available.
-    marginTop: 4,
+    // Center above the trigger relative to the position:relative root. Plain
+    // absolute placement (not CSS anchor positioning) so it lands centered above
+    // the trigger in every browser instead of falling back to the root's corner.
+    bottom: '100%',
+    left: '50%',
+    marginBottom: 6,
     maxWidth: 256,
     paddingBlock: 6,
-    paddingInline: 10,
+    paddingInline: 12,
     position: 'absolute',
-    positionAnchor: '--kovo-tooltip-anchor',
-    positionArea: 'bottom',
+    transform: 'translateX(-50%)',
     width: 'max-content',
     zIndex: 50,
     '[data-state=closed]': {
       display: 'none',
     },
-    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    boxShadow: '0 4px 6px -2px rgb(0 0 0 / 0.12)',
   },
   root: {
     color: uiTheme.color.foreground,
@@ -168,6 +181,7 @@ export const TooltipContent = component({
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
     });
     const styleAttrs = style.attrs(tooltipStyles.content, props.styles?.content);
+    const arrowAttrs = style.attrs(tooltipStyles.arrow);
 
     return (
       <div
@@ -180,6 +194,7 @@ export const TooltipContent = component({
         role={attrs.role}
       >
         {props.children}
+        <span {...arrowAttrs} aria-hidden="true" />
       </div>
     );
   },

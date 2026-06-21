@@ -96,14 +96,14 @@ describe('route JSX pages', () => {
   it('stamps named query-backed component roots for source-served morph targets', async () => {
     const product = domain('product');
     const inventory = domain('inventory');
-    const productQuery = query('product', {
+    const productQuery = query('productById', {
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
         return { id: input.id, label: `Product ${input.id}` };
       },
       reads: [product],
     });
-    const inventoryQuery = query('inventory', {
+    const inventoryQuery = query('inventoryStatus', {
       load: () => ({ available: true }),
       reads: [inventory],
     });
@@ -134,9 +134,55 @@ describe('route JSX pages', () => {
     await expect(
       renderRoutePageResponse(productRoute, { params: { id: 'p1' } }, {}),
     ).resolves.toMatchObject({
-      body: '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventory product" kovo-fragment-target="product-detail" kovo-live-component="components/products/product-detail/product-detail" kovo-props="{&quot;productId&quot;:&quot;p1&quot;}">Product p1</section>',
+      body: '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventoryStatus productById" kovo-fragment-target="product-detail:p1" kovo-live-component="components/products/product-detail/product-detail" kovo-props="{&quot;productId&quot;:&quot;p1&quot;}">Product p1</section>',
       status: 200,
     });
+  });
+
+  it('stamps repeated source-served component instances with distinct live target identities', async () => {
+    const product = domain('product');
+    const productQuery = query('productById', {
+      args: s.object({ id: s.string() }),
+      load(input: { id: string }) {
+        return { id: input.id, label: `Product ${input.id}` };
+      },
+      reads: [product],
+    });
+    const ProductDetail = component({
+      props: { productId: String },
+      queries: {
+        product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
+      },
+      render: ({ product }: { product: { id: string; label: string } }) => (
+        <section data-product={product.id}>{product.label}</section>
+      ),
+    });
+    ProductDetail.name = 'components/products/product-detail/product-detail';
+    const productRoute = route('/products', {
+      page: () => (
+        <main>
+          <ProductDetail key="featured" productId="p1" />
+          <ProductDetail productId="p2" />
+        </main>
+      ),
+    });
+
+    const response = await renderRoutePageResponse(productRoute, {}, {});
+    expect(typeof response.body).toBe('string');
+    const headers = collectLiveTargetHeaders(response.body as string);
+
+    // SPEC.md §4.8/§13.2: repeated inferred fragment targets use authored key
+    // first, then serializable stamped props, so the live headers retain both
+    // source/runtime component instances instead of collapsing by leaf name.
+    expect(headers.targets).toEqual(
+      'product-detail:featured=productById; product-detail:p2=productById',
+    );
+    expect(headers.liveTargets).toEqual(
+      [
+        'product-detail:featured#components/products/product-detail/product-detail:{"productId":"p1"}',
+        'product-detail:p2#components/products/product-detail/product-detail:{"productId":"p2"}',
+      ].join(','),
+    );
   });
 
   it('forwards JSX component props into render slots', async () => {
@@ -517,3 +563,48 @@ describe('route JSX pages', () => {
     });
   });
 });
+
+function collectLiveTargetHeaders(html: string): { liveTargets: string; targets: string } {
+  const targets: string[] = [];
+  const liveTargets: string[] = [];
+
+  for (const match of html.matchAll(/<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/g)) {
+    const attrs = parseAttributes(match[2] ?? '');
+    const target = attrs.get('kovo-fragment-target') ?? attrs.get('id') ?? attrs.get('kovo-c');
+    const deps = attrs.get('kovo-deps');
+    if (target && deps) targets.push(`${target}=${deps}`);
+
+    const componentName = attrs.get('kovo-live-component') ?? attrs.get('kovo-c') ?? target;
+    if (target && componentName) {
+      const props = attrs.get('kovo-props') ?? '{}';
+      liveTargets.push(`${target}#${componentName}:${props}`);
+    }
+  }
+
+  return {
+    liveTargets: liveTargets.join(','),
+    targets: targets.join('; '),
+  };
+}
+
+function parseAttributes(attrs: string): Map<string, string> {
+  const values = new Map<string, string>();
+  for (const match of attrs.matchAll(
+    /(?:^|\s)([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g,
+  )) {
+    const name = match[1];
+    if (!name) continue;
+    values.set(name, decodeAttribute(match[2] ?? match[3] ?? match[4] ?? ''));
+  }
+  return values;
+}
+
+function decodeAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&apos;', "'")
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
+}

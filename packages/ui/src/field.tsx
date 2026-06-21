@@ -144,14 +144,16 @@ const nativeControlStyle = {
     cursor: 'not-allowed',
     opacity: 0.7,
   },
+  // shadcn-style focus: a 3px translucent ring (box-shadow) plus an accent
+  // border, instead of a detached offset outline.
   ':focus-visible': {
-    outlineColor: uiTheme.color.accent,
-    outlineOffset: 2,
-    outlineStyle: 'solid',
-    outlineWidth: 2,
+    borderColor: uiTheme.color.accent,
+    boxShadow: '0 0 0 3px color-mix(in srgb, var(--kovo-theme-sys-color-primary) 35%, transparent)',
+    outlineStyle: 'none',
   },
   '[aria-invalid=true]:focus-visible': {
-    outlineColor: uiTheme.color.danger.border,
+    borderColor: uiTheme.color.danger.border,
+    boxShadow: '0 0 0 3px color-mix(in srgb, var(--kovo-theme-sys-color-error) 30%, transparent)',
   },
 } as const;
 
@@ -169,7 +171,6 @@ export const fieldStyles = style.create({
   error: {
     color: uiTheme.color.danger.border,
     fontSize: 14,
-    fontWeight: 500,
   },
   fieldset: {
     borderColor: uiTheme.color.border,
@@ -203,6 +204,10 @@ export const fieldStyles = style.create({
       cursor: 'not-allowed',
       opacity: 0.7,
     },
+    // Required emphasis belongs on the label only — not the whole field.
+    '[data-required]': {
+      fontWeight: 600,
+    },
   },
   root: {
     color: uiTheme.color.foreground,
@@ -214,9 +219,6 @@ export const fieldStyles = style.create({
     },
     '[data-invalid]': {
       color: uiTheme.color.danger.foreground,
-    },
-    '[data-required]': {
-      fontWeight: 500,
     },
   },
   select: {

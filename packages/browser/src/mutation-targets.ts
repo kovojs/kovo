@@ -54,13 +54,16 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
       element.getAttribute('kovo-c');
     const deps = readDeps(element.getAttribute('kovo-deps'));
     if (!target) continue;
+    if (!isHeaderSafeIdentity(target) || !deps.every(isHeaderSafeIdentity)) continue;
 
     targets.add(deps.length > 0 ? `${target}=${deps.join(' ')}` : target);
 
     if (liveTargets.has(target)) continue;
+    const component =
+      element.getAttribute('kovo-live-component') ?? element.getAttribute('kovo-c') ?? target;
+    if (!isHeaderSafeLiveComponentIdentity(component)) continue;
     liveTargets.set(target, {
-      component:
-        element.getAttribute('kovo-live-component') ?? element.getAttribute('kovo-c') ?? target,
+      component,
       props: readLiveProps(element.getAttribute('kovo-props')),
       target,
     });
@@ -71,6 +74,27 @@ function collectLiveTargetSnapshot(root: TargetCollectorRoot): {
 
 function formatLiveTargetDescriptor(descriptor: LiveTargetDescriptor): string {
   return `${descriptor.target}#${descriptor.component}:${JSON.stringify(descriptor.props)}`;
+}
+
+function isHeaderSafeIdentity(value: string): boolean {
+  // SPEC.md §9.1: browser-collected live target identities are serialized into
+  // delimiter-based headers. Keep selector-hostile values such as quotes and
+  // backslashes working, but reject characters that would corrupt header field
+  // boundaries or target/dependency assignment. Colon remains valid here because
+  // SPEC.md §13.2 instance identities use it and the live descriptor target ends
+  // before the `#` component separator.
+  if (value === '') return false;
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f || /\s/.test(char) || ';,#='.includes(char)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isHeaderSafeLiveComponentIdentity(value: string): boolean {
+  return isHeaderSafeIdentity(value) && !value.includes(':');
 }
 
 function readLiveProps(value: string | null): Record<string, unknown> {

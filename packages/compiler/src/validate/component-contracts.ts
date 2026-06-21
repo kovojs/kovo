@@ -1,6 +1,6 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
 import { capturesUnserializableReferences } from '../lower/handlers.js';
 import {
@@ -26,7 +26,7 @@ import {
   type PropertyAccessPathModel,
   type RenderInputModel,
 } from '../scan/parse.js';
-import { dedupeBy, generatedOffsetToOriginal, type SourceOffsetMap } from '../shared.js';
+import { dedupeBy } from '../shared.js';
 import type { QueryShape, QueryShapeFact, QueryUpdateCoverageFact } from '../types.js';
 
 interface ComponentContractValidationOptions {
@@ -42,11 +42,10 @@ interface EventPayloadPath {
 }
 
 // SPEC 5.2: query data is shared/server-owned; island-local state is private/client-owned.
+// The factory maps `access.start` (a generated/lowered offset) back onto the original source.
 export function validateServerFactsInLocalState(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
-  sourceOffsetMap: SourceOffsetMap,
 ): CompilerDiagnostic[] {
   const stateObject = componentStateReturnObjectModel(model);
   const queryNames = componentOptionObjectKeys(model, 'queries');
@@ -61,35 +60,27 @@ export function validateServerFactsInLocalState(
   );
   if (!access) return [];
 
-  const start = generatedOffsetToOriginal(sourceOffsetMap, access.start);
-  return [diagnosticFor(fileName, 'KV301', source, start, access.path.length)];
+  return [diagnostics.at('KV301', { start: access.start, length: access.path.length })];
 }
 
 export function validateReservedQueryNames(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   return componentOptionObjectKeys(model, 'queries').includes('state')
-    ? [
-        {
-          ...diagnosticFor(fileName, 'KV304', source),
-          message: `${diagnosticDefinitions.KV304.message} state`,
-        },
-      ]
+    ? [diagnostics.at('KV304', undefined, 'state')]
     : [];
 }
 
 export function validateRemovedFragmentTargetOption(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   return model.components.flatMap((component) =>
     component.options
       .filter((option) => option.key === 'fragmentTarget')
       .map((option) => ({
-        ...diagnosticFor(fileName, 'KV223', source, option.start, option.end - option.start),
+        ...diagnostics.at('KV223', { start: option.start, length: option.end - option.start }),
         help: [
           'Would lower to: an inferred server-refresh target for a query-backed component.',
           'Blocked reason: fragmentTarget is no longer an author-facing component option; query dependencies now derive refresh targets.',
@@ -104,9 +95,8 @@ export function validateRemovedFragmentTargetOption(
 }
 
 export function validateHandAuthoredFragmentTargetStamp(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   if (!componentHasInferredServerRefreshTarget(model)) return [];
 
@@ -116,7 +106,10 @@ export function validateHandAuthoredFragmentTargetStamp(
 
   return [
     {
-      ...diagnosticFor(fileName, 'KV223', source, attribute.start, attribute.end - attribute.start),
+      ...diagnostics.at('KV223', {
+        start: attribute.start,
+        length: attribute.end - attribute.start,
+      }),
       help: [
         'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
         'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
@@ -131,9 +124,8 @@ export function validateHandAuthoredFragmentTargetStamp(
 }
 
 export function validateFragmentTargetInputs(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   const validatesFragmentTarget = componentFragmentTargetNames(model).length > 0;
   const validatesIsomorphicIsland = componentOptionStaticValue(model, 'isomorphic') === true;
@@ -147,10 +139,8 @@ export function validateFragmentTargetInputs(
     : [];
 
   return dedupeBy([...missingInputs, ...missingIsomorphicReads], (input) => input.name).map(
-    (input) => ({
-      ...diagnosticFor(fileName, 'KV303', source, input.start, input.end - input.start),
-      message: `${diagnosticDefinitions.KV303.message} ${input.name}`,
-    }),
+    (input) =>
+      diagnostics.at('KV303', { start: input.start, length: input.end - input.start }, input.name),
   );
 }
 
@@ -203,9 +193,8 @@ function isJsxEventAttributeExpression(
 // isomorphic component is rejected (drop isomorphic: true, hoist the children per KV230, or move the
 // dynamic part outside the slot).
 export function validateIsomorphicSlotComposition(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   if (componentOptionStaticValue(model, 'isomorphic') !== true) return [];
 
@@ -213,20 +202,17 @@ export function validateIsomorphicSlotComposition(
   if (!slots) return [];
 
   return [
-    {
-      ...diagnosticFor(fileName, 'KV316', source, slots.start, slots.end - slots.start),
-      message:
-        slots.names.length > 0
-          ? `${diagnosticDefinitions.KV316.message} ${slots.names.join(', ')}`
-          : diagnosticDefinitions.KV316.message,
-    },
+    diagnostics.at(
+      'KV316',
+      { start: slots.start, length: slots.end - slots.start },
+      slots.names.length > 0 ? slots.names.join(', ') : undefined,
+    ),
   ];
 }
 
 export function validateFragmentTargetChildren(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   const targetNames = fragmentTargetUsageNames(model);
   if (targetNames.length === 0) return [];
@@ -234,7 +220,7 @@ export function validateFragmentTargetChildren(
   return targetNames.flatMap((name) =>
     fragmentTargetChildBodies(model, name)
       .filter((body) => fragmentTargetChildCapturesUnserializableValue(model, body))
-      .map((body) => kv230Diagnostic(fileName, source, name, body)),
+      .map((body) => kv230Diagnostic(diagnostics, name, body)),
   );
 }
 
@@ -252,9 +238,8 @@ export function validateFragmentTargetChildren(
 // (see the F39/KV420 plan note); a precise same-module rule is preferred over a broad one that would
 // false-positive on imported components whose state we cannot see.
 export function validateNestedStatefulIslandInRefreshTarget(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   const statefulSiblingsByName = new Map<string, ComponentModel>();
   for (const component of model.components) {
@@ -265,7 +250,7 @@ export function validateNestedStatefulIslandInRefreshTarget(
   }
   if (statefulSiblingsByName.size === 0) return [];
 
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   for (const parent of model.components) {
     if (!componentHasInferredFragmentTarget(parent)) continue;
 
@@ -274,22 +259,20 @@ export function validateNestedStatefulIslandInRefreshTarget(
       // A component never trips KV420 against its own recursive render-time reference.
       if (!childComponent || childComponent.localName === parent.localName) continue;
 
-      diagnostics.push({
-        ...diagnosticFor(
-          fileName,
+      found.push(
+        diagnostics.at(
           'KV420',
-          source,
-          childTag.openingTagNameStart,
-          childTag.openingTagNameEnd - childTag.openingTagNameStart,
+          {
+            start: childTag.openingTagNameStart,
+            length: childTag.openingTagNameEnd - childTag.openingTagNameStart,
+          },
+          `${childTag.tag} inside ${parent.localName ?? 'the enclosing'}.`,
         ),
-        message: `${diagnosticDefinitions.KV420.message} ${childTag.tag} inside ${
-          parent.localName ?? 'the enclosing'
-        }.`,
-      });
+      );
     }
   }
 
-  return diagnostics;
+  return found;
 }
 
 // Capitalized child component references nested strictly inside a parent's render subtree — the
@@ -322,7 +305,7 @@ function isComponentReferenceTag(tag: string): boolean {
 }
 
 export function validateEventPayloads(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: ComponentContractValidationOptions,
 ): CompilerDiagnostic[] {
@@ -333,18 +316,16 @@ export function validateEventPayloads(
   const overlapping = eventPayloads(model).filter((payload) => queryPaths.has(payload.path));
   if (overlapping.length === 0) return [];
 
-  return dedupeBy(overlapping, (payload) => payload.path).map((payload) => ({
-    ...diagnosticFor(options.fileName, 'KV320', source, payload.index, payload.length),
-    message: `${diagnosticDefinitions.KV320.message} ${payload.path}`,
-  }));
+  return dedupeBy(overlapping, (payload) => payload.path).map((payload) =>
+    diagnostics.at('KV320', { start: payload.index, length: payload.length }, payload.path),
+  );
 }
 
 export function validateDirectDbAccess(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const handler of mutationHandlers(model)) {
     const params = handler.paramNames;
@@ -361,27 +342,22 @@ export function validateDirectDbAccess(
 
     if (receivesDb) {
       const span = handler.paramSpans[dbParamIndex];
-      diagnostics.push(
-        diagnosticFor(
-          fileName,
-          'KV330',
-          source,
-          span?.start,
-          span ? span.end - span.start : undefined,
-        ),
+      found.push(
+        diagnostics.at('KV330', {
+          start: span?.start,
+          length: span ? span.end - span.start : undefined,
+        }),
       );
       continue;
     }
 
     if (requestParam && requestDb) {
       const requestDbPath = `${requestParam}.db`;
-      diagnostics.push(
-        diagnosticFor(fileName, 'KV330', source, requestDb.start, requestDbPath.length),
-      );
+      found.push(diagnostics.at('KV330', { start: requestDb.start, length: requestDbPath.length }));
     }
   }
 
-  return diagnostics;
+  return found;
 }
 
 // SPEC §5.2 (KV330): explicit typed predicate over the parsed handler parameter NAME (a
@@ -399,14 +375,12 @@ function isRequestLikeParamName(param: string | undefined): param is string {
 }
 
 export function unhandledUpdateCoverageDiagnostics(
-  source: string,
-  fileName: string,
+  diagnostics: DiagnosticFactory,
   updateCoverage: readonly QueryUpdateCoverageFact[],
-  sourceOffsetMap: SourceOffsetMap,
 ): CompilerDiagnostic[] {
   return updateCoverage
     .filter((fact) => fact.status === 'UNHANDLED')
-    .map((fact) => kv311Diagnostic(fileName, source, fact, sourceOffsetMap));
+    .map((fact) => kv311Diagnostic(diagnostics, fact));
 }
 
 function fragmentTargetUsageNames(model: ComponentModuleModel): string[] {
@@ -447,34 +421,33 @@ function moduleRenderInputNames(model: ComponentModuleModel): string[] {
 }
 
 function kv230Diagnostic(
-  fileName: string,
-  source: string,
+  diagnostics: DiagnosticFactory,
   target: string,
   body: JsxElementChildBody,
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV230;
   const labels = definition.detailLabels;
   return {
-    ...diagnosticFor(fileName, 'KV230', source, body.offset, body.source.length),
+    ...diagnostics.at('KV230', { start: body.offset, length: body.source.length }, target),
     help: [
       `${labels.slotHoist} ${target}$slot_children`,
       `${labels.blockedChildren} ${body.source}`,
       definition.help ?? '',
     ].join('\n'),
-    message: `${diagnosticDefinitions.KV230.message} ${target}`,
   };
 }
 
 function kv311Diagnostic(
-  fileName: string,
-  source: string,
+  diagnostics: DiagnosticFactory,
   fact: QueryUpdateCoverageFact,
-  sourceOffsetMap: SourceOffsetMap,
 ): CompilerDiagnostic {
   const span = fact.sourceSpan;
-  const start = generatedOffsetToOriginal(sourceOffsetMap, span?.start);
   return {
-    ...diagnosticFor(fileName, 'KV311', source, start, span?.length),
+    ...diagnostics.at(
+      'KV311',
+      { start: span?.start, length: span?.length },
+      `${fact.componentName} ${fact.query} ${fact.position}`,
+    ),
     help: [
       `Coverage classification: ${fact.componentName} ${fact.position} ${fact.status}`,
       `Blocked update: ${fact.detail}`,
@@ -485,7 +458,6 @@ function kv311Diagnostic(
         'SPEC §4.9 requires every query/state-dependent rendered position to have plan, fragment, isomorphic, or renderOnce coverage.',
       ].join('\n'),
     ].join('\n'),
-    message: `${diagnosticDefinitions.KV311.message} ${fact.componentName} ${fact.query} ${fact.position}`,
   };
 }
 
