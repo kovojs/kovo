@@ -2421,13 +2421,30 @@ export function DrawerDemo(): string {
 
 export function SkeletonDemo(): string {
   const skeletonDemoStyles = style.create({
-    line: {
+    // A content silhouette (circular avatar + two text lines) so the demo reads
+    // as "a profile row is loading" instead of two anonymous gray blocks — the
+    // shadcn skeleton card shape.
+    row: {
+      alignItems: 'center',
+      columnGap: 12,
+      display: 'flex',
+    },
+    avatar: {
+      borderRadius: '50%',
+      height: 48,
+      width: 48,
+    },
+    lines: {
+      display: 'grid',
+      rowGap: 8,
+    },
+    lineLg: {
+      height: 16,
+      width: 220,
+    },
+    lineSm: {
       height: 16,
       width: 160,
-    },
-    panel: {
-      height: 80,
-      width: '100%',
     },
   });
 
@@ -2437,8 +2454,13 @@ export function SkeletonDemo(): string {
         Skeleton is decorative loading markup hidden from assistive technology.
       </p>
       <div data-ui-demo="skeleton">
-        {Skeleton.definition.render({ style: skeletonDemoStyles.line })}
-        {Skeleton.definition.render({ style: skeletonDemoStyles.panel })}
+        <div {...style.attrs(skeletonDemoStyles.row)}>
+          {Skeleton.definition.render({ style: skeletonDemoStyles.avatar })}
+          <div {...style.attrs(skeletonDemoStyles.lines)}>
+            {Skeleton.definition.render({ style: skeletonDemoStyles.lineLg })}
+            {Skeleton.definition.render({ style: skeletonDemoStyles.lineSm })}
+          </div>
+        </div>
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',

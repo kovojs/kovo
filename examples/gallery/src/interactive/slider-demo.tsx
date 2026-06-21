@@ -32,7 +32,7 @@ export const GallerySliderDemo = component({
       max: 100,
       min: 0,
       name: 'gallery-completion',
-      step: 25,
+      step: 5,
       value: state.value,
       valueText: `${state.value} percent`,
     };
@@ -57,7 +57,7 @@ export const GallerySliderDemo = component({
             const result = _sliderInput(Object(event), {
               max: 100,
               min: 0,
-              step: 25,
+              step: 5,
               value: state.value,
             });
             if (!result?.changed) return;
@@ -72,7 +72,7 @@ export const GallerySliderDemo = component({
             const result = _sliderTrackPointerDown(Object(event), {
               max: 100,
               min: 0,
-              step: 25,
+              step: 5,
               value: state.value,
             });
             if (!result?.changed) return;
@@ -101,7 +101,7 @@ export const GallerySliderDemo = component({
               const result = _sliderKeyDown(Object(event), {
                 max: 100,
                 min: 0,
-                step: 25,
+                step: 5,
                 value: state.value,
               });
               if (!result?.changed) return;
@@ -111,7 +111,7 @@ export const GallerySliderDemo = component({
               const result = _sliderThumbDragStart(Object(event), {
                 max: 100,
                 min: 0,
-                step: 25,
+                step: 5,
                 value: state.value,
               });
               if (!result) return;
@@ -126,7 +126,7 @@ export const GallerySliderDemo = component({
                 {
                   max: 100,
                   min: 0,
-                  step: 25,
+                  step: 5,
                   value: state.value,
                 },
                 {

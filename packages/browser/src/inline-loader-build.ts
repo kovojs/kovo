@@ -651,6 +651,18 @@ function installInlineKovoLoader(im) {
     const el = event.target?.closest?.('[on\\:' + event.type + ']');
     const refs = el?.getAttribute('on:' + event.type);
     if (!el || !refs) return;
+    // SPEC.md §4.4: cancel the native context menu synchronously, in this
+    // capture-phase prefix, before the awaited handler import below. An
+    // on:contextmenu element opts into a custom menu, and deferring
+    // preventDefault until after the await-import misses the dispatch window and
+    // leaks the browser menu (the handler's own preventDefault runs too late).
+    // The marker lets the chained primitive (SPEC.md §4.6 contextMenu open) tell
+    // this framework native-suppression apart from a genuine author preventDefault
+    // so it still opens the styled menu rather than treating itself as superseded.
+    if (event.type === 'contextmenu' && event.cancelable && !event.defaultPrevented) {
+      event.preventDefault();
+      event.kovoNativeDefaultManaged = true;
+    }
     const params = {};
     const pt = rp(el);
     const state = rs(el);

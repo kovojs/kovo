@@ -185,6 +185,19 @@ describe('compiled interactive gallery demos', () => {
       open: false,
       value: 'austin',
     };
+    // Open-on-pointer: clicking the input opens the listbox (and highlights the
+    // current value) so a mouse user can reach an option to click it.
+    clientHandler(combobox, 'GalleryComboboxDemo$input_click')(new Event('click'), {
+      params: {},
+      signal,
+      state: comboboxState,
+    });
+    expect(comboboxState).toEqual({
+      highlightedValue: 'austin',
+      inputValue: 'austin',
+      open: true,
+      value: 'austin',
+    });
     clientHandler(combobox, 'GalleryComboboxDemo$input_input')(inputEvent('chi'), {
       params: {},
       signal,
@@ -207,7 +220,9 @@ describe('compiled interactive gallery demos', () => {
       open: false,
       value: 'chicago',
     });
-    clientHandler(combobox, 'GalleryComboboxDemo$button_click')(new Event('click'), {
+    // The first option (Austin) click handler — ordinal 2 among the demo's click
+    // handlers now that the input carries an open-on-pointer click handler.
+    clientHandler(combobox, 'GalleryComboboxDemo$button_click_2')(new Event('click'), {
       params: { value: 'austin' },
       signal,
       state: comboboxState,
@@ -1018,7 +1033,8 @@ describe('compiled interactive gallery demos', () => {
       state: sliderState,
     });
     expect(sliderKeyDown.defaultPrevented).toBe(true);
-    expect(sliderState.value).toBe(50);
+    // step is 5, so ArrowLeft from 75 lands on 70.
+    expect(sliderState.value).toBe(70);
     clientHandler(slider, 'GallerySliderDemo$span_pointerdown')(
       pointerEvent('pointerdown', { clientX: 20 }),
       {
@@ -1030,7 +1046,7 @@ describe('compiled interactive gallery demos', () => {
     expect(sliderState).toMatchObject({
       dragging: true,
       dragPointerStart: 20,
-      dragValueStart: 50,
+      dragValueStart: 70,
     });
     clientHandler(slider, 'GallerySliderDemo$span_pointermove')(
       pointerEvent('pointermove', {

@@ -10,6 +10,62 @@ import { FakeElement, FakeStatefulBindingElement } from './runtime-test-fakes.js
 
 describe('inline loader delegated handlers', () => {
   it.each(inlineSourceInstallCases)(
+    'cancels the native context menu synchronously before the awaited handler import through %s',
+    async (_name, installSource) => {
+      // SPEC.md §4.4: an on:contextmenu element opts into a custom menu, so the
+      // native menu's default must be canceled synchronously in the capture-phase
+      // dispatch prefix — deferring preventDefault until after the awaited handler
+      // import misses the dispatch window and leaks the browser menu.
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+      };
+      const listeners = new Map<string, (event: unknown) => Promise<void>>();
+      const element = new FakeElement({
+        'kovo-state': '{"open":false}',
+        'on:contextmenu': '/c/menu.js#open',
+      });
+      let importStarted = false;
+      // The import never resolves, so the handler (and any preventDefault it would
+      // call) can only run after the await — proving the loader must prevent
+      // synchronously on its own.
+      const importModule = vi.fn(
+        () =>
+          new Promise<Record<string, unknown>>(() => {
+            importStarted = true;
+          }),
+      );
+
+      try {
+        globalRecord.addEventListener = (
+          type: string,
+          listener: (event: unknown) => Promise<void>,
+        ) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = { querySelectorAll: () => [] };
+
+        installSource(importModule, globalRecord);
+
+        const preventDefault = vi.fn();
+        const event = { cancelable: true, preventDefault, target: element, type: 'contextmenu' };
+        const pending = listeners.get('contextmenu')?.(event);
+
+        // Prevented synchronously — before (or regardless of) the await-import.
+        expect(preventDefault).toHaveBeenCalledTimes(1);
+        void pending;
+        void importStarted;
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+        });
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'keeps inline delegated params and state in parity through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: delegated handler semantics must not drift between inline source artifacts.
