@@ -342,4 +342,200 @@ export const FtpLink = component({
     const kv236Diagnostics = result.diagnostics.filter((d) => d.code === 'KV236');
     expect(kv236Diagnostics).toEqual([]);
   });
+
+  // A3 (SPEC §4.8 / §5.2 #10): static object spread into a URL/raw-HTML/srcdoc/on* sink must be
+  // expanded and validated exactly like the directly-authored attribute — it is not a KV236 bypass.
+  it('flags static object spread into an unsafe URL sink (A3)', () => {
+    const result = compileComponentModule({
+      fileName: 'spread-url.tsx',
+      source: `
+export const SpreadUrl = component({
+  render: () => <a {...{ href: "javascript:alert(1)" }}>x</a>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: `${kv236} href="javascript:alert(1)" uses an unsafe URL scheme`,
+        }),
+      ]),
+    );
+  });
+
+  it('flags static object spread into srcdoc and dangerouslySetInnerHTML sinks (A3)', () => {
+    const srcdoc = compileComponentModule({
+      fileName: 'spread-srcdoc.tsx',
+      source: `
+export const SpreadSrcdoc = component({
+  render: () => <iframe {...{ srcdoc: "<script>alert(1)</script>" }} />,
+});
+`,
+    });
+    const rawHtml = compileComponentModule({
+      fileName: 'spread-rawhtml.tsx',
+      source: `
+export const SpreadRawHtml = component({
+  render: () => <div {...{ dangerouslySetInnerHTML: "<img src=x onerror=alert(1)>" }} />,
+});
+`,
+    });
+
+    expect(srcdoc.diagnostics.filter((d) => d.code === 'KV236')).not.toEqual([]);
+    expect(rawHtml.diagnostics.filter((d) => d.code === 'KV236')).not.toEqual([]);
+  });
+
+  it('keeps safe static object spreads (internal href, class) without KV236 (A3)', () => {
+    const result = compileComponentModule({
+      fileName: 'spread-safe.tsx',
+      source: `
+export const SpreadSafe = component({
+  render: () => <a {...{ href: "/pricing", class: "btn" }}>x</a>,
+});
+`,
+      registryFacts: { routes: ['/pricing'] },
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV236')).toEqual([]);
+  });
+
+  // B1 (SPEC §4.8:358 / §5.2 #10): dynamic <script> element text is an unsafe RAWTEXT context —
+  // KV236 unless trustedHtml; escapeText (`&<>` only) is the wrong encoder for JS context.
+  it('flags dynamic <script> element text as KV236, suppressed by trustedHtml (B1)', () => {
+    const unsafe = compileComponentModule({
+      fileName: 'script-text.tsx',
+      source: `
+export const ScriptText = component({
+  queries: { cfg: () => ({ inline: "" }) },
+  render: ({ cfg }) => <div><script>{cfg.inline}</script></div>,
+});
+`,
+    });
+    const trusted = compileComponentModule({
+      fileName: 'script-text-trusted.tsx',
+      source: `
+import { trustedHtml } from '@kovojs/browser';
+
+export const ScriptTextTrusted = component({
+  queries: { cfg: () => ({ inline: "" }) },
+  render: ({ cfg }) => <div><script>{trustedHtml(cfg.inline)}</script></div>,
+});
+`,
+    });
+
+    expect(unsafe.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: `${kv236} dynamic <script> element text`,
+        }),
+      ]),
+    );
+    expect(trusted.diagnostics.filter((d) => d.code === 'KV236')).toEqual([]);
+  });
+
+  // B2 (SPEC §4.8:356 / §5.2 #10): dynamic <style> element text is an unsafe RAWTEXT context.
+  it('flags dynamic <style> element text as KV236 (B2)', () => {
+    const result = compileComponentModule({
+      fileName: 'style-text.tsx',
+      source: `
+export const StyleText = component({
+  queries: { data: () => ({ css: "" }) },
+  render: ({ data }) => <div><style>{data.css}</style></div>,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV236',
+          message: `${kv236} dynamic <style> element text`,
+        }),
+      ]),
+    );
+  });
+
+  it('allows static literal <script>/<style> element text without KV236 (B1/B2)', () => {
+    const result = compileComponentModule({
+      fileName: 'static-rawtext.tsx',
+      source: `
+export const StaticRawtext = component({
+  render: () => (
+    <div>
+      <script>{"window.__kovo = 1"}</script>
+      <style>{".a{color:red}"}</style>
+    </div>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((d) => d.code === 'KV236')).toEqual([]);
+  });
+
+  // A1 (SPEC §4.8/§4.9): a derive must never reference an unbound query. Element/computed-access
+  // reads (`rows[i].name`, `rows[0].name`) surface their reactive root so the derive-input
+  // extractor either binds every root or refuses to lower (whole-component refresh), never emitting
+  // a derive whose body reads a query that is not one of its declared inputs/params.
+  it('does not emit a derive that references an unbound query for element-access reads (A1)', () => {
+    const text = compileComponentModule({
+      fileName: 'elem-text.tsx',
+      source: `
+export const ElemText = component({
+  queries: { rows: () => [] },
+  state: () => ({ i: 0 }),
+  render: ({ rows }, state) => <p>{rows[state.i].name}</p>,
+});
+`,
+    });
+    const attr = compileComponentModule({
+      fileName: 'elem-attr.tsx',
+      source: `
+export const ElemAttr = component({
+  queries: { rows: () => [], meta: () => ({}) },
+  render: ({ rows, meta }) => <span title={meta.label + rows[0].name}>x</span>,
+});
+`,
+    });
+
+    for (const result of [text, attr]) {
+      const generated = result.files
+        .filter((file) => file.kind === 'server' || file.kind === 'client')
+        .map((file) => file.source)
+        .join('\n');
+      for (const derive of generated.matchAll(/derive\((\[[^\]]*\]),\s*\(([^)]*)\)\s*=>\s*([^;]*?)\)\s*;/g)) {
+        const inputs = derive[1] ?? '';
+        const params = (derive[2] ?? '').split(',').map((p) => (p.split(':')[0] ?? '').trim());
+        const body = derive[3] ?? '';
+        // `rows` is referenced in both bodies; if a derive's body uses it, it MUST be a bound param.
+        if (/\brows\b/.test(body)) {
+          expect(params).toContain('rows');
+          expect(inputs).toContain('rows');
+        }
+      }
+    }
+  });
+
+  it('binds the query root for a single-query element-access attribute derive (A1)', () => {
+    const result = compileComponentModule({
+      fileName: 'single-elem-attr.tsx',
+      source: `
+export const SingleElemAttr = component({
+  queries: { rows: () => [] },
+  render: ({ rows }) => <span title={rows[0].name}>x</span>,
+});
+`,
+    });
+    const generated = result.files
+      .filter((file) => file.kind === 'server' || file.kind === 'client')
+      .map((file) => file.source)
+      .join('\n');
+
+    // The element-access root is now seen, so the attribute lowers to a correctly-bound derive
+    // over `rows` (no unbound reference), not a silently stale whole-component fallback gap.
+    expect(generated).toMatch(/derive\(\["rows"\],\s*\(rows[^)]*\)\s*=>\s*rows\[0\]\.name\)/);
+  });
 });

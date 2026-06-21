@@ -2,11 +2,14 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import { isUrlAttribute, type GeneratedOutputWriteFact } from '../output-context-facts.js';
+import { literalStringValue } from '../scan/object.js';
 import {
   jsxElements,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
+  type JsxExpressionModel,
+  type JsxSpreadAttributeModel,
   type SourceSpan,
 } from '../scan/parse.js';
 import type { CompileComponentOptions } from '../types.js';
@@ -37,11 +40,72 @@ export function validateOutputContexts(
     diagnostics.push(
       ...validateElementAttributes(source, element, options.fileName, compilerOwnedStyleSpans),
     );
+    diagnostics.push(...validateRawtextElementText(source, model, element, options.fileName));
   }
 
   diagnostics.push(...validateComponentCssText(source, model, options.fileName));
 
   return diagnostics;
+}
+
+/**
+ * SPEC §4.8:356-358 / §5.2 #10 (KV236): `<script>` and `<style>` element text are unsafe RAWTEXT
+ * output contexts. Their content is not HTML-entity-decoded, so the framework's `escapeText`
+ * (`&<>` only) is the wrong encoder and provably does not neutralize attacker-influenced bytes in
+ * JS/CSS context. Any dynamic (query/state-derived) text child of a rawtext element that is not an
+ * explicit `trustedHtml(...)` brand is therefore KV236, exactly like a binding into the matching
+ * attribute sink (B1 = script XSS, B2 = style CSS-injection).
+ */
+function validateRawtextElementText(
+  source: string,
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+  fileName: string,
+): CompilerDiagnostic[] {
+  if (element.tag !== 'script' && element.tag !== 'style') return [];
+
+  const diagnostics: CompilerDiagnostic[] = [];
+  for (const child of directChildExpressions(model, element)) {
+    if (!isDynamicExpression(child) || isTrustedHtmlExpression(child)) continue;
+    diagnostics.push(
+      outputContextDiagnostic({
+        detail: `dynamic <${element.tag}> element text`,
+        fileName,
+        length: child.containerEnd - child.containerStart,
+        source,
+        start: child.containerStart,
+      }),
+    );
+  }
+  return diagnostics;
+}
+
+/** Direct (non-nested) `{expr}` text children of an element, matched by container span. */
+function directChildExpressions(
+  model: ComponentModuleModel,
+  element: JsxElementModel,
+): JsxExpressionModel[] {
+  return element.childExpressionContainers.flatMap((container) => {
+    const expression = model.jsxExpressions.find(
+      (candidate) =>
+        candidate.containerStart === container.start && candidate.containerEnd === container.end,
+    );
+    return expression ? [expression] : [];
+  });
+}
+
+/**
+ * A text child carries attacker-influenceable bytes when it reads a reactive root (query/state)
+ * or any free identifier — i.e. it is not a self-contained literal. A pure literal interpolation
+ * (`{"safe"}`, `{42}`) has no references and no property accesses and is not a sink.
+ */
+function isDynamicExpression(expression: JsxExpressionModel): boolean {
+  return expression.references.length > 0 || expression.propertyAccesses.length > 0;
+}
+
+/** SPEC §4.8 escape hatch: a `trustedHtml(...)` brand is the only suppression of KV236. */
+function isTrustedHtmlExpression(expression: JsxExpressionModel): boolean {
+  return /^trustedHtml\s*\(/.test(expression.expression.trim());
 }
 
 export function collectTrustedHtmlOutputContextFacts(
@@ -163,6 +227,69 @@ function validateElementAttributes(
     }
   }
 
+  // SPEC §4.8 / §5.2 #10 (KV236, A3): output-context validation must also expand static object
+  // spreads (`<a {...{ href: 'javascript:…' }}>`). The spread lowers to a directly-authored
+  // attribute, so the same URL-scheme / raw-HTML / on* / srcdoc checks must run over its object
+  // entries; otherwise the spread is a silent bypass of the sink validation the direct form gets.
+  for (const spread of element.spreadAttributes) {
+    diagnostics.push(...validateStaticSpreadEntries(source, spread, hasExternalEscape, fileName));
+  }
+
+  return diagnostics;
+}
+
+/**
+ * SPEC §4.8 (KV236, A3): validate each entry of a static object spread as if it were a directly
+ * authored attribute. Only literal (non-dynamic) string values are statically decidable here; a
+ * dynamic spread value flows through the binding/derive sinks gated elsewhere. The synthesized
+ * attribute reuses the existing per-sink validators so the spread and direct forms cannot diverge.
+ */
+function validateStaticSpreadEntries(
+  source: string,
+  spread: JsxSpreadAttributeModel,
+  hasExternalEscape: boolean,
+  fileName: string,
+): CompilerDiagnostic[] {
+  if (!spread.objectEntries) return [];
+
+  const diagnostics: CompilerDiagnostic[] = [];
+  for (const entry of spread.objectEntries) {
+    if (entry.value === undefined) continue;
+    const literal = literalStringValue(entry.value);
+    if (literal === null) continue;
+    const synthetic: JsxAttributeModel = {
+      end: spread.end,
+      leadingStart: spread.start,
+      name: entry.key,
+      start: spread.start,
+      value: literal,
+    };
+
+    if (isUrlAttribute(synthetic.name)) {
+      diagnostics.push(...validateUrlAttribute(source, synthetic, hasExternalEscape, fileName));
+      continue;
+    }
+    if (isRawHtmlAttribute(synthetic.name)) {
+      diagnostics.push(...validateRawHtmlAttribute(source, synthetic, fileName));
+      continue;
+    }
+    if (/^on/i.test(synthetic.name)) {
+      diagnostics.push(
+        outputContextDiagnostic({
+          detail: `${synthetic.name} is an event-handler sink (on* attribute)`,
+          fileName,
+          length: spread.end - spread.start,
+          source,
+          start: spread.start,
+        }),
+      );
+      continue;
+    }
+    if (synthetic.name === 'srcdoc') {
+      diagnostics.push(...validateRawHtmlAttribute(source, synthetic, fileName));
+      continue;
+    }
+  }
   return diagnostics;
 }
 

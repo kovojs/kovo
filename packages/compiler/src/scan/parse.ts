@@ -645,6 +645,36 @@ function propertyAccessReceiverSegments(expression: ts.Expression): string[] | n
   return propertyAccessPath(expression)?.split('.') ?? null;
 }
 
+/**
+ * SPEC §4.8/§4.9 (A1): resolve the static reactive root of an element/computed access chain
+ * (`rows[i]`, `rows[i].name`, `rows[0].name`, `a.b[i]`) to the leading dotted path before the
+ * first index operator. A read that bottoms out at a computed access still reads a reactive root
+ * (`rows`), so the §4.9 dependency/derive-input extractor must see that root or it will emit a
+ * derive that references an unbound query (ReferenceError) and drop the query dependency (silent
+ * staleness). Descends through trailing property accesses, then through chained element accesses,
+ * and returns the dotted path of the first element access's receiver. Returns null when the chain
+ * is not statically rooted at an identifier (e.g. `getRows()[0]`), so a non-trackable read does
+ * not masquerade as a tracked path.
+ */
+function elementAccessRootPath(node: ts.Expression): string | null {
+  let current: ts.Expression = node;
+  while (ts.isPropertyAccessExpression(current)) {
+    current = current.expression;
+  }
+  while (
+    ts.isElementAccessExpression(current) &&
+    ts.isElementAccessExpression(current.expression)
+  ) {
+    current = current.expression;
+  }
+  if (!ts.isElementAccessExpression(current)) return null;
+
+  const receiver = current.expression;
+  if (ts.isIdentifier(receiver)) return receiver.text;
+  if (ts.isPropertyAccessExpression(receiver)) return propertyAccessPath(receiver);
+  return null;
+}
+
 function markLastOptional(segments: readonly string[]): string[] {
   const result = [...segments];
   const last = result.at(-1);
@@ -1089,11 +1119,19 @@ function propertyAccessPathModels(
 ): PropertyAccessPathModel[] {
   const paths: PropertyAccessPathModel[] = [];
 
+  const pushElementAccessRoot = (node: ts.Expression): void => {
+    const rootPath = elementAccessRootPath(node);
+    if (!rootPath) return;
+    paths.push({
+      end: node.getEnd(),
+      path: rootPath,
+      start: node.getStart(sourceFile),
+      terminalName: rootPath.split('.').at(-1) ?? rootPath,
+    });
+  };
+
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isPropertyAccessExpression(node) &&
-      !(ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node)
-    ) {
+    if (ts.isPropertyAccessExpression(node) && !isReceiverOfOuterAccess(node)) {
       const path = propertyAccessPath(node);
       if (path) {
         paths.push({
@@ -1103,7 +1141,21 @@ function propertyAccessPathModels(
           start: node.getStart(sourceFile),
           terminalName: node.name.text,
         });
+      } else {
+        // SPEC §4.8/§4.9 (A1): the dotted-path grammar could not represent this access because
+        // its receiver bottoms out at a computed/element access (`rows[i].name`, `rows[0].name`).
+        // The read is still rooted at a reactive query/state (`rows`); surface that root so the
+        // derive-input/dependency extractor never emits a derive that references an unbound query
+        // (ReferenceError) and silently drops the query dependency.
+        pushElementAccessRoot(node);
       }
+    }
+
+    // A bare outermost computed access with no trailing property read (`rows[i]`, `rows[0]`) still
+    // reads a reactive root; surface it the same way. Inner receivers are skipped so the root is
+    // modeled once per chain.
+    if (ts.isElementAccessExpression(node) && !isReceiverOfOuterAccess(node)) {
+      pushElementAccessRoot(node);
     }
 
     ts.forEachChild(node, visit);
@@ -1112,6 +1164,17 @@ function propertyAccessPathModels(
   visit(root);
 
   return paths;
+}
+
+// SPEC §4.8/§4.9 (A1): a node is the receiver of an outer access (`X.foo` / `X[i]`) when its
+// parent is a property/element access reading through it. The outermost access of a chain emits
+// the modeled path, so inner receivers are skipped to avoid duplicate roots.
+function isReceiverOfOuterAccess(node: ts.Node): boolean {
+  const parent = node.parent;
+  return (
+    (ts.isPropertyAccessExpression(parent) || ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+  );
 }
 
 function propertyAccessInferredType(
