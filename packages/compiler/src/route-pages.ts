@@ -45,6 +45,11 @@ interface RouteLayoutModel {
   start: number;
 }
 
+interface RouteComponentImportModel {
+  exportName?: string;
+  sourceFileName: string;
+}
+
 const navigationSegmentStampAttributes = new Set([
   'kovo-nav-components',
   'kovo-nav-kind',
@@ -64,7 +69,7 @@ export function compileRouteModule(options: CompileRouteModuleOptions): CompileR
   );
   const routePages: CompiledRoutePage[] = [];
   const layouts = routeLayoutModels(sourceFile);
-  const componentImports = componentImportSourceFiles(options.fileName, sourceFile);
+  const componentImports = componentImportModels(options.fileName, sourceFile);
   const diagnostics: CompilerDiagnostic[] = [];
 
   const visit = (node: ts.Node): void => {
@@ -117,7 +122,7 @@ function routePageFromCall(
   sourceFile: ts.SourceFile,
   node: ts.Node,
   layouts: ReadonlyMap<string, RouteLayoutModel>,
-  componentImports: ReadonlyMap<string, string>,
+  componentImports: ReadonlyMap<string, RouteComponentImportModel>,
   diagnostics: CompilerDiagnostic[],
 ): CompiledRoutePage | null {
   if (!ts.isCallExpression(node)) return null;
@@ -135,6 +140,7 @@ function routePageFromCall(
     source,
     sourceFile,
     pageHandler.node,
+    componentImports,
     diagnostics,
   );
   if (components.length === 0 && !containsJsx(pageHandler.node)) return null;
@@ -169,12 +175,14 @@ function routePageFromCall(
 
 function routePageCssFact(
   components: readonly RoutePageComponentFact[],
-  componentImports: ReadonlyMap<string, string>,
+  componentImports: ReadonlyMap<string, RouteComponentImportModel>,
 ): RoutePageCssFact | undefined {
   const sourceFileNames = uniqueSorted(
     components.flatMap((component) => {
-      const sourceFileName = componentImports.get(component.localName);
-      return sourceFileName ? [compileArtifactFileNames(sourceFileName).css] : [];
+      const componentImport = componentImports.get(component.localName);
+      return componentImport
+        ? [compileArtifactFileNames(componentImport.sourceFileName).css]
+        : [];
     }),
   );
 
@@ -202,11 +210,11 @@ function routeNavigationSegments(
   ];
 }
 
-function componentImportSourceFiles(
+function componentImportModels(
   routeFileName: string,
   sourceFile: ts.SourceFile,
-): ReadonlyMap<string, string> {
-  const imports = new Map<string, string>();
+): ReadonlyMap<string, RouteComponentImportModel> {
+  const imports = new Map<string, RouteComponentImportModel>();
 
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
@@ -219,11 +227,15 @@ function componentImportSourceFiles(
 
     const importClause = statement.importClause;
     if (!importClause) continue;
-    if (importClause.name) imports.set(importClause.name.text, sourceFileName);
+    if (importClause.name) imports.set(importClause.name.text, { sourceFileName });
     const namedBindings = importClause.namedBindings;
     if (!namedBindings || !ts.isNamedImports(namedBindings)) continue;
     for (const element of namedBindings.elements) {
-      imports.set(element.name.text, sourceFileName);
+      const exportName = element.propertyName?.text;
+      imports.set(element.name.text, {
+        ...(exportName && exportName !== element.name.text ? { exportName } : {}),
+        sourceFileName,
+      });
     }
   }
 
@@ -468,6 +480,7 @@ function routePageComponentFacts(
   source: string,
   sourceFile: ts.SourceFile,
   root: ts.Node,
+  componentImports: ReadonlyMap<string, RouteComponentImportModel>,
   diagnostics: CompilerDiagnostic[],
 ): RoutePageComponentFact[] {
   const facts: RoutePageComponentFact[] = [];
@@ -485,7 +498,14 @@ function routePageComponentFacts(
             node.openingElement.attributes,
           ),
         );
-        facts.push(routePageComponentFact(sourceFile, tag, node.openingElement.attributes));
+        facts.push(
+          routePageComponentFact(
+            sourceFile,
+            tag,
+            node.openingElement.attributes,
+            componentImports,
+          ),
+        );
       }
     } else if (ts.isJsxSelfClosingElement(node)) {
       const tag = jsxTagName(node.tagName);
@@ -499,7 +519,9 @@ function routePageComponentFacts(
             node.attributes,
           ),
         );
-        facts.push(routePageComponentFact(sourceFile, tag, node.attributes));
+        facts.push(
+          routePageComponentFact(sourceFile, tag, node.attributes, componentImports),
+        );
       }
     }
 
@@ -538,13 +560,16 @@ function routePageComponentFact(
   sourceFile: ts.SourceFile,
   localName: string,
   attributes: ts.JsxAttributes,
+  componentImports: ReadonlyMap<string, RouteComponentImportModel>,
 ): RoutePageComponentFact {
   const allProps = routePageComponentProps(sourceFile, attributes);
   const key = allProps.find((prop) => prop.name === 'key');
   const props = allProps.filter((prop) => prop.name !== 'key');
   const propsExpression = routePagePropsExpression(props);
+  const exportName = componentImports.get(localName)?.exportName;
 
   return {
+    ...(exportName ? { exportName } : {}),
     ...(key ? { keyExpression: key.expression } : {}),
     localName,
     props,
