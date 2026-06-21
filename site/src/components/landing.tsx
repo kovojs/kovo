@@ -1,40 +1,27 @@
 /** @jsxImportSource @kovojs/server */
 import * as style from '@kovojs/style';
 
-import type { ClientHrefs } from './chrome.js';
+import { SiteFooter, SiteHeader, type ClientHrefs } from './chrome.js';
 
 // Landing page (SPEC §7 L0): the "break it" pipeline is radio buttons + :has(),
 // zero JavaScript. The page is authored as TSX route composition so the route
 // compiler can derive enhanced-navigation page boundaries.
+//
+// The header and footer are the shared site chrome (SiteHeader/SiteFooter from
+// chrome.tsx), so the landing matches the docs site and respects the theme
+// toggle. All colors flow from the global design tokens (--bg/--ink/--teal/…
+// in styles.css), so the page reads correctly in both light and dark themes;
+// code terminals stay black in both, matching the docs' .code-window idiom.
 
 const BRAND = 'Kovo';
 const BRAND_CAPS = BRAND.toUpperCase();
 const BRAND_CLI = BRAND.toLowerCase();
 
-const NAV = [
-  { href: '/docs/installation/', label: 'Docs' },
-  { href: '/tutorial/', label: 'Tutorial' },
-  { href: '/guides/', label: 'Guides' },
-  { href: '/api/', label: 'API' },
-  { href: '/spec/', label: 'Spec' },
-];
-
 const landingStyles = style.create(
   {
+    // The page inherits the global design tokens from styles.css (no local
+    // overrides), so it tracks the light/dark theme like the rest of the site.
     root: {
-      '--bg': '#060606',
-      '--panel': '#0c0c0c',
-      '--edge': '#1f1f1f',
-      '--edge-soft': '#161616',
-      '--ink': '#f2f2f2',
-      '--dim': '#9a9a9a',
-      '--faint': '#5a5a5a',
-      '--teal': '#2dd4bf',
-      '--green': '#4ade80',
-      '--red': '#ff6b6b',
-      '--sky': '#7cc5ff',
-      '--amber': '#fbbf24',
-      '--purple': '#c792ea',
       background: 'var(--bg)',
       color: 'var(--ink)',
       minHeight: '100vh',
@@ -42,64 +29,6 @@ const landingStyles = style.create(
     link: {
       color: 'inherit',
       textDecoration: 'none',
-    },
-    bar: {
-      alignItems: 'center',
-      borderBottomColor: 'var(--edge)',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      display: 'flex',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.78rem',
-      gap: '2rem',
-      margin: '0 auto',
-      maxWidth: '80rem',
-      padding: '0.8rem 1.5rem',
-    },
-    logo: {
-      alignItems: 'center',
-      display: 'flex',
-      fontWeight: 700,
-      gap: '0.6rem',
-      letterSpacing: '0.08em',
-    },
-    mark: {
-      color: 'var(--teal)',
-    },
-    nav: {
-      color: 'var(--dim)',
-      display: 'flex',
-      fontSize: '0.72rem',
-      gap: '1.4rem',
-      letterSpacing: '0.08em',
-      textTransform: 'uppercase',
-    },
-    navLink: {
-      ':hover': {
-        color: 'var(--ink)',
-      },
-    },
-    right: {
-      color: 'var(--dim)',
-      display: 'flex',
-      fontSize: '0.72rem',
-      gap: '1.4rem',
-      letterSpacing: '0.08em',
-      marginLeft: 'auto',
-      textTransform: 'uppercase',
-    },
-    headerButton: {
-      background: 'none',
-      border: 'none',
-      color: 'inherit',
-      cursor: 'pointer',
-      font: 'inherit',
-      letterSpacing: 'inherit',
-      padding: 0,
-      textTransform: 'inherit',
-      ':hover': {
-        color: 'var(--ink)',
-      },
     },
     wrap: {
       margin: '0 auto',
@@ -132,26 +61,26 @@ const landingStyles = style.create(
       borderTopColor: 'var(--edge)',
       borderTopStyle: 'solid',
       borderTopWidth: 1,
-      color: '#e4e4e4',
-      fontSize: '1.8rem',
-      fontWeight: 350,
-      letterSpacing: '-0.015em',
-      lineHeight: 1.32,
+      color: 'var(--ink)',
+      fontSize: 'clamp(1.7rem, 3.4vw, 2.15rem)',
+      fontWeight: 420,
+      letterSpacing: '-0.02em',
+      lineHeight: 1.28,
       marginTop: '1.4rem',
-      maxWidth: '30rem',
+      maxWidth: '32rem',
       paddingTop: '1.3rem',
     },
     taglineEm: {
-      color: 'var(--ink)',
+      color: 'var(--teal)',
       fontStyle: 'normal',
-      fontWeight: 480,
+      fontWeight: 550,
     },
     taglineDim: {
-      color: '#8f8f8f',
+      color: 'var(--dim)',
       whiteSpace: 'nowrap',
     },
     sub: {
-      color: '#b9b9b9',
+      color: 'var(--dim)',
       fontSize: '1.02rem',
       lineHeight: 1.7,
       marginTop: '1.1rem',
@@ -162,7 +91,7 @@ const landingStyles = style.create(
       fontWeight: 650,
     },
     noJs: {
-      borderColor: 'rgb(74 222 128 / 0.25)',
+      borderColor: 'color-mix(in srgb, var(--green) 35%, transparent)',
       borderStyle: 'solid',
       borderWidth: 1,
       color: 'var(--green)',
@@ -269,25 +198,25 @@ const landingStyles = style.create(
       verticalAlign: '0.08em',
     },
     badgeQuery: {
-      borderColor: 'rgb(124 197 255 / 0.35)',
+      borderColor: 'color-mix(in srgb, var(--sky) 40%, transparent)',
       borderStyle: 'solid',
       borderWidth: 1,
       color: 'var(--sky)',
     },
     badgeBind: {
-      borderColor: 'rgb(45 212 191 / 0.35)',
+      borderColor: 'color-mix(in srgb, var(--teal) 40%, transparent)',
       borderStyle: 'solid',
       borderWidth: 1,
       color: 'var(--teal)',
     },
     badgeForm: {
-      borderColor: 'rgb(251 191 36 / 0.35)',
+      borderColor: 'color-mix(in srgb, var(--amber) 40%, transparent)',
       borderStyle: 'solid',
       borderWidth: 1,
       color: 'var(--amber)',
     },
     badgeRoute: {
-      borderColor: 'rgb(199 146 234 / 0.35)',
+      borderColor: 'color-mix(in srgb, var(--purple) 40%, transparent)',
       borderStyle: 'solid',
       borderWidth: 1,
       color: 'var(--purple)',
@@ -314,17 +243,17 @@ const landingStyles = style.create(
       borderTopWidth: 1,
       padding: '3.6rem 0 3.2rem',
       ':has(#brk-col:checked) [data-choice="col"]': {
-        background: 'rgb(255 107 107 / 0.08)',
+        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
         boxShadow: 'inset 0 -2px 0 var(--red)',
         color: 'var(--ink)',
       },
       ':has(#brk-query:checked) [data-choice="query"]': {
-        background: 'rgb(255 107 107 / 0.08)',
+        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
         boxShadow: 'inset 0 -2px 0 var(--red)',
         color: 'var(--ink)',
       },
       ':has(#brk-bind:checked) [data-choice="bind"]': {
-        background: 'rgb(255 107 107 / 0.08)',
+        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
         boxShadow: 'inset 0 -2px 0 var(--red)',
         color: 'var(--ink)',
       },
@@ -346,7 +275,7 @@ const landingStyles = style.create(
         },
       ':has(#brk-col:checked) [data-node="database"], :has(#brk-query:checked) [data-node="query"], :has(#brk-bind:checked) [data-node="ui"]':
         {
-          borderColor: 'rgb(255 107 107 / 0.5)',
+          borderColor: 'color-mix(in srgb, var(--red) 55%, transparent)',
         },
       ':has(#brk-col:checked) [data-case="col"], :has(#brk-query:checked) [data-case="query"], :has(#brk-bind:checked) [data-case="bind"]':
         {
@@ -435,7 +364,7 @@ const landingStyles = style.create(
       textTransform: 'uppercase',
     },
     nodePre: {
-      color: '#bdbdbd',
+      color: 'var(--dim)',
       fontFamily: 'var(--font-mono)',
       fontSize: '0.68rem',
       lineHeight: 1.7,
@@ -443,7 +372,7 @@ const landingStyles = style.create(
       whiteSpace: 'pre-wrap',
     },
     textHl: { color: 'var(--amber)' },
-    textSt: { color: '#ecc48d' },
+    textSt: { color: 'var(--green)' },
     textFn: { color: 'var(--sky)' },
     pipeLink: {
       alignItems: 'center',
@@ -457,7 +386,8 @@ const landingStyles = style.create(
       },
     },
     wire: {
-      background: 'linear-gradient(90deg, rgb(45 212 191 / 0.55), rgb(45 212 191 / 0.25))',
+      background:
+        'linear-gradient(90deg, color-mix(in srgb, var(--teal) 55%, transparent), color-mix(in srgb, var(--teal) 25%, transparent))',
       borderRadius: 2,
       height: 2,
       position: 'relative',
@@ -558,13 +488,13 @@ const landingStyles = style.create(
       marginBottom: '0.55rem',
     },
     lead: {
-      color: '#bdbdbd',
+      color: 'var(--dim)',
       fontSize: '0.94rem',
       lineHeight: 1.65,
       marginBottom: '1.2rem',
     },
     leadCode: {
-      color: '#d8d8d8',
+      color: 'var(--ink)',
       fontFamily: 'var(--font-mono)',
       fontSize: '0.85em',
     },
@@ -593,7 +523,7 @@ const landingStyles = style.create(
     bad: { color: 'var(--red)' },
     good: { color: 'var(--green)' },
     track: {
-      background: '#141414',
+      background: 'var(--panel)',
       borderRadius: 9999,
       height: '0.55rem',
       overflow: 'hidden',
@@ -604,15 +534,23 @@ const landingStyles = style.create(
       position: 'absolute',
       top: 0,
     },
-    spaS1: { background: '#3b3b3b', left: 0, width: '18%' },
+    // Page-load timelines as token-driven data-viz: neutral = idle, an amber
+    // hatch = the JS-loading gap (wasted time), teal = interactive.
+    spaS1: { background: 'var(--faint)', left: 0, width: '18%' },
     spaS2: {
-      background: 'repeating-linear-gradient(135deg, #4a3320 0 6px, #2c1f12 6px 12px)',
+      background:
+        'repeating-linear-gradient(135deg, color-mix(in srgb, var(--amber) 55%, var(--panel)) 0 6px, color-mix(in srgb, var(--amber) 20%, var(--panel)) 6px 12px)',
       left: '18%',
       width: '54%',
     },
-    spaS3: { background: '#1d4136', left: '72%', width: '28%' },
-    mpaS1: { background: '#3b3b3b', left: 0, width: '10%' },
-    mpaS3: { background: 'linear-gradient(90deg, #136a5c, #1d4136)', left: '10%', width: '90%' },
+    spaS3: { background: 'color-mix(in srgb, var(--teal) 45%, var(--panel))', left: '72%', width: '28%' },
+    mpaS1: { background: 'var(--faint)', left: 0, width: '10%' },
+    mpaS3: {
+      background:
+        'linear-gradient(90deg, var(--teal), color-mix(in srgb, var(--teal) 45%, var(--panel)))',
+      left: '10%',
+      width: '90%',
+    },
     marks: {
       color: 'var(--faint)',
       display: 'flex',
@@ -625,7 +563,7 @@ const landingStyles = style.create(
     },
     warn: { color: 'var(--amber)' },
     usersNote: {
-      color: '#a8a8a8',
+      color: 'var(--dim)',
       fontSize: '0.84rem',
       lineHeight: 1.6,
       marginTop: '1rem',
@@ -645,7 +583,7 @@ const landingStyles = style.create(
       marginBottom: '3.4rem',
       padding: '0.85rem 1.3rem',
     },
-    ledgerSep: { color: '#2c2c2c' },
+    ledgerSep: { color: 'var(--edge)' },
     ledgerMore: {
       borderBottomColor: 'var(--teal)',
       borderBottomStyle: 'solid',
@@ -656,25 +594,6 @@ const landingStyles = style.create(
       marginLeft: 'auto',
       paddingBottom: '0.1rem',
       textTransform: 'uppercase',
-    },
-    footer: {
-      borderTopColor: 'var(--edge)',
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      color: 'var(--faint)',
-      display: 'flex',
-      flexWrap: 'wrap',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.7rem',
-      gap: '1.5rem',
-      justifyContent: 'space-between',
-      letterSpacing: '0.08em',
-      padding: '1.4rem 0 2.2rem',
-      textTransform: 'uppercase',
-    },
-    footerLinks: {
-      display: 'flex',
-      gap: '1.5rem',
     },
   },
   { namespace: 'site-landing', source: 'site/src/components/landing.tsx' },
@@ -688,50 +607,15 @@ export interface LandingPageProps {
 export function LandingRoutePage({ clients, loaderGzipBytes }: LandingPageProps): string {
   return (
     <div style={landingStyles.root}>
-      <LandingHeader clients={clients} />
+      {SiteHeader.definition.render({ activePath: '/', clients })}
       <div style={landingStyles.wrap}>
         <Hero clients={clients} />
         <BreakIt />
         <Split />
         <LedgerStrip loaderGzipBytes={loaderGzipBytes} />
-        <LandingFooter />
       </div>
+      {SiteFooter.definition.render()}
     </div>
-  );
-}
-
-function LandingHeader({ clients }: { clients: ClientHrefs }): string {
-  return (
-    <header>
-      <div style={landingStyles.bar}>
-        <a href="/" style={[landingStyles.link, landingStyles.logo]}>
-          <span style={landingStyles.mark}>&#9670;</span> {BRAND_CAPS}
-        </a>
-        <nav style={landingStyles.nav}>
-          {NAV.map((item) => (
-            <a href={item.href} style={[landingStyles.link, landingStyles.navLink]}>
-              {item.label}
-            </a>
-          ))}
-        </nav>
-        <span style={landingStyles.right}>
-          <button
-            type="button"
-            style={landingStyles.headerButton}
-            on:click={`${clients.search}#open`}
-          >
-            &#8984;K
-          </button>
-          <a
-            href="https://github.com/kovojs/kovo"
-            rel="external"
-            style={[landingStyles.link, landingStyles.navLink]}
-          >
-            GitHub
-          </a>
-        </span>
-      </div>
-    </header>
   );
 }
 
@@ -744,14 +628,14 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
           <span style={landingStyles.cursor}>&#9646;</span>
         </h1>
         <p style={landingStyles.tagline}>
-          The web framework that <em style={landingStyles.taglineEm}>hands your agent the fix</em>{' '}
-          <span style={landingStyles.taglineDim}>-- database to DOM.</span>
+          Builds like <em style={landingStyles.taglineEm}>React</em>. Runs like{' '}
+          <em style={landingStyles.taglineEm}>HTML</em>.
         </p>
         <p style={landingStyles.sub}>
-          {BRAND} is built from the ground up so AI coding agents get a precise error and know{' '}
-          <b style={landingStyles.strong}>exactly what to fix</b>. And it's delightful for your
-          users: pages are real HTML, <b style={landingStyles.strong}>interactive at first paint</b>
-          .
+          {BRAND} is the web framework that <b style={landingStyles.strong}>hands your agent the
+          fix</b> -- database to DOM. AI coding agents get a precise error and know exactly what to
+          change, and your users get pages that are real HTML,{' '}
+          <b style={landingStyles.strong}>interactive at first paint</b>.
         </p>
         <span style={landingStyles.noJs}>&#10003; No JS required on load</span>
         <div style={landingStyles.try}>
@@ -1119,31 +1003,5 @@ function LedgerStrip({ loaderGzipBytes }: { loaderGzipBytes: number }): string {
         see how it's verified -&gt;
       </a>
     </p>
-  );
-}
-
-function LandingFooter(): string {
-  return (
-    <footer style={landingStyles.footer}>
-      <span>
-        {BRAND} -- interactive at first paint &middot; legible at every layer &middot; statically
-        verifiable
-      </span>
-      <span style={landingStyles.footerLinks}>
-        <a href="/spec/" style={[landingStyles.link, landingStyles.navLink]}>
-          Spec
-        </a>
-        <a href="/llms.txt" style={[landingStyles.link, landingStyles.navLink]}>
-          llms.txt
-        </a>
-        <a
-          href="https://github.com/kovojs/kovo"
-          rel="external"
-          style={[landingStyles.link, landingStyles.navLink]}
-        >
-          GitHub
-        </a>
-      </span>
-    </footer>
   );
 }

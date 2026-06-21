@@ -19,7 +19,7 @@ export const siteUiStylesheets = [
 ] as const;
 
 export function siteStylesheetsForRoute(path: string): readonly (typeof siteStylesheets)[number][] {
-  return path === '/gallery' || path.startsWith('/gallery/')
+  return path === '/components' || path.startsWith('/components/')
     ? [...siteStylesheets, ...siteUiStylesheets]
     : siteStylesheets;
 }

@@ -32,13 +32,41 @@ const NAV: NavItem[] = [
   { url: '/docs/why-kovo/', title: 'Docs' },
   { url: '/tutorial/', title: 'Tutorial' },
   { url: '/guides/', title: 'Guides' },
-  { url: '/gallery/', title: 'Gallery' },
+  { url: '/components/', title: 'Components' },
   { url: '/examples/', title: 'Examples' },
   { url: '/reference/', title: 'Reference', match: ['/api', '/reference', '/spec'] },
 ];
 
+// Context-dependent sidebar split (SPEC §4.5): a reader browsing the learning
+// path (Getting Started + Tutorial + Guides) should not also see the whole
+// Components/Examples/API/Reference tree, and vice versa. Group keys map to one
+// of two families; the sidebar renders only the family of the active page.
+const LEARN_FAMILY = new Set(['docs', 'tutorial', 'guides']);
+
+function sidebarFamilyForPath(activePath: string): 'learn' | 'reference' {
+  return ['/docs', '/tutorial', '/guides'].some(
+    (prefix) => activePath === prefix || activePath.startsWith(`${prefix}/`),
+  )
+    ? 'learn'
+    : 'reference';
+}
+
+/** The sidebar groups relevant to the page at `activePath`: the learning-path
+ * sections together, or the Components/Examples/reference sections together. */
+export function sidebarGroupsForPath(groups: NavGroup[], activePath: string): NavGroup[] {
+  const family = sidebarFamilyForPath(activePath);
+  const filtered = groups.filter(
+    (group) => (LEARN_FAMILY.has(group.key) ? 'learn' : 'reference') === family,
+  );
+  return filtered.length > 0 ? filtered : groups;
+}
+
 const THEME_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2m0 14v2M5.6 5.6l1.4 1.4m9.9 9.9 1.4 1.4M3 12h2m14 0h2M5.6 18.4 7 17m9.9-9.9 1.4-1.4"/></svg>`;
 const SOURCE_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
+const SEARCH_ICON = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`;
+// The hamburger swaps to an X when its <details> menu is open (CSS-only, the
+// header mobile nav is an L0 disclosure — zero JavaScript).
+const MENU_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>`;
 
 const chromeStyles = style.create(
   {
@@ -231,6 +259,10 @@ const chromeStyles = style.create(
       margin: '0 auto',
       maxWidth: '80rem',
       padding: '0.8rem 1.5rem',
+      '@media (max-width: 47.999rem)': {
+        gap: '1rem',
+        padding: '0.7rem 1rem',
+      },
     },
     iconButton: {
       alignItems: 'center',
@@ -256,6 +288,9 @@ const chromeStyles = style.create(
     nav: {
       display: 'flex',
       gap: '1.4rem',
+      '@media (max-width: 47.999rem)': {
+        display: 'none',
+      },
     },
     navLink: {
       color: 'var(--dim)',
@@ -269,6 +304,73 @@ const chromeStyles = style.create(
     },
     navLinkActive: {
       color: 'var(--teal)',
+    },
+    // Mobile header nav: a CSS-only <details> disclosure (L0, zero JS). The
+    // desktop nav + GitHub link hide below 48rem; this hamburger drops a panel
+    // with the full nav. The desktop search button collapses to an icon.
+    mobileMenu: {
+      display: 'none',
+      position: 'relative',
+      '@media (max-width: 47.999rem)': {
+        display: 'block',
+      },
+    },
+    mobileMenuSummary: {
+      alignItems: 'center',
+      color: 'var(--dim)',
+      cursor: 'pointer',
+      display: 'inline-flex',
+      listStyle: 'none',
+      transition: 'color 0.15s',
+      '::-webkit-details-marker': {
+        display: 'none',
+      },
+      ':hover': {
+        color: 'var(--ink)',
+      },
+    },
+    mobilePanel: {
+      background: 'var(--bg)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      boxShadow: '0 16px 40px -16px rgb(0 0 0 / 0.5)',
+      display: 'flex',
+      flexDirection: 'column',
+      minWidth: '11rem',
+      padding: '0.5rem',
+      position: 'absolute',
+      right: 0,
+      top: 'calc(100% + 0.7rem)',
+      zIndex: 30,
+    },
+    mobilePanelLink: {
+      color: 'var(--dim)',
+      fontSize: '0.78rem',
+      letterSpacing: '0.06em',
+      padding: '0.55rem 0.7rem',
+      textDecoration: 'none',
+      textTransform: 'uppercase',
+      ':hover': {
+        background: 'var(--panel)',
+        color: 'var(--ink)',
+      },
+    },
+    searchIconButton: {
+      alignItems: 'center',
+      background: 'none',
+      border: 'none',
+      color: 'var(--dim)',
+      cursor: 'pointer',
+      display: 'none',
+      padding: 0,
+      transition: 'color 0.15s',
+      ':hover': {
+        color: 'var(--ink)',
+      },
+      '@media (max-width: 47.999rem)': {
+        display: 'inline-flex',
+      },
     },
     pagination: {
       display: 'flex',
@@ -328,6 +430,9 @@ const chromeStyles = style.create(
       ':hover': {
         borderColor: 'var(--faint)',
         color: 'var(--ink)',
+      },
+      '@media (max-width: 47.999rem)': {
+        display: 'none',
       },
     },
     searchKey: {
@@ -464,15 +569,57 @@ export const SiteHeader = component({
           </button>
           <button
             type="button"
+            style={chromeStyles.searchIconButton}
+            on:click={`${clients.search}#open`}
+            aria-label="Search documentation"
+          >
+            {SEARCH_ICON}
+          </button>
+          <button
+            type="button"
             style={chromeStyles.iconButton}
             on:click={`${clients.theme}#toggle`}
             aria-label="Toggle dark mode"
           >
             {THEME_ICON}
           </button>
-          <a style={chromeStyles.iconButton} href="https://github.com/kovojs/kovo" rel="external">
+          <a
+            style={chromeStyles.iconButton}
+            data-header-github
+            href="https://github.com/kovojs/kovo"
+            rel="external"
+          >
             GitHub
           </a>
+          <details style={chromeStyles.mobileMenu}>
+            <summary style={chromeStyles.mobileMenuSummary} aria-label="Menu">
+              {MENU_ICON}
+            </summary>
+            <nav style={chromeStyles.mobilePanel} aria-label="Site">
+              {NAV.map((item) => {
+                const prefixes = item.match ?? [item.url.replace(/\/$/, '') || item.url];
+                const active = prefixes.some((prefix) => activePath.startsWith(prefix));
+                return (
+                  <a
+                    href={item.url}
+                    style={[
+                      chromeStyles.mobilePanelLink,
+                      active && chromeStyles.navLinkActive,
+                    ]}
+                  >
+                    {escapeHtml(item.title)}
+                  </a>
+                );
+              })}
+              <a
+                style={chromeStyles.mobilePanelLink}
+                href="https://github.com/kovojs/kovo"
+                rel="external"
+              >
+                GitHub
+              </a>
+            </nav>
+          </details>
         </div>
       </div>
     </header>
