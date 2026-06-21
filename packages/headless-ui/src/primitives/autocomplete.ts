@@ -238,13 +238,19 @@ export function autocompleteOptionAttributes(
 ): AutocompletePrimitiveAttributes {
   const disabled = autocompleteOptionDisabled(options, options.itemValue);
   const selected = autocompleteOptionSelected(options);
+  // J1 (SPEC.md §4.6): resolve a stable option id so the synthesized
+  // aria-activedescendant always references a rendered option. Honor an explicit
+  // call-site id, then the item's own id, then auto-generate
+  // `<listId>-option-<i>` against the *filtered* render order — the exact id
+  // autocompleteActiveDescendant falls back to. Mirrors combobox.ts/command.ts.
+  const id = autocompleteOptionId(options, options.itemValue);
 
   return Object.freeze({
     ...autocompleteOptionDataAttributes(options),
     'aria-selected': String(selected),
     role: 'option',
     value: options.itemValue,
-    ...(options.id === undefined ? {} : { id: options.id }),
+    ...(id === undefined ? {} : { id }),
     ...(disabled ? { 'aria-disabled': 'true' } : {}),
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
   });
@@ -566,13 +572,45 @@ function autocompleteActiveDescendant(
 ): string | undefined {
   if (options.highlightedValue === undefined) return undefined;
 
-  const itemId = options.items?.find((item) => item.value === options.highlightedValue)?.id;
+  const itemId = autocompleteItemId(options, options.highlightedValue);
   if (itemId !== undefined) return itemId;
 
-  const index = options.items?.findIndex((item) => item.value === options.highlightedValue) ?? -1;
-  if (index < 0) return undefined;
+  // J1 (SPEC.md §4.6): index against the *filtered* render order
+  // (autocompleteSuggestions — the options the listbox actually renders), not the
+  // full item list, so the synthesized id matches the rendered option's
+  // auto-generated id after typing. Mirrors combobox.ts/command.ts.
+  return autocompleteFallbackOptionId(options, options.highlightedValue);
+}
 
-  return `${options.listId ?? options.id ?? 'autocomplete'}-option-${index}`;
+function autocompleteItemId(state: AutocompleteState, value: string): string | undefined {
+  return state.items?.find((item) => item.value === value)?.id;
+}
+
+function autocompleteOptionId(
+  options: AutocompleteOptionAttributeOptions,
+  value: string,
+): string | undefined {
+  if (options.id !== undefined) return options.id;
+  const itemId = autocompleteItemId(options, value);
+  if (itemId !== undefined) return itemId;
+  return autocompleteFallbackOptionId(options, value);
+}
+
+function autocompleteFallbackOptionId(
+  state: AutocompleteState & { id?: string },
+  value: string,
+): string | undefined {
+  // J1 (SPEC.md §4.6): index against the *filtered* render order so the
+  // synthesized id matches the rendered option's position after typing. If the
+  // value is not in the filtered set (e.g. an app that renders the unfiltered
+  // list), fall back to the full-list index so the IDREF still resolves.
+  const filteredIndex = autocompleteSuggestions(state).findIndex((item) => item.value === value);
+  const index =
+    filteredIndex >= 0
+      ? filteredIndex
+      : (state.items?.findIndex((item) => item.value === value) ?? -1);
+  if (index < 0) return undefined;
+  return `${state.listId ?? state.id ?? 'autocomplete'}-option-${index}`;
 }
 
 function autocompleteItemText(item: AutocompleteItem): string {

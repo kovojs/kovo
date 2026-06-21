@@ -10,6 +10,7 @@ import {
   nextTypeaheadState,
   openState,
   safeUrl,
+  scheduleDeferred,
   type CollectionOrientation,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
@@ -554,7 +555,11 @@ export function navigationMenuFocusElement(
     (target as { focus(): void }).focus();
   };
   if (options.defer === true) {
-    (options.schedule ?? ((callback) => setTimeout(callback, 0)))(focus);
+    // J2 (SPEC.md §4.6): a bare setTimeout(0) fires before the runtime drains its
+    // post-commit queue, so .focus() runs while the content subtree is still
+    // hidden (a no-op). Route through scheduleDeferred so focus lands after the
+    // content is revealed — defaults to the menu primitives.
+    (options.schedule ?? scheduleDeferred)(focus);
   } else {
     focus();
   }

@@ -82,6 +82,8 @@ describe('headless-ui select primitive', () => {
         value: 'red',
       }),
     ).toEqual({
+      // J3: open trigger advertises the highlighted option (blue = index 2).
+      'aria-activedescendant': 'color-list-option-2',
       'aria-controls': 'color-list',
       'aria-describedby': 'color-help color-error',
       'aria-expanded': 'true',
@@ -129,6 +131,8 @@ describe('headless-ui select primitive', () => {
     expect(selectItemAttributes({ ...state, itemLabel: 'Red', itemValue: 'red' })).toEqual({
       'aria-selected': 'true',
       'data-state': 'checked',
+      // J3: synthesized option id (no listboxId → 'select' fallback prefix).
+      id: 'select-option-0',
       label: 'Red',
       role: 'option',
       value: 'red',
@@ -141,6 +145,7 @@ describe('headless-ui select primitive', () => {
       'data-disabled': '',
       'data-highlighted': '',
       'data-state': 'unchecked',
+      id: 'select-option-1',
       role: 'option',
       value: 'green',
     });
@@ -150,6 +155,32 @@ describe('headless-ui select primitive', () => {
     expect(selectValueAttributes({ placeholder: 'Choose color', value: '' })).toEqual({
       'data-placeholder': '',
     });
+  });
+
+  // J3 (SPEC.md §4.6): an open listbox must expose the highlighted option to
+  // assistive tech via aria-activedescendant on the focused trigger, and each
+  // option must carry the matching id. Without these, a keyboard+SR user can't
+  // perceive which option is highlighted (only data-highlighted changes today).
+  it('exposes the highlighted option to AT via aria-activedescendant + matching option id', () => {
+    const state = {
+      highlightedValue: 'blue',
+      items: colorItems,
+      listboxId: 'color-list',
+      open: true,
+      value: 'red',
+    };
+
+    // The focused trigger points at the highlighted option (blue = index 2).
+    const trigger = selectTriggerAttributes({ ...state, id: 'color' });
+    expect(trigger['aria-activedescendant']).toBe('color-list-option-2');
+
+    // The rendered option carries the exact same synthesized id.
+    expect(selectItemAttributes({ ...state, itemValue: 'blue' }).id).toBe('color-list-option-2');
+
+    // A closed listbox does not advertise an active descendant.
+    expect(
+      selectTriggerAttributes({ ...state, id: 'color', open: false })['aria-activedescendant'],
+    ).toBeUndefined();
   });
 
   it('resolves selected value text from item labels, text values, raw values, or placeholder', () => {

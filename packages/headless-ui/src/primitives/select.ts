@@ -156,12 +156,17 @@ export function selectTriggerAttributes(
   options: SelectTriggerAttributeOptions = {},
 ): SelectPrimitiveAttributes {
   const describedBy = selectDescribedBy(options);
+  // J3 (SPEC.md §4.6): the trigger holds focus while the listbox is open, so the
+  // highlighted option must be advertised through aria-activedescendant on it —
+  // otherwise a keyboard+SR user perceives nothing as they arrow through items.
+  const activeDescendant = selectActiveDescendant(options);
 
   return Object.freeze({
     ...selectDataAttributes(options),
     'aria-expanded': String(options.open === true),
     'aria-haspopup': 'listbox',
     type: 'button',
+    ...(activeDescendant === undefined ? {} : { 'aria-activedescendant': activeDescendant }),
     ...(options.listboxId === undefined ? {} : { 'aria-controls': options.listboxId }),
     ...(options.disabled === true ? { disabled: true } : {}),
     ...(options.id === undefined ? {} : { id: options.id }),
@@ -200,12 +205,17 @@ export function selectItemAttributes(
 ): SelectPrimitiveAttributes {
   const disabled = selectItemDisabled(options, options.itemValue);
   const selected = selectItemSelected(options);
+  // J3 (SPEC.md §4.6): resolve a stable option id so the synthesized
+  // aria-activedescendant always references a rendered option. Honor an explicit
+  // call-site id, then the item's own id, then auto-generate
+  // `<listboxId>-option-<i>`. Mirrors combobox.ts/command.ts/autocomplete.ts.
+  const id = selectOptionId(options, options.itemValue);
 
   return Object.freeze({
     ...selectItemDataAttributes(options),
     'aria-selected': String(selected),
     role: 'option',
-    ...(options.id === undefined ? {} : { id: options.id }),
+    ...(id === undefined ? {} : { id }),
     ...(disabled ? { 'aria-disabled': 'true' } : {}),
     value: options.itemValue,
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
@@ -515,6 +525,43 @@ function selectItemDisabled(
 
 function selectValueDisabled(state: SelectState, value: string | undefined): boolean {
   return value !== undefined && selectItemDisabled(state, value);
+}
+
+function selectActiveDescendant(options: SelectTriggerAttributeOptions): string | undefined {
+  // J3 (SPEC.md §4.6): only an open listbox has a navigable highlight; a closed
+  // trigger must not advertise a dangling active descendant.
+  if (options.open !== true || options.highlightedValue === undefined) return undefined;
+
+  const itemId = selectItemId(options, options.highlightedValue);
+  if (itemId !== undefined) return itemId;
+
+  return selectFallbackOptionId(options, options.highlightedValue);
+}
+
+function selectItemId(state: SelectState, value: string): string | undefined {
+  return state.items?.find((item) => item.value === value)?.id;
+}
+
+function selectOptionId(
+  options: SelectItemAttributeOptions,
+  value: string,
+): string | undefined {
+  if (options.id !== undefined) return options.id;
+  const itemId = selectItemId(options, value);
+  if (itemId !== undefined) return itemId;
+  return selectFallbackOptionId(options, value);
+}
+
+function selectFallbackOptionId(
+  state: SelectState & { id?: string },
+  value: string,
+): string | undefined {
+  // J3 (SPEC.md §4.6): select renders the full item list unfiltered, so the
+  // synthesized id is the option's index in `items`. Mirrors combobox/command's
+  // fallback id shape (`<listboxId>-option-<i>`).
+  const index = state.items?.findIndex((item) => item.value === value) ?? -1;
+  if (index < 0) return undefined;
+  return `${state.listboxId ?? state.id ?? 'select'}-option-${index}`;
 }
 
 function selectDescribedBy(options: {

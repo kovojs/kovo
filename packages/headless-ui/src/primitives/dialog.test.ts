@@ -76,21 +76,34 @@ describe('headless-ui dialog primitive', () => {
     ).toEqual({
       'aria-describedby': 'cart-description',
       'aria-labelledby': 'cart-title',
+      // J5: base Dialog content is now a modal dialog (aria-modal/role).
+      'aria-modal': 'true',
       closedby: 'any',
       'data-state': 'open',
       id: 'cart-drawer',
       open: true,
+      role: 'dialog',
     });
     expect(dialogContentAttributes({ contentId: 'cart-drawer', open: false })).toEqual({
+      'aria-modal': 'true',
       closedby: 'any',
       'data-state': 'closed',
       id: 'cart-drawer',
       open: false,
+      role: 'dialog',
     });
     expect(
       dialogContentAttributes({ contentId: 'cart-drawer', dismissible: false, open: true }),
     ).toMatchObject({
       closedby: 'closerequest',
+    });
+
+    // J5 (OFM-1, SPEC.md §4.6): the base Dialog content must tell AT the rest of
+    // the page is inert, matching its sibling modal primitives (alert-dialog,
+    // command). Without aria-modal a screen reader wanders the background.
+    expect(dialogContentAttributes({ contentId: 'cart-drawer', open: true })).toMatchObject({
+      'aria-modal': 'true',
+      role: 'dialog',
     });
 
     expect(dialogCloseAttributes({ contentId: 'cart-drawer', open: true })).toEqual({

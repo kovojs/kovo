@@ -384,18 +384,41 @@ function numberFieldAlignedStepValue(
   direction: 'decrement' | 'increment',
 ): number {
   if (!numberFieldFinite(state.min)) {
-    return value + (direction === 'increment' ? step : -step);
+    // J4: snap to step precision so fractional steps don't accumulate IEEE-754
+    // noise (e.g. 0.1+0.1+0.1 → 0.30000000000000004).
+    return roundNumberFieldValue(value + (direction === 'increment' ? step : -step), step);
   }
 
   const base = state.min;
-  const offset = (value - base) / step;
+  // J4: round the offset before the integer test. Without rounding, an on-grid
+  // value like 0.6 reads as 5.999…/0.1 = 5.999… (off-grid) → Math.ceil snaps it
+  // back to 6 → the spinner stutters at ~0.6 and never reaches 0.7. Rounding the
+  // offset first makes the on-grid check robust, matching native <input>.
+  const rawOffset = (value - base) / step;
+  const offset = roundNumberFieldOffset(rawOffset);
 
   if (Number.isInteger(offset)) {
-    return value + (direction === 'increment' ? step : -step);
+    return roundNumberFieldValue(value + (direction === 'increment' ? step : -step), step);
   }
 
   const alignedOffset = direction === 'increment' ? Math.ceil(offset) : Math.floor(offset);
-  return base + alignedOffset * step;
+  return roundNumberFieldValue(base + alignedOffset * step, step);
+}
+
+// J4 (mirrors slider.ts roundSliderValue): snap a computed value to the step's
+// decimal precision so fractional-step arithmetic lands on the visible grid.
+function roundNumberFieldValue(value: number, step: number): number {
+  const stepText = String(step);
+  const decimalIndex = stepText.indexOf('.');
+  const precision = decimalIndex === -1 ? 0 : stepText.length - decimalIndex - 1;
+  return Number(value.toFixed(Math.min(precision, 12)));
+}
+
+// J4: collapse near-integer float error so the on-grid (Number.isInteger) test
+// recognizes values that are integral to ~12 decimals (5.999… → 6).
+function roundNumberFieldOffset(offset: number): number {
+  const rounded = Number(offset.toFixed(12));
+  return Number.isInteger(rounded) ? rounded : offset;
 }
 
 function clampNumberFieldValue(value: number, state: NumberFieldState): number {

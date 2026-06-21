@@ -215,6 +215,33 @@ describe('headless-ui number-field primitive', () => {
     });
   });
 
+  // J4: fractional steps must stay on the step grid and not stutter. With
+  // step=0.1 and min=0, IEEE-754 error makes (0.6-0)/0.1 read as 5.999…, so the
+  // old Math.ceil/floor path stuck at ~0.6 and committed 0.6000000000000001
+  // instead of reaching 0.7. The result must match a native <input step=0.1>.
+  it('keeps fractional-step increments on the step grid (no off-grid floats or stutter)', () => {
+    const sequence: number[] = [];
+    let value: number | undefined = 0;
+    for (let i = 0; i < 8; i += 1) {
+      const result = incrementNumberFieldValue({ min: 0, step: 0.1, value });
+      value = result.value;
+      sequence.push(value as number);
+    }
+    expect(sequence).toEqual([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]);
+  });
+
+  it('snaps fractional decrements to step precision', () => {
+    expect(decrementNumberFieldValue({ min: 0, step: 0.1, value: 0.3 })).toMatchObject({
+      changed: true,
+      value: 0.2,
+    });
+    // An off-grid value snaps down to the nearest grid point on decrement.
+    expect(decrementNumberFieldValue({ min: 0, step: 0.1, value: 0.25 })).toMatchObject({
+      changed: true,
+      value: 0.2,
+    });
+  });
+
   it('parses input strings into number field values', () => {
     expect(numberFieldValueFromString('42')).toBe(42);
     expect(numberFieldValueFromString(' 3.5 ')).toBe(3.5);

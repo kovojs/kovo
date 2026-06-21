@@ -85,8 +85,14 @@ export function dialogContentAttributes(
 ): DialogPrimitiveAttributes {
   return Object.freeze({
     ...openState(options.open),
+    // J5 (OFM-1, SPEC.md §4.6): mark the content as a modal dialog so AT treats
+    // the background as inert, matching alert-dialog/command. Without this the
+    // most-used overlay (cart drawer, modal forms) lets screen readers wander
+    // the page behind the open modal.
+    'aria-modal': 'true',
     closedby: options.dismissible === false ? 'closerequest' : 'any',
     open: options.open,
+    role: 'dialog',
     ...(options.contentId === undefined ? {} : { id: options.contentId }),
     ...(options.titleId === undefined ? {} : { 'aria-labelledby': options.titleId }),
     ...(options.descriptionId === undefined ? {} : { 'aria-describedby': options.descriptionId }),

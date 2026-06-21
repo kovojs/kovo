@@ -687,6 +687,49 @@ describe('headless-ui navigation-menu primitive', () => {
     expect(deferredFocusCount).toBe(1);
   });
 
+  // J2 (SPEC.md §4.6): with no explicit `schedule`, deferred focus must route
+  // through the runtime's post-commit hook (scheduleDeferred) so it runs after
+  // the content is revealed — NOT through a bare setTimeout(0) that fires while
+  // the subtree is still hidden. Mirrors dropdown-menu/menubar/context-menu.
+  it('default deferred focus prefers the runtime post-commit hook (not bare setTimeout)', () => {
+    let deferredFocusCount = 0;
+    const event = {
+      target: {
+        ownerDocument: {
+          getElementById(id: string) {
+            return id === 'docs-link'
+              ? {
+                  focus() {
+                    deferredFocusCount += 1;
+                  },
+                }
+              : undefined;
+          },
+        },
+      },
+    } as Event & {
+      target: { ownerDocument: { getElementById(id: string): unknown } };
+    };
+
+    const postCommit: Array<() => void> = [];
+    const globalRecord = globalThis as { __kovo_postCommitSchedule?: (cb: () => void) => void };
+    const previous = globalRecord.__kovo_postCommitSchedule;
+    globalRecord.__kovo_postCommitSchedule = (callback) => {
+      postCommit.push(callback);
+    };
+    try {
+      // No `schedule` override: must prefer the installed post-commit hook.
+      expect(navigationMenuFocusElement(event, 'docs-link', { defer: true })).toBe(true);
+      expect(postCommit).toHaveLength(1);
+      expect(deferredFocusCount).toBe(0);
+      postCommit.forEach((callback) => callback());
+      expect(deferredFocusCount).toBe(1);
+    } finally {
+      if (previous === undefined) delete globalRecord.__kovo_postCommitSchedule;
+      else globalRecord.__kovo_postCommitSchedule = previous;
+    }
+  });
+
   it('exports navigation-menu helpers from package and primitives barrels', () => {
     expect(exportedNavigationMenuContentAttributes).toBe(navigationMenuContentAttributes);
     expect(exportedNavigationMenuFocusElement).toBe(navigationMenuFocusElement);

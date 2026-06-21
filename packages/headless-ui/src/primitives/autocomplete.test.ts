@@ -156,6 +156,8 @@ describe('headless-ui autocomplete primitive', () => {
       'aria-selected': 'false',
       'data-disabled': '',
       'data-state': 'unchecked',
+      // J1: boston carries an explicit item id (cityItems), so the option emits it.
+      id: 'city-list-option-1',
       role: 'option',
       value: 'boston',
     });
@@ -163,6 +165,8 @@ describe('headless-ui autocomplete primitive', () => {
       'aria-selected': 'false',
       'data-highlighted': '',
       'data-state': 'unchecked',
+      // J1: chicago carries an explicit item id (cityItems), so the option emits it.
+      id: 'city-list-option-2',
       role: 'option',
       value: 'chicago',
     });
@@ -172,6 +176,35 @@ describe('headless-ui autocomplete primitive', () => {
     expect(autocompleteValueAttributes({ placeholder: 'Choose city', value: '' })).toEqual({
       'data-placeholder': '',
     });
+  });
+
+  // J1 (SPEC.md §4.6): the synthesized aria-activedescendant must reference the
+  // highlighted option's rendered id. Options render from the *filtered*
+  // suggestions, so the fallback id must use the filtered index and the option
+  // element must emit that same id — otherwise the IDREF dangles and the SR
+  // announces nothing.
+  it('points aria-activedescendant at the highlighted filtered option id (no explicit ids)', () => {
+    const unidentifiedItems: readonly AutocompleteItem[] = [
+      { label: 'Austin', value: 'austin' },
+      { label: 'Chicago', value: 'chicago' },
+      { label: 'Charlotte', value: 'charlotte' },
+    ];
+    const state = {
+      highlightedValue: 'charlotte',
+      inputValue: 'ch',
+      items: unidentifiedItems,
+      listId: 'city-list',
+      open: true,
+    };
+
+    // Typing "ch" filters to [chicago, charlotte]; charlotte is filtered index 1.
+    const input = autocompleteInputAttributes({ ...state, id: 'city' });
+    expect(input['aria-activedescendant']).toBe('city-list-option-1');
+
+    // The rendered option must carry the exact same id so the IDREF resolves.
+    expect(
+      autocompleteOptionAttributes({ ...state, itemValue: 'charlotte' }).id,
+    ).toBe('city-list-option-1');
   });
 
   it('resolves display text and filters enabled suggestions by input value', () => {
