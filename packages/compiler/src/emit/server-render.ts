@@ -1,3 +1,5 @@
+import * as ts from 'typescript';
+
 import { compilerIrHeader } from '../ir.js';
 import {
   outputContextForAttribute,
@@ -5,10 +7,12 @@ import {
 } from '../output-context-facts.js';
 import {
   componentHasInferredServerRefreshTarget,
+  componentOptionObjectEntries,
   componentOptionObjectKeys,
   componentRenderHost,
   componentRenderHostElement,
   componentStateReturnObjectModel,
+  type ObjectLiteralEntry,
   type ComponentModuleModel,
   type JsxAttributeModel,
   type JsxElementModel,
@@ -493,22 +497,116 @@ function declaredQueryDepsStamp(
   model: ComponentModuleModel,
   hostElement: JsxElementModel,
 ): ServerRenderStampWriteFact | null {
-  const deps = componentOptionObjectKeys(model, 'queries');
+  const deps = componentQueryDependencyTokens(model);
   if (deps.length === 0) return null;
 
   const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-deps');
   const existingDeps = splitDepValue(existing?.value ?? '');
-  const depValue = mergeDepValues(existingDeps, deps).join(' ');
+  const mergedDeps = mergeDepValues(
+    existingDeps.map((value) => ({ value })),
+    deps,
+  );
+  const depValue = renderQueryDependencyTokens(mergedDeps);
   return {
     attr: 'kovo-deps',
     mode: existing ? 'replace' : 'insert',
     value: depValue,
+    ...(mergedDeps.some((dep) => dep.kind === 'expression') ? { valueKind: 'expression' } : {}),
     writer: 'host dependency stamp',
   };
 }
 
-function mergeDepValues(existing: readonly string[], declared: readonly string[]): string[] {
-  return [...new Set([...existing, ...declared])];
+type QueryDependencyToken =
+  | { kind?: 'literal'; value: string }
+  | { fallback: string; kind: 'expression'; value: string };
+
+function componentQueryDependencyTokens(model: ComponentModuleModel): QueryDependencyToken[] {
+  return componentOptionObjectEntries(model, 'queries').map((entry) => {
+    const expression = queryKeyExpressionForBinding(entry);
+    return expression
+      ? { fallback: entry.key, kind: 'expression', value: expression }
+      : { value: entry.key };
+  });
+}
+
+function queryKeyExpressionForBinding(entry: ObjectLiteralEntry): string | null {
+  const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+  if (!queryExpression) return null;
+  if (queryExpression === entry.key || queryExpression === `${entry.key}Query`) return null;
+  return `${queryExpression}.key ?? ${JSON.stringify(entry.key)}`;
+}
+
+function queryExpressionFromBinding(expressionSource: string): string | null {
+  const sourceFile = ts.createSourceFile(
+    'query-binding.tsx',
+    `const __binding = ${expressionSource};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const statement = sourceFile.statements[0];
+  if (!statement || !ts.isVariableStatement(statement)) return null;
+  const expression = statement.declarationList.declarations[0]?.initializer;
+  if (!expression) return null;
+
+  const unwrappedExpression = unwrapQueryRefreshExpression(expression);
+  if (
+    ts.isCallExpression(unwrappedExpression) &&
+    ts.isPropertyAccessExpression(unwrappedExpression.expression) &&
+    unwrappedExpression.expression.name.text === 'args'
+  ) {
+    return queryKeyReadableExpression(
+      unwrapQueryRefreshExpression(unwrappedExpression.expression.expression),
+      sourceFile,
+    );
+  }
+
+  return queryKeyReadableExpression(unwrappedExpression, sourceFile);
+}
+
+function unwrapQueryRefreshExpression(expression: ts.Expression): ts.Expression {
+  if (
+    ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    expression.expression.name.text === 'refresh'
+  ) {
+    return unwrapQueryRefreshExpression(expression.expression.expression);
+  }
+  return expression;
+}
+
+function queryKeyReadableExpression(
+  expression: ts.Expression,
+  sourceFile: ts.SourceFile,
+): string | null {
+  if (ts.isObjectLiteralExpression(expression)) return null;
+  return expression.getText(sourceFile);
+}
+
+function mergeDepValues(
+  existing: readonly QueryDependencyToken[],
+  declared: readonly QueryDependencyToken[],
+): QueryDependencyToken[] {
+  const seen = new Set<string>();
+  const merged: QueryDependencyToken[] = [];
+  for (const dep of [...existing, ...declared]) {
+    const key = dep.kind === 'expression' ? `expr:${dep.value}` : `lit:${dep.value}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(dep);
+  }
+  return merged;
+}
+
+function renderQueryDependencyTokens(deps: readonly QueryDependencyToken[]): string {
+  if (!deps.some((dep) => dep.kind === 'expression')) {
+    return deps.map((dep) => dep.value).join(' ');
+  }
+  return `[${deps.map(renderQueryDependencyExpressionElement).join(', ')}].join(' ')`;
+}
+
+function renderQueryDependencyExpressionElement(dep: QueryDependencyToken): string {
+  return dep.kind === 'expression' ? `(${dep.value})` : JSON.stringify(dep.value);
 }
 
 function staticStateJson(model: ComponentModuleModel): string | null {

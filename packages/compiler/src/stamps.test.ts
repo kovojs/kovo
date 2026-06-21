@@ -872,6 +872,33 @@ export const CartBadge = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('stamps emitted kovo-deps from query keys when render aliases differ', () => {
+    const result = compileComponentModule({
+      fileName: 'question-detail.tsx',
+      source: `
+export const QuestionDetail = component({
+  props: { questionId: String },
+  queries: {
+    answers: questionAnswers.args((props) => ({ questionId: props.questionId })),
+    question: questionDetail.args((props) => ({ id: props.questionId })),
+  },
+  render: ({ answers, question }) => (
+    <section>
+      <h1>{question.title}</h1>
+      <p>{answers.length}</p>
+    </section>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    expect(serverSource).toContain(
+      'kovo-deps={[(questionAnswers.key ?? "answers"), (questionDetail.key ?? "question")].join(\' \')}',
+    );
+    expect(serverSource).not.toContain('kovo-deps="answers question"');
+  });
+
   it('lints hand-written fragment target hooks on inferred query roots', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
