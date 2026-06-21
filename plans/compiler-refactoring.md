@@ -148,7 +148,11 @@ behavior change never hides inside a "neutral" move.
   - Neutrality proof: identical bodies collapsed to one import; hash outputs unchanged. Covered by
     `cache-identity.test.ts`, `compile-cache.test.ts`, `hmr-impact.test.ts`.
 
-- [ ] **FN4 · P1 · S/low — Relocate `removeUnreferencedNamedImports` out of `compile.ts`.**
+- [x] **FN4 · P1 · S/low — Relocate `removeUnreferencedNamedImports` out of `compile.ts`.** ✅ done
+  - Done: moved `removeUnreferencedNamedImports` + its 5 private helpers to new `emit/dead-imports.ts`; `compile.ts`
+    imports it and dropped the now-unused `applySourceReplacements` import. Call site unchanged. `compile.ts` shed
+    ~142 lines. Verified: `tsc` clean + compile-component / render-equivalence-boundary / compiler-conformance (43
+    pass) — emitted server source byte-identical.
   - Problem: a ~141-line TS AST walk for dead-import pruning (the largest single block in `compile.ts`, doing its
     own `ts.createSourceFile`) lives in the orchestrator. It is a terminal emit/transform concern, not sequencing,
     and inflates the file every later pass-framework refactor must touch.
