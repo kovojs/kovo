@@ -267,6 +267,7 @@ export function evaluateClientModule(
     _popoverBeforeToggle: primitiveActions.popoverBeforeToggle,
     _radioGroupItemClick: primitiveActions.radioGroupItemClick,
     _radioGroupKeyDown: primitiveActions.radioGroupKeyDown,
+    _scrollAreaScrollTo: primitiveActions.scrollAreaScrollTo,
     _scrollAreaThumbGeometry: primitiveActions.scrollAreaThumbGeometry,
     _scrollAreaThumbDrag: primitiveActions.scrollAreaThumbDrag,
     _scrollAreaThumbDragStart: primitiveActions.scrollAreaThumbDragStart,

@@ -8,8 +8,35 @@ deferral traces to one of two framework gaps — **reactive `data-bind:*` is att
 sets a live element property or reacts to a DOM event) and **the StyleX extractor can't resolve
 `style.keyframes(...)`** — plus a couple of component-local model choices.
 
-**Status (2026-06-20):** Planning. Builds on the merged `better-components-ux` work; see its
-"Deferred" section for the original evidence.
+**Status (2026-06-20):** Implementation pass on branch `agent/more-ui-primitives`. **Shipped** two
+new reusable primitives (green, unit-tested): **B — `scrollAreaScrollTo`** (the "Jump to end" button
+now imperatively scrolls the live viewport, reached via the trigger's `aria-controls` off the event,
+KV201-safe) and **A — `avatarImageLoad`/`avatarImageError`** island handlers (a broken `<img>` flips
+`data-state` to `error` → fallback; a real load → `loaded`). **E — OTP** verified working (unchanged;
+its prior "bug" was a probe artifact). Remaining items proved to be **deeper framework features than a
+single safe session should rush** and are re-scoped as tracked follow-ups with precise findings:
+
+- **C — checkbox-group styled select-all:** robust native form state for a _styled_ select-all needs
+  either the generic live-property binding (below) or an imperative `.checked` sync whose interaction
+  with the morph (element replacement vs. property persistence) is not fully understood — the prior
+  attempt regressed `FormData` in a way that needs dedicated investigation. The current raw-native
+  select-all is **functional** (only its look is native); deferring avoids re-introducing flakiness.
+- **D — CSS keyframe animations:** confirmed deeper than an extractor tweak — the engine's
+  `style.keyframes()` (`packages/style/src/engine.ts:459`) is **name-only**; it never emits the
+  `@keyframes` block, so the feature is unimplemented end-to-end (compiler **must** generate + thread
+  the `@keyframes` CSS, not just resolve a name). A dedicated compiler/engine change.
+- **A (gallery demo):** the avatar load/error island handlers ship + are unit-tested, but converting
+  the avatar gallery route from static to a compiled interactive island is bounded multi-file wiring
+  (the strict 1:1 `compiledDemos`/`src/interactive`/docs/client-module check) — left as polish; the
+  static demo already shows the loading/loaded/error visuals.
+- **Generic `data-bind-prop:*` (live-property binding):** the clean unifier for C and future cases.
+  Confirmed the loader applies bindings via `setAttribute` only; a loader-applied property binding is
+  its own framework change. Promote to a dedicated plan.
+
+This branch merges the two completed primitives (B, A-handlers) + this status; C/D and the polish stay
+open follow-ups.
+
+(Original planning notes below.)
 
 **Behavior source of truth:** `SPEC.md` (§4.6 chained client handlers; §5.2 TSX-authored
 components + KV235; §6.1.1 atomic CSS / §13.1 stylesheet extraction; §12.x accessibility),

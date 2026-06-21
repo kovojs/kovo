@@ -490,7 +490,10 @@ describe('headless-ui scroll-area primitive', () => {
 });
 
 describe('scrollAreaScrollTo', () => {
-  function fakeTrigger(controls: string | null, viewport: { scrollHeight: number; scrollTop: number }) {
+  function fakeTrigger(
+    controls: string | null,
+    viewport: { scrollHeight: number; scrollTop: number },
+  ) {
     return {
       getAttribute: (name: string) => (name === 'aria-controls' ? controls : null),
       ownerDocument: { getElementById: (id: string) => (id === controls ? viewport : null) },
@@ -521,7 +524,9 @@ describe('scrollAreaScrollTo', () => {
   it('no-ops when default is prevented or the viewport is missing', () => {
     const viewport = { scrollHeight: 260, scrollTop: 50 };
     expect(
-      exportedScrollAreaScrollTo(clickEvent(fakeTrigger('vp', viewport), true), { position: 'end' }),
+      exportedScrollAreaScrollTo(clickEvent(fakeTrigger('vp', viewport), true), {
+        position: 'end',
+      }),
     ).toBeUndefined();
     expect(viewport.scrollTop).toBe(50);
     expect(
