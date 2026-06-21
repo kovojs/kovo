@@ -248,12 +248,19 @@ type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;
 
+// H1 (bugs-part4 L6-1): a param name is the whole segment after `:` up to the next
+// `/`, `?`, or `#`. This mirrors the runtime matcher (server match.ts
+// `parseRouteSegment`, which takes the entire segment after `:`) and `buildHref`'s
+// `:([^/?#]+)` substitution, so a hyphen/dot param name (`:user-id`, `:name.json`)
+// is one key across the type extractor, the URL builders, and the matcher.
 type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
   ? Rest extends `${infer Param}/${infer Tail}`
     ? Param | PathParamNames<Tail>
     : Rest extends `${infer Param}?${string}`
       ? Param
-      : Rest
+      : Rest extends `${infer Param}#${string}`
+        ? Param
+        : Rest
   : never;
 
 type PathParams<Path extends string> =
@@ -409,7 +416,12 @@ function buildHref(
   options: { params?: Record<string, string>; search?: Record<string, JsonValue> },
 ): string {
   const params = options.params ?? {};
-  const pathname = path.replace(/:([A-Za-z_$][\w$]*)/g, (_match, key: string) =>
+  // H1 (bugs-part4 L6-1): the param name is the whole segment after `:` up to the
+  // next `/`, `?`, or `#`, matching both the `PathParamNames` type extractor above
+  // and the runtime matcher (server match.ts `parseRouteSegment`, which takes the
+  // entire segment after `:`). A narrower `\w`-only name dropped hyphen/dot params
+  // (`:user-id` matched only `user`, emitting `/users/-id` instead of `/users/42`).
+  const pathname = path.replace(/:([^/?#]+)/g, (_match, key: string) =>
     encodeURIComponent(params[key] ?? ''),
   );
   const search = new URLSearchParams();

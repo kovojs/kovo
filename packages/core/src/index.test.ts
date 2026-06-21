@@ -62,6 +62,11 @@ declare module './index.js' {
     '/products/:id': ReturnType<
       typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
     >;
+    // H1 (bugs-part4 L6-1): param names use the same whole-segment grammar as the
+    // matcher (server match.ts) and the `PathParamNames` type extractor, so hyphen
+    // and dot characters belong to the param name.
+    '/users/:user-id': ReturnType<typeof route<'/users/:user-id'>>;
+    '/files/:name.json': ReturnType<typeof route<'/files/:name.json'>>;
   }
 }
 
@@ -412,6 +417,21 @@ describe('core authoring APIs', () => {
       href: '/products/p1?sort=price',
     });
     expect(redirect('/cart', {})).toEqual({ location: '/cart', status: 303 });
+
+    // H1 (bugs-part4 L6-1): `PathParamNames` and the runtime matcher take the whole
+    // segment after `:`, so a hyphen/dot param name must substitute the whole value
+    // rather than stopping at the first non-word char (which dropped the value).
+    expect(href('/users/:user-id', { params: { 'user-id': '42' } })).toBe('/users/42');
+    expect(Link('/users/:user-id', { params: { 'user-id': '42' } })).toEqual({
+      href: '/users/42',
+    });
+    expect(redirect('/users/:user-id', { params: { 'user-id': '42' } })).toEqual({
+      location: '/users/42',
+      status: 303,
+    });
+    expect(href('/files/:name.json', { params: { 'name.json': 'report' } })).toBe(
+      '/files/report',
+    );
 
     const assertMissingParam = () => {
       // @ts-expect-error id is required by the route path.

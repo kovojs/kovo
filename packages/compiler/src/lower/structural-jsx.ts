@@ -1645,6 +1645,11 @@ function buildStaticHref(
   return query ? `${pathname}?${query}` : pathname;
 }
 
+// H1 (bugs-part4 L6-1): keep this structural-JSX scanner's `:param` grammar
+// identical to lower/navigation.ts, core's `buildHref`/`PathParamNames`, and the
+// runtime matcher (server match.ts `parseRouteSegment`). A `:param` name is the
+// whole segment after `:` up to the next `/`, `?`, or `#`; a narrower `\w`-only
+// name dropped hyphen/dot params (`:user-id` → `/users/-id`).
 function substituteStaticRouteParams(
   path: string,
   params: Record<string, string | number | boolean | null>,
@@ -1654,13 +1659,13 @@ function substituteStaticRouteParams(
   while (index < path.length) {
     const char = path[index];
     const next = path[index + 1];
-    if (char !== ':' || next === undefined || !isRouteParamNameStart(next)) {
+    if (char !== ':' || next === undefined || isRouteParamNameTerminator(next)) {
       output += char;
       index += 1;
       continue;
     }
     let end = index + 2;
-    while (end < path.length && isRouteParamNamePart(path[end] ?? '')) end += 1;
+    while (end < path.length && !isRouteParamNameTerminator(path[end] ?? '')) end += 1;
     const key = path.slice(index + 1, end);
     output += encodeURIComponent(String(params[key] ?? ''));
     index = end;
@@ -1794,14 +1799,8 @@ function staticStringValue(value: StaticLiteralValue | undefined): string | null
   return typeof value === 'string' ? value : null;
 }
 
-function isRouteParamNameStart(char: string): boolean {
-  return (
-    char === '_' || char === '$' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z')
-  );
-}
-
-function isRouteParamNamePart(char: string): boolean {
-  return isRouteParamNameStart(char) || (char >= '0' && char <= '9');
+function isRouteParamNameTerminator(char: string): boolean {
+  return char === '/' || char === '?' || char === '#';
 }
 
 function sanitizeIdentifier(value: string): string {

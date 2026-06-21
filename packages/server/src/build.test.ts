@@ -223,6 +223,81 @@ describe('server build-time deployment API', () => {
     }
   });
 
+  it('overwrites stylesheet assets deterministically when rebuilding into a reused output dir', async () => {
+    // M2 (bugs-part4 L12-1): the §14 retention design reuses the output dir, so a
+    // 2nd+ build must recompute each stylesheet from current inputs. Previously
+    // `materializeNeutralStylesheetAssets` folded the prior on-disk stylesheet back
+    // in, so the second build retained stale rules and duplicated current ones.
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-rebuild-'));
+
+    try {
+      const distDir = join(root, 'dist');
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'assets/styles.css'), 'main{color:red}\n');
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/app.ts': {
+            css: ['assets/styles.css'],
+            file: 'assets/app.js',
+          },
+        }),
+      );
+      await writeFile(join(distDir, 'assets/app.js'), 'export const app = true;');
+
+      const outDir = join(distDir, '.kovo');
+      const buildApp = (criticalCss: string) =>
+        createApp({
+          routes: [
+            route('/', {
+              page() {
+                return '<main>Home</main>';
+              },
+            }),
+          ],
+          stylesheets: [stylesheet('./styles.css', { criticalCss })],
+        });
+      // A build-owned-only stylesheet with no Vite asset to copy: this is the path
+      // where `copyNeutralStaticAssets` does not overwrite the output before
+      // materialization, so a stale-disk-read would retain prior rules.
+      const ownedHref = '/assets/routes/index.css';
+
+      // First build emits a multi-line stylesheet ("A\nB"): two critical rules and a
+      // two-rule build-owned chunk.
+      await writeKovoNeutralBuild({
+        app: buildApp(':root{--brand:teal}\n.legacy{color:gray}'),
+        buildStylesheetCss: [
+          { css: '.btn{display:flex}', href: '/assets/styles.css' },
+          { css: '.card{color:teal}\n.stale-card{color:gray}', href: ownedHref },
+        ],
+        manifestFile: join(distDir, '.vite/manifest.json'),
+        outDir,
+      });
+
+      // Second build into the SAME output dir drops the legacy/stale rules ("A").
+      await writeKovoNeutralBuild({
+        app: buildApp(':root{--brand:teal}'),
+        buildStylesheetCss: [
+          { css: '.btn{display:flex}', href: '/assets/styles.css' },
+          { css: '.card{color:teal}', href: ownedHref },
+        ],
+        manifestFile: join(distDir, '.vite/manifest.json'),
+        outDir,
+      });
+
+      const secondVite = await readFile(join(outDir, 'client/assets/styles.css'), 'utf8');
+      const secondOwned = await readFile(join(outDir, 'client', ownedHref.slice(1)), 'utf8');
+      // Recomputed purely from current inputs: stale rules gone, no duplication.
+      expect(secondVite).toBe(':root{--brand:teal}\n.btn{display:flex}\nmain{color:red}\n');
+      expect(secondVite).not.toContain('.legacy{color:gray}');
+      expect(secondOwned).toBe('.card{color:teal}\n');
+      expect(secondOwned).not.toContain('.stale-card{color:gray}');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('warns presets to retain immutable client modules across deploys', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-client-retention-'));
 

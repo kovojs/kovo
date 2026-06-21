@@ -154,6 +154,7 @@ export async function writeKovoNeutralBuild(
     app: appShellBuild.app,
     assets: appShellBuild.assets,
     buildStylesheetCss: options.buildStylesheetCss ?? [],
+    manifestDistDir,
     rootDir: clientDir,
   });
 
@@ -171,6 +172,7 @@ export async function writeKovoNeutralBuild(
       app: appShellBuild.app,
       assets: appShellBuild.assets,
       buildStylesheetCss: options.buildStylesheetCss ?? [],
+      manifestDistDir,
       rootDir: staticOutput.dir,
     });
   }
@@ -333,6 +335,7 @@ interface MaterializeNeutralStylesheetAssetsOptions {
   app: KovoApp;
   assets: readonly KovoNeutralBuild['staticAssets'][number][];
   buildStylesheetCss: readonly { css: string; href: string }[];
+  manifestDistDir: string | undefined;
   rootDir: string;
 }
 
@@ -340,19 +343,49 @@ async function materializeNeutralStylesheetAssets({
   app,
   assets,
   buildStylesheetCss,
+  manifestDistDir,
   rootDir,
 }: MaterializeNeutralStylesheetAssetsOptions): Promise<void> {
   const cssByPath = stylesheetCssByPath(app, assets, buildStylesheetCss);
+  const viteCssBySourceFile = sourceFileByStylesheetAssetPath(assets);
 
   for (const [assetPath, cssChunks] of cssByPath) {
     const outputPath = neutralClientOutputPath(rootDir, assetPath);
-    const existingCss = await readExistingStylesheet(outputPath);
-    const mergedCss = dedupeCssChunks([...cssChunks, existingCss]).join('\n');
+    // M2 (bugs-part4 L12-1): compute each stylesheet's content purely from the
+    // *current* build's inputs (declared/critical CSS, build-owned CSS, and the
+    // Vite-emitted CSS read from this build's Vite output dir). Reading the
+    // previously-emitted on-disk stylesheet here folded the prior build's
+    // already-merged output back in, so reusing the §14 retention output dir on a
+    // 2nd+ build retained stale rules and duplicated current ones. Overwrite the
+    // asset deterministically from current inputs instead.
+    const viteSourceFile = viteCssBySourceFile.get(assetPath);
+    const viteCss =
+      viteSourceFile === undefined || manifestDistDir === undefined
+        ? ''
+        : await readExistingStylesheet(viteDistSourcePath(manifestDistDir, viteSourceFile));
+    const mergedCss = dedupeCssChunks([...cssChunks, viteCss]).join('\n');
     if (!mergedCss) continue;
 
     await mkdir(path.dirname(outputPath), { recursive: true });
     await writeFile(outputPath, `${mergedCss}${mergedCss.endsWith('\n') ? '' : '\n'}`, 'utf8');
   }
+}
+
+/**
+ * Map each declared CSS stylesheet asset URL path to its Vite-emitted source
+ * `file` (relative to the Vite output dir). The source file is a current-build
+ * input, so reading it keeps stylesheet materialization idempotent across
+ * rebuilds into a reused output dir (M2, SPEC.md §14 retention).
+ */
+function sourceFileByStylesheetAssetPath(
+  assets: readonly KovoNeutralBuild['staticAssets'][number][],
+): Map<string, string> {
+  const sourceFileByPath = new Map<string, string>();
+  for (const asset of assets) {
+    if (!asset.path.endsWith('.css')) continue;
+    sourceFileByPath.set(asset.path, asset.file);
+  }
+  return sourceFileByPath;
 }
 
 function stylesheetCssByPath(

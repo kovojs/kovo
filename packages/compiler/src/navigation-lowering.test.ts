@@ -152,17 +152,25 @@ export const ProductLinks = component({
   });
 
   it('lowers static href params with explicit path scanning', () => {
+    // H1 (bugs-part4 L6-1): a `:param` name is the whole segment after `:` up to
+    // the next `/`, so a hyphen/dot param name is one key. The compiler scanner
+    // must use the same grammar as the runtime matcher (server match.ts
+    // `parseRouteSegment`) and core's `buildHref`/`PathParamNames`, otherwise a
+    // type-correct hyphen param silently dropped its value (`/users/-id`).
     const result = compileComponentModule({
       fileName: 'product-links.tsx',
       registryFacts: {
-        routes: ['/products/:id.:format'],
+        routes: ['/users/:user-id', '/files/:name.json'],
       },
       source: `
 export const ProductLinks = component({
   render: () => (
     <nav>
-      <a href={href('/products/:id.:format', { params: { id: 'p 1', format: 'json' }, search: { token: 'a:b' } })}>
-        Product
+      <a href={href('/users/:user-id', { params: { 'user-id': 'u 1' }, search: { token: 'a:b' } })}>
+        User
+      </a>
+      <a href={href('/files/:name.json', { params: { 'name.json': 'report' } })}>
+        File
       </a>
     </nav>
   ),
@@ -171,7 +179,8 @@ export const ProductLinks = component({
     });
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.files[0]?.source).toContain('href="/products/p%201.json?token=a%3Ab"');
+    expect(result.files[0]?.source).toContain('href="/users/u%201?token=a%3Ab"');
+    expect(result.files[0]?.source).toContain('href="/files/report"');
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 

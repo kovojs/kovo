@@ -126,6 +126,13 @@ export function buildStaticHref(
   return query ? `${pathname}?${query}` : pathname;
 }
 
+// H1 (bugs-part4 L6-1): a `:param` name is the whole segment after `:` up to the
+// next `/`, `?`, or `#`. This matches the runtime matcher (server match.ts
+// `parseRouteSegment` takes the entire segment after `:`, splitting only on `/`)
+// and core's `PathParamNames`/`buildHref` (`:([^/?#]+)`). A narrower `\w`-only name
+// stopped at the first hyphen/dot, so `:user-id`/`:name.json` silently dropped the
+// value and emitted a wrong URL (`/users/-id`). Stopping only at `/`, `?`, `#`
+// keeps every typed link round-trip-safe through `matchRoute`.
 function substituteStaticRouteParams(
   path: string,
   params: Record<string, string | number | boolean | null>,
@@ -136,14 +143,14 @@ function substituteStaticRouteParams(
   while (index < path.length) {
     const char = path[index];
     const next = path[index + 1];
-    if (char !== ':' || next === undefined || !isRouteParamNameStart(next)) {
+    if (char !== ':' || next === undefined || isRouteParamNameTerminator(next)) {
       output += char;
       index += 1;
       continue;
     }
 
     let end = index + 2;
-    while (end < path.length && isRouteParamNamePart(path[end] ?? '')) end += 1;
+    while (end < path.length && !isRouteParamNameTerminator(path[end] ?? '')) end += 1;
 
     const key = path.slice(index + 1, end);
     output += encodeURIComponent(String(params[key] ?? ''));
@@ -153,12 +160,6 @@ function substituteStaticRouteParams(
   return output;
 }
 
-function isRouteParamNameStart(char: string): boolean {
-  return (
-    char === '_' || char === '$' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z')
-  );
-}
-
-function isRouteParamNamePart(char: string): boolean {
-  return isRouteParamNameStart(char) || (char >= '0' && char <= '9');
+function isRouteParamNameTerminator(char: string): boolean {
+  return char === '/' || char === '?' || char === '#';
 }
