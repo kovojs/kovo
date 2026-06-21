@@ -3,108 +3,9 @@ import {
   jsxElements,
   type ComponentModuleModel,
   type JsxAttributeModel,
-  type JsxElementModel,
 } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
 import { escapeAttribute, type SourceReplacement } from '../shared.js';
-
-export function navigationLinkLowering(model: ComponentModuleModel): SourceReplacement[] {
-  const replacements: SourceReplacement[] = [];
-
-  for (const link of jsxElements(model).filter((element) => element.tag === 'Link')) {
-    const toAttribute = link.attributes.find((attribute) => attribute.name === 'to');
-    const target =
-      jsxStaticAttributeValue(link, 'to') ?? staticStringValue(toAttribute?.expressionStaticValue);
-    if (!toAttribute) continue;
-
-    if (target) {
-      const params = navigationObjectAttributeValue(link, 'params');
-      const search = navigationObjectAttributeValue(link, 'search');
-      if (params === null || search === null) continue;
-
-      const href = buildStaticHref(target, params ?? {}, search ?? {});
-      replacements.push(...lowerStaticLinkElementPatches(link, href));
-      continue;
-    }
-
-    if (toAttribute.expression === undefined) continue;
-
-    replacements.push(...lowerDynamicLinkElementPatches(link, toAttribute));
-  }
-
-  return replacements;
-}
-
-function lowerStaticLinkElementPatches(link: JsxElementModel, href: string): SourceReplacement[] {
-  return [
-    {
-      end: link.openingTagNameEnd,
-      replacement: `a href="${escapeAttribute(href)}"`,
-      start: link.openingTagNameStart,
-    },
-    ...link.attributes
-      .filter((attribute) => ['params', 'search', 'to'].includes(attribute.name))
-      .map((attribute) => ({
-        end: attribute.end,
-        replacement: '',
-        start: attribute.leadingStart,
-      })),
-    ...lowerLinkClosingTagPatches(link),
-  ];
-}
-
-function lowerDynamicLinkElementPatches(
-  link: JsxElementModel,
-  toAttribute: JsxAttributeModel,
-): SourceReplacement[] {
-  return [
-    {
-      end: link.openingTagNameEnd,
-      replacement: 'a',
-      start: link.openingTagNameStart,
-    },
-    {
-      end: toAttribute.start + toAttribute.name.length,
-      replacement: 'href',
-      start: toAttribute.start,
-    },
-    ...link.attributes
-      .filter((attribute) => ['params', 'search'].includes(attribute.name))
-      .map((attribute) => ({
-        end: attribute.end,
-        replacement: '',
-        start: attribute.leadingStart,
-      })),
-    ...lowerLinkClosingTagPatches(link),
-  ];
-}
-
-function lowerLinkClosingTagPatches(link: JsxElementModel): SourceReplacement[] {
-  if (link.selfClosing) return [];
-
-  return [
-    {
-      end: link.closingStart + 2 + link.tag.length,
-      replacement: 'a',
-      start: link.closingStart + 2,
-    },
-  ];
-}
-
-export function navigationHrefLowering(model: ComponentModuleModel): SourceReplacement[] {
-  const replacements: SourceReplacement[] = [];
-  const wholeAttributeReplacements = navigationHrefAttributeReplacements(model);
-
-  replacements.push(...wholeAttributeReplacements);
-  for (const { call, lowered } of staticHrefCalls(model)) {
-    if (wholeAttributeReplacements.some((replacement) => isWithinReplacement(call, replacement))) {
-      continue;
-    }
-    replacements.push({ end: call.end, replacement: JSON.stringify(lowered), start: call.start });
-  }
-
-  return replacements;
-}
 
 export function navigationStandaloneHrefLowering(model: ComponentModuleModel): SourceReplacement[] {
   const wholeAttributeReplacements = navigationHrefAttributeReplacements(model);
@@ -185,15 +86,6 @@ function lowerStaticHrefCall(args: readonly (StaticLiteralValue | undefined)[]):
 type StaticNavigationValue = string | number | boolean | null;
 type StaticNavigationObject = Record<string, StaticNavigationValue>;
 
-function navigationObjectAttributeValue(
-  element: JsxElementModel,
-  name: string,
-): StaticNavigationObject | null | undefined {
-  const attribute = element.attributes.find((item) => item.name === name);
-  if (attribute?.expression === undefined) return undefined;
-  return staticNavigationObjectValue(attribute.expressionStaticValue, { nested: false });
-}
-
 function objectRecordValue(
   value: StaticLiteralValue | undefined,
 ): StaticNavigationObject | null | undefined {
@@ -269,8 +161,4 @@ function isRouteParamNameStart(char: string): boolean {
 
 function isRouteParamNamePart(char: string): boolean {
   return isRouteParamNameStart(char) || (char >= '0' && char <= '9');
-}
-
-function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {
-  return element.attributes.find((attribute) => attribute.name === name)?.value;
 }

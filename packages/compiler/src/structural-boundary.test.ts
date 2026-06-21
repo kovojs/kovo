@@ -15,14 +15,7 @@ describe('structural IR ownership boundary', () => {
       sourceReplacementLowererNames(fileName),
     );
 
-    expect(sourcePatchLowerers).toEqual([
-      'navigationHrefLowering',
-      'navigationLinkLowering',
-      'navigationStandaloneHrefLowering',
-      'platformBehaviorLowering',
-      'lowerStructuralJsx',
-      'viewTransitionLowering',
-    ]);
+    expect(sourcePatchLowerers).toEqual(['navigationStandaloneHrefLowering', 'lowerStructuralJsx']);
     expect(sourcePatchLowerers.filter((name) => !registeredLowerers.has(name))).toEqual([]);
   });
 

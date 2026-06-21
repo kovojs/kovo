@@ -5,7 +5,7 @@ import {
   type JsxAttributeModel,
   type JsxElementModel,
 } from '../scan/parse.js';
-import { escapeAttribute, type SourceReplacement } from '../shared.js';
+import { escapeAttribute } from '../shared.js';
 
 /**
  * @internal A lowered platform-behavior substitution: a provable event handler the compiler
@@ -20,34 +20,9 @@ export interface PlatformSubstitution {
   target: string;
 }
 
-interface PlatformBehaviorLowering {
-  replacements: SourceReplacement[];
-  substitutions: PlatformSubstitution[];
-}
-
 export interface PlatformElementSubstitution {
   attribute: JsxAttributeModel;
   substitution: PlatformSubstitution;
-}
-
-export function platformBehaviorLowering(model: ComponentModuleModel): PlatformBehaviorLowering {
-  const matches = jsxElements(model).flatMap((element) => {
-    const match = platformElementSubstitution(model, element);
-    return match ? [match] : [];
-  });
-  const replacements: SourceReplacement[] = matches.map((match) => {
-    const attributes = platformAttributes(match.substitution);
-    const span =
-      attributes === ''
-        ? { end: match.attribute.end, start: match.attribute.leadingStart }
-        : { end: match.attribute.end, start: match.attribute.start };
-    return { ...span, replacement: attributes };
-  });
-
-  return {
-    replacements,
-    substitutions: matches.map((match) => match.substitution),
-  };
 }
 
 export function platformElementSubstitution(

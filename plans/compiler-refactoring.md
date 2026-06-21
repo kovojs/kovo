@@ -253,17 +253,18 @@ behavior change never hides inside a "neutral" move.
     render-equivalence + a fact-hash snapshot.
   - Unlocks: CAP1, CAP2, CAP3.
 
-- [ ] **FN12 · P1 · M/low — Delete the legacy standalone structural lowerers; fold their tests onto `lowerStructuralJsx`.** ⏳ partial
-  - Partial done: deleted `lower/inline-derives.ts` + `lower/primitive-spreads.ts` (~850 lines, zero production
-    importers and zero tests — provably dead); updated the `structural-boundary.test.ts` guard list + the
-    `structural-boundary.md` table. Verified: `tsc` clean, structural-boundary guard + structural-jsx-ir +
-    conformance + render-equivalence (15 pass) — production unaffected.
-  - Remaining (needs surgery on mixed test files, deferred): delete `lower/view-transitions.ts` + the legacy halves
-    of `navigation.ts` (`navigationLinkLowering`/`navigationHrefLowering`) and `platform.ts` (`platformBehaviorLowering`),
-    keeping `navigationStandaloneHrefLowering`/`staticHrefAttributeValue`/`buildStaticHref` + the platform helpers
-    `structural-jsx` uses; then prune the `compileComponentModule`-based vs legacy-fn tests in
-    `navigation-lowering.test.ts` / `view-transitions.test.ts` and the matching guard/doc rows. (Helper dependency
-    graph already traced: kept functions do not depend on the deleted ones.)
+- [x] **FN12 · P1 · M/low — Delete the legacy standalone structural lowerers; fold their tests onto `lowerStructuralJsx`.** ✅ done
+  - Done: deleted `lower/inline-derives.ts`, `lower/primitive-spreads.ts`, `lower/view-transitions.ts` and the legacy
+    halves of `navigation.ts` (`navigationLinkLowering`/`navigationHrefLowering` + their private helpers) and
+    `platform.ts` (`platformBehaviorLowering` + its interface; dropped the now-unused `SourceReplacement` import so
+    platform.ts leaves the boundary registry). Kept the production paths: `navigationStandaloneHrefLowering`,
+    `staticHrefAttributeValue`, `buildStaticHref`, and the `platformElementSubstitution`/`platformAttributes` helpers
+    `lowerStructuralJsx` uses. Pruned the legacy-fn unit tests (one in `view-transitions.test.ts`, three in
+    `navigation-lowering.test.ts`) while keeping all `compileComponentModule`-based production-path coverage; updated
+    the `structural-boundary.test.ts` guard list to `['navigationStandaloneHrefLowering','lowerStructuralJsx']` and the
+    `structural-boundary.md` table to the two surviving rows. ~1200 lines of dead/duplicated logic removed total.
+    Verified: `tsc` clean, structural-boundary + navigation-lowering + view-transitions + platform-lowering +
+    conformance + render-equivalence (43 pass) — production output unchanged.
   - Problem: `inline-derives.ts` (623 lines), `primitive-spreads.ts`, `view-transitions.ts`, and the JSX-structural
     halves of `navigation.ts`/`platform.ts` are dead in production (zero non-test callers; explicitly marked
     legacy "do not add production call sites" in `structural-boundary.md`) but ~1200 lines of duplicate logic that
