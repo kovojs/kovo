@@ -114,3 +114,50 @@ describe('server wire html emitters', () => {
     );
   });
 });
+
+describe('wire codec — unserializable value normalization (bugs-part4 L3/L4/L5)', () => {
+  it('L3: a bigint column does NOT throw and serializes via the tagged codec', () => {
+    // Previously `JSON.stringify({ count: 10n })` threw, 500ing the whole /_q read.
+    expect(() => renderQueryWireHtml({ name: 'cart', value: { count: 10n } })).not.toThrow();
+    expect(renderQueryWireHtml({ name: 'cart', value: { count: 10n } })).toBe(
+      '<kovo-query name="cart">{"count":{"$kovo":"bigint","value":"10"}}</kovo-query>',
+    );
+  });
+
+  it('L4: a bigint in a (mutation rerun) query value serializes through the shared seam', () => {
+    // renderQueryWireHtml is shared by the mutation-rerun render path; it must not throw.
+    expect(() =>
+      renderQueryWireHtml({ name: 'cart', key: 'cart:c1', value: { total: 999999999999999n } }),
+    ).not.toThrow();
+  });
+
+  it('L5: a Date column serializes to the tagged date form (round-trips as a Date)', () => {
+    expect(
+      renderQueryWireHtml({ name: 'order', value: { at: new Date('2020-01-02T03:04:05.678Z') } }),
+    ).toBe(
+      '<kovo-query name="order">{"at":{"$kovo":"date","value":"2020-01-02T03:04:05.678Z"}}</kovo-query>',
+    );
+  });
+
+  it('normalizes nested bigint/Date inside arrays and objects', () => {
+    const html = renderQueryWireHtml({
+      name: 'q',
+      value: { rows: [{ id: 1n, at: new Date('2021-06-01T00:00:00.000Z') }] },
+    });
+    expect(html).toContain('{"$kovo":"bigint","value":"1"}');
+    expect(html).toContain('{"$kovo":"date","value":"2021-06-01T00:00:00.000Z"}');
+  });
+
+  it('renderQueryScript also normalizes bigint at the script encode seam', () => {
+    expect(() => renderQueryScript({ name: 'cart', value: { n: 5n } })).not.toThrow();
+    expect(renderQueryScript({ name: 'cart', value: { n: 5n } })).toContain(
+      '{"n":{"$kovo":"bigint","value":"5"}}',
+    );
+  });
+
+  it('emits null for an invalid Date rather than throwing', () => {
+    expect(renderQueryWireHtml({ name: 'q', value: { at: new Date('not-a-date') } })).toBe(
+      '<kovo-query name="q">{"at":{"$kovo":"date","value":null}}</kovo-query>',
+    );
+  });
+});

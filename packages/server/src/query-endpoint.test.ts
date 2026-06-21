@@ -333,6 +333,42 @@ describe('query endpoints', () => {
     expect(result.status).toBe(200);
     expect(result.headers['Kovo-Build']).toBeUndefined();
   });
+
+  it('L3: a bigint column resolves to 200 with a serialized value (no throw, headers intact)', async () => {
+    const totalsQuery = query('totals', {
+      load: () => ({ count: 10n }),
+      reads: [],
+    });
+
+    // Previously the success render threw in JSON.stringify and the promise REJECTED,
+    // dropping the §9.4:895 private-cache posture entirely.
+    const result = await renderQueryEndpointResponse(totalsQuery, { request: {} });
+
+    expect(result.status).toBe(200);
+    expect(result.body).toBe(
+      '<kovo-query name="totals">{"count":{"$kovo":"bigint","value":"10"}}</kovo-query>',
+    );
+    expect(result.headers['Cache-Control']).toBe('private, no-store');
+    expect(result.headers.Vary).toBe('Cookie');
+  });
+
+  it('L3: a still-throwing success render returns 500 carrying the private-cache posture', async () => {
+    // A value that JSON.stringify cannot serialize even after normalization (a circular ref)
+    // must NOT let the throw escape the success branch and drop the mandated headers.
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    const brokenQuery = query('broken', {
+      load: () => circular,
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(brokenQuery, { request: {} });
+
+    expect(result.status).toBe(500);
+    expect(result.headers['Cache-Control']).toBe('private, no-store');
+    expect(result.headers.Vary).toBe('Cookie');
+    expect(result.body).toBe(JSON.stringify({ code: 'SERVER_ERROR', payload: {} }));
+  });
 });
 
 function alienValidationSchema<T>(message: string, path: readonly string[]): Schema<T> {

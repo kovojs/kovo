@@ -19,7 +19,11 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
+import {
+  renderQueryScript,
+  stringifyWireValue,
+  type QueryScriptRenderOptions,
+} from './wire-html.js';
 
 /**
  * Assembled document parts (`head`, `body`, `lang`, and serialized query
@@ -422,7 +426,9 @@ function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {
   html: string;
 } {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
-  const scriptText = escapeScriptJson(JSON.stringify(options.value));
+  // SPEC §4.1 wire codec: normalize bigint/Date through the shared encode seam so a
+  // bigint never throws (bugs-part4 L3/L4) and a Date round-trips as a Date (L5).
+  const scriptText = escapeScriptJson(stringifyWireValue(options.value));
   const hash = cspSha256(scriptText);
 
   return {

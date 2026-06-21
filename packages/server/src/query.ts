@@ -372,8 +372,34 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
     };
   }
 
+  // SPEC §9.4:895 (bugs-part4 L3): the success render is wrapped in the SAME private-cache
+  // try/catch as the error branch above. The wire encode seam normalizes unserializable
+  // values (bigint→tagged, Date→tagged) so `JSON.stringify` no longer throws on a `bigint`
+  // column; if any render still throws, this catch keeps the mandated `private, no-store` +
+  // `Vary: Cookie` posture on the resulting 500 instead of letting the throw escape and drop
+  // those headers (which would let a shared cache replay one user's data to another).
+  let body: string;
+  try {
+    body = renderQueryEndpointChunk(definition, result.input, result.value);
+  } catch (error) {
+    reportServerError(endpointRequest.onError, error, {
+      operation: 'query-endpoint',
+      queryKey: definition.key,
+      request: lifecycleRequest,
+    });
+    return {
+      body: JSON.stringify(serverErrorPayload()),
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
+      },
+      status: 500,
+    };
+  }
+
   return {
-    body: renderQueryEndpointChunk(definition, result.input, result.value),
+    body,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       // SPEC §9.4 (bugs-1 F35): /_q reads return per-user, session-dependent query JSON and
