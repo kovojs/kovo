@@ -18,6 +18,7 @@ import type {
   OptimisticRebaser,
 } from './optimism.js';
 import { stampPendingQueries } from './pending.js';
+import { rebaserApplyQueryInterposition } from './query-apply.js';
 import { queryStoreKey } from './query-store.js';
 import type { QueryChunk } from './wire-parser.js';
 
@@ -144,12 +145,13 @@ function optimisticMutationRuntimeApplyHooks<Input>(
   optimisticKeys: Readonly<Record<string, string | undefined>>,
 ): MutationRuntimeApplyHooks {
   return {
-    applyQuery(query) {
-      // SPEC §9.1.1/§10.4: settle (drop) the transforms this truth already reflects before rebasing
-      // the rest, so a sibling mutation's committed effect folded into this re-run is not re-applied.
-      options.rebaser.applyServerTruth(query.name, query.value, query.key, query.settles);
-      return { value: options.store.get(query.name, query.key) };
-    },
+    // SPEC §9.1.1 (F1) + §10.4: route each chunk through the rebaser as server truth. A
+    // `<kovo-query delta>` body is a QueryDelta envelope merged against the held base BEFORE
+    // it is handed to the rebaser; otherwise the raw {set}/{lists} envelope is written to the
+    // store as the full value and the rebaser baseline is corrupted. `applyServerTruth` then
+    // settles the transforms this truth already reflects (`query.settles`) before rebasing the
+    // rest, so a sibling mutation's committed effect folded into this re-run is not re-applied.
+    applyQuery: rebaserApplyQueryInterposition(options.store, options.rebaser, options.onDeltaMiss),
     beforeApplyQueries(queryChunks) {
       const uncoveredQueries = uncoveredOptimisticQueries(
         queryChunks,

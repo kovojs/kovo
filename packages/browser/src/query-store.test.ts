@@ -1,6 +1,27 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, queryStoreKey } from './query-store.js';
+import { createQueryStore, queryStoreKey, splitQueryWireKey } from './query-store.js';
+
+// SPEC §9.4/§10.2 (F5): the typed-read endpoint dispatches by query NAME, so a
+// refetch must split the canonical `name:keyValue` wireKey and use the name as
+// the path. `splitQueryWireKey` is the inverse of `queryWireKey`.
+describe('splitQueryWireKey (F5)', () => {
+  it('splits a keyed wireKey into its name and instance key value', () => {
+    expect(splitQueryWireKey('recommendations:user-1')).toEqual({
+      keyValue: 'user-1',
+      name: 'recommendations',
+    });
+  });
+
+  it('returns just the name for an unkeyed wireKey', () => {
+    expect(splitQueryWireKey('cart')).toEqual({ name: 'cart' });
+  });
+
+  it('keeps colons after the first inside the instance key value', () => {
+    // The instance key value itself may contain colons (e.g. a composite key).
+    expect(splitQueryWireKey('product:a:b')).toEqual({ keyValue: 'a:b', name: 'product' });
+  });
+});
 
 describe('query store', () => {
   it('runs update plans whenever a query value changes', () => {

@@ -126,6 +126,26 @@ export function queryWireKey(name: string, key: string | undefined): string {
   return key.startsWith(`${name}:`) ? key : `${name}:${key}`;
 }
 
+/**
+ * Split a `queryWireKey` back into its query `name` and (optional) instance
+ * `keyValue` (SPEC §9.4/§10.2, F5). The canonical instance key is `name:keyValue`;
+ * the typed-read endpoint dispatches by query NAME (`/_q/<name>`), so a refetch
+ * must use the name as the path and never `/_q/<name:keyValue>` (which 404s — the
+ * server registers no query named `name:keyValue`). `keyValue` is the §10.2
+ * instance-key value (e.g. `user-1` for `recommendations:user-1`).
+ *
+ * Runtime API used by Kovo applications and generated runtime integration.
+ */
+export function splitQueryWireKey(wireKey: string): { keyValue?: string; name: string } {
+  const separator = wireKey.indexOf(':');
+  if (separator === -1) return { name: wireKey };
+
+  return {
+    keyValue: wireKey.slice(separator + 1),
+    name: wireKey.slice(0, separator),
+  };
+}
+
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export function queryIdentityFromStoreKey(storeKey: string): { key?: string; name: string } {
   const separator = storeKey.indexOf('\0');

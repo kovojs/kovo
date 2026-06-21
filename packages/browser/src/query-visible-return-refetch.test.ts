@@ -268,7 +268,10 @@ describe('query visible-return refetch', () => {
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations%3Auser-1', {
+    // SPEC.md §9.4/§10.2 (F5): a keyed query refetch dispatches by NAME with the instance
+    // key as a search param (`/_q/recommendations?key=user-1`), not the canonical key as a
+    // path (`/_q/recommendations%3Auser-1`), which would 404 and never replace the stale base.
+    expect(fetch).toHaveBeenNthCalledWith(3, '/_q/recommendations?key=user-1', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',

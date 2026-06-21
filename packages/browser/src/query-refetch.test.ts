@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './query-store.js';
-import { refetchQueries } from './query-refetch.js';
+import { rebaserApplyQueryInterposition } from './query-apply.js';
+import { OptimisticRebaser } from './optimism.js';
+import { createDeltaMissRefetcher, refetchQueries } from './query-refetch.js';
 import { FakeMorphRoot, FakeQueryBindingElement } from './runtime-test-fakes.js';
 
 describe('query refetch', () => {
@@ -105,7 +107,7 @@ describe('query refetch', () => {
     expect(meter.getAttribute('value')).toBe('8');
   });
 
-  it('applies keyed typed read chunks and reports canonical query keys', async () => {
+  it('refetches a keyed query over /_q/<name> with the instance key as a search param (F5)', async () => {
     const store = createQueryStore();
     const plan = vi.fn();
     const fetch = vi.fn(async () => ({
@@ -123,9 +125,11 @@ describe('query refetch', () => {
       }),
     ).resolves.toEqual([{ fragments: [], queries: ['product:p1'] }]);
 
-    // SPEC.md §9.4/§10.2: typed-read responses carry the canonical query
-    // instance key directly in the kovo-query name and still hit the keyed store.
-    expect(fetch).toHaveBeenCalledWith('/_q/product%3Ap1', {
+    // SPEC.md §9.4/§10.2 (F5): the typed-read endpoint dispatches by query NAME and a keyed
+    // query's args arrive as search params. A refetch MUST hit `/_q/product?key=p1`, NOT the
+    // canonical instance key as a path (`/_q/product%3Ap1`), which the server registers no
+    // query for and answers 404 — leaving the stale base in place forever.
+    expect(fetch).toHaveBeenCalledWith('/_q/product?key=p1', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
@@ -297,5 +301,72 @@ describe('query refetch', () => {
 
     expect(onBuildSkew).not.toHaveBeenCalled();
     expect(store.get('cart')).toEqual({ count: 2 });
+  });
+
+  it('createDeltaMissRefetcher GETs /_q/<name>?key=<keyValue> for a keyed delta miss (F1+F5)', async () => {
+    // SPEC §9.1.1 (F1 delta-miss) + §9.4/§10.2 (F5): when a delta cannot be applied to a keyed
+    // query, the full refetch must hit the NAME endpoint with the instance key as a search param,
+    // not `/_q/<name:keyValue>` (404).
+    const store = createQueryStore();
+    let resolveFetch: (() => void) | undefined;
+    const done = new Promise<void>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetch = vi.fn(async () => {
+      resolveFetch?.();
+      return {
+        status: 200,
+        text: async () => '<kovo-query name="recommendations:user-1">{"items":["p9"]}</kovo-query>',
+      };
+    });
+
+    const onDeltaMiss = createDeltaMissRefetcher({ fetch, queryStore: store });
+    onDeltaMiss('recommendations', 'user-1');
+    await done;
+    await Promise.resolve();
+
+    expect(fetch).toHaveBeenCalledWith('/_q/recommendations?key=user-1', {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    });
+    expect(store.get('recommendations', 'user-1')).toEqual({ items: ['p9'] });
+  });
+
+  it('L8-2: a refetch routed through the rebaser rebases pending instead of clobbering', async () => {
+    // SPEC §10.4 (F4/L8-2): when a refetch is wired through the rebaser, the arriving server
+    // truth refreshes the baseline and re-applies pending predictions, rather than overwriting
+    // the store with raw truth (which would drop the in-flight optimistic prediction).
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    store.set('cart', { count: 0 });
+    rebaser.add('m1', {}, {
+      transforms: {
+        cart(draft: unknown) {
+          (draft as { count: number }).count += 1;
+        },
+      },
+    });
+    expect(store.get('cart')).toEqual({ count: 1 });
+
+    const fetch = vi.fn(async () => ({
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":100}</kovo-query>',
+    }));
+
+    await refetchQueries({
+      applyQuery: rebaserApplyQueryInterposition(store, rebaser),
+      fetch,
+      queries: ['cart'],
+      queryStore: store,
+    });
+
+    // Server truth 100 + the still-pending m1 prediction (+1) = 101; the prediction is NOT lost.
+    expect(store.get('cart')).toEqual({ count: 101 });
+    expect(rebaser.pendingCount('cart')).toBe(1);
+
+    // A later m1 failure now re-derives from the refreshed baseline (100), not the frozen 0.
+    rebaser.settleWithoutServerTruth('m1', 'cart');
+    expect(store.get('cart')).toEqual({ count: 100 });
   });
 });

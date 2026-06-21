@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './client.js';
 import { OptimisticRebaser } from './optimism.js';
@@ -119,6 +119,127 @@ describe('optimistic query rebase', () => {
       items: [{ id: 'r1' }, { id: 'server' }, { id: 'draft-2' }],
     });
     expect(rebaser.pendingCount('reviews', 'product:p1')).toBe(1);
+  });
+
+  it('F2: a throwing survivor transform during applyServerTruth lands on settled server truth, not the stale prediction', () => {
+    // SPEC §10.4 line 1129 / KV313: when a pending transform throws while rebasing over
+    // arriving server truth (e.g. a concurrent delete made truth `{items:null}` but the
+    // transform does `items.push`), the runtime MUST present the SETTLED server truth, drop
+    // the throwing prediction, and report it — never freeze the pre-truth prediction on screen
+    // nor discard the server truth.
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const rebaser = new OptimisticRebaser(store, { onError });
+    store.set('cart', { items: [{ id: 'a' }] });
+    const pushTransform = (draft: unknown) => {
+      (draft as { items: { id: string }[] }).items.push({ id: 'draft' });
+    };
+
+    rebaser.add('m1', {}, { transforms: { cart: pushTransform } });
+    expect(store.get('cart')).toEqual({ items: [{ id: 'a' }, { id: 'draft' }] });
+
+    // A concurrent delete makes server truth `{items:null}`; re-applying the push throws.
+    expect(() => rebaser.applyServerTruth('cart', { items: null })).not.toThrow();
+
+    // The store must reflect the settled server truth, not the stale `{items:[...draft]}`.
+    expect(store.get('cart')).toEqual({ items: null });
+    // The throwing transform is dropped (KV313) and reported.
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('F2: a surviving transform still rebases after an earlier sibling throws', () => {
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const rebaser = new OptimisticRebaser(store, { onError });
+    store.set('cart', { items: [{ id: 'a' }], count: 0 });
+
+    const throwing = (draft: unknown) => {
+      (draft as { items: { id: string }[] }).items.push({ id: 'm1' });
+    };
+    const safe = (draft: unknown) => {
+      (draft as { count: number }).count += 10;
+    };
+
+    rebaser.add('m1', {}, { transforms: { cart: throwing } });
+    rebaser.add('m2', {}, { transforms: { cart: safe } });
+
+    // Truth makes items null (m1's push throws) but count is present (m2's add applies).
+    rebaser.applyServerTruth('cart', { items: null, count: 5 });
+
+    expect(store.get('cart')).toEqual({ items: null, count: 15 });
+    expect(rebaser.pendingCount('cart')).toBe(1); // only m2 survives
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('F3: a transform that throws on enqueue does not orphan a pending entry', () => {
+    // SPEC §10.4: addChange records pending then applies. If the transform throws on enqueue
+    // (store value undefined/wrong shape), the pending entry must NOT be recorded — otherwise
+    // every future applyServerTruth re-runs the throwing transform and throws forever.
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const rebaser = new OptimisticRebaser(store, { onError });
+    // Unseeded store: `store.get('cart')` is undefined; `d.count += 1` throws on undefined.
+    const add = (draft: unknown) => {
+      (draft as { count: number }).count += 1;
+    };
+
+    expect(() => rebaser.add('m1', {}, { transforms: { cart: add } })).not.toThrow();
+
+    // No orphaned pending entry; a later server truth must not re-throw.
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(() => rebaser.applyServerTruth('cart', { count: 9 })).not.toThrow();
+    expect(store.get('cart')).toEqual({ count: 9 });
+  });
+
+  it('F3: a throwing enqueue restores earlier in-call store writes and reports', () => {
+    // A plan touching two queries where the second transform throws must not leave the first
+    // query mutated with the second orphaned: roll back the earlier write in the same call.
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const rebaser = new OptimisticRebaser(store, { onError });
+    store.set('cart', { count: 1 });
+    // `reviews` is unseeded → throws.
+    const addCart = (draft: unknown) => {
+      (draft as { count: number }).count += 1;
+    };
+    const addReviews = (draft: unknown) => {
+      (draft as { items: unknown[] }).items.push({});
+    };
+
+    rebaser.add('m1', {}, { transforms: { cart: addCart, reviews: addReviews } });
+
+    // Neither query keeps a pending prediction; cart is restored to its pre-call value.
+    expect(rebaser.pendingCount('cart')).toBe(0);
+    expect(rebaser.pendingCount('reviews')).toBe(0);
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(onError).toHaveBeenCalled();
+  });
+
+  it('F4: applyServerTruth refreshes the baseline so a later rollback keeps an out-of-band write', () => {
+    // SPEC §10.4: an external server-truth write (a concurrent broadcast/refetch) routed through
+    // the rebaser must refresh the captured baseline. A subsequent failed mutation rollback then
+    // re-derives from the FRESH baseline, never reverting the out-of-band committed value.
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    store.set('cart', { count: 0 });
+    const inc = (draft: unknown) => {
+      (draft as { count: number }).count += 1;
+    };
+
+    // m1 predicts +1 over baseline 0 → store 1.
+    rebaser.add('m1', {}, { transforms: { cart: inc } });
+    expect(store.get('cart')).toEqual({ count: 1 });
+
+    // A concurrent same-user broadcast commits {count:100}, routed through the rebaser so it
+    // refreshes the baseline and re-applies m1's pending prediction → store 101, baseline 100.
+    rebaser.applyServerTruth('cart', { count: 100 });
+    expect(store.get('cart')).toEqual({ count: 101 });
+
+    // m1 fails → rollback must re-derive from the refreshed baseline (100), not the frozen 0.
+    rebaser.settleWithoutServerTruth('m1', 'cart');
+    expect(store.get('cart')).toEqual({ count: 100 });
   });
 
   it('discards pending optimistic transforms back to server truth on pagehide', () => {

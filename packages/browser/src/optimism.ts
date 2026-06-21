@@ -1,4 +1,6 @@
 import type { Form, FormInput, InvalidationSets, QueryRegistry } from '@kovojs/core';
+import { reportRuntimeError } from './error-policy.js';
+import type { RuntimeErrorReporter } from './error-policy.js';
 import { queryIdentityFromStoreKey, queryStoreKey } from './query-store.js';
 import type { QuerySnapshot, QueryStore } from './query-store.js';
 
@@ -112,14 +114,27 @@ export interface PagehideOptimismCleanupOptions {
   root: PagehideRoot;
 }
 
+/** @internal Options for constructing an {@link OptimisticRebaser} (SPEC §10.4/§10.5). */
+export interface OptimisticRebaserOptions {
+  /**
+   * Reports a per-transform throw the rebaser recovers from (KV313, SPEC §10.4 line 1129):
+   * a transform that throws on enqueue (F3) or while rebasing over arriving server truth (F2)
+   * is dropped rather than freezing a stale prediction or corrupting the baseline; the dropped
+   * prediction is surfaced here so app code/devtools see the escape.
+   */
+  onError?: RuntimeErrorReporter;
+}
+
 /** @internal Tracks pending optimistic transforms and rebases them against server truth (SPEC §10.5). */
 export class OptimisticRebaser {
   #pendingByQuery = new Map<string, PendingTransform[]>();
   #serverTruthByQuery = new Map<string, unknown>();
   #store: QueryStore;
+  #onError: RuntimeErrorReporter | undefined;
 
-  constructor(store: QueryStore) {
+  constructor(store: QueryStore, options: OptimisticRebaserOptions = {}) {
     this.#store = store;
+    this.#onError = options.onError;
   }
 
   add<Input>(id: string, input: Input, plan: OptimisticPlan<Input>): void {
@@ -127,23 +142,57 @@ export class OptimisticRebaser {
   }
 
   addChange<Input>(id: string, change: OptimisticChange<Input>, plan: OptimisticPlan<Input>): void {
+    // SPEC §10.4 (F3): two-phase enqueue. Predict every transform against the live store FIRST,
+    // committing NOTHING. A transform that throws on enqueue (store value undefined/wrong shape)
+    // must not orphan a pending entry nor leave a sibling query half-applied — an orphan would
+    // re-throw on every future applyServerTruth and permanently break that query's reconciliation.
+    // Only if ALL transforms predict cleanly do we record pending + write the store; on any throw
+    // we report (KV313) and leave the store and pending log untouched.
+    const staged: Array<{
+      key?: string;
+      predicted: unknown;
+      previous: unknown;
+      queryName: string;
+      storeKey: string;
+      transform: OptimisticTransform;
+    }> = [];
+
     for (const [queryName, transform] of Object.entries(plan.transforms)) {
       if (transform === 'await-fragment') continue;
 
       const key = optimisticQueryKey(plan, queryName, change);
       const storeKey = queryStoreKey(queryName, key);
-      const pending = this.#pendingByQuery.get(storeKey) ?? [];
-      if (pending.length === 0) {
-        this.#serverTruthByQuery.set(storeKey, structuredClone(this.#store.get(queryName, key)));
-      }
-      pending.push({ change, id, transform: transform as OptimisticTransform });
-      this.#pendingByQuery.set(storeKey, pending);
+      const previous = this.#store.get(queryName, key);
 
-      this.#store.set(
+      let predicted: unknown;
+      try {
+        predicted = applyOptimisticTransform(previous, change.input, transform);
+      } catch (error) {
+        // Phase-1 failure: nothing committed yet, so there is nothing to roll back.
+        reportRuntimeError(this.#onError, error);
+        return;
+      }
+
+      staged.push({
+        ...(key === undefined ? {} : { key }),
+        predicted,
+        previous,
         queryName,
-        applyOptimisticTransform(this.#store.get(queryName, key), change.input, transform),
-        key,
-      );
+        storeKey,
+        transform: transform as OptimisticTransform,
+      });
+    }
+
+    // Phase 2: all transforms predicted cleanly — commit pending + store writes.
+    for (const entry of staged) {
+      const pending = this.#pendingByQuery.get(entry.storeKey) ?? [];
+      if (pending.length === 0) {
+        this.#serverTruthByQuery.set(entry.storeKey, structuredClone(entry.previous));
+      }
+      pending.push({ change, id, transform: entry.transform });
+      this.#pendingByQuery.set(entry.storeKey, pending);
+
+      this.#store.set(entry.queryName, entry.predicted, entry.key);
     }
   }
 
@@ -216,11 +265,33 @@ export class OptimisticRebaser {
       this.#serverTruthByQuery.delete(storeKey);
     }
 
+    // SPEC §10.4 line 1129 / KV313 (F2): be fault-atomic. Re-apply each survivor over the SETTLED
+    // server truth with a per-transform try/catch, so no throw can escape and leave the store frozen
+    // on the pre-truth prediction. A survivor that throws (e.g. a concurrent delete made truth
+    // `{items:null}` but the transform does `items.push`) is dropped and reported — never freeze the
+    // stale prediction on screen, never discard the arriving truth, and never re-run that throwing
+    // transform on the next reconcile. `applyOptimisticTransform` clones before mutating, so a throw
+    // leaves `next` at the last successfully-rebased value.
+    const survivors: PendingTransform[] = [];
     for (const pending of pendingTransforms) {
-      next = applyOptimisticTransform(next, pending.change.input, pending.transform);
+      try {
+        next = applyOptimisticTransform(next, pending.change.input, pending.transform);
+      } catch (error) {
+        reportRuntimeError(this.#onError, error);
+        continue;
+      }
+      survivors.push(pending);
     }
 
+    // The store always lands on settled truth + surviving predictions, never the old prediction.
     this.#store.set(queryName, next, key);
+
+    if (survivors.length === 0) {
+      this.#pendingByQuery.delete(storeKey);
+      this.#serverTruthByQuery.delete(storeKey);
+    } else if (survivors.length !== pendingTransforms.length) {
+      this.#pendingByQuery.set(storeKey, survivors);
+    }
   }
 
   discardPendingOptimism(

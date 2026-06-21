@@ -7,7 +7,7 @@ import {
 } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import type { QueryStore } from './query-store.js';
-import { queryWireKey } from './query-store.js';
+import { queryWireKey, splitQueryWireKey } from './query-store.js';
 import { readQueryChunks } from './wire-parser.js';
 import type { QueryChunk } from './wire-parser.js';
 
@@ -94,7 +94,14 @@ export async function refetchQueries(
   const bodies: RefetchedQueryBody[] = [];
 
   for (const query of options.queries) {
-    const url = options.urlForQuery?.(query) ?? `/_q/${encodeURIComponent(query)}`;
+    // SPEC §9.4/§10.2 (F5): the typed-read endpoint dispatches by query NAME
+    // (`/_q/<name>`), and a keyed query's args arrive as search params through the
+    // query's `args` schema. The default URL therefore uses the NAME from the
+    // wireKey, never the canonical `name:keyValue` (which the server registers no
+    // query for → 404, silently stale base + broken deploy-skew recovery). Apps
+    // that need to carry per-instance args build the full `/_q/<name>?<args>` URL
+    // via `urlForQuery`.
+    const url = options.urlForQuery?.(query) ?? defaultQueryRefetchUrl(query);
     if (!url) continue;
 
     try {
@@ -159,6 +166,19 @@ export async function refetchQueries(
     }))
     .filter((body) => body.decodedQueryCount === 0 || body.queries.length > 0)
     .map(({ decodedQueryCount: _decodedQueryCount, ...body }) => body);
+}
+
+/**
+ * @internal Build the default `/_q/` refetch URL for a query wireKey (SPEC §9.4/§10.2, F5).
+ * Splits `name:keyValue` and uses the NAME as the path segment so dispatch matches the
+ * registered query, never `/_q/<name:keyValue>` (a guaranteed 404). The instance key value
+ * rides as the reserved `key` search param so a keyed query whose `args` schema reads it can
+ * scope the read; an unkeyed query gets `/_q/<name>` with no params.
+ */
+function defaultQueryRefetchUrl(wireKey: string): string {
+  const { keyValue, name } = splitQueryWireKey(wireKey);
+  const path = `/_q/${encodeURIComponent(name)}`;
+  return keyValue === undefined ? path : `${path}?key=${encodeURIComponent(keyValue)}`;
 }
 
 /** @internal Options for building the default delta-miss refetch callback (SPEC §9.1.1). */

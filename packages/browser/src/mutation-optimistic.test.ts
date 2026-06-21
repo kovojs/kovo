@@ -148,6 +148,56 @@ describe('optimistic enhanced mutation submission', () => {
     expect(root.targets.get('reviews:p1')?.html).toBe('<section>Reviews ready</section>');
   });
 
+  it('F1: merges a prod delta chunk before rebasing instead of storing the raw envelope', async () => {
+    // SPEC §9.1.1: a `<kovo-query delta>` response body is a QueryDelta envelope
+    // ({set}/{lists}), not the full value. The optimistic apply hook must merge the
+    // delta against the held base BEFORE handing it to the rebaser as server truth;
+    // otherwise the raw envelope is written to the store as the full value and the
+    // rebaser baseline is corrupted (every binding renders blank).
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    store.set('cart', { count: 5, items: [{ kovoKey: 'a' }] });
+
+    const fetch = vi.fn(async () => ({
+      async text() {
+        // Steady-state prod encoding: a delta chunk that overwrites `count` (a
+        // non-collection field, sent whole under `set`) and upserts the `items`
+        // collection. The merge against the held base must produce the FULL value;
+        // the held base for future deltas and the rebaser server-truth baseline
+        // must both be that merged value, never the raw {set}/{lists} envelope.
+        return [
+          '<kovo-query name="cart" delta>',
+          '{"set":{"count":6},"lists":{"items":{"key":"kovoKey","upsert":[{"kovoKey":"b"}]}}}',
+          '</kovo-query>',
+        ].join('');
+      },
+    }));
+
+    await submitOptimisticEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add', method: 'post' },
+      formData: new FormData(),
+      idem: 'idem_delta',
+      input: { quantity: 1 },
+      optimistic: {
+        transforms: {
+          cart(current, input) {
+            const cart = current as { count: number; items: unknown[] };
+            return { ...cart, count: cart.count + input.quantity };
+          },
+        },
+      },
+      rebaser,
+      root: new FakeMorphRoot(),
+      store,
+    });
+
+    // Server committed count=6, upserted item b, and settled the only pending
+    // transform → merged FULL value, NOT the raw {set,lists} envelope.
+    expect(store.get('cart')).toEqual({ count: 6, items: [{ kovoKey: 'a' }, { kovoKey: 'b' }] });
+    expect(rebaser.pendingCount('cart')).toBe(0);
+  });
+
   it('rebases other pending optimism while reconciling an optimistic submit', async () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);

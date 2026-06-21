@@ -31,6 +31,44 @@ export type QueryApplyInterposition = (query: QueryChunk) => { value: unknown } 
  * handler is responsible for refetching the full value (SPEC §9.1.1). */
 export type OnDeltaMiss = (name: string, key: string | undefined) => void;
 
+/**
+ * @internal The subset of {@link OptimisticRebaser} the apply path needs to route an external
+ * server-truth writer (a refetch, a same-user broadcast) through the rebaser (SPEC §10.4, F4/L8-2).
+ * Structural to avoid an import cycle with `optimism.ts`.
+ */
+export interface ServerTruthRebaser {
+  applyServerTruth(name: string, value: unknown, key?: string, settles?: readonly string[]): void;
+}
+
+/**
+ * @internal Build a {@link QueryApplyInterposition} that routes every incoming query chunk through
+ * the optimistic rebaser as server truth (SPEC §10.4, F4/L8-2). A refetch or same-user broadcast
+ * wired with this interpose refreshes the rebaser baseline and re-applies pending predictions
+ * instead of clobbering the store with raw truth — so a later failed-mutation rollback re-derives
+ * from the fresh baseline and never reverts the out-of-band write. Delta chunks are merged against
+ * the held base first (F1); a delta miss routes to `onDeltaMiss` and leaves the store untouched.
+ */
+export function rebaserApplyQueryInterposition(
+  store: QueryStore,
+  rebaser: ServerTruthRebaser,
+  onDeltaMiss?: OnDeltaMiss,
+): QueryApplyInterposition {
+  return (query) => {
+    let value: unknown;
+    try {
+      value = resolveQueryChunkValue(store, query);
+    } catch (error) {
+      if (error instanceof QueryDeltaApplyError) {
+        onDeltaMiss?.(query.name, query.key);
+        return { value: store.get(query.name, query.key) };
+      }
+      throw error;
+    }
+    rebaser.applyServerTruth(query.name, value, query.key, query.settles);
+    return { value: store.get(query.name, query.key) };
+  };
+}
+
 interface ApplyQueryChunksOptions {
   afterApplyQuery?: (query: QueryChunk, value: unknown) => void;
   applyQuery?: QueryApplyInterposition;
@@ -41,6 +79,23 @@ interface ApplyQueryChunksOptions {
 export interface ApplyQueryChunksToRuntimeOptions extends ApplyQueryChunksOptions {
   queryPlans?: CompiledQueryUpdatePlans;
   root?: unknown;
+}
+
+/**
+ * @internal Resolve a query chunk's effective full value (SPEC §9.1.1): for a
+ * `delta=true` chunk the body is a `QueryDelta` envelope ({set}/{lists}) that
+ * must be merged against the held base; for a full chunk the body IS the value.
+ * Throws `QueryDeltaApplyError` on a delta whose base is missing/stale so the
+ * caller can refetch full. Used by both the runtime apply path and the
+ * optimistic-submit hook (F1) so neither ever treats the raw delta envelope as a
+ * full value.
+ */
+export function resolveQueryChunkValue(store: QueryStore, query: QueryChunk): unknown {
+  if (!query.delta) return query.value;
+
+  const base = store.get(query.name, query.key);
+  // Propagates QueryDeltaApplyError on a missing/stale base.
+  return applyQueryDelta(base as JsonValue | undefined, query.value as QueryDelta);
 }
 
 function applyQueryChunk(
@@ -55,9 +110,8 @@ function applyQueryChunk(
   // SPEC §9.1.1: when the chunk carries delta=true the body is a QueryDelta
   // envelope; merge it against the held base instead of overwriting.
   if (query.delta) {
-    const base = store.get(query.name, query.key);
     try {
-      const merged = applyQueryDelta(base as JsonValue | undefined, query.value as QueryDelta);
+      const merged = resolveQueryChunkValue(store, query);
       store.set(query.name, merged, query.key);
       return merged;
     } catch (error) {
