@@ -34,6 +34,7 @@ import { soTheme } from './theme.js';
 
 const soStylesheets = [
   stylesheet('./styles.css', {
+    href: '/assets/styles.css?v=so-demo-css-2',
     theme: soTheme,
   }),
 ] as const;

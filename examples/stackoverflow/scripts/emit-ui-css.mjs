@@ -1,8 +1,8 @@
 // Emit the committed `src/generated/kovo-ui.css` stylesheet for the Stack
 // Overflow example: the shared @kovojs/ui design-token sheet plus the StyleX CSS
 // for the @kovojs/ui components the app imports. `src/styles.css` @imports this
-// file, so the single `/assets/styles.css` the app already links carries the
-// component styling (SPEC §6.1.1, §13.1). Re-run after upgrading @kovojs/ui.
+// file, so the versioned `/assets/styles.css?...` link the app declares carries
+// the component styling (SPEC §6.1.1, §13.1). Re-run after upgrading @kovojs/ui.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
