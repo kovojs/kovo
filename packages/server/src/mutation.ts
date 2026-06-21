@@ -1603,10 +1603,10 @@ function queriesToRerun(
       return {
         ...(instanceKey === undefined ? {} : { instanceKey }),
         key: queryDefinition.key,
-        ...((instanceKey !== undefined &&
+        ...(instanceKey !== undefined &&
         changes.some((change) =>
           queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, input),
-        ))
+        )
           ? { whole: true }
           : {}),
       };
@@ -1904,7 +1904,8 @@ function selectMutationResponseTargets<Request>(
   const rerunQueries = input.rerunQueries.filter((query) => {
     const tokens = queryRerunTokens(query);
     return liveTargets.some(
-      (target) => targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
+      (target) =>
+        targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
     );
   });
 
@@ -1966,10 +1967,10 @@ function liveTargetDescriptorQueryReruns<Request>(
       input: queryInput,
       ...(instanceKey === undefined ? {} : { instanceKey }),
       key: binding.query.key,
-      ...((instanceKey !== undefined &&
+      ...(instanceKey !== undefined &&
       changes.some((change) =>
         queryChangeInvalidatesWholeQueryInstance(binding.query, change, queryInput),
-      ))
+      )
         ? { whole: true }
         : {}),
     });
@@ -2001,7 +2002,9 @@ function mergeQueryReruns(queries: readonly QueryRerun[]): QueryRerun[] {
     const existing = byIdentity.get(identity);
     byIdentity.set(identity, {
       ...query,
-      ...(existing?.input !== undefined && query.input === undefined ? { input: existing.input } : {}),
+      ...(existing?.input !== undefined && query.input === undefined
+        ? { input: existing.input }
+        : {}),
       ...((existing?.whole === true || query.whole === true) && query.instanceKey !== undefined
         ? { whole: true }
         : {}),

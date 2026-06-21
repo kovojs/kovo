@@ -168,7 +168,8 @@ describe('route JSX pages', () => {
     });
 
     const response = await renderRoutePageResponse(productRoute, {}, {});
-    const headers = collectLiveTargetHeaders(response.body);
+    expect(typeof response.body).toBe('string');
+    const headers = collectLiveTargetHeaders(response.body as string);
 
     // SPEC.md §4.8/§13.2: repeated inferred fragment targets use authored key
     // first, then serializable stamped props, so the live headers retain both

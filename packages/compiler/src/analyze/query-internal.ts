@@ -7,16 +7,8 @@
 // `Object.defineProperty`. This channel is deliberately excluded from
 // `JSON.stringify` and `factHash`; it is load-bearing for byte/fact-hash
 // stability. Do not convert it to a plain enumerable field.
-import {
-  isRelativeBindingPath,
-  queryNameFromPath,
-  relativeBindingPath,
-} from './query-shapes.js';
-import {
-  jsxElements,
-  type ComponentModuleModel,
-  type JsxElementModel,
-} from '../scan/parse.js';
+import { isRelativeBindingPath, queryNameFromPath, relativeBindingPath } from './query-shapes.js';
+import { jsxElements, type ComponentModuleModel, type JsxElementModel } from '../scan/parse.js';
 import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
 
 export interface DataBindAttribute {
@@ -63,7 +55,10 @@ export function hasJsxAttribute(element: JsxElementModel, name: string): boolean
   return element.attributes.some((attribute) => attribute.name === name);
 }
 
-export function jsxStaticAttributeValue(element: JsxElementModel, name: string): string | undefined {
+export function jsxStaticAttributeValue(
+  element: JsxElementModel,
+  name: string,
+): string | undefined {
   return element.attributes.find((attribute) => attribute.name === name)?.value;
 }
 

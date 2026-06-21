@@ -140,11 +140,7 @@ export function validateFragmentTargetInputs(
 
   return dedupeBy([...missingInputs, ...missingIsomorphicReads], (input) => input.name).map(
     (input) =>
-      diagnostics.at(
-        'KV303',
-        { start: input.start, length: input.end - input.start },
-        input.name,
-      ),
+      diagnostics.at('KV303', { start: input.start, length: input.end - input.start }, input.name),
   );
 }
 
@@ -357,9 +353,7 @@ export function validateDirectDbAccess(
 
     if (requestParam && requestDb) {
       const requestDbPath = `${requestParam}.db`;
-      found.push(
-        diagnostics.at('KV330', { start: requestDb.start, length: requestDbPath.length }),
-      );
+      found.push(diagnostics.at('KV330', { start: requestDb.start, length: requestDbPath.length }));
     }
   }
 

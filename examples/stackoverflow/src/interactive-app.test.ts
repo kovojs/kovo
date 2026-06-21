@@ -227,9 +227,7 @@ describe('stackoverflow interactive app', () => {
       }),
     );
     const headers = browserCollectedLiveHeaders(await page.text());
-    expect(headers.targets).toContain(
-      `${questionDetailTarget}=questionAnswers questionDetail`,
-    );
+    expect(headers.targets).toContain(`${questionDetailTarget}=questionAnswers questionDetail`);
     expect(headers.liveTargets).toContain(
       liveHeader(questionDetailTarget, questionDetailComponent, { questionId: question.id }),
     );

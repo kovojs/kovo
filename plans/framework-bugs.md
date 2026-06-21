@@ -66,8 +66,7 @@ remain tracked separately below.
     `{ name: 'productDetail', key: 'product:p1' }`. The query store can hydrate or settle the wrong
     slot, leaving the actual component query stale.
   - Repro: define `query('productDetail', { instanceKey: input => \`product:${input.id}\` })`,
-    render a `/_q/productDetail?id=p1` response, parse it with `readMutationResponseBodyChunks` or
-    `readQueryChunks`, and assert identity is `productDetail` + `product:p1`.
+render a `/\_q/productDetail?id=p1`response, parse it with`readMutationResponseBodyChunks`or`readQueryChunks`, and assert identity is `productDetail`+`product:p1`.
   - Fix sketch: query endpoint chunks should mirror mutation rerun chunks: `name=queryDefinition.key`
     and `key=instanceKey` when present.
 
@@ -125,7 +124,7 @@ remain tracked separately below.
   - Fixed: compiler server rendering now stamps dynamic query-key expressions for aliased component
     query bindings, preserving fallback aliases only when no query key can be derived. Verified by
     `pnpm exec vitest run packages/compiler/src/stamps.test.ts`, including `answers:
-    questionAnswers.args(...)` emitting `questionAnswers.key ?? "answers"` instead of static
+questionAnswers.args(...)` emitting `questionAnswers.key ?? "answers"` instead of static
     `answers`.
 
 - [x] **Medium-high: parameterized live-target renderer matching loses instance identity.**
@@ -246,12 +245,12 @@ remain tracked separately below.
 ## Suggested Triage Order
 
 - [x] **P0:** Fix descriptor bypass, mutation raw-input reruns, query endpoint identity, and compiler
-  alias-based `kovo-deps`.
+      alias-based `kovo-deps`.
 - [x] **P1:** Fix repeated source/runtime instance target identity and parameterized descriptor
-  matching.
+      matching.
 - [x] **P2:** Unify browser collection/apply precedence and inline/modular target lookup escaping.
 - [ ] **P3:** Define/validate live-target header identity encoding and broaden example DOM-derived
-  coverage.
+      coverage.
 
 ## Audit Inputs
 

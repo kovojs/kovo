@@ -16,6 +16,7 @@ moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10 were impleme
 in isolated worktrees and integrated here.
 
 **Open / deferred (genuinely multi-session; the substrate above unblocks them):**
+
 - **FN5** — keystone pass-registry: the `ResultBuilder` half is a clean follow-up; the declarative `Pass`
   registry is large and carries the YAGNI caveat noted on the item. Not started.
 - **FN7** — routing the 11 `createSourceFile` reparses through `scan/` (incl. cleaning `app-graph.ts` so it can

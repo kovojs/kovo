@@ -4,11 +4,7 @@
 // `outputContext` channel are unchanged.
 import { parseBindingPath } from './query-shapes.js';
 import { withOutputContext } from './query-internal.js';
-import {
-  callExpressions,
-  jsxElements,
-  type ComponentModuleModel,
-} from '../scan/parse.js';
+import { callExpressions, jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import { outputContextForAttribute } from '../output-context-facts.js';
 import type { QueryDeriveFact, QueryStampFact } from '../types.js';
 

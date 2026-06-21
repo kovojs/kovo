@@ -26,9 +26,7 @@ describe('inline loader fragment-target selector guard (M10)', () => {
     expect(source).toContain('[kovo-fragment-target="');
     expect(/try\s*\{[\s\S]{0,120}sq\(target\)/.test(source)).toBe(true);
     // ...explicit fragment targets are tried before component stamps...
-    expect(source.indexOf('[kovo-fragment-target="')).toBeLessThan(
-      source.indexOf('[kovo-c="'),
-    );
+    expect(source.indexOf('[kovo-fragment-target="')).toBeLessThan(source.indexOf('[kovo-c="'));
     // ...and a `catch` closes the guard so a malformed selector cannot throw out of `ft`.
     expect(/\[kovo-fragment-target="[\s\S]{0,700}?catch/.test(source)).toBe(true);
   });
