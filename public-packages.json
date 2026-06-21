@@ -16,6 +16,7 @@
           "./internal/graph",
           "./internal/package-prefix",
           "./internal/query-delta",
+          "./internal/render-plan-token",
           "./internal/component-render",
           "./internal/event",
           "./internal/storage"

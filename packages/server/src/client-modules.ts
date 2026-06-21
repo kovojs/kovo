@@ -1,45 +1,21 @@
 import { createHash } from 'node:crypto';
+import {
+  RENDER_PLAN_GRAMMAR_VERSION,
+  computeRenderPlanFingerprint,
+  type RenderPlanFingerprintInput,
+} from '@kovojs/core/internal/render-plan-token';
 import { reportServerError, type ServerErrorHandler } from './diagnostics.js';
 import type { ServerResponseBase } from './response.js';
 
-/**
- * The render-plan grammar version folded into every build token so that a
- * module-less (no islands) app still produces a non-empty token (DEPLOY-3),
- * and so that a grammar-only change produces a different token even when no
- * client-module versions changed (SPEC §5.2.1 rule 1).
- *
- * Bump this string whenever the update-plan grammar changes in a way that
- * breaks wire compatibility.
- */
-export const RENDER_PLAN_GRAMMAR_VERSION = 'kovo-render-plan/1';
-
-/**
- * Input to {@link computeRenderPlanFingerprint}: a map of query name to an
- * opaque string that captures the projected shape (field names, nesting, and
- * order) for that query. The values are stable within a build and must change
- * whenever the projected shape changes (SPEC §5.2.1 rule 1).
- */
-export type RenderPlanFingerprintInput = Record<string, string>;
-
-/**
- * Compute an opaque fingerprint that covers the projected query shapes and the
- * render-plan grammar version. Thread this into a
- * {@link VersionedClientModuleRegistry} via
- * {@link MemoryVersionedClientModuleRegistryOptions.renderPlanFingerprint} or
- * via the registry's `setRenderPlanFingerprint` method so `buildToken()` is
- * derived from shape + grammar, not just module hashes (SPEC §5.2.1 rule 1).
- */
-export function computeRenderPlanFingerprint(input: RenderPlanFingerprintInput): string {
-  const entries = Object.keys(input)
-    .sort()
-    .map((name) => `${name}:${input[name]}`);
-  return createHash('sha256')
-    .update(RENDER_PLAN_GRAMMAR_VERSION)
-    .update('\0')
-    .update(entries.join('\n'))
-    .digest('hex')
-    .slice(0, 16);
-}
+// FN1 (plans/compiler-refactoring.md): the render-plan grammar version + fingerprint
+// are the single source of truth in `@kovojs/core` so the compiler (KV416) and the
+// server build token cannot drift (SPEC §5.2.1 rule 1). Re-exported here under the
+// historical names so this module's public/internal surface is unchanged.
+export {
+  RENDER_PLAN_GRAMMAR_VERSION,
+  computeRenderPlanFingerprint,
+  type RenderPlanFingerprintInput,
+};
 
 /**
  * Source module registered into a {@link VersionedClientModuleRegistry} for

@@ -1,6 +1,10 @@
-import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import * as ts from 'typescript';
+
+import {
+  computeRenderPlanFingerprint,
+  type RenderPlanFingerprintInput,
+} from '@kovojs/core/internal/render-plan-token';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import { componentCssAssetForFile, dedupeCss, emitCssModule } from './css.js';
@@ -865,40 +869,24 @@ export function assertRenderEquivalence(result: CompileResult): void {
 }
 
 /**
- * The render-plan grammar version used when computing render-plan fingerprints from
- * the compiler.  Must stay in sync with the same constant in `@kovojs/server`'s
- * `client-modules.ts` (both serve SPEC §5.2.1 rule 1).
- * @internal
- */
-const RENDER_PLAN_GRAMMAR_VERSION = 'kovo-render-plan/1';
-
-/**
  * Input to {@link computeCompilerRenderPlanFingerprint}: a map of query name to an
  * opaque string that captures the projected shape for that query.  The values must
  * change whenever the projected shape changes (SPEC §5.2.1 rule 1).
  * @internal
  */
-export type CompilerRenderPlanFingerprintInput = Record<string, string>;
+export type CompilerRenderPlanFingerprintInput = RenderPlanFingerprintInput;
 
 /**
  * Compute the render-plan fingerprint over a set of projected query shapes + the
- * grammar version.  Mirrors `computeRenderPlanFingerprint` from `@kovojs/server`
- * so the compiler can generate a compatible token for KV416 checks without
- * importing from the server package (SPEC §5.2.1 rule 1, §5.2.2 KV416).
+ * grammar version.  FN1 (plans/compiler-refactoring.md): a thin wrapper over the
+ * single shared implementation in `@kovojs/core` so the compiler (KV416) and
+ * `@kovojs/server` (build token) cannot drift (SPEC §5.2.1 rule 1, §5.2.2 KV416).
  * @internal
  */
 export function computeCompilerRenderPlanFingerprint(
   input: CompilerRenderPlanFingerprintInput,
 ): string {
-  const entries = Object.keys(input)
-    .sort()
-    .map((name) => `${name}:${input[name]}`);
-  return createHash('sha256')
-    .update(RENDER_PLAN_GRAMMAR_VERSION)
-    .update('\0')
-    .update(entries.join('\n'))
-    .digest('hex')
-    .slice(0, 16);
+  return computeRenderPlanFingerprint(input);
 }
 
 /**
