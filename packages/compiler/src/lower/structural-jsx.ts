@@ -49,7 +49,7 @@ import {
   type MergeableAttributeValue,
 } from './attribute-merge.js';
 import {
-  platformAttributes,
+  platformAttributeList,
   platformElementSubstitution,
   type PlatformSubstitution,
 } from './platform.js';
@@ -435,19 +435,9 @@ function platformJsxIrAttributes(
   substitution: PlatformSubstitution,
   options: StructuralJsxLoweringOptions,
 ): JsxIrAttribute[] {
-  const attributes = platformAttributes(substitution);
-  if (!attributes) return [];
-
-  return attributes.split(' ').map((attribute) => {
-    const [name, rawValue] = attribute.split('=');
-    const value = rawValue?.replace(/^"|"$/g, '') ?? '';
-    return generatedJsxIrAttribute(
-      name ?? '',
-      { kind: 'string', value },
-      'platform behavior lowering',
-      options,
-    );
-  });
+  return platformAttributeList(substitution).map(({ name, value }) =>
+    generatedJsxIrAttribute(name, { kind: 'string', value }, 'platform behavior lowering', options),
+  );
 }
 
 function lowerViewTransitionNames(

@@ -65,22 +65,17 @@ function platformSubstitutionFor(
 ): PlatformSubstitution | null {
   if (tag !== 'button') return null;
 
-  if (method === 'showModal') {
-    return hasDialogTarget(model, target)
-      ? { action: 'show-modal', event: 'click', kind: 'dialog', tag, target }
-      : null;
-  }
-
-  if (method === 'close') {
-    return hasDialogTarget(model, target)
-      ? { action: 'close', event: 'click', kind: 'dialog', tag, target }
-      : null;
-  }
-
+  // FN13 (plans/compiler-refactoring.md): method->action substitutions as data.
   // SPEC §5.2.4: provable dialog handlers lower to platform invoker commands.
-  if (method === 'requestClose') {
+  const dialogActionByMethod: Record<string, string> = {
+    showModal: 'show-modal',
+    close: 'close',
+    requestClose: 'request-close',
+  };
+  const dialogAction = dialogActionByMethod[method];
+  if (dialogAction) {
     return hasDialogTarget(model, target)
-      ? { action: 'request-close', event: 'click', kind: 'dialog', tag, target }
+      ? { action: dialogAction, event: 'click', kind: 'dialog', tag, target }
       : null;
   }
 
@@ -89,11 +84,11 @@ function platformSubstitutionFor(
     showPopover: 'show',
     togglePopover: 'toggle',
   };
-  const action = popoverActionByMethod[method];
-  if (!action) return null;
+  const popoverAction = popoverActionByMethod[method];
+  if (!popoverAction) return null;
 
   return hasPopoverTarget(model, target)
-    ? { action, event: 'click', kind: 'popover', tag, target }
+    ? { action: popoverAction, event: 'click', kind: 'popover', tag, target }
     : null;
 }
 
@@ -119,14 +114,32 @@ function hasPopoverAttribute(element: ReturnType<typeof jsxElements>[number]): b
   return element.attributes.some((attribute) => attribute.name === 'popover');
 }
 
-export function platformAttributes(substitution: PlatformSubstitution): string {
+/** @internal A single lowered platform attribute (name + already-escaped value). */
+export interface PlatformAttribute {
+  name: string;
+  value: string;
+}
+
+/**
+ * @internal FN13 (plans/compiler-refactoring.md): the structured attribute list a
+ * platform substitution lowers to. Values are pre-escaped for an HTML attribute
+ * context. Returned as typed pairs so `lowerStructuralJsx` builds `JsxIrAttribute`s
+ * directly instead of re-parsing a serialized attribute string by `split(' ')`.
+ */
+export function platformAttributeList(substitution: PlatformSubstitution): PlatformAttribute[] {
   if (substitution.kind === 'dialog') {
-    return `commandfor="${escapeAttribute(substitution.target)}" command="${substitution.action}"`;
+    return [
+      { name: 'commandfor', value: escapeAttribute(substitution.target) },
+      { name: 'command', value: substitution.action },
+    ];
   }
 
   if (substitution.kind === 'details') {
-    return '';
+    return [];
   }
 
-  return `popovertarget="${escapeAttribute(substitution.target)}" popovertargetaction="${substitution.action}"`;
+  return [
+    { name: 'popovertarget', value: escapeAttribute(substitution.target) },
+    { name: 'popovertargetaction', value: substitution.action },
+  ];
 }
