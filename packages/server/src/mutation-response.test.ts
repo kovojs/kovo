@@ -122,7 +122,7 @@ describe('server mutation primitives', () => {
         headers: {
           'Kovo-Fragment': 'true',
           'Kovo-Live-Targets': 'cart-panel#components/cart/panel:{"cartId":"c1"}',
-          'Kovo-Targets': 'cart-panel=panelCart',
+          'Kovo-Targets': 'cart-panel=cart',
         },
         liveTargetRenderers: [
           {
@@ -146,6 +146,217 @@ describe('server mutation primitives', () => {
       status: 200,
     });
     expect(renderCartPanel).toHaveBeenCalledOnce();
+  });
+
+  it('does not let generated live target descriptors bypass the submitted live DOM targets', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cart', {
+      load: () => ({ count: 2 }),
+      reads: [cart],
+    });
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        queries: [cartQuery],
+        touches: [cart],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const renderAdminPanel = vi.fn(() => '<admin-panel>secret</admin-panel>');
+
+    await expect(
+      renderMutationEndpointResponse(addToCart, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'admin-panel#components/admin/panel:{}',
+          'Kovo-Targets': 'cart-badge=cart',
+        },
+        liveTargetRenderers: [
+          {
+            component: 'components/admin/panel',
+            queries: ['cart'],
+            render: renderAdminPanel,
+          },
+        ],
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '<kovo-query name="cart">{"count":2}</kovo-query>',
+      status: 200,
+    });
+    expect(renderAdminPanel).not.toHaveBeenCalled();
+  });
+
+  it('matches generated live target descriptors by component-bound query instance identity', async () => {
+    const product = domain('product');
+    const productLoad = vi.fn((input) => ({ id: (input as { id: string }).id }));
+    const productQuery = query('product', {
+      instanceKey: (input) => `product:${(input as { id: string }).id}`,
+      load: productLoad,
+      reads: [product],
+    });
+    const ProductCard = component({
+      render: ({ product }) => `<product-card>${product.id}</product-card>`,
+    });
+    const reserveProduct = mutation('product/reserve', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        queries: [productQuery],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(reserveProduct, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': [
+            'product-card:p1#components/product/card:{"productId":"p1"}',
+            'product-card:p2#components/product/card:{"productId":"p2"}',
+          ].join('; '),
+          'Kovo-Targets': 'product-card:p1=product:p1; product-card:p2=product:p2',
+        },
+        liveTargetRenderers: [
+          componentLiveTargetRenderer({
+            component: ProductCard,
+            componentId: 'components/product/card',
+            queries: [
+              {
+                args: (props) => ({ id: props.productId }),
+                name: 'product',
+                query: productQuery,
+              },
+            ],
+          }),
+        ],
+        rawInput: { productId: 'p1' },
+        redirectTo: '/products/p1',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: [
+        '<kovo-query name="product" key="product:p1">{"id":"p1"}</kovo-query>',
+        '<kovo-fragment target="product-card:p1"><product-card>p1</product-card></kovo-fragment>',
+      ].join('\n'),
+      status: 200,
+    });
+    expect(productLoad).toHaveBeenCalledWith({ id: 'p1' }, { request: {} });
+    expect(productLoad).not.toHaveBeenCalledWith({ id: 'p2' }, { request: {} });
+  });
+
+  it('does not match broad query deps for instance-specific live target invalidations', async () => {
+    const product = domain('product');
+    const productQuery = query('product', {
+      instanceKey: (input) => `product:${(input as { id: string }).id}`,
+      load: (input) => ({ id: (input as { id: string }).id }),
+      reads: [product],
+    });
+    const ProductCard = component({
+      render: ({ product }) => `<product-card>${product.id}</product-card>`,
+    });
+    const reserveProduct = mutation('product/reserve', {
+      input: s.object({ productId: s.string() }),
+      registry: {
+        inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
+        queries: [productQuery],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(reserveProduct, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'product-card:p2#components/product/card:{"productId":"p2"}',
+          'Kovo-Targets': 'product-card:p2=product',
+        },
+        liveTargetRenderers: [
+          componentLiveTargetRenderer({
+            component: ProductCard,
+            componentId: 'components/product/card',
+            queries: [
+              {
+                args: (props) => ({ id: props.productId }),
+                name: 'product',
+                query: productQuery,
+              },
+            ],
+          }),
+        ],
+        rawInput: { productId: 'p1' },
+        redirectTo: '/products/p1',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '',
+      status: 200,
+    });
+  });
+
+  it('reruns generated live target query chunks with component-bound query input', async () => {
+    const question = domain('question');
+    const questionLoad = vi.fn((input) => ({ id: (input as { id: string }).id }));
+    const questionDetail = query('questionDetail', {
+      instanceKey: (input) => `question:${(input as { id: string }).id}`,
+      load: questionLoad,
+      reads: [question],
+    });
+    const QuestionDetail = component({
+      render: ({ question }) => `<question-detail>${question.id}</question-detail>`,
+    });
+    const postAnswer = mutation('answer/post', {
+      input: s.object({ id: s.string(), questionId: s.string() }),
+      registry: {
+        inferredTouches: [{ domain: 'question', keys: 'arg:questionId' }],
+        queries: [questionDetail],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(postAnswer, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': 'question-detail-region#components/question/detail:{"questionId":"q1"}',
+          'Kovo-Targets': 'question-detail-region=question:q1',
+        },
+        liveTargetRenderers: [
+          componentLiveTargetRenderer({
+            component: QuestionDetail,
+            componentId: 'components/question/detail',
+            queries: [
+              {
+                args: (props) => ({ id: props.questionId }),
+                name: 'question',
+                query: questionDetail,
+              },
+            ],
+          }),
+        ],
+        rawInput: { id: 'a2', questionId: 'q1' },
+        redirectTo: '/questions/q1',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: [
+        '<kovo-query name="questionDetail" key="question:q1">{"id":"q1"}</kovo-query>',
+        '<kovo-fragment target="question-detail-region"><question-detail>q1</question-detail></kovo-fragment>',
+      ].join('\n'),
+      status: 200,
+    });
+    expect(questionLoad).toHaveBeenCalledWith({ id: 'q1' }, { request: {} });
+    expect(questionLoad).not.toHaveBeenCalledWith({ id: 'a2' }, { request: {} });
   });
 
   it('renders generated live target error boundaries per affected descriptor', async () => {
