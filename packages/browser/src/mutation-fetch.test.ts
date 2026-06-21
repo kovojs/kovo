@@ -109,6 +109,69 @@ describe('enhanced mutation fetch', () => {
     expect(root.queries).toBe(1);
   });
 
+  it('keeps selector-hostile identities but skips delimiter-unsafe live target headers', async () => {
+    const root = new FakeTargetRoot([
+      new FakeTargetElement('target"bad\\id', {
+        'kovo-deps': 'cart product:p1',
+        'kovo-live-component': 'components/cart/cart-panel',
+      }),
+      new FakeTargetElement(undefined, {
+        'kovo-deps': 'cart',
+        'kovo-fragment-target': 'bad#target',
+        'kovo-live-component': 'components/cart/bad',
+      }),
+      new FakeTargetElement(undefined, {
+        'kovo-c': 'bad-component',
+        'kovo-deps': 'bad;dep',
+        'kovo-fragment-target': 'bad-dep',
+      }),
+      new FakeTargetElement(undefined, {
+        'kovo-c': 'bad#component',
+        'kovo-deps': 'cart',
+        'kovo-fragment-target': 'safe-target',
+      }),
+      new FakeTargetElement(undefined, {
+        'kovo-c': 'bad:component',
+        'kovo-deps': 'cart',
+        'kovo-fragment-target': 'safe-target-with-bad-component',
+      }),
+    ]);
+    const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
+      async text() {
+        return '';
+      },
+    }));
+
+    const fetched = await fetchEnhancedMutation({
+      fetch,
+      form: { action: '/_m/cart/add' },
+      formData: new FormData(),
+      idem: 'idem_header_safe',
+      root,
+    });
+
+    // SPEC.md §9.1: live target headers are delimiter-based, so the browser
+    // collector rejects only identities that would corrupt those headers.
+    expect(fetch).toHaveBeenCalledWith('/_m/cart/add', {
+      body: expect.any(FormData),
+      headers: {
+        Accept: 'text/vnd.kovo.fragment+html',
+        'Kovo-Fragment': 'true',
+        'Kovo-Idem': 'idem_header_safe',
+        'Kovo-Live-Targets': 'target"bad\\id#components/cart/cart-panel:{}',
+        'Kovo-Targets':
+          'target"bad\\id=cart product:p1; safe-target=cart; safe-target-with-bad-component=cart',
+      },
+      keepalive: true,
+      method: 'POST',
+    });
+    expect(fetched.targets).toEqual([
+      'target"bad\\id=cart product:p1',
+      'safe-target=cart',
+      'safe-target-with-bad-component=cart',
+    ]);
+  });
+
   it('sends the submitted enhanced form target when the form carries runtime identity', async () => {
     const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
       async text() {
