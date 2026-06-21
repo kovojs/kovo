@@ -194,6 +194,18 @@ behavior change never hides inside a "neutral" move.
   - Unlocks: CAP1, CAP3, CAP7, CAP8.
 
 - [ ] **FN6 · P1 · M/low — Split `emit/server.ts` into render-lowering / equivalence-gate / mutation-form / shared-helper modules.**
+  - Dependency analysis (done this session, for the next implementer): the semantic-render gate cluster (lines
+    ~95–603: `semanticRenderEquivalenceCheck` + all `semantic*`/`renderSemantic*` helpers) is downward-self-contained
+    — **no** function below line 604 references it — so the gate can move out. BUT the gate calls **7 helpers defined
+    in the mutation-form region**: `componentMutationSlotName`, `enclosingEnhancedMutationForm`,
+    `mutationFormErrorProps`, `mutationFormErrorIdExpression`, `enhancedMutationFormLowering`,
+    `enhancedMutationFormBinding`, `staticStringAttributeValue` (the semantic walker must reproduce mutation-form
+    error rendering to compare). So a clean 4-way cut is impossible: those 7 (plus the low-level attribute/escape
+    helpers) must move to a `server-emit-shared` module that the gate, the renderer, and the mutation-form module all
+    import. Confirms the verifier's "shared private helpers — not a clean cut" note. Recommended order: (1) extract
+    `server-emit-shared.ts` with the shared helpers; (2) extract `render-equivalence.ts` (the self-contained gate
+    cluster) importing from shared; (3) extract `mutation-form.ts`; (4) leave `server-render.ts` + a `server.ts`
+    barrel. Gate each step with conformance + render-equivalence (byte-identical).
   - Problem: `server.ts` (2239 lines, 95 functions) conflates four responsibilities — the render-_equivalence
     gate_ (`semanticRender*` + VM eval + normalizer), server-render _lowering_ (`serverRenderPatches` + host-stamp
     writers), enhanced-mutation-_form_ lowering + KV231/238/242/243 diagnostics, and `mutationFormExplainFacts`
