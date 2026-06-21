@@ -8,7 +8,7 @@ import {
   htmlJsonScriptFacts,
   kovoResponseBodyFact,
   type HtmlJsonScriptFact,
-} from './internal/html-wire.js';
+} from '@kovojs/test/internal/html-wire';
 
 /**
  * Extracts the server-rendered HTML for a single fragment target from a page

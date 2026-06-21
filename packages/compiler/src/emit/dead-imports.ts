@@ -82,8 +82,8 @@ function removeStatementReplacement(
   sourceFile: ts.SourceFile,
 ): SourceReplacement {
   let end = statement.getEnd();
-  if (source[end] === '\r') end += 1;
-  if (source[end] === '\n') end += 1;
+  if (source.charCodeAt(end) === 13) end += 1;
+  if (source.charCodeAt(end) === 10) end += 1;
 
   return {
     end,

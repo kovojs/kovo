@@ -2,11 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  CompileCache,
-  compileCacheKey,
-  compileComponentCacheKeyInput,
-} from './compile-cache.js';
+import { CompileCache, compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
 import type { CompileDependencyFootprint } from './types.js';
 
 describe('CompileCache', () => {

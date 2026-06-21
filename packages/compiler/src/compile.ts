@@ -55,11 +55,7 @@ import {
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import {
-  composeSourceOffsetMaps,
-  escapeAttribute,
-  type SourceReplacement,
-} from './shared.js';
+import { composeSourceOffsetMaps, escapeAttribute, type SourceReplacement } from './shared.js';
 import { extractKovoStyles } from './style.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';

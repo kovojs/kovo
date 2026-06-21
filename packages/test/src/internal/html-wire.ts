@@ -6,7 +6,7 @@
 // rather than the public `./html-fragment` surface. The generic HTML element /
 // form / key / text extractors they build on stay public in `../html-fragment.ts`.
 
-import { htmlElementFacts, htmlKeyValues, type HtmlElementFact } from '../html-fragment.js';
+import { htmlElementFacts, htmlKeyValues, type HtmlElementFact } from '@kovojs/test/html-fragment';
 
 /** @internal */
 export interface HtmlJsonScriptFact {
