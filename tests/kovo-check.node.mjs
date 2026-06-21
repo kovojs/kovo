@@ -114,7 +114,7 @@ import {
   graphOptimisticStatusMatrix,
 } from '../packages/conformance-fixtures/src/graph-fixtures.ts';
 import { touchGraphProvenanceFact } from '../packages/conformance-fixtures/src/touch-graph-fixtures.ts';
-import { documentQueryScriptBehaviorFact } from '../packages/test/src/html-fragment.ts';
+import { documentQueryScriptBehaviorFact } from '../packages/test/src/internal/html-wire.ts';
 import {
   legibilityStudyGateFact,
   normativeDocsGateFact,
@@ -133,10 +133,7 @@ import {
   projectJsonFile,
   projectPackageManifestFacts,
 } from '../packages/conformance-fixtures/src/source-fixtures.ts';
-import {
-  runPnpmFilterTaskCommand,
-  starterTemplateAcceptanceFact,
-} from '../packages/conformance-fixtures/src/starter-template-fixtures.ts';
+import { runPnpmFilterTaskCommand } from '../packages/conformance-fixtures/src/starter-template-fixtures.ts';
 import {
   commerceKeyedOptimisticBehaviorFact,
   enhancedMutationBehaviorFact,
@@ -308,32 +305,6 @@ const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
   loadVitePlusConfig(await readProjectFile(configPath));
 
 const projectRootPath = fileURLToPath(new URL('..', import.meta.url));
-const starterTemplatePaths = {
-  projectRoot: projectRootPath,
-  templateRoot: new URL('../packages/create-kovo/templates/', import.meta.url),
-};
-const starterTemplateKovoOutputs = [
-  {
-    args: ['check', 'graph.json'],
-    output: 'kovo-check/v1\nOK\n',
-  },
-  {
-    args: ['explain', 'query', 'cart', 'graph.json'],
-    output:
-      'kovo-explain/v1\nQUERY cart\nreads: cart\nconsumers: component:CartBadge,component:CartPanel,page:/cart\ninvalidated-by: cart/add\ndomain-writes: cart.addItem\n',
-  },
-  {
-    args: ['explain', 'mutation', 'cart/add', '--optimistic', 'graph.json'],
-    output:
-      'kovo-explain/v1\nMUTATION cart/add\nguards: authed\nsession: starterSession\ninput-fields: productId,quantity\nwrites: cart\ninvalidates: cart\nmanual-invalidates: -\nupdates: cart->component:CartBadge,component:CartPanel,page:/cart\nOPTIMISTIC cart await-fragment\nOPTIMISTIC-SUMMARY total=1 derived=0 hand-written=0 await-fragment=1 UNHANDLED=0 PUNTED=0\n',
-  },
-  {
-    args: ['explain', 'page', '/cart', 'graph.json'],
-    output:
-      'kovo-explain/v1\nPAGE /cart\nprefetch: false\nmeta: title=Kovo Starter Cart description=Starter cart backed by query data. image=-\ni18n: en-US:cartTitle\nmodulepreloads: -\nstylesheets: /src/styles.css\nqueries: cart\nview-transitions: -\n',
-  },
-];
-
 void test('kovo-check wrapper explains the production build prerequisite', () => {
   assert.equal(
     missingBuildMessage('dist/missing-cli.mjs'),
@@ -459,7 +430,9 @@ void test('Phase 0 wire fixture responses keep stable protocol metadata', async 
     },
     {
       headers: {
+        'cache-control': 'private, no-store',
         'content-type': 'text/html; charset=utf-8',
+        vary: 'Cookie',
       },
       name: 'typed-read.http',
       responseIndex: 1,
@@ -595,7 +568,13 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
     'Public imports in app source',
     'Post-parse decisions use typed facts, not source strings',
   ]);
-  assert.deepEqual(fact.compilerRuleTitles, fact.hardRuleTitlesCovered);
+  assert.deepEqual(fact.hardRuleTitlesCovered, [
+    ...fact.compilerRuleTitles,
+    'Output safety is contextual and default-on',
+    'Inputs (mandatory)',
+    'Stamping points (mandatory)',
+    'Comparison (mandatory, server and client)',
+  ]);
   assert.equal(
     fact.compilerRuleItemsMatchTitles,
     true,
@@ -2071,234 +2050,65 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
   assert.deepEqual(fact.touchGraphKeys, ['cart.addItem']);
 });
 
-void test('P10 starter wires graph assertions into CI', async () => {
-  const starterAcceptance = await starterTemplateAcceptanceFact({
-    assertFixpoint,
-    assertRenderEquivalence,
-    compileComponentModule,
-    expectedDevDependencies: [
-      '@kovojs/compiler',
-      '@types/node',
-      '@typescript/native-preview',
-      'kovo',
-      'typescript',
-      'vite',
-      'vite-plus',
-      'vitest',
-    ],
-    kovoCheck,
-    kovoExplain,
-    kovoOutputs: starterTemplateKovoOutputs,
-    ...starterTemplatePaths,
-  });
-
-  assert.deepEqual(starterAcceptance.package, {
-    dependencies: [
-      '@kovojs/better-auth',
-      '@kovojs/browser',
-      '@kovojs/core',
-      '@kovojs/server',
-      '@kovojs/style',
-    ],
-    scripts: {
-      emitGraph: 'node scripts/emit-graph.mjs',
-      kovoCheck: undefined,
-      graphAssertions: undefined,
-    },
-  });
-  assert.deepEqual(starterAcceptance.devDependencyCoverage, {
-    expected: [
-      '@kovojs/compiler',
-      '@types/node',
-      '@typescript/native-preview',
-      'kovo',
-      'typescript',
-      'vite',
-      'vite-plus',
-      'vitest',
-    ],
-    missing: ['@kovojs/compiler', 'kovo'],
-    present: [
-      '@types/node',
-      '@typescript/native-preview',
-      'typescript',
-      'vite',
-      'vite-plus',
-      'vitest',
-    ],
-  });
-  assert.deepEqual(starterAcceptance.graphCheck, {
-    exitCode: 0,
-    issueCount: 0,
-    status: 'ok',
-    version: 'kovo-check/v1',
-  });
-  assert.deepEqual(starterAcceptance.graph.components, ['CartBadge', 'CartPanel']);
-  assert.deepEqual(starterAcceptance.graph.mutations, [
-    {
-      guards: ['authed'],
-      invalidates: ['cart'],
-      inputFields: ['productId', 'quantity'],
-      key: 'cart/add',
-      session: 'starterSession',
-      writes: ['cart'],
-    },
-  ]);
-  assert.deepEqual(starterAcceptance.graph.optimistic, [
-    { mutation: 'cart/add', query: 'cart', status: 'await-fragment' },
-  ]);
-  assert.deepEqual(starterAcceptance.graph.pages, [
-    {
-      i18n: ['en-US:cartTitle'],
-      meta: {
-        description: 'Starter cart backed by query data.',
-        title: 'Kovo Starter Cart',
-      },
-      queries: ['cart'],
-      route: '/cart',
-      stylesheets: ['/src/styles.css'],
-    },
-  ]);
-  assert.deepEqual(starterAcceptance.graph.queries, [{ domains: ['cart'], query: 'cart' }]);
-  assert.deepEqual(starterAcceptance.graph.touchGraphSites['cart.addItem'], [
-    { domain: 'cart', keys: null, site: 'src/cart.ts:12', via: 'cart_items' },
-  ]);
-  assert.deepEqual(starterAcceptance.explain.cartQuery, {
-    consumers: ['component:CartBadge', 'component:CartPanel', 'page:/cart'],
-    domainWrites: ['cart.addItem'],
-    exitCode: 0,
-    invalidatedBy: ['cart/add'],
-    reads: ['cart'],
-    subject: 'QUERY cart',
-    version: 'kovo-explain/v1',
-  });
-  assert.deepEqual(starterAcceptance.explain.cartAdd, {
-    exitCode: 0,
-    guards: ['authed'],
-    inputFields: ['productId', 'quantity'],
-    invalidates: ['cart'],
-    manualInvalidates: [],
-    optimisticStatuses: { cart: 'await-fragment' },
-    optimisticSummary: {
-      PUNTED: '0',
-      UNHANDLED: '0',
-      'await-fragment': '1',
-      derived: '0',
-      'hand-written': '0',
-      total: '1',
-    },
-    session: 'starterSession',
-    subject: 'MUTATION cart/add',
-    updateConsumers: [
-      { consumers: ['component:CartBadge', 'component:CartPanel', 'page:/cart'], query: 'cart' },
-    ],
-    version: 'kovo-explain/v1',
-    writes: ['cart'],
-  });
-  assert.deepEqual(starterAcceptance.explain.cartPage, {
-    exitCode: 0,
-    i18n: ['en-US:cartTitle'],
-    meta: 'title=Kovo Starter Cart description=Starter cart backed by query data. image=-',
-    modulepreloads: [],
-    prefetch: 'false',
-    queries: ['cart'],
-    stylesheets: ['/src/styles.css'],
-    subject: 'PAGE /cart',
-    version: 'kovo-explain/v1',
-    viewTransitions: [],
-  });
-
-  assert.deepEqual(starterAcceptance.tasks.kovoCheck, {
-    input: [
-      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-      { pattern: 'src/**/*', base: 'workspace' },
-    ],
-    output: ['graph.json'],
-  });
-  assert.deepEqual(starterAcceptance.tasks.graphAssertions, {
-    input: [
-      { pattern: 'scripts/emit-graph.mjs', base: 'workspace' },
-      { pattern: 'scripts/graph-assertions.mjs', base: 'workspace' },
-      { pattern: 'src/**/*', base: 'workspace' },
-    ],
-    output: undefined,
-  });
-  assert.deepEqual(starterAcceptance.ciRunCommands, [
-    'vp install',
-    'vp check',
-    'vp test',
-    'vp run build',
-    'vp run kovo-check',
-    'vp run graph-assertions',
-  ]);
-  assert.deepEqual(
-    starterAcceptance.taskOutputs.map((taskOutput) => taskOutput.output),
-    ['emit-graph/v1\nOK\nkovo-check/v1\nOK\n', 'graph-assertions/v1\nOK\n'],
+void test('P10 starter template stays wired to the current app-shell contract', async () => {
+  const packageJson = JSON.parse(
+    await readFile(
+      new URL('../packages/create-kovo/templates/package.json', import.meta.url),
+      'utf8',
+    ),
   );
-  assert.deepEqual(
-    starterAcceptance.taskOutputs.map((taskOutput) => taskOutput.graph),
-    [starterAcceptance.emittedGraph.graph, starterAcceptance.emittedGraph.graph],
+  const appSource = await readFile(
+    new URL('../packages/create-kovo/templates/src/app.tsx', import.meta.url),
+    'utf8',
   );
+  const stylesSource = await readFile(
+    new URL('../packages/create-kovo/templates/src/styles.css', import.meta.url),
+    'utf8',
+  );
+  const viteConfigSource = await readFile(
+    new URL('../packages/create-kovo/templates/vite.config.ts', import.meta.url),
+    'utf8',
+  );
+  const appCompile = compileComponentModule({ fileName: 'src/app.tsx', source: appSource });
 
-  assert.equal(starterAcceptance.emittedGraph.output, 'emit-graph/v1\nOK\n');
-  assert.equal(starterAcceptance.graphAssertionsOutput, 'graph-assertions/v1\nOK\n');
-  assert.deepEqual(starterAcceptance.appCompile, {
-    fixpointAsserted: true,
-    renderEquivalenceAsserted: true,
-  });
-  assert.deepEqual(starterAcceptance.browserClient, {
-    appendedHtml: [['beforeend', '<li>p1</li>']],
-    deferredApplication: {
-      body: '<kovo-fragment></kovo-fragment>',
-      boundary: 'starter-boundary',
-      morph: 'structural',
-      queryPlansMatch: true,
-      rootMatches: true,
-      storeMatches: true,
-    },
-    deferredApplied: true,
-    fetchCall: {
-      body: 'productId=p1',
-      headers: { Accept: 'text/vnd.kovo.fragment+html' },
-      keepalive: true,
-      method: 'POST',
-      url: '/_m/cart/add',
-    },
-    fetchOk: true,
-    fragmentHtml: {
-      afterReplace: '<cart-badge>1</cart-badge>',
-      beforeReplace: '<cart-badge>0</cart-badge>',
-    },
-    loader: {
-      enhancedMutationStoreMatches: true,
-      hasEnhancedFetch: true,
-      hasImportModule: true,
-      queryPlansType: 'object',
-      queryStoreMatches: true,
-      rootMatches: true,
-    },
-    loaderInstallCount: 1,
-  });
-
-  assert.deepEqual(starterAcceptance.cssLayers, ['kovo-starter-base']);
-  assert.deepEqual(starterAcceptance.html.tags, [
-    'html',
-    'head',
-    'meta',
-    'meta',
-    'link',
-    'title',
-    'body',
+  assertFixpoint(appCompile);
+  assertRenderEquivalence(appCompile);
+  assert.deepEqual(Object.keys(packageJson.scripts).sort(), [
+    'build:prod',
+    'check',
+    'dev',
+    'serve',
+    'start',
+    'test',
   ]);
-  assert.deepEqual(starterAcceptance.html.htmlAttrs, { lang: 'en' });
-  assert.deepEqual(starterAcceptance.html.metaAttrs, [
-    { charset: 'UTF-8' },
-    { content: 'width=device-width, initial-scale=1.0', name: 'viewport' },
+  assert.deepEqual(Object.keys(packageJson.dependencies).sort(), [
+    '@electric-sql/pglite',
+    '@kovojs/better-auth',
+    '@kovojs/browser',
+    '@kovojs/core',
+    '@kovojs/drizzle',
+    '@kovojs/server',
+    '@kovojs/style',
+    '@kovojs/ui',
+    'better-auth',
+    'drizzle-orm',
   ]);
-  assert.deepEqual(starterAcceptance.html.linkAttrs, [
-    { rel: 'stylesheet', href: '/src/styles.css' },
+  assert.deepEqual(Object.keys(packageJson.devDependencies).sort(), [
+    '@kovojs/cli',
+    '@types/node',
+    '@typescript/native-preview',
+    'typescript',
+    'vite',
+    'vite-plus',
+    'vitest',
   ]);
-  assert.deepEqual(starterAcceptance.html.scriptAttrs, []);
+  assert.match(viteConfigSource, /kovo\(\{ app: '\/src\/app\.tsx' \}\)/);
+  assert.doesNotMatch(viteConfigSource, /\brun\s*:/);
+  assert.match(appSource, /createMemoryVersionedClientModuleRegistry/);
+  assert.match(appSource, /createRequestHandler/);
+  assert.match(appSource, /route\('\/login'/);
+  assert.match(appSource, /contactsQuery/);
+  assert.match(stylesSource, /@layer kovo-app-base/);
 
   execFileSync('pnpm', ['exec', 'vitest', '--run', 'packages/create-kovo/src/index.test.ts'], {
     cwd: new URL('..', import.meta.url),
