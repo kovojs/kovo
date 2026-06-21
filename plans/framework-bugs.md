@@ -81,7 +81,7 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
     repeated live target, matching the compiler's `key` / `kovo-key` contract in SPEC.md §4.8 and
     §13.2.
 
-- [ ] **High: browser target collection precedence does not match fragment apply precedence.**
+- [x] **High: browser target collection precedence does not match fragment apply precedence.**
   - Evidence: [packages/browser/src/mutation-targets.ts](/Users/mini/kovo/packages/browser/src/mutation-targets.ts:50)
     collects target identity as `kovo-fragment-target ?? id ?? kovo-c`, while
     [packages/browser/src/fragment-targets.ts](/Users/mini/kovo/packages/browser/src/fragment-targets.ts:17)
@@ -95,6 +95,10 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
     updates and the aside does not in both modular and inline loaders.
   - Fix sketch: make collection and apply use the same precedence, or reject ambiguous duplicate
     target identities before submit/apply.
+  - Fixed 2026-06-21: modular and inline fragment lookup now use
+    `kovo-fragment-target ?? id ?? kovo-c` precedence. Proved by
+    `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/mutation-response-dom.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts`
+    across Chromium, Firefox, and WebKit.
 
 - [ ] **High: compiler-emitted component `kovo-deps` still uses query aliases, not query keys.**
   - Evidence: [packages/compiler/src/emit/server.ts](/Users/mini/kovo/packages/compiler/src/emit/server.ts:2090)
@@ -148,7 +152,7 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
     `packages/compiler/src/{registry,route-pages}.test.ts`) and
     `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 
-- [ ] **Medium: inline loader treats CSS-selector-invalid targets as total misses.**
+- [x] **Medium: inline loader treats CSS-selector-invalid targets as total misses.**
   - Evidence: [packages/browser/src/inline-loader-build.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.ts:290)
     wraps all target lookup in one `try/catch` and builds raw CSS selectors; modular lookup escapes
     selector strings at [packages/browser/src/fragment-targets.ts](/Users/mini/kovo/packages/browser/src/fragment-targets.ts:17).
@@ -160,8 +164,12 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
     charset in compiler/runtime validation.
   - Fix sketch: share the modular escaped lookup helper with the inline loader, or attempt
     `getElementById` outside the selector `try/catch`.
+  - Fixed 2026-06-21: inline lookup now escapes selector operands and covers selector-invalid id
+    and `kovo-fragment-target` values. Proved by
+    `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/mutation-response-dom.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts`
+    across Chromium, Firefox, and WebKit, plus `pnpm --filter @kovojs/browser run check:inline-loader`.
 
-- [ ] **Medium: live-target header protocol is delimiter-fragile for target/component identities.**
+- [x] **Medium: live-target header protocol is delimiter-fragile for target/component identities.**
   - Evidence: [packages/server/src/mutation-wire.ts](/Users/mini/kovo/packages/server/src/mutation-wire.ts:335)
     splits `Kovo-Targets` on `;` and `,`; [packages/server/src/mutation-wire.ts](/Users/mini/kovo/packages/server/src/mutation-wire.ts:412)
     parses descriptors using first `#` and first `:` after that. Browser serialization is raw at
@@ -173,6 +181,9 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
     back to exactly one target descriptor with the same identity.
   - Fix sketch: encode header fields with a structured format, or enforce and document an allowed
     target/key charset at compile/runtime boundaries.
+  - Fixed 2026-06-21: browser collection skips delimiter-unsafe target/dependency identities and
+    live component identities, while preserving colon-bearing target/dependency instance identities.
+    Proved by `pnpm exec vitest run packages/browser/src/mutation-fetch.test.ts packages/browser/src/inline-loader-fragment-target.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts`.
 
 ## Coverage Gaps That Would Have Caught This Class
 

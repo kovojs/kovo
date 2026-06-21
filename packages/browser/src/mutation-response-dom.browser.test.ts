@@ -193,6 +193,64 @@ describe('browser mutation response DOM apply', () => {
     );
   });
 
+  it('prefers explicit fragment targets over conflicting component stamps', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section kovo-fragment-target="cart" kovo-deps="cart">old cart</section>',
+      '<aside kovo-c="cart">wrong target</aside>',
+    ].join('');
+    document.body.append(root);
+
+    const applied = applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-fragment target="cart">',
+        '<section kovo-fragment-target="cart" kovo-deps="cart">fresh cart</section>',
+        '</kovo-fragment>',
+      ].join(''),
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    // SPEC.md §9.1: apply lookup must use the same precedence as live-DOM
+    // Kovo-Targets collection, so the requested target is the patched target.
+    expect(applied.appliedFragments).toEqual(['cart']);
+    expect(root.querySelector('[kovo-fragment-target="cart"]')?.textContent).toBe('fresh cart');
+    expect(root.querySelector('[kovo-c="cart"]')?.textContent).toBe('wrong target');
+  });
+
+  it('resolves selector-invalid id targets with the same escaped lookup as fragment targets', () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<section id=\'target"bad-id\'>old id</section>',
+      '<section kovo-fragment-target=\'target"bad-fragment\'>old fragment target</section>',
+    ].join('');
+    document.body.append(root);
+
+    const applied = applyMutationResponseBodyToRuntime({
+      body: [
+        '<kovo-fragment target=\'target"bad-id\'>',
+        '<section id=\'target"bad-id\'>fresh id</section>',
+        '</kovo-fragment>',
+        '<kovo-fragment target=\'target"bad-fragment\'>',
+        '<section kovo-fragment-target=\'target"bad-fragment\'>fresh fragment target</section>',
+        '</kovo-fragment>',
+      ].join(''),
+      root: new DomMorphRoot(root),
+      store: createQueryStore(),
+    });
+
+    expect(applied.appliedFragments).toEqual(['target"bad-id', 'target"bad-fragment']);
+    const sections = [...root.querySelectorAll('section')];
+    expect(sections.find((section) => section.getAttribute('id') === 'target"bad-id')?.textContent).toBe(
+      'fresh id',
+    );
+    expect(
+      sections.find(
+        (section) => section.getAttribute('kovo-fragment-target') === 'target"bad-fragment',
+      )?.textContent,
+    ).toBe('fresh fragment target');
+  });
+
   it('keeps escaped refreshed fragment payloads as text instead of markup', () => {
     const root = document.createElement('main');
     root.innerHTML = '<section kovo-c="promo">stale promo</section>';

@@ -11,14 +11,14 @@ export function findFragmentTargetElement(
   root: FragmentTargetRoot,
   target: string,
 ): Element | null {
-  // SPEC.md §9.1: fragment targets are live DOM targets. Component stamps remain
-  // the primary runtime identity, with id/kovo-fragment-target matching the
-  // Kovo-Targets collection and inline-loader apply path.
+  // SPEC.md §9.1: fragment targets are live DOM targets. Apply lookup uses the
+  // same identity precedence as Kovo-Targets collection: explicit fragment
+  // target, then DOM id, then component stamp.
   return (
-    findRootOrDescendant(root, `[kovo-c="${escapeCssString(target)}"]`) ??
+    findRootOrDescendant(root, `[kovo-fragment-target="${escapeCssString(target)}"]`) ??
     root.getElementById?.(target) ??
     findRootOrDescendant(root, `[id="${escapeCssString(target)}"]`) ??
-    findRootOrDescendant(root, `[kovo-fragment-target="${escapeCssString(target)}"]`) ??
+    findRootOrDescendant(root, `[kovo-c="${escapeCssString(target)}"]`) ??
     findRootOrDescendant(root, `kovo-defer[target="${escapeCssString(target)}"]`)
   );
 }
@@ -32,7 +32,7 @@ function findRootOrDescendant(root: FragmentTargetRoot, selector: string): Eleme
   return root.querySelector(selector);
 }
 
-function escapeCssString(value: string): string {
+export function escapeCssString(value: string): string {
   return value.replace(/[\n\r\f"\\]/g, (char) => {
     if (char === '\n') return '\\a ';
     if (char === '\r') return '\\d ';
