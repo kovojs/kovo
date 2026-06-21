@@ -16,12 +16,10 @@ describe('structural IR ownership boundary', () => {
     );
 
     expect(sourcePatchLowerers).toEqual([
-      'lowerInlineAttributeDerives',
       'navigationHrefLowering',
       'navigationLinkLowering',
       'navigationStandaloneHrefLowering',
       'platformBehaviorLowering',
-      'lowerPrimitiveAttributeSpreads',
       'lowerStructuralJsx',
       'viewTransitionLowering',
     ]);
