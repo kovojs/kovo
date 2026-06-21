@@ -1,15 +1,6 @@
 {
-  "tags": [
-    "docker",
-    "gcp-cloud-functions",
-    "github-actions",
-    "node"
-  ],
-  "sentinels": [
-    "Dockerfile",
-    "cloudbuild.yaml",
-    "package.json"
-  ],
+  "tags": ["docker", "gcp-cloud-functions", "github-actions", "node"],
+  "sentinels": ["Dockerfile", "cloudbuild.yaml", "package.json"],
   "detectedAt": "2026-06-21T07:39:45.869Z",
   "rootPath": "/Users/mini/kovo"
 }

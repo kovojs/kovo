@@ -16,6 +16,7 @@ moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10/FN11 were im
 in isolated worktrees and integrated here.
 
 **Open / deferred (genuinely multi-session; the substrate above unblocks them):**
+
 - **FN7 Step 2** — migrate each allowlisted `createSourceFile` site's fact extraction into `scan/parse.ts`
   byte-exact (the 5 StyleX parses, route grammar, app-graph query-refresh, etc.), then widen
   `isPostParseGuardedFile` to those files. Step 1 (the enforcing allowlist guard) is done; this cleanup half is
@@ -241,7 +242,7 @@ behavior change never hides inside a "neutral" move.
     site in `compiler/src` outside `scan/` and pins them to a documented allowlist — a NEW reparse now fails loudly
     and the existing 8 sites (app-graph, mutation-inputs, optimistic-inline, route-pages, style.ts ×5, and the emit/
     gate/dead-import/live-target sites) are documented as the Step-2 worklist. This widens rule-9 to cover the
-    *structural* reparse form the conformance guard misses, across the whole compiler (not just the 4 zones).
+    _structural_ reparse form the conformance guard misses, across the whole compiler (not just the 4 zones).
     Test-config only; zero behavior change.
   - Step 2 remaining (the larger half): migrate each allowlisted site's fact extraction into `scan/parse.ts`
     byte-exact (incl. the 5 StyleX parses + app-graph's query-refresh parse — which would also let `app-graph.ts`

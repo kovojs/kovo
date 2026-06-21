@@ -564,7 +564,6 @@ function versionStateDeriveReferences(
   }));
 }
 
-
 /**
  * Assert the SPEC.md §5.2 fixpoint property: re-compiling every emitted artifact of a
  * compileComponentModule result reproduces that artifact byte-for-byte. Throws on the first
