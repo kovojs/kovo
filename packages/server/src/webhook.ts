@@ -14,7 +14,8 @@ import {
   type MutationResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import type { InferSchema, Schema } from './schema.js';
+import { isSchemaValidationError } from './schema.js';
+import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 
 /** @internal */
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
@@ -264,16 +265,28 @@ export async function runWebhook<
     };
   }
 
-  const inputResult = await parseLooseWebhookInput(
-    declaration.webhookDefinition.input,
-    bodyResult.value,
-  );
+  // L2 (SPEC §9.2:876): `parseLooseWebhookInput` returns typed issues for a validation
+  // failure (→ 422) but RE-THROWS any non-validation (internal) error. Map that re-throw to
+  // the same sanitized 500 the handler-exception path returns, never leaking its `.message`.
+  let inputResult: Awaited<ReturnType<typeof parseLooseWebhookInput<InputSchema>>>;
+  try {
+    inputResult = await parseLooseWebhookInput(
+      declaration.webhookDefinition.input,
+      bodyResult.value,
+    );
+  } catch {
+    return {
+      changes: [],
+      replayed: false,
+      response: webhookResponse(500, 'Internal Server Error'),
+    };
+  }
   if (!inputResult.ok) {
     return {
       changes: [],
       replayed: false,
       response: webhookJsonResponse(422, {
-        error: { code: 'VALIDATION', payload: { message: inputResult.message } },
+        error: { code: 'VALIDATION', payload: { issues: inputResult.issues } },
         ok: false,
       }),
     };
@@ -434,7 +447,10 @@ function parseWebhookBody(
 async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(
   schema: InputSchema,
   rawInput: unknown,
-): Promise<{ ok: true; value: WebhookInputFor<InputSchema> } | { message: string; ok: false }> {
+): Promise<
+  | { ok: true; value: WebhookInputFor<InputSchema> }
+  | { issues: readonly ValidationIssue[]; ok: false }
+> {
   try {
     const parsed = await parseSchema(schema, rawInput);
     const value =
@@ -442,7 +458,14 @@ async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(
 
     return { ok: true, value: value as WebhookInputFor<InputSchema> };
   } catch (error) {
-    return { message: error instanceof Error ? error.message : 'Invalid webhook input', ok: false };
+    // L2 (SPEC §9.2:876): only a schema validation failure is a client-facing 422. Any other
+    // throw is an internal failure (e.g. an `s.file().store()` storage/DB backend error whose
+    // `.message` may carry a DSN/endpoint/request-id) and MUST NOT be laundered into the 422
+    // body — re-throw it so the outer handler maps it to a sanitized 500.
+    if (isSchemaValidationError(error)) {
+      return { issues: error.issues, ok: false };
+    }
+    throw error;
   }
 }
 

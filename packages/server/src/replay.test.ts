@@ -6,6 +6,7 @@ import { renderMutationResponse } from './mutation.js';
 import { query } from './query.js';
 import {
   createMemoryMutationReplayStore,
+  MutationReplayAbortedError,
   type MutationReplayResponse,
   type MutationReplayStore,
 } from './replay.js';
@@ -894,5 +895,52 @@ describe('server mutation response replay', () => {
     expect(replayStore.reserve('scope-b', 'idem_b')).toBeDefined();
     // Third pending under maxEntries:2 must still succeed (no eviction, no premature cap).
     expect(replayStore.reserve('scope-c', 'idem_c')).toBeDefined();
+  });
+
+  // K3 (SPEC §9.1): part-2 A6 stopped reserve() from FIFO-evicting in-flight pending
+  // reservations, but set()'s own maxEntries eviction still deleted the oldest record —
+  // which may be a pending reservation — without settling its promise. A concurrent
+  // duplicate that joined via get() (returning that pending promise) then hung forever.
+  // set()'s eviction must never silently drop a pending record: it must settle the
+  // awaiter (reject with MutationReplayAbortedError) so it falls back to running itself.
+  it('K3: set() eviction never strands an awaiter of an evicted pending reservation', async () => {
+    const replayStore = createMemoryMutationReplayStore({ maxEntries: 1 });
+
+    // Reserve A (pending). A duplicate request joins it via get() → a pending promise.
+    const reservationA = replayStore.reserve('scope', 'idem_a');
+    expect(reservationA).toBeDefined();
+    const joined = replayStore.get('scope', 'idem_a');
+    expect(joined).toBeInstanceOf(Promise);
+
+    // A webhook-fallback set() for a different key fires while at maxEntries:1. Its eviction
+    // loop would otherwise delete A's pending record without resolving/rejecting it.
+    replayStore.set('scope', 'idem_b', { body: 'b', headers: {}, status: 200 });
+
+    // The joined awaiter MUST settle (not hang). On the fixed store it rejects with
+    // MutationReplayAbortedError so the duplicate falls back to running itself.
+    let settled = false;
+    const settlePromise = Promise.resolve(joined).then(
+      (value) => {
+        settled = true;
+        return { kind: 'resolved' as const, value };
+      },
+      (error: unknown) => {
+        settled = true;
+        return { kind: 'rejected' as const, error };
+      },
+    );
+
+    const outcome = await Promise.race([
+      settlePromise,
+      new Promise<{ kind: 'timeout' }>((resolve) =>
+        setTimeout(() => resolve({ kind: 'timeout' }), 200),
+      ),
+    ]);
+
+    expect(settled).toBe(true);
+    expect(outcome.kind).not.toBe('timeout');
+    if (outcome.kind === 'rejected') {
+      expect(outcome.error).toBeInstanceOf(MutationReplayAbortedError);
+    }
   });
 });

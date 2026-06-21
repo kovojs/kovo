@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
 import { createMemoryMutationReplayStore } from './replay.js';
-import { s } from './schema.js';
+import { s, SchemaValidationError } from './schema.js';
 import { runWebhook, webhook } from './webhook.js';
 
 function signedRequest(body: string, signature: string): Request {
@@ -427,6 +427,75 @@ describe('server webhook primitive', () => {
     // The redelivery replayed via the fast-path lookup, so no second reservation.
     expect(getCalls).toEqual(['', '']);
     expect(reserveCalls).toBe(1);
+  });
+
+  // L2 (SPEC §9.2:876): webhook input parsing must not launder a non-validation throw
+  // (an internal storage/DB exception, e.g. an `s.file().store()` backend failure that
+  // throws a DSN/endpoint string) into the typed 422 body. Only a SchemaValidationError
+  // is a 422; any other error is an unexpected failure that maps to a sanitized 500 and
+  // must not surface the raw `.message` to the caller.
+  it('L2: an internal (non-validation) input-parse error maps to 500, not a 422 leaking the message', async () => {
+    const secret = 'DB dsn postgres://user:pw@db.internal:5432/prod';
+    let handled = 0;
+    const leakyWebhook = webhook('leaky-parse', {
+      handler() {
+        handled += 1;
+        return { ok: true };
+      },
+      // A field schema whose `.parse` throws a raw internal error on a perfectly valid
+      // body (e.g. a degraded storage/DB backend reached during coercion).
+      input: {
+        parse() {
+          throw new Error(secret);
+        },
+      } as unknown as Parameters<typeof webhook>[1]['input'],
+      path: '/webhooks/leaky-parse',
+      verify: 'none',
+      verifyJustification: 'fixture-only test webhook',
+    });
+
+    const body = JSON.stringify({ id: 'evt_leak' });
+    const result = await runWebhook(
+      leakyWebhook,
+      new Request('https://example.test/webhooks/leaky-parse', { body, method: 'POST' }),
+    );
+
+    expect(result.response.status).toBe(500);
+    const text = await result.response.text();
+    expect(text).not.toContain('postgres://');
+    expect(text).not.toContain(secret);
+    // The handler must never run for a failed input parse.
+    expect(handled).toBe(0);
+    expect(result.changes).toEqual([]);
+    expect(result.replayed).toBe(false);
+  });
+
+  // L2: a genuine SchemaValidationError still produces the typed 422 (not a 500), so the
+  // re-throw of internals does not regress the legitimate validation path.
+  it('L2: a real validation error still maps to a typed 422', async () => {
+    const validatingWebhook = webhook('validating', {
+      handler() {
+        return { ok: true };
+      },
+      input: {
+        parse() {
+          throw new SchemaValidationError([{ message: 'id is required', path: ['id'] }]);
+        },
+      } as unknown as Parameters<typeof webhook>[1]['input'],
+      path: '/webhooks/validating',
+      verify: 'none',
+      verifyJustification: 'fixture-only test webhook',
+    });
+
+    const body = JSON.stringify({});
+    const result = await runWebhook(
+      validatingWebhook,
+      new Request('https://example.test/webhooks/validating', { body, method: 'POST' }),
+    );
+
+    expect(result.response.status).toBe(422);
+    const payload = (await result.response.json()) as { error: { code: string } };
+    expect(payload.error.code).toBe('VALIDATION');
   });
 });
 

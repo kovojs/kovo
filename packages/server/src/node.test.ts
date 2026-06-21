@@ -1,4 +1,4 @@
-import { request as httpRequest, createServer } from 'node:http';
+import { Agent, request as httpRequest, createServer } from 'node:http';
 import type {
   IncomingHttpHeaders,
   IncomingMessage,
@@ -6,7 +6,7 @@ import type {
   ServerResponse,
 } from 'node:http';
 import { connect as http2Connect, createServer as createHttp2Server } from 'node:http2';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
@@ -341,6 +341,128 @@ describe('nodeRequestToWebRequest client disconnect (E3)', () => {
   });
 });
 
+describe('nodeRequestToWebRequest keep-alive listener hygiene (K1)', () => {
+  // SPEC §9.5: the client-disconnect bridge (E3) must not accumulate one socket 'close'
+  // listener + AbortController per request on a reused keep-alive connection. Without
+  // cleanup, each request permanently retains a listener (and its closed-over Request/
+  // AbortController), an unbounded attacker-controlled leak culminating in
+  // MaxListenersExceededWarning (>10).
+  it('does not accumulate socket close listeners across sequential keep-alive requests', async () => {
+    const observedSockets: Socket[] = [];
+    const server = await serveWithNode((nodeRequest, nodeResponse) => {
+      if (nodeRequest.socket && !observedSockets.includes(nodeRequest.socket)) {
+        observedSockets.push(nodeRequest.socket);
+      }
+      return toNodeHandler(async () => new Response('ok', { status: 200 }))(
+        nodeRequest,
+        nodeResponse,
+      );
+    });
+    // A single keep-alive connection reused across every request.
+    const agent = new Agent({ keepAlive: true, maxSockets: 1 });
+
+    try {
+      const requestCount = 12;
+      for (let i = 0; i < requestCount; i += 1) {
+        const outcome = await keepAliveGet(server.origin, '/keepalive', agent);
+        expect(outcome.status).toBe(200);
+        expect(outcome.body).toBe('ok');
+      }
+
+      // All requests should have ridden the same reused socket (keep-alive).
+      expect(observedSockets).toHaveLength(1);
+      const socket = observedSockets[0]!;
+      // The bridge attaches a 'close' listener per request; with cleanup the count
+      // must stay bounded (well under Node's default-10 warning threshold), not ~12.
+      expect(socket.listenerCount('close')).toBeLessThan(requestCount);
+      expect(socket.listenerCount('close')).toBeLessThanOrEqual(2);
+    } finally {
+      agent.destroy();
+      await server.close();
+    }
+  });
+});
+
+describe('writeWebResponseToNode early hints HTTP version gating (L16-2)', () => {
+  // RFC 8297: 103 Early Hints is an HTTP/1.1+ feature. Sending a 1xx informational
+  // response to an HTTP/1.0 client that cannot parse interim responses desynchronizes
+  // the connection. Gate writeEarlyHints on httpVersion !== '1.0'.
+  it('suppresses 103 Early Hints for HTTP/1.0 requests', () => {
+    const earlyHintCalls: { link: string | string[] }[] = [];
+    const headWrites: number[] = [];
+    const nodeResponse = {
+      headersSent: false,
+      writeEarlyHints(hints: { link: string | string[] }) {
+        earlyHintCalls.push(hints);
+      },
+      writeHead(status: number) {
+        headWrites.push(status);
+        return this;
+      },
+      end() {
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    const response = new Response(null, {
+      headers: { Link: '</app.css>; rel=preload; as=style' },
+      status: 200,
+    });
+
+    void writeWebResponseToNode(response, nodeResponse, 'GET', { httpVersion: '1.0' });
+
+    expect(earlyHintCalls).toHaveLength(0);
+    expect(headWrites).toEqual([200]);
+  });
+
+  it('still sends 103 Early Hints for HTTP/1.1 requests', () => {
+    const earlyHintCalls: { link: string | string[] }[] = [];
+    const nodeResponse = {
+      headersSent: false,
+      writeEarlyHints(hints: { link: string | string[] }) {
+        earlyHintCalls.push(hints);
+      },
+      writeHead() {
+        return this;
+      },
+      end() {
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    const response = new Response(null, {
+      headers: { Link: '</app.css>; rel=preload; as=style' },
+      status: 200,
+    });
+
+    void writeWebResponseToNode(response, nodeResponse, 'GET', { httpVersion: '1.1' });
+
+    expect(earlyHintCalls).toEqual([{ link: '</app.css>; rel=preload; as=style' }]);
+  });
+});
+
+function keepAliveGet(
+  origin: string,
+  pathname: string,
+  agent: Agent,
+): Promise<{ body: string; status: number }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(`${origin}${pathname}`, { agent, method: 'GET' }, (response) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer) => chunks.push(chunk));
+      response.on('error', reject);
+      response.on('end', () =>
+        resolve({
+          body: Buffer.concat(chunks).toString('utf8'),
+          status: response.statusCode ?? 0,
+        }),
+      );
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
 async function serverHandleForAbort(
   server: ReturnType<typeof createServer>,
   resolveOnAbort: (value: boolean) => void,
@@ -379,6 +501,7 @@ async function serveWithNode(handler: RequestListener): Promise<{
   close(): Promise<void>;
   fetch(pathname: string, options?: NodeTestRequestOptions): Promise<NodeTestResponse>;
   fetchRaw(pathname: string, options?: NodeTestRequestOptions): Promise<NodeFetchOutcome>;
+  origin: string;
 }> {
   const server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -397,6 +520,7 @@ async function serveWithNode(handler: RequestListener): Promise<{
     fetchRaw(pathname, options = {}) {
       return nodeFetchRaw(`${origin}${pathname}`, options);
     },
+    origin,
   };
 }
 

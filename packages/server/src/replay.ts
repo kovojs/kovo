@@ -157,6 +157,7 @@ export function createMemoryMutationReplayStore<
       const record: MutationReplayRecord<Response> = {
         expiresAt: Date.now() + ttlMs,
         pending,
+        reject: rejectPending,
         resolve: resolvePending,
       };
       responses.set(key, record);
@@ -195,8 +196,16 @@ export function createMemoryMutationReplayStore<
         const oldest = responses.keys().next().value;
         if (oldest === undefined) break;
         const oldestRecord = responses.get(oldest);
-        if (oldestRecord && 'pending' in oldestRecord) pendingCount -= 1;
         responses.delete(oldest);
+        // K3 (SPEC §9.1): never silently drop a pending record. A6 stopped reserve() from
+        // evicting pending slots, but set()'s maxEntries eviction could still delete the
+        // oldest — which may be an in-flight reservation — leaving any duplicate that joined
+        // it via get() hung forever. Reject its pending promise (MutationReplayAbortedError)
+        // so the awaiter falls back to running itself (mirrors reserve()/A4 abort).
+        if (oldestRecord && 'pending' in oldestRecord) {
+          pendingCount -= 1;
+          oldestRecord.reject(new MutationReplayAbortedError());
+        }
       }
 
       // Overwriting an existing pending record with a committed one releases its pending slot.
@@ -330,6 +339,9 @@ type MutationReplayRecord<Response extends MutationReplayResponse> =
   | {
       expiresAt: number;
       pending: Promise<Response>;
+      // K3 (SPEC §9.1): carried so an eviction path that drops a pending record can settle
+      // any joined awaiter (reject with MutationReplayAbortedError) instead of stranding it.
+      reject(reason?: unknown): void;
       resolve(response: Response): void;
     };
 

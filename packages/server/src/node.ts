@@ -11,6 +11,12 @@ export interface NodeHandlerOptions {
 
 export interface WriteWebResponseToNodeOptions {
   earlyHints?: boolean;
+  /**
+   * L16-2 (RFC 8297): the originating request's HTTP version. 103 Early Hints is an
+   * HTTP/1.1+ interim response; an HTTP/1.0 client cannot parse 1xx responses, so a 103
+   * desynchronizes the connection. When this is `'1.0'`, `writeEarlyHints` is suppressed.
+   */
+  httpVersion?: string;
 }
 
 /** Node `http`/`https` listener shape returned by `toNodeHandler()`. */
@@ -36,10 +42,14 @@ export function toNodeHandler(
 ): NodeRequestHandler {
   return async (nodeRequest, nodeResponse) => {
     try {
-      const request = nodeRequestToWebRequest(nodeRequest, options);
+      const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
       const response = await handler(request);
-      const writeOptions =
-        options.earlyHints === undefined ? undefined : { earlyHints: options.earlyHints };
+      // L16-2 (RFC 8297): thread the request's HTTP version so 103 Early Hints is gated to
+      // HTTP/1.1+ clients (an HTTP/1.0 peer cannot parse interim 1xx responses).
+      const writeOptions: WriteWebResponseToNodeOptions = {
+        ...(options.earlyHints === undefined ? {} : { earlyHints: options.earlyHints }),
+        httpVersion: nodeRequest.httpVersion,
+      };
 
       await writeWebResponseToNode(response, nodeResponse, request.method, writeOptions);
     } catch {
@@ -61,6 +71,7 @@ export function toNodeHandler(
 export function nodeRequestToWebRequest(
   nodeRequest: IncomingMessage,
   options: NodeHandlerOptions = {},
+  nodeResponse?: ServerResponse,
 ): Request {
   const method = nodeRequest.method ?? 'GET';
   const headers = nodeHeadersToWebHeaders(nodeRequest);
@@ -73,9 +84,26 @@ export function nodeRequestToWebRequest(
   const abort = (): void => {
     if (!controller.signal.aborted) controller.abort();
   };
+  const socket = nodeRequest.socket;
   nodeRequest.once('aborted', abort);
   nodeRequest.once('close', abort);
-  nodeRequest.socket?.once('close', abort);
+  socket?.once('close', abort);
+  // K1 (SPEC §9.5): the socket is reused across requests on a keep-alive connection, so a
+  // never-removed `socket.once('close', abort)` accumulates one listener + AbortController
+  // (closing over this Request) per request — an unbounded leak culminating in
+  // MaxListenersExceededWarning. The `'aborted'`/`'close'` listeners live on the per-request
+  // `nodeRequest` (discarded each request), but the socket-level listener must be removed once
+  // this request's response is done so it never outlives the request that registered it. Drive
+  // cleanup off the response's own 'close'/'finish' (the response is per-request too), which
+  // fires after the head+body are flushed and cannot prematurely cancel a still-running handler.
+  if (nodeResponse) {
+    const cleanup = (): void => {
+      nodeRequest.off('aborted', abort);
+      nodeRequest.off('close', abort);
+      socket?.off('close', abort);
+    };
+    nodeResponse.once('close', cleanup);
+  }
   const init: RequestInit = {
     headers,
     method,
@@ -103,7 +131,10 @@ export async function writeWebResponseToNode(
   if (
     options.earlyHints !== false &&
     earlyHints &&
-    typeof nodeResponse.writeEarlyHints === 'function'
+    typeof nodeResponse.writeEarlyHints === 'function' &&
+    // L16-2 (RFC 8297): 103 Early Hints is HTTP/1.1+; an HTTP/1.0 client cannot parse a 1xx
+    // interim response, so emitting one desynchronizes the connection. Suppress for '1.0'.
+    options.httpVersion !== '1.0'
   ) {
     nodeResponse.writeEarlyHints({ link: earlyHints });
   }
