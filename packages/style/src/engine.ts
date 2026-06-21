@@ -103,6 +103,13 @@ export interface AtomicCssResult<Styles extends Record<string, StyleObject>> {
 /** Options for serializing extracted atom rules into CSS text. */
 export interface CssEmitOptions {
   readonly layerName?: string;
+  /**
+   * `@keyframes` blocks (from `createKeyframes`) to emit alongside the atomic
+   * layers. They are written once each, outside any `@layer` (keyframes do not
+   * participate in the cascade), so a runtime caller that collects both atomic
+   * rules and keyframes serializes a complete stylesheet (SPEC.md §13.1).
+   */
+  readonly keyframes?: readonly KeyframesResult[];
 }
 
 /** Kovo JSX-shaped merge result returned by `style.attrs`. */
@@ -115,6 +122,20 @@ export interface AttrsResult {
 /** Keyframes object accepted by the deterministic `keyframes` name helper. */
 export interface Keyframes {
   readonly [step: string]: StyleObject;
+}
+
+/**
+ * @internal Structured `@keyframes` extraction result. `name` is the deterministic
+ * animation-name `keyframes(...)` returns; `css` is the full `@keyframes <name>
+ * { … }` block, with declarations normalized identically to atomic rules (property
+ * casing + unitless-length handling via `cssLengthValue`). The compiler consumes
+ * this through `@kovojs/style/internal` to thread the block into extracted CSS so
+ * a `style.keyframes` const used by `animationName` actually ships its animation
+ * (SPEC.md §13.1). Not part of the app-facing public surface.
+ */
+export interface KeyframesResult {
+  readonly name: string;
+  readonly css: string;
 }
 
 /**
@@ -453,12 +474,57 @@ export function raw(style: InlineStyle): readonly [null, InlineStyle] {
   return [null, style] as const;
 }
 
-/** Deterministic keyframes name placeholder for the compiler's later extraction pass. */
+/**
+ * Define a CSS `@keyframes` animation, returning its deterministic
+ * (`kv-<slug>-<hash>`) animation-name for use in `animationName`. The compiler's
+ * StyleX extraction recognizes the `style.keyframes(...)` const, resolves this
+ * name, and emits the matching `@keyframes` block into the served CSS asset
+ * (SPEC.md §13.1); see `createKeyframes` for the engine's structured result.
+ */
 export function keyframes(frames: Keyframes): string;
 export function keyframes(frames: Keyframes, identity: StyleIdentityOptions): string;
 export function keyframes(frames: Keyframes, identity: StyleIdentityOptions = {}): string {
+  return createKeyframes(frames, identity).name;
+}
+
+/**
+ * @internal Compile a `Keyframes` object into both its deterministic
+ * animation-name and the extractable `@keyframes <name> { … }` CSS block. The
+ * declarations are normalized identically to atomic rules (property casing via
+ * `toKebabCase`, unitless-length handling via `cssLengthValue`) so a value like
+ * `transform`/`opacity`/`width: 40` serializes the same inside the keyframe as it
+ * would in a `style.create(...)` rule. Compiler integration consumes this through
+ * `@kovojs/style/internal` (SPEC.md §13.1); not part of the app-facing surface.
+ */
+export function createKeyframes(frames: Keyframes): KeyframesResult;
+export function createKeyframes(frames: Keyframes, identity: StyleIdentityOptions): KeyframesResult;
+export function createKeyframes(
+  frames: Keyframes,
+  identity: StyleIdentityOptions = {},
+): KeyframesResult {
   assertObjectInput(frames, 'style.keyframes', 'frames');
-  return `kv-${slug(identity.namespace ?? identity.source ?? 'keyframes')}-${hash(JSON.stringify(frames))}`;
+  // Hash the RAW frames object (not the emitted CSS) so the name is stable across
+  // engine serialization changes and matches the prior name-only behavior.
+  const name = `kv-${slug(identity.namespace ?? identity.source ?? 'keyframes')}-${hash(JSON.stringify(frames))}`;
+  const steps = Object.entries(frames)
+    .map(([step, declarations]) => {
+      assertObjectInput(declarations, 'style.keyframes', `frames[${JSON.stringify(step)}]`);
+      return `${step}{${keyframeDeclarations(declarations)}}`;
+    })
+    .join('');
+  return { css: `@keyframes ${name}{${steps}}`, name };
+}
+
+function keyframeDeclarations(declarations: StyleObject): string {
+  const parts: string[] = [];
+  for (const [property, value] of Object.entries(declarations)) {
+    // Keyframe steps carry only flat declarations (no pseudos/at-rules/nesting),
+    // matching CSS `@keyframes`. Skip null/undefined like atomic compilation does.
+    if (value == null || isNestedStyle(value)) continue;
+    const cssProperty = property.startsWith('--') ? property : toKebabCase(property);
+    parts.push(`${cssProperty}:${cssLengthValue(cssProperty, value)}`);
+  }
+  return parts.join(';');
 }
 
 /** Emit atomic CSS in priority layers so split files do not depend on link order. */
@@ -471,7 +537,7 @@ export function emitAtomicCss(rules: readonly AtomicRule[], options: CssEmitOpti
     byPriority.set(rule.priority, bucket);
   }
 
-  return [...byPriority.entries()]
+  const layers = [...byPriority.entries()]
     .sort(([left], [right]) => left - right)
     .map(([priority, bucket]) => {
       const body = bucket
@@ -484,8 +550,21 @@ export function emitAtomicCss(rules: readonly AtomicRule[], options: CssEmitOpti
       // keep the same cascade order (they order by first declaration, ascending
       // priority here), matching the compiler's served-CSS normalization.
       return `@layer ${layerName}-${priority}{${body}}`;
-    })
-    .join('\n');
+    });
+
+  // `@keyframes` blocks are emitted outside `@layer` (they carry no cascade
+  // priority) and deduped by name so a keyframe shared across rules is written
+  // once. They lead so the animation is defined before any rule references it.
+  const keyframeCss = dedupeKeyframes(options.keyframes ?? []);
+  return [...keyframeCss, ...layers].join('\n');
+}
+
+function dedupeKeyframes(keyframes: readonly KeyframesResult[]): string[] {
+  const byName = new Map<string, string>();
+  for (const keyframe of keyframes) {
+    if (!byName.has(keyframe.name)) byName.set(keyframe.name, keyframe.css);
+  }
+  return [...byName.values()];
 }
 
 interface CompileContext {

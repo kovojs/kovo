@@ -560,7 +560,13 @@ export function collectStateDeriveReferenceFacts(
   for (const element of jsxElements(model)) {
     for (const attribute of element.attributes) {
       if (
-        !(attribute.name === 'data-bind' || attribute.name.startsWith('data-bind:')) ||
+        !(
+          attribute.name === 'data-bind' ||
+          attribute.name.startsWith('data-bind:') ||
+          // SPEC §4.8 data-bind-prop: version the live-property stamp's derive
+          // reference identically to its data-bind:<attr> sibling.
+          attribute.name.startsWith('data-bind-prop:')
+        ) ||
         !attribute.value
       ) {
         continue;

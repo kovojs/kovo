@@ -376,6 +376,75 @@ describe('query binding helpers', () => {
     expect(input.value).toBe('');
   });
 
+  it('assigns data-bind-prop:checked/indeterminate live properties across re-renders (SPEC §4.8)', async () => {
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"checked":"indeterminate"}' });
+    // The companion SSR attribute (checked) is attribute-only; data-bind-prop owns
+    // the dirty .checked / .indeterminate properties after interaction.
+    const input = new FakeStatefulBindingElement(
+      {
+        checked: '',
+        'data-bind:checked': '/c/checkbox.client.js#Checkbox$input_checked_derive',
+        'data-bind-prop:checked': '/c/checkbox.client.js#Checkbox$input_checked_derive',
+        'data-bind-prop:indeterminate': '/c/checkbox.client.js#Checkbox$input_indeterminate_derive',
+      },
+      { checked: false, indeterminate: false, parent: host },
+    );
+    const importModule = async () => ({
+      Checkbox$input_checked_derive: {
+        run(value: unknown) {
+          return (value as { checked: unknown }).checked === true ? '' : null;
+        },
+      },
+      Checkbox$input_indeterminate_derive: {
+        run(value: unknown) {
+          return (value as { checked: unknown }).checked === 'indeterminate' ? '' : null;
+        },
+      },
+    });
+
+    // Indeterminate state: not .checked, but .indeterminate true.
+    await applyStateBindings(host, { checked: 'indeterminate' }, { importModule });
+    expect(input.checked).toBe(false);
+    expect(input.indeterminate).toBe(true);
+
+    // Checked state: .checked true, .indeterminate false.
+    await applyStateBindings(host, { checked: true }, { importModule });
+    expect(input.checked).toBe(true);
+    expect(input.indeterminate).toBe(false);
+
+    // Unchecked state: both false.
+    await applyStateBindings(host, { checked: false }, { importModule });
+    expect(input.checked).toBe(false);
+    expect(input.indeterminate).toBe(false);
+  });
+
+  it('assigns data-bind-prop:scrollTop from a state path (SPEC §4.8)', async () => {
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"scrollTop":0}' });
+    // scrollTop is not an HTML attribute, so only the property write applies.
+    const viewport = new FakeStatefulBindingElement(
+      { 'data-bind-prop:scrolltop': 'state.scrollTop' },
+      { parent: host, scrollTop: 0 },
+    );
+
+    await applyStateBindings(host, { scrollTop: 240 });
+    expect(viewport.scrollTop).toBe(240);
+
+    await applyStateBindings(host, { scrollTop: 0 });
+    expect(viewport.scrollTop).toBe(0);
+  });
+
+  it('ignores a non-allowlisted data-bind-prop suffix (KV236 wall)', async () => {
+    const host = new FakeStatefulBindingElement({ 'kovo-state': '{"x":"<b>"}' });
+    const el = new FakeStatefulBindingElement(
+      { 'data-bind-prop:innerhtml': 'state.x' },
+      { parent: host },
+    );
+    (el as unknown as Record<string, unknown>).innerHTML = 'safe';
+
+    await applyStateBindings(host, { x: '<script>alert(1)</script>' });
+    expect((el as unknown as Record<string, unknown>).innerHTML).toBe('safe');
+  });
+
   it('removes native progress value bindings without restoring determinate state', async () => {
     const host = new FakeStatefulBindingElement({ 'kovo-state': '{"value":40}' });
     const progress = new FakeStatefulBindingElement(

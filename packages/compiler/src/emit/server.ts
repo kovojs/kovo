@@ -596,6 +596,10 @@ function isGeneratedOnlyRenderAttribute(name: string): boolean {
     name === 'popovertarget' ||
     name === 'popovertargetaction' ||
     name.startsWith('data-bind:') ||
+    // SPEC §4.8 data-bind-prop: the live-property stamp is a non-attribute output
+    // (the loader assigns el[prop]); it carries no visible HTML, so the §5.2 #3
+    // render-equivalence gate treats it as generated-only like data-bind:*.
+    name.startsWith('data-bind-prop:') ||
     name.startsWith('data-p-') ||
     name.startsWith('on:')
   );

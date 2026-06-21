@@ -3,6 +3,37 @@ export function escapeAttribute(value: string): string {
 }
 
 /**
+ * SPEC.md §4.8 (data-bind-prop): closed, security-reviewed allowlist of
+ * property-authoritative attributes. When a reactive value targets one of these,
+ * the compiler emits BOTH the SSR attribute (initial paint / no-JS) and the
+ * companion `data-bind:<attr>` AND a `data-bind-prop:<prop>` stamp so the loader
+ * keeps the dirty live property (e.g. `.checked` after user interaction) in sync.
+ *
+ * This is the only set for which the property write is emitted; nothing else is
+ * eligible, and unsafe sinks (`innerHTML`/`outerHTML`/`srcdoc`/`on*`) are never
+ * here (KV236). Names are the canonical authored attribute names.
+ */
+export const PROPERTY_AUTHORITATIVE_ATTRIBUTES: ReadonlySet<string> = new Set([
+  'checked',
+  'indeterminate',
+  'value',
+  'scrollTop',
+  'scrollLeft',
+  'selected',
+  'open',
+]);
+
+/** Returns whether the attribute should additionally emit a data-bind-prop stamp. */
+export function isPropertyAuthoritativeAttribute(name: string): boolean {
+  return PROPERTY_AUTHORITATIVE_ATTRIBUTES.has(name);
+}
+
+/** The companion live-property binding attribute name for a reactive attr. */
+export function bindPropStampAttributeName(name: string): string {
+  return `data-bind-prop:${name}`;
+}
+
+/**
  * Escape a string for embedding inside a double-quoted CSS string token, e.g. the
  * value of an attribute selector `[kovo-c="…"]`. CSS string syntax — not HTML
  * attribute syntax — governs this position, so the HTML escaper `escapeAttribute`

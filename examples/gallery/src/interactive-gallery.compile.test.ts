@@ -172,10 +172,17 @@ describe('compiled interactive gallery demos', () => {
     expect(checkboxGroup).toContain("form: 'gallery-checkbox-group-form'");
     expect(checkboxGroup).toContain('<CheckboxGroupControl');
     expect(checkboxGroup).toContain('id="gallery-checkbox-group-all"');
-    expect(checkboxGroup).toContain('data-bind:indeterminate=');
-    expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$input_click');
+    // C unblock (plans/more-ui-primitives.md): the styled select-all Checkbox.
+    // data-bind-prop:checked / :indeterminate (SPEC §4.8) keep the inner input's
+    // dirty .checked / .indeterminate properties correct after interaction.
+    expect(checkboxGroup).toContain('<Checkbox ');
+    expect(checkboxGroup).toContain('data-bind-prop:checked=');
+    expect(checkboxGroup).toContain('data-bind-prop:indeterminate=');
+    expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$Checkbox_click');
+    // CheckboxGroupControl items also carry the live-property checked stamp.
     expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$CheckboxGroupControl_click');
     expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$CheckboxGroupControl_click_2');
+    expect(checkboxGroup).toContain('GalleryCheckboxGroupDemo$CheckboxGroupControl_checked_derive');
 
     expect(combobox).toContain('data-gallery-interactive="combobox"');
     expect(combobox).toContain(

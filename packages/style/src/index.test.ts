@@ -4,6 +4,7 @@ import * as publicStyle from './index.js';
 import { attrs, create, defineTheme, createTheme, defineVars, keyframes, tokens } from './index.js';
 import {
   createAtomicStyles,
+  createKeyframes,
   defineConsts,
   defineThemeFromBase,
   emitAtomicCss,
@@ -192,6 +193,61 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(spacing.buttonHeight).toBe(36);
     expect(Object.isFrozen(spacing)).toBe(true);
     expect(attrs(styles.root).class).toMatch(/^kv-style-h-[a-z0-9]+ kv-style-pad-[a-z0-9]+$/);
+  });
+
+  it('emits an extractable @keyframes block whose name matches keyframes()', () => {
+    const frames = {
+      '0%, 100%': { opacity: 1 },
+      '50%': { opacity: 0.5 },
+    };
+    const result = createKeyframes(frames, { namespace: 'skeletonPulse', source: 'skeleton.tsx' });
+
+    // The structured `name` is byte-identical to the public `keyframes(...)` name.
+    expect(result.name).toBe(
+      keyframes(frames, { namespace: 'skeletonPulse', source: 'skeleton.tsx' }),
+    );
+    expect(result.name).toMatch(/^kv-skeleton-pulse-[a-z0-9]+$/);
+    // The block names each step verbatim and serializes flat declarations.
+    expect(result.css).toBe(`@keyframes ${result.name}{0%, 100%{opacity:1}50%{opacity:0.5}}`);
+  });
+
+  it('normalizes keyframe declarations identically to atomic rules (units + casing)', () => {
+    const result = createKeyframes(
+      {
+        from: { transform: 'translateX(-100%)' },
+        to: { transform: 'translateX(100%)', width: 40 },
+      },
+      { namespace: 'slide', source: 'progress.tsx' },
+    );
+
+    // camelCase property -> kebab-case; bare-number length -> px; unitless stays bare.
+    expect(result.css).toContain('transform:translateX(-100%)');
+    expect(result.css).toContain('width:40px');
+    // Parity: a `width: 40` atomic rule appends px the same way.
+    const atomic = createAtomicStyles({ root: { width: 40 } }).styles.root.__rules ?? [];
+    expect(atomic[0]?.rule).toContain('width:40px');
+  });
+
+  it('produces a stable deterministic name from the raw frames object', () => {
+    const a = keyframes({ '0%': { opacity: 0 }, '100%': { opacity: 1 } }, { namespace: 'fade' });
+    const b = keyframes({ '0%': { opacity: 0 }, '100%': { opacity: 1 } }, { namespace: 'fade' });
+    const different = keyframes(
+      { '0%': { opacity: 1 }, '100%': { opacity: 0 } },
+      { namespace: 'fade' },
+    );
+    expect(a).toBe(b);
+    expect(a).not.toBe(different);
+  });
+
+  it('emits deduped @keyframes blocks outside any layer in emitAtomicCss', () => {
+    const pulse = createKeyframes({ '0%': { opacity: 1 } }, { namespace: 'pulse' });
+    const rules = createAtomicStyles({ root: { padding: 8 } }).styles.root.__rules ?? [];
+    const css = emitAtomicCss([...rules], { keyframes: [pulse, pulse] });
+
+    // Keyframes lead, defined once, before the atomic @layer; not wrapped in @layer.
+    expect(css.indexOf(pulse.css)).toBe(0);
+    expect(css.split(pulse.css).length - 1).toBe(1);
+    expect(css.indexOf(pulse.css)).toBeLessThan(css.indexOf('@layer kovo-style'));
   });
 
   it('generates a deterministic Material theme from one seed color', () => {

@@ -8,14 +8,27 @@ export interface SkeletonProps {
   style?: style.StyleInput;
 }
 
+// Pulse the placeholder opacity so loading state reads as "in progress". The
+// `style.keyframes` name is resolved by the StyleX extractor, which emits the
+// matching `@keyframes` block into the served CSS asset (SPEC.md §13.1).
+const pulse = style.keyframes(
+  {
+    '0%, 100%': { opacity: 1 },
+    '50%': { opacity: 0.5 },
+  },
+  { namespace: 'skeletonPulse', source: 'skeleton.tsx' },
+);
+
 export const skeletonStyles = style.create({
   root: {
     // `border` (outlineVariant) is the M3 divider tone — distinctly darker than
     // the card surface, so placeholders are clearly visible. The old
     // `backgroundMuted` (surfaceContainerHighest) blended into the near-white card
-    // and read as invisible. (A keyframe pulse isn't used: a keyframes name
-    // referenced by variable isn't statically extractable by the package-css /
-    // vendored-compile StyleX extractor — KV236 — so it is left as a follow-up.)
+    // and read as invisible.
+    animationDuration: '2s',
+    animationIterationCount: 'infinite',
+    animationName: pulse,
+    animationTimingFunction: 'cubic-bezier(0.4, 0, 0.6, 1)',
     backgroundColor: uiTheme.color.border,
     borderRadius: uiTheme.radius.md,
   },
