@@ -312,6 +312,76 @@ describe('@kovojs/test SQL verifier integration', () => {
     expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV407', 'price'));
   });
 
+  // E2 (SPEC.md §11.2 meta-soundness): the `ON CONFLICT DO UPDATE SET col=(subquery)`
+  // clause reads other tables; the harness must record those as mutation reads so a
+  // cross-domain read the touch graph omitted surfaces as KV407 instead of green.
+  it('verifies INSERT ON CONFLICT DO UPDATE subqueries as mutation reads', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.upsert': {
+          touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { prices: 'price', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql(
+      "insert into products (id, price) values ('p1', 0) " +
+        'on conflict (id) do update set price = (select amount from prices where prices.product_id = products.id)',
+    );
+
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV407', 'price'));
+  });
+
+  // E3 (SPEC.md §11.2 meta-soundness): a `RETURNING (subquery)` clause reads other
+  // tables that must be recorded as mutation reads, on every DML statement.
+  it('verifies UPDATE … RETURNING subqueries as mutation reads', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.touch': {
+          touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { prices: 'price', products: 'product' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("update products set name = 'x' returning (select amount from prices)");
+
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV407', 'price'));
+  });
+
+  it('verifies INSERT/DELETE … RETURNING subqueries as mutation reads', () => {
+    const insertVerifier = createDbVerifier(
+      {
+        'product.churn': {
+          touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { prices: 'price', products: 'product' } },
+    );
+    const insertDb = insertVerifier.wrap(createFakeDb());
+    insertDb.sql("insert into products (id) values ('p1') returning (select amount from prices)");
+    expect(() => insertVerifier.assertCovered()).toThrow(expectedDiagnostic('KV407', 'price'));
+
+    const deleteVerifier = createDbVerifier(
+      {
+        'product.churn': {
+          touches: [{ domain: 'product', keys: null, site: 'product.ts:1', via: 'products' }],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { prices: 'price', products: 'product' } },
+    );
+    const deleteDb = deleteVerifier.wrap(createFakeDb());
+    deleteDb.sql("delete from products where id = 'p1' returning (select amount from prices)");
+    expect(() => deleteVerifier.assertCovered()).toThrow(expectedDiagnostic('KV407', 'price'));
+  });
+
   it('verifies select expression subqueries as query reads', () => {
     const verifier = createDbVerifier(
       {

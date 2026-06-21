@@ -78,12 +78,15 @@ export function isSchemaValidationError(error: unknown): error is SchemaValidati
  */
 export const s = {
   array<Item>(item: Schema<Item>): Schema<Item[]> {
-    return {
+    // `parseAsync` mirrors `s.object` (SPEC §6): each item flows through
+    // `parseSchemaAsync` so a storing item schema (`s.file().store()`) runs its
+    // async `storage.put`/`normalizeStorageKey` path. Without it, the runtime's
+    // async input parse (`parseSchemaAsync`) would fall back to the sync `parse`
+    // below, which for a storing file schema fabricates a result with no upload
+    // and no key normalization (data loss + traversal-key passthrough; Part 4 M1).
+    const schema: AsyncSchema<Item[]> = {
       parse(input: unknown): Item[] {
-        const values =
-          input === undefined || input === null ? [] : Array.isArray(input) ? input : [input];
-
-        return values.map((value, index) => {
+        return arrayValues(input).map((value, index) => {
           try {
             return item.parse(value);
           } catch (error) {
@@ -91,7 +94,21 @@ export const s = {
           }
         });
       },
+      async parseAsync(input: unknown): Promise<Item[]> {
+        const output: Item[] = [];
+
+        for (const [index, value] of arrayValues(input).entries()) {
+          try {
+            output.push(await parseSchemaAsync(item, value));
+          } catch (error) {
+            throw validationErrorFrom(error, [String(index)]);
+          }
+        }
+
+        return output;
+      },
     };
+    return schema;
   },
   boolean(): Schema<boolean> {
     return {
@@ -305,28 +322,13 @@ class StoredFileSchemaImpl implements StoredFileSchema {
     this.#storageOptions = storageOptions;
   }
 
-  parse(input: unknown): StoredFileUpload {
-    const file = parseFileLike(input, this.#fileOptions);
-    const key =
-      typeof this.#storageOptions.key === 'string'
-        ? this.#storageOptions.key
-        : this.#storageOptions.key(file);
-    if (typeof key !== 'string') {
-      throw validationError('Expected synchronous storage key');
-    }
-
-    return {
-      file,
-      key,
-      storage: {
-        ...(file.type === '' ? {} : { contentType: file.type }),
-        key,
-        ...(this.#storageOptions.metadata === undefined
-          ? {}
-          : { metadata: this.#storageOptions.metadata(file) }),
-        size: file.size,
-      },
-    };
+  parse(_input: unknown): StoredFileUpload {
+    // Storing a file is inherently async: it must `await storage.put(...)` (which
+    // also runs `normalizeStorageKey`). The sync `parse` cannot do that, so it must
+    // NOT fabricate a `StoredFileUpload` (no upload, unnormalized key — Part 4 M1).
+    // Callers reach the storing path through `parseSchemaAsync`/`parseAsync`; a sync
+    // `parse` here is a programming error, so throw a non-validation Error.
+    throw new Error('s.file().store(): storing requires async parsing; call parseAsync (SPEC §6).');
   }
 
   async parseAsync(input: unknown): Promise<StoredFileUpload> {
@@ -355,6 +357,11 @@ function createFileOptions(
     ...(maxBytes === undefined ? {} : { maxBytes }),
     ...(mime === undefined ? {} : { mime }),
   };
+}
+
+function arrayValues(input: unknown): unknown[] {
+  if (input === undefined || input === null) return [];
+  return Array.isArray(input) ? input : [input];
 }
 
 function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {
@@ -397,6 +404,15 @@ function validationError(message: string, path: readonly string[] = []): SchemaV
   return new SchemaValidationError([{ message, path }]);
 }
 
+/**
+ * Re-key a caught field/item error under `pathPrefix`. Only an already-validation
+ * error is re-wrapped (to prepend the path); any other exception — e.g. a
+ * `storage.put` failure inside `s.file().store()` — is re-thrown UNCHANGED so its
+ * raw internal `.message` never gets laundered into a `SchemaValidationError` and
+ * leaked to the client through the 422 path. Such errors must reach the 500 path
+ * (Part 4 L1). Returns the wrapped validation error; callers `throw` the result,
+ * but for non-validation input this function throws before returning.
+ */
 function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): SchemaValidationError {
   if (isSchemaValidationError(error)) {
     return new SchemaValidationError(
@@ -407,7 +423,7 @@ function validationErrorFrom(error: unknown, pathPrefix: readonly string[]): Sch
     );
   }
 
-  return validationError(error instanceof Error ? error.message : String(error), pathPrefix);
+  throw error;
 }
 
 function isValidationIssue(value: unknown): value is ValidationIssue {
@@ -432,7 +448,11 @@ export async function parseSchemaAsync<T>(schema: Schema<T>, input: unknown): Pr
 export function entriesToRecord(
   entries: Iterable<readonly [string, unknown]>,
 ): Record<string, unknown> {
-  const record: Record<string, unknown> = {};
+  // `Object.create(null)` (no prototype): a `__proto__` FormData entry must be a
+  // plain data key, not the accessor that rebinds the prototype and silently drops
+  // the value; and keys like `constructor`/`toString` must not be read off the
+  // prototype chain (Part 4 SCHEMA-1/SCHEMA-2).
+  const record = Object.create(null) as Record<string, unknown>;
 
   for (const [key, value] of entries) {
     appendRecordValue(record, key, value);
@@ -442,11 +462,16 @@ export function entriesToRecord(
 }
 
 function appendRecordValue(record: Record<string, unknown>, key: string, value: unknown): void {
-  const existing = record[key];
-
-  if (existing === undefined) {
+  // Gate first-vs-repeat on own-keys only. On a null-prototype record this is also
+  // correct for inherited names, but `Object.hasOwn` keeps the intent explicit and
+  // robust if the record ever carries a prototype (SCHEMA-1/SCHEMA-2).
+  if (!Object.hasOwn(record, key)) {
     record[key] = value;
-  } else if (Array.isArray(existing)) {
+    return;
+  }
+
+  const existing = record[key];
+  if (Array.isArray(existing)) {
     existing.push(value);
   } else {
     record[key] = [existing, value];

@@ -146,6 +146,33 @@ async function existingTables(
   }
 }
 
+/**
+ * @internal Whether a wrapped db exposes an *asynchronous* raw query handle
+ * usable for the row-count net (SPEC.md §11.2 meta-soundness).
+ *
+ * The count net snapshots row counts before/after a statement across an awaited
+ * boundary, so it only applies to a real async DB seam. Synchronous test doubles
+ * (whose `query`/`exec` return values directly) cannot be count-netted and must
+ * not have count probes dispatched into them, so they are excluded here.
+ */
+export function hasTableCountHandle(target: object): boolean {
+  return isAsyncQueryHandle(rawQueryHandle(target));
+}
+
+function isAsyncQueryHandle(handle: unknown): boolean {
+  return typeof handle === 'function' && handle.constructor?.name === 'AsyncFunction';
+}
+
+function rawQueryHandle(target: object): unknown {
+  const record = target as Record<PropertyKey, unknown>;
+  const pglite = record.pglite;
+  if (typeof pglite === 'object' && pglite !== null) {
+    const query = (pglite as Record<PropertyKey, unknown>).query;
+    if (typeof query === 'function') return query;
+  }
+  return record.query;
+}
+
 function tableCountQuery(target: object): ((statement: string) => Promise<unknown>) | null {
   const record = target as Record<PropertyKey, unknown>;
   const pglite = record.pglite;

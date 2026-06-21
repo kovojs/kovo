@@ -5,6 +5,7 @@ import { mutation, s } from '@kovojs/server';
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
+import { createDbVerifier } from './verifier.js';
 
 describe('@kovojs/test PGlite harness integration', () => {
   it('runs mutation suites against an in-memory pglite database', async () => {
@@ -243,6 +244,52 @@ describe('@kovojs/test PGlite harness integration', () => {
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
         expectedDiagnostic('KV402', 'audit'),
       );
+    } finally {
+      await db.close();
+    }
+  });
+
+  // E1 (SPEC.md §11.2 meta-soundness): an uncovered TRUNCATE is a full-table
+  // destructive write. The parser emits a `truncate table` op per table, so an
+  // uncovered truncate must fail `assertCovered()` instead of passing green.
+  it('flags an uncovered TRUNCATE as an uncovered destructive write', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table products (id text primary key)');
+      await db.exec("insert into products (id) values ('p1'), ('p2')");
+
+      const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
+      const wrapped = verifier.wrap(db);
+
+      await wrapped.sql('truncate products');
+
+      expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'product'));
+    } finally {
+      await db.close();
+    }
+  });
+
+  // E1 (SPEC.md §11.2 meta-soundness): a destructive write the parser does not
+  // recognize (`DELETE … USING` throws → fail-open `[]`) must still be caught by
+  // the UNCONDITIONAL row-count backstop, not pass `assertCovered()` green.
+  it('flags an unparseable destructive write via the unconditional row-count net', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table products (id text primary key)');
+      await db.exec('create table archived (id text primary key)');
+      await db.exec("insert into products (id) values ('p1'), ('p2')");
+      await db.exec("insert into archived (id) values ('p1')");
+
+      const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
+      const wrapped = verifier.wrap(db);
+
+      // pgsql-ast-parser rejects `DELETE … USING`, so the explicit parse drops to
+      // [] (fail-open). The count delta on `products` is the only signal.
+      await wrapped.sql('delete from products using archived where products.id = archived.id');
+
+      expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'product'));
     } finally {
       await db.close();
     }

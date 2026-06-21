@@ -537,3 +537,66 @@ describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
     expect(response.headers['Set-Cookie']).toBeUndefined();
   });
 });
+
+// ─── part-4 G1: unguarded refresh-cookie document must be no-store ─────────────
+
+describe('rolling-session Set-Cookie forces no-store on unguarded GET documents (part-4 G1)', () => {
+  it('an UNGUARDED route emitting a per-principal Set-Cookie carries Cache-Control: no-store', async () => {
+    // SPEC §9.4:906 (a credentialed body that varies by identity must never be stored by a shared
+    // cache) and §9.4:767 (a document carrying session-dependent state must be no-store). The route
+    // lifecycle / sessionProvider runs on EVERY route (guarded or not) and forwards a rolling-session
+    // refresh `Set-Cookie` via `onSessionSetCookie`; app-document re-emits it (part-3 I2). Before
+    // this fix `noStore` was set ONLY when `route.guard !== undefined`, so an authenticated user
+    // loading the public unguarded `/` got a CACHEABLE response carrying their `Set-Cookie` → a
+    // shared CDN/proxy caches it and replays the session cookie to other anonymous visitors
+    // (cross-principal session-token leak / takeover).
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    expect(homeRoute.guard).toBeUndefined();
+
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider: () => ({
+        setCookies: ['better-auth.session_token=tok; Path=/; HttpOnly'],
+        value: { user: { id: 'u1' } },
+      }),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    // The refresh cookie MUST still ride the response (the lifecycle forwarding is unchanged)…
+    expect(response.headers['Set-Cookie']).toEqual([
+      'better-auth.session_token=tok; Path=/; HttpOnly',
+    ]);
+    // …and because a per-principal cookie was emitted, the document MUST be non-cacheable.
+    expect(response.headers['Cache-Control']).toBe('no-store');
+  });
+
+  it('an unguarded route with a plain-value session provider (no Set-Cookie) stays cacheable', async () => {
+    // Negative: no per-principal cookie emitted → no forced no-store. An unguarded, anonymous
+    // document remains shared-cacheable; we must not over-broadly disable caching.
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider: () => ({ user: { id: 'u1' } }),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['Set-Cookie']).toBeUndefined();
+    expect(response.headers['Cache-Control']).toBeUndefined();
+  });
+});

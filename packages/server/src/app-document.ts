@@ -98,6 +98,16 @@ export async function renderAppRouteDocumentResponse({
   // sessionProvider here (it already ran once for the guarded route).
   const sessionFingerprint = sessionFingerprintFromRequest(request);
 
+  // part-4 G1 (SPEC §9.4:906 caching contract, §9.4:767 bfcache hygiene): a response that carries a
+  // per-principal `Set-Cookie` (a rolling/refresh session token forwarded by the sessionProvider via
+  // `onSessionSetCookie` — part-3 I2) varies by identity, so it MUST never be stored by a shared
+  // CDN/proxy cache; otherwise the cached document replays one user's session cookie to other
+  // visitors (cross-principal token leak / takeover). The sessionProvider runs on every route —
+  // guarded or not (route.ts) — so an authenticated user loading an UNGUARDED route (the public `/`)
+  // also gets a refresh cookie. Force `no-store` whenever any per-principal cookie was emitted,
+  // independent of `route.guard`. (We do NOT change the cookie forwarding itself.)
+  const noStore = route.guard !== undefined || refreshSetCookies.length > 0;
+
   return withRefreshCookies(
     renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
       // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
@@ -108,7 +118,9 @@ export async function renderAppRouteDocumentResponse({
       ...(app.document.template === undefined ? {} : { template: app.document.template }),
       // bugs-1 F34: a guarded route renders session-dependent content; mark its
       // document no-store so a Back/bfcache restore can't show it after logout.
-      ...(route.guard === undefined ? {} : { noStore: true }),
+      // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
+      // response on an unguarded route (cross-principal shared-cache leak).
+      ...(noStore ? { noStore: true } : {}),
       // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
       // cross-principal BroadcastChannel discard (SPEC §9.3).
       ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),

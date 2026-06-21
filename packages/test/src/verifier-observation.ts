@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import {
+  hasTableCountHandle,
   observeSqlEngineSideEffects,
   observeSqlStatementArgument,
   sqlStatementText,
@@ -110,10 +111,24 @@ export function observableSqlMethod(
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
     const explicitOperations = observeSqlStatementArgument(statement, config, recorder);
-    const hasWrite = explicitOperations.some((operation) => operation.kind === 'write');
-    if (!hasWrite) return value.call(target, statement, ...args);
+
+    // SPEC.md §11.2 meta-soundness (E1): the row-count backstop must be
+    // UNCONDITIONAL. Gating it behind a parsed write let unrecognized
+    // destructive writes (`TRUNCATE`/`MERGE`/`DELETE…USING`) that parse to no
+    // ops — and statements the parser rejects (fail-open `[]`) — slip past
+    // `assertCovered()` green. Always snapshot/compare configured table counts
+    // so any row delta the explicit parse missed is still recorded as a write.
+    //
+    // The count net only applies to the real async DB seam (a db exposing an
+    // asynchronous raw count query handle). When none is reachable — including
+    // every synchronous test double — run the call straight through so adapter
+    // results pass through unwrapped (SPEC.md §11.4): a synchronous db cannot be
+    // count-netted across the awaited before/after snapshot boundary.
+    if (!hasTableCountHandle(target)) return value.call(target, statement, ...args);
 
     const sql = sqlStatementText(statement);
+    // Snapshot before-counts fully (so the count queries are dispatched and
+    // executed before the mutating call), then run the statement and compare.
     const before = tableCounts(target, Object.keys(config.domainByTable));
     return Promise.resolve(before).then((counts) => {
       if (counts.size === 0) return value.call(target, statement, ...args);

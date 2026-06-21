@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
+import type { StorageCapability } from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
-import { s } from './schema.js';
+import { entriesToRecord, parseSchemaAsync, s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server schemas', () => {
@@ -264,6 +265,110 @@ describe('server schemas', () => {
       ok: false,
       status: 422,
     });
+  });
+
+  // M1: `s.array(s.file().store())` MUST run the async storing path for every item.
+  // Before the fix `s.array` had no `parseAsync`, so `parseSchemaAsync` fell back to the
+  // sync `parse`, which fabricated a `StoredFileUpload` without ever calling `storage.put`
+  // (data loss) and without `normalizeStorageKey` (traversal-key passthrough).
+  it('stores every item of an s.array(s.file().store()) and rejects traversal keys', async () => {
+    const memory = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
+    const put = vi.fn<StorageCapability['put']>((key, body, options) =>
+      memory.put(key, body, options),
+    );
+    const storage: StorageCapability = { ...memory, put };
+
+    const schema = s.object({
+      photos: s.array(
+        s.file().store({
+          key: (file) => `gallery/${file.name}`,
+          storage,
+        }),
+      ),
+    });
+    const form = new FormData();
+    form.append('photos', formDataFile(['one'], 'one.png', 'image/png'));
+    form.append('photos', formDataFile(['evil'], '../../etc/evil.png', 'image/png'));
+
+    // The traversal key reaches `storage.put`, where `normalizeStorageKey` rejects it.
+    await expect(parseSchemaAsync(schema, form)).rejects.toThrow(/parent path segments/u);
+
+    // `storage.put` was attempted once per file (was 0 before the fix — sync path skipped it).
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(put.mock.calls[0]?.[0]).toBe('gallery/one.png');
+    expect(put.mock.calls[1]?.[0]).toBe('gallery/../../etc/evil.png');
+
+    // The valid file actually landed in storage; the traversal file did not.
+    await expect(memory.get('gallery/one.png')).resolves.toMatchObject({ key: 'gallery/one.png' });
+  });
+
+  // M1: the sync `parse` of a storing file schema must refuse to fabricate a result.
+  it('refuses to store a file through the synchronous parse path', () => {
+    const storing = s.file().store({ key: 'gallery/photo.png', storage: createMemoryStorage() });
+
+    expect(() => storing.parse(formDataFile(['x'], 'photo.png', 'image/png'))).toThrow(
+      /storing requires async parsing/u,
+    );
+  });
+
+  // L1: a non-validation error thrown inside a field schema (e.g. a storage failure) must
+  // NOT be wrapped into a SchemaValidationError — otherwise its raw `.message` leaks to the
+  // client through the 422. It must re-throw unchanged so the caller routes it to the 500 path.
+  it('re-throws non-validation field errors instead of leaking them as a 422', async () => {
+    const leaky: ReturnType<typeof s.string> = {
+      parse() {
+        throw new Error('SECRET endpoint https://internal.example/keys leaked');
+      },
+    };
+    const schema = s.object({ token: leaky });
+
+    await expect(parseSchemaAsync(schema, { token: 'valid' })).rejects.toThrow(
+      'SECRET endpoint https://internal.example/keys leaked',
+    );
+    await expect(parseSchemaAsync(schema, { token: 'valid' })).rejects.not.toMatchObject({
+      name: 'SchemaValidationError',
+    });
+
+    // End-to-end: runMutation routes the leaked error to the 500 path, not a 422 payload.
+    const reveal = mutation('secrets/reveal', {
+      input: schema,
+      handler: (input) => input,
+    });
+    await expect(runMutation(reveal, { token: 'valid' }, {})).rejects.toThrow(
+      'SECRET endpoint https://internal.example/keys leaked',
+    );
+  });
+
+  // SCHEMA-1 / SCHEMA-2: the FormData→record map must not read/write through the prototype.
+  // `__proto__` keys must not rebind the record's prototype, and keys like `constructor` must
+  // not be misclassified as repeats (becoming `[<fn>, value]` arrays). Normal fields still parse.
+  it('builds the FormData record with a null prototype and own-key gating', () => {
+    const record = entriesToRecord([
+      ['__proto__', 'attacker-a'],
+      ['__proto__', 'attacker-b'],
+      ['title', 'hello'],
+    ]);
+
+    expect(Object.getPrototypeOf(record)).toBeNull();
+    expect(record.title).toBe('hello');
+    // The repeated __proto__ entries are stored as an own-property array, never the
+    // prototype-rebinding setter, and never the attacker array contaminating other keys.
+    expect(Object.hasOwn(record, '__proto__')).toBe(true);
+    expect(record['__proto__']).toEqual(['attacker-a', 'attacker-b']);
+    expect(record.constructor).toBe(undefined);
+    expect(record.toString).toBe(undefined);
+  });
+
+  it('does not misclassify prototype-chain keys as repeated FormData fields', () => {
+    const record = entriesToRecord([
+      ['constructor', 'first'],
+      ['toString', 'only'],
+    ]);
+
+    // Before the fix `record['constructor']` read the inherited function, so the first
+    // append took the array branch and produced `[<fn>, 'first']`.
+    expect(record.constructor).toBe('first');
+    expect(record.toString).toBe('only');
   });
 });
 

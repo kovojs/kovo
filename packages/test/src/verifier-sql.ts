@@ -7,6 +7,7 @@ import {
   type QName,
   type SelectStatement,
   type Statement,
+  type TruncateTableStatement,
   type UpdateStatement,
   type WithRecursiveStatement,
   type WithStatement,
@@ -44,6 +45,8 @@ function operationsForStatement(
       return operationsForUpdate(statement, cteAliases);
     case 'delete':
       return operationsForDelete(statement, cteAliases);
+    case 'truncate table':
+      return operationsForTruncate(statement);
     default:
       return [];
   }
@@ -88,6 +91,12 @@ function operationsForInsert(
       table: tableName(statement.into),
     },
     ...markMutationReads(operationsForSelect(statement.insert, cteAliases)),
+    // KV407 soundness: `ON CONFLICT DO UPDATE SET col=(subquery)` and
+    // `RETURNING (subquery)` read other tables; without walking them a
+    // cross-domain read hides from coverage (SPEC.md §11.2).
+    ...markMutationReads(
+      operationsForNestedStatements([statement.onConflict, statement.returning], cteAliases),
+    ),
   ];
 }
 
@@ -102,7 +111,11 @@ function operationsForUpdate(
       operationsForFrom(statement.from ? [statement.from] : [], rowKey, cteAliases),
     ),
     ...markMutationReads(
-      operationsForNestedStatements([statement.sets, statement.where], cteAliases),
+      operationsForNestedStatements(
+        // KV407 soundness: `RETURNING (subquery)` reads other tables (SPEC.md §11.2).
+        [statement.sets, statement.where, statement.returning],
+        cteAliases,
+      ),
     ),
   ];
 }
@@ -118,8 +131,23 @@ function operationsForDelete(
       rowKey: rowKeyFromWhere(statement.where),
       table: tableName(statement.from),
     },
-    ...markMutationReads(operationsForNestedStatements([statement.where], cteAliases)),
+    // KV407 soundness: `RETURNING (subquery)` reads other tables (SPEC.md §11.2).
+    ...markMutationReads(
+      operationsForNestedStatements([statement.where, statement.returning], cteAliases),
+    ),
   ];
+}
+
+function operationsForTruncate(statement: TruncateTableStatement): ParsedSqlOperation[] {
+  // SPEC.md §11.2 meta-soundness: TRUNCATE is a destructive write per named
+  // table. Without an explicit write op an uncovered `truncate products` would
+  // parse to zero ops and pass `assertCovered()` green (E1).
+  return statement.tables.map((table) => ({
+    kind: 'write' as const,
+    mutationRead: undefined,
+    rowKey: undefined,
+    table: tableName(table),
+  }));
 }
 
 function operationsForWith(
