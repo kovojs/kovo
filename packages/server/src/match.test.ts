@@ -83,6 +83,57 @@ describe('server route matching', () => {
     });
   });
 
+  // F1 (bugs-part3 L2-route-matcher-1): an internal `//` run must not survive
+  // normalization, or an empty interior segment silently matches a param and changes
+  // the matched route arity (`/files//etc` → `/files/:a/:b` with `a=''`).
+  it('collapses internal slash runs so an empty segment cannot match a param (F1)', () => {
+    expect(normalizePathname('/a//b').pathname).toBe('/a/b');
+    expect(normalizePathname('/files//etc')).toEqual({
+      inputPathname: '/files//etc',
+      pathname: '/files/etc',
+      redirect: { pathname: '/files/etc', status: 308 },
+      trailingSlash: 'canonical',
+    });
+    expect(normalizePathname('/orders//items').pathname).toBe('/orders/items');
+    // Backslash runs collapse too (no smuggle via `/orders/\items`).
+    expect(normalizePathname('/a/\\/b').pathname).toBe('/a/b');
+
+    const files = route('/files/:a/:b', {});
+    // The empty middle segment must NOT produce a match with `a=''`; the canonical
+    // form `/files/etc` has only one interior segment so the two-param route no
+    // longer matches it.
+    expect(matchRoute([files], '/files//etc')).toBeUndefined();
+
+    // A two-non-empty-segment request still matches and round-trips.
+    expect(matchRoute([files], '/files/x/y')?.params).toEqual({ a: 'x', b: 'y' });
+  });
+
+  // L2-route-matcher-2 (bugs-part3): decoded `.`/`..` must never be delivered as a
+  // literal param value (a traversal primitive). Aligns with the static-export check
+  // (static-export-route-plan.ts) which already rejects decoded `.`/`..` segments.
+  it('removes dot-segments and rejects decoded `.`/`..` param values (L2-route-matcher-2)', () => {
+    const file = route('/files/:name', {});
+
+    // Literal dot-segments are removed during normalization (RFC-3986 §5.2.4).
+    expect(normalizePathname('/files/../etc').pathname).toBe('/etc');
+    expect(normalizePathname('/files/./etc').pathname).toBe('/files/etc');
+    // A trailing `..` cannot escape above root.
+    expect(normalizePathname('/a/b/..').pathname).toBe('/a');
+    expect(normalizePathname('/..').pathname).toBe('/');
+
+    // A bare `/files/..` no longer matches `/files/:name` as `{name:'..'}`.
+    expect(matchRoute([file], '/files/..')).toBeUndefined();
+    expect(matchRoute([file], '/files/.')).toBeUndefined();
+
+    // Percent-encoded `%2e%2e` decodes to `..` only at the param layer; it must also
+    // be a no-match rather than a literal `..` param value.
+    expect(matchRoute([file], '/files/%2e%2e')).toBeUndefined();
+    expect(matchRoute([file], '/files/%2e')).toBeUndefined();
+
+    // A normal filename still round-trips.
+    expect(matchRoute([file], '/files/readme.md')?.params).toEqual({ name: 'readme.md' });
+  });
+
   it('reports KV228 ambiguities when two route patterns can match one pathname', () => {
     expect(
       findRouteAmbiguities([

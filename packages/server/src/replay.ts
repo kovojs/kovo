@@ -49,6 +49,19 @@ export interface MutationReplayContext<
 
 export interface MutationReplayStoreOptions {
   maxEntries?: number;
+  /**
+   * E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): a separate
+   * bound on concurrent *in-flight pending* reservations, independent of `maxEntries`.
+   * Part-2 A6 (SPEC §10.3:1063/1065) correctly stopped EVICTING pending slots to avoid
+   * the M4 double-execute hazard, but that left pending reservations free to bypass
+   * `maxEntries` and linger for the full `ttlMs` — an authenticated attacker firing many
+   * concurrent slow mutations with client-chosen `Kovo-Idem` values could accumulate
+   * unbounded pending records. When the number of pending reservations is at this cap,
+   * `reserve()` REFUSES a new reservation (returns `undefined`, so the request runs
+   * unprotected) rather than EVICTING an existing pending slot (which would re-open A6/M4).
+   * Defaults to `maxEntries` so the documented A6 maxEntries-pressure behavior is unchanged.
+   */
+  maxPending?: number;
   ttlMs?: number;
 }
 
@@ -67,8 +80,30 @@ export function createMemoryMutationReplayStore<
   Response extends MutationReplayResponse = MutationReplayResponse,
 >(options: MutationReplayStoreOptions = {}): MutationReplayStore<Response> {
   const maxEntries = options.maxEntries ?? 1_000;
+  // E4 (SPEC §9.1:1073/§9.5:914): bound in-flight pending reservations independently of
+  // `maxEntries` to cap peak memory under a concurrent-flood DoS. The default is a generous
+  // absolute bound (`max(maxEntries, 256)`) rather than `maxEntries` itself, so it never
+  // throttles legitimate concurrency under a deliberately tiny `maxEntries` (e.g. the A6
+  // maxEntries-pressure scenario, where several pending records must coexist under
+  // `maxEntries:2`) while still bounding the default-config peak to `maxEntries` (1000).
+  const maxPending = options.maxPending ?? Math.max(maxEntries, 256);
   const ttlMs = options.ttlMs ?? 5 * 60_000;
   const responses = new Map<string, MutationReplayRecord<Response>>();
+
+  // E4: number of in-flight pending reservations currently held in `responses`. Kept in
+  // sync with every path that adds (reserve), removes (abort/commit/set-overwrite), or
+  // expires (evictExpiredPending) a pending record, so the `maxPending` refusal below is
+  // O(1) rather than re-scanning the map on every reserve.
+  let pendingCount = 0;
+  function evictExpired(): void {
+    const now = Date.now();
+    for (const [key, record] of responses) {
+      if (record.expiresAt <= now) {
+        if ('pending' in record) pendingCount -= 1;
+        responses.delete(key);
+      }
+    }
+  }
 
   return {
     get(scope, idem) {
@@ -76,6 +111,7 @@ export function createMemoryMutationReplayStore<
       const record = responses.get(key);
       if (!record) return undefined;
       if (record.expiresAt <= Date.now()) {
+        if ('pending' in record) pendingCount -= 1;
         responses.delete(key);
         return undefined;
       }
@@ -87,9 +123,15 @@ export function createMemoryMutationReplayStore<
       return cloneMutationReplayResponse(record.response);
     },
     reserve(scope, idem) {
-      evictExpiredMutationReplays(responses);
+      evictExpired();
       const key = mutationReplayKey(scope, idem);
       if (responses.has(key)) return undefined;
+
+      // E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): when pending
+      // reservations are at `maxPending`, REFUSE a new one (return undefined → caller runs
+      // unprotected) rather than allocating without bound. Must REFUSE, never EVICT a
+      // pending slot — evicting one re-opens the part-2 A6/M4 double-execute hazard.
+      if (pendingCount >= maxPending) return undefined;
 
       // A6 (SPEC §10.3:1063/1065): only evict committed/expired records, never
       // in-flight pending reservations (evicting a pending slot re-opens the M4
@@ -118,17 +160,25 @@ export function createMemoryMutationReplayStore<
         resolve: resolvePending,
       };
       responses.set(key, record);
+      pendingCount += 1;
 
       return {
         abort() {
           // Security finding M4: release the pending record so a corrected retry
           // can run, and reject the pending promise so concurrent duplicates that
           // raced onto this reservation fall back to running themselves.
-          if (responses.get(key) === record) responses.delete(key);
+          if (responses.get(key) === record) {
+            responses.delete(key);
+            pendingCount -= 1;
+          }
           rejectPending(new MutationReplayAbortedError());
         },
         commit(response) {
           const cloned = cloneMutationReplayResponse(response);
+          // Commit replaces the pending record with a committed one. Decrement only if
+          // this reservation's pending record is still the one in the map (an abort or
+          // set-overwrite may have already removed/replaced it).
+          if (responses.get(key) === record) pendingCount -= 1;
           responses.set(key, {
             expiresAt: Date.now() + ttlMs,
             response: cloned,
@@ -138,15 +188,19 @@ export function createMemoryMutationReplayStore<
       };
     },
     set(scope, idem, response) {
-      evictExpiredMutationReplays(responses);
+      evictExpired();
       const key = mutationReplayKey(scope, idem);
       const existing = responses.get(key);
       while (!existing && responses.size >= maxEntries) {
         const oldest = responses.keys().next().value;
         if (oldest === undefined) break;
+        const oldestRecord = responses.get(oldest);
+        if (oldestRecord && 'pending' in oldestRecord) pendingCount -= 1;
         responses.delete(oldest);
       }
 
+      // Overwriting an existing pending record with a committed one releases its pending slot.
+      if (existing && 'pending' in existing) pendingCount -= 1;
       const cloned = cloneMutationReplayResponse(response);
       responses.set(key, {
         expiresAt: Date.now() + ttlMs,
@@ -314,15 +368,6 @@ function mutationReplayScope<Request>(
 
 function mutationReplayKey(scope: string, idem: string): string {
   return `${scope}\0${idem}`;
-}
-
-function evictExpiredMutationReplays<Response extends MutationReplayResponse>(
-  responses: Map<string, MutationReplayRecord<Response>>,
-): void {
-  const now = Date.now();
-  for (const [key, record] of responses) {
-    if (record.expiresAt <= now) responses.delete(key);
-  }
 }
 
 function cloneMutationReplayResponse<Response extends MutationReplayResponse>(

@@ -212,12 +212,18 @@ export function comboboxOptionAttributes(
 ): ComboboxPrimitiveAttributes {
   const disabled = comboboxOptionDisabled(options, options.itemValue);
   const selected = comboboxOptionSelected(options);
+  // J2 (SPEC.md §4.6): resolve a stable option id so the synthesized
+  // aria-activedescendant always references a rendered option. Honor an explicit
+  // id, then the item's own id, then auto-generate `<listboxId>-option-<i>` against
+  // the *filtered* render order — the exact id comboboxActiveDescendant falls back
+  // to. Mirrors command.ts (commandItemId + the filtered-index fallback).
+  const id = comboboxOptionId(options, options.itemValue);
 
   return Object.freeze({
     ...comboboxOptionDataAttributes(options),
     'aria-selected': String(selected),
     role: 'option',
-    ...(options.id === undefined ? {} : { id: options.id }),
+    ...(id === undefined ? {} : { id }),
     ...(disabled ? { 'aria-disabled': 'true' } : {}),
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
     value: options.itemValue,
@@ -497,13 +503,45 @@ function comboboxValueDisabled(state: ComboboxState, value: string | undefined):
 function comboboxActiveDescendant(options: ComboboxInputAttributeOptions): string | undefined {
   if (options.highlightedValue === undefined) return undefined;
 
-  const itemId = options.items?.find((item) => item.value === options.highlightedValue)?.id;
+  const itemId = comboboxItemId(options, options.highlightedValue);
   if (itemId !== undefined) return itemId;
 
-  const index = options.items?.findIndex((item) => item.value === options.highlightedValue) ?? -1;
-  if (index < 0) return undefined;
+  // J2 (SPEC.md §4.6): index against the *filtered* render order (the options the
+  // listbox actually renders, comboboxFilteredItems), not the full item list, so the
+  // synthesized id matches the rendered option's auto-generated id after filtering.
+  return comboboxFallbackOptionId(options, options.highlightedValue);
+}
 
-  return `${options.listboxId ?? options.id ?? 'combobox'}-option-${index}`;
+function comboboxItemId(state: ComboboxState, value: string): string | undefined {
+  return state.items?.find((item) => item.value === value)?.id;
+}
+
+function comboboxOptionId(
+  options: ComboboxOptionAttributeOptions,
+  value: string,
+): string | undefined {
+  if (options.id !== undefined) return options.id;
+  const itemId = comboboxItemId(options, value);
+  if (itemId !== undefined) return itemId;
+  return comboboxFallbackOptionId(options, value);
+}
+
+function comboboxFallbackOptionId(
+  state: ComboboxState & { id?: string },
+  value: string,
+): string | undefined {
+  // J2 (SPEC.md §4.6): index against the *filtered* render order so the synthesized
+  // id matches the rendered option's position after typing. Mirrors command.ts:649.
+  // If the value is not in the filtered set (e.g. an app that renders the unfiltered
+  // list), fall back to the full-list index so the IDREF still resolves to that
+  // option rather than vanishing.
+  const filteredIndex = comboboxFilteredItems(state).findIndex((item) => item.value === value);
+  const index =
+    filteredIndex >= 0
+      ? filteredIndex
+      : (state.items?.findIndex((item) => item.value === value) ?? -1);
+  if (index < 0) return undefined;
+  return `${state.listboxId ?? state.id ?? 'combobox'}-option-${index}`;
 }
 
 function comboboxDescribedBy(options: {

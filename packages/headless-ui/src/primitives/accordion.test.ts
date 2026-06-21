@@ -249,4 +249,44 @@ describe('headless-ui accordion primitive', () => {
       accordionKeyDown(Object.assign(new Event('keydown'), { key: 'Enter' }), {}),
     ).toBeUndefined();
   });
+
+  // SPEC.md §4.6 + rules/accessibility-conformance.md (WAI-ARIA APG): a default
+  // (vertical) accordion must navigate headers with Up/Down only. Off-axis arrows
+  // must be ignored so the browser's caret/horizontal scroll keeps working. J1:
+  // keyboard nav previously fell back to 'both' despite the vertical default.
+  it('ignores off-axis arrows on a default (vertical) accordion while honoring on-axis arrows', () => {
+    const offAxisEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'ArrowRight',
+    });
+    const offAxisResult = accordionKeyDown(offAxisEvent, {
+      items: [{ value: 'shipping' }, { value: 'billing' }],
+      value: 'shipping',
+    });
+
+    expect(offAxisResult).toBeUndefined();
+    expect(offAxisEvent.defaultPrevented).toBe(false);
+
+    const onAxisEvent = Object.assign(new Event('keydown', { cancelable: true }), {
+      key: 'ArrowDown',
+    });
+    const onAxisResult = accordionKeyDown(onAxisEvent, {
+      items: [{ value: 'shipping' }, { value: 'billing' }],
+      value: 'shipping',
+    });
+
+    expect(onAxisResult).toEqual({ index: 1, value: 'billing' });
+    expect(onAxisEvent.defaultPrevented).toBe(true);
+  });
+
+  // J3: an intended-multiple accordion that omits `type` and starts with no open
+  // panels (value: undefined) must stay multiple across toggles. Previously the
+  // multiplicity was re-derived from the runtime value shape, so the empty start
+  // collapsed to single and the second toggle replaced the first.
+  it('keeps a type-omitted accordion multiple when it starts empty so toggles accumulate', () => {
+    const first = toggleAccordionItem({ value: undefined }, 'one', 'programmatic');
+    expect(first).toMatchObject({ changed: true, value: ['one'] });
+
+    const second = toggleAccordionItem({ value: first.value }, 'two', 'programmatic');
+    expect(second).toMatchObject({ changed: true, value: ['one', 'two'] });
+  });
 });

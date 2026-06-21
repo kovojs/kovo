@@ -8,14 +8,23 @@ export interface StoragePutOptions {
   metadata?: Readonly<Record<string, string>>;
 }
 
-/** Descriptive information about a stored object: its key, size, and optional content type, etag, modified time, and metadata. */
+/**
+ * Descriptive information about a stored object: its key and optional size, content type, etag,
+ * modified time, and metadata.
+ *
+ * `size` is the object's byte length when known. It is `undefined` only when a backend genuinely
+ * cannot report it (e.g. an S3-compatible client that omits `contentLength` on a head/stream, where
+ * no body is materialized); the framework never fabricates `size: 0` for a non-empty object so that
+ * the memory, filesystem, and S3 adapters agree on observable info (SPEC §12/§13 parity; Part 3 bug
+ * L2-storage-3). Memory and filesystem always know the length, so `size` is always present there.
+ */
 export interface StorageObjectInfo {
   contentType?: string;
   etag?: string;
   key: string;
   lastModified?: Date;
   metadata?: Readonly<Record<string, string>>;
-  size: number;
+  size?: number;
 }
 
 /** Result of writing an object: the stored object's descriptive information. */
@@ -49,11 +58,20 @@ export interface MemoryStorageOptions {
   now?: () => Date;
 }
 
-/** @internal Input to an S3-compatible put-object call: target bucket and key, the body, and optional content type and metadata. */
+/**
+ * @internal Input to an S3-compatible put-object call: target bucket and key, the body, and optional
+ * content type, caller-supplied etag, and metadata.
+ *
+ * `etag` is the caller-provided etag from `StoragePutOptions`. SPEC §12/§13 cross-backend parity
+ * (Part 3 bug L2): memory and filesystem honor a caller etag, so a conforming S3-compatible client
+ * SHOULD persist this value (e.g. as object user-metadata) and echo it back as `metadata.etag` on
+ * subsequent get/head, so the same input yields the same observable etag on every backend.
+ */
 export interface S3CompatiblePutObjectInput {
   body: StorageBody;
   bucket: string;
   contentType?: string;
+  etag?: string;
   key: string;
   metadata?: Readonly<Record<string, string>>;
 }
@@ -113,7 +131,7 @@ interface FileSystemMetadataRecord {
   etag?: string;
   lastModified: string;
   metadata?: Readonly<Record<string, string>>;
-  size: number;
+  size?: number;
 }
 
 const textEncoder = new TextEncoder();
@@ -268,10 +286,14 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
         key: s3ObjectKey(prefix, normalizedKey),
         body,
         ...(putOptions.contentType === undefined ? {} : { contentType: putOptions.contentType }),
+        // Forward the caller etag so a conforming client can persist + echo it (Part 3 bug L2 parity).
+        ...(putOptions.etag === undefined ? {} : { etag: putOptions.etag }),
         ...(putOptions.metadata === undefined ? {} : { metadata: putOptions.metadata }),
       });
 
-      return s3ObjectInfo(normalizedKey, output, output.size ?? size ?? 0, putOptions.etag);
+      // `size` (the materialized body length) is the out-of-band fallback; `s3ObjectInfo` prefers the
+      // client's `contentLength`. Caller etag is honored uniformly (Part 3 bug L2).
+      return s3ObjectInfo(normalizedKey, output, output.size ?? size, putOptions.etag);
     },
     async stat(key) {
       const normalizedKey = normalizeStorageKey(key);
@@ -279,7 +301,9 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
         bucket: options.bucket,
         key: s3ObjectKey(prefix, normalizedKey),
       });
-      return output === undefined ? undefined : s3ObjectInfo(normalizedKey, output, 0);
+      // No body is materialized on a head, so size is whatever the client reports; never fabricate 0
+      // for a content-length-blind client (Part 3 bug L2-storage-3).
+      return output === undefined ? undefined : s3ObjectInfo(normalizedKey, output, undefined);
     },
     async stream(key) {
       const normalizedKey = normalizeStorageKey(key);
@@ -290,7 +314,9 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       if (output === undefined) return undefined;
 
       return {
-        ...s3ObjectInfo(normalizedKey, output, 0),
+        // Streaming does not pre-buffer the body, so size is the client-reported length or unknown
+        // (undefined) — never a fabricated 0 (Part 3 bug L2-storage-3).
+        ...s3ObjectInfo(normalizedKey, output, undefined),
         body: storageBodyToReadableStream(output.body),
       };
     },
@@ -313,6 +339,18 @@ export function normalizeStorageKey(key: string): string {
   const parts = key.split('/');
   if (parts.some((part) => part.length === 0 || part === '.' || part === '..')) {
     throw new Error('Storage key must not contain empty, current, or parent path segments.');
+  }
+
+  // SPEC §12/§13 cross-backend parity: the filesystem adapter persists each object's metadata in a
+  // sidecar at `<blob>.kovo-storage.json` (see `metadataFilePath`). A user key whose FINAL segment
+  // ends with that suffix would alias another object's sidecar — letting an attacker overwrite a
+  // victim's metadata (contentType/etag spoofing) or read it back as a body (metadata disclosure).
+  // Memory and S3 have no sidecar, so the keys would silently coexist there; the adapters would then
+  // disagree on whether the keys can exist. Reject the reserved suffix here so the rule is uniform
+  // across all three adapters regardless of backend (Part 3 bug L1).
+  const finalSegment = parts[parts.length - 1] ?? '';
+  if (finalSegment.toLowerCase().endsWith(sidecarSuffix.toLowerCase())) {
+    throw new Error(`Storage key must not end with the reserved suffix "${sidecarSuffix}".`);
   }
 
   return parts.join('/');
@@ -375,7 +413,7 @@ function objectInfo(
 function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
   return {
     lastModified: info.lastModified?.toISOString() ?? new Date().toISOString(),
-    size: info.size,
+    ...(info.size === undefined ? {} : { size: info.size }),
     ...(info.contentType === undefined ? {} : { contentType: info.contentType }),
     ...(info.etag === undefined ? {} : { etag: info.etag }),
     ...(info.metadata === undefined ? {} : { metadata: info.metadata }),
@@ -490,21 +528,32 @@ function s3ObjectKey(prefix: string | undefined, key: string): string {
   return prefix === undefined || prefix.length === 0 ? key : `${prefix}/${key}`;
 }
 
+/**
+ * @internal Project an S3-compatible client's metadata onto `StorageObjectInfo`.
+ *
+ * SPEC §12/§13 cross-backend parity (Part 3 bugs L2 / L2-storage-3):
+ * - `callerEtag` (the `options.etag` a caller passed to `put`) is honored UNIFORMLY across all three
+ *   adapters: when provided it OVERRIDES the server-assigned `metadata.etag`, matching memory/FS
+ *   (`objectInfo` at `:368-370`). Real S3 clients always return a server etag, so without this the
+ *   caller etag would be silently discarded only on the production backend.
+ * - `fallbackSize` is the size resolved out-of-band (a materialized body length, etc.) or `undefined`
+ *   when genuinely unknown. The adapter never fabricates `size: 0`: if neither the client's
+ *   `contentLength` nor a known fallback is available, `size` is left `undefined` rather than
+ *   misreporting a non-empty object as empty.
+ */
 function s3ObjectInfo(
   key: string,
   metadata: S3CompatibleObjectMetadata,
-  fallbackSize: number,
-  fallbackEtag?: string,
+  fallbackSize: number | undefined,
+  callerEtag?: string,
 ): StorageObjectInfo {
+  const size = metadata.contentLength ?? fallbackSize;
+  const etag = callerEtag ?? metadata.etag;
   return {
     key,
-    size: metadata.contentLength ?? fallbackSize,
+    ...(size === undefined ? {} : { size }),
     ...(metadata.contentType === undefined ? {} : { contentType: metadata.contentType }),
-    ...(metadata.etag === undefined
-      ? fallbackEtag === undefined
-        ? {}
-        : { etag: fallbackEtag }
-      : { etag: metadata.etag }),
+    ...(etag === undefined ? {} : { etag }),
     ...(metadata.lastModified === undefined
       ? {}
       : { lastModified: new Date(metadata.lastModified) }),

@@ -40,15 +40,46 @@ export interface BetterAuthGetSessionOptions {
 }
 
 /**
+ * part-3 I2: options for a `getSession` call that also returns the response `Headers`.
+ * Better Auth writes fresh session-refresh / cookie-cache `Set-Cookie` headers there
+ * (on `updateAge`/`cookieCache`); the adapter forwards them so rolling sessions extend
+ * (SPEC.md §6.5, §9.1.1:854).
+ */
+export interface BetterAuthGetSessionWithHeadersOptions extends BetterAuthGetSessionOptions {
+  returnHeaders: true;
+}
+
+/**
+ * The `{ response, headers }` pair Better Auth returns from `getSession` when called with
+ * `returnHeaders: true`: `response` is the session payload (or null/undefined) and `headers`
+ * carries any refresh `Set-Cookie` the call wrote (part-3 I2).
+ */
+export interface BetterAuthGetSessionWithHeadersResult<Session, User> {
+  headers: Headers;
+  response: BetterAuthSessionPayload<Session, User> | null | undefined;
+}
+
+/**
  * The subset of the Better Auth server `api` the session provider depends on: a
- * `getSession` method returning a `BetterAuthSessionPayload` (or null/undefined
- * when unauthenticated). Structurally satisfied by a real Better Auth instance.
+ * `getSession` method. part-3 I2: the adapter calls it with `returnHeaders: true` so it
+ * CAN forward session-refresh `Set-Cookie` headers when the instance honors that option
+ * and returns the `{ response, headers }` envelope. The consumed signature stays
+ * BACKWARD-COMPATIBLE — it also admits an instance whose `getSession` ignores
+ * `returnHeaders` and returns the bare session payload (as the example apps and a
+ * non-overloaded instance do). The provider detects the shape at runtime
+ * ({@link betterAuthSession}); a real overloaded Better Auth instance satisfies it too.
  */
 export interface BetterAuthApi<Session, User> {
   getSession(
-    options: BetterAuthGetSessionOptions,
+    options: BetterAuthGetSessionWithHeadersOptions,
   ):
-    | Promise<BetterAuthSessionPayload<Session, User> | null | undefined>
+    | Promise<
+        | BetterAuthGetSessionWithHeadersResult<Session, User>
+        | BetterAuthSessionPayload<Session, User>
+        | null
+        | undefined
+      >
+    | BetterAuthGetSessionWithHeadersResult<Session, User>
     | BetterAuthSessionPayload<Session, User>
     | null
     | undefined;
@@ -1101,8 +1132,22 @@ function parseSetCookieHeader(
         }
         break;
       }
+      // part-3 I1 (SPEC §9.1.1:856): `Partitioned` (CHIPS) is correctness-critical for
+      // cross-site login — dropping it makes Chrome refuse/segregate the re-emitted cookie
+      // so the session never sticks. Map it (and `Priority`) through the typed builder
+      // instead of silently discarding the attribute.
+      case 'partitioned':
+        options.partitioned = true;
+        break;
+      case 'priority': {
+        const priority = attrValue.toLowerCase();
+        if (priority === 'high' || priority === 'low' || priority === 'medium') {
+          options.priority = priority;
+        }
+        break;
+      }
       default:
-        break; // ignore attributes the typed builder does not model (Priority, Partitioned, …)
+        break; // ignore attributes the typed builder does not model
     }
   }
   return { name, options, value };
@@ -1117,17 +1162,52 @@ function decodeCookieOctet(value: string): string {
 }
 
 /** @internal Read all `Set-Cookie` values from a Headers object across platform variants. */
-export function getBetterAuthSetCookie(headers: Headers): string[] {
+export function getBetterAuthSetCookie(headers: Headers | null | undefined): string[] {
+  // part-3 I2 backward-compat: an instance that ignores `returnHeaders` returns the bare
+  // session payload, so there is no `headers` object to read — treat that as "no refresh
+  // cookies" rather than crashing on `undefined.getSetCookie`.
+  if (headers === null || headers === undefined || typeof headers.get !== 'function') return [];
   const platformHeaders = headers as Headers & {
     getSetCookie?: () => string[];
   };
-  const cookies = platformHeaders.getSetCookie?.();
 
-  if (cookies && cookies.length > 0) return cookies;
+  // part-3 L13-3: when `getSetCookie()` is available (every modern runtime) it is the only
+  // safe source — it returns each Set-Cookie as a separate, un-folded entry. Mandate it; an
+  // empty result genuinely means no cookies, so do NOT fall through to the folded `get()`
+  // path (which would re-introduce the comma-folding corruption this fix removes).
+  if (typeof platformHeaders.getSetCookie === 'function') {
+    return platformHeaders.getSetCookie();
+  }
 
   const cookie = headers.get('set-cookie');
+  if (!cookie) return [];
 
-  return cookie ? [cookie] : [];
+  // Fallback for a runtime without `getSetCookie()`: `get('set-cookie')` returns a single
+  // comma-FOLDED string when multiple cookies were set. Naively returning it as one cookie
+  // collapses multiple cookies into one AND corrupts any cookie whose `Expires` contains a
+  // comma (e.g. `Expires=Wed, 09 Jun 2021 …`). Split on a top-level cookie boundary that
+  // is Expires-comma-aware (a comma followed by a `name=` pair, not a comma inside a date).
+  return splitFoldedSetCookie(cookie);
+}
+
+// part-3 L13-3: split a comma-FOLDED `Set-Cookie` header into individual cookies without
+// splitting inside an RFC-1123/850 date that an `Expires` attribute embeds. A genuine
+// cookie boundary is `", <cookie-name>="`: a comma, optional whitespace, an HTTP cookie-name
+// token, then `=`. A comma inside an Expires date is followed by a weekday/day-of-month, not
+// a `token=`, so it is preserved.
+function splitFoldedSetCookie(folded: string): string[] {
+  const cookies: string[] = [];
+  // A cookie-name is an HTTP token (RFC 6265 token octets). The boundary requires the
+  // delimiter comma to be immediately followed (after optional spaces) by `token=`.
+  const boundary = /,(?=\s*[!#$%&'*+\-.^_`|~0-9A-Za-z]+=)/g;
+  let lastIndex = 0;
+  for (let match = boundary.exec(folded); match !== null; match = boundary.exec(folded)) {
+    cookies.push(folded.slice(lastIndex, match.index).trim());
+    lastIndex = boundary.lastIndex;
+  }
+  const tail = folded.slice(lastIndex).trim();
+  if (tail) cookies.push(tail);
+  return cookies.filter((cookie) => cookie.length > 0);
 }
 
 /** @internal True when a Better Auth response status (400/401/403) signals a credential failure. */
@@ -1159,7 +1239,31 @@ function isSessionEstablishingSetCookie(rawSetCookie: string): boolean {
   if (/(?:^|;)\s*max-age\s*=\s*0(?:\s*;|\s*$)/.test(attributes)) return false;
   if (/(?:^|;)\s*max-age\s*=\s*-/.test(attributes)) return false;
 
+  // part-3 I3 (SECURITY_FINDINGS.md M2): the docstring lists "Expires in the past" as a
+  // clearing cookie, but only Max-Age was checked. A `sid=deleted; Expires=Thu, 01 Jan
+  // 1970 …` (non-empty value, no Max-Age) was mis-classified as session-establishing.
+  // Parse Expires off the ORIGINAL-case raw string (Date.parse needs the real casing) and
+  // treat a valid past/now date as a deletion.
+  const expires = parseSetCookieExpires(rawSetCookie);
+  if (expires !== undefined && expires <= Date.now()) return false;
+
   return true;
+}
+
+// part-3 I3: extract a `Set-Cookie` `Expires` attribute as epoch ms, or undefined when the
+// attribute is absent or unparseable. Operates on the raw (original-case) header so the
+// HTTP-date is recoverable by `Date.parse`.
+function parseSetCookieExpires(rawSetCookie: string): number | undefined {
+  const segments = rawSetCookie.split(';');
+  for (let index = 1; index < segments.length; index += 1) {
+    const segment = segments[index]?.trim() ?? '';
+    const separator = segment.indexOf('=');
+    if (separator === -1) continue;
+    if (segment.slice(0, separator).trim().toLowerCase() !== 'expires') continue;
+    const parsed = Date.parse(segment.slice(separator + 1).trim());
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
 }
 
 function hasSessionEstablishingSetCookie(headers: Headers): boolean {

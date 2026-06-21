@@ -153,6 +153,13 @@ export interface QueryShapeWrapper {
 
 /** @internal */
 export interface QueryFact {
+  /**
+   * Owner-annotated domains this query selects through a client-visible `input.*`
+   * arg compared against ANY column of the domain's table (SPEC §10.3, KV414, A3) —
+   * not just the declared `key:` column, so `where(eq(orders.userId, input.userId))`
+   * on `{ key: id, owner: userId }` is still flagged `args`/IDOR.
+   */
+  argScopedReads?: readonly string[];
   diagnostics?: readonly TouchGraphDiagnostic[];
   instanceKey?: {
     domain: string;
@@ -188,8 +195,13 @@ export function scopeAuditsFromQueryFacts(
     for (const domain of fact.reads) {
       if (!owners.has(domain)) continue;
 
+      // SPEC §10.3 / KV414. `args` is the IDOR signal and is fail-closed: a
+      // client-visible `input.*` arg keying the declared key column (A1/legacy),
+      // OR any owner-table column (A3, `argScopedReads`), flags KV414 even when the
+      // same predicate is also session-anchored.
       const argKeyed =
-        fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:');
+        (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) ||
+        (fact.argScopedReads ?? []).includes(domain);
       if (argKeyed) {
         audits.push({ domain, kind: 'query', name: fact.query, scope: 'args', site: fact.site });
         continue;
@@ -197,6 +209,61 @@ export function scopeAuditsFromQueryFacts(
 
       if ((fact.sessionAnchoredReads ?? []).includes(domain)) {
         audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
+      }
+    }
+  }
+
+  return audits;
+}
+
+/**
+ * A write touch on an owner-annotated domain, with the `args`/`session` domains its
+ * `where()` predicate selects (SPEC §10.3, KV414 A1). The write half of the IDOR gate:
+ * `scopeAuditsFromQueryFacts` covers reads; this covers `db.update/delete(...)` writes.
+ *
+ * @internal
+ */
+export interface WriteScopeFact {
+  /** Owner-table domains keyed by a client-visible `input.*` arg (any column) → `args`/IDOR. */
+  argScopedWrites: readonly string[];
+  /** The mutation/handler name that owns this write (for `owns()` discharge in `kovo check`). */
+  name: string;
+  /** Owner-table domains this write touches (the audited surface). */
+  reads: readonly string[];
+  /** Owner-table domains keyed by `req.session.*` → `session` (safe). */
+  sessionAnchoredWrites: readonly string[];
+  site: string;
+}
+
+/**
+ * Scope-audit facts for WRITES against an `owner:`-annotated domain (SPEC §10.3,
+ * §11.1; KV414 A1). Parallels `scopeAuditsFromQueryFacts` but emits `kind:'write'`: a
+ * write keyed by a client-visible `args.*` is the write-side IDOR candidate the CLI
+ * enforces unless an `owns()` guard discharges it; a `req.session.*`-anchored write is
+ * safe (`session`); a write keyed by neither emits no fact (no false positive without
+ * inter-procedural session tracing — mirrors the read side).
+ *
+ * @internal
+ */
+export function scopeAuditsFromWriteFacts(
+  facts: readonly WriteScopeFact[],
+  ownerDomains: Iterable<string>,
+): ScopeAuditFact[] {
+  const owners = new Set(ownerDomains);
+  const audits: ScopeAuditFact[] = [];
+
+  for (const fact of facts) {
+    for (const domain of fact.reads) {
+      if (!owners.has(domain)) continue;
+
+      // Fail-closed: an arg-keyed owner write is IDOR even if also session-anchored.
+      if (fact.argScopedWrites.includes(domain)) {
+        audits.push({ domain, kind: 'write', name: fact.name, scope: 'args', site: fact.site });
+        continue;
+      }
+
+      if (fact.sessionAnchoredWrites.includes(domain)) {
+        audits.push({ domain, kind: 'write', name: fact.name, scope: 'session', site: fact.site });
       }
     }
   }
@@ -434,11 +501,77 @@ export function extractOwnerAuditFromProject(options: TouchGraphProjectOptions):
   scopeAudits: ScopeAuditFact[];
 } {
   const ownerDomains = ownerDomainsFromProject(options);
-  const scopeAudits = scopeAuditsFromQueryFacts(
-    extractQueryFactsFromProject(options),
-    ownerDomains.map((owner) => owner.domain),
-  );
+  const ownerDomainNames = ownerDomains.map((owner) => owner.domain);
+  // SPEC §10.3 / KV414: "a query OR write" reaching an owner table. Reads and writes
+  // are both audited (A1 added the write half, which the framework never produced).
+  const scopeAudits = [
+    ...scopeAuditsFromQueryFacts(extractQueryFactsFromProject(options), ownerDomainNames),
+    ...scopeAuditsFromWriteFacts(extractWriteScopeFactsFromProject(options), ownerDomainNames),
+  ];
   return { ownerDomains, scopeAudits };
+}
+
+/**
+ * Write-side owner scope facts for a project (SPEC §10.3, §11.1; KV414 A1). Iterates
+ * every analyzable function's Drizzle write calls (`db.update/delete(...).where(...)`)
+ * and, for each write touching an owner-annotated table, classifies its `where()`
+ * predicate as `args` (client `input.*` key, any column — A3) or `session`
+ * (`req.session.*`), reusing the same operand classifier as the read side.
+ *
+ * @internal
+ */
+export function extractWriteScopeFactsFromProject(
+  options: TouchGraphProjectOptions,
+): WriteScopeFact[] {
+  const extraction = createProjectExtraction(options);
+  try {
+    const sourceContext = projectSourceModuleContext(extraction);
+    const contextFiles = projectContextFiles(extraction);
+    const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+    const facts: WriteScopeFact[] = [];
+
+    for (const file of contextFiles) {
+      const fileTables = tablesForFile(file, sourceContext);
+      for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
+        if (fn.summaryOnly) continue;
+        facts.push(...writeScopeFactsForFunction(fn, fileTables));
+      }
+    }
+
+    return facts.sort(
+      (left, right) => left.name.localeCompare(right.name) || left.site.localeCompare(right.site),
+    );
+  } finally {
+    extraction.dispose();
+  }
+}
+
+function writeScopeFactsForFunction(
+  fn: ExtractedFunction,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): WriteScopeFact[] {
+  const facts: WriteScopeFact[] = [];
+
+  for (const call of fn.writeCalls) {
+    const domains = new Set<string>();
+    for (const table of tables.get(call.tableExpression) ?? []) {
+      if (isDomainExtractedTableAnnotation(table.annotation)) domains.add(table.annotation.domain);
+    }
+    if (domains.size === 0) continue;
+
+    const argScopedWrites = queryArgScopedDomains(call.instanceKeyComparisons, tables);
+    const sessionAnchoredWrites = querySessionAnchoredDomains(call.instanceKeyComparisons, tables);
+
+    facts.push({
+      argScopedWrites,
+      name: fn.name,
+      reads: [...domains].sort(),
+      sessionAnchoredWrites,
+      site: call.site ?? '',
+    });
+  }
+
+  return facts;
 }
 
 function ownerDomainsFromProject(
@@ -1531,12 +1664,16 @@ function extractProjectDrizzleWriteCalls(
       projectUnmodeledRelationNameForNode(tableArgument, unmodeledRelationNamesBySymbol) ??
       UNRESOLVED_READ_SOURCE_EXPRESSION;
 
+    const resolveWriteTableIdentifier = (node: Node) =>
+      projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames);
+
     calls.push({
       index: 0,
+      instanceKeyComparisons: writeInstanceKeyComparisons(chain, resolveWriteTableIdentifier),
       operation,
       predicateFacts: extractPredicateFactsFromWriteChain(
         chain,
-        (node) => projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames),
+        resolveWriteTableIdentifier,
         paramSymbolKeys,
       ),
       readSources: extractReadSourcesFromWriteChain(
@@ -2146,9 +2283,21 @@ function extractQueryFactsFromPreparedFiles(
         query.instanceKeyComparisons,
         fileTables,
       );
+      const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
+      // A3 (SPEC §10.3): the supplemental owner-column arg signal. Omit any domain the
+      // declared-key `instanceKey` already captures as `arg:*` — that domain is already
+      // flagged `args` by `scopeAuditsFromQueryFacts`, so listing it here too would only
+      // add redundant output. `argScopedReads` carries the cases the declared-key path
+      // misses (an arg keyed on an owner column other than `key:`).
+      const argScopedReads = queryArgScopedDomains(query.instanceKeyComparisons, fileTables).filter(
+        (domain) =>
+          !(instanceKey?.instanceKey?.domain === domain &&
+            instanceKey.instanceKey.key.startsWith('arg:')),
+      );
       facts.push({
+        ...(argScopedReads.length > 0 ? { argScopedReads } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
-        ...queryInstanceKey(query.instanceKeyComparisons, fileTables),
+        ...instanceKey,
         query: query.query,
         reads: allReads,
         ...(sessionAnchoredReads.length > 0 ? { sessionAnchoredReads } : {}),
@@ -3231,7 +3380,7 @@ interface ExtractedQueryDefinition {
   hasOutputSchema: boolean;
   hasSelection: boolean;
   index: number;
-  instanceKeyComparisons: readonly QueryInstanceKeyComparison[];
+  instanceKeyComparisons: QueryInstanceKeyComparisons;
   localHelperCalls: readonly string[];
   opaquePaths: readonly string[];
   query: string;
@@ -3256,6 +3405,13 @@ interface QueryInstanceKeyOperand {
 
 interface ExtractedWriteCall {
   index: number;
+  /**
+   * The write `where()` predicate operand comparisons, classified the same way as
+   * query reads (SPEC §10.3, KV414 A1/A2/A3): `argCandidates` carries every `eq`
+   * operand pair (incl. `and()`/`or()` branches) so an owner-table column compared
+   * against a client `input.*` arg surfaces as an `args`-scope write candidate.
+   */
+  instanceKeyComparisons: QueryInstanceKeyComparisons;
   operation: string;
   predicateFacts: readonly ExtractedPredicateFact[];
   readSources: ExtractedReadSource[];
@@ -3370,7 +3526,7 @@ function extractQueryDefinitionsFromSourceFile(
           hasOutputSchema: false,
           hasSelection: false,
           index: declaration.getStart(),
-          instanceKeyComparisons: [],
+          instanceKeyComparisons: { argCandidates: [], instanceKey: [] },
           localHelperCalls: [],
           opaquePaths: [],
           query,
@@ -5519,11 +5675,12 @@ function unwrappedFunctionExpression(node: Node): ArrowFunction | FunctionExpres
 }
 
 function queryInstanceKey(
-  comparisons: readonly QueryInstanceKeyComparison[],
+  comparisons: QueryInstanceKeyComparisons,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Pick<QueryFact, 'instanceKey'> | null {
   // SPEC §10-§11: query keys must come from real predicates, not comment/string text.
-  for (const comparison of comparisons) {
+  // Only `and(...)`/top-level conjuncts (not `or(...)` branches) discharge a unique key.
+  for (const comparison of comparisons.instanceKey) {
     const instanceKey = queryInstanceKeyFromEqOperands(comparison.left, comparison.right, tables);
     if (instanceKey) return instanceKey;
   }
@@ -5537,15 +5694,101 @@ function queryInstanceKey(
  * session-scoped (not IDOR), so it discharges KV414.
  */
 function querySessionAnchoredDomains(
-  comparisons: readonly QueryInstanceKeyComparison[],
+  comparisons: QueryInstanceKeyComparisons,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): readonly string[] {
   const domains = new Set<string>();
-  for (const comparison of comparisons) {
+  for (const comparison of comparisons.instanceKey) {
     const domain = sessionAnchoredDomainFromEqOperands(comparison.left, comparison.right, tables);
     if (domain) domains.add(domain);
   }
   return [...domains].sort();
+}
+
+/**
+ * SPEC §10.3 / KV414 (A3): the owner-annotated domains a query's `where` predicates
+ * select through a client-visible `input.*` arg compared against ANY column of that
+ * domain's table — not only the declared `key` column. This is the canonical IDOR
+ * signal regardless of whether the keyed column is `key:` or `owner:` (e.g.
+ * `where(eq(orders.userId, input.userId))` on `{ key: id, owner: userId }`). Includes
+ * `or(...)`-branch operands (A2, fail-closed). The declared-key match in
+ * `queryInstanceKey` still governs instanceKey/invalidation granularity.
+ */
+function queryArgScopedDomains(
+  comparisons: QueryInstanceKeyComparisons,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): readonly string[] {
+  const domains = new Set<string>();
+  for (const comparison of comparisons.argCandidates) {
+    const domain = argScopedDomainFromEqOperands(comparison.left, comparison.right, tables);
+    if (domain) domains.add(domain);
+  }
+  return [...domains].sort();
+}
+
+function argScopedDomainFromEqOperands(
+  left: QueryInstanceKeyOperand,
+  right: QueryInstanceKeyOperand,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string | null {
+  const candidates = [
+    { inputKey: right.inputKey, tableKey: left.tableKey },
+    { inputKey: left.inputKey, tableKey: right.tableKey },
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.inputKey || !candidate.tableKey) continue;
+    // A3 is purely an `owner:`-table IDOR signal — restrict to owner-annotated tables
+    // so a non-owner arg read (the common safe case, e.g. `eq(products.sku, input.sku)`)
+    // never pollutes the fact. The owner-domain filter in `scopeAuditsFromQueryFacts`
+    // would drop a non-owner domain anyway; this keeps the fact precise.
+    const domain = resolvedQueryOwnerTableDomain(candidate.tableKey, tables);
+    if (domain) return domain;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve a `tableIdentifier.column` reference to the domain of an `owner:`-annotated
+ * table regardless of which column is named (SPEC §10.1/§10.3). Contrast
+ * `resolvedQueryTableKey`, which requires the declared `key:` column — A3 needs the
+ * domain for an `args` predicate on ANY column of an owner table (the owner column is
+ * usually not the key column), so it matches on table identity + owner-ness.
+ */
+function resolvedQueryOwnerTableDomain(
+  key: { key: string; tableIdentifier: string },
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string | null {
+  for (const table of tables.get(key.tableIdentifier) ?? []) {
+    if (
+      isDomainExtractedTableAnnotation(table.annotation) &&
+      typeof table.annotation.owner === 'string'
+    ) {
+      return table.annotation.domain;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolve a `tableIdentifier.column` reference to its domain regardless of which
+ * column is named (SPEC §10.1). Contrast `resolvedQueryTableKey`, which requires the
+ * declared `key:` column — used for session-anchoring detection on any domain table
+ * column (matching prior declared-key behavior, now column-agnostic).
+ */
+function resolvedQueryTableDomain(
+  key: { key: string; tableIdentifier: string },
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): string | null {
+  for (const table of tables.get(key.tableIdentifier) ?? []) {
+    if (isDomainExtractedTableAnnotation(table.annotation)) {
+      return table.annotation.domain;
+    }
+  }
+
+  return null;
 }
 
 function sessionAnchoredDomainFromEqOperands(
@@ -5560,38 +5803,89 @@ function sessionAnchoredDomainFromEqOperands(
 
   for (const candidate of candidates) {
     if (!candidate.sessionKey || !candidate.tableKey) continue;
-    const tableKey = resolvedQueryTableKey(candidate.tableKey, tables);
-    if (tableKey) return tableKey.domain;
+    // SPEC §11.1 (A3 symmetry): match on table identity, ANY column — not only the
+    // declared `key:` column. An owner table is usually keyed `key:id, owner:userId`,
+    // and the safe pattern `where(eq(orders.userId, req.session.userId))` anchors the
+    // OWNER column to the session, so the declared-key-only check missed it and the
+    // read fell through to the `args` IDOR branch (a false KV414 on a safe app).
+    const domain = resolvedQueryTableDomain(candidate.tableKey, tables);
+    if (domain) return domain;
   }
 
   return null;
 }
 
+/**
+ * SPEC §11.1 / KV414: the `where()`-predicate `eq(...)` operand comparisons of a query.
+ *
+ * Two tiers, both reusing the write side's `eqPredicateConjuncts` (~:9736):
+ * - `instanceKey`: top-level/`and(...)` conjuncts only — these may discharge a unique
+ *   single-row instance key and a `session` scope.
+ * - `argCandidates`: every `eq(...)` operand pair anywhere in the predicate tree,
+ *   INCLUDING under `or(...)` (A2, fail-closed). An arg-keyed owner operand in any
+ *   branch is an `args`-scope candidate that must surface KV414, but an `or`-branch
+ *   does NOT pin a row, so these never discharge an instance key.
+ */
 function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
-): QueryInstanceKeyComparison[] {
-  return queryBodyCallExpressions(body, queryReceiverMode(receiverReferences), (call) => {
-    if (propertyAccessCallName(call) !== 'where') return [];
-    if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
+): QueryInstanceKeyComparisons {
+  const instanceKey: QueryInstanceKeyComparison[] = [];
+  const argCandidates: QueryInstanceKeyComparison[] = [];
 
-    const predicate = call.getArguments()[0];
-    if (!predicate || !Node.isCallExpression(predicate)) return [];
+  for (const predicate of queryBodyCallExpressions(
+    body,
+    queryReceiverMode(receiverReferences),
+    (call) => {
+      if (propertyAccessCallName(call) !== 'where') return [];
+      if (!isQueryCallOnReceiver(call, receiverReferences)) return [];
+      const argument = call.getArguments()[0];
+      return argument ? [argument] : [];
+    },
+  )) {
+    const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
+      left: queryInstanceKeyOperand(left, readTableIdentifier),
+      right: queryInstanceKeyOperand(right, readTableIdentifier),
+    });
 
-    const expression = predicate.getExpression();
-    if (!Node.isIdentifier(expression) || expression.getText() !== 'eq') return [];
+    // A2: `and(...)`/top-level `eq` conjuncts may discharge a unique instance key.
+    const conjuncts = eqPredicateConjuncts(predicate);
+    if (conjuncts) instanceKey.push(...conjuncts.map(toComparison));
 
-    const [left, right] = predicate.getArguments();
-    if (!left || !right) return [];
+    // A2 fail-closed: any `eq` operand anywhere (incl. `or(...)` branches) is an
+    // `args`/`session` scope candidate, never an instance-key.
+    argCandidates.push(...allEqOperandPairs(predicate).map(toComparison));
+  }
 
-    return [
-      {
-        left: queryInstanceKeyOperand(left, readTableIdentifier),
-        right: queryInstanceKeyOperand(right, readTableIdentifier),
-      },
-    ];
-  });
+  return { argCandidates, instanceKey };
+}
+
+interface QueryInstanceKeyComparisons {
+  argCandidates: readonly QueryInstanceKeyComparison[];
+  instanceKey: readonly QueryInstanceKeyComparison[];
+}
+
+/**
+ * Every `eq(...)` operand pair nested anywhere under a predicate node (SPEC §11.1,
+ * KV414 fail-closed). Used only for `args`/`session` scope candidacy — `or(...)`
+ * branches are included here but must never discharge an instance key.
+ */
+function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
+  const expression = unwrappedStaticExpressionNode(predicate);
+  if (!Node.isCallExpression(expression)) return [];
+
+  const conjuncts: EqPredicateConjunct[] = [];
+  for (const descendant of [
+    expression,
+    ...expression.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ]) {
+    const callee = descendant.getExpression();
+    if (!Node.isIdentifier(callee) || callee.getText() !== 'eq') continue;
+    const [left, right] = descendant.getArguments();
+    if (left && right) conjuncts.push({ left, right });
+  }
+  return conjuncts;
 }
 
 function queryInstanceKeyOperand(
@@ -9691,6 +9985,38 @@ function extractPredicateFactsFromWriteChain(
   }
 
   return dedupePredicateFacts(facts);
+}
+
+/**
+ * Classify a write chain's `where()` predicate operands the same way as a query read
+ * (SPEC §10.3, KV414 A1/A2/A3). Reuses `eqPredicateConjuncts` (`and()`/top-level →
+ * instance-key/`session` candidates) and `allEqOperandPairs` (every `eq` operand,
+ * incl. `or()` branches → fail-closed `args` candidates), with the same
+ * `input.*`/`req.session.*`/table-column operand classifier the read side uses — so a
+ * write keyed by a client arg against an owner table emits a `kind:'write'` scope
+ * audit (the write half of KV414 the framework previously never produced).
+ */
+function writeInstanceKeyComparisons(
+  chain: Node,
+  resolveIdentifier?: (node: Node) => string | undefined,
+): QueryInstanceKeyComparisons {
+  const calls = [
+    ...(Node.isCallExpression(chain) ? [chain] : []),
+    ...chain.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+  const whereCall = calls.find((call) => propertyAccessCallName(call) === 'where');
+  const predicate = whereCall?.getArguments()[0];
+  if (!predicate) return { argCandidates: [], instanceKey: [] };
+
+  const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
+    left: queryInstanceKeyOperand(left, resolveIdentifier),
+    right: queryInstanceKeyOperand(right, resolveIdentifier),
+  });
+
+  return {
+    argCandidates: allEqOperandPairs(predicate).map(toComparison),
+    instanceKey: (eqPredicateConjuncts(predicate) ?? []).map(toComparison),
+  };
 }
 
 function extractParameterizedKeys(

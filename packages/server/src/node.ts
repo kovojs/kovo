@@ -43,9 +43,16 @@ export function toNodeHandler(
 
       await writeWebResponseToNode(response, nodeResponse, request.method, writeOptions);
     } catch {
-      if (!nodeResponse.headersSent) {
-        nodeResponse.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      // E1 (SPEC §9.5/§9.2): once the response head is committed (`headersSent`), a 200's
+      // status/body are already on the wire. Appending "Internal Server Error" here would
+      // corrupt that committed body (a mid-stream render error yielding HTTP 200
+      // "partial-Internal Server Error"). Tear the socket instead so the client observes a
+      // truncated/aborted transfer rather than a clean 200 carrying injected error text.
+      if (nodeResponse.headersSent) {
+        nodeResponse.destroy();
+        return;
       }
+      nodeResponse.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
       nodeResponse.end('Internal Server Error');
     }
   };
@@ -57,9 +64,22 @@ export function nodeRequestToWebRequest(
 ): Request {
   const method = nodeRequest.method ?? 'GET';
   const headers = nodeHeadersToWebHeaders(nodeRequest);
+  // E3 (SPEC §9.5): bridge a client disconnect into the Web `Request.signal` so handlers,
+  // queries, webhooks, and any downstream `fetch(url, { signal: request.signal })` abort
+  // instead of running against a dead socket (a cheap resource-exhaustion amplifier under an
+  // anonymous flood). `'aborted'`/an early `'close'` on the request stream and a `'close'`
+  // on the response before it finished all mean the peer went away — abort the controller.
+  const controller = new AbortController();
+  const abort = (): void => {
+    if (!controller.signal.aborted) controller.abort();
+  };
+  nodeRequest.once('aborted', abort);
+  nodeRequest.once('close', abort);
+  nodeRequest.socket?.once('close', abort);
   const init: RequestInit = {
     headers,
     method,
+    signal: controller.signal,
     ...(bodylessMethods.has(method)
       ? {}
       : {
@@ -96,8 +116,16 @@ export async function writeWebResponseToNode(
   const responseBody = response.body;
 
   await new Promise<void>((resolve, reject) => {
-    Readable.fromWeb(responseBody as NodeReadableStream<Uint8Array>)
-      .once('error', reject)
+    const source = Readable.fromWeb(responseBody as NodeReadableStream<Uint8Array>);
+    // E1 (SPEC §9.5/§9.2): the head is already committed (writeHead above). A source-stream
+    // error mid-body must not let the caller append error text onto the partial response —
+    // tear the socket so the client sees a truncated/aborted transfer, then reject so the
+    // caller's catch knows the write failed (its `headersSent` guard short-circuits).
+    source
+      .once('error', (error) => {
+        nodeResponse.destroy(error instanceof Error ? error : undefined);
+        reject(error);
+      })
       .pipe(nodeResponse)
       .once('error', reject)
       .once('finish', resolve);
@@ -117,10 +145,18 @@ function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): 
 }
 
 function defaultOrigin(request: IncomingMessage): string {
-  const host = request.headers.host ?? '127.0.0.1';
+  // E2 (SPEC §9.5): under HTTP/2 the `Host` header is often absent — the authority lives in
+  // the `:authority` pseudo-header instead. Fall back to it (then `:scheme`) so URL resolution
+  // works for HTTP/2 requests, not just HTTP/1.1.
+  const pseudoHeaders = request.headers as Record<string, string | string[] | undefined>;
+  const host =
+    request.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
   const forwardedProto = firstHeaderValue(request.headers['x-forwarded-proto']);
+  const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
   const proto =
-    forwardedProto ?? ((request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http');
+    forwardedProto ??
+    pseudoScheme ??
+    ((request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http');
 
   return `${proto}://${host}`;
 }
@@ -130,6 +166,11 @@ function nodeHeadersToWebHeaders(request: IncomingMessage): Headers {
 
   for (const [name, value] of Object.entries(request.headers)) {
     if (value === undefined) continue;
+    // E2 (SPEC §9.5): under Node's HTTP/2 compat API `request.headers` carries pseudo-headers
+    // (`:path`/`:method`/`:authority`/`:scheme`). The web `Headers` constructor throws on any
+    // name starting with `:`, so copying them unfiltered 500'd every HTTP/2 request. Skip them
+    // — they are addressed via `request.method`/`request.url`/the `:authority` URL fallback.
+    if (name.startsWith(':')) continue;
     if (Array.isArray(value)) {
       for (const entry of value) headers.append(name, entry);
     } else {

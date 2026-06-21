@@ -47,10 +47,13 @@ function assertStaticExportRouteDocumentL0L1({
   origin,
   routePath,
 }: StaticExportRouteDocumentL0L1Options): void {
+  // `routePath` here is the concrete replay target; stamp it as the concrete-path discriminator so
+  // SPEC §9.5 `skip` suppresses only this exact target and not its valid param siblings.
   const diagnostics = collectStaticExportServerEndpointRefs(body, origin).map((ref) =>
     staticExportDiagnostic(
       routePath,
       `KV229 static export cannot export route '${routePath}' because document attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
+      routePath,
     ),
   );
 

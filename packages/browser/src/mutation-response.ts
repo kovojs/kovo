@@ -35,6 +35,11 @@ export function readMutationChangeHeader(
 /** @internal Type guard for a same-user mutation-response broadcast message (SPEC §9.2). */
 export function isMutationBroadcastMessage(value: unknown): value is {
   body: string;
+  /**
+   * D3 / SPEC §9.1.1: the sender's render-plan version token, stamped on publish so a
+   * receiver on a different build can convert the body's delta chunks to misses.
+   */
+  buildToken?: string;
   changes: MutationChangeRecord[];
   principal?: string;
   type: 'kovo:mutation-response';
@@ -46,6 +51,9 @@ export function isMutationBroadcastMessage(value: unknown): value is {
     value.type === 'kovo:mutation-response' &&
     'body' in value &&
     typeof value.body === 'string' &&
+    // D3: an envelope buildToken, when present, must be a string; reject a poisoned
+    // non-string token rather than letting a NaN-shaped value defeat the skew check.
+    (!('buildToken' in value) || typeof value.buildToken === 'string') &&
     'changes' in value &&
     Array.isArray(value.changes) &&
     value.changes.every(isMutationChangeRecord)

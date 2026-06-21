@@ -5,6 +5,7 @@ import type {
   RequestListener,
   ServerResponse,
 } from 'node:http';
+import { connect as http2Connect, createServer as createHttp2Server } from 'node:http2';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -221,6 +222,148 @@ describe('responseHeadersToNodeHeaders (B1)', () => {
   });
 });
 
+describe('toNodeHandler mid-stream error handling (E1)', () => {
+  // SPEC §9.5/§9.2: a streaming render that throws AFTER the first chunk must not append
+  // "Internal Server Error" onto the already-committed 200 body. The headersSent guard only
+  // protected writeHead; the catch still ran end('Internal Server Error'), yielding a 200
+  // whose body was "partial-Internal Server Error". The fix tears the socket (destroy) on
+  // the pipe error path so the client sees a truncated/aborted read, never a corrupt 200.
+  it('aborts the transfer instead of corrupting a committed 200 body when the stream throws mid-flight', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(async () => {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode('partial-'));
+          },
+          pull() {
+            throw new Error('boom mid-stream');
+          },
+        });
+        return new Response(stream, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          status: 200,
+        });
+      }),
+    );
+
+    try {
+      const outcome = await server.fetchRaw('/stream-error');
+      // The client must NEVER observe a clean 200 with appended error text.
+      if (outcome.kind === 'response') {
+        expect(outcome.body).not.toContain('Internal Server Error');
+        expect(outcome.body).not.toBe('partial-Internal Server Error');
+        // A committed 200 that then errors must surface as a transport error
+        // (aborted/incomplete read), not a successful completed body.
+        expect(outcome.complete).toBe(false);
+      } else {
+        // The socket was torn down — a transport-level error is the acceptable signal.
+        expect(outcome.kind).toBe('error');
+      }
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('nodeRequestToWebRequest HTTP/2 pseudo-headers (E2)', () => {
+  // SPEC §9.5: under Node's HTTP/2 compat API, req.headers carries :path/:method/:authority/
+  // :scheme. The web Headers constructor rejects names starting with ':', so the copy loop
+  // threw synchronously → every HTTP/2 request answered 500. The fix skips pseudo-headers.
+  it('serves an HTTP/2 request without 500ing on the :path/:method pseudo-headers', async () => {
+    const nodeHandler = toNodeHandler(async (request) => {
+      const url = new URL(request.url);
+      return new Response(`ok ${url.pathname}`, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        status: 200,
+      });
+    });
+    // The Node http2 compat (req,res) are structurally compatible with the http1
+    // handler at runtime (this test proves E2 — pseudo-headers no longer throw);
+    // cast through the http2 callback shape to satisfy createServer's typing.
+    const server = createHttp2Server((req, res) => {
+      void (nodeHandler as (q: unknown, s: unknown) => unknown)(req, res);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address() as AddressInfo;
+    const client = http2Connect(`http://127.0.0.1:${address.port}`);
+
+    try {
+      const { status, body } = await new Promise<{ body: string; status: number }>(
+        (resolve, reject) => {
+          const req = client.request({ ':method': 'GET', ':path': '/h2-path' });
+          let received = '';
+          let statusCode = 0;
+          req.on('response', (headers) => {
+            statusCode = Number(headers[':status'] ?? 0);
+          });
+          req.setEncoding('utf8');
+          req.on('data', (chunk: string) => {
+            received += chunk;
+          });
+          req.on('end', () => resolve({ body: received, status: statusCode }));
+          req.on('error', reject);
+          req.end();
+        },
+      );
+
+      expect(status).toBe(200);
+      expect(body).toBe('ok /h2-path');
+    } finally {
+      client.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+});
+
+describe('nodeRequestToWebRequest client disconnect (E3)', () => {
+  // SPEC §9.5: a client disconnect must propagate to request.signal so handlers/queries and
+  // any downstream fetch(url, { signal: request.signal }) abort instead of running against a
+  // dead socket. Previously RequestInit carried no signal and nothing bridged 'aborted'/'close'.
+  it('aborts request.signal when the client destroys the connection mid-handler', async () => {
+    let observedSignal: AbortSignal | undefined;
+    const aborted = new Promise<boolean>((resolve) => {
+      const server = createServer(
+        toNodeHandler(async (request) => {
+          observedSignal = request.signal;
+          request.signal.addEventListener('abort', () => resolve(true), { once: true });
+          // Never resolve on our own; only the client disconnect should abort us.
+          await new Promise<void>(() => undefined);
+          return new Response('unreachable');
+        }),
+      );
+      void serverHandleForAbort(server, resolve);
+    });
+
+    expect(await aborted).toBe(true);
+    expect(observedSignal?.aborted).toBe(true);
+  });
+});
+
+async function serverHandleForAbort(
+  server: ReturnType<typeof createServer>,
+  resolveOnAbort: (value: boolean) => void,
+): Promise<void> {
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address() as AddressInfo;
+  const req = httpRequest({
+    host: '127.0.0.1',
+    method: 'GET',
+    path: '/abort',
+    port: address.port,
+  });
+  req.on('error', () => undefined);
+  req.end();
+  // Give the server a tick to enter the handler, then tear down the client socket.
+  setTimeout(() => req.destroy(), 50);
+  // Safety net: if abort never fires, fail the wait after a bounded delay.
+  setTimeout(() => {
+    server.close();
+    resolveOnAbort(false);
+  }, 3_000);
+}
+
 interface NodeTestResponse {
   body: string;
   earlyHints: IncomingHttpHeaders[];
@@ -228,9 +371,14 @@ interface NodeTestResponse {
   status: number;
 }
 
+type NodeFetchOutcome =
+  | { body: string; complete: boolean; kind: 'response'; status: number }
+  | { kind: 'error' };
+
 async function serveWithNode(handler: RequestListener): Promise<{
   close(): Promise<void>;
   fetch(pathname: string, options?: NodeTestRequestOptions): Promise<NodeTestResponse>;
+  fetchRaw(pathname: string, options?: NodeTestRequestOptions): Promise<NodeFetchOutcome>;
 }> {
   const server = createServer(handler);
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -246,7 +394,55 @@ async function serveWithNode(handler: RequestListener): Promise<{
     fetch(pathname, options = {}) {
       return nodeFetch(`${origin}${pathname}`, options);
     },
+    fetchRaw(pathname, options = {}) {
+      return nodeFetchRaw(`${origin}${pathname}`, options);
+    },
   };
+}
+
+// Like nodeFetch but reports whether the body read completed cleanly. A mid-stream server
+// error that tears the socket surfaces either as a request/response 'error' (kind:'error')
+// or as a response whose `complete` flag is false (aborted/truncated read).
+async function nodeFetchRaw(
+  url: string,
+  options: NodeTestRequestOptions = {},
+): Promise<NodeFetchOutcome> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (outcome: NodeFetchOutcome): void => {
+      if (settled) return;
+      settled = true;
+      resolve(outcome);
+    };
+    const request = httpRequest(
+      url,
+      { headers: options.headers, method: options.method ?? 'GET' },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('error', () => finish({ kind: 'error' }));
+        response.on('aborted', () =>
+          finish({
+            body: Buffer.concat(chunks).toString('utf8'),
+            complete: false,
+            kind: 'response',
+            status: response.statusCode ?? 0,
+          }),
+        );
+        response.on('end', () =>
+          finish({
+            body: Buffer.concat(chunks).toString('utf8'),
+            // `complete` is false when the connection terminated before the full body.
+            complete: response.complete,
+            kind: 'response',
+            status: response.statusCode ?? 0,
+          }),
+        );
+      },
+    );
+    request.on('error', () => finish({ kind: 'error' }));
+    request.end(options.body);
+  });
 }
 
 interface NodeTestRequestOptions {

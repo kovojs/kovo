@@ -387,7 +387,13 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('renderNoJsMutationResponse');
     expect(publicValues).not.toHaveProperty('renderQueryEndpointResponse');
     expect(publicValues).not.toHaveProperty('renderQueryRegistryEndpointResponse');
-    expect(publicValues).not.toHaveProperty('renderContentSecurityPolicy');
+    // CSP-3 (bugs-part3): `renderContentSecurityPolicy` + `cspSha256` are now public at
+    // the root barrel so apps can emit the framework's own hash-based CSP. (Inverts the
+    // prior not-public assertions.)
+    expect(publicApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
+    expect(publicApi.cspSha256).toBe(cspApi.cspSha256);
+    expect(packageRootApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
+    expect(packageRootApi.cspSha256).toBe(cspApi.cspSha256);
     expect(publicValues).not.toHaveProperty('renderDeferredDocument');
     expect(publicValues).not.toHaveProperty('renderDeferredStream');
     expect(publicValues).not.toHaveProperty('renderDiagnosticDocument');
@@ -408,7 +414,9 @@ describe('server app-shell public API barrels', () => {
     expect(dataApi).not.toHaveProperty('renderQueryScript');
     expect(dataApi).not.toHaveProperty('runMutation');
     expect(dataApi).not.toHaveProperty('runQuery');
-    expect(renderingApi).not.toHaveProperty('renderContentSecurityPolicy');
+    // CSP-3 (bugs-part3): the rendering barrel now re-exports the CSP helpers publicly.
+    expect(renderingApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
+    expect(renderingApi.cspSha256).toBe(cspApi.cspSha256);
     expect(renderingApi).not.toHaveProperty('renderDeferredDocument');
     expect(renderingApi).not.toHaveProperty('renderDeferredStream');
     expect(renderingApi).not.toHaveProperty('renderDiagnosticDocument');
@@ -502,6 +510,7 @@ describe('server app-shell public API barrels', () => {
       'invalidate',
       'registerGeneratedMutationTouchRegistry',
       'registerGeneratedQueryReadRegistry',
+      'resolveLifecycleRequest',
       'runEndpoint',
       'runMutation',
       'runQuery',

@@ -1,5 +1,9 @@
 import { type EndpointDeclaration, type SessionProvider } from '@kovojs/server';
-import { endpointMatches, runEndpoint } from '@kovojs/server/internal/execution';
+import {
+  endpointMatches,
+  resolveLifecycleRequest,
+  runEndpoint,
+} from '@kovojs/server/internal/execution';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { betterAuthSession, mount } from './index.js';
 import {
@@ -12,21 +16,27 @@ import {
   mapSession,
 } from './test-fakes.js';
 
+const mappedAppSession: AppSession = {
+  activeOrganizationId: 'org-1',
+  id: 'session-1',
+  user: {
+    email: 'ada@example.com',
+    id: 'user-1',
+    roles: ['admin', 'member'],
+  },
+};
+
 describe('betterAuthSession', () => {
   it('maps a Better Auth-like session into the app session provider seam', async () => {
     const auth = new FakeBetterAuth();
     const headers = new Headers({ cookie: 'kovo_session=s1' });
     const provider = betterAuthSession(auth, mapSession);
 
-    await expect(provider({ headers })).resolves.toEqual({
-      activeOrganizationId: 'org-1',
-      id: 'session-1',
-      user: {
-        email: 'ada@example.com',
-        id: 'user-1',
-        roles: ['admin', 'member'],
-      },
-    });
+    // part-3 I2 (backward-compat): the provider resolves to the plain mapped value when
+    // Better Auth wrote no refresh Set-Cookie (the common case), and only to the additive
+    // `{ value, setCookies }` envelope when there ARE cookies to forward — keeping existing
+    // SessionProvider consumers (and apps whose getSession ignores returnHeaders) unchanged.
+    await expect(provider({ headers })).resolves.toEqual(mappedAppSession);
     expect(auth.lastHeaders).toBe(headers);
   });
 
@@ -34,7 +44,53 @@ describe('betterAuthSession', () => {
     const auth = new FakeBetterAuth();
     const provider = betterAuthSession(auth, mapSession);
 
-    await expect(provider({ headers: new Headers() })).resolves.toBe(null);
+    await expect(provider({ headers: new Headers() })).resolves.toBeNull();
+  });
+
+  // part-3 I2 (SPEC.md §6.5, §9.1.1:854): with rolling sessions / cookie-cache, Better Auth
+  // writes a fresh session Set-Cookie on every authenticated GET. The framework lifecycle
+  // MUST set the resolved session AND forward that refresh cookie to the response sink, so a
+  // continuously-active user is not hard-logged-out at the original boundary.
+  it('forwards Better Auth session-refresh Set-Cookie headers to the lifecycle sink', async () => {
+    const auth = new FakeBetterAuth();
+    auth.refreshSetCookie =
+      'better-auth.session_token=refreshed; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800';
+    const provider = betterAuthSession(auth, mapSession);
+
+    const forwarded: string[] = [];
+    const lifecycleRequest = await resolveLifecycleRequest<
+      RequestWithHeaders,
+      AppSession
+    >(
+      { headers: new Headers({ cookie: 'kovo_session=s1' }) },
+      {
+        onSessionSetCookie: (cookie) => forwarded.push(cookie),
+        sessionProvider: provider,
+      },
+    );
+
+    // The resolved request still carries the mapped session value (backward compatible).
+    expect((lifecycleRequest as { session: AppSession | null }).session).toEqual(mappedAppSession);
+    // And the refresh cookie reached the response sink (today: nothing).
+    expect(forwarded).toEqual([
+      'better-auth.session_token=refreshed; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800',
+    ]);
+  });
+
+  it('drives no refresh cookies when Better Auth wrote none', async () => {
+    const auth = new FakeBetterAuth();
+    const provider = betterAuthSession(auth, mapSession);
+
+    const forwarded: string[] = [];
+    await resolveLifecycleRequest<RequestWithHeaders, AppSession>(
+      { headers: new Headers({ cookie: 'kovo_session=s1' }) },
+      {
+        onSessionSetCookie: (cookie) => forwarded.push(cookie),
+        sessionProvider: provider,
+      },
+    );
+
+    expect(forwarded).toEqual([]);
   });
 
   it('keeps the mapper total against the declared app session type', () => {

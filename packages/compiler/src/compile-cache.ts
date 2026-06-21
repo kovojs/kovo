@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { compilerBuildId } from './cache-identity.js';
 import { factHash } from './fact-hash.js';
 import type {
@@ -413,14 +415,14 @@ function registryNameLeaf(registryName: string): string {
   return registryName.split('/').at(-1) ?? registryName;
 }
 
+// L8-2 (plans/bug-and-testing-part3.md): the cache key folds module source by
+// hash with no stored preimage, so a hash collision is a stale wrong-output hit.
+// SPEC.md §5.2.1#1 mandates a collision-resistant hash for the version-token /
+// cache namespace; a 32-bit FNV-1a is not. Use SHA-256 so a collision is
+// cryptographically infeasible. Output stays deterministic: a fixed source maps
+// to one fixed digest.
 function stableHash(source: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
-  }
-
-  return hash.toString(16).padStart(8, '0');
+  return createHash('sha256').update(source).digest('hex');
 }
 
 function stableJson(value: unknown): string {

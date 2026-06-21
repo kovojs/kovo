@@ -558,14 +558,18 @@ describe('server mutation lifecycle', () => {
     });
   });
 
-  it('narrows post-commit rerun query instances by row keys', async () => {
+  it('narrows post-commit rerun query instances by row keys (canonical §10.2 name:keyValue)', async () => {
+    // Canonical single-row identity of domain `product` is `product:<key>`
+    // (SPEC §10.2:1019 `product:p1`) — no `via`/source-table segment. The sibling
+    // `product:p2` must NOT rerun (L2-invalidation-2: prior `domain:via:key`
+    // matcher over-invalidated every sibling instance).
     const product = domain('product');
-    const productP1 = query('productDetail', {
-      instanceKey: 'product:products:p1',
+    const productP1 = query('product', {
+      instanceKey: 'product:p1',
       reads: [product],
     });
-    const productP2 = query('productDetail', {
-      instanceKey: 'product:products:p2',
+    const productP2 = query('product', {
+      instanceKey: 'product:p2',
       reads: [product],
     });
     const reserveProduct = mutation('product/reserve', {
@@ -591,8 +595,8 @@ describe('server mutation lifecycle', () => {
         },
       ],
       ok: true,
-      rerunQueries: ['productDetail'],
-      rerunQueryInstances: [{ instanceKey: 'product:products:p1', key: 'productDetail' }],
+      rerunQueries: ['product'],
+      rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'product' }],
       value: 'p1',
     });
   });

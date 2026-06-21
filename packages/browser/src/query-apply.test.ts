@@ -218,6 +218,28 @@ describe('delta query chunk apply (SPEC §9.1.1)', () => {
     expect(store.get('product', 'p1')).toBeUndefined();
   });
 
+  it('treats a malformed (non-object) delta envelope as a miss, not a no-op success', () => {
+    // SPEC §847: a corrupted/shape-skewed delta body (here a bare number) must
+    // throw QueryDeltaApplyError → onDeltaMiss → full refetch, never a silent
+    // no-op apply counted as success that keeps stale data. Base IS present, so
+    // this is a delta-shape miss, distinct from the missing-base miss above.
+    const store = createQueryStore();
+    const onDeltaMiss = vi.fn();
+    store.set('cart', { count: 1, items: [{ id: 'p1', qty: 1 }] });
+    const snapshot = store.get('cart');
+
+    const applied = applyQueryChunksToRuntime(
+      store,
+      [{ delta: true, name: 'cart', value: 42 as unknown as object }],
+      { onDeltaMiss },
+    );
+
+    expect(applied).toEqual([]);
+    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+    // Store base left exactly untouched (no corrupted spread written).
+    expect(store.get('cart')).toEqual(snapshot);
+  });
+
   it('does not call onDeltaMiss for full (non-delta) chunks', () => {
     const store = createQueryStore();
     const onDeltaMiss = vi.fn();

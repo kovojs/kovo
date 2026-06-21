@@ -276,7 +276,14 @@ function renderSpeculationRules(
   prefetch: RoutePrefetch,
   urls: readonly string[],
 ): InlineHtmlWithCsp {
-  const prerenderUrls = dedupe(urls);
+  // L2-early-hints-1 (bugs-part3): a speculation rule with `prefetch:'conservative'`
+  // prerenders/prefetches the listed URLs with the user's credentials, and KV419 only
+  // gates `moderate` (SPEC §8:763). An off-origin URL here is a credentialed
+  // cross-origin prerender. Filter to SAME-ORIGIN targets only: a single-leading-slash
+  // absolute path (`/path`) — rejecting `//host` and `/\host` (protocol-relative /
+  // authority-forming) and any value carrying a scheme. `SAFE_URL_SCHEMES` alone would
+  // not block cross-origin https, so an explicit same-origin path check is required.
+  const prerenderUrls = dedupe(urls).filter(isSameOriginPrerenderUrl);
   if (!prefetch || prerenderUrls.length === 0) return { html: '' };
 
   const scriptText = escapeScriptJson(
@@ -297,6 +304,29 @@ function renderSpeculationRules(
   };
 }
 
+/**
+ * L2-early-hints-1 (bugs-part3): accept only same-origin prerender targets — a
+ * root-relative path with exactly one leading slash. Rejects protocol-relative
+ * (`//host`), authority-forming (`/\host`), and any scheme-bearing absolute URL
+ * (`https://evil/…`, `data:…`), which would prerender off-origin with the user's
+ * credentials (SPEC §8:763; mirrors the same-origin `next` rule at §6.5:731).
+ */
+function isSameOriginPrerenderUrl(url: string): boolean {
+  if (!url.startsWith('/')) return false;
+  // Reject protocol-relative `//host` and backslash-authority `/\host`.
+  if (url.startsWith('//') || url.startsWith('/\\')) return false;
+  // Reject any backslash anywhere (a browser may normalize `\` to `/`, turning
+  // `/x\evil` into an authority).
+  if (url.includes('\\')) return false;
+  // Reject any ASCII control char or whitespace (<= 0x20) and DEL (0x7f) that could
+  // smuggle a second leading slash after browser normalization or break the path.
+  for (let index = 0; index < url.length; index += 1) {
+    const code = url.charCodeAt(index);
+    if (code <= 0x20 || code === 0x7f) return false;
+  }
+  return true;
+}
+
 function renderRouteMeta(
   metaInput: PageHintOptions['meta'],
   context: PageHintRenderContext,
@@ -305,7 +335,19 @@ function renderRouteMeta(
   const tags: string[] = [];
 
   for (const item of metas) {
-    const resolved = resolveRouteMeta(item, context);
+    // F2 (bugs-part3 L2-early-hints-2): head meta is best-effort enrichment, not a
+    // load-bearing render step. A meta-derive failure (absent query, a `derive`
+    // callback throwing on a data gap such as a not-found product) must drop only the
+    // affected tags, never 500 the whole document. `resolveRouteMeta` already returns
+    // `undefined` for an absent-query factory; this catch also contains a throwing
+    // `resolve`.
+    let resolved: RouteMeta | undefined;
+    try {
+      resolved = resolveRouteMeta(item, context);
+    } catch {
+      resolved = undefined;
+    }
+    if (!resolved) continue;
 
     if (resolved.title) tags.push(`<title>${escapeHtml(resolved.title)}</title>`);
     if (resolved.description) {
@@ -322,7 +364,18 @@ function renderRouteMeta(
   return tags;
 }
 
-function resolveRouteMeta(source: RouteMetaSource, context: PageHintRenderContext): RouteMeta {
+/**
+ * Resolve one route-meta source. A static {@link RouteMeta} is returned as-is. A
+ * {@link RouteMetaFactory} returns `undefined` (skip — emit no tags) when any of its
+ * declared queries is absent from the render context, instead of throwing
+ * (F2 / bugs-part3 L2-early-hints-2): the document head path threads rendered queries
+ * in only when they exist, so a routine data gap must omit the derived tags rather
+ * than hard-500 the page.
+ */
+function resolveRouteMeta(
+  source: RouteMetaSource,
+  context: PageHintRenderContext,
+): RouteMeta | undefined {
   if (!isRouteMetaFactory(source)) return source;
 
   const queries = context.queries ?? {};
@@ -330,7 +383,7 @@ function resolveRouteMeta(source: RouteMetaSource, context: PageHintRenderContex
 
   for (const query of source.queries) {
     if (!Object.hasOwn(queries, query)) {
-      throw new Error(`Missing query data for route meta: ${query}`);
+      return undefined;
     }
     values[query] = queries[query];
   }

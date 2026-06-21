@@ -105,6 +105,23 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(compiled.css).not.toContain(':832px}px');
   });
 
+  it('K1: numeric CSS custom-property (--var) values are never px-suffixed (SPEC.md §5.2)', () => {
+    // `cssLengthValue` must treat `--`-prefixed declarations as opaque: a custom
+    // property is not a length, so `style.create({x:{'--gap':3}})` emitting
+    // `--gap:3px` is invalid CSS that breaks downstream consumers such as
+    // `grid-template-columns: repeat(var(--cols), 1fr)`. Every other engine path
+    // (engine.ts:532/:692, internal.ts getPriority) special-cases `--`; the
+    // length normalizer must too.
+    const compiled = createAtomicStyles({
+      a: { '--gap': 3, '--cols': 4 },
+    });
+
+    expect(compiled.css).toContain('--gap:3}');
+    expect(compiled.css).toContain('--cols:4}');
+    expect(compiled.css).not.toContain('--gap:3px');
+    expect(compiled.css).not.toContain('--cols:4px');
+  });
+
   it('emits data-attribute selector suffixes for headless component state', () => {
     const compiled = createAtomicStyles({
       root: {

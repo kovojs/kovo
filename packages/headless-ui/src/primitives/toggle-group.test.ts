@@ -269,6 +269,31 @@ describe('headless-ui toggle-group primitive', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  // SPEC.md §4.6 + rules/accessibility-conformance.md (WAI-ARIA APG): a default
+  // (horizontal) toolbar-style group must navigate with Left/Right only. Off-axis
+  // arrows must be ignored so the browser's page scroll keeps working. J1: keyboard
+  // nav previously fell back to 'both' even though the rendered orientation is
+  // horizontal by default.
+  it('ignores off-axis arrows on a default (horizontal) toggle-group while honoring on-axis arrows', () => {
+    const offAxisEvent = toggleGroupKeyboardEvent('ArrowDown');
+    const offAxisResult = toggleGroupKeyDown(offAxisEvent, {
+      items: alignmentItems,
+      value: 'left',
+    });
+
+    expect(offAxisResult).toBeUndefined();
+    expect(offAxisEvent.defaultPrevented).toBe(false);
+
+    const onAxisEvent = toggleGroupKeyboardEvent('ArrowRight');
+    const onAxisResult = toggleGroupKeyDown(onAxisEvent, {
+      items: alignmentItems,
+      value: 'left',
+    });
+
+    expect(onAxisResult).toEqual({ index: 2, value: 'right' });
+    expect(onAxisEvent.defaultPrevented).toBe(true);
+  });
+
   it('does not trap keyboard events for disabled, empty, or fully disabled collections', () => {
     const disabledEvent = toggleGroupKeyboardEvent('ArrowRight');
     expect(

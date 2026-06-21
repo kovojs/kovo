@@ -111,10 +111,50 @@ export interface SessionDefinition<Value> {
   schema: Schema<Value>;
 }
 
+/**
+ * The result a {@link SessionProvider} resolves to. Backward-compatibly, a provider may
+ * return a plain `SessionValue` (or null/undefined). part-3 I2 (SPEC §6.5, §9.1.1:854):
+ * a provider backed by a rolling/refresh session (e.g. Better Auth `updateAge` or
+ * `cookieCache`) may instead return `{ value, setCookies }` so the framework forwards the
+ * provider's fresh `Set-Cookie` headers onto the resolved GET response — otherwise a
+ * continuously-active user is silently hard-logged-out at the original session boundary.
+ * The plain-value form remains fully supported; this is purely additive.
+ */
+export interface SessionProviderResult<SessionValue> {
+  /** Raw `Set-Cookie` header strings the provider wants forwarded on the response. */
+  setCookies?: readonly string[];
+  value: SessionValue | null | undefined;
+}
+
 /** A function that resolves the session value from a raw request (or null). */
 export type SessionProvider<RawRequest, SessionValue> = (
   request: RawRequest,
-) => Promise<SessionValue | null | undefined> | SessionValue | null | undefined;
+) =>
+  | Promise<SessionProviderResult<SessionValue> | SessionValue | null | undefined>
+  | SessionProviderResult<SessionValue>
+  | SessionValue
+  | null
+  | undefined;
+
+/**
+ * @internal Type guard distinguishing the additive `{ value, setCookies }` provider result
+ * (part-3 I2) from a plain `SessionValue`. A `SessionValue` could itself be an object with a
+ * `value` field, so the discriminator requires the result-envelope shape: an object owning a
+ * `value` key, and — when present — a `setCookies` array. We only treat a return as an
+ * envelope when it carries `setCookies` (the only reason to use the envelope form), keeping
+ * a plain `{ value: … }` session object working unchanged.
+ */
+export function isSessionProviderResult<SessionValue>(
+  result: SessionProviderResult<SessionValue> | SessionValue | null | undefined,
+): result is SessionProviderResult<SessionValue> {
+  return (
+    typeof result === 'object' &&
+    result !== null &&
+    'value' in result &&
+    'setCookies' in result &&
+    Array.isArray((result as { setCookies?: unknown }).setCookies)
+  );
+}
 
 /** A function that resolves the app database/transaction handle for a request. */
 export type DbProvider<RawRequest, DbValue, SessionValue = unknown> = (
@@ -131,6 +171,14 @@ export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> 
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   onError?: ServerErrorHandler;
+  /**
+   * @internal part-3 I2: optional sink the lifecycle calls with each raw `Set-Cookie`
+   * string a {@link SessionProvider} returned via the `{ value, setCookies }` envelope.
+   * A caller that can attach cookies to the resolved response (e.g. a rolling/refresh
+   * session adapter) passes a sink; callers that cannot are unaffected — the cookies are
+   * simply dropped, preserving today's behavior for the plain-value provider form.
+   */
+  onSessionSetCookie?: (rawSetCookie: string) => void;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
 }
 
@@ -322,6 +370,13 @@ export async function runGuard<Request>(
   return result === true ? null : resolveGuardResult(result);
 }
 
+/**
+ * @internal
+ * Resolve the per-request lifecycle: run the session provider, attach `req.session`/`req.db`,
+ * and (part-3 I2) forward any `SessionProvider` `{ value, setCookies }` envelope cookies to
+ * `onSessionSetCookie`. Internal to the request shell; re-exported only on the internal
+ * `@kovojs/server/internal/execution` subpath for adapter tests.
+ */
 export async function resolveLifecycleRequest<Request, SessionValue = unknown, DbValue = unknown>(
   request: Request,
   options: RequestLifecycleOptions<Request, SessionValue, DbValue> = {},
@@ -329,7 +384,19 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   let lifecycleRequest: unknown = request;
 
   if (options.sessionProvider) {
-    const sessionValue = (await options.sessionProvider(request)) ?? null;
+    const resolved = await options.sessionProvider(request);
+    // part-3 I2 (SPEC §6.5): unwrap the additive `{ value, setCookies }` envelope so a
+    // rolling/refresh provider's fresh Set-Cookie headers reach the response; a plain
+    // SessionValue return keeps working unchanged.
+    let sessionValue: SessionValue | null;
+    if (isSessionProviderResult<SessionValue>(resolved)) {
+      sessionValue = resolved.value ?? null;
+      if (options.onSessionSetCookie) {
+        for (const cookie of resolved.setCookies ?? []) options.onSessionSetCookie(cookie);
+      }
+    } else {
+      sessionValue = resolved ?? null;
+    }
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'session', sessionValue);
   }
 

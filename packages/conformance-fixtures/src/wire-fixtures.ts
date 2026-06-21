@@ -80,9 +80,9 @@ export const generatedWireResponseBodies: Record<string, readonly string[]> = {
 <kovo-query name="recommendations" key="product:p1">{"items":[{"id":"rec-1"}]}</kovo-query>
 <kovo-fragment target="reviews:p1" priority="5"><link rel="stylesheet" href="/assets/reviews.css"><section kovo-c="reviews" kovo-deps="product:p1"><article kovo-key="r1">5</article></section></kovo-fragment>
 <kovo-fragment target="recommendations:p1"><section kovo-c="recommendations" kovo-deps="product:p1"><article kovo-key="rec-1">Beans</article></section></kovo-fragment>
-<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>
+<script data-kovo-csp-hash="sha256-jW0HxE0A9VgabJGRM87NEwaePeA2UkMEJqG48kplS/k=">let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>
 --kovo-boundary--
-<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>
+<script data-kovo-csp-hash="sha256-57G5HlGMb762BzkqsI6ro2c8Y4m8RXj1piYt6E8APqU=">for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>
 </body></html>
 `,
   ],

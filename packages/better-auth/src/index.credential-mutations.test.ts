@@ -201,6 +201,127 @@ describe('credential mutation helpers', () => {
     expect(isBetterAuthCredentialFailureError(new AuthApiError(403, 'Forbidden'))).toBe(true);
     expect(isBetterAuthCredentialFailureError(new AuthApiError(500, 'Broken'))).toBe(false);
   });
+
+  // part-3 I1 (SPEC §9.1.1:856): an app serving login in a cross-site iframe sets
+  // `advanced.defaultCookieAttributes = { partitioned: true }`; Better Auth then emits
+  // `Set-Cookie: …; SameSite=None; Partitioned`. The re-emitted cookie MUST keep
+  // `; Partitioned` or Chrome refuses/segregates it and login silently fails.
+  it('preserves the Partitioned (CHIPS) attribute when forwarding Better Auth cookies', async () => {
+    const auth: BetterAuthSignInEmailLike = {
+      api: {
+        signInEmail: () =>
+          responseWithCookies([
+            'better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
+          ]),
+      },
+    };
+    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false, defaultRedirectTo: '/home' });
+
+    const result = await runMutation(
+      signIn,
+      { email: 'ada@example.com', password: 'correct' },
+      { headers: requestHeaders() },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      responseHeaders: {
+        // round-trips through the typed builder (canonical attribute order), keeping
+        // `; Partitioned` and `SameSite=None`.
+        'Set-Cookie': [
+          'better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=None; Partitioned',
+        ],
+      },
+      value: { redirectTo: '/home', status: 'signed-in' },
+    });
+  });
+});
+
+// part-3 I3 (SECURITY_FINDINGS.md M2): a clearing cookie `sid=deleted; Expires=<past>`
+// (non-empty value, no Max-Age) must NOT be classified as session-establishing, so a 2xx
+// carrying only such a cookie fails to sign in instead of redirecting into the protected area.
+describe('Expires-in-past clearing cookie is not session-establishing (part-3 I3)', () => {
+  function signInAuthReturning(cookies: readonly string[]): BetterAuthSignInEmailLike {
+    return {
+      api: {
+        signInEmail: () => responseWithCookies(cookies, 200),
+      },
+    };
+  }
+
+  it('does NOT sign in on a 200 whose only cookie has Expires in the past', async () => {
+    const auth = signInAuthReturning([
+      'better-auth.session_token=deleted; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly',
+    ]);
+    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
+
+    const result = await runMutation(
+      signIn,
+      { email: 'ada@example.com', password: 'correct' },
+      { headers: requestHeaders() },
+    );
+
+    expect(result).toMatchObject({ ok: false, status: 422 });
+  });
+
+  it('still signs in when an Expires is in the future', async () => {
+    const auth = signInAuthReturning([
+      'better-auth.session_token=tok-1; Path=/; Expires=Tue, 19 Jan 2038 03:14:07 GMT; HttpOnly',
+    ]);
+    const signIn = betterAuthSignInEmailMutation(auth, { csrf: false, defaultRedirectTo: '/home' });
+
+    const result = await runMutation(
+      signIn,
+      { email: 'ada@example.com', password: 'correct' },
+      { headers: requestHeaders() },
+    );
+
+    expect(result).toMatchObject({ ok: true, value: { status: 'signed-in' } });
+  });
+});
+
+// part-3 L13-3: `getBetterAuthSetCookie`'s no-`getSetCookie()` fallback must split a
+// comma-FOLDED multi-cookie header into separate cookies WITHOUT splitting inside an
+// `Expires` date that itself contains a comma.
+describe('getBetterAuthSetCookie comma-folded fallback (part-3 L13-3)', () => {
+  function headersWithFoldedSetCookie(folded: string): Headers {
+    // A Headers shim with no getSetCookie(): forces the fallback path. The real
+    // platform Headers always exposes getSetCookie(), so this models a degraded runtime.
+    return {
+      get: (name: string) => (name.toLowerCase() === 'set-cookie' ? folded : null),
+    } as unknown as Headers;
+  }
+
+  it('splits a comma-folded two-cookie header into both cookies', () => {
+    const headers = headersWithFoldedSetCookie(
+      'a=1; Path=/; HttpOnly, b=2; Path=/; HttpOnly',
+    );
+    expect(getBetterAuthSetCookie(headers)).toEqual([
+      'a=1; Path=/; HttpOnly',
+      'b=2; Path=/; HttpOnly',
+    ]);
+  });
+
+  it('does not split inside an Expires date containing a comma', () => {
+    const folded = 'sid=tok; Path=/; Expires=Wed, 09 Jun 2099 10:18:14 GMT; HttpOnly';
+    const headers = headersWithFoldedSetCookie(folded);
+    expect(getBetterAuthSetCookie(headers)).toEqual([folded]);
+  });
+
+  it('splits two cookies that each carry an Expires-comma date', () => {
+    const headers = headersWithFoldedSetCookie(
+      'a=1; Expires=Wed, 09 Jun 2099 10:18:14 GMT, b=2; Expires=Thu, 10 Jun 2099 10:18:14 GMT',
+    );
+    expect(getBetterAuthSetCookie(headers)).toEqual([
+      'a=1; Expires=Wed, 09 Jun 2099 10:18:14 GMT',
+      'b=2; Expires=Thu, 10 Jun 2099 10:18:14 GMT',
+    ]);
+  });
+
+  it('uses getSetCookie() verbatim when available (no comma-folding fallback)', () => {
+    const headers = responseWithCookies(['a=1; Path=/', 'b=2; Path=/']).headers;
+    expect(getBetterAuthSetCookie(headers)).toEqual(['a=1; Path=/', 'b=2; Path=/']);
+  });
 });
 
 // SECURITY_FINDINGS.md H4: backslash / control-char open-redirect hardening.

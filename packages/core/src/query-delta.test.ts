@@ -4,6 +4,7 @@ import type { JsonValue } from './index.js';
 import {
   applyQueryDelta,
   buildQueryDelta,
+  type QueryDelta,
   QueryDeltaApplyError,
   queryDeltaIsSmaller,
   type QueryDeltaListMeta,
@@ -121,6 +122,66 @@ describe('applyQueryDelta', () => {
       applyQueryDelta(base, { lists: { items: { key: 'id', upsert: [{ id: 'p1' }] } } }),
     ).toThrow(QueryDeltaApplyError);
   });
+
+  // D1 (SPEC §843/§848, KV416): `set` is the parent object sent whole for
+  // non-collection fields. A non-collection base key absent from `set` is a
+  // dropped field and MUST be removed; collection (list) paths are reconciled
+  // via `delta.lists` and MUST NEVER be deleted by this rule.
+  it('drops a top-level non-collection field absent from set (parent sent whole)', () => {
+    const base: JsonValue = { count: 2, coupon: 'SAVE10', items: [{ id: 'p1', qty: 1 }] };
+    const next = applyQueryDelta(base, {
+      set: { count: 2 },
+      lists: { items: { key: 'id', upsert: [{ id: 'p1', qty: 2 }] } },
+    });
+    expect(next).toEqual({ count: 2, items: [{ id: 'p1', qty: 2 }] });
+  });
+
+  it('never drops a tracked list path even when it is absent from set', () => {
+    // `set` carries only non-collection fields; the `items` list survives via
+    // `delta.lists` reconciliation and must not be treated as a dropped field.
+    const base: JsonValue = {
+      count: 2,
+      items: [
+        { id: 'p1', qty: 1 },
+        { id: 'p2', qty: 5 },
+      ],
+    };
+    const next = applyQueryDelta(base, {
+      set: { count: 3 },
+      lists: { items: { key: 'id', upsert: [{ id: 'p1', qty: 2 }] } },
+    });
+    expect(next).toEqual({
+      count: 3,
+      items: [
+        { id: 'p1', qty: 2 },
+        { id: 'p2', qty: 5 },
+      ],
+    });
+  });
+
+  // D2 (SPEC §847): a malformed/non-object delta envelope is a delta-miss, not a
+  // silent no-op apply. It must throw so the caller refetches the full value.
+  it('throws QueryDeltaApplyError on a non-object delta envelope', () => {
+    const base: JsonValue = { count: 2, items: [{ id: 'p1', qty: 1 }] };
+    expect(() => applyQueryDelta(base, 42 as unknown as QueryDelta)).toThrow(QueryDeltaApplyError);
+    expect(() => applyQueryDelta(base, null as unknown as QueryDelta)).toThrow(QueryDeltaApplyError);
+    expect(() => applyQueryDelta(base, [{ id: 'p1' }] as unknown as QueryDelta)).toThrow(
+      QueryDeltaApplyError,
+    );
+  });
+
+  it('throws QueryDeltaApplyError when set or lists is not a plain object', () => {
+    const base: JsonValue = { count: 2, items: [{ id: 'p1', qty: 1 }] };
+    expect(() => applyQueryDelta(base, { set: 'oops' } as unknown as QueryDelta)).toThrow(
+      QueryDeltaApplyError,
+    );
+    expect(() => applyQueryDelta(base, { set: 42 } as unknown as QueryDelta)).toThrow(
+      QueryDeltaApplyError,
+    );
+    expect(() => applyQueryDelta(base, { lists: [] } as unknown as QueryDelta)).toThrow(
+      QueryDeltaApplyError,
+    );
+  });
 });
 
 describe('round-trip equivalence (the §9.1.1 apply_delta ≡ full gate)', () => {
@@ -133,6 +194,20 @@ describe('round-trip equivalence (the §9.1.1 apply_delta ≡ full gate)', () =>
       { id: 'p2', qty: 1, name: 'Hat' },
     ],
   };
+
+  // D1 (SPEC §848/KV416): a base carrying a non-collection field the re-run drops.
+  const couponBase: JsonValue = {
+    count: 2,
+    coupon: 'SAVE10',
+    items: [{ id: 'p1', qty: 1 }],
+  };
+
+  it('drops a non-collection field the re-run removed (apply_delta(base, Δ) ≡ full)', () => {
+    const full: JsonValue = { count: 2, items: [{ id: 'p1', qty: 2 }] };
+    const delta = buildQueryDelta(full, affected('cart', ['p1']), meta);
+    expect(delta).toBeDefined();
+    expect(applyQueryDelta(couponBase, delta!)).toEqual(full);
+  });
 
   const scenarios: { name: string; full: JsonValue; keys: string[] }[] = [
     {

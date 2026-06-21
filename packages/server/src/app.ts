@@ -82,8 +82,10 @@ export function createApp<
     liveTargetRendererQueries(liveTargetRenderers),
     routeLayoutQueries(routes),
   );
-  const mutations = resolveAppAuthoringDeclarations(options.mutations, authoringContext).map(
-    withGeneratedMutationTouches,
+  const mutations = assertUniqueMutationKeys(
+    resolveAppAuthoringDeclarations(options.mutations, authoringContext).map(
+      withGeneratedMutationTouches,
+    ),
   );
 
   return {
@@ -107,6 +109,33 @@ export function createApp<
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
   };
+}
+
+/**
+ * Fail closed on duplicate `app.mutations[].key` at handler-build time. SPEC §6.1 makes the
+ * mutation registry key-addressed and SPEC §9.5 dispatches a POST to exactly one keyed handler;
+ * `app-mutation-request.ts` resolves the handler with `.find(c => c.key === key)` (first-match),
+ * so a second same-key mutation would be unreachable dead code while the compile-time invalidation
+ * registry silently last-write-wins the *other* declaration — the two layers would disagree and
+ * the wrong handler (with the wrong input schema and guards) could run. We reject here rather than
+ * silently first-match-winning so the ambiguity surfaces at build, mirroring KV421.
+ */
+function assertUniqueMutationKeys<Mutation extends AppMutationDeclaration<any>>(
+  mutations: readonly Mutation[],
+): readonly Mutation[] {
+  const seen = new Set<string>();
+  for (const mutation of mutations) {
+    if (seen.has(mutation.key)) {
+      throw new Error(
+        `createApp() received two mutations with the same key "${mutation.key}". ` +
+          'Mutation keys address one handler for request dispatch (SPEC §6.1, §9.5); a duplicate ' +
+          'key makes the second handler unreachable and the invalidation registry ambiguous. ' +
+          'Rename one mutation so its key is unique (compile diagnostic KV421).',
+      );
+    }
+    seen.add(mutation.key);
+  }
+  return mutations;
 }
 
 function withGeneratedMutationTouches<Mutation extends AppMutationDeclaration<any>>(

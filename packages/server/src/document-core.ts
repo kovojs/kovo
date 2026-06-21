@@ -78,6 +78,17 @@ export interface DocumentAssemblyOptions {
 /** @internal */
 export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {}
 
+/**
+ * @internal CSP-3 (bugs-part3): a wrapped HTML document response that additionally
+ * surfaces the assembled inline-script/style CSP hashes (`document.csp`) so the
+ * dispatch path can attach a `Content-Security-Policy` header when the app opts in.
+ * `csp` is present only on a wrapped HTML document (status 200, text/html); a
+ * pass-through non-HTML outcome carries no `csp`.
+ */
+export interface DocumentRoutePageResponseWithCsp extends DocumentRoutePageResponse {
+  csp?: CspInlineMetadata;
+}
+
 /** @internal */
 export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, 'body'> {
   /**
@@ -169,7 +180,9 @@ export function renderDeferredDocument(
 
   return {
     ...response,
-    csp: assembled.csp,
+    // G1 (bugs-part3 CSP-1): merge the deferred stream's inline apply/cleanup script
+    // hashes into the document CSP so a strict hash-CSP admits deferred hydration.
+    csp: mergeCspInlineMetadata(assembled.csp, response.csp),
     headers: mergeDocumentHeaders(response.headers, assembled.earlyHints),
   };
 }
@@ -180,7 +193,15 @@ function assembleDocumentParts(
     'body' | 'buildToken' | 'hints' | 'lang' | 'queries' | 'sessionFingerprint'
   >,
 ): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
-  const hints = renderPageHints(options.hints ?? {});
+  // F2 (bugs-part3 L2-early-hints-2): thread the rendered query values into the head
+  // hint context so a `metaFromQuery(...)` factory resolves against real data instead
+  // of an always-empty `{}` (which previously made every such factory throw → a hard
+  // 500 during head render). Map by query name, matching `RouteMetaFactory.queries`.
+  const queryValues = queryValuesByName(options.queries ?? []);
+  const hints = renderPageHints(
+    options.hints ?? {},
+    Object.keys(queryValues).length > 0 ? { queries: queryValues } : {},
+  );
   const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
   const loader = inlineLoaderScript();
   const csp = mergeCspInlineMetadata(
@@ -224,7 +245,7 @@ function assembleDocumentParts(
 export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
-): DocumentRoutePageResponse {
+): DocumentRoutePageResponseWithCsp {
   const { noStore, ...assemblyOptions } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
@@ -242,9 +263,23 @@ export function renderRouteDocumentResponse(
 
   return {
     body: document.html,
+    // CSP-3 (bugs-part3): surface the assembled CSP so the dispatch path can attach a
+    // `Content-Security-Policy` header when the app opts in (previously discarded).
+    csp: document.csp,
     headers: {
       ...mergeDocumentHeaders(response.headers, document.earlyHints),
       'Content-Type': 'text/html; charset=utf-8',
+      // CSP-3 (bugs-part3): baseline security headers on every HTML document, matching
+      // the file/stream posture (response.ts routeOutcomeHeaders). `nosniff` stops
+      // content-type sniffing; `Referrer-Policy` limits cross-origin referrer leakage.
+      // Authors may override by setting these headers on the route response (preserved
+      // by `mergeDocumentHeaders` above, which keeps the existing header name).
+      ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
+        ? { 'X-Content-Type-Options': 'nosniff' }
+        : {}),
+      ...(findHeaderRecordName(response.headers, 'Referrer-Policy') === undefined
+        ? { 'Referrer-Policy': 'strict-origin-when-cross-origin' }
+        : {}),
       // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
       ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
     },
@@ -279,6 +314,10 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
     headers: {
       ...document.earlyHints,
       'Content-Type': 'text/html; charset=utf-8',
+      // CSP-3 (bugs-part3): error documents are HTML responses too; carry the same
+      // baseline security headers as successful documents.
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
     },
     status: options.status,
   };
@@ -357,6 +396,22 @@ function inlineLoaderScript(): { csp: CspInlineMetadata; html: string } {
     csp: { scripts: [hash], styles: [] },
     html: `<script ${cspHashAttribute(hash)}>${kovoLoaderSource}</script>`,
   };
+}
+
+/**
+ * F2 (bugs-part3 L2-early-hints-2): index rendered query values by query name so a
+ * `metaFromQuery(...)` head factory (whose `queries` are query names) can resolve
+ * against the same data the page rendered. The instance `key` is separate; meta
+ * derives from the named query value.
+ */
+function queryValuesByName(
+  queries: readonly QueryScriptRenderOptions[],
+): Record<string, unknown> {
+  const byName: Record<string, unknown> = {};
+  for (const query of queries) {
+    byName[query.name] = query.value;
+  }
+  return byName;
 }
 
 function renderDocumentQueryScriptWithCsp(options: QueryScriptRenderOptions): {

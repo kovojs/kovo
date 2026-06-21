@@ -31,6 +31,24 @@ describe('cookie header helpers', () => {
     );
   });
 
+  // part-3 I1 (SPEC §9.1.1:856): the typed builder must be able to emit `Partitioned`
+  // (CHIPS) — the correctness-critical attribute for cross-site (`SameSite=None`) login —
+  // and `Priority`, so `forwardBetterAuthSetCookie` round-trips them instead of dropping.
+  it('emits Partitioned and Priority when set (part-3 I1)', () => {
+    expect(serializeCookie('sid', 'tok', { partitioned: true })).toBe('sid=tok; Partitioned');
+    expect(
+      serializeCookie('sid', 'tok', {
+        httpOnly: true,
+        partitioned: true,
+        path: '/',
+        sameSite: 'none',
+        secure: true,
+      }),
+    ).toBe('sid=tok; Path=/; HttpOnly; Secure; SameSite=None; Partitioned');
+    expect(serializeCookie('sid', 'tok', { priority: 'high' })).toBe('sid=tok; Priority=High');
+    expect(serializeCookie('sid', 'tok', { priority: 'medium' })).toBe('sid=tok; Priority=Medium');
+  });
+
   // B2: SPEC §9.1.1:846 — typed builder must percent-encode the value.
   it('percent-encodes cookie values so special characters cannot inject cookies (B2)', () => {
     expect(serializeCookie('sid', 'a b,c=d')).toBe('sid=a%20b%2Cc%3Dd');

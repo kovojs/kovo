@@ -3,7 +3,15 @@ export interface CookieOptions {
   expires?: Date | string;
   httpOnly?: boolean;
   maxAge?: number;
+  // SPEC §9.1.1:856 — CHIPS partitioning is correctness-critical for cross-site
+  // (`SameSite=None`) login in an embedded/third-party context: Chrome requires the
+  // `Partitioned` attribute or it refuses/segregates the cookie. The typed builder
+  // must be able to emit it so `forwardBetterAuthSetCookie` round-trips it (part-3 I1).
+  partitioned?: boolean;
   path?: string;
+  // RFC 6265bis cookie priority. Modeled so the typed builder re-emits it instead of
+  // silently dropping an attribute Better Auth set (part-3 I1).
+  priority?: 'high' | 'low' | 'medium';
   sameSite?: 'lax' | 'none' | 'strict';
   secure?: boolean;
 }
@@ -51,6 +59,17 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
     }[options.sameSite];
     parts.push(`SameSite=${sameSite}`);
   }
+  if (options.priority !== undefined) {
+    const priority = {
+      high: 'High',
+      low: 'Low',
+      medium: 'Medium',
+    }[options.priority];
+    parts.push(`Priority=${priority}`);
+  }
+  // `Partitioned` is a valueless attribute; emit it last so it survives the round-trip
+  // through `parseSetCookieHeader` (part-3 I1, SPEC §9.1.1).
+  if (options.partitioned) parts.push('Partitioned');
 
   return parts.join('; ');
 }

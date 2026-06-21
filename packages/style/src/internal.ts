@@ -81,6 +81,12 @@ const BARE_NUMBER = /^-?\d+(?:\.\d+)?$/;
  */
 export function cssLengthValue(cssProperty: string, value: string | number): string {
   const text = String(value);
+  // CSS custom properties (`--gap`, `--cols`, …) are not lengths — their value is
+  // opaque and substituted verbatim by `var()`. Appending `px` produces invalid
+  // CSS (e.g. `grid-template-columns: repeat(var(--cols), 1fr)` with `--cols:3px`
+  // collapses the grid). Every other engine path special-cases `--` (engine.ts
+  // :532/:692, getPriority above); the length normalizer must too. (SPEC.md §5.2)
+  if (cssProperty.startsWith('--')) return text;
   if (UNITLESS_CSS_PROPERTIES.has(cssProperty)) return text;
   if (text === '0' || !BARE_NUMBER.test(text)) return text;
   return `${text}px`;

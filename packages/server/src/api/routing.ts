@@ -27,6 +27,7 @@ export type {
   RateLimitOptions,
   SessionDefinition,
   SessionProvider,
+  SessionProviderResult,
   SessionRequestLike,
   SessionUserLike,
   UnauthenticatedContext,

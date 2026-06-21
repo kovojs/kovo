@@ -391,6 +391,8 @@ describe('server app shell Vite build seam', () => {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/shop.css>; rel=preload; as=style, </assets/shop.js>; rel=modulepreload',
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'x-content-type-options': 'nosniff',
           },
           kind: 'route-document',
           path: '/shop/index.html',
@@ -758,6 +760,8 @@ describe('server app shell Vite build seam', () => {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/catalog.css>; rel=preload; as=style, </assets/catalog.js>; rel=modulepreload',
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'x-content-type-options': 'nosniff',
           },
           kind: 'route-document',
           path: '/catalog/index.html',
@@ -873,6 +877,8 @@ describe('server app shell Vite build seam', () => {
             headers: {
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
+              'referrer-policy': 'strict-origin-when-cross-origin',
+              'x-content-type-options': 'nosniff',
             },
             kind: 'route-document',
             path: '/docs/intro/index.html',
@@ -908,6 +914,8 @@ describe('server app shell Vite build seam', () => {
             headers: {
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
+              'referrer-policy': 'strict-origin-when-cross-origin',
+              'x-content-type-options': 'nosniff',
             },
             path: '/docs/intro/index.html',
             status: 200,

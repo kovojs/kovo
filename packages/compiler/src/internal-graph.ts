@@ -219,7 +219,7 @@ export function deriveRegistryFactsFromGraph(
   options: RegistryTypeFactOptions = {},
 ): RegistryFacts {
   const components = deriveComponentFactsFromGraph(graph);
-  const diagnostics = routeFactDiagnostics(graph);
+  const diagnostics = [...routeFactDiagnostics(graph), ...mutationFactDiagnostics(graph)];
   const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
   const viewTransitions = deriveViewTransitionsFromGraph(graph);
 
@@ -259,6 +259,38 @@ export function routeFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnos
       help: diagnosticDefinitions.KV228.help,
       message: `${diagnosticDefinitions.KV228.message} duplicate route path "${route}" appears ${count} times in graph pages.`,
       severity: diagnosticDefinitions.KV228.severity,
+    });
+  }
+
+  return diagnostics;
+}
+
+/**
+ * @internal Report duplicate mutation-key facts before the invalidation registry indexes them.
+ * SPEC §6.1 makes the mutation registry key-addressed and §9.5 dispatches a POST to exactly one
+ * keyed handler. Two graph mutations sharing `mutation.key` is ambiguous graph authorship that
+ * {@link deriveInvalidationFactsFromGraph} silently last-write-wins while the server dispatch
+ * (`app-mutation-request.ts` `.find(...)`) first-match-wins — the same "duplicate facts silently
+ * last-write-wins during graph indexing" failure mode every other registry identity is already
+ * protected from (routes KV228, components KV237, fragment targets KV238, view transitions KV239,
+ * query shapes KV240). Mutations were the only registry identity with no uniqueness diagnostic.
+ */
+export function mutationFactDiagnostics(graph: RegistryGraphInput): CompilerDiagnostic[] {
+  const diagnostics: CompilerDiagnostic[] = [];
+  const keyCounts = new Map<string, number>();
+
+  for (const mutation of graph.mutations ?? []) {
+    keyCounts.set(mutation.key, (keyCounts.get(mutation.key) ?? 0) + 1);
+  }
+
+  for (const [key, count] of [...keyCounts].sort(([left], [right]) => left.localeCompare(right))) {
+    if (count < 2) continue;
+    diagnostics.push({
+      code: 'KV421',
+      fileName: 'app graph mutation table',
+      help: diagnosticDefinitions.KV421.help,
+      message: `${diagnosticDefinitions.KV421.message} mutation key "${key}" appears ${count} times in graph mutations.`,
+      severity: diagnosticDefinitions.KV421.severity,
     });
   }
 

@@ -12,10 +12,15 @@ import {
 } from './document-core.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
 
-const deferredApplyScript =
-  '<script>let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()</script>';
-const deferredCleanupScript =
-  '<script>for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()</script>';
+// G1 (bugs-part3 CSP-1): the deferred apply/cleanup scripts now carry a CSP hash attr.
+const deferredApplyScriptBody =
+  'let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
+const deferredCleanupScriptBody =
+  'for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
+const deferredApplyHash = cspSha256(deferredApplyScriptBody);
+const deferredCleanupHash = cspSha256(deferredCleanupScriptBody);
+const deferredApplyScript = `<script data-kovo-csp-hash="${deferredApplyHash}">${deferredApplyScriptBody}</script>`;
+const deferredCleanupScript = `<script data-kovo-csp-hash="${deferredCleanupHash}">${deferredCleanupScriptBody}</script>`;
 
 describe('server app shell document assembly', () => {
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {
@@ -52,8 +57,15 @@ describe('server app shell document assembly', () => {
     expect(
       renderContentSecurityPolicy(document.csp).replaceAll(loaderHash, '<loader-hash>'),
     ).toMatchInlineSnapshot(
-      `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='"`,
+      `"default-src 'self'; script-src 'self' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"`,
     );
+    // G2 (bugs-part3 CSP-2): the hardening directives are present so a hash-locked
+    // script-src is not bypassable via an injected `<base>`/`<object>`.
+    const policy = renderContentSecurityPolicy(document.csp);
+    expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("form-action 'self'");
+    expect(policy).toContain("frame-ancestors 'none'");
     expect(document.html).toContain('<!doctype html><html lang="en-US"><head>');
     expect(document.html).toContain('<title>Cart</title>');
     expect(document.html).toContain(
@@ -70,6 +82,41 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain(
       '<body><main><cart-badge kovo-deps="cart"></cart-badge></main></body></html>',
     );
+  });
+
+  // F2 (bugs-part3 L2-early-hints-2): the document head path threads rendered query
+  // values into the meta factory so `metaFromQuery(...)` resolves; an absent query
+  // must drop only the derived tags rather than 500 the whole document.
+  it('threads rendered queries into head meta factories without 500ing on a gap', () => {
+    const productFactory = {
+      queries: ['product'],
+      resolve(values: Record<string, unknown>) {
+        const product = values.product as { name: string; stock: number };
+        return { description: `${product.stock} in stock`, title: product.name };
+      },
+    };
+
+    const withData = renderDocument({
+      body: '<main>Product</main>',
+      hints: { meta: productFactory },
+      queries: [{ name: 'product', value: { name: 'Coffee', stock: 5 } }],
+    });
+    expect(withData.html).toContain('<title>Coffee</title>');
+    expect(withData.html).toContain('<meta name="description" content="5 in stock">');
+
+    // No matching query script → the factory is skipped, no throw, body still renders.
+    expect(() =>
+      renderDocument({
+        body: '<main>Product</main>',
+        hints: { meta: productFactory },
+      }),
+    ).not.toThrow();
+    const withoutData = renderDocument({
+      body: '<main>Product</main>',
+      hints: { meta: productFactory },
+    });
+    expect(withoutData.html).not.toContain('<title>Coffee</title>');
+    expect(withoutData.html).toContain('<main>Product</main>');
   });
 
   it('lets document templates receive assembled parts without losing required shell parts', () => {
@@ -176,6 +223,47 @@ describe('server app shell document assembly', () => {
     expect(renderRouteDocumentResponse(csv)).toBe(csv);
   });
 
+  // CSP-3 (bugs-part3): HTML document responses carry baseline security headers and
+  // surface the assembled CSP so the dispatch path can emit a Content-Security-Policy.
+  it('attaches baseline security headers and plumbs document.csp on HTML responses (CSP-3)', () => {
+    const wrapped = renderRouteDocumentResponse({
+      body: '<main>Orders</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200,
+    });
+
+    expect(wrapped.headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(wrapped.headers['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
+
+    // `document.csp` is surfaced (previously discarded) — the loader hash is present so
+    // an app can render and attach a Content-Security-Policy header.
+    expect(wrapped.csp).toBeDefined();
+    expect(wrapped.csp?.scripts.length).toBeGreaterThan(0);
+    const policy = renderContentSecurityPolicy(wrapped.csp!);
+    expect(policy).toContain("script-src 'self'");
+    expect(policy).toContain("base-uri 'self'");
+
+    // An author-set nosniff header is preserved rather than duplicated.
+    const authorNosniff = renderRouteDocumentResponse({
+      body: '<main>Orders</main>',
+      headers: { 'Content-Type': 'text/html', 'x-content-type-options': 'nosniff' },
+      status: 200,
+    });
+    const nosniffKeys = Object.keys(authorNosniff.headers).filter(
+      (name) => name.toLowerCase() === 'x-content-type-options',
+    );
+    expect(nosniffKeys).toHaveLength(1);
+  });
+
+  it('attaches baseline security headers to error documents (CSP-3)', () => {
+    const error = renderErrorDocument({ status: 404 });
+    expect(error.headers).toMatchObject({
+      'Content-Type': 'text/html; charset=utf-8',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'X-Content-Type-Options': 'nosniff',
+    });
+  });
+
   it('assembles deferred document streams with chunks before the closing shell', () => {
     const loaderHash = cspSha256(kovoLoaderSource);
     const response = renderDeferredDocument({
@@ -217,6 +305,17 @@ describe('server app shell document assembly', () => {
     expect(
       response.body.endsWith(`--kovo-boundary--\n${deferredCleanupScript}\n</body></html>`),
     ).toBe(true);
+
+    // G1 (bugs-part3 CSP-1): the deferred apply/cleanup script hashes are merged into
+    // the returned document CSP so a strict hash-CSP admits deferred hydration, and the
+    // HTML carries matching hash attributes.
+    expect(response.csp.scripts).toContain(deferredApplyHash);
+    expect(response.csp.scripts).toContain(deferredCleanupHash);
+    expect(response.csp.scripts).toContain(loaderHash);
+    const policy = renderContentSecurityPolicy(response.csp);
+    expect(policy).toContain(`'${deferredApplyHash}'`);
+    expect(policy).toContain(`'${deferredCleanupHash}'`);
+    expect(response.body).toContain(`data-kovo-csp-hash="${deferredApplyHash}"`);
   });
 
   it('renders stable error documents with escaped content', () => {

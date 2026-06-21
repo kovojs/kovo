@@ -8,7 +8,7 @@ import {
   type ComponentModuleModel,
 } from './scan/parse.js';
 import { cssIrHeader } from './ir.js';
-import { escapeAttribute, indent } from './shared.js';
+import { escapeCssString, indent } from './shared.js';
 import type { RoutePageFact } from './types.js';
 
 /**
@@ -813,9 +813,23 @@ function extractStaticComponentCss(model: ComponentModuleModel): string | null {
   );
 }
 
-function componentHostSelector(domComponentName: string, model: ComponentModuleModel): string {
+/**
+ * @internal Build the host CSS selector for a component's scoped stylesheet.
+ * Exported for the L14-3 escaping conformance test only; not part of the
+ * app-facing public surface (rules/api-surface.md).
+ */
+export function componentHostSelector(
+  domComponentName: string,
+  model: ComponentModuleModel,
+): string {
   const hostName = domComponentName;
   const renderedHost = componentRenderHostElement(model)?.tag ?? null;
 
-  return renderedHost === hostName ? hostName : `[kovo-c="${escapeAttribute(hostName)}"]`;
+  // The `kovo-c` value sits inside a double-quoted CSS string token, so it must
+  // be escaped per CSS string syntax (escapeCssString), NOT HTML attribute syntax
+  // (escapeAttribute). The HTML escaper would emit `&quot;`/`&amp;` literals and
+  // leave `"`, `\`, `]`, `}`, and newlines able to break the selector or smuggle
+  // an escape, so the selector would not round-trip against the runtime attribute
+  // value. (SPEC.md §5.2)
+  return renderedHost === hostName ? hostName : `[kovo-c="${escapeCssString(hostName)}"]`;
 }

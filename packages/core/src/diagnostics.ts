@@ -58,7 +58,8 @@ export type DiagnosticCode =
   | 'KV414'
   | 'KV418'
   | 'KV419'
-  | 'KV420';
+  | 'KV420'
+  | 'KV421';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -736,5 +737,16 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message:
       'Island with local state nested inside a server-refreshable fragment target loses its state on refresh.',
+  },
+  KV421: {
+    code: 'KV421',
+    help: [
+      'Would lower to: one mutation fact per mutation key for the invalidation registry and server dispatch table.',
+      'Blocked reason: two mutation declarations share one key, so graph indexing silently last-write-wins the invalidation set while server dispatch first-match-wins the handler — the two layers disagree, an invalidation can be computed for a mutation that never runs, and the wrong handler (with the wrong input schema and guards) executes against attacker-shaped input.',
+      'Fixes: emit exactly one mutation fact per mutation key, or rename one mutation so its key is unique across the app graph.',
+      'SPEC §6.1 makes the mutation registry key-addressed and §9.5 dispatches a POST to exactly one keyed handler; duplicate mutation keys would otherwise silently last-write-wins the invalidation registry while first-match-wins server dispatch — like routes (KV228), components (KV237), fragment targets (KV238), view transitions (KV239), and query shapes (KV240), mutation keys must be unique.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Duplicate mutation key.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

@@ -62,7 +62,11 @@ describe('generated live target registry collection', () => {
     );
   });
 
-  it('stores generated renderers registered by imported modules', () => {
+  // L2-deferred-4 (bugs-part3): `register` is now collision-aware (parity with
+  // `collect`). The SAME renderer object re-registers idempotently (HMR re-import);
+  // a DIFFERENT object for the same component id throws instead of last-writer-wins
+  // silently cross-contaminating renderers.
+  it('stores generated renderers and is collision-aware on re-register (L2-deferred-4)', () => {
     const initial = registeredGeneratedLiveTargetRenderers().filter(
       (renderer) => renderer.component === 'test/auto-registered',
     );
@@ -73,7 +77,7 @@ describe('generated live target registry collection', () => {
       queries: ['cart'],
       render: () => '<cart-badge>1</cart-badge>',
     };
-    const second: LiveTargetRenderer = {
+    const conflicting: LiveTargetRenderer = {
       component: 'test/auto-registered',
       queries: ['cart'],
       render: () => '<cart-badge>2</cart-badge>',
@@ -86,11 +90,23 @@ describe('generated live target registry collection', () => {
       ),
     ).toEqual([first]);
 
-    registerGeneratedLiveTargetRenderer(second);
+    // Re-registering the SAME object identity is idempotent (no throw, no duplicate).
+    expect(registerGeneratedLiveTargetRenderer(first)).toBe(first);
     expect(
       registeredGeneratedLiveTargetRenderers().filter(
         (renderer) => renderer.component === 'test/auto-registered',
       ),
-    ).toEqual([second]);
+    ).toEqual([first]);
+
+    // A DIFFERENT object for the same component id is a collision → throw (parity with
+    // `collectGeneratedLiveTargetRenderers`); the first registration is preserved.
+    expect(() => registerGeneratedLiveTargetRenderer(conflicting)).toThrow(
+      'Duplicate generated live target renderer for component "test/auto-registered".',
+    );
+    expect(
+      registeredGeneratedLiveTargetRenderers().filter(
+        (renderer) => renderer.component === 'test/auto-registered',
+      ),
+    ).toEqual([first]);
   });
 });

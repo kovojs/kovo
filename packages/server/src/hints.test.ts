@@ -230,6 +230,44 @@ describe('page hints', () => {
     });
   });
 
+  // L2-early-hints-1 (bugs-part3): a speculation rule prerenders/prefetches with the
+  // user's credentials, so an off-origin target is a credentialed cross-origin
+  // prerender (KV419 never gates `conservative`). Same-origin paths survive; everything
+  // off-origin is dropped.
+  it('drops cross-origin / protocol-relative prerender URLs (L2-early-hints-1)', () => {
+    const result = renderPageHints({
+      prefetch: 'conservative',
+      prerenderUrls: [
+        '/cart', // same-origin path: kept
+        '/products/p1', // same-origin path: kept
+        'https://evil.example/steal', // absolute cross-origin: dropped
+        'http://evil.example/steal', // absolute cross-origin: dropped
+        '//evil.example/steal', // protocol-relative: dropped
+        '/\\evil.example/steal', // backslash-authority: dropped
+        '/x\\evil.example', // embedded backslash: dropped
+        'data:text/html,<x>', // scheme: dropped
+        'cart', // relative (no leading slash): dropped
+      ],
+    });
+
+    // Only the two same-origin paths appear in the emitted rule.
+    expect(result.html).toContain('"urls":["/cart","/products/p1"]');
+    expect(result.html).not.toContain('evil.example');
+    expect(result.html).not.toContain('data:');
+  });
+
+  it('emits no speculation rule when every prerender URL is off-origin (L2-early-hints-1)', () => {
+    expect(
+      renderPageHints({
+        prefetch: 'conservative',
+        prerenderUrls: ['https://evil.example/a', '//evil.example/b'],
+      }),
+    ).toEqual({
+      earlyHints: {},
+      html: '',
+    });
+  });
+
   it('renders moderate speculation rules with deduped escaped prerender urls only when opted in', () => {
     expect(
       renderPageHints({

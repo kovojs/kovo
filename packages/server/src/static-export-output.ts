@@ -1,10 +1,11 @@
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, type Dirent } from 'node:fs';
 import {
   access,
   copyFile,
   lstat,
   mkdir,
   mkdtemp,
+  readdir,
   rename,
   rm,
   stat,
@@ -126,7 +127,12 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
   }
 
   await assertWritableStaticExportTargets(plan);
-  if (plan.writes.length === 0) return;
+  if (plan.writes.length === 0) {
+    // C2/SPEC §9.5: even when this export emits nothing, prior route documents must be reconciled so
+    // a fully-removed route stops serving stale 200 HTML across rebuilds.
+    await pruneStaleStaticExportRouteDocuments(plan);
+    return;
+  }
 
   const stagingRoot = await createStaticExportStagingRoot(plan.root);
   try {
@@ -136,8 +142,71 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
       ),
     );
     await commitStaticExportStagedOutput(plan, stagingRoot);
+    // C2/SPEC §9.5: reconcile relative to the rename commit — remove prior route-document artifacts
+    // (mutable `index.html`) the current plan no longer owns. A removed route must not keep serving
+    // stale 200 HTML (stale-page disclosure). Immutable versioned `/c/__v/` modules are RETAINED per
+    // SPEC §14 prior-version retention and never pruned here.
+    await pruneStaleStaticExportRouteDocuments(plan);
   } finally {
     await rm(stagingRoot, { force: true, recursive: true });
+  }
+}
+
+/**
+ * @internal C2/SPEC §9.5 + §14. After the atomic rename commit, remove prior mutable
+ * route-document `index.html` artifacts under the output root that the current plan no longer owns,
+ * so a removed/unpublished route stops serving stale 200 HTML across rebuilds. Immutable versioned
+ * client modules under `/c/__v/` are preserved for the SPEC §14 deploy-skew retention window and are
+ * never enumerated for pruning.
+ */
+async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan): Promise<void> {
+  const ownedRouteDocuments = new Set(
+    plan.writes
+      .filter((write) => write.itemKind === 'route-document')
+      .map((write) => write.targetPath),
+  );
+
+  const clientModuleRoot = path.join(plan.root, 'c');
+  for await (const indexHtmlPath of enumerateStaticExportRouteDocuments(
+    plan.root,
+    clientModuleRoot,
+  )) {
+    if (!ownedRouteDocuments.has(indexHtmlPath)) {
+      // Remove only the stale directory-index document; leave any sibling files (assets the export
+      // does not own a manifest for, user-managed files) untouched.
+      await rm(indexHtmlPath, { force: true });
+    }
+  }
+}
+
+/**
+ * @internal Enumerate existing static-export route-document `index.html` files under `root`,
+ * skipping the entire `/c/` client-module subtree so immutable versioned modules (SPEC §14) are
+ * never considered for pruning.
+ */
+async function* enumerateStaticExportRouteDocuments(
+  root: string,
+  clientModuleRoot: string,
+): AsyncGenerator<string> {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    const entryPath = path.join(root, entry.name);
+    if (entry.isDirectory()) {
+      // `/c/` holds immutable versioned client modules — never descend (SPEC §14 retention).
+      if (entryPath === clientModuleRoot) continue;
+      yield* enumerateStaticExportRouteDocuments(entryPath, clientModuleRoot);
+      continue;
+    }
+
+    if (entry.isFile() && entry.name === 'index.html') {
+      yield entryPath;
+    }
   }
 }
 

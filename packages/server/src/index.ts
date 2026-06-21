@@ -113,7 +113,15 @@ export type {
   ValidationIssue,
   WriteDefinition,
 } from './api/data.js';
-export { i18n, meta, metaFromQuery, stylesheet, t } from './api/rendering.js';
+export {
+  cspSha256,
+  i18n,
+  meta,
+  metaFromQuery,
+  renderContentSecurityPolicy,
+  stylesheet,
+  t,
+} from './api/rendering.js';
 export type {
   ContentSecurityPolicyOptions,
   CspInlineMetadata,
@@ -196,6 +204,7 @@ export type {
   ServerResponseBase,
   SessionDefinition,
   SessionProvider,
+  SessionProviderResult,
   SessionRequestLike,
   SessionUserLike,
   UnauthenticatedContext,

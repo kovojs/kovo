@@ -80,9 +80,34 @@ describe('server route meta and i18n hints', () => {
         '<meta property="og:description" content="3 available">',
       ].join(''),
     });
-    expect(() => renderPageHints({ meta: productMeta })).toThrow(
-      'Missing query data for route meta: product',
-    );
+    // F2 (bugs-part3 L2-early-hints-2): a query-derived meta factory whose query data
+    // is absent must skip silently (emit no derived tags), NOT throw — the document
+    // head path previously called `renderPageHints` with no query context, so any
+    // `metaFromQuery` factory hard-500'd the whole page. (Inverts the prior throw
+    // assertion.)
+    expect(renderPageHints({ meta: productMeta })).toEqual({
+      earlyHints: {},
+      html: '',
+    });
+
+    // A throwing `derive` (e.g. a not-found row) also drops only the derived tags
+    // rather than 500ing; the rest of the document still renders.
+    const throwingMeta = metaFromQuery(productQuery, (product) => {
+      if (!product) throw new Error('not found');
+      return { title: product.name };
+    });
+    expect(
+      renderPageHints(
+        { meta: [{ description: 'Static fallback' }, throwingMeta] },
+        { queries: { product: undefined } },
+      ),
+    ).toEqual({
+      earlyHints: {},
+      html: [
+        '<meta name="description" content="Static fallback">',
+        '<meta property="og:description" content="Static fallback">',
+      ].join(''),
+    });
   });
 
   it('reports invalid query-derived meta declarations early', () => {

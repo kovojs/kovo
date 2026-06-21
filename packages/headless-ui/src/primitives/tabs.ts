@@ -260,9 +260,14 @@ export function tabsKeyDown(
     };
   }
 
+  // SPEC.md §4.6 + rules/accessibility-conformance.md (WAI-ARIA APG): default the
+  // navigation orientation to the rendered default ('horizontal', matching
+  // tabsDataOrientation) instead of 'both', so a horizontal tablist responds to
+  // Left/Right only and off-axis arrows fall through to the browser. Mirrors the
+  // toolbar/menubar peers (`state.orientation ?? 'horizontal'`).
   const intent = navigationIntentFromKey(event.key, {
     ...(state.dir === undefined ? {} : { dir: state.dir }),
-    ...(state.orientation === undefined ? {} : { orientation: state.orientation }),
+    orientation: state.orientation ?? 'horizontal',
   });
   if (intent === undefined) return;
 

@@ -43,60 +43,96 @@ describe('server change records', () => {
     ]);
   });
 
-  it('matches change records against table-scoped query instance keys', () => {
+  it('narrows a keyed change to canonical per-row instance keys of the touched domain (SPEC §10.2:1019)', () => {
+    // Canonical currency is `name:keyValue` (`product:p1`) — NO `via`/source-table
+    // segment, even when the change record carries one. A per-row reader of domain
+    // `product` is named `product`, so the canonical key prefix is the domain.
     expect(
       changeRecordTouchesQueryInstance(
         { domain: 'product', keys: ['p1'], via: 'products' },
-        'product:products:p1',
+        'product:p1',
       ),
     ).toBe(true);
+    // L2-invalidation-2: a SIBLING single-row reader of the same domain must NOT
+    // rerun — the old `domain:via:key` matcher over-invalidated every sibling.
     expect(
       changeRecordTouchesQueryInstance(
         { domain: 'product', keys: ['p1'], via: 'products' },
-        'product:products:p2',
+        'product:p2',
       ),
     ).toBe(false);
+    // A key prefixed by a different query name reading the domain is not a provable
+    // single-row identity → over-invalidate (SPEC §10.1).
     expect(
       changeRecordTouchesQueryInstance(
         { domain: 'product', keys: ['p1'], via: 'products' },
-        'product:prices:p2',
+        'productDetail:p2',
       ),
     ).toBe(true);
+    // A key for a different domain prefix never matches this change's domain.
     expect(
       changeRecordTouchesQueryInstance(
         { domain: 'product', keys: ['p1'], via: 'products' },
-        'cart:products:p1',
+        'cart:p1',
       ),
-    ).toBe(false);
-    expect(changeRecordTouchesQueryInstance({ domain: 'product' }, 'product:products:p1')).toBe(
-      true,
-    );
+    ).toBe(true);
+    // A whole-domain change (no keys) reruns every reader.
+    expect(changeRecordTouchesQueryInstance({ domain: 'product' }, 'product:p1')).toBe(true);
   });
 
-  it('over-invalidates legacy same-domain keyed instances when source table is unknown', () => {
+  it('A4: a keyed change reruns a LIST/AGGREGATE reader of the same domain (SPEC §1.1:19, §10.1)', () => {
+    // The canonical SPEC §1.1:19 stale-list bug: a list/aggregate/session-scoped
+    // reader is NOT a single-row identity of the domain, so a keyed change must
+    // still rerun it rather than silently leave it stale.
+    expect(
+      changeRecordTouchesQueryInstance(
+        { domain: 'order', keys: ['o1'], via: 'orders' },
+        'orders-page:1',
+      ),
+    ).toBe(true);
+    expect(
+      changeRecordTouchesQueryInstance({ domain: 'cart', keys: ['u7'], via: 'carts' }, 'cartTotal:u7'),
+    ).toBe(true);
+    expect(
+      changeRecordTouchesQueryInstance(
+        { domain: 'product', keys: ['p1'], via: 'products' },
+        'productsByCat:electronics',
+      ),
+    ).toBe(true);
+  });
+
+  it('over-invalidates legacy same-domain keys whose value is not a provable single row', () => {
+    // `product:p1` is a provable single-row identity → narrow to the touched key.
     expect(
       changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p1'),
     ).toBe(true);
     expect(
       changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p2'),
+    ).toBe(false);
+    // A composite value after the domain is not a single row → over-invalidate.
+    expect(
+      changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'product:p2:variant'),
     ).toBe(true);
     expect(changeRecordTouchesQueryInstance({ domain: 'product', keys: ['p1'] }, 'cart:p1')).toBe(
-      false,
+      true,
     );
   });
 
-  it('invalidates same-domain query instances from another keyed table', async () => {
+  it('narrows per-row instances and over-invalidates non-row readers of the same domain (canonical §10.2 keys)', async () => {
+    // Canonical per-row identity of domain `catalog` is `catalog:<key>` (name == domain).
     const catalog = domain('catalog');
-    const productP1 = query('productDetail', {
-      instanceKey: 'catalog:products:p1',
+    const catalogP1 = query('catalog', {
+      instanceKey: 'catalog:p1',
       reads: [catalog],
     });
-    const productP2 = query('productDetail', {
-      instanceKey: 'catalog:products:p2',
+    const catalogP2 = query('catalog', {
+      instanceKey: 'catalog:p2',
       reads: [catalog],
     });
+    // A differently-named reader of the same domain is NOT a provable single-row
+    // identity → it over-invalidates (reruns) on any keyed catalog change.
     const priceP2 = query('priceDetail', {
-      instanceKey: 'catalog:prices:p2',
+      instanceKey: 'priceDetail:p2',
       reads: [catalog],
     });
     const updateProduct = mutation('catalog/product/update', {
@@ -105,7 +141,7 @@ describe('server change records', () => {
       }),
       registry: {
         inferredTouches: [{ domain: 'catalog', keys: 'arg:productId', via: 'products' }],
-        queries: [productP1, productP2, priceP2],
+        queries: [catalogP1, catalogP2, priceP2],
       },
       handler(input) {
         return input.productId;
@@ -122,24 +158,26 @@ describe('server change records', () => {
         },
       ],
       ok: true,
-      rerunQueries: ['productDetail', 'priceDetail'],
+      rerunQueries: ['catalog', 'priceDetail'],
       rerunQueryInstances: [
-        { instanceKey: 'catalog:products:p1', key: 'productDetail' },
-        { instanceKey: 'catalog:prices:p2', key: 'priceDetail' },
+        { instanceKey: 'catalog:p1', key: 'catalog' },
+        { instanceKey: 'priceDetail:p2', key: 'priceDetail' },
       ],
       value: 'p1',
     });
   });
 
-  it('renders same-domain query instances from another keyed table after one table mutates', async () => {
+  it('renders narrowed + over-invalidated same-domain instances after one row mutates', async () => {
     const catalog = domain('catalog');
-    const productP2 = query('productDetail', {
-      instanceKey: 'catalog:products:p2',
+    // Sibling per-row instance `catalog:p2` must NOT rerun when `p1` is touched.
+    const catalogP2 = query('catalog', {
+      instanceKey: 'catalog:p2',
       load: () => ({ id: 'p2', title: 'Catalog p2' }),
       reads: [catalog],
     });
+    // Non-row reader of the domain reruns (over-invalidate).
     const priceP2 = query('priceDetail', {
-      instanceKey: 'catalog:prices:p2',
+      instanceKey: 'priceDetail:p2',
       load: () => ({ id: 'p2', amount: 25 }),
       reads: [catalog],
     });
@@ -149,7 +187,7 @@ describe('server change records', () => {
       }),
       registry: {
         inferredTouches: [{ domain: 'catalog', keys: 'arg:productId', via: 'products' }],
-        queries: [productP2, priceP2],
+        queries: [catalogP2, priceP2],
       },
       handler(input) {
         return input.productId;
@@ -163,10 +201,46 @@ describe('server change records', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.body).not.toContain('name="productDetail"');
+    expect(response.body).not.toContain('key="catalog:p2"');
     expect(response.body).toContain(
-      '<kovo-query name="priceDetail" key="catalog:prices:p2">{"id":"p2","amount":25}</kovo-query>',
+      '<kovo-query name="priceDetail" key="priceDetail:p2">{"id":"p2","amount":25}</kovo-query>',
     );
+  });
+
+  it('A4: a LIST query reading the touched domain appears in rerunQueries (SPEC §1.1:19)', async () => {
+    const order = domain('order');
+    // A list reader keyed `orderList:active` reads the `order` domain but is not a
+    // single-row identity; today it is silently excluded and renders stale data.
+    const orderList = query('orderList', {
+      instanceKey: 'orderList:active',
+      load: () => ({ orders: ['o1', 'o2'] }),
+      reads: [order],
+    });
+    const reserveOrder = mutation('order/reserve', {
+      input: s.object({ orderId: s.string() }),
+      registry: {
+        inferredTouches: [{ domain: 'order', keys: 'arg:orderId', via: 'orders' }],
+        queries: [orderList],
+      },
+      handler(input) {
+        return input.orderId;
+      },
+    });
+
+    await expect(runMutation(reserveOrder, { orderId: 'o1' }, {})).resolves.toEqual({
+      changes: [
+        {
+          domain: 'order',
+          input: { orderId: 'o1' },
+          keys: ['o1'],
+          via: 'orders',
+        },
+      ],
+      ok: true,
+      rerunQueries: ['orderList'],
+      rerunQueryInstances: [{ instanceKey: 'orderList:active', key: 'orderList' }],
+      value: 'o1',
+    });
   });
 
   it('emits manual invalidate escape-hatch records from mutation context', async () => {

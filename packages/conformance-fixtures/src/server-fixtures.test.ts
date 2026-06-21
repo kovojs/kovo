@@ -316,7 +316,10 @@ describe('@kovojs/test server fixture facts', () => {
       writes: ['attachment'],
     });
     expect(fact.pageHints).toEqual({
-      missingQueryMessage: 'Missing query data for route meta: cart',
+      // part-3 F2 (SPEC §6.4): route meta is best-effort enrichment — a missing query
+      // value no longer throws ("Missing query data for route meta") and hard-500s head
+      // render; it degrades gracefully (the derived tags are simply omitted).
+      missingQueryMessage: '',
       rendered: {
         csp: {
           scripts: ['sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI='],

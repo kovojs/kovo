@@ -75,16 +75,62 @@ export function mutationRegistryChangeRecords<Input>(
   return changeRecordsFor(registry?.touches ?? [], input);
 }
 
+/**
+ * Decide whether a key-scoped change must rerun a query instance that already
+ * reads the change's domain (the read-set filter ran upstream in
+ * `queryTouchedByChange`).
+ *
+ * The instance key is the SPEC §10.2:1019 / §9.1:904 canonical currency
+ * `name:keyValue` (`product:p1`) — the single string shared across the client
+ * store, wire, optimism, and live-push routing. There is no `via`/source-table
+ * segment in this currency; `via` lives only on the change record (the table the
+ * mutation touched within the domain).
+ *
+ * Key granularity may only NARROW within a provable single-row reader of this
+ * change's domain: a key `name:keyValue` whose name segment is the domain itself
+ * (a per-row reader of `change.domain`, e.g. `product:p2`) reruns only when its
+ * row value is one of `change.keys`. Every other reader — a list, aggregate, or
+ * otherwise session/non-row-identity key (`orders-page:1`, `cartTotal:u7`,
+ * `productsByCat:electronics`) — is NOT a provable single-row identity of this
+ * domain, so it always reruns (SPEC §10.1: the domain is the cache currency;
+ * over-invalidate when row identity is uncertain rather than silently leave a
+ * same-domain reader stale, the canonical SPEC §1.1:19 bug).
+ */
 export function changeRecordTouchesQueryInstance(
   change: ChangeRecord,
   instanceKey: string,
 ): boolean {
   if ((change.keys?.length ?? 0) === 0) return true;
-  if (change.keys?.some((key) => instanceKey === queryInstanceKeyForChangeKey(change, key))) {
+
+  const rowValue = canonicalSingleRowValue(change.domain, instanceKey);
+  if (rowValue === undefined) {
+    // Not a provable single-row identity of this domain (list/aggregate/
+    // session-scoped reader). SPEC §10.1: over-invalidate when uncertain.
     return true;
   }
 
-  return queryInstanceKeyReadsChangeDomain(change, instanceKey);
+  // A per-row reader of this domain: narrow to the touched rows only.
+  return change.keys?.includes(rowValue) ?? false;
+}
+
+/**
+ * If `instanceKey` is the canonical `domain:keyValue` single-row identity of
+ * `domain`, return its row value; otherwise `undefined` (the reader is a list,
+ * aggregate, or a key prefixed by some other query name).
+ *
+ * A single-row reader of domain `D` is named `D` (SPEC §10.2:1019 example
+ * `product:p1`), so the canonical key is exactly `D:<value>` with `<value>` a
+ * single non-empty segment. A composite/multi-segment value after the domain is
+ * not provably a single row, so it is treated as a non-row reader (rerun).
+ */
+function canonicalSingleRowValue(domain: string, instanceKey: string): string | undefined {
+  const prefix = `${domain}:`;
+  if (!instanceKey.startsWith(prefix)) return undefined;
+
+  const value = instanceKey.slice(prefix.length);
+  if (value.length === 0 || value.includes(':')) return undefined;
+
+  return value;
 }
 
 function changeRecordsFor<Input>(
@@ -95,27 +141,6 @@ function changeRecordsFor<Input>(
     domain: item.key,
     input,
   }));
-}
-
-function queryInstanceKeyForChangeKey(
-  change: Pick<ChangeRecord, 'domain' | 'via'>,
-  key: string,
-): string {
-  return change.via === undefined
-    ? `${change.domain}:${key}`
-    : `${change.domain}:${change.via}:${key}`;
-}
-
-function queryInstanceKeyReadsChangeDomain(
-  change: Pick<ChangeRecord, 'domain' | 'via'>,
-  instanceKey: string,
-): boolean {
-  if (!instanceKey.startsWith(`${change.domain}:`)) return false;
-
-  // SPEC §10.1: the domain is the cache currency. When source-table identity is
-  // missing or differs, row keys are not comparable, so over-invalidate.
-  if (change.via === undefined) return true;
-  return !instanceKey.startsWith(`${change.domain}:${change.via}:`);
 }
 
 function dedupeTouchSites(touches: readonly MutationTouchSite[]): MutationTouchSite[] {

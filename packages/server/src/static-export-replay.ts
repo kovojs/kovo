@@ -1,7 +1,10 @@
 import type { KovoApp } from './app-types.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
-import { staticExportRoutePlan } from './static-export-route-plan.js';
+import {
+  staticExportRoutePlan,
+  type StaticExportRouteTarget,
+} from './static-export-route-plan.js';
 import {
   blockingStaticExportDiagnostics,
   StaticExportError,
@@ -47,7 +50,12 @@ export async function replayStaticExportApp({
   const artifacts: StaticExportArtifact[] = [];
 
   for (const routeTarget of routePlan.targets) {
-    if (diagnostics.some((diagnostic) => diagnostic.routePath === routeTarget.routePath)) {
+    // SPEC §9.5: `skip` policy publishes the exportable subset. Suppress a target only when a
+    // diagnostic names this exact concrete URL (`concretePath`), or — for a route-level diagnostic
+    // with no single concrete target — when it shares the route pattern. Matching every staticPath
+    // sibling by `routePath` (all param targets share `route.path`) would drop valid pages whenever
+    // one staticPath is non-exportable; see C1.
+    if (diagnostics.some((diagnostic) => staticExportDiagnosticSuppresses(diagnostic, routeTarget))) {
       continue;
     }
 
@@ -75,4 +83,18 @@ export async function replayStaticExportApp({
     }),
     diagnostics,
   };
+}
+
+/**
+ * SPEC §9.5 `skip` suppression test for one concrete replay target. A diagnostic that names a
+ * single concrete URL (`concretePath`) suppresses only that exact target; a route-level diagnostic
+ * with no concrete target suppresses every target sharing its route pattern.
+ */
+function staticExportDiagnosticSuppresses(
+  diagnostic: StaticExportDiagnostic,
+  routeTarget: StaticExportRouteTarget,
+): boolean {
+  return diagnostic.concretePath === undefined
+    ? diagnostic.routePath === routeTarget.routePath
+    : diagnostic.concretePath === routeTarget.path;
 }

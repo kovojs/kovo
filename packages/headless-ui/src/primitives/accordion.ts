@@ -263,9 +263,14 @@ export function accordionKeyDown(
 ): AccordionMoveResult | undefined {
   if (event.defaultPrevented) return;
 
+  // SPEC.md §4.6 + rules/accessibility-conformance.md (WAI-ARIA APG): default the
+  // navigation orientation to the rendered default ('vertical', matching
+  // accordionDataOrientation) instead of 'both', so a vertical accordion responds to
+  // Up/Down only and off-axis arrows fall through to the browser. Mirrors the
+  // toolbar/menubar peers (`state.orientation ?? 'horizontal'`).
   const intent = navigationIntentFromKey(event.key, {
     ...(state.dir === undefined ? {} : { dir: state.dir }),
-    ...(state.orientation === undefined ? {} : { orientation: state.orientation }),
+    orientation: state.orientation ?? 'vertical',
   });
   if (intent === undefined) return;
 
@@ -318,7 +323,15 @@ function accordionDataOrientation(
 }
 
 function accordionType(state: AccordionState): AccordionType {
-  return state.type ?? (Array.isArray(state.value) ? 'multiple' : 'single');
+  // J3 (SPEC.md §4.6): an explicit `type` is authoritative and must stay stable
+  // across toggles. When `type` is omitted, only a string value (a single open
+  // panel) implies single-select; an array OR an empty/undefined value keeps the
+  // accordion multiple, so an intended-multiple accordion that starts with no open
+  // panels does not silently collapse to single after the first toggle stores a
+  // bare string. Multiplicity is never re-derived in a way that flips the declared
+  // mode between toggles.
+  if (state.type !== undefined) return state.type;
+  return typeof state.value === 'string' ? 'single' : 'multiple';
 }
 
 function nextAccordionValue(state: AccordionState, itemValue: string): AccordionValue {

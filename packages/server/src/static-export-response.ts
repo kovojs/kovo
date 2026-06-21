@@ -39,9 +39,13 @@ function staticExportReplayResponseDiagnostic(
   contentType: string | null,
 ) {
   if (options.kind === 'route-document') {
+    // `routePath` here is the concrete replay target (e.g. `/products/p1`), so stamp it as the
+    // concrete-path discriminator: SPEC §9.5 `skip` must suppress only this exact non-exportable
+    // target, never its valid param siblings replayed in the same pass.
     return staticExportDiagnostic(
       options.routePath,
       `KV229 static export can only write successful HTML route documents; '${options.routePath}' returned status ${options.response.status} with Content-Type '${contentType ?? 'none'}'.`,
+      options.routePath,
     );
   }
 

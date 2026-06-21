@@ -56,6 +56,8 @@ describe('server static export', () => {
         headers: {
           'content-type': 'text/html; charset=utf-8',
           link: `<${cartHref}>; rel=modulepreload`,
+          'referrer-policy': 'strict-origin-when-cross-origin',
+          'x-content-type-options': 'nosniff',
         },
         kind: 'route-document',
         path: '/index.html',
@@ -206,6 +208,8 @@ describe('server static export', () => {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'x-content-type-options': 'nosniff',
           },
           kind: 'route-document',
           path: '/index.html',
@@ -215,6 +219,8 @@ describe('server static export', () => {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'x-content-type-options': 'nosniff',
           },
           kind: 'route-document',
           path: '/docs/intro/index.html',
@@ -243,6 +249,8 @@ describe('server static export', () => {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'x-content-type-options': 'nosniff',
           },
           path: '/index.html',
           status: 200,
@@ -251,6 +259,8 @@ describe('server static export', () => {
           headers: {
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'x-content-type-options': 'nosniff',
           },
           path: '/docs/intro/index.html',
           status: 200,

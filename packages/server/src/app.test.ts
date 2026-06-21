@@ -124,6 +124,39 @@ describe('server createApp request shell', () => {
     });
   });
 
+  // H1 (SPEC §6.1 key-addressed mutation registry / §9.5 single keyed dispatch): two same-key
+  // mutations make the second handler unreachable (app-mutation-request resolves with .find,
+  // first-match-wins) while the compile-time invalidation registry last-write-wins the other
+  // declaration. createApp must fail closed rather than silently shadow the second handler.
+  it('rejects duplicate mutation keys at createApp build time (KV421 runtime sibling)', () => {
+    const firstAdd = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler: (input) => input,
+    });
+    const secondAdd = mutation('cart/add', {
+      input: s.object({ orderId: s.string() }),
+      handler: (input) => input,
+    });
+
+    expect(() => createApp({ mutations: [firstAdd, secondAdd] })).toThrow(
+      /two mutations with the same key "cart\/add"/,
+    );
+  });
+
+  it('accepts distinct mutation keys at createApp build time', () => {
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler: (input) => input,
+    });
+    const removeFromCart = mutation('cart/remove', {
+      input: s.object({ productId: s.string() }),
+      handler: (input) => input,
+    });
+
+    const app = createApp({ mutations: [addToCart, removeFromCart] });
+    expect(app.mutations.map((candidate) => candidate.key)).toEqual(['cart/add', 'cart/remove']);
+  });
+
   it('injects compiler-registered query reads into app queries', () => {
     const catalogQuery = query('generatedCatalog', {
       load: () => ({ items: [] as string[] }),

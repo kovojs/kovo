@@ -7,6 +7,19 @@ export type QueryUpdatePlan<Value = unknown> = (value: Value) => void;
  * The client query store: get/set/subscribe to query values and take snapshots.
  */
 export interface QueryStore {
+  /**
+   * L7-2 / SPEC §9.4: drop every held query value, releasing the heap retained
+   * by rotating server-authored `<kovo-query key>` instances for the session.
+   * Subscriptions are preserved (the store can be re-hydrated); use this on
+   * teardown or when discarding a whole document's query truth.
+   */
+  clear(): void;
+  /**
+   * L7-2 / SPEC §9.4: drop a single `(name, key)` value so a loader/morph path can
+   * evict an instance key no longer present in the DOM (e.g. a paged-out search row)
+   * instead of growing the `values` map without bound. Subscriptions are preserved.
+   */
+  delete(name: string, key?: string): void;
   get<Value = unknown>(name: string, key?: string): Value | undefined;
   snapshot(
     names: readonly string[],
@@ -38,6 +51,16 @@ export function createQueryStore(): QueryStore {
   const plans = new Map<string, Set<QueryUpdatePlan>>();
 
   return {
+    // L7-2 / SPEC §9.4: the `values` map is otherwise never evicted and its keys
+    // flow from server-authored `<kovo-query key>`, so rotating keys (search,
+    // pagination, per-row) grow the session heap without bound. `clear`/`delete`
+    // give the loader/morph path a way to release that retained memory.
+    clear(): void {
+      values.clear();
+    },
+    delete(name: string, key?: string): void {
+      values.delete(queryStoreKey(name, key));
+    },
     get<Value = unknown>(name: string, key?: string): Value | undefined {
       return values.get(queryStoreKey(name, key)) as Value | undefined;
     },
@@ -78,6 +101,14 @@ export function createQueryStore(): QueryStore {
 
       return () => {
         existing.delete(plan as QueryUpdatePlan);
+        // L7-1 / SPEC §9.4: prune the now-empty subscriber Set so the `plans` map
+        // does not leak one empty Set per distinct `(name, key)` over the session.
+        // Re-resolve the current Set first: a later subscribe() may have replaced
+        // the captured `existing` with a fresh Set for the same key, which must not
+        // be deleted.
+        if (existing.size === 0 && plans.get(storeKey) === existing) {
+          plans.delete(storeKey);
+        }
       };
     },
   };

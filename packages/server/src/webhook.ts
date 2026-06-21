@@ -203,7 +203,18 @@ export async function runWebhook<
 ): Promise<WebhookRunResult<WebhookInputFor<InputSchema>, Value>> {
   const endpointRequest = endpointRequestWithoutSession(request);
   const rawBody = new Uint8Array(await endpointRequest.arrayBuffer());
-  const verification = await verifyWebhook(declaration.webhookDefinition, endpointRequest, rawBody);
+  // L10-1 (SPEC §9.1:860-862): verification is fail-closed. An app-authored
+  // `verify()`/`payload`/`tolerance.timestamp` callback (core/src/verifier.ts) may
+  // THROW on a malformed signature header instead of returning false; that thrown
+  // error must be treated as verification failure, not propagate as an uncaught
+  // rejection → framework 500. Catch ANY error here and return the same 401 as a
+  // `false` result, never surfacing which check failed.
+  let verification: boolean;
+  try {
+    verification = await verifyWebhook(declaration.webhookDefinition, endpointRequest, rawBody);
+  } catch {
+    verification = false;
+  }
   if (!verification) {
     return {
       changes: [],
@@ -238,8 +249,14 @@ export async function runWebhook<
 
   const input = inputResult.value;
   const idem = declaration.webhookDefinition.idempotency?.(input);
+  // L10-3 (SPEC §9.1:860): use ONE truthiness predicate for the whole replay
+  // lifecycle. An empty-string idem is a VALID provider event id, so the fast-path
+  // LOOKUP must be gated on `idem !== undefined` (treated active) exactly like the
+  // RESERVE/SET below — gating the lookup on a truthy `idem` skipped the fast path
+  // for '' while still reserving, leaving a latent double-execute window.
+  const idemActive = idem !== undefined;
   const replayScope = webhookReplayScope(declaration.name);
-  const replayed = idem
+  const replayed = idemActive
     ? await declaration.webhookDefinition.replayStore?.get(replayScope, idem)
     : undefined;
   if (replayed) {
@@ -250,11 +267,10 @@ export async function runWebhook<
     };
   }
 
-  const reservation =
-    idem === undefined
-      ? undefined
-      : declaration.webhookDefinition.replayStore?.reserve(replayScope, idem);
-  if (idem !== undefined && !reservation) {
+  const reservation = idemActive
+    ? declaration.webhookDefinition.replayStore?.reserve(replayScope, idem)
+    : undefined;
+  if (idemActive && !reservation) {
     const pending = await declaration.webhookDefinition.replayStore?.get(replayScope, idem);
     if (pending) {
       return {

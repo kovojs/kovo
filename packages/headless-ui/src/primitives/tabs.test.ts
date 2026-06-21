@@ -337,6 +337,24 @@ describe('headless-ui tabs primitive', () => {
     expect(event.defaultPrevented).toBe(true);
   });
 
+  // SPEC.md §4.6 + rules/accessibility-conformance.md (WAI-ARIA APG): a default
+  // (horizontal) tablist must respond to Left/Right only. Off-axis arrows must be
+  // ignored so the browser's page scroll keeps working and the announced
+  // aria-orientation is honored. J1: keyboard nav previously fell back to 'both'.
+  it('ignores off-axis arrows on a default (horizontal) tablist while honoring on-axis arrows', () => {
+    const offAxisEvent = tabsKeyboardEvent('ArrowDown');
+    const offAxisResult = tabsKeyDown(offAxisEvent, { items: billingItems, value: 'card' });
+
+    expect(offAxisResult).toBeUndefined();
+    expect(offAxisEvent.defaultPrevented).toBe(false);
+
+    const onAxisEvent = tabsKeyboardEvent('ArrowRight');
+    const onAxisResult = tabsKeyDown(onAxisEvent, { items: billingItems, value: 'card' });
+
+    expect(onAxisResult).toMatchObject({ changed: true, index: 2, value: 'wire' });
+    expect(onAxisEvent.defaultPrevented).toBe(true);
+  });
+
   it('guards primitive handlers when author behavior prevented default', () => {
     const clickEvent = new Event('click', { cancelable: true });
     clickEvent.preventDefault();

@@ -83,9 +83,22 @@ export function normalizePathname(pathname: string): PathnameNormalization {
   // `/\`. Without this, a request to `//evil.com/` would normalize to `//evil.com`
   // and be emitted verbatim as a protocol-relative `Location` 308 — an
   // unauthenticated open redirect (security finding H5).
-  const authorityCollapsed = `/${absolutePathname.replace(/^[/\\]+/, '')}`;
+  //
+  // F1 (bugs-part3 L2-route-matcher-1): also collapse *internal* slash/backslash
+  // runs across the whole path. Without this, `/files//etc` survives as
+  // `['files','','etc']` and an empty interior segment silently matches a param
+  // (`/files/:a/:b` → `a=''`), letting a request probe a different route arity than
+  // the canonical URL implies and feed empty params into ownership/key lookups.
+  const slashCollapsed = `/${absolutePathname.replace(/[/\\]+/g, '/').replace(/^\/+/, '')}`;
+  // L2-route-matcher-2 (bugs-part3): apply RFC-3986 dot-segment removal so a decoded
+  // `.`/`..` can never be delivered as a literal param value (a traversal primitive
+  // if an app interpolates a param into a filesystem path/cache key). This aligns the
+  // runtime matcher with the static-export safety check
+  // (static-export-route-plan.ts staticExportRouteTargetPathSegmentIsSafe), which
+  // already rejects decoded `.`/`..` segments.
+  const dotSegmentsRemoved = removeDotSegments(slashCollapsed);
   const trailingTrimmed =
-    authorityCollapsed === '/' ? '/' : authorityCollapsed.replace(/\/+$/, '') || '/';
+    dotSegmentsRemoved === '/' ? '/' : dotSegmentsRemoved.replace(/\/+$/, '') || '/';
   const normalized = trailingTrimmed;
 
   if (normalized === absolutePathname) {
@@ -97,11 +110,12 @@ export function normalizePathname(pathname: string): PathnameNormalization {
   }
 
   // The normalized form differs from the requested path because trailing slashes
-  // were stripped and/or a leading authority-forming run was collapsed. Either
-  // way, emit a 308 carrying the collapsed pathname so the browser never follows
-  // the original protocol-relative form. `trailingSlash` reflects only whether a
-  // trailing slash was removed.
-  const trailingSlashRemoved = trailingTrimmed !== authorityCollapsed;
+  // were stripped and/or a leading authority-forming run was collapsed, an internal
+  // slash run was collapsed, or a dot-segment was removed. Either way, emit a 308
+  // carrying the canonical pathname so the browser never follows the original
+  // protocol-relative form or an empty-interior-segment smuggle. `trailingSlash`
+  // reflects only whether a trailing slash was removed.
+  const trailingSlashRemoved = trailingTrimmed !== dotSegmentsRemoved;
   return {
     inputPathname,
     pathname: normalized,
@@ -242,6 +256,12 @@ function matchCompiledRoute(
     } catch {
       return undefined;
     }
+    // L2-route-matcher-2 (bugs-part3): a decoded param value of exactly `.`/`..` is a
+    // traversal primitive. `removeDotSegments` already strips literal dot-segments
+    // during normalization; this also rejects percent-encoded `%2e`/`%2e%2e` that only
+    // surface as a dot-segment after decoding, matching the static-export safety check
+    // (static-export-route-plan.ts) which rejects decoded `.`/`..` segments.
+    if (decoded === '.' || decoded === '..') return undefined;
     params[routeSegment.name ?? routeSegment.value.slice(1)] = decoded;
   }
 
@@ -297,4 +317,29 @@ function routeAmbiguityWitness(left: CompiledRoute, right: CompiledRoute): strin
 function splitPathSegments(pathname: string): readonly string[] {
   if (pathname === '/') return [];
   return pathname.slice(1).split('/');
+}
+
+/**
+ * RFC-3986 §5.2.4 dot-segment removal over an already-absolute, slash-collapsed
+ * pathname (L2-route-matcher-2). Resolves `.`/`..` interior segments so a decoded
+ * dot-segment can never reach a param or change the matched route arity. A leading
+ * `..` cannot escape above root — it is dropped, mirroring the static-export safety
+ * check (static-export-route-plan.ts) which rejects decoded `.`/`..` segments.
+ */
+function removeDotSegments(pathname: string): string {
+  const segments = pathname.split('/');
+  const output: string[] = [];
+
+  for (const segment of segments) {
+    if (segment === '.') continue;
+    if (segment === '..') {
+      // Pop the last real segment but never the leading empty (root) segment.
+      if (output.length > 1) output.pop();
+      continue;
+    }
+    output.push(segment);
+  }
+
+  const joined = output.join('/');
+  return joined.startsWith('/') ? joined : `/${joined}`;
 }

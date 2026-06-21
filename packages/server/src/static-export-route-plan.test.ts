@@ -64,12 +64,14 @@ describe('server static export route plan', () => {
       },
       {
         code: 'KV229',
+        concretePath: '/orders/:id',
         message:
           "KV229 static export staticPath '/orders/:id' for param route '/orders/:id' must be a concrete URL, not a route pattern.",
         routePath: '/orders/:id',
       },
       {
         code: 'KV229',
+        concretePath: '/cart',
         message: "KV229 static export staticPath '/cart' does not match param route '/orders/:id'.",
         routePath: '/orders/:id',
       },
@@ -102,18 +104,21 @@ describe('server static export route plan', () => {
       diagnostics: [
         {
           code: 'KV229',
+          concretePath: '/docs/intro',
           message:
             "KV229 static export cannot export '/docs/intro' for route '/docs/intro/' because it duplicates the concrete route target from '/docs/intro'.",
           routePath: '/docs/intro/',
         },
         {
           code: 'KV229',
+          concretePath: '/products/p1',
           message:
             "KV229 static export cannot export '/products/p1' for route '/products/:id' because it duplicates the concrete route target from '/products/:id'.",
           routePath: '/products/:id',
         },
         {
           code: 'KV229',
+          concretePath: '/docs/intro',
           message:
             "KV229 static export cannot export '/docs/intro' for route '/docs/:slug' because it duplicates the concrete route target from '/docs/intro'.",
           routePath: '/docs/:slug',
@@ -145,18 +150,21 @@ describe('server static export route plan', () => {
       diagnostics: [
         {
           code: 'KV229',
+          concretePath: '/docs/%2e%2e',
           message:
             "KV229 static export cannot export concrete route target '/docs/%2e%2e' for route '/docs/%2e%2e' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/docs/%2e%2e',
         },
         {
           code: 'KV229',
+          concretePath: '/products/%2f',
           message:
             "KV229 static export cannot export concrete route target '/products/%2f' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/products/:id',
         },
         {
           code: 'KV229',
+          concretePath: '/products/%E0%A4%A',
           message:
             "KV229 static export cannot export concrete route target '/products/%E0%A4%A' for route '/products/:id' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.",
           routePath: '/products/:id',

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   collectCssAssetManifest,
+  componentHostSelector,
   createCssAssetResolver,
   cssRouteByteAccounting,
   cssRouteDeliveryGate,
@@ -13,6 +14,7 @@ import {
   selectCssAssets,
 } from './internal.js';
 import { compileComponentModule } from './index.js';
+import { parseComponentModule } from './scan/parse.js';
 import type { ComponentCssAsset } from './internal.js';
 
 function cssAssetSnapshot(assets: readonly ComponentCssAsset[]) {
@@ -32,6 +34,46 @@ function cssAssetSnapshot(assets: readonly ComponentCssAsset[]) {
     })),
   }));
 }
+
+describe('componentHostSelector (L14-3: kovo-c attribute-selector escaping)', () => {
+  // A model whose render host (`<dialog>`) differs from the DOM component name,
+  // so `componentHostSelector` takes the `[kovo-c="…"]` branch for any chosen
+  // component name.
+  function dialogHostModel() {
+    return parseComponentModule(
+      'components/widget/widget.tsx',
+      `
+import { component } from '@kovojs/core';
+
+export const Widget = component({
+  css: \`.count { color: teal; }\`,
+  render: () => <dialog id="widget">Widget</dialog>,
+});
+`,
+    );
+  }
+
+  it('escapes CSS-string-significant chars so the selector round-trips against kovo-c (SPEC.md §5.2)', () => {
+    const model = dialogHostModel();
+
+    // A `"` in the value would otherwise terminate the CSS string token and let
+    // the rest of the name smuggle in selector syntax. The CSS-string escaper
+    // backslash-escapes it (NOT the HTML escaper, which would emit `&quot;`).
+    expect(componentHostSelector('a"b', model)).toBe('[kovo-c="a\\"b"]');
+    // Backslash and newline likewise follow CSS string rules, not HTML entities.
+    expect(componentHostSelector('a\\b', model)).toBe('[kovo-c="a\\\\b"]');
+    expect(componentHostSelector('a\nb', model)).toBe('[kovo-c="a\\a b"]');
+    // The HTML attribute escaper bug is gone: no `&amp;`/`&quot;` entities leak
+    // into the CSS selector (`&` is not significant inside a CSS string).
+    expect(componentHostSelector('a&b', model)).toBe('[kovo-c="a&b"]');
+    expect(componentHostSelector('a"b', model)).not.toContain('&quot;');
+  });
+
+  it('leaves a normal identifier component name unchanged', () => {
+    const model = dialogHostModel();
+    expect(componentHostSelector('cart-drawer', model)).toBe('[kovo-c="cart-drawer"]');
+  });
+});
 
 describe('component CSS helpers', () => {
   it('wraps component CSS in @scope and emits a prefixed fallback', () => {

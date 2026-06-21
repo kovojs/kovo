@@ -2,6 +2,29 @@ export function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
 }
 
+/**
+ * Escape a string for embedding inside a double-quoted CSS string token, e.g. the
+ * value of an attribute selector `[kovo-c="…"]`. CSS string syntax — not HTML
+ * attribute syntax — governs this position, so the HTML escaper `escapeAttribute`
+ * (which entity-encodes `&`/`"` but leaves `\`, `]`, `}`, and newlines raw) cannot
+ * be reused: it would emit `&quot;` literals into the selector and leave a `"` or
+ * backslash able to terminate the string or smuggle an escape, so the selector
+ * would not round-trip against the runtime `kovo-c` attribute value (SPEC.md §5.2).
+ *
+ * Escapes `"`, `\`, and the CSS-significant control characters per the CSS string
+ * grammar. Mirrors `escapeCssString` in `@kovojs/browser`
+ * (packages/browser/src/fragment-targets.ts) — a deliberate LOCAL copy so the
+ * compiler does not depend on the browser runtime package.
+ */
+export function escapeCssString(value: string): string {
+  return value.replace(/[\n\r\f"\\]/g, (char) => {
+    if (char === '\n') return '\\a ';
+    if (char === '\r') return '\\d ';
+    if (char === '\f') return '\\c ';
+    return `\\${char}`;
+  });
+}
+
 export function indent(value: string): string {
   return value
     .split('\n')

@@ -1140,17 +1140,30 @@ export const CartBadge = component({
     expect(bootstrap.source).toContain(
       "import { applyDeferredStreamResponseToRuntime, createQueryStore, installKovoLoader } from '@kovojs/browser/generated';",
     );
-    expect(bootstrap.source).toContain(
-      'import { CartBadge$queryUpdatePlans, CartBadge$clockUpdatePlans } from "../components/cart/cart-badge.client.js";',
-    );
-    expect(bootstrap.source).toContain(
-      'import { CartPanel$queryUpdatePlans } from "../components/cart/cart-panel.client.js";',
-    );
-    expect(bootstrap.source).toContain('const queryPlans = {');
-    expect(bootstrap.source).toContain('...CartBadge$queryUpdatePlans,');
-    expect(bootstrap.source).toContain('...CartPanel$queryUpdatePlans,');
+    // B2 (SPEC §5.2): each compiled-plan import is aliased to a per-input-unique local so two
+    // same-named components never collide into a duplicate lexical binding. The alias is derived
+    // from the import path hash, so assert the aliased import shape rather than a fixed local.
+    const badgeImport =
+      /import \{ CartBadge\$queryUpdatePlans as (\w+), CartBadge\$clockUpdatePlans as (\w+) \} from "\.\.\/components\/cart\/cart-badge\.client\.js";/.exec(
+        bootstrap.source,
+      );
+    expect(badgeImport, 'aliased cart-badge import').not.toBeNull();
+    const panelImport =
+      /import \{ CartPanel\$queryUpdatePlans as (\w+) \} from "\.\.\/components\/cart\/cart-panel\.client\.js";/.exec(
+        bootstrap.source,
+      );
+    expect(panelImport, 'aliased cart-panel import').not.toBeNull();
+    const [, badgeQueryLocal, badgeClockLocal] = badgeImport ?? [];
+    const [, panelQueryLocal] = panelImport ?? [];
+    // Distinct locals -> no duplicate binding even if the export names had collided.
+    expect(new Set([badgeQueryLocal, badgeClockLocal, panelQueryLocal]).size).toBe(3);
+    // B2 (SPEC §4.8): query plans are MERGED (not shallow-spread) so a query bound by two
+    // components keeps both update plans; the aliased locals feed the merge helper.
+    expect(bootstrap.source).toContain('const queryPlans = mergeKovoQueryPlans([');
+    expect(bootstrap.source).toContain(`  ${badgeQueryLocal},`);
+    expect(bootstrap.source).toContain(`  ${panelQueryLocal},`);
     expect(bootstrap.source).toContain('const clockUpdatePlans = [');
-    expect(bootstrap.source).toContain('...CartBadge$clockUpdatePlans,');
+    expect(bootstrap.source).toContain(`  ...${badgeClockLocal},`);
     expect(bootstrap.source).toContain('installKovoLoader({');
     expect(bootstrap.source).toContain('clockUpdatePlans,');
     expect(bootstrap.source).toContain('queryStore: store');

@@ -34,7 +34,11 @@ describe('server static export app replay boundary', () => {
       artifacts: [
         {
           body: expect.stringContaining('<button on:click="/c/__v/cart-static/cart.client.js'),
-          headers: { 'content-type': 'text/html; charset=utf-8' },
+          headers: {
+            'content-type': 'text/html; charset=utf-8',
+            'referrer-policy': 'strict-origin-when-cross-origin',
+            'x-content-type-options': 'nosniff',
+          },
           path: '/index.html',
           status: 200,
         },
@@ -54,6 +58,7 @@ describe('server static export app replay boundary', () => {
       diagnostics: [
         {
           code: 'KV229',
+          concretePath: '/exports/orders.csv',
           message: expect.stringContaining(
             "successful HTML route documents; '/exports/orders.csv' returned status 200 with Content-Type 'text/csv; charset=utf-8'",
           ),
@@ -61,6 +66,72 @@ describe('server static export app replay boundary', () => {
         },
       ],
     });
+  });
+
+  it('skips only the non-exportable concrete staticPath, keeping valid param siblings (C1)', async () => {
+    // SPEC §9.5: `skip` publishes the exportable subset. The unsafe `/products/%2f` target must be
+    // dropped while its valid sibling `/products/p1` still exports — the old skip predicate matched by
+    // shared `routePath` (`/products/:id`), poisoning every sibling (artifacts === []).
+    const app = createApp({
+      routes: [
+        route('/products/:id', {
+          page(context) {
+            const params = context.params as { id: string };
+            return `<main data-product="${params.id}">Product ${params.id}</main>`;
+          },
+          staticPaths: ['/products/p1', '/products/%2f'],
+        }),
+      ],
+    });
+
+    const result = await replayStaticExportApp({ app, onNonExportable: 'skip' });
+
+    expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/products/p1/index.html']);
+    expect(result.artifacts[0]?.body).toContain('<main data-product="p1">Product p1</main>');
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'KV229',
+        concretePath: '/products/%2f',
+        message: expect.stringContaining('unsafe URL path segment'),
+        routePath: '/products/:id',
+      },
+    ]);
+  });
+
+  it('skips a non-HTML concrete staticPath while exporting its valid HTML sibling (C1)', async () => {
+    // A replay-time per-target failure (one staticPath responds non-HTML) must not poison the valid
+    // sibling: skip suppresses only the concrete URL the diagnostic names (SPEC §9.5).
+    const app = createApp({
+      routes: [
+        route('/products/:id', {
+          page(context) {
+            const params = context.params as { id: string };
+            if (params.id === 'csv') {
+              return respond.file('id,total\nord_1,42\n', {
+                contentType: 'text/csv; charset=utf-8',
+                filename: 'orders.csv',
+              });
+            }
+            return `<main data-product="${params.id}">Product ${params.id}</main>`;
+          },
+          staticPaths: ['/products/p1', '/products/csv'],
+        }),
+      ],
+    });
+
+    const result = await replayStaticExportApp({ app, onNonExportable: 'skip' });
+
+    expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/products/p1/index.html']);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'KV229',
+        concretePath: '/products/csv',
+        message: expect.stringContaining(
+          "can only write successful HTML route documents; '/products/csv' returned status 200",
+        ),
+        routePath: '/products/csv',
+      },
+    ]);
   });
 
   it('reports route-plan diagnostics before replaying route documents', async () => {

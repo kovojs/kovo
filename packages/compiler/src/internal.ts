@@ -45,6 +45,7 @@ export type {
 } from './css.js';
 export {
   collectCssAssetManifest,
+  componentHostSelector,
   createCssAssetResolver,
   cssRouteByteAccounting,
   cssRouteDeliveryGate,

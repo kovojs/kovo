@@ -130,13 +130,24 @@ export async function prunePersistentCompileCache(
   );
   const keep = new Set(entries.slice(0, options.maxEntries).map((entry) => entry.cacheKey));
 
+  // B3 (plans/bug-and-testing-part3.md): result blobs are content-addressed
+  // (`blobs/${sha256(resultJson)}.json`), so two entries with identical results
+  // share one blob. Removing an evicted entry's blob unconditionally would also
+  // delete a blob still referenced by a KEPT entry, turning a future hit into a
+  // spurious miss. Only remove a blob no surviving entry still references.
+  const referencedByKept = new Set<string>();
+  for (const entry of entries) {
+    if (keep.has(entry.cacheKey)) referencedByKept.add(entry.artifactRefs.result);
+  }
+
   for (const entry of entries) {
     if (keep.has(entry.cacheKey)) continue;
     delete manifest.entries[entry.cacheKey];
-    await Promise.all([
-      rm(join(cacheDir, entry.artifactRefs.result), { force: true }),
-      rm(entryPath(cacheDir, entry.cacheKey), { force: true }),
-    ]);
+    const removals = [rm(entryPath(cacheDir, entry.cacheKey), { force: true })];
+    if (!referencedByKept.has(entry.artifactRefs.result)) {
+      removals.push(rm(join(cacheDir, entry.artifactRefs.result), { force: true }));
+    }
+    await Promise.all(removals);
   }
   await atomicWriteFile(manifestPath(cacheDir), `${stableJson(manifest)}\n`);
 }

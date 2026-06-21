@@ -9,6 +9,7 @@ import {
   extractAppComponentCss,
   extractAppRouteCssTargets,
   extractPackageComponentCss,
+  normalizeNumericLengths,
 } from './package-styles.js';
 
 // Walk up from this test file to the monorepo root (the dir that holds the
@@ -79,6 +80,31 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
       'src/progress.tsx',
       'src/skeleton.tsx',
     ]);
+  });
+});
+
+describe('normalizeNumericLengths (K2: served-CSS length normalizer)', () => {
+  it('never px-ifies numeric CSS custom-property (--var) token values (SPEC §13.1)', () => {
+    // `defineVars` emits `:root{--kovo-ns-token:VALUE}` raw (engine.ts:353) — a
+    // custom property is opaque, not a length. The served-CSS normalizer's
+    // bare-number regex matched `--kovo-t-ratio` and px-ified it, producing
+    // invalid `--kovo-t-ratio:1.5px`. Declarations whose property starts with
+    // `--` must pass through untouched.
+    const normalized = normalizeNumericLengths(':root{--kovo-t-ratio:1.5}');
+    expect(normalized).toContain('--kovo-t-ratio:1.5}');
+    expect(normalized).not.toContain('1.5px');
+
+    // Integer token values and multiple declarations are likewise preserved.
+    const multi = normalizeNumericLengths(':root{--kovo-t-cols:3;--kovo-t-z:10}');
+    expect(multi).toBe(':root{--kovo-t-cols:3;--kovo-t-z:10}');
+  });
+
+  it('still px-ifies genuine bare-number length declarations (no regression)', () => {
+    // The intended normalization must keep working for real length properties.
+    expect(normalizeNumericLengths('.x{padding:8}')).toBe('.x{padding:8px}');
+    expect(normalizeNumericLengths('.x{max-width:832;gap:8}')).toBe('.x{max-width:832px;gap:8px}');
+    // Unitless props and `0` stay bare even on a non-`--` property.
+    expect(normalizeNumericLengths('.x{z-index:10;margin:0}')).toBe('.x{z-index:10;margin:0}');
   });
 });
 

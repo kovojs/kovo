@@ -1386,9 +1386,23 @@ export function executeGeneratedBootstrapModule(
   const documentRoot = new GeneratedFixtureMorphRoot();
   const moduleSource = rewriteGeneratedRuntimeImports(source)
     .replace(
-      /import\s+\{ ([A-Za-z_$][\w$]*) \}\s+from\s+['"]([^'"]+)['"];\n?/g,
-      (_match, exportName: string, importPath: string) =>
-        `const { ${exportName} } = planModules[${JSON.stringify(importPath)}];\n`,
+      // B2 (SPEC §5.2): the emitted bootstrap aliases each plan import to a per-input-unique
+      // local (`A$queryUpdatePlans as kovoQueryPlans_0_<hash>`) and may pull multiple specifiers
+      // per module (query + clock). Rewrite the full specifier list, turning `A as B` into the
+      // `A: B` destructure binding so the planModules wiring stays faithful.
+      /import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];\n?/g,
+      (_match, names: string, importPath: string) => {
+        const bindings = names
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name) => {
+            const alias = /\s+as\s+/.test(name) ? name.split(/\s+as\s+/) : undefined;
+            return alias ? `${alias[0]?.trim()}: ${alias[1]?.trim()}` : name;
+          })
+          .join(', ');
+        return `const { ${bindings} } = planModules[${JSON.stringify(importPath)}];\n`;
+      },
     )
     .replace(/export function ([A-Za-z_$][\w$]*)/g, 'exports.$1 = function $1');
 

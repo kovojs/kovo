@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -22,6 +24,27 @@ describe('CompileCache', () => {
       value: 1,
     });
     expect(compile).toHaveBeenCalledTimes(1);
+  });
+
+  it('folds source with a >=256-bit collision-resistant digest, not a 32-bit FNV-1a', () => {
+    // L8-2 (plans/bug-and-testing-part3.md): the cache key stores no source
+    // preimage, so a hash collision is a stale wrong-output hit. SPEC.md
+    // §5.2.1#1 mandates a collision-resistant hash. Assert the sourceHash in the
+    // emitted key is a SHA-256 hex digest (64 chars / 256 bits), never the prior
+    // 8-char (32-bit) FNV-1a.
+    const key = compileCacheKey({ fileName: 'cart.tsx', source: 'component({})' });
+    const match = /"sourceHash":"([0-9a-f]+)"/.exec(key);
+    expect(match).not.toBeNull();
+    const digest = match?.[1] ?? '';
+    expect(digest).toMatch(/^[0-9a-f]{64}$/);
+    expect(digest.length * 4).toBeGreaterThanOrEqual(256);
+
+    // It is the SHA-256 of the source, with no app-visible FNV-1a constant in
+    // the key path.
+    const expected = createHash('sha256').update('component({})').digest('hex');
+    expect(digest).toBe(expected);
+    expect(key).not.toContain('811c9dc5');
+    expect(key).not.toContain('01000193');
   });
 
   it('keys by source hash and the whole passed fact set before a footprint exists', () => {

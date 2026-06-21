@@ -33,24 +33,37 @@ export type AppRequest = {
   session?: AppSession | null;
 };
 
+// part-3 I2: the adapter calls getSession with `returnHeaders: true`, so the fake returns
+// the `{ response, headers }` shape and can simulate a session-refresh Set-Cookie header.
 export class FakeBetterAuth implements BetterAuthLike<AuthSession, AuthUser> {
+  // Set to a raw Set-Cookie string to simulate a rolling-session / cookie-cache refresh
+  // header that Better Auth writes on `updateAge`/`cookieCache`.
+  refreshSetCookie: string | undefined;
+
   readonly api = {
-    getSession: (options: { headers: Headers }) => {
+    getSession: (options: { headers: Headers; returnHeaders: true }) => {
       this.lastHeaders = options.headers;
 
-      if (options.headers.get('cookie') !== 'kovo_session=s1') return null;
+      const authenticated = options.headers.get('cookie') === 'kovo_session=s1';
+      const response = authenticated
+        ? {
+            session: {
+              activeOrganizationId: 'org-1' as const,
+              id: 'session-1',
+            },
+            user: {
+              email: 'ada@example.com',
+              id: 'user-1',
+              roles: ['admin', 'member'] as const,
+            },
+          }
+        : null;
 
-      return {
-        session: {
-          activeOrganizationId: 'org-1',
-          id: 'session-1',
-        },
-        user: {
-          email: 'ada@example.com',
-          id: 'user-1',
-          roles: ['admin', 'member'] as const,
-        },
-      };
+      const headers = new Headers();
+      if (this.refreshSetCookie !== undefined) {
+        headers.append('set-cookie', this.refreshSetCookie);
+      }
+      return { headers, response };
     },
   };
 

@@ -4,9 +4,17 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 /**
  * Route-level diagnostic emitted when a request-shell route cannot be represented
  * by static export output (SPEC §11.3).
+ *
+ * `concretePath`, when present, names the single non-exportable concrete URL the
+ * diagnostic describes (e.g. a param route's individual `staticPaths` entry). SPEC
+ * §9.5 `skip` policy publishes the exportable subset, so skip must suppress only the
+ * exact non-exportable concrete target — not every sibling that shares the route
+ * pattern (`routePath`). Route-level diagnostics with no single concrete target leave
+ * `concretePath` undefined.
  */
 export interface StaticExportDiagnostic {
   code: DiagnosticCode | 'KV229';
+  concretePath?: string;
   message: string;
   routePath: string;
 }
@@ -39,20 +47,28 @@ export class StaticExportError extends Error {
   }
 }
 
-export function staticExportDiagnostic(routePath: string, message: string): StaticExportDiagnostic {
-  return { code: 'KV229', message, routePath };
+export function staticExportDiagnostic(
+  routePath: string,
+  message: string,
+  concretePath?: string,
+): StaticExportDiagnostic {
+  return concretePath === undefined
+    ? { code: 'KV229', message, routePath }
+    : { code: 'KV229', concretePath, message, routePath };
 }
 
 /**
  * @internal Static-export diagnostic shape guard for framework export tooling (SPEC.md §9.5).
  */
 export function isStaticExportDiagnostic(value: unknown): value is StaticExportDiagnostic {
+  const concretePath = (value as StaticExportDiagnostic | null)?.concretePath;
   return (
     typeof value === 'object' &&
     value !== null &&
     typeof (value as StaticExportDiagnostic).code === 'string' &&
     typeof (value as StaticExportDiagnostic).message === 'string' &&
-    typeof (value as StaticExportDiagnostic).routePath === 'string'
+    typeof (value as StaticExportDiagnostic).routePath === 'string' &&
+    (concretePath === undefined || typeof concretePath === 'string')
   );
 }
 

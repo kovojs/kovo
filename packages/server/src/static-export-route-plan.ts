@@ -90,11 +90,15 @@ function staticExportParamRouteTargets(
   const targets: StaticExportRouteTarget[] = [];
   for (const staticPath of staticPaths) {
     const normalized = normalizePathname(staticPath);
+    // SPEC §9.5 `skip` policy publishes the exportable subset of a param route. Every per-staticPath
+    // diagnostic carries the offending concrete URL so skip suppresses only that exact target and not
+    // its valid siblings (all of which share `routePath = route.path`).
     if (!staticPath.startsWith('/') || staticPath.includes('?') || staticPath.includes('#')) {
       diagnostics.push(
         staticExportDiagnostic(
           route.path,
           `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be an absolute pathname without search or hash.`,
+          staticPath,
         ),
       );
       continue;
@@ -105,6 +109,7 @@ function staticExportParamRouteTargets(
         staticExportDiagnostic(
           route.path,
           `KV229 static export staticPath '${staticPath}' for param route '${route.path}' must be a concrete URL, not a route pattern.`,
+          normalized.pathname,
         ),
       );
       continue;
@@ -124,6 +129,7 @@ function staticExportParamRouteTargets(
         staticExportDiagnostic(
           route.path,
           `KV229 static export staticPath '${staticPath}' does not match param route '${route.path}'.`,
+          normalized.pathname,
         ),
       );
       continue;
@@ -157,6 +163,7 @@ function addStaticExportRouteTarget(
       staticExportDiagnostic(
         target.routePath,
         `KV229 static export cannot export '${target.path}' for route '${target.routePath}' because it duplicates the concrete route target from '${existing.routePath}'.`,
+        target.path,
       ),
     );
     return;
@@ -193,6 +200,7 @@ function unsafeStaticExportRouteTargetDiagnostic(
   return staticExportDiagnostic(
     routePath,
     `KV229 static export cannot export concrete route target '${targetPath}' for route '${routePath}' because it contains an unsafe URL path segment. Encoded separators, encoded dot segments, and invalid URL encoding cannot be published as SPEC §9.5 directory-index route documents.`,
+    targetPath,
   );
 }
 

@@ -372,12 +372,22 @@ function normalizeLayerNames(css: string): string {
  * (`:12px}` no longer matches the bare-number pattern). It is kept as a
  * defense-in-depth normalizer for any CSS text that reaches the served bundle by
  * another path, and so the two stay provably in lockstep through the shared set.
+ *
+ * CSS custom properties (`--kovo-ns-token:1.5`, emitted raw by `defineVars` via
+ * engine.ts:353) are NOT lengths — their value is opaque and substituted by
+ * `var()`. The capture `[a-z-]+` would match `--kovo-t-ratio` and px-ify it,
+ * producing invalid `--kovo-t-ratio:1.5px`, so declarations whose property begins
+ * with `--` are skipped (mirrors `cssLengthValue`'s `--` guard in
+ * `@kovojs/style`). (SPEC.md §13.1)
+ *
+ * @internal Exported for the served-CSS normalizer conformance test only; not
+ * part of the app-facing public surface (rules/api-surface.md).
  */
-function normalizeNumericLengths(css: string): string {
+export function normalizeNumericLengths(css: string): string {
   return css.replace(
     /([a-z-]+):(-?\d+(?:\.\d+)?)([;}])/g,
     (match, property: string, value: string, terminator: string) =>
-      UNITLESS_CSS_PROPERTIES.has(property) || value === '0'
+      property.startsWith('--') || UNITLESS_CSS_PROPERTIES.has(property) || value === '0'
         ? match
         : `${property}:${value}px${terminator}`,
   );

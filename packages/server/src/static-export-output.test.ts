@@ -249,6 +249,76 @@ describe('server static export output boundary', () => {
     ).toThrow(/SPEC §9\.5 static export output directories must be filesystem paths or file: URLs/);
   });
 
+  it('prunes stale route documents on re-export while retaining versioned /c/ modules (C2)', async () => {
+    // C2/SPEC §9.5: a route removed across rebuilds must stop serving stale 200 HTML. SPEC §14: prior
+    // immutable versioned /c/__v/ modules MUST be retained for the deploy-skew window.
+    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-prune-'));
+    try {
+      const v1Plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home v1</main>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+          {
+            body: '<!doctype html><main>Old</main>',
+            headers: {},
+            path: '/old/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [
+          {
+            body: 'export const v1 = true;',
+            headers: {},
+            href: '/c/__v/v1/app.client.js',
+            path: '/c/__v/v1/app.client.js',
+            status: 200,
+          },
+        ],
+        outDir,
+      });
+      await writeStaticExportOutput(v1Plan);
+
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain('Home v1');
+      await expect(readFile(path.join(outDir, 'old', 'index.html'), 'utf8')).resolves.toContain(
+        'Old',
+      );
+      await expect(
+        readFile(path.join(outDir, 'c', '__v', 'v1', 'app.client.js'), 'utf8'),
+      ).resolves.toContain('export const v1 = true;');
+
+      // Re-export only `/` (the `/old` route was removed; the v1 client module is no longer referenced).
+      const v2Plan = createStaticExportOutputPlan({
+        artifacts: [
+          {
+            body: '<!doctype html><main>Home v2</main>',
+            headers: {},
+            path: '/index.html',
+            status: 200,
+          },
+        ],
+        assets: [],
+        clientModules: [],
+        outDir,
+      });
+      await writeStaticExportOutput(v2Plan);
+
+      // The removed route's stale document is gone; the surviving route holds v2.
+      await expect(readFile(path.join(outDir, 'old', 'index.html'))).rejects.toThrow();
+      await expect(readFile(path.join(outDir, 'index.html'), 'utf8')).resolves.toContain('Home v2');
+      // SPEC §14: the prior immutable versioned module is RETAINED across the rebuild.
+      await expect(
+        readFile(path.join(outDir, 'c', '__v', 'v1', 'app.client.js'), 'utf8'),
+      ).resolves.toContain('export const v1 = true;');
+    } finally {
+      await rm(outDir, { force: true, recursive: true });
+    }
+  });
+
   it('validates final output targets before committing staged files', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-commit-'));
     const sourceDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-source-'));

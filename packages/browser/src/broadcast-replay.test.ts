@@ -155,6 +155,118 @@ describe('mutation broadcast replay', () => {
     expect(capturedSignal?.aborted).toBe(true);
   });
 
+  // D3 / SPEC §9.1.1, §847, §14: BroadcastChannel replay is a distinct apply path
+  // from direct enhanced submit. Without build-token validation, Tab A on build N
+  // applies Tab B's build N+1 delta onto its N base after a redeploy — the exact
+  // long-open-tab skew base-version validation exists to catch. The receiver passes
+  // its own page token as the expected token and the sender-stamped envelope token
+  // as the response token, so a cross-build delta chunk becomes a miss.
+  describe('cross-build delta validation (D3 / SPEC §9.1.1)', () => {
+    const deltaBody =
+      '<kovo-query name="cart" delta>{"set":{"count":99}}</kovo-query>';
+
+    it('converts a cross-build delta chunk to a miss and leaves the store base untouched', () => {
+      const store = createQueryStore();
+      const channel = new FakeBroadcastChannel();
+      const onDeltaMiss = vi.fn();
+      store.set('cart', { count: 1 });
+
+      // Receiver page is on build N.
+      installMutationBroadcast({ buildToken: 'N', channel, onDeltaMiss, store });
+
+      // Envelope was stamped by a sender on build N+1 (post-redeploy tab).
+      channel.onmessage?.({
+        data: {
+          body: deltaBody,
+          buildToken: 'N+1',
+          changes: [],
+          type: 'kovo:mutation-response',
+        },
+      });
+
+      // The cross-build delta is a miss → refetch; the N base is never merged with N+1.
+      expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+      expect(store.get('cart')).toEqual({ count: 1 });
+    });
+
+    it('applies a same-build delta chunk against the held base', () => {
+      const store = createQueryStore();
+      const channel = new FakeBroadcastChannel();
+      const onDeltaMiss = vi.fn();
+      store.set('cart', { count: 1 });
+
+      installMutationBroadcast({ buildToken: 'N', channel, onDeltaMiss, store });
+
+      // Same-build envelope: the delta merges normally.
+      channel.onmessage?.({
+        data: {
+          body: deltaBody,
+          buildToken: 'N',
+          changes: [],
+          type: 'kovo:mutation-response',
+        },
+      });
+
+      expect(onDeltaMiss).not.toHaveBeenCalled();
+      expect(store.get('cart')).toEqual({ count: 99 });
+    });
+
+    it('still applies a cross-build FULL chunk (only deltas are gated)', () => {
+      const store = createQueryStore();
+      const channel = new FakeBroadcastChannel();
+      const onDeltaMiss = vi.fn();
+      store.set('cart', { count: 1 });
+
+      installMutationBroadcast({ buildToken: 'N', channel, onDeltaMiss, store });
+
+      // A full (non-delta) chunk from a different build still overwrites — SPEC
+      // §9.1.1 only converts deltas to misses on mismatch.
+      channel.onmessage?.({
+        data: {
+          body: '<kovo-query name="cart">{"count":7}</kovo-query>',
+          buildToken: 'N+1',
+          changes: [],
+          type: 'kovo:mutation-response',
+        },
+      });
+
+      expect(onDeltaMiss).not.toHaveBeenCalled();
+      expect(store.get('cart')).toEqual({ count: 7 });
+    });
+  });
+
+  it('round-trips a build token through publish and back into the receive gate (D3)', () => {
+    // publish stamps the sender's build token; a peer on a different build converts
+    // the rebroadcast delta into a miss. Drives the publish + receive paths together.
+    const senderChannel = new FakeBroadcastChannel();
+    const senderStore = createQueryStore();
+    const sender = installMutationBroadcast({
+      buildToken: 'N+1',
+      channel: senderChannel,
+      store: senderStore,
+    });
+
+    sender.publish('<kovo-query name="cart" delta>{"set":{"count":99}}</kovo-query>');
+    const envelope = senderChannel.messages[0] as { buildToken?: string };
+    expect(envelope.buildToken).toBe('N+1');
+
+    // Deliver that exact envelope into a receiver pinned to build N.
+    const receiverStore = createQueryStore();
+    const receiverChannel = new FakeBroadcastChannel();
+    const onDeltaMiss = vi.fn();
+    receiverStore.set('cart', { count: 1 });
+    installMutationBroadcast({
+      buildToken: 'N',
+      channel: receiverChannel,
+      onDeltaMiss,
+      store: receiverStore,
+    });
+    receiverChannel.onmessage?.({ data: envelope });
+
+    expect(onDeltaMiss).toHaveBeenCalledWith('cart', undefined);
+    expect(receiverStore.get('cart')).toEqual({ count: 1 });
+  });
+
   it('morphs rebroadcast mutation fragments when a root is configured', () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();

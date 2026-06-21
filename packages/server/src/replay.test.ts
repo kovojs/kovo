@@ -852,4 +852,47 @@ describe('server mutation response replay', () => {
     const secondReserveA = replayStore.reserve('scope-a', 'idem_a');
     expect(secondReserveA).toBeUndefined();
   });
+
+  // E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): A6 correctly
+  // stopped EVICTING pending slots to avoid the M4 double-execute, but that let in-flight
+  // pending reservations bypass `maxEntries` and linger for the full TTL — an authenticated
+  // attacker firing many concurrent slow mutations with client-chosen Kovo-Idem values
+  // accumulates unbounded pending records. A separate `maxPending` cap REFUSES new pending
+  // reservations past the cap (reserve() returns undefined → the request runs unprotected)
+  // rather than EVICTING an existing pending slot (which would re-open A6/M4).
+  it('E4: enforces maxPending by refusing (not evicting) excess pending reservations', () => {
+    const replayStore = createMemoryMutationReplayStore({ maxEntries: 100, maxPending: 2 });
+
+    // First two distinct keys reserve pending slots up to the cap.
+    const reservationA = replayStore.reserve('scope', 'idem_a');
+    const reservationB = replayStore.reserve('scope', 'idem_b');
+    expect(reservationA).toBeDefined();
+    expect(reservationB).toBeDefined();
+
+    // A third distinct key exceeds maxPending → refused (undefined), NOT allocated.
+    const reservationC = replayStore.reserve('scope', 'idem_c');
+    expect(reservationC).toBeUndefined();
+
+    // A6 preserved: the existing pending slots were NOT evicted — they still hold and a
+    // re-reserve of an occupied key returns undefined (slot still taken), not a fresh slot.
+    expect(replayStore.get('scope', 'idem_a')).toBeDefined();
+    expect(replayStore.get('scope', 'idem_b')).toBeDefined();
+    expect(replayStore.reserve('scope', 'idem_a')).toBeUndefined();
+
+    // Committing a pending slot frees capacity so a new reservation can be made again.
+    reservationA!.commit({ body: 'committed', headers: {}, status: 200 });
+    const reservationD = replayStore.reserve('scope', 'idem_d');
+    expect(reservationD).toBeDefined();
+  });
+
+  // E4: maxPending defaults must NOT regress the A6 maxEntries-pressure scenario (3 pending
+  // under maxEntries:2 all coexist). The default pending cap is generous enough that the
+  // documented A6 behavior is unchanged when no maxPending is configured.
+  it('E4: default maxPending leaves the A6 maxEntries scenario unchanged', () => {
+    const replayStore = createMemoryMutationReplayStore({ maxEntries: 2 });
+    expect(replayStore.reserve('scope-a', 'idem_a')).toBeDefined();
+    expect(replayStore.reserve('scope-b', 'idem_b')).toBeDefined();
+    // Third pending under maxEntries:2 must still succeed (no eviction, no premature cap).
+    expect(replayStore.reserve('scope-c', 'idem_c')).toBeDefined();
+  });
 });

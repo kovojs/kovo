@@ -57,6 +57,15 @@ function isPlainObject(value: unknown): value is { [key: string]: JsonValue } {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Runtime plain-object check that does NOT narrow its argument's static type, so
+ * validating the untrusted wire `delta` envelope does not collapse the declared
+ * {@link QueryDelta} structure (`lists` → {@link QueryListDelta}) to `JsonValue`.
+ */
+function isRecordShape(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function rowKey(row: JsonValue, keyField: string): string | undefined {
   if (!isPlainObject(row)) return undefined;
   const value = row[keyField];
@@ -144,14 +153,19 @@ export function queryDeltaIsSmaller(delta: QueryDelta, value: JsonValue): boolea
 /**
  * @internal
  * Apply a change-record-scoped `delta` to the client's held `base` value,
- * returning the reconstructed full value (SPEC §9.1.1). Scalar/object fields in
- * `set` overwrite; keyed collections reconcile by `kovo-key` — matched rows are
- * replaced in place, new rows append, removed keys drop. The result is then fed
- * to the existing update plan (§4.8) exactly like a full value.
+ * returning the reconstructed full value (SPEC §9.1.1). `set` is the parent
+ * object sent whole for non-collection fields (§843/§848): its fields overwrite
+ * the base, and base non-collection fields absent from `set` are dropped (the
+ * only deletion path for a non-keyed field). Keyed collections reconcile by
+ * `kovo-key` — matched rows are replaced in place, new rows append, removed keys
+ * drop — and their paths (the keys of `delta.lists`) are never treated as dropped
+ * fields by the whole-object `set` rule. The result is then fed to the existing
+ * update plan (§4.8) exactly like a full value.
  *
  * Throws {@link QueryDeltaApplyError} when the delta cannot be applied to the
- * base (missing base, or a field whose shape moved across a deploy) so the caller
- * refetches the full value rather than guessing.
+ * base — a missing/non-object base, a malformed envelope whose shape is not a
+ * plain object (§847 delta-miss), or a field whose shape moved across a deploy —
+ * so the caller refetches the full value rather than guessing.
  *
  * @param base - The client's currently held query value.
  * @param delta - The wire delta to apply.
@@ -162,9 +176,36 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
     throw new QueryDeltaApplyError('cannot apply a query delta without an object base');
   }
 
+  // SPEC §847: a malformed/shape-skewed envelope is a delta-miss, not a silent
+  // no-op apply. Throwing routes the caller to onDeltaMiss → full refetch
+  // (browser/src/query-apply.ts) instead of swallowing corrupted truth as success.
+  if (!isRecordShape(delta)) {
+    throw new QueryDeltaApplyError('cannot apply a non-object query delta envelope');
+  }
+  if (delta.set !== undefined && !isRecordShape(delta.set)) {
+    throw new QueryDeltaApplyError('query delta "set" is not a plain object');
+  }
+  if (delta.lists !== undefined && !isRecordShape(delta.lists)) {
+    throw new QueryDeltaApplyError('query delta "lists" is not a plain object');
+  }
+
   const next: { [key: string]: JsonValue } = structuredClone(base);
 
+  // SPEC §843/§848 (KV416): for non-collection (non-keyed) top-level fields the
+  // value is "the parent object sent whole" — `set` is the authoritative
+  // whole-object-minus-collections. The ONLY way to drop a non-keyed field is to
+  // send its parent whole with the field omitted, so a base top-level key absent
+  // from `set` is a dropped field and must be removed. Tracked COLLECTION paths
+  // (the keys of `delta.lists`) are reconciled by identity below and MUST NEVER be
+  // deleted by this rule — they are not part of the whole-object `set`. This
+  // mirrors buildQueryDelta, which emits `set` as exactly value-minus-collectionPaths.
   if (delta.set) {
+    const listPaths = new Set(Object.keys(delta.lists ?? {}));
+    for (const field of Object.keys(next)) {
+      if (!Object.prototype.hasOwnProperty.call(delta.set, field) && !listPaths.has(field)) {
+        delete next[field];
+      }
+    }
     for (const [field, fieldValue] of Object.entries(delta.set)) next[field] = fieldValue;
   }
 
