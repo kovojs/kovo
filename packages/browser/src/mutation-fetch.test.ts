@@ -109,6 +109,33 @@ describe('enhanced mutation fetch', () => {
     expect(root.queries).toBe(1);
   });
 
+  it('uses the hidden Kovo-Idem form field when no explicit idem is supplied', async () => {
+    const formData = new FormData();
+    formData.set('Kovo-Idem', 'idem_hidden_field');
+    const root = new FakeTargetRoot([]);
+    const fetch = vi.fn(async (_url: string, _options: EnhancedMutationFetchOptions) => ({
+      async text() {
+        return '';
+      },
+    }));
+
+    const fetched = await fetchEnhancedMutation({
+      fetch,
+      form: { action: '/_m/comment/post', getAttribute: () => null, method: 'post' },
+      formData,
+      root,
+    });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/_m/comment/post',
+      expect.objectContaining({
+        body: formData,
+        headers: expect.objectContaining({ 'Kovo-Idem': 'idem_hidden_field' }),
+      }),
+    );
+    expect(fetched.idem).toBe('idem_hidden_field');
+  });
+
   it('keeps selector-hostile identities but skips delimiter-unsafe live target headers', async () => {
     const root = new FakeTargetRoot([
       new FakeTargetElement('target"bad\\id', {

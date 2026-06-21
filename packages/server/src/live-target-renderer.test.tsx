@@ -3,6 +3,7 @@ import { component, form } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
+import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 import { query } from './query.js';
 import { s } from './schema.js';
@@ -51,6 +52,31 @@ describe('generated component live target renderers', () => {
         target: 'product-detail:p1',
       }),
     ).resolves.toBe('<section data-product="p1" data-prop="p1">en-US:p1</section>');
+  });
+
+  it('folds generated query reads into component-bound live target query definitions', async () => {
+    const productQuery = query('generatedLiveProduct', {
+      args: s.object({ id: s.string() }),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+    });
+    const ProductDetail = component({
+      queries: {
+        product: productQuery.args((props: { productId: string }) => ({ id: props.productId })),
+      },
+      render: () => <section />,
+    });
+
+    registerGeneratedQueryReadRegistry([
+      { domains: ['generated-live-product'], query: 'generatedLiveProduct' },
+    ]);
+    const renderer = componentLiveTargetRenderer({
+      component: ProductDetail,
+      componentId: 'components/generated-product-detail/product-detail',
+    });
+
+    expect(renderer.queryDefinitions?.[0]?.reads).toEqual([{ key: 'generated-live-product' }]);
   });
 
   it('throws when a generated query reload fails', async () => {

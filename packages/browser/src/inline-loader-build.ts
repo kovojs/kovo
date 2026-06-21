@@ -615,15 +615,18 @@ function installInlineKovoLoader(im) {
   const sef = (event, form) => {
     event.preventDefault();
     const streaming = form.getAttribute?.('data-mutation-stream') !== null;
+    const body = new FormData(form, event.submitter);
+    const formIdem = body.get?.('Kovo-Idem');
+    const idem = typeof formIdem === 'string' && formIdem !== '' ? formIdem : ci();
     fetch(form.action, {
-      body: new FormData(form, event.submitter),
+      body,
       headers: {
         Accept: streaming
           ? 'text/vnd.kovo.fragment+html; stream=1'
           : 'text/vnd.kovo.fragment+html',
         'Kovo-Form-Target': targetIdentity(form),
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': ci(),
+        'Kovo-Idem': String(idem),
         'Kovo-Live-Targets': rlt().join('; '),
         ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
         'Kovo-Targets': rt().join('; '),

@@ -128,7 +128,7 @@ describe('stackoverflow interactive app', () => {
       {
         deps: 'questionAnswers questionDetail',
         route: '/questions/q1',
-        target: questionDetailTarget,
+        target: `${questionDetailTarget}:q1`,
       },
     ];
 
@@ -227,9 +227,10 @@ describe('stackoverflow interactive app', () => {
       }),
     );
     const headers = browserCollectedLiveHeaders(await page.text());
-    expect(headers.targets).toContain(`${questionDetailTarget}=questionAnswers questionDetail`);
+    const detailTarget = `${questionDetailTarget}:${question.id}`;
+    expect(headers.targets).toContain(`${detailTarget}=questionAnswers questionDetail`);
     expect(headers.liveTargets).toContain(
-      liveHeader(questionDetailTarget, questionDetailComponent, { questionId: question.id }),
+      liveHeader(detailTarget, questionDetailComponent, { questionId: question.id }),
     );
 
     const { status, html } = await postForm(
@@ -246,7 +247,7 @@ describe('stackoverflow interactive app', () => {
     );
 
     expect(status).toBe(200);
-    expect(html).toContain(`<kovo-fragment target="${questionDetailTarget}"`);
+    expect(html).toContain(`<kovo-fragment target="${detailTarget}"`);
     expect(html).toContain('Visible without refresh.');
   });
 

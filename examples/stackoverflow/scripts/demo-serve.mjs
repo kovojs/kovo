@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-session/serve.mjs';
 
@@ -13,6 +14,8 @@ export function createSoDemoServer(options = {}) {
     root: soRoot,
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
     async loadInstanceFactory(vite) {
+      emitGeneratedGraph();
+      await vite.ssrLoadModule('/src/generated/touch-graph.ts');
       const { buildSoInteractiveApp } = await vite.ssrLoadModule('/src/interactive-app.tsx');
       const { toNodeHandler } = await vite.ssrLoadModule('@kovojs/server');
       if (typeof buildSoInteractiveApp !== 'function') {
@@ -30,6 +33,13 @@ export function createSoDemoServer(options = {}) {
       };
     },
     ...options,
+  });
+}
+
+function emitGeneratedGraph() {
+  execFileSync(process.execPath, [fileURLToPath(new URL('./emit-graph.mjs', import.meta.url))], {
+    cwd: soRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 }
 
