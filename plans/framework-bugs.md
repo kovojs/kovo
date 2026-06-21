@@ -42,11 +42,15 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
     entry; use descriptor data to render an already-selected target, not to select targets by
     itself.
 
-- [ ] **High: query endpoint chunks lose the declared query key for instance-keyed reads.**
+- [x] **High: query endpoint chunks lose the declared query key for instance-keyed reads.**
   - Evidence: [packages/server/src/query.ts](/Users/mini/kovo/packages/server/src/query.ts:570)
     `renderQueryEndpointChunk` emits `name: instanceKey ?? queryDefinition.key` and no `key`
     attribute; [packages/browser/src/wire-parser.ts](/Users/mini/kovo/packages/browser/src/wire-parser.ts:244)
     splits a colon-bearing `name` into `{ name, key }`.
+  - Fixed: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/browser/src/wire-parser.test.ts`
+    and `pnpm exec playwright test tests/integration/specs/query-args-search.spec.ts` verify
+    `/_q` emits `name=productDetail`/`name=product` with `key=product:p1|p2`, and the browser
+    parser preserves `{ name: 'productDetail', key: 'product:p1' }`.
   - Failure mode: a query `productDetail` with instance key `product:p1` emits
     `<kovo-query name="product:p1">`, which parses as `{ name: 'product', key: 'p1' }`, not
     `{ name: 'productDetail', key: 'product:p1' }`. The query store can hydrate or settle the wrong
