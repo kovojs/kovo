@@ -10,7 +10,7 @@ import {
   type CssRouteSplitTarget,
 } from './css.js';
 import { deriveComponentNames } from './component-names.js';
-import { findFragmentTargetFacts } from './internal-graph.js';
+import { findFragmentTargetFacts } from './app-graph.js';
 import { cssIrHeader } from './ir.js';
 import {
   resolvePackageManifestPath,

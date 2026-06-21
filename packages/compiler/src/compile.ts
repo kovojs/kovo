@@ -23,7 +23,7 @@ import {
   componentGraphFact,
   findFragmentTargetFacts,
   findLiveTargetFacts,
-} from './internal-graph.js';
+} from './app-graph.js';
 import { cssIrHeader } from './ir.js';
 import { createComponentHmrImpactMetadata } from './hmr-impact.js';
 import {

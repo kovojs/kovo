@@ -11,7 +11,7 @@ import {
   appGraphContributionHash,
   deriveRegistryFactsFromGraph,
   IncrementalAppGraphCache,
-} from './internal-graph.js';
+} from './app-graph.js';
 
 const cartBadgeSource = `
 import { component } from '@kovojs/core';

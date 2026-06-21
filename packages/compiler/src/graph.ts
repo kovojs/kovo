@@ -1,5 +1,5 @@
 import type { CompileAppGraphOptions, CompileAppGraphResult } from './types.js';
-import { deriveAppGraph as deriveAppGraphInternal } from './internal-graph.js';
+import { deriveAppGraph as deriveAppGraphInternal } from './app-graph.js';
 
 /**
  * Derive an app-level component/registry graph from compiled component facts.

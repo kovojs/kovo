@@ -3,7 +3,7 @@ export {
   deriveRegistryFactsFromGraph,
   findFragmentTargetFacts,
   routeFactDiagnostics,
-} from '../internal-graph.js';
+} from '../app-graph.js';
 export type {
   ComponentGraphFact,
   FragmentTargetFact,
