@@ -318,7 +318,7 @@ describe('gallery demo fixtures', () => {
     expect(autocomplete.html).toContain('aria-expanded="true"');
     expect(autocomplete.html).toContain('aria-controls="gallery-autocomplete-list"');
     expect(autocomplete.html).toContain(
-      'aria-activedescendant="gallery-autocomplete-list-option-1"',
+      'aria-activedescendant="gallery-autocomplete-list-option-0"',
     );
     expect(autocomplete.html).toContain('id="gallery-autocomplete-form"');
     expect(autocomplete.html).toContain('form="gallery-autocomplete-form"');

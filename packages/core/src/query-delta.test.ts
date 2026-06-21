@@ -184,6 +184,26 @@ describe('applyQueryDelta', () => {
       QueryDeltaApplyError,
     );
   });
+
+  // part-4 L2-protopollution-1 (SPEC §9.1.1): a wire/DB-sourced `set` field named
+  // `__proto__` must be assigned as an OWN data property, never invoke the prototype
+  // setter. Bracket/spread assignment would rebind the result's prototype (and could
+  // pollute Object.prototype), corrupting the applied value and leaking globally.
+  it('assigns a __proto__ set field as an own property without prototype pollution', () => {
+    // A `__proto__` key only becomes an OWN property via the wire (JSON.parse), not an
+    // object literal (where `__proto__:` invokes the prototype setter). This mirrors the
+    // attack surface: a malicious delta envelope deserialized from the network/DB.
+    const delta = JSON.parse('{"set":{"__proto__":{"polluted":true}}}') as QueryDelta;
+    const result = applyQueryDelta({ a: 1 }, delta) as Record<string, JsonValue>;
+
+    // The result keeps Object.prototype as its prototype (no rebind via the setter).
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    // `__proto__` lands as an OWN data property carrying the sent value.
+    expect(Object.prototype.hasOwnProperty.call(result, '__proto__')).toBe(true);
+    expect(Object.getOwnPropertyDescriptor(result, '__proto__')?.value).toEqual({ polluted: true });
+    // No global Object.prototype pollution leaked out.
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
 });
 
 describe('round-trip equivalence (the §9.1.1 apply_delta ≡ full gate)', () => {

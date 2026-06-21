@@ -183,7 +183,7 @@ describe('loader visible-return refetch', () => {
     const fetch = vi.fn(async (url: string) => ({
       status: 200,
       text: async () =>
-        url === '/_q/product%3Ap1'
+        url === '/_q/product?key=p1'
           ? '<kovo-query name="product" key="p1">{"stock":5}</kovo-query>'
           : '<kovo-query name="product" key="p2">{"stock":10}</kovo-query>',
     }));
@@ -215,12 +215,12 @@ describe('loader visible-return refetch', () => {
     // SPEC.md §9.4: refetch-on-focus talks to the typed-read endpoint with the
     // same query instance key that hydration and mutation chunks expose.
     expect(refetchOnFocus).toHaveBeenCalledWith(['product:p1', 'product:p2']);
-    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/product%3Ap1', {
+    expect(fetch).toHaveBeenNthCalledWith(1, '/_q/product?key=p1', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',
     });
-    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/product%3Ap2', {
+    expect(fetch).toHaveBeenNthCalledWith(2, '/_q/product?key=p2', {
       cache: 'no-store',
       headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
       method: 'GET',

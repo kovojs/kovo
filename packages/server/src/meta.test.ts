@@ -110,6 +110,38 @@ describe('server route meta and i18n hints', () => {
     });
   });
 
+  it('scheme-checks the og:image URL sink against a metaFromQuery-derived value (L-i18n-meta-1)', () => {
+    // part-4 L-i18n-meta-1 / SPEC.md §4.8 + §5.2#10: og:image is a URL sink, so a
+    // metaFromQuery-derived `image` carrying an unsafe scheme (e.g. an attacker-controlled
+    // product row surfacing `javascript:alert(1)`) must be sanitized to `#` before escaping,
+    // while an http(s) origin URL is preserved verbatim.
+    const productQuery = query('product', {
+      load: (_input: { id: string }) => ({ id: 'p1', image: '/products/p1.png' }),
+      reads: [domain('product')],
+    });
+    const imageMeta = metaFromQuery(productQuery, (product) => ({ image: product.image }));
+
+    expect(
+      renderPageHints(
+        { meta: imageMeta },
+        { queries: { product: { id: 'evil', image: 'javascript:alert(1)' } } },
+      ),
+    ).toEqual({
+      earlyHints: {},
+      html: '<meta property="og:image" content="#">',
+    });
+
+    expect(
+      renderPageHints(
+        { meta: imageMeta },
+        { queries: { product: { id: 'ok', image: 'https://cdn.example.com/x.png' } } },
+      ),
+    ).toEqual({
+      earlyHints: {},
+      html: '<meta property="og:image" content="https://cdn.example.com/x.png">',
+    });
+  });
+
   it('reports invalid query-derived meta declarations early', () => {
     const productQuery = query('product', {
       load: (_input: { id: string }) => ({ id: 'p1', name: 'Coffee' }),

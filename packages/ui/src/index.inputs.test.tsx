@@ -150,7 +150,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(trigger).toContain('id="plan" type="button"');
     expect(trigger).toContain('role="listbox"');
     expect(trigger).toContain('aria-selected="true"');
-    expect(trigger).toContain('data-state="checked" label="Growth" role="option" value="growth"');
+    expect(trigger).toContain(
+      'data-state="checked" id="select-option-1" label="Growth" role="option" value="growth"',
+    );
     expect(trigger).toContain('aria-disabled="true"');
     expect(trigger).toContain('data-disabled="" data-state="unchecked"');
     expect(trigger).toContain('value="enterprise"');
@@ -266,7 +268,7 @@ describe('@kovojs/ui styled package foundation', () => {
       labelledBy: 'plan-search-label',
     });
     const value = AutocompleteValue.definition.render({ ...state, id: 'plan-search-value' });
-    expect(input).toContain('aria-activedescendant="plan-suggestions-option-1"');
+    expect(input).toContain('aria-activedescendant="plan-suggestions-option-0"');
     expect(input).toContain('autocomplete="off"');
     expect(input).toContain('form="plan-form"');
     expect(input).toContain('role="combobox" type="text" value="gr"');

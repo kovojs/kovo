@@ -48,7 +48,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <dialog {...content.attrs}>Body</dialog>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="dialog-idref"><button data-state="closed" aria-expanded="false" aria-haspopup="dialog" type="button" aria-controls="authored-dialog-content" command="show-modal" commandfor="authored-dialog-content" class="dialog-trigger">Open</button><dialog data-state="open" closedby="any" open id="authored-dialog-content" aria-labelledby="gallery-dialog-title" aria-describedby="gallery-dialog-description" class="dialog-panel">Body</dialog></section>',
+      '<section data-gallery-merge="dialog-idref"><button data-state="closed" aria-expanded="false" aria-haspopup="dialog" type="button" aria-controls="authored-dialog-content" command="show-modal" commandfor="authored-dialog-content" class="dialog-trigger">Open</button><dialog data-state="open" aria-modal="true" closedby="any" open role="dialog" id="authored-dialog-content" aria-labelledby="gallery-dialog-title" aria-describedby="gallery-dialog-description" class="dialog-panel">Body</dialog></section>',
     );
   });
 
@@ -474,8 +474,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "dialogCloseAttributes",
         },
         {
-          "diagnostics": 3,
-          "html": "<div data-gallery-merge-builder="dialogContentAttributes" data-state="open" closedby="author-dialogContentAttributes" open id="author-dialogContentAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" class="primitive-dialogContentAttributes author-dialogContentAttributes">merged</div>",
+          "diagnostics": 5,
+          "html": "<div data-gallery-merge-builder="dialogContentAttributes" data-state="open" aria-modal="false" closedby="author-dialogContentAttributes" open role="presentation" id="author-dialogContentAttributes" aria-labelledby="author-aria-labelledby" aria-describedby="author-aria-describedby" class="primitive-dialogContentAttributes author-dialogContentAttributes">merged</div>",
           "name": "dialogContentAttributes",
         },
         {
@@ -774,8 +774,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "selectRootAttributes",
         },
         {
-          "diagnostics": 5,
-          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="true" aria-haspopup="author-aria" type="author-selectTriggerAttributes" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
+          "diagnostics": 6,
+          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="true" aria-haspopup="author-aria" type="author-selectTriggerAttributes" aria-activedescendant="author-aria-activedescendant" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
           "name": "selectTriggerAttributes",
         },
         {

@@ -272,7 +272,7 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
     'role="combobox"',
     'aria-autocomplete="list"',
     'aria-controls="gallery-autocomplete-list"',
-    'aria-activedescendant="gallery-autocomplete-list-option-1"',
+    'aria-activedescendant="gallery-autocomplete-list-option-0"',
     'form="gallery-autocomplete-form"',
     'role="listbox"',
     'role="option"',
