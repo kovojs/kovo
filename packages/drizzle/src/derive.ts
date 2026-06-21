@@ -119,6 +119,14 @@ function deriveAgg(
   effect: SymbolicEffect,
 ): FieldDerivation {
   if (effect.op === 'insert' || effect.op === 'upsert') {
+    // C2 (SPEC.md §10.5 membership-entry rule): a filtered list must not receive an
+    // INSERTed row that PROVABLY violates its rowset filters (the row would appear and
+    // then vanish on reconcile — worse than no prediction).  Only a decidable const-eq
+    // filter that the inserted const value contradicts is a provable non-member: no-op.
+    // An undecidable filter (non-eq / opaque value) keeps the §10.4 push — the author's
+    // mutation is assumed to write into the filtered scope and reconcile content-matches.
+    if (insertSatisfiesAllFilters(field.rowset.filters, effect.values) === false) return ok();
+
     const position = insertPosition(field.rowset);
     if (position.reason) return fail(position.reason);
     const built = buildInsertRow(field, effect.values);
@@ -209,15 +217,29 @@ function deriveSum(
 ): FieldDerivation {
   const column = field.arith.kind === 'col' ? field.arith.column : undefined;
 
+  // C1 (SPEC.md §10.5): a filtered SUM ranges over only its rowset members. The
+  // resum-over-witness path reads the sibling AGG's (unfiltered) rows, which over-counts
+  // a filtered total, so the witness path is disabled when the SUM is filtered. The
+  // inc-path must NOT add a row that PROVABLY violates a decidable const-eq filter (the
+  // C1 over-count: `inc by 50` for `{status:'pending'}` into `WHERE status='active'`).
+  // An undecidable filter (non-eq / opaque value, e.g. inserting `cartId=<param>` into
+  // `WHERE cartId='c1'`) keeps the §10.5:1164 inc — the author's mutation is assumed to
+  // write into the queried scope; reconcile settles the exact total.
+  const filtered = field.rowset.filters.length > 0;
+
   // C6: Only use the resum-over-witness path when the witness ships the summed
-  // column.  RowWitness.columns records exactly which columns the sibling AGG
-  // projects; reading row[col] from a witness that doesn't ship col yields 0
-  // for every row, collapsing the total (SPEC.md §10.5).
+  // column AND the SUM is unfiltered.  RowWitness.columns records exactly which
+  // columns the sibling AGG projects; reading row[col] from a witness that doesn't
+  // ship col yields 0 for every row, collapsing the total (SPEC.md §10.5).
   const witness = shape.rowsByTable?.[field.rowset.table];
   const witnessShipsSummedCol = witness && column ? witness.columns.includes(column) : false;
-  const rowsPath = witnessShipsSummedCol ? witness?.rowsPath : undefined;
+  const rowsPath = witnessShipsSummedCol && !filtered ? witness?.rowsPath : undefined;
 
   if (effect.op === 'insert' || effect.op === 'upsert') {
+    // C1: no-op only when the inserted row provably violates a decidable filter.
+    if (filtered && insertSatisfiesAllFilters(field.rowset.filters, effect.values) === false) {
+      return ok();
+    }
     if (rowsPath && column) {
       if (isOpaqueColumn(effect.values[column]))
         return fail({ code: 'no-row-witness', field: path });
@@ -248,19 +270,23 @@ function deriveCount(
   effect: SymbolicEffect,
   shape: AlgebraicQueryShape,
 ): FieldDerivation {
-  // C4: The rowsByTable witness is keyed by table only; a sibling unfiltered AGG
-  // builds a witness over ALL rows.  If this COUNT has a predicate, recount(witness)
-  // would count every row rather than only those satisfying pred → wrong optimistic
-  // count.  Punt (no-row-witness) unless the COUNT has no predicate (plain COUNT(*)).
-  // (SPEC.md §10.5 "soundly optimistic — wrong predictions are worse than none")
-  const rowsPath = field.pred ? undefined : fullRowsPath(shape, field.rowset.table);
+  // C3/C4 (SPEC.md §10.5 "soundly optimistic — wrong predictions are worse than none"):
+  // the rowsByTable witness is a sibling AGG built over its own (typically unfiltered)
+  // rowset, so recount(witness) counts every shipped row, not only those satisfying THIS
+  // COUNT's WHERE chain.  ANY predicate makes the unfiltered-witness recount unsound, so
+  // only plain COUNT(*) (no predicates) may recount over the witness.  The effective
+  // predicate set is the full rowset filter chain (C3: not just the first eq), plus a
+  // standalone `field.pred` when an extraction supplies one outside the chain (C4).
+  const predicates = countPredicates(field);
+  const rowsPath = predicates.length === 0 ? fullRowsPath(shape, field.rowset.table) : undefined;
 
   if (effect.op === 'insert' || effect.op === 'upsert') {
-    const satisfies = predSatisfiedByInsert(field.pred, effect.values);
-    if (satisfies === 'opaque')
-      return fail({ code: 'opaque-set', expr: `COUNT pred ${field.pred?.column}` });
+    // C3: evaluate the inserted row against the ENTIRE predicate set — keeping only the
+    // first eq over-counts a row that PROVABLY violates a sibling predicate (no-op then).
+    // An undecidable predicate keeps the §10.5:1164 inc-by-1 (assume member); the witness
+    // recount is gated off above so it never counts the unfiltered witness (C3-2 / C4).
+    if (insertSatisfiesAllFilters(predicates, effect.values) === false) return ok();
     if (rowsPath) return agg({ from: rowsPath, op: 'recount', path });
-    if (satisfies === false) return ok();
     return agg({ by: { kind: 'const', value: 1 }, op: 'inc', path });
   }
 
@@ -269,10 +295,48 @@ function deriveCount(
     return fail({ code: 'no-row-witness', field: path });
   }
 
-  // UPDATE: count only changes if the pred column's membership flips.
-  if (!field.pred || !(field.pred.column in effect.sets)) return ok();
+  // UPDATE: count only changes if a predicate column's membership flips. With predicates
+  // present there is no sound witness (rowsPath is undefined), so any touched predicate
+  // column punts.
+  if (!predicates.some((predicate) => predicate.column in effect.sets)) return ok();
   if (rowsPath) return agg({ from: rowsPath, op: 'recount', path });
   return fail({ code: 'no-row-witness', field: path });
+}
+
+/**
+ * C3/C4 (SPEC.md §10.5): a COUNT's effective predicate set — the full rowset
+ * filter chain plus any standalone `field.pred` not already represented in the
+ * chain (so a shape that carries `pred` outside `rowset.filters` still gates the
+ * unfiltered-witness recount).
+ */
+function countPredicates(
+  field: Extract<AlgebraicField, { kind: 'count' }>,
+): readonly RowsetFilter[] {
+  const filters = field.rowset.filters;
+  if (!field.pred) return filters;
+  if (filters.some((filter) => filter === field.pred || filter.column === field.pred?.column)) {
+    return filters;
+  }
+  return [...filters, field.pred];
+}
+
+/**
+ * C3 (SPEC.md §10.5): does an inserted row provably satisfy EVERY filter in the
+ * COUNT's WHERE chain? `true`/`false` only when every filter is a decidable
+ * const-eq; any non-eq/opaque filter or an opaque/missing inserted value is
+ * `'opaque'` (undecidable ⇒ punt).
+ */
+function insertSatisfiesAllFilters(
+  filters: readonly RowsetFilter[],
+  values: Readonly<Record<string, SymbolicValue>>,
+): 'opaque' | boolean {
+  let satisfiesAll = true;
+  for (const filter of filters) {
+    const satisfies = predSatisfiedByInsert(filter, values);
+    if (satisfies === 'opaque') return 'opaque';
+    if (satisfies === false) satisfiesAll = false;
+  }
+  return satisfiesAll;
 }
 
 // ── Scalar(keyed-row col) ─────────────────────────────────────────────────────

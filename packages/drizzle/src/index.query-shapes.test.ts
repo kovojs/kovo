@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   diagnosticsForQueryFacts,
+  extractAlgebraicShapesFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
@@ -9,6 +10,33 @@ import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 const extractQueryFactsFromProject = (
   options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
 ) => extractQueryFactsFromProjectBase(withPgDatabaseTypes(options));
+
+// Part-4 Lane C — algebraic field classification (SPEC §10.5 Stage 2).
+const ITEMS_C_TABLE = [
+  "export const items = pgTable('items', {",
+  "  id: text('id').primaryKey(),",
+  "  cartId: text('cart_id'),",
+  "  assignee: text('assignee'),",
+  "  qty: integer('qty'),",
+  "}, kovo({ domain: 'item', key: 'id' }));",
+].join('\n');
+
+const C_COMMON_IMPORTS = [
+  "import { and, count, eq, sum } from 'drizzle-orm';",
+  "import { integer, pgTable, text, type PgDatabase } from 'drizzle-orm/pg-core';",
+  '',
+].join('\n');
+
+function singleAlgebraicField(...lines: string[]) {
+  const shapes = extractAlgebraicShapesFromProject({
+    files: [{ fileName: 'lane-c.query.ts', source: lines.join('\n') }],
+  });
+  const shape = shapes[0];
+  if (!shape) throw new Error('expected an extracted AlgebraicQueryShape');
+  const field = shape.fields.f;
+  if (!field) throw new Error('expected field "f"');
+  return field;
+}
 
 describe('@kovojs/drizzle touch graph helpers', () => {
   it('extracts project query result shapes, read domains, and instance keys from joined Drizzle selects', () => {
@@ -1409,5 +1437,69 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'user.queries.ts:4',
       },
     ]);
+  });
+});
+
+describe('@kovojs/drizzle algebraic field classification — Lane C extractor fixes', () => {
+  // C4 (SPEC §10.5): Drizzle `count(t.col)` counts only NON-NULL values, unlike
+  // `count()`/`count(*)`. Classifying it as COUNT(*) over-counts NULL-column INSERTs,
+  // so it must be opaque (the deriver then punts the pair rather than mis-counting).
+  it('C4: count(t.col) classifies as opaque, not a plain COUNT', () => {
+    const field = singleAlgebraicField(
+      C_COMMON_IMPORTS,
+      ITEMS_C_TABLE,
+      "export const q = query('q', {",
+      '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
+      '    return { f: db.select({ value: count(items.assignee) }).from(items) };',
+      '  },',
+      '});',
+    );
+    expect(field).toEqual({
+      kind: 'opaque',
+      reason: { code: 'opaque-projection', expr: 'count(items.assignee)' },
+    });
+  });
+
+  it('C4: argument-less count() still classifies as a plain COUNT', () => {
+    const field = singleAlgebraicField(
+      C_COMMON_IMPORTS,
+      ITEMS_C_TABLE,
+      "export const q = query('q', {",
+      '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
+      '    return { f: db.select({ value: count() }).from(items) };',
+      '  },',
+      '});',
+    );
+    expect(field).toEqual({
+      kind: 'count',
+      rowset: { filters: [], key: 'id', orderBy: [], table: 'items' },
+    });
+  });
+
+  // C3 (SPEC §10.5): a multi-eq COUNT must carry the FULL filter chain so the deriver
+  // can re-check every predicate — not just the first eq.
+  it('C3: count() WHERE and(eq,eq) carries the full filter chain', () => {
+    const field = singleAlgebraicField(
+      C_COMMON_IMPORTS,
+      ITEMS_C_TABLE,
+      "export const q = query('q', {",
+      '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
+      "    return { f: db.select({ value: count() }).from(items).where(and(eq(items.cartId, 'c1'), eq(items.assignee, 'u1'))) };",
+      '  },',
+      '});',
+    );
+    expect(field).toEqual({
+      kind: 'count',
+      pred: { column: 'cartId', op: 'eq', value: { kind: 'const', value: 'c1' } },
+      rowset: {
+        filters: [
+          { column: 'cartId', op: 'eq', value: { kind: 'const', value: 'c1' } },
+          { column: 'assignee', op: 'eq', value: { kind: 'const', value: 'u1' } },
+        ],
+        key: 'id',
+        orderBy: [],
+        table: 'items',
+      },
+    });
   });
 });

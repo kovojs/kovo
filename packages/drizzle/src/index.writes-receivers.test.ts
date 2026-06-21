@@ -393,6 +393,89 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  // SPEC §11.1 (part-4 D2): a CASCADE child is itself deleted, so the DB re-fires
+  // that child's own ON DELETE CASCADE FKs — the fan-out is a transitive closure.
+  it('follows multi-level (a→b→c) CASCADE chains as a transitive closure', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['delete(table: unknown): Promise<void>;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const a = pgTable("a", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "adom", key: "id" }));',
+            'export const b = pgTable("b", {',
+            '  id: text("id").primaryKey(),',
+            '  aId: text("a_id").references(() => a.id, { onDelete: "cascade" }),',
+            '}, kovo({ domain: "bdom", key: "id" }));',
+            'export const c = pgTable("c", {',
+            '  id: text("id").primaryKey(),',
+            '  bId: text("b_id").references(() => b.id, { onDelete: "cascade" }),',
+            '}, kovo({ domain: "cdom", key: "id" }));',
+            '',
+            'export const wipe = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.delete(a);',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      wipe: {
+        reads: [],
+        touches: [
+          { domain: 'adom', keys: null, site: 'cart.domain.ts:16', via: 'a' },
+          { domain: 'bdom', keys: null, site: 'cart.domain.ts:16', via: 'b' },
+          { domain: 'cdom', keys: null, site: 'cart.domain.ts:16', via: 'c' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  // SPEC §11.1 (part-4 D2): the transitive closure must terminate on FK cycles.
+  it('terminates the CASCADE closure on a foreign-key cycle', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['delete(table: unknown): Promise<void>;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const a = pgTable("a", {',
+            '  id: text("id").primaryKey(),',
+            '  bId: text("b_id").references((): any => b.id, { onDelete: "cascade" }),',
+            '}, kovo({ domain: "adom", key: "id" }));',
+            'export const b = pgTable("b", {',
+            '  id: text("id").primaryKey(),',
+            '  aId: text("a_id").references(() => a.id, { onDelete: "cascade" }),',
+            '}, kovo({ domain: "bdom", key: "id" }));',
+            '',
+            'export const wipe = async (db: PgDatabase<any, any, any>) => {',
+            '  await db.delete(a);',
+            '};',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      wipe: {
+        reads: [],
+        touches: [
+          { domain: 'adom', keys: null, site: 'cart.domain.ts:13', via: 'a' },
+          { domain: 'bdom', keys: null, site: 'cart.domain.ts:13', via: 'b' },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
   it('unions declared trigger fan-out domains into project-mode writes', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -583,6 +666,83 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             site: 'cart.domain.ts:8',
             via: 'cart_items',
           },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  // SPEC §11.1 (part-4 D1): CTE-prefixed writes `db.with(cte).update/insert/delete(t)`
+  // resolve the write receiver through chained `.with()` so the write still touches the
+  // domain (previously the CallExpression receiver was rejected → no touch, no KV406).
+  it('records CTE-prefixed writes (db.with(cte).update(t)) through the chained .with() receiver', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'with(cte: unknown): { update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } } };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "product", key: "id" }));',
+            '',
+            'export async function reprice(db: PgDatabase<any, any, any>, id: string, cte: unknown) {',
+            '  await db.with(cte).update(products).set({ price: 1 }).where(eq(products.id, id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      reprice: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:id',
+            site: 'cart.domain.ts:8',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+  });
+
+  it('records CTE-prefixed inserts and deletes through chained .with()', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'with(cte: unknown): { insert(table: unknown): { values(value: unknown): Promise<void> }; delete(table: unknown): Promise<void> };',
+        ]),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
+            'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+            '',
+            'export async function fill(db: PgDatabase<any, any, any>, cte: unknown) {',
+            '  await db.with(cte).insert(cartItems).values({ productId: "p1" });',
+            '  await db.with(cte).delete(products);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      fill: {
+        reads: [],
+        touches: [
+          { domain: 'cart', keys: null, site: 'cart.domain.ts:7', via: 'cart_items' },
+          { domain: 'product', keys: null, site: 'cart.domain.ts:8', via: 'products' },
         ],
         unresolved: [],
       },

@@ -1653,7 +1653,12 @@ function extractProjectDrizzleWriteCalls(
     const operation = staticAccessName(expression);
     const receiver = staticAccessExpression(expression);
     if (!operation || !receiver) continue;
-    if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
+    // SPEC §11.1 (part-4 D1): a CTE-prefixed write `db.with(cte).update(t)` has the
+    // CallExpression `db.with(cte)` as its receiver. Resolve through chained `.with()`
+    // (mirroring the read-side `queryCallChainReceiver`) so the write still touches the
+    // domain; an unresolved CallExpression receiver fails closed as KV406 below.
+    const resolvedReceiver = writeCallChainReceiver(receiver);
+    if (!isProjectDrizzleReceiverIdentifier(resolvedReceiver, receivers)) continue;
 
     const tableArgument = call.getArguments()[0];
     if (!tableArgument) continue;
@@ -5597,6 +5602,23 @@ function queryCallChainReceiver(call: CallExpression): Node | undefined {
   return receiver;
 }
 
+/**
+ * SPEC §11.1 (part-4 D1): resolve a write call's receiver through chained CTE
+ * prefixes (`db.with(cte).insert(t)` ⇒ receiver `db`). Only `.with(...)` link
+ * calls are unwound; any other CallExpression receiver is returned as-is so it
+ * fails closed (not a project receiver identifier ⇒ KV406 surface).
+ */
+function writeCallChainReceiver(receiver: Node | undefined): Node | undefined {
+  let current = receiver;
+
+  while (current && Node.isCallExpression(current)) {
+    if (staticAccessName(current.getExpression()) !== 'with') break;
+    current = staticAccessExpression(current.getExpression());
+  }
+
+  return current;
+}
+
 function callSourceOrder(call: CallExpression): number {
   const expression = call.getExpression();
   return Node.isPropertyAccessExpression(expression)
@@ -6196,22 +6218,51 @@ function appendForeignKeyCascadeWriteSummaries(
     call.operation === 'delete' ? 'onDelete' : call.operation === 'update' ? 'onUpdate' : null;
   if (!action) return;
 
-  for (const entries of tables.values()) {
-    for (const childTable of entries) {
-      if (!isDomainExtractedTableAnnotation(childTable.annotation)) continue;
+  // SPEC §11.1 (part-4 D2): a CASCADE child is itself deleted/updated, so the DB
+  // re-fires that child's own referential actions — the fan-out is a transitive
+  // closure, not one hop. `set null`/`set default` are terminal (the row is mutated,
+  // not deleted, so it does not re-trigger its own ON DELETE cascades). `walked`
+  // guards FK cycles (the parent is pre-seeded since its own touch is emitted by the
+  // caller); `emitted` dedupes touches across diamond/cycle fan-out paths.
+  const walked = new Set<KovoDomainTableAnnotation & { name: string }>([parentTable]);
+  const emitted = new Set<KovoDomainTableAnnotation & { name: string }>([parentTable]);
+  let frontier: (KovoDomainTableAnnotation & { name: string })[] = [parentTable];
 
-      for (const foreignKey of childTable.foreignKeys ?? []) {
-        const foreignKeyAction = action === 'onDelete' ? foreignKey.onDelete : foreignKey.onUpdate;
-        if (!isTouchingForeignKeyAction(foreignKeyAction)) continue;
-        if (!foreignKeyTargetsTable(foreignKey, parentTable, tables)) continue;
+  while (frontier.length > 0) {
+    const next: (KovoDomainTableAnnotation & { name: string })[] = [];
 
-        writes.push({
-          operation: `${call.operation}-${foreignKeyAction}`,
-          site,
-          table: childTable.annotation,
-        });
+    for (const ancestor of frontier) {
+      for (const entries of tables.values()) {
+        for (const childTable of entries) {
+          if (!isDomainExtractedTableAnnotation(childTable.annotation)) continue;
+
+          for (const foreignKey of childTable.foreignKeys ?? []) {
+            const foreignKeyAction =
+              action === 'onDelete' ? foreignKey.onDelete : foreignKey.onUpdate;
+            if (!isTouchingForeignKeyAction(foreignKeyAction)) continue;
+            if (!foreignKeyTargetsTable(foreignKey, ancestor, tables)) continue;
+
+            if (!emitted.has(childTable.annotation)) {
+              emitted.add(childTable.annotation);
+              writes.push({
+                operation: `${call.operation}-${foreignKeyAction}`,
+                site,
+                table: childTable.annotation,
+              });
+            }
+
+            // Only a `cascade` child re-fires its own referential actions (the row is
+            // deleted/updated and triggers further cascades). Walk each child once.
+            if (foreignKeyAction === 'cascade' && !walked.has(childTable.annotation)) {
+              walked.add(childTable.annotation);
+              next.push(childTable.annotation);
+            }
+          }
+        }
       }
     }
+
+    frontier = next;
   }
 }
 
@@ -11114,6 +11165,15 @@ function aggregateField(
     const callee = expression.getExpression();
     const name = Node.isIdentifier(callee) ? callee.getText() : undefined;
     if (name === 'count') {
+      // C4 (SPEC §10.5): Drizzle `count(t.col)` counts only NON-NULL values, unlike
+      // `count()`/`count(*)`. Modeling it as COUNT(*) over-counts NULL-column INSERTs.
+      // The deriver has no per-row null witness, so a column-argument count is opaque.
+      if (expression.getArguments().length > 0) {
+        return { kind: 'opaque', reason: { code: 'opaque-projection', expr: expression.getText() } };
+      }
+      // C3 (SPEC §10.5): the rowset carries the full filter chain; `pred` is a single
+      // representative eq used by the fast-path. `deriveCount` re-checks the whole
+      // chain so a multi-eq / non-eq filtered COUNT cannot mis-derive.
       const pred = rowset.filters.find((filter) => filter.op === 'eq');
       return { kind: 'count', ...(pred ? { pred } : {}), rowset };
     }
