@@ -240,7 +240,9 @@ function validateComponentCssText(
       if (option.key !== 'css' && option.key !== 'styles') continue;
       if (!option.staticTemplateValue || !cssTextHasUnsafeUrl(option.staticTemplateValue)) continue;
 
-      found.push(outputContextDiagnostic(diagnostics, `${option.key} contains an unsafe CSS url()`));
+      found.push(
+        outputContextDiagnostic(diagnostics, `${option.key} contains an unsafe CSS url()`),
+      );
     }
   }
 

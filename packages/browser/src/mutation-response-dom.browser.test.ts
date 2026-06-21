@@ -221,18 +221,18 @@ describe('browser mutation response DOM apply', () => {
   it('resolves selector-invalid id targets with the same escaped lookup as fragment targets', () => {
     const root = document.createElement('main');
     root.innerHTML = [
-      '<section id=\'target"bad-id\'>old id</section>',
-      '<section kovo-fragment-target=\'target"bad-fragment\'>old fragment target</section>',
+      "<section id='target\"bad-id'>old id</section>",
+      "<section kovo-fragment-target='target\"bad-fragment'>old fragment target</section>",
     ].join('');
     document.body.append(root);
 
     const applied = applyMutationResponseBodyToRuntime({
       body: [
-        '<kovo-fragment target=\'target"bad-id\'>',
-        '<section id=\'target"bad-id\'>fresh id</section>',
+        "<kovo-fragment target='target\"bad-id'>",
+        "<section id='target\"bad-id'>fresh id</section>",
         '</kovo-fragment>',
-        '<kovo-fragment target=\'target"bad-fragment\'>',
-        '<section kovo-fragment-target=\'target"bad-fragment\'>fresh fragment target</section>',
+        "<kovo-fragment target='target\"bad-fragment'>",
+        "<section kovo-fragment-target='target\"bad-fragment'>fresh fragment target</section>",
         '</kovo-fragment>',
       ].join(''),
       root: new DomMorphRoot(root),
@@ -241,9 +241,9 @@ describe('browser mutation response DOM apply', () => {
 
     expect(applied.appliedFragments).toEqual(['target"bad-id', 'target"bad-fragment']);
     const sections = [...root.querySelectorAll('section')];
-    expect(sections.find((section) => section.getAttribute('id') === 'target"bad-id')?.textContent).toBe(
-      'fresh id',
-    );
+    expect(
+      sections.find((section) => section.getAttribute('id') === 'target"bad-id')?.textContent,
+    ).toBe('fresh id');
     expect(
       sections.find(
         (section) => section.getAttribute('kovo-fragment-target') === 'target"bad-fragment',

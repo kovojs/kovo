@@ -53,11 +53,7 @@ export function validateDataBindings(
       const result = validatePathInQueryShapes(binding.path, queryShapes ?? {});
       if (!result.exists) {
         return [
-          diagnostics.at(
-            'KV302',
-            { start: binding.index, length: binding.length },
-            binding.path,
-          ),
+          diagnostics.at('KV302', { start: binding.index, length: binding.length }, binding.path),
         ];
       }
 
@@ -83,11 +79,7 @@ export function validateDataBindings(
         const result = validateListStampInQueryShapes(stamp, queryShapes);
         if (!result.exists) {
           return [
-            diagnostics.at(
-              'KV302',
-              { start: binding?.index, length: binding?.length },
-              stamp.list,
-            ),
+            diagnostics.at('KV302', { start: binding?.index, length: binding?.length }, stamp.list),
           ];
         }
 

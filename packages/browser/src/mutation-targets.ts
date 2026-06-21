@@ -83,7 +83,14 @@ function isHeaderSafeIdentity(value: string): boolean {
   // boundaries or target/dependency assignment. Colon remains valid here because
   // SPEC.md §13.2 instance identities use it and the live descriptor target ends
   // before the `#` component separator.
-  return value !== '' && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
+  if (value === '') return false;
+  for (const char of value) {
+    const code = char.charCodeAt(0);
+    if (code <= 0x1f || code === 0x7f || /\s/.test(char) || ';,#='.includes(char)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function isHeaderSafeLiveComponentIdentity(value: string): boolean {

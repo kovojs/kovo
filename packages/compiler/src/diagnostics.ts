@@ -99,8 +99,7 @@ export function createDiagnosticFactory(
       const offset =
         offsetMap === undefined ? rawStart : generatedOffsetToOriginal(offsetMap, rawStart);
       const length = span?.length;
-      const message =
-        detail === undefined ? definition.message : `${definition.message} ${detail}`;
+      const message = detail === undefined ? definition.message : `${definition.message} ${detail}`;
       return {
         code,
         fileName,

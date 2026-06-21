@@ -24,11 +24,7 @@ import {
   semanticRenderEquivalenceCheck,
   serverRenderLowering,
 } from './emit/server.js';
-import {
-  componentGraphFact,
-  findFragmentTargetFacts,
-  findLiveTargetFacts,
-} from './app-graph.js';
+import { componentGraphFact, findFragmentTargetFacts, findLiveTargetFacts } from './app-graph.js';
 import { cssIrHeader } from './ir.js';
 import { createComponentHmrImpactMetadata } from './hmr-impact.js';
 import {

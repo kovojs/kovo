@@ -41,7 +41,7 @@ describe('inline loader minified artifact', () => {
       "el.getAttribute('kovo-fragment-target')??el.getAttribute('id')??el.getAttribute('kovo-c')",
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "const hsaf=(value)=>value&&!/[\\x00-\\x1f\\x7f\\s;,#=]/.test(value);",
+      'const hsaf=(value)=>value&&!/[\\x00-\\x1f\\x7f\\s;,#=]/.test(value);',
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
       "const hsc=(value)=>hsaf(value)&&!value.includes(':');",

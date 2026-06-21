@@ -104,8 +104,8 @@ describe('browser inline loader response apply', () => {
     const root = document.createElement('main');
     root.innerHTML = [
       '<form enhance action="/cart" method="post">',
-      '<section id=\'target"bad-id\'>old id</section>',
-      '<section kovo-fragment-target=\'target"bad-fragment\'>old fragment target</section>',
+      "<section id='target\"bad-id'>old id</section>",
+      "<section kovo-fragment-target='target\"bad-fragment'>old fragment target</section>",
       '</form>',
     ].join('');
     document.body.append(root);
@@ -118,11 +118,11 @@ describe('browser inline loader response apply', () => {
       vi.fn(async () => ({
         async text() {
           return [
-            '<kovo-fragment target=\'target"bad-id\'>',
-            '<section id=\'target"bad-id\'>fresh id</section>',
+            "<kovo-fragment target='target\"bad-id'>",
+            "<section id='target\"bad-id'>fresh id</section>",
             '</kovo-fragment>',
-            '<kovo-fragment target=\'target"bad-fragment\'>',
-            '<section kovo-fragment-target=\'target"bad-fragment\'>fresh fragment target</section>',
+            "<kovo-fragment target='target\"bad-fragment'>",
+            "<section kovo-fragment-target='target\"bad-fragment'>fresh fragment target</section>",
             '</kovo-fragment>',
           ].join('');
         },

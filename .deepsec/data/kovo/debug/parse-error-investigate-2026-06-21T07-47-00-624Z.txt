@@ -1,0 +1,64 @@
+# deepsec parse-failure debug dump
+# phase: investigate
+# agentType: claude-agent-sdk
+# timestamp: 2026-06-21T07:47:00.624Z
+# error: Error: Agent produced output that wasn't a parseable JSON findings array: Bad escaped character in JSON at position 2443 (line 9 column 2192). First 400 chars: I now have everything I need. The evidence is conclusive. Let me synthesize. ## Analysis Summary **The real finding is in `packages/core/src/index.ts`.** `renderFailureOutput` (L766–773) — the shared render path for the `FieldError`/`FormError` mutation-failure helpers — interpolates the message body via **raw `String(message)`** with no HTML escaping, even though: 1. The **attributes** in the 
+# batch (5 files):
+  - packages/core/src/verifier.ts
+  - packages/core/src/index.ts
+  - packages/core/src/derivation.ts
+  - packages/core/src/diagnostics.ts
+  - packages/core/src/generated.ts
+# --- raw agent output begins on next line ---
+I now have everything I need. The evidence is conclusive. Let me synthesize.
+
+## Analysis Summary
+
+**The real finding is in `packages/core/src/index.ts`.** `renderFailureOutput` (L766–773) — the shared render path for the `FieldError`/`FormError` mutation-failure helpers — interpolates the message body via **raw `String(message)`** with no HTML escaping, even though:
+
+1. The **attributes** in the very same function are escaped (`escapeHtmlAttribute` for `role`/`id`/`class`/`data-error-code`).
+2. The framework's **parallel no-JS renderer** in `mutation.ts:2132` escapes the *identical* data: `${escapeHtml(issue.message)}`.
+3. The C1 remediation (2026-06-15) deliberately escapes at the **compiler** and **`@kovojs/ui`** layers — but `FieldError`/`FormError` live in `@kovojs/core`, hand-roll HTML, and are **not** in the C1 changed-files list, so they fall through both safety nets.
+
+The message reaches the sink from author-supplied `message`/`children` props (which the compiler does *not* escape — it only escapes JSX *child* containers, never attribute/prop expressions), and the shipped **CRM reference app** (`contacts.tsx:171`) demonstrates the blessed pattern echoing user-submitted data: `message={(f) => \`${f.payload.email} is already in the contact book.\`}`. A submitted email containing `<img src=x onerror=…>` renders unescaped.
+
+The crypto in **`verifier.ts`** is sound (correct WebCrypto HMAC-SHA256, a genuinely constant-time comparison that folds in the length delta and never early-exits, fail-closed tolerance/replay handling; flagged "secrets" are docstring `whsec_test` examples). **`derivation.ts`** (compile-time IR; paths/keys are constants, user input only flows as values — no prototype pollution), **`diagnostics.ts`** (static message registry), and **`generated.ts`** (empty generated stubs) have no security issues. The remaining scanner flags are false positives (matching words like `opaque`/`AGG` in type definitions and diagnostic strings).
+
+```json
+[
+  {
+    "filePath": "packages/core/src/index.ts",
+    "findings": [
+      {
+        "severity": "HIGH",
+        "vulnSlug": "xss",
+        "title": "FieldError/FormError render mutation-failure messages without HTML escaping (reflected/stored XSS)",
+        "description": "`renderFailureOutput` (L766-773) builds the failure output element as `<output${attrs}>${String(message)}</output>`, interpolating the message body with raw `String(message)` and NO HTML escaping. The attributes around it ARE escaped via `escapeHtmlAttribute` (role/id/class/data-error-code), making the omission of body-escaping an asymmetric, unintentional gap rather than a deliberate raw-HTML feature.\n\n`message` reaches this sink from `failureMessage`/`fieldErrorMessage` (L730-755): (a) the default validation path returns `fieldErrors[props.name]` (the validator's `issue.message`); (b) the coded-failure default returns `failure.code`; and (c) author-supplied `props.message`/`props.children`, INCLUDING a function `(failure) => ...` evaluated over the failure object/payload. These helpers are the documented SPEC §9.2 way to render mutation failures, and the server runtime (`packages/server/src/jsx-runtime.ts:336-345`) invokes these exact `@kovojs/core` functions and splices their returned string into the form HTML via `html.replace(...)` with no further escaping, so the returned string is final, browser-parsed output.\n\nThis path was missed by the 2026-06-15 C1 remediation, which chose to escape at the compiler layer (app-authored JSX `{expr}` CHILD containers only) and the `@kojovs/ui` component layer. `FieldError`/`FormError` are in `@kovojs/core`, hand-roll HTML, and are not in the C1 changed-files list. The compiler escaping explicitly excludes attribute/prop expressions, so `<FormError message={expr} />` (prop position) is escaped by neither the compiler nor the runtime, and flows raw to `String(message)`.\n\nDecisive evidence that this data is untrusted and must be escaped: the framework's OWN parallel no-JS validation renderer at `packages/server/src/mutation.ts:2132` emits `<output role=\"alert\" data-error-path=\"...\">${escapeHtml(issue.message)}</output>` — i.e. it escapes the identical `issue.message` that `FieldError` renders raw. The shipped CRM reference app (`examples/crm/src/components/contacts.tsx:171-177`) demonstrates the blessed pattern echoing user-submitted input into the message: `message={(failure) => \`${failure.payload.email} is already in the contact book.\`}`. A submitted value such as `x\"><img src=y onerror=fetch('/x',{method:'POST',body:document.cookie})>@a.com` is reflected unescaped, executing script in the app origin (session/CSRF-token theft, account actions). Where the failure is rendered for a different viewer than the submitter (moderation/admin/collaborative flows) or the payload carries another user's data, this is cross-user stored/reflected XSS. Custom validators (the `SchemaLike { parse }` contract accepts Zod-style libraries whose enum/literal/refine messages echo input) further widen the default-path exposure.",
+        "lineNumbers": [772, 766, 745, 749, 742, 707, 727],
+        "recommendation": "Escape the rendered text in `renderFailureOutput`: replace `${String(message)}` with `${escapeText(message)}` (reuse `escapeText`/`escapeHtml` from `@kovojs/server`'s html.ts, mirroring `mutation.ts:2132`). If intentionally-composed HTML children must remain supported, only treat genuine composed component output as raw and escape all scalar string/number messages (the common case). Add a regression test asserting `FieldError`/`FormError` with a `<img onerror>` validation message and with a `message={() => '<script>...'}` render escaped, mirroring `packages/ui/src/xss-escaping.test.tsx`.",
+        "confidence": "high"
+      }
+    ]
+  },
+  {
+    "filePath": "packages/core/src/verifier.ts",
+    "findings": []
+  },
+  {
+    "filePath": "packages/core/src/derivation.ts",
+    "findings": []
+  },
+  {
+    "filePath": "packages/core/src/diagnostics.ts",
+    "findings": []
+  },
+  {
+    "filePath": "packages/core/src/generated.ts",
+    "findings": []
+  }
+]
+```
+
+### Notes on scanner candidates judged false positives
+- **`verifier.ts`** — `whsec_test` (L139/L213) are JSDoc example secrets, not real credentials; "Timing-unsafe comparison" is wrong (`constantTimeEqual` L463 folds the length delta in and never early-exits, and `expected` is a fixed 32-byte HMAC); `crypto.subtle.importKey`/`sign` (L446/L453) is correct HMAC-SHA256 usage; "secret-in-log" L213 is a docstring, not a log.
+- **`index.ts`/`derivation.ts`/`diagnostics.ts`/`generated.ts`** "weak cipher algorithm" flags match words like `opaque`, `AGG`, and diagnostic message text in type definitions/registries — no cipher code exists. The XSS flags at `index.ts` L127/L369 are inside JSDoc `@example` blocks (not executable). `derivation.ts` paths/keys are compile-time constants with user input flowing only as values, so no prototype pollution.

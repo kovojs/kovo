@@ -180,9 +180,7 @@ function routePageCssFact(
   const sourceFileNames = uniqueSorted(
     components.flatMap((component) => {
       const componentImport = componentImports.get(component.localName);
-      return componentImport
-        ? [compileArtifactFileNames(componentImport.sourceFileName).css]
-        : [];
+      return componentImport ? [compileArtifactFileNames(componentImport.sourceFileName).css] : [];
     }),
   );
 
@@ -499,12 +497,7 @@ function routePageComponentFacts(
           ),
         );
         facts.push(
-          routePageComponentFact(
-            sourceFile,
-            tag,
-            node.openingElement.attributes,
-            componentImports,
-          ),
+          routePageComponentFact(sourceFile, tag, node.openingElement.attributes, componentImports),
         );
       }
     } else if (ts.isJsxSelfClosingElement(node)) {
@@ -519,9 +512,7 @@ function routePageComponentFacts(
             node.attributes,
           ),
         );
-        facts.push(
-          routePageComponentFact(sourceFile, tag, node.attributes, componentImports),
-        );
+        facts.push(routePageComponentFact(sourceFile, tag, node.attributes, componentImports));
       }
     }
 

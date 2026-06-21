@@ -18,11 +18,7 @@ import {
   type JsxElementModel,
 } from '../scan/parse.js';
 import { escapeAttribute, splitDepValue, type SourceReplacement } from '../shared.js';
-import {
-  emitElementParamTypes,
-  type HandlerLowering,
-  type RegistryFacts,
-} from '../types.js';
+import { emitElementParamTypes, type HandlerLowering, type RegistryFacts } from '../types.js';
 import type { CompilerDiagnostic } from '../diagnostics.js';
 import {
   enhancedMutationFormRenderLowering,

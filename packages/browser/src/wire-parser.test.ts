@@ -51,9 +51,7 @@ describe('wire parser HTML entity handling', () => {
     // SPEC.md §9.4/§10.2: /_q chunks use the declared query key as `name` and
     // the canonical instance identity as `key`, even when that key contains colons.
     expect(
-      readQueryChunks(
-        '<kovo-query name="productDetail" key="product:p1">{"id":"p1"}</kovo-query>',
-      ),
+      readQueryChunks('<kovo-query name="productDetail" key="product:p1">{"id":"p1"}</kovo-query>'),
     ).toEqual([{ key: 'product:p1', name: 'productDetail', value: { id: 'p1' } }]);
   });
 

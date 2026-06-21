@@ -328,7 +328,8 @@ describe('server mutation primitives', () => {
       renderMutationEndpointResponse(postAnswer, {
         headers: {
           'Kovo-Fragment': 'true',
-          'Kovo-Live-Targets': 'question-detail-region#components/question/detail:{"questionId":"q1"}',
+          'Kovo-Live-Targets':
+            'question-detail-region#components/question/detail:{"questionId":"q1"}',
           'Kovo-Targets': 'question-detail-region=question:q1',
         },
         liveTargetRenderers: [
