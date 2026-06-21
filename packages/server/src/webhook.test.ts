@@ -348,7 +348,10 @@ describe('server webhook primitive', () => {
     const body = JSON.stringify({ id: 'evt_payload' });
 
     // Malformed signature header → payload callback throws → fail closed to 401.
-    const bad = await runWebhook(okWebhook, signedRequestNamed('throwing-payload', body, 'malformed'));
+    const bad = await runWebhook(
+      okWebhook,
+      signedRequestNamed('throwing-payload', body, 'malformed'),
+    );
     expect(bad.response.status).toBe(401);
     await expect(bad.response.text()).resolves.toBe('Unauthorized');
     expect(handled).toBe(0);

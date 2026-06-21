@@ -2291,8 +2291,10 @@ function extractQueryFactsFromPreparedFiles(
       // misses (an arg keyed on an owner column other than `key:`).
       const argScopedReads = queryArgScopedDomains(query.instanceKeyComparisons, fileTables).filter(
         (domain) =>
-          !(instanceKey?.instanceKey?.domain === domain &&
-            instanceKey.instanceKey.key.startsWith('arg:')),
+          !(
+            instanceKey?.instanceKey?.domain === domain &&
+            instanceKey.instanceKey.key.startsWith('arg:')
+          ),
       );
       facts.push({
         ...(argScopedReads.length > 0 ? { argScopedReads } : {}),

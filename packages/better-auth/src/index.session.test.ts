@@ -58,10 +58,7 @@ describe('betterAuthSession', () => {
     const provider = betterAuthSession(auth, mapSession);
 
     const forwarded: string[] = [];
-    const lifecycleRequest = await resolveLifecycleRequest<
-      RequestWithHeaders,
-      AppSession
-    >(
+    const lifecycleRequest = await resolveLifecycleRequest<RequestWithHeaders, AppSession>(
       { headers: new Headers({ cookie: 'kovo_session=s1' }) },
       {
         onSessionSetCookie: (cookie) => forwarded.push(cookie),

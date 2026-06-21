@@ -194,8 +194,9 @@ describe('headless-ui combobox primitive', () => {
     // Filtering to the query leaves exactly the highlighted option rendered.
     expect(comboboxFilteredItems(filteredState).map(({ value }) => value)).toEqual(['design']);
 
-    const activeDescendant =
-      comboboxInputAttributes({ ...filteredState, id: 'team-input' })['aria-activedescendant'];
+    const activeDescendant = comboboxInputAttributes({ ...filteredState, id: 'team-input' })[
+      'aria-activedescendant'
+    ];
     expect(activeDescendant).toBe('team-listbox-option-0');
 
     // The rendered option must carry exactly that id (no dangling IDREF).

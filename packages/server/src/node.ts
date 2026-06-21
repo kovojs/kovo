@@ -149,8 +149,7 @@ function defaultOrigin(request: IncomingMessage): string {
   // the `:authority` pseudo-header instead. Fall back to it (then `:scheme`) so URL resolution
   // works for HTTP/2 requests, not just HTTP/1.1.
   const pseudoHeaders = request.headers as Record<string, string | string[] | undefined>;
-  const host =
-    request.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
+  const host = request.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
   const forwardedProto = firstHeaderValue(request.headers['x-forwarded-proto']);
   const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
   const proto =

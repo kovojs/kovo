@@ -164,7 +164,9 @@ describe('applyQueryDelta', () => {
   it('throws QueryDeltaApplyError on a non-object delta envelope', () => {
     const base: JsonValue = { count: 2, items: [{ id: 'p1', qty: 1 }] };
     expect(() => applyQueryDelta(base, 42 as unknown as QueryDelta)).toThrow(QueryDeltaApplyError);
-    expect(() => applyQueryDelta(base, null as unknown as QueryDelta)).toThrow(QueryDeltaApplyError);
+    expect(() => applyQueryDelta(base, null as unknown as QueryDelta)).toThrow(
+      QueryDeltaApplyError,
+    );
     expect(() => applyQueryDelta(base, [{ id: 'p1' }] as unknown as QueryDelta)).toThrow(
       QueryDeltaApplyError,
     );

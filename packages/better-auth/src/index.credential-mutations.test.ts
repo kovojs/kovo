@@ -293,9 +293,7 @@ describe('getBetterAuthSetCookie comma-folded fallback (part-3 L13-3)', () => {
   }
 
   it('splits a comma-folded two-cookie header into both cookies', () => {
-    const headers = headersWithFoldedSetCookie(
-      'a=1; Path=/; HttpOnly, b=2; Path=/; HttpOnly',
-    );
+    const headers = headersWithFoldedSetCookie('a=1; Path=/; HttpOnly, b=2; Path=/; HttpOnly');
     expect(getBetterAuthSetCookie(headers)).toEqual([
       'a=1; Path=/; HttpOnly',
       'b=2; Path=/; HttpOnly',

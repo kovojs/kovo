@@ -1,4 +1,4 @@
-import { createApp, endpoint } from '@kovojs/server';
+import { createApp, endpoint, type ResponseHeaders } from '@kovojs/server';
 import { renderDeferredDocument } from '@kovojs/server/internal/html';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
@@ -46,12 +46,25 @@ const deferredHome = endpoint('/', {
         },
       }),
       {
-        headers: response.headers,
+        headers: webResponseHeaders(response.headers),
         status: response.status,
       },
     );
   },
 });
+
+function webResponseHeaders(headers: ResponseHeaders): Headers {
+  const webHeaders = new Headers();
+  for (const [name, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      for (const entry of value) webHeaders.append(name, entry);
+    } else {
+      webHeaders.set(name, value);
+    }
+  }
+
+  return webHeaders;
+}
 
 export default defineFixture({
   app: createApp({ endpoints: [deferredHome] }),

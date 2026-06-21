@@ -162,8 +162,7 @@ describe('mutation broadcast replay', () => {
   // its own page token as the expected token and the sender-stamped envelope token
   // as the response token, so a cross-build delta chunk becomes a miss.
   describe('cross-build delta validation (D3 / SPEC §9.1.1)', () => {
-    const deltaBody =
-      '<kovo-query name="cart" delta>{"set":{"count":99}}</kovo-query>';
+    const deltaBody = '<kovo-query name="cart" delta>{"set":{"count":99}}</kovo-query>';
 
     it('converts a cross-build delta chunk to a miss and leaves the store base untouched', () => {
       const store = createQueryStore();

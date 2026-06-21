@@ -64,10 +64,7 @@ export function betterAuthSession<
     // non-overloaded instance) returns the bare session payload. A session payload never
     // carries both `response` and `headers`, so their joint presence identifies the envelope.
     const isEnvelope =
-      result !== null &&
-      typeof result === 'object' &&
-      'response' in result &&
-      'headers' in result;
+      result !== null && typeof result === 'object' && 'response' in result && 'headers' in result;
     const payload = isEnvelope
       ? (result as BetterAuthGetSessionWithHeadersResult<AuthSession, AuthUser>).response
       : (result as BetterAuthSessionPayload<AuthSession, AuthUser> | null | undefined);

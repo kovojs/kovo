@@ -39,8 +39,7 @@ function runBootstrap(
   const rewritten = source
     .replace(
       /import\s*\{([^}]*)\}\s*from\s*['"]@kovojs\/browser\/generated['"];?/g,
-      (_match, names: string) =>
-        `const { ${names.trim()} } = runtime;`,
+      (_match, names: string) => `const { ${names.trim()} } = runtime;`,
     )
     .replace(
       /import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"];?/g,
@@ -117,8 +116,14 @@ describe('emitQueryPlanBootstrapModule — same-name export collision (B2, SPEC 
 
   it('merges same-query-key plans so both components’ appliers run (no clobber, §4.8)', () => {
     const bootstrap = emitQueryPlanBootstrapModule([
-      { exportName: 'CartBadge$queryUpdatePlans', importPath: '../components/cart-badge.client.js' },
-      { exportName: 'CartPanel$queryUpdatePlans', importPath: '../components/cart-panel.client.js' },
+      {
+        exportName: 'CartBadge$queryUpdatePlans',
+        importPath: '../components/cart-badge.client.js',
+      },
+      {
+        exportName: 'CartPanel$queryUpdatePlans',
+        importPath: '../components/cart-panel.client.js',
+      },
     ]);
 
     const ran: string[] = [];

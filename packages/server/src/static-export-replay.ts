@@ -1,10 +1,7 @@
 import type { KovoApp } from './app-types.js';
 import { replayStaticExportClientModuleArtifacts } from './static-export-client-modules.js';
 import { replayStaticExportRouteDocumentArtifact } from './static-export-document.js';
-import {
-  staticExportRoutePlan,
-  type StaticExportRouteTarget,
-} from './static-export-route-plan.js';
+import { staticExportRoutePlan, type StaticExportRouteTarget } from './static-export-route-plan.js';
 import {
   blockingStaticExportDiagnostics,
   StaticExportError,
@@ -55,7 +52,9 @@ export async function replayStaticExportApp({
     // with no single concrete target — when it shares the route pattern. Matching every staticPath
     // sibling by `routePath` (all param targets share `route.path`) would drop valid pages whenever
     // one staticPath is non-exportable; see C1.
-    if (diagnostics.some((diagnostic) => staticExportDiagnosticSuppresses(diagnostic, routeTarget))) {
+    if (
+      diagnostics.some((diagnostic) => staticExportDiagnosticSuppresses(diagnostic, routeTarget))
+    ) {
       continue;
     }
 
