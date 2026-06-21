@@ -537,8 +537,6 @@ function lowerAttributeDerive(
   nameCounts: Map<string, number>,
   forceQueryBinding = false,
 ): void {
-  const exportName = nextExportName(candidate.baseName, nameCounts);
-  const stampName = `${candidate.query}.${exportName}`;
   const expression =
     candidate.source === 'state'
       ? deriveExpression(candidate.attribute, candidate.expression)
@@ -546,29 +544,35 @@ function lowerAttributeDerive(
   const deriveInputs = candidate.inputs ?? [candidate.query];
   const deriveParams = candidate.params ?? [deriveParam(candidate)];
 
-  deriveExports.push(
-    `export const ${exportName} = derive(${JSON.stringify(deriveInputs)}, (${deriveParams.join(', ')}) => ${expression});`,
-  );
-  if (candidate.source === 'state') {
-    stateDerives.push({
-      attr: candidate.attribute.name,
-      expression,
-      exportName,
-      input: 'state',
-      name: exportName,
-      outputContext: outputWriteFact({
-        context: outputContextForAttribute(candidate.targetAttr),
-        expression,
-        sink: candidate.targetAttr,
-        source: 'client-state',
-        writer: 'inline state attribute derive',
-      }),
-      param: 'state',
-      placeholder: stampName,
-    });
-  }
-  outputContexts.push(
-    outputWriteFact({
+  const { stampName } = emitDerive({
+    baseName: candidate.baseName,
+    nameCounts,
+    stampPrefix: candidate.query,
+    deriveExports,
+    inputs: JSON.stringify(deriveInputs),
+    params: deriveParams.join(', '),
+    expression,
+    stateDerive:
+      candidate.source === 'state'
+        ? (exportName) => ({
+            attr: candidate.attribute.name,
+            expression,
+            exportName,
+            input: 'state',
+            name: exportName,
+            outputContext: outputWriteFact({
+              context: outputContextForAttribute(candidate.targetAttr),
+              expression,
+              sink: candidate.targetAttr,
+              source: 'client-state',
+              writer: 'inline state attribute derive',
+            }),
+            param: 'state',
+            placeholder: `${candidate.query}.${exportName}`,
+          })
+        : undefined,
+    stateDerives,
+    outputContext: outputWriteFact({
       context: outputContextForAttribute(candidate.targetAttr),
       expression,
       sink: candidate.targetAttr,
@@ -578,7 +582,8 @@ function lowerAttributeDerive(
           ? 'inline state attribute derive'
           : 'inline query attribute derive',
     }),
-  );
+    outputContexts,
+  });
 
   // SPEC.md §4.8 data-bind-prop: for property-authoritative attributes, also emit
   // the live-property stamp wherever a data-bind:<attr> sibling is produced (state
@@ -777,16 +782,10 @@ function lowerPrimitiveIndeterminateProp(
   nameCounts: Map<string, number>,
 ): void {
   const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_indeterminate_derive`;
-  const exportName = nextExportName(baseName, nameCounts);
-  const stampName = `${root}.${exportName}`;
   // Boolean-presence form ("" present / null absent) matching the other primitive
   // derives; the loader coerces it to the boolean `.indeterminate` property.
   const expression = `((${statePath}) === "indeterminate" ? "" : null)`;
   const isState = root === 'state';
-
-  deriveExports.push(
-    `export const ${exportName} = derive(${JSON.stringify([root])}, (${root}: any) => ${expression});`,
-  );
   const outputContext = outputWriteFact({
     context: outputContextForAttribute('indeterminate'),
     expression,
@@ -794,19 +793,31 @@ function lowerPrimitiveIndeterminateProp(
     source: isState ? 'client-state' : 'client-query',
     writer: 'primitive reactive live-property derive',
   });
-  if (isState) {
-    stateDerives.push({
-      attr: 'indeterminate',
-      expression,
-      exportName,
-      input: 'state',
-      name: exportName,
-      outputContext,
-      param: 'state',
-      placeholder: stampName,
-    });
-  }
-  outputContexts.push(outputContext);
+
+  const { stampName } = emitDerive({
+    baseName,
+    nameCounts,
+    stampPrefix: root,
+    deriveExports,
+    inputs: JSON.stringify([root]),
+    params: `${root}: any`,
+    expression,
+    stateDerive: isState
+      ? (exportName) => ({
+          attr: 'indeterminate',
+          expression,
+          exportName,
+          input: 'state',
+          name: exportName,
+          outputContext,
+          param: 'state',
+          placeholder: `${root}.${exportName}`,
+        })
+      : undefined,
+    stateDerives,
+    outputContext,
+    outputContexts,
+  });
 
   setJsxIrAttribute(
     element,
@@ -833,17 +844,8 @@ function lowerPrimitiveReactiveAttribute(
   nameCounts: Map<string, number>,
 ): void {
   const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attrName)}_derive`;
-  const exportName = nextExportName(baseName, nameCounts);
-  const stampName = `${root}.${exportName}`;
   const expression = primitiveReactiveExpression(condition, attr);
   const isState = root === 'state';
-
-  // SPEC.md §4.6: emit derive(["state"], ...) for state-rooted control props or
-  // derive(["<query>"], ...) for single-query-rooted props (A11Y-PRIMITIVES-2).
-  // The parameter name mirrors the root so the expression resolves correctly.
-  deriveExports.push(
-    `export const ${exportName} = derive(${JSON.stringify([root])}, (${root}: any) => ${expression});`,
-  );
   const source = isState ? 'client-state' : 'client-query';
   const outputContext = outputWriteFact({
     context: outputContextForAttribute(attrName),
@@ -852,19 +854,34 @@ function lowerPrimitiveReactiveAttribute(
     source,
     writer: 'primitive reactive attribute derive',
   });
-  if (isState) {
-    stateDerives.push({
-      attr: attrName,
-      expression,
-      exportName,
-      input: 'state',
-      name: exportName,
-      outputContext,
-      param: 'state',
-      placeholder: stampName,
-    });
-  }
-  outputContexts.push(outputContext);
+
+  // SPEC.md §4.6: emit derive(["state"], ...) for state-rooted control props or
+  // derive(["<query>"], ...) for single-query-rooted props (A11Y-PRIMITIVES-2).
+  // The parameter name mirrors the root so the expression resolves correctly.
+  const { stampName } = emitDerive({
+    baseName,
+    nameCounts,
+    stampPrefix: root,
+    deriveExports,
+    inputs: JSON.stringify([root]),
+    params: `${root}: any`,
+    expression,
+    stateDerive: isState
+      ? (exportName) => ({
+          attr: attrName,
+          expression,
+          exportName,
+          input: 'state',
+          name: exportName,
+          outputContext,
+          param: 'state',
+          placeholder: `${root}.${exportName}`,
+        })
+      : undefined,
+    stateDerives,
+    outputContext,
+    outputContexts,
+  });
 
   setJsxIrAttribute(
     element,
@@ -1088,9 +1105,13 @@ function lowerInlineTextBindings(
     const derive = inlineTextDerive(element, expression, componentName);
     if (derive) {
       boundElementStarts.add(element.element.start);
-      const exportName = nextExportName(derive.baseName, nameCounts);
-      const stampName = `state.${exportName}`;
-      recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
+      const { stampName } = recordStateDerive(
+        derive,
+        deriveExports,
+        stateDerives,
+        outputContexts,
+        nameCounts,
+      );
       setJsxIrAttribute(
         element,
         generatedJsxIrAttribute(
@@ -1105,9 +1126,12 @@ function lowerInlineTextBindings(
     const queryDerive = inlineQueryTextDerive(element, expression, componentName, knownQueries);
     if (!queryDerive) continue;
     boundElementStarts.add(element.element.start);
-    const exportName = nextExportName(queryDerive.baseName, nameCounts);
-    const stampName = `${queryDerive.query}.${exportName}`;
-    recordQueryTextDerive(queryDerive, exportName, deriveExports, outputContexts);
+    const { stampName } = recordQueryTextDerive(
+      queryDerive,
+      deriveExports,
+      outputContexts,
+      nameCounts,
+    );
     setJsxIrAttribute(
       element,
       generatedJsxIrAttribute(
@@ -1136,17 +1160,24 @@ function lowerInlineTextBindings(
     }
     const derive = inlineMixedTextDerive(expression, model, componentName);
     if (derive) {
-      const exportName = nextExportName(derive.baseName, nameCounts);
-      const stampName = `state.${exportName}`;
-      recordStateDerive(derive, exportName, stampName, deriveExports, stateDerives, outputContexts);
+      const { stampName } = recordStateDerive(
+        derive,
+        deriveExports,
+        stateDerives,
+        outputContexts,
+        nameCounts,
+      );
       expression.replacement = `<span data-bind="${escapeAttribute(stampName)}">{${derive.expression}}</span>`;
       continue;
     }
     const queryDerive = inlineMixedQueryTextDerive(expression, model, componentName, knownQueries);
     if (!queryDerive) continue;
-    const exportName = nextExportName(queryDerive.baseName, nameCounts);
-    const stampName = `${queryDerive.query}.${exportName}`;
-    recordQueryTextDerive(queryDerive, exportName, deriveExports, outputContexts);
+    const { stampName } = recordQueryTextDerive(
+      queryDerive,
+      deriveExports,
+      outputContexts,
+      nameCounts,
+    );
     expression.replacement = `<span data-derive="${escapeAttribute(stampName)}">{${queryDerive.expression}}</span>`;
   }
 }
@@ -1456,21 +1487,36 @@ function clockQueryInputsFromRoots(
 
 function recordStateDerive(
   derive: InlineStateTextDerive,
-  exportName: string,
-  stampName: string,
   deriveExports: string[],
   stateDerives: StateDeriveFact[],
   outputContexts: GeneratedOutputWriteFact[],
-): void {
+  nameCounts: Map<string, number>,
+): { exportName: string; stampName: string } {
   const expression = derive.expression.trim();
-  deriveExports.push(
-    `export const ${exportName} = derive(["state"], (state: any) => ${expression});`,
-  );
-  stateDerives.push({
+  return emitDerive({
+    baseName: derive.baseName,
+    nameCounts,
+    stampPrefix: 'state',
+    deriveExports,
+    inputs: '["state"]',
+    params: 'state: any',
     expression,
-    exportName,
-    input: 'state',
-    name: exportName,
+    stateDerive: (exportName) => ({
+      expression,
+      exportName,
+      input: 'state',
+      name: exportName,
+      outputContext: outputWriteFact({
+        context: 'text',
+        expression,
+        sink: 'textContent',
+        source: 'client-state',
+        writer: 'inline state text derive',
+      }),
+      param: 'state',
+      placeholder: `state.${exportName}`,
+    }),
+    stateDerives,
     outputContext: outputWriteFact({
       context: 'text',
       expression,
@@ -1478,43 +1524,92 @@ function recordStateDerive(
       source: 'client-state',
       writer: 'inline state text derive',
     }),
-    param: 'state',
-    placeholder: stampName,
+    outputContexts,
   });
-  outputContexts.push(
-    outputWriteFact({
-      context: 'text',
-      expression,
-      sink: 'textContent',
-      source: 'client-state',
-      writer: 'inline state text derive',
-    }),
-  );
 }
 
 function recordQueryTextDerive(
   derive: InlineQueryTextDerive,
-  exportName: string,
   deriveExports: string[],
   outputContexts: GeneratedOutputWriteFact[],
-): void {
+  nameCounts: Map<string, number>,
+): { exportName: string; stampName: string } {
   const expression = derive.expression.trim();
-  deriveExports.push(
-    `export const ${exportName} = derive(${JSON.stringify(derive.inputs)}, (${derive.params.join(', ')}) => ${expression});`,
-  );
-  outputContexts.push(
-    outputWriteFact({
+  return emitDerive({
+    baseName: derive.baseName,
+    nameCounts,
+    stampPrefix: derive.query,
+    deriveExports,
+    inputs: JSON.stringify(derive.inputs),
+    params: derive.params.join(', '),
+    expression,
+    outputContext: outputWriteFact({
       context: 'text',
       expression,
       sink: 'textContent',
       source: 'client-query',
       writer: 'inline query text derive',
     }),
-  );
+    outputContexts,
+  });
 }
 
 function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
   return fact;
+}
+
+/**
+ * SPEC.md §5.2 derive ABI chokepoint (FN11, plans/compiler-refactoring.md): the single
+ * owner of the `export const X = derive(<inputs>, (<params>) => <expression>);` template,
+ * the export-name allocation, and the matching `StateDeriveFact` /
+ * `GeneratedOutputWriteFact` records. The production derive sites have load-bearing,
+ * byte-significant shape differences (`JSON.stringify`'d vs literal `inputs`, `: any` vs
+ * un-annotated `params`, per-site fact fields, and whether the state-derive fact shares
+ * the same output-context object pushed into `outputContexts`). To stay byte- and
+ * identity-neutral, callers pass the already-formatted `inputs`/`params` strings and the
+ * fully-built fact objects through unchanged; this helper only centralizes the template,
+ * name allocation, and which arrays receive a push.
+ */
+interface EmitDeriveOptions {
+  baseName: string;
+  nameCounts: Map<string, number>;
+  /** Stamp prefix joined to the allocated export name as `${stampPrefix}.${exportName}`. */
+  stampPrefix: string;
+  deriveExports: string[];
+  /** Already-formatted `inputs` string, e.g. `JSON.stringify([root])` or `["state"]`. */
+  inputs: string;
+  /** Already-formatted `params` string, e.g. `state: any` or `deriveParams.join(', ')`. */
+  params: string;
+  expression: string;
+  /**
+   * Builds the per-site `StateDeriveFact` from the allocated name. Returning `undefined`
+   * skips the `stateDerives` push (sites that only emit an output-context fact). The
+   * caller owns object identity (e.g. sharing the `outputContext` ref with the push below).
+   */
+  stateDerive?: ((exportName: string) => StateDeriveFact | undefined) | undefined;
+  stateDerives?: StateDeriveFact[] | undefined;
+  /**
+   * Output-context fact to push into `outputContexts`. The caller passes the exact object
+   * (shared with the state-derive fact or distinct, per site) so identity is preserved.
+   */
+  outputContext?: GeneratedOutputWriteFact;
+  outputContexts?: GeneratedOutputWriteFact[];
+}
+
+function emitDerive(options: EmitDeriveOptions): { exportName: string; stampName: string } {
+  const exportName = nextExportName(options.baseName, options.nameCounts);
+  const stampName = `${options.stampPrefix}.${exportName}`;
+  options.deriveExports.push(
+    `export const ${exportName} = derive(${options.inputs}, (${options.params}) => ${options.expression});`,
+  );
+  if (options.stateDerive && options.stateDerives) {
+    const fact = options.stateDerive(exportName);
+    if (fact) options.stateDerives.push(fact);
+  }
+  if (options.outputContext && options.outputContexts) {
+    options.outputContexts.push(options.outputContext);
+  }
+  return { exportName, stampName };
 }
 
 function expressionChildren(elements: readonly JsxIrElement[]): JsxIrExpression[] {
