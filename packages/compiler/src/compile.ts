@@ -7,6 +7,11 @@ import {
 } from '@kovojs/core/internal/render-plan-token';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
+import {
+  dedupeOutputContextFacts,
+  mergeQueryUpdatePlans,
+  mergeStyleUpdateCoverage,
+} from './compile-result.js';
 import { componentCssAssetForFile, dedupeCss, emitCssModule } from './css.js';
 import { deriveComponentNames } from './component-names.js';
 import { emitClientModule } from './emit/client.js';
@@ -32,8 +37,7 @@ import {
   lowerEventHandlers,
   versionHandlerLowering,
 } from './lower/handlers.js';
-import { navigationStandaloneHrefLowering } from './lower/navigation.js';
-import { lowerStructuralJsx } from './lower/structural-jsx.js';
+import { runLoweringPipeline } from './lowering-pipeline.js';
 import {
   inferComponentName,
   jsxElements,
@@ -41,13 +45,8 @@ import {
   firstComponentModel,
   componentOptionObjectEntries,
   type ComponentModuleModel,
-  type SourceSpan,
 } from './scan/parse.js';
-import {
-  applyModelPatchPass,
-  applyTerminalEmitPatches,
-  componentPipelineState,
-} from './model-pipeline.js';
+import { applyTerminalEmitPatches, componentPipelineState } from './model-pipeline.js';
 import {
   mergePackageComponentPrefixFacts,
   packageComponentPrefixesForModule,
@@ -55,16 +54,13 @@ import {
 import { isCompilerIrArtifact, validateAuthoringSurface } from './validate/authoring-surface.js';
 import { validatePackageComponentPrefixes } from './validate/package-prefixes.js';
 import { collectCompilerDiagnostics } from './validate/pipeline.js';
-import { composeSourceOffsetMaps, escapeAttribute, type SourceReplacement } from './shared.js';
-import { extractKovoStyles } from './style.js';
+import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
-import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type {
   CompileComponentOptions,
   CompileResult,
   ClockUpdatePlanFact,
   CompileDependencyFootprint,
-  QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   StateDeriveFact,
   StateDeriveReferenceFact,
@@ -113,42 +109,14 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
   const componentName = inferComponentName(options.fileName, originalModel);
   const componentNames = deriveComponentNames(options.fileName, firstComponentModel(originalModel));
   const originalState = componentPipelineState(options.fileName, options.source, originalModel);
-  const styleSpanProbe = extractKovoStyles(
-    options.fileName,
-    options.source,
-    originalModel,
-    componentName,
-    compileOptions,
-  );
-  const structuralLowering = lowerStructuralJsx(originalState.model, componentName, {
-    ...compileOptions,
-    skipInlineAttributeDeriveSpans: styleSpanProbe.handledSpans,
-  });
-  const hrefReplacements = navigationStandaloneHrefLowering(originalState.model);
-  const structuralPatch = applyModelPatchPass(
-    originalState,
-    [...structuralLowering.replacements, ...hrefReplacements],
-    parseComponentModuleModel,
-  );
-  const styleExtraction = extractKovoStyles(
-    options.fileName,
-    structuralPatch.state.source,
-    structuralPatch.state.model,
-    componentName,
-    compileOptions,
-  );
-  const modelPatch = applyModelPatchPass(
-    structuralPatch.state,
-    styleExtraction.replacements,
-    parseComponentModuleModel,
-  );
-  const source = modelPatch.state.source;
+  // FN5 (plans/compiler-refactoring.md): the lowering stage runs as a declarative pass list
+  // (probe -> structural -> standalone-href -> reparse -> style-extract -> reparse).
+  const lowering = runLoweringPipeline(originalState, componentName, compileOptions);
+  const { styleSpanProbe, structuralLowering, styleExtraction } = lowering;
+  const source = lowering.source;
   const diagnosticSource = options.source;
-  const validationOffsetMap = composeSourceOffsetMaps(
-    structuralPatch.sourceOffsetMap,
-    modelPatch.sourceOffsetMap,
-  );
-  const model = modelPatch.state.model;
+  const validationOffsetMap = lowering.validationOffsetMap;
+  const model = lowering.model;
   const handlers = lowerEventHandlers({ ...compileOptions, source }, componentName, model);
   const queryUpdatePlans = mergeQueryUpdatePlans([
     ...collectQueryUpdatePlans(model, componentName),
@@ -251,7 +219,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     appendLiveTargetRendererExports({
       componentExpression: componentName,
       liveTargetFacts,
-      source: applyTerminalEmitPatches(modelPatch.state, serverRenderReplacements),
+      source: applyTerminalEmitPatches(lowering.terminalState, serverRenderReplacements),
     }),
   );
   const serverModule = emitServerModule(serverRenderedSource);
@@ -600,93 +568,6 @@ function versionStateDeriveReferences(
   }));
 }
 
-function mergeQueryUpdatePlans(plans: readonly QueryUpdatePlanFact[]): QueryUpdatePlanFact[] {
-  const byQuery = new Map<string, QueryUpdatePlanFact[]>();
-  for (const plan of plans) {
-    byQuery.set(plan.query, [...(byQuery.get(plan.query) ?? []), plan]);
-  }
-
-  return [...byQuery.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([query, queryPlans]) => ({
-      componentName: queryPlans[0]?.componentName ?? 'Component',
-      query,
-      paths: [...new Set(queryPlans.flatMap((plan) => plan.paths))].sort(),
-      ...(queryPlans.some((plan) => (plan.outputContexts?.length ?? 0) > 0)
-        ? {
-            outputContexts: dedupeOutputContextFacts(
-              queryPlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
-            ),
-          }
-        : {}),
-      ...(queryPlans.some((plan) => (plan.derives?.length ?? 0) > 0)
-        ? {
-            derives: dedupeByKey(
-              queryPlans.flatMap((plan) => [...(plan.derives ?? [])]),
-              (derive) => derive.exportName,
-            ).sort((left, right) => left.name.localeCompare(right.name)),
-          }
-        : {}),
-      ...(queryPlans.some((plan) => (plan.stamps?.length ?? 0) > 0)
-        ? {
-            stamps: dedupeByKey(
-              queryPlans.flatMap((plan) => [...(plan.stamps ?? [])]),
-              (stamp) => `${stamp.attr}\0${stamp.selector}\0${stamp.derive.exportName}`,
-            ).sort((left, right) => left.attr.localeCompare(right.attr)),
-          }
-        : {}),
-      ...(queryPlans.some((plan) => (plan.templateStamps?.length ?? 0) > 0)
-        ? {
-            templateStamps: dedupeByKey(
-              queryPlans.flatMap((plan) => [...(plan.templateStamps ?? [])]),
-              (stamp) => `${stamp.key}\0${stamp.selector}\0${stamp.list}`,
-            ).sort((left, right) => left.list.localeCompare(right.list)),
-          }
-        : {}),
-    }));
-}
-
-function dedupeOutputContextFacts(
-  facts: readonly GeneratedOutputWriteFact[],
-): GeneratedOutputWriteFact[] {
-  return dedupeByKey(facts, (fact) => JSON.stringify(fact));
-}
-
-function mergeStyleUpdateCoverage(
-  coverage: readonly QueryUpdateCoverageFact[],
-  styleCoverage: readonly QueryUpdateCoverageFact[],
-  handledSpans: readonly SourceSpan[],
-): QueryUpdateCoverageFact[] {
-  if (styleCoverage.length === 0) return [...coverage];
-
-  return [
-    ...coverage.filter((fact) => {
-      const sourceSpan = fact.sourceSpan;
-      return (
-        fact.status !== 'UNHANDLED' ||
-        !sourceSpan ||
-        !handledSpans.some((span) => containsSourceSpan(span, sourceSpan))
-      );
-    }),
-    ...styleCoverage,
-  ];
-}
-
-function containsSourceSpan(outer: SourceSpan, inner: { length: number; start: number }): boolean {
-  return inner.start >= outer.start && inner.start + inner.length <= outer.end;
-}
-
-function dedupeByKey<Value>(values: readonly Value[], keyFor: (value: Value) => string): Value[] {
-  const seen = new Set<string>();
-  const deduped: Value[] = [];
-  for (const value of values) {
-    const key = keyFor(value);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    deduped.push(value);
-  }
-  return deduped;
-}
 
 /**
  * Assert the SPEC.md §5.2 fixpoint property: re-compiling every emitted artifact of a
