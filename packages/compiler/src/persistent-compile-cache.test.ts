@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as cacheIdentity from './cache-identity.js';
 import {
   persistentCompileCacheDir,
-  prunePersistentCompileCache,
   readPersistentCompileCacheEntry,
   readPersistentCompileCacheManifest,
   writePersistentCompileCacheEntry,
@@ -54,7 +53,7 @@ describe('persistent compile cache format', () => {
     });
   });
 
-  it('preserves parallel per-entry writes and prunes older entries', async () => {
+  it('preserves parallel per-entry writes', async () => {
     const cacheDir = persistentCompileCacheDir(await tempRoot());
     await Promise.all([
       writePersistentCompileCacheEntry(cacheDir, {
@@ -71,10 +70,6 @@ describe('persistent compile cache format', () => {
 
     const manifest = await readPersistentCompileCacheManifest(cacheDir);
     expect(Object.keys(manifest.entries).sort()).toEqual(['cache-key-a', 'cache-key-b']);
-
-    await prunePersistentCompileCache(cacheDir, { maxEntries: 1 });
-    const pruned = await readPersistentCompileCacheManifest(cacheDir);
-    expect(Object.keys(pruned.entries)).toHaveLength(1);
   });
 
   it('misses an entry written by a different compiler build id (upgrade simulation)', async () => {
@@ -97,41 +92,6 @@ describe('persistent compile cache format', () => {
     // namespace, so the previously written entry is a clean miss.
     vi.spyOn(cacheIdentity, 'compilerBuildId').mockReturnValue('@kovojs/compiler@9.9.9/deadbeef');
     await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
-  });
-
-  it('keeps a result blob shared by a surviving entry when pruning evicts its twin', async () => {
-    // B3 (plans/bug-and-testing-part3.md): result blobs are content-addressed,
-    // so two entries with identical results share one blob. Pruning the older
-    // entry must not delete the shared blob the kept entry still references.
-    const cacheDir = persistentCompileCacheDir(await tempRoot());
-    const sharedResult = { files: [{ fileName: 'shared.server.js', source: 'export {};' }] };
-
-    const older = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-old',
-      footprint: { reads: { queryShapeNames: ['a'] } },
-      result: sharedResult,
-    });
-    // Ensure a strictly newer timestamp so the kept entry is deterministic.
-    await new Promise((resolve) => setTimeout(resolve, 5));
-    const newer = await writePersistentCompileCacheEntry(cacheDir, {
-      cacheKey: 'cache-key-new',
-      footprint: { reads: { queryShapeNames: ['b'] } },
-      result: sharedResult,
-    });
-    // Both entries point at the same content-addressed blob.
-    expect(older.artifactRefs.result).toBe(newer.artifactRefs.result);
-
-    await prunePersistentCompileCache(cacheDir, { maxEntries: 1 });
-
-    const pruned = await readPersistentCompileCacheManifest(cacheDir);
-    expect(Object.keys(pruned.entries)).toEqual(['cache-key-new']);
-    // The kept entry's shared blob must survive: reading it still returns the result.
-    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-new')).resolves.toEqual(
-      sharedResult,
-    );
-    await expect(readFile(join(cacheDir, newer.artifactRefs.result), 'utf8')).resolves.toContain(
-      'shared.server.js',
-    );
   });
 
   it('treats a missing or corrupt manifest as an empty cache miss', async () => {

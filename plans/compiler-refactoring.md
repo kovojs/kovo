@@ -102,7 +102,14 @@ behavior change never hides inside a "neutral" move.
     `output-context-raw-html.test.ts`, `output-context-payloads.test.ts`, `server-emit-security.test.ts` + render-equivalence.
   - Unlocks: CAP9.
 
-- [ ] **FN3 · P1 · S/low — Delete the dead fact-invalidation + persistent-prune machinery (or commit to wiring it).**
+- [x] **FN3 · P1 · S/low — Delete the dead fact-invalidation + persistent-prune machinery (or commit to wiring it).** ✅ done (deletion branch)
+  - Done: removed `registryFactChanges`, `invalidateFacts`, `#inverseIndex`, `#indexEntry` (+ its two
+    per-compile call sites), `compileDependencyFootprintFactKeys`, `compileDependencyFactKey`,
+    `CompileDependencyFactChange`, `changedRecordKeys`/`changedArrayValues` from `compile-cache.ts`;
+    `prunePersistentCompileCache` from `persistent-compile-cache.ts`; the matching `internal.ts` re-exports and
+    dead tests. Live cache behavior (footprint-aware `getOrCreate`, key narrowing) unchanged; per-compile
+    index-write cost removed. Open decision deferred to CAP8 if fact-driven incremental dev is wanted. Verified:
+    grep (no remaining refs), `tsc` clean, compile-cache/persistent/hmr/cache-identity tests (21 pass), api-surface gate.
   - Problem: `CompileCache.invalidateFacts` / `registryFactChanges` / `#inverseIndex` and
     `prunePersistentCompileCache` are fully implemented, exported via `internal.ts`, and tested, but have **zero
     production callers** (only `internal.ts` re-exports + their own tests). Worse, the inverse index is _written_

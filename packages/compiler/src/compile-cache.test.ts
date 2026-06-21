@@ -6,7 +6,6 @@ import {
   CompileCache,
   compileCacheKey,
   compileComponentCacheKeyInput,
-  registryFactChanges,
 } from './compile-cache.js';
 import type { CompileDependencyFootprint } from './types.js';
 
@@ -194,127 +193,6 @@ describe('CompileCache', () => {
 
     expect(second).toBe(first);
     expect(compile).toHaveBeenCalledTimes(1);
-  });
-
-  it('invalidates only modules indexed to changed dependency facts', () => {
-    const cache = new CompileCache<{
-      dependencyFootprint: CompileDependencyFootprint;
-      value: string;
-    }>();
-    const compileCart = vi.fn(
-      (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
-        dependencyFootprint: {
-          queryShapes: { cart: { count: 'number' } },
-          reads: { queryShapeNames: ['cart'] },
-        },
-        value: `cart-${compileCart.mock.calls.length}`,
-      }),
-    );
-    const compileProduct = vi.fn(
-      (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
-        dependencyFootprint: {
-          queryShapes: { product: { name: 'string' } },
-          reads: { queryShapeNames: ['product'] },
-        },
-        value: `product-${compileProduct.mock.calls.length}`,
-      }),
-    );
-    const cartInput = compileComponentCacheKeyInput({
-      fileName: 'cart.tsx',
-      queryShapes: { cart: { count: 'number' } },
-      source: 'component({})',
-    });
-    const productInput = compileComponentCacheKeyInput({
-      fileName: 'product.tsx',
-      queryShapes: { product: { name: 'string' } },
-      source: 'component({})',
-    });
-
-    const firstCart = cache.getOrCreate(cartInput, compileCart);
-    const firstProduct = cache.getOrCreate(productInput, compileProduct);
-    cache.invalidateFacts([{ kind: 'queryShape', name: 'cart' }]);
-    const secondCart = cache.getOrCreate(cartInput, compileCart);
-    const secondProduct = cache.getOrCreate(productInput, compileProduct);
-
-    expect(secondCart).not.toBe(firstCart);
-    expect(secondProduct).toBe(firstProduct);
-    expect(compileCart).toHaveBeenCalledTimes(2);
-    expect(compileProduct).toHaveBeenCalledTimes(1);
-  });
-
-  it('feeds registry fact diffs into the inverse index', () => {
-    const cache = new CompileCache<{
-      dependencyFootprint: CompileDependencyFootprint;
-      value: string;
-    }>();
-    const compileCart = vi.fn(
-      (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
-        dependencyFootprint: {
-          reads: { mutationInputKeys: ['cart/add'] },
-          registryFacts: {
-            mutationInputs: {
-              'cart/add': [
-                {
-                  coercion: 'number',
-                  defaulted: false,
-                  name: 'quantity',
-                  optional: false,
-                  provenance: 'registry',
-                  required: true,
-                },
-              ],
-            },
-          },
-        },
-        value: `cart-${compileCart.mock.calls.length}`,
-      }),
-    );
-    const compileProduct = vi.fn(
-      (): { dependencyFootprint: CompileDependencyFootprint; value: string } => ({
-        dependencyFootprint: {
-          reads: { mutationInputKeys: ['product/save'] },
-          registryFacts: { mutationInputs: { 'product/save': [] } },
-        },
-        value: `product-${compileProduct.mock.calls.length}`,
-      }),
-    );
-    const cartInput = compileComponentCacheKeyInput({
-      fileName: 'cart.tsx',
-      registryFacts: { mutationInputs: { 'cart/add': [] } },
-      source: 'component({})',
-    });
-    const productInput = compileComponentCacheKeyInput({
-      fileName: 'product.tsx',
-      registryFacts: { mutationInputs: { 'product/save': [] } },
-      source: 'component({})',
-    });
-
-    const firstCart = cache.getOrCreate(cartInput, compileCart);
-    const firstProduct = cache.getOrCreate(productInput, compileProduct);
-    cache.invalidateFacts(
-      registryFactChanges(
-        { mutationInputs: { 'cart/add': [] } },
-        {
-          mutationInputs: {
-            'cart/add': [
-              {
-                coercion: 'number',
-                defaulted: false,
-                name: 'quantity',
-                optional: false,
-                provenance: 'registry',
-                required: true,
-              },
-            ],
-          },
-        },
-      ),
-    );
-
-    expect(cache.getOrCreate(cartInput, compileCart)).not.toBe(firstCart);
-    expect(cache.getOrCreate(productInput, compileProduct)).toBe(firstProduct);
-    expect(compileCart).toHaveBeenCalledTimes(2);
-    expect(compileProduct).toHaveBeenCalledTimes(1);
   });
 
   it('includes every declared component compile input that can affect lowering', () => {

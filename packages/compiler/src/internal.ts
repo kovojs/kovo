@@ -4,13 +4,10 @@ export {
   CompileCache,
   compileCacheKey,
   compileComponentCacheKeyInput,
-  registryFactChanges,
   type CompileCacheKeyInput,
-  type CompileDependencyFactChange,
 } from './compile-cache.js';
 export {
   persistentCompileCacheDir,
-  prunePersistentCompileCache,
   readPersistentCompileCacheEntry,
   readPersistentCompileCacheManifest,
   writePersistentCompileCacheEntry,

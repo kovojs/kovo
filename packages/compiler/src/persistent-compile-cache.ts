@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { compilerBuildId } from './cache-identity.js';
@@ -116,40 +116,6 @@ export async function writePersistentCompileCacheEntry(
   manifest.entries[entry.cacheKey] = manifestEntry;
   await atomicWriteFile(manifestPath(cacheDir), `${stableJson(manifest)}\n`);
   return manifestEntry;
-}
-
-/** @internal Best-effort size policy: keep the newest N entries and remove older entry/blob files. */
-export async function prunePersistentCompileCache(
-  cacheDir: string,
-  options: { maxEntries: number },
-): Promise<void> {
-  if (options.maxEntries < 1) return;
-  const manifest = await readPersistentCompileCacheManifest(cacheDir);
-  const entries = Object.values(manifest.entries).sort(
-    (left, right) => right.updatedAtMs - left.updatedAtMs,
-  );
-  const keep = new Set(entries.slice(0, options.maxEntries).map((entry) => entry.cacheKey));
-
-  // B3 (plans/bug-and-testing-part3.md): result blobs are content-addressed
-  // (`blobs/${sha256(resultJson)}.json`), so two entries with identical results
-  // share one blob. Removing an evicted entry's blob unconditionally would also
-  // delete a blob still referenced by a KEPT entry, turning a future hit into a
-  // spurious miss. Only remove a blob no surviving entry still references.
-  const referencedByKept = new Set<string>();
-  for (const entry of entries) {
-    if (keep.has(entry.cacheKey)) referencedByKept.add(entry.artifactRefs.result);
-  }
-
-  for (const entry of entries) {
-    if (keep.has(entry.cacheKey)) continue;
-    delete manifest.entries[entry.cacheKey];
-    const removals = [rm(entryPath(cacheDir, entry.cacheKey), { force: true })];
-    if (!referencedByKept.has(entry.artifactRefs.result)) {
-      removals.push(rm(join(cacheDir, entry.artifactRefs.result), { force: true }));
-    }
-    await Promise.all(removals);
-  }
-  await atomicWriteFile(manifestPath(cacheDir), `${stableJson(manifest)}\n`);
 }
 
 function emptyPersistentCompileCacheManifest(): PersistentCompileCacheManifest {
