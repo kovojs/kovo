@@ -57,10 +57,15 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
   - Fix sketch: query endpoint chunks should mirror mutation rerun chunks: `name=queryDefinition.key`
     and `key=instanceKey` when present.
 
-- [ ] **High: repeated source/runtime component instances collapse to one live target.**
+- [x] **High: repeated source/runtime component instances collapse to one live target.**
   - Evidence: [packages/server/src/jsx-runtime.ts](/Users/mini/kovo/packages/server/src/jsx-runtime.ts:553)
     derives the default target from the component leaf name; [packages/browser/src/mutation-targets.ts](/Users/mini/kovo/packages/browser/src/mutation-targets.ts:60)
     dedupes live descriptors by target and keeps the first props set.
+  - Fixed: [packages/server/src/jsx-runtime.ts](/Users/mini/kovo/packages/server/src/jsx-runtime.ts)
+    now derives source/runtime component fragment targets from the leaf plus authored key or
+    serializable stamped props; [packages/server/src/route-jsx.test.tsx](/Users/mini/kovo/packages/server/src/route-jsx.test.tsx)
+    verifies two query-backed source-served instances collect distinct `Kovo-Targets` and
+    `Kovo-Live-Targets` entries. Command: `pnpm exec vitest --run ./packages/server/src/route-jsx.test.tsx ./packages/server/src/jsx-runtime.test.ts`.
   - Failure mode: two `<ProductDetail productId="p1" />` / `<ProductDetail productId="p2" />`
     instances source-served through JSX both stamp `kovo-fragment-target="product-detail"`, so the
     browser sends one descriptor and one props object. One instance can remain stale or receive the
