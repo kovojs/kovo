@@ -8,10 +8,43 @@ import {
 } from './avatar.js';
 import {
   avatarFallbackAttributes,
-  avatarImageAttributes,
+  avatarImageError,
+  avatarImageLoad,
   avatarImageState,
+  avatarImageAttributes,
   avatarRootAttributes,
 } from './avatar.js';
+
+describe('avatar image load/error island', () => {
+  const event = (defaultPrevented = false) => ({ defaultPrevented }) as unknown as Event;
+
+  it('flips to loaded on the image load event', () => {
+    expect(avatarImageLoad(event(), { status: 'loading' })).toEqual({
+      changed: true,
+      status: 'loaded',
+    });
+  });
+
+  it('flips to error on the image error event so the fallback shows', () => {
+    expect(avatarImageError(event(), { status: 'loading' })).toEqual({
+      changed: true,
+      status: 'error',
+    });
+  });
+
+  it('no-ops when already resolved or default-prevented', () => {
+    expect(avatarImageLoad(event(), { status: 'loaded' })).toEqual({
+      changed: false,
+      status: 'loaded',
+    });
+    expect(avatarImageError(event(), { status: 'error' })).toEqual({
+      changed: false,
+      status: 'error',
+    });
+    expect(avatarImageLoad(event(true), { status: 'loading' })).toBeUndefined();
+    expect(avatarImageError(event(true), { status: 'loading' })).toBeUndefined();
+  });
+});
 
 describe('headless-ui avatar primitive', () => {
   it('builds semantic root attributes without introducing wrapper behavior', () => {
