@@ -1,4 +1,8 @@
 /** @jsxImportSource @kovojs/server */
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import {
   createApp,
   createMemoryVersionedClientModuleRegistry,
@@ -32,9 +36,10 @@ import { soTheme } from './theme.js';
 // The native `enhance` forms POST to `/_m/*`; served by the Node server
 // (scripts/serve.mjs), the inline loader morphs the re-rendered region.
 
+const soRoot = fileURLToPath(new URL('../', import.meta.url));
 const soStylesheets = [
   stylesheet('./styles.css', {
-    href: '/assets/styles.css?v=so-demo-css-2',
+    href: stackOverflowStylesheetHref(),
     theme: soTheme,
   }),
 ] as const;
@@ -121,6 +126,20 @@ function escapeSourceAttribute(value: string): string {
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;');
+}
+
+function stackOverflowStylesheetHref(): string {
+  const manifestPath = resolve(soRoot, 'dist/stackoverflow-css-manifest.json');
+  if (!existsSync(manifestPath)) return '/assets/styles.css';
+
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { href?: unknown };
+    return typeof manifest.href === 'string' && manifest.href.startsWith('/assets/')
+      ? manifest.href
+      : '/assets/styles.css';
+  } catch {
+    return '/assets/styles.css';
+  }
 }
 
 export interface SoInteractiveApp {

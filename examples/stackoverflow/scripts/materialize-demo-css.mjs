@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
@@ -19,6 +20,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const soRoot = resolve(scriptDir, '..');
 const appEntry = resolve(soRoot, 'src/app-shell.ts');
 const stylesPath = resolve(soRoot, 'dist/assets/styles.css');
+const manifestPath = resolve(soRoot, 'dist/stackoverflow-css-manifest.json');
 const { extractAppComponentCss } = await import('@kovojs/compiler/package-styles');
 const { soTheme } = await import('../src/theme.ts');
 
@@ -37,8 +39,19 @@ if (appCss.diagnostics.length > 0) {
 
 const baseCss = readFileSync(stylesPath, 'utf8').trim();
 const chunks = [baseCss, soTheme.css, appCss.css].filter(Boolean).map((chunk) => chunk.trim());
-writeFileSync(stylesPath, `${[...new Set(chunks)].join('\n')}\n`);
+const css = `${[...new Set(chunks)].join('\n')}\n`;
+const hash = createHash('sha256').update(css).digest('hex').slice(0, 12);
+const hashedHref = `/assets/styles.${hash}.css`;
+const hashedStylesPath = resolve(soRoot, `dist${hashedHref}`);
+
+writeFileSync(stylesPath, css);
+writeFileSync(hashedStylesPath, css);
+writeFileSync(
+  manifestPath,
+  `${JSON.stringify({ href: hashedHref, version: 1 }, null, 2)}\n`,
+  'utf8',
+);
 
 console.log(
-  `materialize-demo-css: wrote ${stylesPath} (${appCss.sourceFiles.length} source files scanned).`,
+  `materialize-demo-css: wrote ${hashedStylesPath} (${appCss.sourceFiles.length} source files scanned).`,
 );
