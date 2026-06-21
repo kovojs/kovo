@@ -125,7 +125,12 @@ behavior change never hides inside a "neutral" move.
     unused index-write also yields a small per-compile speedup.
   - Unlocks: CAP8 (mutually exclusive branch).
 
-- [ ] **FN2 · P1 · S/low — De-duplicate the canonical-JSON serializer behind one shared helper.**
+- [x] **FN2 · P1 · S/low — De-duplicate the canonical-JSON serializer behind one shared helper.** ✅ done
+  - Done: new `packages/compiler/src/canonical-json.ts` exports the one `canonicalJson`; `fact-hash.ts`,
+    `cache-identity.ts`, `compile-cache.ts`, and `persistent-compile-cache.ts` import it and dropped their local
+    copies (the latter two kept the `stableJson` call shape by switching to `canonicalJson`). Intentional hash
+    divergence preserved (fnv1a vs sha256). Verified: no leftover `stableJson`, `tsc` clean, cache-identity /
+    compile-cache / persistent / hmr tests (21 pass) — byte-identical hashes/keys.
   - Problem: the canonical serializer is copied four times under two names; divergence would silently break
     cache-identity vs HMR fact-hash agreement.
   - Evidence: `fact-hash.ts:6` & `cache-identity.ts:121` (`canonicalJson`); `compile-cache.ts:428` &

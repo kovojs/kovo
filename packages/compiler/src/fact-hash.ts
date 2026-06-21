@@ -1,19 +1,8 @@
+import { canonicalJson } from './canonical-json.js';
+
 /** @internal Stable structural fact hash shared by HMR and incremental cache invalidation. */
 export function factHash(value: unknown): string {
   return fnv1a(canonicalJson(value));
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
-      .join(',')}}`;
-  }
-
-  return JSON.stringify(value);
 }
 
 function fnv1a(source: string): string {

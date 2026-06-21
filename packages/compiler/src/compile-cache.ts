@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import { canonicalJson } from './canonical-json.js';
 import { compilerBuildId } from './cache-identity.js';
 import type {
   CompileComponentOptions,
@@ -100,7 +101,7 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
     ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
   };
 
-  return stableJson({
+  return canonicalJson({
     compileContext,
     compilerBuildId: compilerBuildId(),
     fileName: input.fileName,
@@ -188,7 +189,7 @@ export function narrowCompileCacheKeyInput(
 }
 
 function compileCacheSourceKey(input: CompileCacheKeyInput): string {
-  return stableJson({
+  return canonicalJson({
     compilerBuildId: compilerBuildId(),
     fileName: input.fileName,
     root: input.root ?? null,
@@ -293,17 +294,4 @@ function registryNameLeaf(registryName: string): string {
 // to one fixed digest.
 function stableHash(source: string): string {
   return createHash('sha256').update(source).digest('hex');
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .filter(([, nested]) => nested !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
-      .join(',')}}`;
-  }
-
-  return JSON.stringify(value);
 }

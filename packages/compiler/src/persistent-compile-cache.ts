@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { canonicalJson } from './canonical-json.js';
 import { compilerBuildId } from './cache-identity.js';
 import type { CompileDependencyFootprint } from './types.js';
 
@@ -100,7 +101,7 @@ export async function writePersistentCompileCacheEntry(
   },
 ): Promise<PersistentCompileCacheEntry> {
   await mkdir(join(cacheDir, 'blobs'), { recursive: true });
-  const resultJson = stableJson(entry.result);
+  const resultJson = canonicalJson(entry.result);
   const resultRef = `blobs/${sha256(resultJson)}.json`;
   await atomicWriteFile(join(cacheDir, resultRef), resultJson);
 
@@ -112,9 +113,9 @@ export async function writePersistentCompileCacheEntry(
     footprint: entry.footprint,
     updatedAtMs: Date.now(),
   };
-  await atomicWriteFile(entryPath(cacheDir, entry.cacheKey), `${stableJson(manifestEntry)}\n`);
+  await atomicWriteFile(entryPath(cacheDir, entry.cacheKey), `${canonicalJson(manifestEntry)}\n`);
   manifest.entries[entry.cacheKey] = manifestEntry;
-  await atomicWriteFile(manifestPath(cacheDir), `${stableJson(manifest)}\n`);
+  await atomicWriteFile(manifestPath(cacheDir), `${canonicalJson(manifest)}\n`);
   return manifestEntry;
 }
 
@@ -158,17 +159,4 @@ function entryPath(cacheDir: string, cacheKey: string): string {
 
 function sha256(source: string): string {
   return createHash('sha256').update(source).digest('hex');
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
-  if (value && typeof value === 'object') {
-    return `{${Object.entries(value)
-      .filter(([, nested]) => nested !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, nested]) => `${JSON.stringify(key)}:${stableJson(nested)}`)
-      .join(',')}}`;
-  }
-
-  return JSON.stringify(value);
 }
