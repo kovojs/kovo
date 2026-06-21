@@ -97,7 +97,9 @@ export const generatedWireResponseBodies: Record<string, readonly string[]> = {
 <html><body><script type="application/json" kovo-query="cart">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</script><cart-badge kovo-deps="cart"><span data-bind="cart.count">1</span></cart-badge></body></html>
 `,
   ],
-  'typed-read.http': ['<kovo-query name="product:p1">{"name":"Mug","stock":4}</kovo-query>\n'],
+  'typed-read.http': [
+    '<kovo-query name="product" key="product:p1">{"name":"Mug","stock":4}</kovo-query>\n',
+  ],
   'validation-422-fragment.http': [
     `<kovo-fragment target="product-form:p1"><form kovo-c="product-form" aria-invalid="true"><output role="alert" data-error-code="OUT_OF_STOCK">Only 5 left.</output><input name="productId" value="p1"><input name="quantity" value="99"></form></kovo-fragment>
 `,

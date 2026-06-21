@@ -1659,7 +1659,7 @@ describe('@kovojs/test package subpath exports', () => {
       wireResponseBodyPinFacts(wireSources, { 'cart-read.http': ['<main>Cart</main>'] }),
     ).toHaveProperty('0.matches', true);
     expect(generatedWireResponseBodies['typed-read.http']).toEqual([
-      '<kovo-query name="product:p1">{"name":"Mug","stock":4}</kovo-query>\n',
+      '<kovo-query name="product" key="product:p1">{"name":"Mug","stock":4}</kovo-query>\n',
     ]);
     expect(loadWireFixtureSources).toBeTypeOf('function');
     expect(wireFixtureResponseBody(wireSources, 'cart-read.http', 1)).toBe('<main>Cart</main>');
