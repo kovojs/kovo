@@ -256,7 +256,19 @@ behavior change never hides inside a "neutral" move.
     sites before migrating (the snapshot alone is not exhaustive).
   - Unlocks: CAP10.
 
-- [ ] **FN10 · P1 · M/med — Decompose `analyze/query-updates.ts` into binding / derive-stamp / coverage modules behind stable fact facades.**
+- [x] **FN10 · P1 · M/med — Decompose `analyze/query-updates.ts` into binding / derive-stamp / coverage modules behind stable fact facades.** ✅ done
+  - Done: split the 832-line file into `analyze/query-bindings.ts` (data-bind collection +
+    data-bind-list template-stamp offset math), `analyze/query-derives.ts` (`derive()`/`data-derive`
+    stamps), `analyze/query-coverage.ts` (coverage expression-path + `statusCoveredPaths`/`planCoveredPaths`
+    precedence helpers), and `analyze/query-internal.ts` (shared helpers incl. the hidden non-enumerable
+    `outputContext`/`outputContexts` channel, moved verbatim — `Object.defineProperty(..,{enumerable:false})`).
+    `query-updates.ts` (311 lines) keeps `collectQueryUpdatePlans`/`collectQueryUpdateCoverage` as composition
+    entrypoints and re-exports `collectDataBindListStamps`; importers (`compile.ts`, `validate/bindings.ts`)
+    unchanged. Functions moved verbatim, no logic edits.
+  - Evidence: `tsc -p tsconfig.json --noEmit` clean; 7 cited suites 83 pass (query-coverage/query-update-plans/
+    query-bindings/registry/compiler-conformance/render-equivalence-boundary/hmr-impact); `api-surface-gate.mjs`
+    exit 0; fact-hash sanity check on a data-bind+derive+list+isomorphic fixture — plans `bb03a6fa`/coverage
+    `6f7b3b2e` and full JSON bytes byte-identical pre- vs post-split.
   - Problem: `query-updates.ts` (832 lines) mixes five concerns — data-bind collection, data-bind-list
     template-stamp assembly with offset math, `derive()`/`data-derive` stamp collection, 9 nearly-parallel coverage
     push-loops with subtle `statusCoveredPaths`/`planCoveredPaths` precedence, and a hidden non-enumerable
