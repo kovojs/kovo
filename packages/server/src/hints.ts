@@ -5,7 +5,7 @@ import {
   mergeCspInlineMetadata,
   type CspInlineMetadata,
 } from './csp.js';
-import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import { escapeAttribute, escapeHtml, escapeScriptJson, safeUrlValue } from './html.js';
 
 /**
  * Per-route Speculation Rules eagerness (SPEC §8). `'conservative'` and `'moderate'`
@@ -383,7 +383,9 @@ function renderRouteMeta(
       );
     }
     if (resolved.image) {
-      tags.push(`<meta property="og:image" content="${escapeAttribute(resolved.image)}">`);
+      // part-4 L-i18n-meta-1: og:image is a URL sink — scheme-check before escaping so a
+      // metaFromQuery-derived javascript:/data:/off-origin URL cannot bypass the §4.8 allowlist.
+      tags.push(`<meta property="og:image" content="${escapeAttribute(safeUrlValue(resolved.image))}">`);
     }
   }
 

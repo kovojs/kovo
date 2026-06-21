@@ -206,11 +206,27 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
         delete next[field];
       }
     }
-    for (const [field, fieldValue] of Object.entries(delta.set)) next[field] = fieldValue;
+    // part-4 L2-protopollution-1: assign as an OWN data property. Bracket assignment of a
+    // `__proto__` field from the wire/DB would invoke the prototype setter (rebinding the value
+    // object's prototype + dropping the field) instead of replacing the field wholesale (§9.1.1).
+    for (const [field, fieldValue] of Object.entries(delta.set)) {
+      Object.defineProperty(next, field, {
+        configurable: true,
+        enumerable: true,
+        value: fieldValue,
+        writable: true,
+      });
+    }
   }
 
   for (const [path, listDelta] of Object.entries(delta.lists ?? {})) {
-    next[path] = reconcileList(next[path], listDelta, path);
+    const baseList = Object.getOwnPropertyDescriptor(next, path)?.value as JsonValue | undefined;
+    Object.defineProperty(next, path, {
+      configurable: true,
+      enumerable: true,
+      value: reconcileList(baseList, listDelta, path),
+      writable: true,
+    });
   }
 
   return next;

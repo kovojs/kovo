@@ -76,6 +76,16 @@ export function safeUrlAttribute(name: string, value: string): string {
 }
 
 /**
+ * @internal part-4 L-i18n-meta-1: scheme-check a URL-bearing VALUE that is emitted into a
+ * non-URL-named attribute (e.g. `<meta property="og:image" content="…">`). Returns `'#'`
+ * for an unsafe scheme (javascript:/data:/etc), otherwise the value verbatim. The caller is
+ * responsible for `escapeAttribute`-ing the result. SPEC.md §4.8 + §5.2#10 URL-sink allowlist.
+ */
+export function safeUrlValue(value: string): string {
+  return hasUnsafeUrlScheme(value) ? '#' : value;
+}
+
+/**
  * @internal HTML-coercion helper the compiler injects into emitted server modules
  * (SPEC.md §6.x rendering). SECURITY (SECURITY_FINDINGS.md C1): safe coercion for an
  * interpolated text child. Mirrors the jsx runtime's renderJsxChildren coercion
