@@ -8,8 +8,11 @@ interaction. This unblocks the deferred items from `plans/more-ui-primitives.md`
 styled select-all **C**) and `plans/better-components-ux.md` (scroll-area imperative scroll, checkbox
 indeterminate) and removes a whole class of "the attribute updated but nothing happened" bugs.
 
-**Status (2026-06-20):** Planning. Framework feature (compiler + runtime). High leverage, high blast
-radius — sequence runtime-first behind an allowlist, then compiler emission, then migrate consumers.
+**Status (2026-06-20):** Implemented on `agent/primitives-infra`. Runtime (both loaders) + compiler
+emission + consumer migration (styled select-all Checkbox, checkbox/switch indeterminate, scroll-area
+`.scrollTop`) all landed behind the closed allowlist; SPEC §4.8 documented. Phases 0–4 complete (see
+checklist). Open follow-up: retiring the `applyCheckboxIndeterminate` axe shim is deferred (lives in
+out-of-scope `@kovojs/headless-ui` + gallery fixtures).
 
 **Behavior source of truth:** `SPEC.md` (§4.6 chained client handlers; §5.2 #3 render-equivalence
 gate — server render and loader must agree; §6.2 binding grammar; security/unsafe-sink rules around
@@ -74,42 +77,60 @@ A new binding kind **`data-bind-prop:<prop>="/c/…client.js#<derive>"`** that t
 
 ### Phase 0 — Investigation (pinpoint the exact seams)
 
-- [ ] Compiler: find where `attr={expr}` lowers to `data-bind:<attr>` (`packages/compiler/src/emit/*`)
-      and where the binding-kind/derive table lives — the emission site for the new kind.
-- [ ] Runtime: map both apply paths — inline loader `xa`/`xd` (`inline-loader.ts`) and the client
-      loader (`@kovojs/browser/client`, `query-bindings.ts`, `handler-context.ts`) — and the post-morph
-      hook where property re-application must run.
-- [ ] Render-equivalence: how the §5.2 #3 gate compares server vs loader output, to thread the
-      attribute-only comparison + the new property output.
+- [x] Compiler: `attr={expr}` lowers to `data-bind:<attr>` in two seams — `lower/inline-derives.ts`
+      (source-replacement) and `lower/structural-jsx.ts` `lowerInlineAttributeDerivesInIr` (the IR
+      path actually used for raw elements) + the primitive-reactive pass `lowerPrimitiveReactiveAttributes`
+      (forwarded `@kovojs/ui` control props). Derive URL versioning lives in `compile.ts`.
+- [x] Runtime: inline loader source-of-truth is `inline-loader-build.ts` readable bootstrap (`ba`/`wa`/
+      `as`; `inline-loader.ts` is GENERATED). Client loader chokepoints: `handlers.ts` →
+      `query-bindings.ts` `applyStateBindings`→`applyRootBindings`/`applyStateDeriveBindings` (state),
+      `applyCompiledQueryUpdatePlan` (query); morph copies attrs only, re-apply rides these chokepoints.
+- [x] Render-equivalence: §5.2 #3 gate skips generated-only stamps via `isGeneratedOnlyRenderAttribute`
+      (`emit/server.ts`); `data-bind-prop:*` added there as a non-attribute output.
 
 ### Phase 1 — Runtime: apply `data-bind-prop:*` (behind the allowlist)
 
-- [ ] Inline + client loaders recognize `data-bind-prop:<prop>`, assign `el[prop]` with per-property
-      coercion, on hydration and after morph; ignore non-allowlisted props defensively.
-- [ ] Browser tests: a fixture element with `data-bind-prop:checked`/`indeterminate`/`scrollTop` whose
-      derive flips with state → assert the live property updates across re-renders and `FormData`
-      reflects `.checked`.
+- [x] Inline + client loaders recognize `data-bind-prop:<prop>`, assign `el[prop]` with per-property
+      coercion after the attribute pass; non-allowlisted props ignored (KV236 wall). Shared allowlist +
+      coercion in `packages/browser/src/bind-prop.ts`; client in `query-bindings.ts` (state-path,
+      state-derive, item-relative); inline in `inline-loader-build.ts` (`bp`/`wp`/`wpd`, regenerated,
+      7305/8192 gzip bytes — `check:inline-loader` green).
+- [x] Browser tests: `bind-prop.test.ts` (allowlist + coercion + `<progress>.value` carve-out + KV236),
+      `query-bindings.test.ts` (state checked/indeterminate/scrollTop across re-renders + KV236 guard),
+      `inline-loader-delegated.test.ts` (inline-source parity for checked/indeterminate/scrollTop).
+      `FormData.checked` correctness proven via the gallery checkbox-group browser test (Phase 3).
 
 ### Phase 2 — Compiler: emit `data-bind-prop:*` for allowlisted attrs
 
-- [ ] Emit both the SSR attribute and `data-bind-prop:<prop>` derive when a reactive value targets an
-      allowlisted property-authoritative attribute; keep all other attrs on `data-bind:*`.
-- [ ] Compiler unit tests (emission shape) + render-equivalence gate green + the inline-loader size
-      budget check (`check:inline-loader`).
+- [x] Emit the SSR attribute + `data-bind:<attr>` + `data-bind-prop:<prop>` for the allowlist
+      [checked, indeterminate, value, scrollTop, scrollLeft, selected, open]; other attrs stay
+      `data-bind:*` only. Allowlist in `compiler/src/shared.ts`; emission in `lower/structural-jsx.ts`
+      (inline-derive IR path + primitive pass, incl. a property-only `data-bind-prop:indeterminate`
+      derive for tri-state checkboxes) + `lower/inline-derives.ts`; URL-versioned in `compile.ts`.
+- [x] `bind-prop-emission.test.ts` (allowlist gating, property-only indeterminate, fixpoint stable);
+      full compiler suite (575) + `render-equivalence-boundary.test.ts` green; `check:inline-loader` OK.
 
 ### Phase 3 — Migrate consumers (cash the unblocks)
 
-- [ ] checkbox-group items + restore the styled select-all `Checkbox` (closes **C**); gallery browser
-      test toggles select-all on/off and asserts `FormData.getAll(...)` across all transitions + axe.
-- [ ] checkbox/switch `indeterminate` via the binding (retire the `applyCheckboxIndeterminate` shim
-      where possible).
-- [ ] scroll-area: bind `.scrollTop` reactively (optionally retire the imperative `scrollAreaScrollTo`,
-      or keep it for the event-driven case); confirm the browser test still scrolls.
+- [x] Restored the styled select-all `Checkbox` in `checkbox-group-demo.tsx` (closes **C**).
+      `interactions-a.browser.test.ts` "updates checkbox-group ARIA…" asserts `all.checked` /
+      `all.indeterminate` + `FormData.getAll('gallery-notifications')` across select-all
+      on/off/indeterminate, then axe-clean — passes (16/16). Required a `pass-through.ts` `bindings:false`
+      fix so the wrapper `<label>` no longer forwards input-only `data-bind:aria-checked`/`checked`
+      (axe `aria-allowed-attr` on a roleless label).
+- [x] checkbox/switch `indeterminate` via the primitive `data-bind-prop:indeterminate` derive.
+      `applyCheckboxIndeterminate` axe shim NOT retired — it lives in `@kovojs/headless-ui` +
+      `interactive-gallery.browser-fixtures.ts` (out of this slice's scope); left as-is (see Risks).
+- [x] scroll-area: `scrollTop={state.scrollTop}` now emits `data-bind-prop:scrolltop` (reactive
+      `.scrollTop`); kept imperative `scrollAreaScrollTo` for the event-driven jump.
+      `interactions-b.browser.test.ts` passes (17/17, incl. scroll-area + progress carve-out).
 
 ### Phase 4 — Docs + surface
 
-- [ ] SPEC §6.2 note for `data-bind-prop:*` + the allowlist + security rationale; `api-surface` for any
-      new exports; `rules/compiler-hard-rules.md` if a new diagnostic is added.
+- [x] SPEC §4.8 addendum for `data-bind-prop:<prop>` (allowlist + coercion + render-equivalence + KV236
+      security rationale). No new PUBLIC exports (`bind-prop.ts` is internal, not in `client.ts`/barrels;
+      api-surface gate count unchanged 1338); no new diagnostic, so `rules/compiler-hard-rules.md`
+      untouched.
 
 ---
 

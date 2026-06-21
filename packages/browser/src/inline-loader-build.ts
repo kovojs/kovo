@@ -205,6 +205,43 @@ function installInlineKovoLoader(im) {
       el.textContent = fb(val);
     }
   };
+  // SPEC.md §4.8 data-bind-prop: closed allowlist of property-authoritative
+  // props (lowercased suffix -> [cased prop, kind]); 0=bool,1=number,2=string.
+  // The property write complements the SSR attribute and never reaches an unsafe
+  // sink (KV236). bp(el) collects the stamps; wp writes one with coercion.
+  const pa = {
+    checked: ['checked', 0],
+    indeterminate: ['indeterminate', 0],
+    selected: ['selected', 0],
+    open: ['open', 0],
+    scrolltop: ['scrollTop', 1],
+    scrollleft: ['scrollLeft', 1],
+    value: ['value', 2],
+  };
+  const bp = (el) =>
+    [...(el.attributes || [])].filter(
+      (attr) => attr.name.startsWith('data-bind-prop:') && attr.value,
+    );
+  const wp = (el, suffix, val) => {
+    const spec = pa[suffix] || pa[suffix.toLowerCase()];
+    if (!spec) return;
+    const prop = spec[0];
+    if (el[prop] === undefined) return;
+    // <progress>.value is not dirty/user-interactive; null=indeterminate (no attr),
+    // so skip the string write (data-bind:value owns progress). Mirrors wa().
+    if (spec[1] === 2 && el.localName == 'progress') return;
+    el[prop] = spec[1] === 0 ? val != null && val !== false : spec[1] === 1 ? Number(val) || 0 : fb(val);
+  };
+  const wpd = async (el, ref, suffix, state) => {
+    if (ref.includes('#')) {
+      const hi = ref.lastIndexOf('#');
+      if (hi <= 0 || hi === ref.length - 1) return;
+      const mod = await im(ref.slice(0, hi));
+      wp(el, suffix, mod[ref.slice(hi + 1)]?.run?.(state));
+    } else if (ref.startsWith('state.')) {
+      wp(el, suffix, vp(state, ref.slice(6)));
+    }
+  };
   const as = async (host, state) => {
     const hb = host.getAttribute?.('data-bind');
     if (hb?.includes('#')) await wd(host, hb, undefined, state);
@@ -237,6 +274,10 @@ function installInlineKovoLoader(im) {
           attr.name.slice('data-bind:'.length),
           state,
         );
+      }
+      // SPEC.md §4.8 data-bind-prop: live property write after the attribute pass.
+      for (const attr of bp(el)) {
+        await wpd(el, attr.value, attr.name.slice('data-bind-prop:'.length), state);
       }
     }
   };

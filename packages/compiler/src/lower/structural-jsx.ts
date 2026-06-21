@@ -35,7 +35,12 @@ import type {
 import type { StaticLiteralValue } from '../scan/object.js';
 import { literalStringValue } from '../scan/object.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
-import { escapeAttribute, type SourceReplacement } from '../shared.js';
+import {
+  bindPropStampAttributeName,
+  escapeAttribute,
+  isPropertyAuthoritativeAttribute,
+  type SourceReplacement,
+} from '../shared.js';
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
@@ -585,6 +590,24 @@ function lowerAttributeDerive(
     }),
   );
 
+  // SPEC.md §4.8 data-bind-prop: for property-authoritative attributes, also emit
+  // the live-property stamp wherever a data-bind:<attr> sibling is produced (state
+  // bindings and query binding stamps), so the loader keeps the dirty property
+  // (e.g. .checked/.value/.scrollTop after interaction) in sync. The two stamps
+  // share the same derive reference.
+  const emitBindProp = (writer: string): void => {
+    if (!isPropertyAuthoritativeAttribute(candidate.targetAttr)) return;
+    setJsxIrAttribute(
+      candidate.element,
+      generatedJsxIrAttribute(
+        bindPropStampAttributeName(candidate.targetAttr),
+        { kind: 'string', value: stampName },
+        writer,
+        options,
+      ),
+    );
+  };
+
   removeJsxIrAttribute(candidate.element, candidate.attribute.name);
   if (candidate.source === 'state') {
     if (candidate.targetAttr === candidate.attribute.name) {
@@ -599,11 +622,19 @@ function lowerAttributeDerive(
         options,
       ),
     );
+    emitBindProp('inline state live-property derive');
     return;
   }
 
-  // SPEC.md §4.8: one data-derive slot cannot represent multiple derived attributes.
-  if (forceQueryBinding || hasAttribute(candidate.element, 'data-derive')) {
+  // SPEC.md §4.8: one data-derive slot cannot represent multiple derived
+  // attributes. Also use the binding-stamp (not data-derive) form for
+  // property-authoritative attrs so the companion data-bind-prop:<prop> has a
+  // data-bind:<attr> sibling the loader resolves from.
+  if (
+    forceQueryBinding ||
+    hasAttribute(candidate.element, 'data-derive') ||
+    isPropertyAuthoritativeAttribute(candidate.targetAttr)
+  ) {
     setJsxIrAttribute(
       candidate.element,
       generatedJsxIrAttribute(
@@ -613,6 +644,7 @@ function lowerAttributeDerive(
         options,
       ),
     );
+    emitBindProp('inline query live-property derive');
     return;
   }
 
@@ -711,7 +743,90 @@ function lowerPrimitiveReactiveAttributes(
         nameCounts,
       );
     }
+
+    // SPEC.md §4.8 data-bind-prop: `.indeterminate` is property-only (no HTML
+    // attribute), so the manifest carries no `indeterminate` entry. For a
+    // tri-state checkbox primitive, emit a property-only `data-bind-prop:
+    // indeterminate` stamp so the dirty `.indeterminate` property tracks the
+    // "indeterminate" control state after interaction (retires the
+    // applyCheckboxIndeterminate shim need on re-render).
+    if (
+      condition.kind === 'tri-state' &&
+      condition.statePath !== undefined &&
+      !hasAttribute(element, bindPropStampAttributeName('indeterminate'))
+    ) {
+      lowerPrimitiveIndeterminateProp(
+        element,
+        componentName,
+        condition.statePath,
+        controlPath.root,
+        options,
+        deriveExports,
+        stateDerives,
+        outputContexts,
+        nameCounts,
+      );
+    }
   }
+}
+
+// SPEC.md §4.8 data-bind-prop: emit a property-only `data-bind-prop:indeterminate`
+// derive for a tri-state checkbox. There is no companion SSR attribute (the DOM
+// has no `indeterminate` content attribute), so this is the one prop stamp with
+// no `data-bind:<attr>` sibling — the loader applies it directly to the live
+// `.indeterminate` property.
+function lowerPrimitiveIndeterminateProp(
+  element: JsxIrElement,
+  componentName: string,
+  statePath: string,
+  root: string,
+  options: StructuralJsxLoweringOptions,
+  deriveExports: string[],
+  stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
+  nameCounts: Map<string, number>,
+): void {
+  const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_indeterminate_derive`;
+  const exportName = nextExportName(baseName, nameCounts);
+  const stampName = `${root}.${exportName}`;
+  // Boolean-presence form ("" present / null absent) matching the other primitive
+  // derives; the loader coerces it to the boolean `.indeterminate` property.
+  const expression = `((${statePath}) === "indeterminate" ? "" : null)`;
+  const isState = root === 'state';
+
+  deriveExports.push(
+    `export const ${exportName} = derive(${JSON.stringify([root])}, (${root}: any) => ${expression});`,
+  );
+  const outputContext = outputWriteFact({
+    context: outputContextForAttribute('indeterminate'),
+    expression,
+    sink: 'indeterminate',
+    source: isState ? 'client-state' : 'client-query',
+    writer: 'primitive reactive live-property derive',
+  });
+  if (isState) {
+    stateDerives.push({
+      attr: 'indeterminate',
+      expression,
+      exportName,
+      input: 'state',
+      name: exportName,
+      outputContext,
+      param: 'state',
+      placeholder: stampName,
+    });
+  }
+  outputContexts.push(outputContext);
+
+  setJsxIrAttribute(
+    element,
+    generatedJsxIrAttribute(
+      bindPropStampAttributeName('indeterminate'),
+      { kind: 'string', value: stampName },
+      'primitive reactive live-property derive',
+      options,
+    ),
+  );
 }
 
 function lowerPrimitiveReactiveAttribute(
@@ -770,6 +885,21 @@ function lowerPrimitiveReactiveAttribute(
       options,
     ),
   );
+
+  // SPEC.md §4.8 data-bind-prop: forward the live-property stamp for
+  // property-authoritative attributes (checked/selected/open) the primitive owns,
+  // so the dirty .checked/.selected/.open property tracks state after interaction.
+  if (isPropertyAuthoritativeAttribute(attrName)) {
+    setJsxIrAttribute(
+      element,
+      generatedJsxIrAttribute(
+        bindPropStampAttributeName(attrName),
+        { kind: 'string', value: stampName },
+        'primitive reactive live-property derive',
+        options,
+      ),
+    );
+  }
 }
 
 function primitiveReactiveExpression(
@@ -1589,6 +1719,7 @@ function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean 
     name === 'data-derive-attr' ||
     name === 'data-bind' ||
     name.startsWith('data-bind:') ||
+    name.startsWith('data-bind-prop:') ||
     name.startsWith('data-p-') ||
     name.startsWith('kovo-')
   );

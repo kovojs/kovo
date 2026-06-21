@@ -128,7 +128,8 @@ export const Checkbox = component({
     return (
       <label
         {...rootStyleAttrs}
-        {...passThroughProps(props, { events: false })}
+        {...passThroughProps(props, { events: false, bindings: false })}
+        {...bindingProps(props, ['data-state'])}
         data-disabled={attrs['data-disabled']}
         data-state={attrs['data-state']}
       >
