@@ -241,19 +241,21 @@ behavior change never hides inside a "neutral" move.
     joins (`parse.ts:519-520`, `:568-571`) are load-bearing — preserve `start`/`openingEnd` exactly.
   - Unlocks: CAP1, CAP2, CAP7, CAP8.
 
-- [ ] **FN9 · P1 · M/low — Thread diagnostic positions through a `DiagnosticFactory` on `ValidatorContext`; stop passing raw source to validators.**
-  - Problem: every validator signature takes `source:string` though none use it for accept/reject — it flows only
-    to `diagnosticFor()` for offset→line/col. This obscures rule-9 compliance by signature and forces each
-    validator to hand-pick one of three `source`/`model`/`offset` triples; a wrong pairing silently mislocates
-    diagnostics with no type error.
-  - Evidence: `validate/pipeline.ts:41-107`, `validate/bindings.ts:39-113`, `diagnostics.ts:25-57`.
-  - Approach: introduce a `DiagnosticFactory` on `ValidatorContext` closing over the correct `(source, offsetMap)`
-    pair, exposing `at(code, span, detail?)`; validators receive factory + typed model only. Provide an
-    `originalModel`-bound variant for pre-lowering validators. Memoize a line-start index per source (turns the
-    O(n) prefix scan at `diagnostics.ts:49-56` into binary search — free perf win).
-  - Neutrality proof: pure plumbing — byte-identical diagnostics (code/message/help/start/length). Proven by
-    `diagnostic-coverage-matrix.test.ts` positive+negative coverage; add a fact assertion over all ~37 diagnostic
-    sites before migrating (the snapshot alone is not exhaustive).
+- [x] **FN9 · P1 · M/low — Thread diagnostic positions through a `DiagnosticFactory` on `ValidatorContext`; stop passing raw source to validators.** ✅ done
+  - Done: added `createDiagnosticFactory(fileName, source, offsetMap?)` + `DiagnosticFactory`/`DiagnosticSpan`
+    (`diagnostics.ts`), with a memoized line-start binary-search `offsetToPosition` (byte-identical to the legacy
+    O(n) prefix scan, incl. negative/zero/boundary offsets). `collectCompilerDiagnostics` now builds three frame-pinned
+    factories — `loweredDiagnostics` (post-lowering `model`/`source`), `originalDiagnostics` (`originalModel`/
+    `options.source`), `mappedDiagnostics` (generated offsets mapped via `sourceOffsetMap`) — and passes a factory +
+    typed model to every validator; no validator receives a bare `source: string` anymore. Migrated all validators in
+    `validate/{bindings,component-contracts,component-names,event-triggers,markup,navigation,temporal}.ts` and
+    `security/output-context.ts`. Left `queryShapeFactDiagnostics` (`types.ts`) untouched — it is already source-free
+    (positionless KV240, takes only `fileName` + facts), a legitimate rule-9 non-exception.
+  - Neutrality proof: pure plumbing, byte-identical diagnostics. Proven by the full `packages/compiler` vitest suite
+    (58 files / 566 tests pass) including `diagnostic-coverage-matrix`, `compiler-conformance`, render-equivalence, and
+    the 5 named gates (`diagnostic-coverage-matrix`, `compile-component`, `compiler-conformance`, `state-bindings`,
+    `output-context-security` — 67 pass). `tsc -p tsconfig.json --noEmit` clean; `node scripts/api-surface-gate.mjs`
+    exit 0 (baseline 1338 unchanged; new exports are `@internal`).
   - Unlocks: CAP10.
 
 - [ ] **FN10 · P1 · M/med — Decompose `analyze/query-updates.ts` into binding / derive-stamp / coverage modules behind stable fact facades.**
