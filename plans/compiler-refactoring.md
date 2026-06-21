@@ -11,6 +11,7 @@ gates". File:line citations were spot-checked via grep (see "Verification proven
 
 **Implementation status (2026-06-20)** — **done & merged to `main`**: Part 1 — **FN1, FN2, FN3, FN4, FN6,
 FN8, FN9, FN10, FN12, FN13, FN14** (11 of 14); Part 2 — **CAP6, CAP9** (the two substrate-enabled gates).
+**Done on branch (pending integration):** **FN11** (`emitDerive` chokepoint).
 Each verified by tsc + the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts
 moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10 were implemented by parallel sub-agents
 in isolated worktrees and integrated here.
@@ -21,8 +22,6 @@ in isolated worktrees and integrated here.
 - **FN7** — routing the 11 `createSourceFile` reparses through `scan/` (incl. cleaning `app-graph.ts` so it can
   move under the guarded `analyze/` zone): the plan's single largest neutral refactor; each site must reproduce
   fact bytes exactly. Not started.
-- **FN11** — `emitDerive` chokepoint: the 4 derive sites have divergent shapes (`: any` vs not, literal vs
-  `JSON.stringify` inputs) that make a byte-neutral helper error-prone. Not started.
 - **Part 2 features** — **CAP1** (optimism IR unification + typed deriver channel), **CAP2** (`<kovo-live>` SSE),
   **CAP3** (lists at scale), **CAP7** (incremental compile, needs FN5), **CAP8** (fact-driven dev — note FN3
   removed the dead machinery, so this is rebuild-and-wire), **CAP10** (machine-readable diagnostics, builds on
@@ -323,20 +322,19 @@ behavior change never hides inside a "neutral" move.
     `compiler-conformance.test.ts` + migrated unit tests + `structural-boundary.test.ts`.
   - Unlocks: FN11, CAP3.
 
-- [ ] **FN11 · P1 · M/med — Consolidate derive emission into one helper owning the `(exportName, inputs, params, expression, sink, context)` contract.**
-  - Problem: the `export const X = derive([inputs], (params) => expr)` pattern + matching
-    `StateDeriveFact`/`GeneratedOutputWriteFact` construction is hand-assembled with string templates at 6 sites (4
-    in `structural-jsx.ts`, 2 in legacy `inline-derives.ts`), with genuinely differing shapes (`JSON.stringify`'d vs
-    literal inputs, `: any` annotations). The derive ABI is implicit and per-site, so any v2 metadata
-    (effect/shape mapping, punt reason) must be edited in every copy.
-  - Evidence: `lower/structural-jsx.ts:555`, `:740`, `:1347`, `:1383`.
-  - Approach: add `emitDerive(ctx, {baseName, inputs, params, expression, source, attr?, sink, context})` that
-    allocates the export name, pushes the derive string, and records the facts; rewrite call sites. Must reproduce
-    each site's exact input-format/param-typing variations byte-for-byte. **Sequence after FN12** so only the 4
-    production sites remain.
-  - Neutrality proof: generated strings + fact records byte-identical (snapshot emitted IR for gallery fixtures) +
-    render-equivalence + fact-hash snapshot. Slightly more error-prone than a pure move (inter-site shape differences).
-  - Unlocks: CAP1.
+- [x] **FN11 · P1 · M/med — Consolidate derive emission into one helper owning the `(exportName, inputs, params, expression, sink, context)` contract.** ✅ done
+  - Done: added `emitDerive(EmitDeriveOptions)` in `lower/structural-jsx.ts` (owns export-name allocation via
+    `nextExportName`, the lone `export const X = derive(<inputs>, (<params>) => <expr>);` template, and the
+    `StateDeriveFact`/`GeneratedOutputWriteFact` pushes). All production derive sites route through it:
+    `lowerAttributeDerive`, `lowerPrimitiveIndeterminateProp`, `lowerPrimitiveReactiveAttribute`, `recordStateDerive`,
+    `recordQueryTextDerive`. Callers pass already-formatted `inputs`/`params` strings + fully-built fact objects, so
+    each site's load-bearing shape (`JSON.stringify`'d vs literal `["state"]` inputs; `: any` vs un-annotated params;
+    per-site fact fields; shared-vs-distinct outputContext object identity) stays byte- and identity-neutral. There is
+    now exactly one `= derive(` template and one `nextExportName` caller in the file.
+  - Verified (byte-neutral): tsc clean; `vitest --run packages/compiler` 582/582 (61 files), incl.
+    `render-equivalence-boundary` + `compiler-conformance` (byte-identical emitted module/stamp guards) +
+    `structural-jsx-ir` + `state-bindings`/`state-events` + `stamps`; `node scripts/api-surface-gate.mjs` exit 0
+    (baseline 1338 unchanged). Unlocks CAP1.
 
 - [x] **FN13 · P2 · S/low — Make the platform substitution table data-driven and drop the string round-trip.** ✅ done
   - Done: dialog method matching became a `dialogActionByMethod` table (mirroring the popover one); `platformAttributes`
