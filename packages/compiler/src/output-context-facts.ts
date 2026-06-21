@@ -27,9 +27,19 @@ export interface GeneratedOutputWriteFact {
 
 export function outputContextForAttribute(name: string): OutputContext {
   if (BOOLEAN_ATTRIBUTES.has(name)) return 'boolean-attribute';
-  if (URL_ATTRIBUTES.has(name.toLowerCase())) return 'url-attribute';
+  if (isUrlAttribute(name)) return 'url-attribute';
   if (name === 'style') return 'style-property';
   return 'attribute';
+}
+
+/**
+ * @internal Canonical URL-attribute sink predicate shared by emit
+ * (`outputContextForAttribute`) and the KV236 validator (`security/output-context.ts`)
+ * so the rule-10 escaping decision and the gate that enforces it cannot diverge
+ * (FN8, plans/compiler-refactoring.md; SPEC §5.2 rule 10).
+ */
+export function isUrlAttribute(name: string): boolean {
+  return URL_ATTRIBUTES.has(name.toLowerCase());
 }
 
 const BOOLEAN_ATTRIBUTES = new Set([

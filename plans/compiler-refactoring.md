@@ -87,7 +87,14 @@ behavior change never hides inside a "neutral" move.
     server `client-modules.test.ts`, `assertRenderPlanTokenMonotonicity` (KV416, `compile.ts:919-942`), api-surface gate.
   - Unlocks: CAP6.
 
-- [ ] **FN8 · P0 · M/med — Unify the output-context sink taxonomy into one module shared by emit and validation.**
+- [x] **FN8 · P0 · M/med — Unify the output-context sink taxonomy into one module shared by emit and validation.** ✅ done (compiler-side scope)
+  - Done: `output-context-facts.ts` now owns the canonical `URL_ATTRIBUTES` + exported `isUrlAttribute`; both emit
+    (`outputContextForAttribute`) and the KV236 validator (`security/output-context.ts`) call it; the byte-identical
+    duplicate set + predicate were deleted from the validator. `BOOLEAN_ATTRIBUTES` kept emit-only (asymmetry
+    preserved). Verified the two sets were identical before merging; `tsc` clean + output-context-security/raw-html/
+    payloads/facts + server-emit-security tests (31 pass) + api-surface gate. Scope note: a THIRD copy
+    (`@kovojs/browser` `URL_BOUND_ATTRIBUTES`) + the `SAFE_URL_SCHEMES` allow-list stay separate — cross-package
+    escaper unification + the soundness cross-check is **CAP9**.
   - Problem: the rule-10 escaping decision is split across two modules with duplicated, independently-maintained
     attribute tables. `output-context-facts.ts` (emit) and `security/output-context.ts` (validation / KV236) each
     define their own `URL_ATTRIBUTES` + sink predicates. Byte-identical today — which is exactly why one

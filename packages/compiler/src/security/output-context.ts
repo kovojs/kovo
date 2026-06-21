@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
-import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
+import { isUrlAttribute, type GeneratedOutputWriteFact } from '../output-context-facts.js';
 import {
   jsxElements,
   type ComponentModuleModel,
@@ -337,23 +337,6 @@ function isRawHtmlAttribute(name: string): boolean {
     name === 'html'
   );
 }
-
-function isUrlAttribute(name: string): boolean {
-  return URL_ATTRIBUTES.has(name.toLowerCase());
-}
-
-const URL_ATTRIBUTES = new Set([
-  'href',
-  'src',
-  'action',
-  'formaction',
-  'poster',
-  'background',
-  'cite',
-  'data',
-  'ping',
-  'xlink:href',
-]);
 
 const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
 
