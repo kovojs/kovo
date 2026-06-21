@@ -9,13 +9,25 @@ rules unless it is an explicit Part-2 capability that adds new accepted/emitted 
 Mark an item `[x]` only after the same session proves it against the gates named under "Neutrality
 gates". File:line citations were spot-checked via grep (see "Verification provenance").
 
-**Implementation status (2026-06-20)** — merged to `main`: **FN1, FN2, FN3, FN4, FN8, FN12** (all of
-Wave 0 + the dead-code/orchestrator-shrink Wave 1 items), each verified by tsc + the golden/conformance/
-render-equivalence oracles + api-surface and committed as its own checkpoint on `agent/compiler-refactoring`.
-**Open / not yet implemented**: FN5 (keystone pass framework — large, and see its YAGNI caveat),
-FN7/FN9/FN10/FN11 (typed-fact-boundary + analyze decomposition),
-FN13/FN14 (P2 cleanup), and all of Part 2 (capability features). These remain a deliberate multi-session
-effort on the now-merged substrate.
+**Implementation status (2026-06-20)** — **done & merged to `main`**: Part 1 — **FN1, FN2, FN3, FN4, FN6,
+FN8, FN9, FN10, FN12, FN13, FN14** (11 of 14); Part 2 — **CAP6, CAP9** (the two substrate-enabled gates).
+Each verified by tsc + the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts
+moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10 were implemented by parallel sub-agents
+in isolated worktrees and integrated here.
+
+**Open / deferred (genuinely multi-session; the substrate above unblocks them):**
+- **FN5** — keystone pass-registry: the `ResultBuilder` half is a clean follow-up; the declarative `Pass`
+  registry is large and carries the YAGNI caveat noted on the item. Not started.
+- **FN7** — routing the 11 `createSourceFile` reparses through `scan/` (incl. cleaning `app-graph.ts` so it can
+  move under the guarded `analyze/` zone): the plan's single largest neutral refactor; each site must reproduce
+  fact bytes exactly. Not started.
+- **FN11** — `emitDerive` chokepoint: the 4 derive sites have divergent shapes (`: any` vs not, literal vs
+  `JSON.stringify` inputs) that make a byte-neutral helper error-prone. Not started.
+- **Part 2 features** — **CAP1** (optimism IR unification + typed deriver channel), **CAP2** (`<kovo-live>` SSE),
+  **CAP3** (lists at scale), **CAP7** (incremental compile, needs FN5), **CAP8** (fact-driven dev — note FN3
+  removed the dead machinery, so this is rebuild-and-wire), **CAP10** (machine-readable diagnostics, builds on
+  FN9). Each is a cross-package feature warranting its own effort; not started here to avoid shipping
+  unverifiable/partial feature code to `main`.
 
 ## Thesis
 
@@ -326,7 +338,11 @@ behavior change never hides inside a "neutral" move.
     render-equivalence + fact-hash snapshot. Slightly more error-prone than a pure move (inter-site shape differences).
   - Unlocks: CAP1.
 
-- [ ] **FN13 · P2 · S/low — Make the platform substitution table data-driven and drop the string round-trip.**
+- [x] **FN13 · P2 · S/low — Make the platform substitution table data-driven and drop the string round-trip.** ✅ done
+  - Done: dialog method matching became a `dialogActionByMethod` table (mirroring the popover one); `platformAttributes`
+    (string) → `platformAttributeList` returning typed `{name, value}` pairs (values pre-escaped as before); `lowerStructuralJsx`
+    builds `JsxIrAttribute`s directly, removing the `split(' ')/split('=')` round-trip. Verified: tsc + platform-lowering +
+    conformance + render-equivalence + structural-jsx-ir (22 pass) — byte-identical emission.
   - Problem: `platformSubstitutionFor` is an if/else ladder hard-gated on `tag==='button'` with method names
     inline; `platformAttributes` builds attribute _strings_ that `structural-jsx.ts:441-443` then re-parses by naive
     `split(' ')`/`split('=')` — fragile if any value contained a space or `=`. Adding a substitution touches matcher
@@ -340,7 +356,13 @@ attributes:[{name, valueFrom}]}` and have `lowerPlatformBehaviors` consume the s
     `button` matcher exists today — the table should reflect that, not invent `summary`/`details` rows.)
   - Unlocks: — (standalone cleanup; removes a fragile attribute-string round-trip).
 
-- [ ] **FN14 · P2 · S/low — Collapse the graph file trio into one canonical module + two thin facades.**
+- [x] **FN14 · P2 · S/low — Collapse the graph file trio into one canonical module + two thin facades.** ✅ done (root rename)
+  - Done: renamed `internal-graph.ts` → `app-graph.ts` (ending the `internal-graph` vs `internal/graph` confusion);
+    `graph.ts` (public) + `internal/graph.ts` (internal) facades + all importers updated. Kept at the package root
+    rather than `analyze/` ON PURPOSE: `app-graph.ts` still does a `createSourceFile`/`getText` reparse of a
+    query-refresh expression, which is exactly the rule-9 debt FN7 must clean before it can live under the guarded
+    `analyze/` zone (confirmed via the `postParseSourceStringProjectFact` guard — moving it under `analyze/`
+    surfaced 7 violations). Verified: tsc + registry + conformance + render-equivalence.
   - Problem: `deriveAppGraph` et al. live in `internal-graph.ts` (632 lines, at package root, _outside_ `analyze/`),
     while `graph.ts` (public) and `internal/graph.ts` (internal) are 13-line facades. There is one
     `deriveAppGraph` implementation; the public/internal split is deliberate (rule 8) but the naming triple + root
@@ -392,7 +414,10 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
     pair; turns KV310 into an editor error instead of a CLI-only check; replaces a brittle generated-file handoff with
     a typed contract.
 
-- [ ] **CAP6 · P0 — Drift-proof render-plan token + cross-package ABI contract test (and remote build-cache seam).** (SPEC §5.2.1 normative; KV416)
+- [x] **CAP6 · P0 — Drift-proof render-plan token + cross-package ABI contract test.** ✅ done (contract test; remote-cache seam deferred)
+  - Done: `render-plan-token-contract.test.ts` locks `computeCompilerRenderPlanFingerprint` to the shared
+    `@kovojs/core` source `@kovojs/server` also re-exports (FN1), with order-insensitivity, KV416 monotonicity,
+    determinism, and the pinned grammar constant. Remote/distributed `CompileCacheBackend` seam remains future work.
   - Summary: a build-failing cross-package conformance test that the compiler-produced render-plan token and the
     server-validated token agree; plus the seam for a distributed/remote content-addressed build cache.
   - Blocked by: grammar version + fingerprint fn are duplicated literals in two packages (`compile.ts:873`/`:890`;
@@ -454,7 +479,12 @@ reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifa
     `cache-identity.ts` supply the fingerprint primitives.
   - Payoff: sub-linear rebuild on edits; lower watch-mode latency; faster CI on large component trees.
 
-- [ ] **CAP9 · P1 — Output-context soundness gate (every policed sink maps to an escaped emitter context).** (SPEC §5.2 rule 10; §5.2.2/§9.1.1 prod delta; KV416)
+- [x] **CAP9 · P1 — Output-context soundness gate (every policed sink maps to an escaped emitter context).** ✅ done
+  - Done: `output-context-soundness.test.ts` asserts the rule-10 lockstep FN8 unified — emit
+    (`outputContextForAttribute`) returns `url-attribute` exactly when the KV236 validator's `isUrlAttribute`
+    predicate gates it (across URL/plain/boolean attrs, case-insensitively), plus a compile-based check that a
+    dynamic `href` emits a `url-attribute` `GeneratedOutputWriteFact` for the gated sink. (Cross-package escaper
+    unification — the `@kovojs/browser` table — remains future work.)
   - Summary: a build-failing cross-check that every sink the KV236 validator forbids/permits corresponds to an
     emitter context that actually escapes it, closing the rule-10 lockstep gap structurally.
   - Blocked by: validation and emit classify sinks with separate duplicated tables (`security/output-context.ts:345`
