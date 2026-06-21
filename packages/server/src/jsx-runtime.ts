@@ -544,7 +544,10 @@ function componentRootStampMetadata(
   if (typeof component.name !== 'string' || component.name.length === 0) return null;
   if (!isRecord(component.definition.queries)) return null;
 
-  const deps = Object.keys(component.definition.queries);
+  const deps = Object.values(component.definition.queries).flatMap((binding) => {
+    const query = componentQueryDefinition(binding);
+    return query ? [query.key] : [];
+  });
   if (deps.length === 0) return null;
 
   const domName = component.name.split('/').filter(Boolean).at(-1);
@@ -601,6 +604,12 @@ function componentQueryBinding(
 ): { input: unknown; query: QueryDefinition } | undefined {
   if (isQueryDefinition(binding)) return { input: undefined, query: binding };
   if (isQueryArgsBinding(binding)) return { input: binding.args(props), query: binding.query };
+  return undefined;
+}
+
+function componentQueryDefinition(binding: unknown): QueryDefinition | undefined {
+  if (isQueryDefinition(binding)) return binding;
+  if (isQueryArgsBinding(binding)) return binding.query;
   return undefined;
 }
 

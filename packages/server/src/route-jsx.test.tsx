@@ -96,14 +96,14 @@ describe('route JSX pages', () => {
   it('stamps named query-backed component roots for source-served morph targets', async () => {
     const product = domain('product');
     const inventory = domain('inventory');
-    const productQuery = query('product', {
+    const productQuery = query('productById', {
       args: s.object({ id: s.string() }),
       load(input: { id: string }) {
         return { id: input.id, label: `Product ${input.id}` };
       },
       reads: [product],
     });
-    const inventoryQuery = query('inventory', {
+    const inventoryQuery = query('inventoryStatus', {
       load: () => ({ available: true }),
       reads: [inventory],
     });
@@ -134,7 +134,7 @@ describe('route JSX pages', () => {
     await expect(
       renderRoutePageResponse(productRoute, { params: { id: 'p1' } }, {}),
     ).resolves.toMatchObject({
-      body: '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventory product" kovo-fragment-target="product-detail" kovo-live-component="components/products/product-detail/product-detail" kovo-props="{&quot;productId&quot;:&quot;p1&quot;}">Product p1</section>',
+      body: '<section data-available="yes" data-product="p1" kovo-c="product-detail" kovo-deps="inventoryStatus productById" kovo-fragment-target="product-detail" kovo-live-component="components/products/product-detail/product-detail" kovo-props="{&quot;productId&quot;:&quot;p1&quot;}">Product p1</section>',
       status: 200,
     });
   });

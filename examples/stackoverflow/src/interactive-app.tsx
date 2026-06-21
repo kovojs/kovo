@@ -77,7 +77,7 @@ const sourceLiveTargetRenderers = [
       component: QuestionDetailRegion,
       componentId: QuestionDetailRegion.name,
     }),
-    { deps: 'answers question', target: 'question-detail-region' },
+    { deps: 'questionAnswers questionDetail', target: 'question-detail-region' },
   ),
 ] as const;
 
