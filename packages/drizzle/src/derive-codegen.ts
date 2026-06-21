@@ -105,7 +105,14 @@ export function lowerTransform(program: PatchProgram): string {
   // Indent relative to the arrow's own start (body +2, close +0); the caller
   // re-indents the whole arrow to its nesting depth, keeping braces aligned.
   const statements = program.ops.flatMap((op) => lowerOp(op));
-  const body = statements.map((line) => indent(line, 2)).join('\n');
+  // C5 (SPEC.md §10.5:1172) — node-postgres serializes numeric/decimal/bigint columns
+  // as STRINGS, so raw `+`/`<`/`>` would string-concatenate or lexically mis-order them
+  // and codegen would disagree with the interpreter. Prepend the shared `n(...)` numeric
+  // coercion helper — byte-for-byte the interpreter's `asNumber` — whenever the body
+  // performs arithmetic/numeric comparison, so the committed transform is self-contained
+  // and identical in meaning to `applyPatchProgram`.
+  const lines = programNeedsNumericCoercion(program) ? [NUMERIC_HELPER, ...statements] : statements;
+  const body = lines.map((line) => indent(line, 2)).join('\n');
   // Some sound transforms never read the mutation input (e.g. a +1 count inc or a
   // provably no-op program). `$input` is only ever lowered as `$input.<path>`, so
   // name the parameter `_$input` when the body never references it — keeping the
@@ -114,17 +121,28 @@ export function lowerTransform(program: PatchProgram): string {
   return `(draft, ${inputParam}) => {\n${body}\n}`;
 }
 
+// Numeric coercion helper emitted into a transform body — IDENTICAL semantics to the
+// interpreter's `asNumber` in `@kovojs/core` derivation (SPEC.md §10.5:1172 commuting
+// diagram): a `number` passes through; anything else (PG string numeric/decimal/bigint,
+// null/undefined) is `Number(v ?? 0)`.
+const NUMERIC_HELPER = 'const n = (v) => (typeof v === "number" ? v : Number(v ?? 0));';
+
 function lowerOp(op: PatchOp): string[] {
   switch (op.op) {
     case 'inc':
-      return [`draft.${op.path} = (draft.${op.path} ?? 0) + ${lowerValue(op.by)};`];
+      // C5/C6 — coerce both the held SUM/COUNT base and the increment numerically,
+      // exactly as the interpreter's `asNumber`, so a string-decimal base does not
+      // string-concatenate and codegen ≡ interpreter (SPEC.md §10.5:1172).
+      return [`draft.${op.path} = n(draft.${op.path}) + n(${lowerValue(op.by)});`];
     case 'set-field':
       return [`draft.${op.path} = ${lowerValue(op.value)};`];
     case 'recount':
       return [`draft.${op.path} = draft.${op.from}.length;`];
     case 'resum':
+      // C5 — coerce each contribution numerically (the interpreter reduces with
+      // `asNumber(row[col] ?? 0)`), so string-decimal columns sum rather than concat.
       return [
-        `draft.${op.path} = draft.${op.from}.reduce((sum, row) => sum + (row.${op.column} ?? 0), 0);`,
+        `draft.${op.path} = draft.${op.from}.reduce((sum, row) => sum + n(row.${op.column}), 0);`,
       ];
     case 'remove-row':
       return [
@@ -155,10 +173,13 @@ function lowerPush(op: Extract<PatchOp, { op: 'push-row' }>): string[] {
     .join(', ')} }`;
   if (op.position === 'start') return [`draft.${op.path}.unshift(${rowLiteral});`];
   if (op.position === 'end') return [`draft.${op.path}.push(${rowLiteral});`];
+  // C5 — coerce both sides of the orderBy compare numerically (the interpreter
+  // compares `asNumber(...)` on both), so a string-numeric orderBy column does not
+  // sort lexically ("10" before "9"); codegen ≡ interpreter (SPEC.md §10.5:1172).
   const comparison =
     op.position.direction === 'asc'
-      ? `entry.${op.position.column} > row.${op.position.column}`
-      : `entry.${op.position.column} < row.${op.position.column}`;
+      ? `n(entry.${op.position.column}) > n(row.${op.position.column})`
+      : `n(entry.${op.position.column}) < n(row.${op.position.column})`;
   return [
     `{`,
     `  const row = ${rowLiteral};`,
@@ -176,7 +197,10 @@ function matchExpression(match: readonly { column: string; value: SymbolicValue 
 function lowerValue(value: SymbolicValue, rowVar?: string): string {
   switch (value.kind) {
     case 'arith':
-      return `(${lowerValue(value.left, rowVar)} ${value.op} ${lowerValue(value.right, rowVar)})`;
+      // C5 — the interpreter coerces both operands (`asNumber`) before `applyArith`;
+      // mirror it so string-decimal cols/params don't string-concat or NaN-coerce
+      // differently across lowerings (SPEC.md §10.5:1172).
+      return `(n(${lowerValue(value.left, rowVar)}) ${value.op} n(${lowerValue(value.right, rowVar)}))`;
     case 'col':
       return rowVar ? `${rowVar}.${value.column}` : `draft.${value.column}`;
     case 'const':
@@ -194,6 +218,43 @@ function lowerValue(value: SymbolicValue, rowVar?: string): string {
 
 function programUses(program: PatchProgram, placeholder: 'now' | 'tempId'): boolean {
   return program.ops.some((op) => op.op === 'push-row' && rowUses(op.row, placeholder));
+}
+
+/**
+ * Whether a lowered transform body performs arithmetic / numeric comparison and so
+ * must prepend the `n(...)` coercion helper (C5, SPEC.md §10.5:1172). True for `inc`,
+ * `resum`, an orderBy-sorted `push-row`, and any `arith` value anywhere in the program.
+ */
+function programNeedsNumericCoercion(program: PatchProgram): boolean {
+  return program.ops.some((op) => {
+    switch (op.op) {
+      case 'inc':
+        return true;
+      case 'resum':
+        return true;
+      case 'push-row':
+        return (
+          (typeof op.position === 'object' && op.position !== null) ||
+          Object.values(op.row).some(valueUsesArith)
+        );
+      case 'set-field':
+        return valueUsesArith(op.value);
+      case 'update-row':
+        return (
+          op.match.some((entry) => valueUsesArith(entry.value)) ||
+          Object.values(op.sets).some(valueUsesArith)
+        );
+      case 'remove-row':
+        return op.match.some((entry) => valueUsesArith(entry.value));
+      case 'recount':
+        return false;
+    }
+  });
+}
+
+/** An `arith` value lowers its operands wrapped in `n(...)`, so it needs the helper. */
+function valueUsesArith(value: SymbolicValue): boolean {
+  return value.kind === 'arith';
 }
 
 function rowUses(

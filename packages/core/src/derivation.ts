@@ -408,7 +408,11 @@ function applyPatchOp(
       const target = parentRecordForPath(value, op.path);
       if (!target) return;
       const current = target.record[target.leaf];
-      const base = typeof current === 'number' ? current : 0;
+      // C6 (SPEC.md §10.5:1172) — node-postgres serializes numeric/decimal/bigint
+      // SUM bases as STRINGS. Coerce the existing total numerically rather than
+      // discarding a non-`number` base to 0 (which would collapse a cart subtotal to
+      // just the added amount) — and to keep the codegen `n(...)` lowering identical.
+      const base = asNumber(current);
       target.record[target.leaf] = base + asNumber(evalSymbolicValue(op.by, ctx));
       return;
     }
@@ -534,7 +538,7 @@ function applyArith(op: ArithOp, left: number, right: number): number {
   }
 }
 
-function asNumber(value: JsonValue): number {
+function asNumber(value: JsonValue | undefined): number {
   return typeof value === 'number' ? value : Number(value ?? 0);
 }
 

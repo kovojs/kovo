@@ -46,7 +46,11 @@ describe('serializeDerivedOptimistic', () => {
     expect(source).toContain("queue: 'cart',");
     expect(source).toContain('transforms: {');
     expect(source).toContain('cart: (draft, $input) => {');
-    expect(source).toContain('draft.count = (draft.count ?? 0) + $input.quantity;');
+    // C5 (SPEC.md §10.5:1172) — inc coerces base + increment via the shared `n(...)`
+    // helper (identical to the interpreter's `asNumber`) so string-serialized
+    // numeric/decimal/bigint columns sum rather than string-concatenate.
+    expect(source).toContain('const n = (v) => (typeof v === "number" ? v : Number(v ?? 0));');
+    expect(source).toContain('draft.count = n(draft.count) + n($input.quantity);');
     expect(source).toContain('} satisfies OptimisticFor<typeof addToCartForm>;');
   });
 
@@ -139,6 +143,88 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
         { id: 'p1', stock: 3 },
         { id: 'p2', stock: 9 },
       ],
+    });
+  });
+
+  // C5 (SPEC.md §10.5:1172 commuting diagram) — node-postgres serializes
+  // numeric/decimal/bigint columns as STRINGS. The SHIPPED path is codegen; it must
+  // coerce numerically EXACTLY as the interpreter (`asNumber`), or `0 + "19.99"`
+  // string-concatenates into a corrupt total and codegen ≢ interpreter.
+  async function runBoth(program: PatchProgram, before: unknown, input: unknown) {
+    const { applyPatchProgram } = await import('@kovojs/core/internal/derivation');
+    // eslint-disable-next-line no-implied-eval, @typescript-eslint/no-implied-eval -- executing the
+    // emitted source is precisely what proves codegen ≡ interpreter.
+    const factory = new Function('tempId', 'now', `return ${lowerTransform(program)};`) as (
+      t: () => string,
+      n: () => number,
+    ) => (draft: unknown, $input: unknown) => void;
+    const transform = factory(
+      () => '__tempId__',
+      () => 0,
+    );
+    const generated = structuredClone(before);
+    transform(generated, input);
+    const interpreted = applyPatchProgram(before as never, input as never, program, {
+      now: () => 0,
+      tempId: () => '__tempId__',
+    });
+    return { generated, interpreted };
+  }
+
+  it('inc over a string-decimal SUM base agrees with the interpreter (no string concat)', async () => {
+    const program: PatchProgram = {
+      ops: [{ by: { kind: 'param', path: 'amount' }, op: 'inc', path: 'total' }],
+      query: 'cart',
+    };
+    const { generated, interpreted } = await runBoth(
+      program,
+      { total: '100.50' },
+      { amount: '5' },
+    );
+
+    expect(generated).toEqual(interpreted);
+    expect(generated).toEqual({ total: 105.5 });
+  });
+
+  it('resum over string-decimal row columns agrees with the interpreter', async () => {
+    const program: PatchProgram = {
+      ops: [{ column: 'amount', from: 'lines', op: 'resum', path: 'total' }],
+      query: 'cart',
+    };
+    const { generated, interpreted } = await runBoth(
+      program,
+      { lines: [{ amount: '19.99' }, { amount: '5' }], total: '0' },
+      {},
+    );
+
+    expect(generated).toEqual(interpreted);
+    expect(generated).toEqual({ lines: [{ amount: '19.99' }, { amount: '5' }], total: 24.99 });
+  });
+
+  it('sorted push-row over string-numeric orderBy agrees with the interpreter', async () => {
+    const program: PatchProgram = {
+      ops: [
+        {
+          op: 'push-row',
+          path: 'items',
+          placeholderColumns: [],
+          position: { column: 'rank', direction: 'asc' },
+          row: { id: { kind: 'param', path: 'id' }, rank: { kind: 'param', path: 'rank' } },
+        },
+      ],
+      query: 'leaderboard',
+    };
+    // String-serialized ranks: lexical compare would place "10" before "9"; numeric
+    // coercion (asNumber) must place the new "9" before "10".
+    const { generated, interpreted } = await runBoth(
+      program,
+      { items: [{ id: 'a', rank: '2' }, { id: 'b', rank: '10' }] },
+      { id: 'c', rank: '9' },
+    );
+
+    expect(generated).toEqual(interpreted);
+    expect(generated).toEqual({
+      items: [{ id: 'a', rank: '2' }, { id: 'c', rank: '9' }, { id: 'b', rank: '10' }],
     });
   });
 });

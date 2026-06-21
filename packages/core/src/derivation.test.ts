@@ -27,6 +27,20 @@ describe('derivation patch interpreter', () => {
     expect(value).toEqual({ count: 3 });
   });
 
+  // C6 (SPEC.md §10.5:1172) — node-postgres serializes numeric/decimal/bigint columns
+  // as STRINGS, so the held SUM base is a string like '100.50'. `inc` must coerce the
+  // existing total numerically (asNumber), not reset a non-`number` base to 0; otherwise
+  // the cart subtotal silently collapses to just the added amount and the interpreter
+  // disagrees with codegen (which keeps the base).
+  it('inc coerces a string/decimal SUM base instead of discarding it', () => {
+    const program: PatchProgram = {
+      ops: [{ by: { kind: 'const', value: 5 }, op: 'inc', path: 'total' }],
+      query: 'cart',
+    };
+
+    expect(applyPatchProgram({ total: '100.50' }, {}, program)).toEqual({ total: 105.5 });
+  });
+
   it('decrements via negative arith (DELETE × SUM)', () => {
     const program: PatchProgram = {
       ops: [
