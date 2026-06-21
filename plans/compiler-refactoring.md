@@ -12,8 +12,8 @@ gates". File:line citations were spot-checked via grep (see "Verification proven
 **Implementation status (2026-06-20)** — merged to `main`: **FN1, FN2, FN3, FN4, FN8, FN12** (all of
 Wave 0 + the dead-code/orchestrator-shrink Wave 1 items), each verified by tsc + the golden/conformance/
 render-equivalence oracles + api-surface and committed as its own checkpoint on `agent/compiler-refactoring`.
-**Open / not yet implemented**: FN5 (keystone pass framework — large, and see its YAGNI caveat), FN6
-(split `emit/server.ts` — large), FN7/FN9/FN10/FN11 (typed-fact-boundary + analyze decomposition),
+**Open / not yet implemented**: FN5 (keystone pass framework — large, and see its YAGNI caveat),
+FN7/FN9/FN10/FN11 (typed-fact-boundary + analyze decomposition),
 FN13/FN14 (P2 cleanup), and all of Part 2 (capability features). These remain a deliberate multi-session
 effort on the now-merged substrate.
 
@@ -193,31 +193,29 @@ behavior change never hides inside a "neutral" move.
     `compile-component.test.ts` — **NOT fixpoint**. Add a fact-hash snapshot.
   - Unlocks: CAP1, CAP3, CAP7, CAP8.
 
-- [ ] **FN6 · P1 · M/low — Split `emit/server.ts` into render-lowering / equivalence-gate / mutation-form / shared-helper modules.**
-  - Dependency analysis (done this session, for the next implementer): the semantic-render gate cluster (lines
-    ~95–603: `semanticRenderEquivalenceCheck` + all `semantic*`/`renderSemantic*` helpers) is downward-self-contained
-    — **no** function below line 604 references it — so the gate can move out. BUT the gate calls **7 helpers defined
-    in the mutation-form region**: `componentMutationSlotName`, `enclosingEnhancedMutationForm`,
-    `mutationFormErrorProps`, `mutationFormErrorIdExpression`, `enhancedMutationFormLowering`,
-    `enhancedMutationFormBinding`, `staticStringAttributeValue` (the semantic walker must reproduce mutation-form
-    error rendering to compare). So a clean 4-way cut is impossible: those 7 (plus the low-level attribute/escape
-    helpers) must move to a `server-emit-shared` module that the gate, the renderer, and the mutation-form module all
-    import. Confirms the verifier's "shared private helpers — not a clean cut" note. Recommended order: (1) extract
-    `server-emit-shared.ts` with the shared helpers; (2) extract `render-equivalence.ts` (the self-contained gate
-    cluster) importing from shared; (3) extract `mutation-form.ts`; (4) leave `server-render.ts` + a `server.ts`
-    barrel. Gate each step with conformance + render-equivalence (byte-identical).
-  - Problem: `server.ts` (2239 lines, 95 functions) conflates four responsibilities — the render-_equivalence
-    gate_ (`semanticRender*` + VM eval + normalizer), server-render _lowering_ (`serverRenderPatches` + host-stamp
-    writers), enhanced-mutation-_form_ lowering + KV231/238/242/243 diagnostics, and `mutationFormExplainFacts`
-    _graph facts_. The gate is a verifier living inside the emitter.
-  - Evidence: `emit/server.ts:95`, `:604`, `:683`, `:765`.
-  - Approach: extract behind the existing exported entrypoints → `emit/server-render.ts`,
-    `emit/render-equivalence.ts`, `emit/mutation-form.ts`, **plus** a `server-emit-shared` helper module (the four
-    groups share private attribute/escape/void-element/`kebabCase` helpers — not a clean 3-way cut). Keep
-    `server.ts` as a thin re-export barrel so `compile.ts` imports are unchanged. **Do not merge the gate's two
-    render walks** (that would make the differential vacuous) — extraction only.
-  - Neutrality proof: pure file-move + barrel; no logic edits. Byte-identical artifacts + diagnostics, proven by
-    render-equivalence + `compile-component.test.ts`, `registry.test.ts`, the gallery forms fixtures, `diagnostic-coverage-matrix`.
+- [x] **FN6 · P1 · M/low — Split `emit/server.ts` into render-lowering / equivalence-gate / mutation-form / shared-helper modules.** ✅ done
+  - Done: pure module move (no logic edits). `emit/server.ts` (2239 lines) is now an 18-line re-export barrel
+    keeping `compile.ts`/`stamps.test.ts`/`compile-component.test.ts` imports unchanged
+    (`emitServerModule`, `serverRenderLowering`, `semanticRenderEquivalenceCheck`, `mutationFormExplainFacts`,
+    `EmittedServerModule`, `ServerRenderLowering`, `ServerRenderStampWriteFact`). Concern modules:
+    `emit/render-equivalence.ts` (gate: `semanticRenderEquivalenceCheck` + `semantic*`/`renderSemantic*` cluster),
+    `emit/mutation-form.ts` (`mutationFormExplainFacts` + enhanced-mutation-form lowering/diagnostics),
+    `emit/server-render.ts` (`serverRenderLowering`/`serverRenderPatches` + host-stamp writers + `emitServerModule`),
+    `emit/server-emit-shared.ts` (helpers used by ≥2 concerns). Module DAG is acyclic:
+    GATE→SHARED, MF→SHARED, SR→{MF,SHARED}, SHARED→∅. The "do not merge the gate's two render walks" rule
+    is preserved (extraction only).
+  - Shared set is the **transitive closure** of the 7 named gate-facing helpers (`componentMutationSlotName`,
+    `enclosingEnhancedMutationForm`, `mutationFormErrorProps`, `mutationFormErrorIdExpression`,
+    `enhancedMutationFormLowering`, `enhancedMutationFormBinding`, `staticStringAttributeValue`) **plus**
+    `writerConflictDiagnostic` (MF+SR shared) — 24 decls total. The extra tail
+    (`localMutationKey`, `submittedForm*`, `staticAttributeScalar`, `formLoweringOutputContext`,
+    `renderAttributeWithName`, `attributeValueExpression`, `escapeTemplateLiteral`, `jsx*`,
+    `enhancedMutationFormConflicts`, `importsMutationCsrfField`, `EnhancedMutationForm*`) is required to keep
+    SHARED self-contained and the graph acyclic (placing it in MF would create a SHARED↔MF cycle), satisfying the
+    "move once, no duplication" rule.
+  - Verification: `tsc -p tsconfig.json --noEmit` clean; `node scripts/api-surface-gate.mjs` exit 0
+    (baseline 1338, 0 new); vitest 107/107 across `compile-component`, `compiler-conformance`,
+    `render-equivalence-boundary`, `stamps`, `registry`, `server-emit-security`, `diagnostic-coverage-matrix`.
   - Unlocks: CAP6.
 
 - [ ] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.**
