@@ -31,13 +31,13 @@ For most attributes that's correct (attribute === rendered state). But several D
 **property-authoritative** — the browser stops reflecting attribute changes onto the property once the
 property is "dirty" (touched by the user or script):
 
-| Attribute   | Why attribute-only is wrong                                                       |
-| ----------- | -------------------------------------------------------------------------------- |
-| `checked`   | After interaction, `.checked` ignores the `checked` attribute. `FormData` reads `.checked`. (This is exactly the checkbox-group select-all **C** regression.) |
-| `indeterminate` | Not an HTML attribute at all — property-only; the `applyCheckboxIndeterminate` test shim exists only because the binding can't set it. |
-| `value` (inputs) | `.value` decouples from the `value` attribute after typing. |
-| `scrollTop`/`scrollLeft` | Not attributes; `data-bind:scrolltop` is a no-op (the scroll-area "Jump to end" workaround had to imperatively set `.scrollTop`). |
-| `selected`, `open` | Same dirty-property semantics. |
+| Attribute                | Why attribute-only is wrong                                                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checked`                | After interaction, `.checked` ignores the `checked` attribute. `FormData` reads `.checked`. (This is exactly the checkbox-group select-all **C** regression.) |
+| `indeterminate`          | Not an HTML attribute at all — property-only; the `applyCheckboxIndeterminate` test shim exists only because the binding can't set it.                        |
+| `value` (inputs)         | `.value` decouples from the `value` attribute after typing.                                                                                                   |
+| `scrollTop`/`scrollLeft` | Not attributes; `data-bind:scrolltop` is a no-op (the scroll-area "Jump to end" workaround had to imperatively set `.scrollTop`).                             |
+| `selected`, `open`       | Same dirty-property semantics.                                                                                                                                |
 
 The current escape hatches are per-component imperative client actions (`scrollAreaScrollTo`) or test
 shims (`applyCheckboxIndeterminate`) — neither composes. One reactive primitive fixes all of them.
@@ -51,7 +51,7 @@ A new binding kind **`data-bind-prop:<prop>="/c/…client.js#<derive>"`** that t
 
 1. **Authoring surface — allowlist-driven, automatic.** Keep authoring unchanged: a component still
    writes `checked={…}` / `value={…}` / `scrollTop={…}`. The compiler, for a fixed **allowlist of
-   property-authoritative attributes**, emits *both* the SSR attribute (initial paint) *and* a
+   property-authoritative attributes**, emits _both_ the SSR attribute (initial paint) _and_ a
    `data-bind-prop:<prop>` derive (client property). Proposed allowlist (closed, security-reviewed):
    `checked`, `indeterminate`, `value` (form controls), `scrollTop`, `scrollLeft`, `selected`, `open`.
    No arbitrary properties — explicitly **not** `innerHTML`/`outerHTML`/`srcdoc`/`on*` (KV236 unsafe
