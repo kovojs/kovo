@@ -33,6 +33,6 @@ test('query guard protects initial page render and typed-read endpoint', async (
   const authedQuery = await page.request.get('/_q/account?view=summary');
   expect(authedQuery.status()).toBe(200);
   await expect(authedQuery.text()).resolves.toContain(
-    '<kovo-query name="account:summary">{"id":"ada@example.com","view":"summary"}</kovo-query>',
+    '<kovo-query name="account" key="account:summary">{"id":"ada@example.com","view":"summary"}</kovo-query>',
   );
 });
