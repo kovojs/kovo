@@ -355,12 +355,16 @@ function derivedPageFactsFromRoutePages(
 
   return routePages.map((page) => {
     const queries = pageComponentQueries(page, componentQueriesByExportName);
+    const componentQueryNamesByLocalName = routePageComponentQueryNamesByLocalName(
+      page,
+      componentQueriesByExportName,
+    );
     const navigationSegments = (page.navigationSegments ?? []).map((segment) => {
       const segmentQueries =
         segment.kind === 'page'
           ? uniqueSorted(
               (segment.components ?? []).flatMap(
-                (component) => componentQueriesByExportName.get(component) ?? [],
+                (component) => componentQueryNamesByLocalName.get(component) ?? [],
               ),
             )
           : (segment.queries ?? []);
@@ -453,9 +457,30 @@ function pageComponentQueries(
 ): string[] {
   return uniqueSorted(
     page.components.flatMap(
-      (component) => componentQueriesByExportName.get(component.localName) ?? [],
+      (component) =>
+        componentQueriesByExportName.get(routePageComponentExportName(component)) ?? [],
     ),
   );
+}
+
+function routePageComponentQueryNamesByLocalName(
+  page: RoutePageFact,
+  componentQueriesByExportName: ReadonlyMap<string, readonly string[]>,
+): ReadonlyMap<string, readonly string[]> {
+  const result = new Map<string, readonly string[]>();
+
+  for (const component of page.components) {
+    result.set(
+      component.localName,
+      componentQueriesByExportName.get(routePageComponentExportName(component)) ?? [],
+    );
+  }
+
+  return result;
+}
+
+function routePageComponentExportName(component: RoutePageFact['components'][number]): string {
+  return component.exportName ?? component.localName;
 }
 
 function uniqueSorted(values: readonly string[]): string[] {

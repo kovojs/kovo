@@ -126,9 +126,9 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
   - Fix sketch: distinguish whole-query invalidation from instance invalidation instead of adding the
     base key to every instance rerun token set.
 
-- [ ] **Medium: route component import aliases drop derived page query/navigation metadata.**
+- [x] **Medium: route component import aliases drop derived page query/navigation metadata.**
   - Evidence: [packages/compiler/src/route-pages.ts](/Users/mini/kovo/packages/compiler/src/route-pages.ts:149)
-    stores navigation segment component names from route JSX facts; [packages/compiler/src/internal-graph.ts](/Users/mini/kovo/packages/compiler/src/internal-graph.ts:436)
+    stores navigation segment component names from route JSX facts; [packages/compiler/src/app-graph.ts](/Users/mini/kovo/packages/compiler/src/app-graph.ts:354)
     maps query metadata by component export name and then looks up `component.localName`.
   - Failure mode: `import { CartBadge as Badge } from './cart-badge.js'; page: () => <Badge />`
     records `Badge`, but graph derivation knows queries under `CartBadge`; page `queries` and
@@ -137,6 +137,11 @@ fragment targets, live-target descriptors, query instance keys, and mutation ref
     include the component's declared query keys.
   - Fix sketch: route facts should carry resolved import/export identity in addition to local JSX
     binding name, or graph derivation should consult route import alias metadata.
+  - Fixed: route facts now retain aliased named-import export identity and graph derivation resolves
+    page/navigation query metadata through it. Verified by
+    `pnpm exec vitest --run --config vitest.compiler-temp.config.ts` (temporary config scoped to
+    `packages/compiler/src/{registry,route-pages}.test.ts`) and
+    `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`.
 
 - [ ] **Medium: inline loader treats CSS-selector-invalid targets as total misses.**
   - Evidence: [packages/browser/src/inline-loader-build.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.ts:290)
