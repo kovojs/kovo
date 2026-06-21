@@ -303,6 +303,61 @@ export function scrollAreaViewportScroll(
   return scrollAreaViewportState(target, state);
 }
 
+export interface ScrollAreaScrollToTrigger {
+  getAttribute(name: string): string | null;
+  readonly ownerDocument?: {
+    getElementById(id: string): ScrollAreaScrollToViewport | null;
+  } | null;
+}
+
+export interface ScrollAreaScrollToViewport {
+  scrollTop: number;
+  readonly scrollHeight: number;
+}
+
+export type ScrollAreaScrollToEvent = Event & {
+  readonly currentTarget?: ScrollAreaScrollToTrigger | null;
+  readonly target?: ScrollAreaScrollToTrigger | null;
+};
+
+export interface ScrollAreaScrollToResult {
+  scrollTop: number;
+  scrollY: 'end' | 'start';
+}
+
+/**
+ * @kovoPrimitiveHandler
+ *
+ * Imperatively scrolls the viewport to the top/bottom in response to a control
+ * (e.g. a "Jump to end" button). A `data-bind:*` stamp only writes an attribute,
+ * never the live `.scrollTop` property, so a property-backed scroll needs an
+ * imperative action. The viewport is reached through the event — the trigger's
+ * `aria-controls` id resolved via `ownerDocument.getElementById` — so the handler
+ * captures no unserializable closure value (KV201-safe; the prior inline attempt
+ * captured a render-scope id). Setting `.scrollTop` fires the native `scroll`
+ * event, so the viewport's own scroll handler reconciles the thumb/state.
+ * SPEC.md §4.6: no-ops when the author already prevented the default action.
+ */
+export function scrollAreaScrollTo(
+  event: ScrollAreaScrollToEvent,
+  options: { position: 'end' | 'start' },
+): ScrollAreaScrollToResult | undefined {
+  if (event.defaultPrevented) return;
+
+  const trigger = event.currentTarget ?? event.target ?? null;
+  if (!trigger || typeof trigger.getAttribute !== 'function') return;
+
+  const controls = trigger.getAttribute('aria-controls');
+  const viewport =
+    controls === null ? null : (trigger.ownerDocument?.getElementById(controls) ?? null);
+  if (!viewport) return;
+
+  const top = options.position === 'end' ? viewport.scrollHeight : 0;
+  viewport.scrollTop = top;
+
+  return { scrollTop: top, scrollY: options.position };
+}
+
 /**
  * @kovoPrimitiveHandler
  *

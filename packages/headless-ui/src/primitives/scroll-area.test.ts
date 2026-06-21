@@ -4,6 +4,8 @@ import {
   scrollAreaCornerAttributes as exportedScrollAreaCornerAttributes,
   scrollAreaCornerState as exportedScrollAreaCornerState,
   scrollAreaRootAttributes as exportedScrollAreaRootAttributes,
+  scrollAreaScrollTo as exportedScrollAreaScrollTo,
+  type ScrollAreaScrollToEvent as exportedScrollAreaScrollToEvent,
   scrollAreaScrollbarAttributes as exportedScrollAreaScrollbarAttributes,
   scrollAreaScrollbarState as exportedScrollAreaScrollbarState,
   scrollAreaThumbAttributes as exportedScrollAreaThumbAttributes,
@@ -484,6 +486,48 @@ describe('headless-ui scroll-area primitive', () => {
     expect(primitiveScrollAreaCornerState).toBe(scrollAreaCornerState);
     expect(primitiveScrollAreaViewportState).toBe(scrollAreaViewportState);
     expect(primitiveScrollAreaViewportScroll).toBe(scrollAreaViewportScroll);
+  });
+});
+
+describe('scrollAreaScrollTo', () => {
+  function fakeTrigger(controls: string | null, viewport: { scrollHeight: number; scrollTop: number }) {
+    return {
+      getAttribute: (name: string) => (name === 'aria-controls' ? controls : null),
+      ownerDocument: { getElementById: (id: string) => (id === controls ? viewport : null) },
+    };
+  }
+  function clickEvent(currentTarget: unknown, defaultPrevented = false) {
+    return { currentTarget, defaultPrevented } as unknown as exportedScrollAreaScrollToEvent;
+  }
+
+  it('scrolls the aria-controls viewport to the bottom for position=end', () => {
+    const viewport = { scrollHeight: 260, scrollTop: 0 };
+    const result = exportedScrollAreaScrollTo(clickEvent(fakeTrigger('vp', viewport)), {
+      position: 'end',
+    });
+    expect(viewport.scrollTop).toBe(260);
+    expect(result).toEqual({ scrollTop: 260, scrollY: 'end' });
+  });
+
+  it('scrolls to the top for position=start', () => {
+    const viewport = { scrollHeight: 260, scrollTop: 200 };
+    const result = exportedScrollAreaScrollTo(clickEvent(fakeTrigger('vp', viewport)), {
+      position: 'start',
+    });
+    expect(viewport.scrollTop).toBe(0);
+    expect(result).toEqual({ scrollTop: 0, scrollY: 'start' });
+  });
+
+  it('no-ops when default is prevented or the viewport is missing', () => {
+    const viewport = { scrollHeight: 260, scrollTop: 50 };
+    expect(
+      exportedScrollAreaScrollTo(clickEvent(fakeTrigger('vp', viewport), true), { position: 'end' }),
+    ).toBeUndefined();
+    expect(viewport.scrollTop).toBe(50);
+    expect(
+      exportedScrollAreaScrollTo(clickEvent(fakeTrigger(null, viewport)), { position: 'end' }),
+    ).toBeUndefined();
+    expect(viewport.scrollTop).toBe(50);
   });
 });
 

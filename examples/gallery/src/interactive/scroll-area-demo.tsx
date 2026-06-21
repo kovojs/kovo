@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import {
+  scrollAreaScrollTo as _scrollAreaScrollTo,
   scrollAreaThumbDrag as _scrollAreaThumbDrag,
   scrollAreaThumbDragStart as _scrollAreaThumbDragStart,
   scrollAreaThumbGeometry as _scrollAreaThumbGeometry,
@@ -268,16 +269,17 @@ export const GalleryScrollAreaDemo = component({
           id="gallery-scroll-area-toggle"
           onClick={() => {
             const nextAtEnd = state.scrollY !== 'end';
+            // Imperatively scroll the live viewport (plan more-ui-primitives B):
+            // scrollAreaScrollTo reaches the viewport via this button's
+            // aria-controls (read off the event, no captured render-locals — so no
+            // KV201) and sets .scrollTop, which fires the viewport's scroll handler
+            // to reconcile the thumb. The optimistic state below keeps the
+            // aria-pressed/data-state contract immediate.
+            _scrollAreaScrollTo(Object(event), { position: nextAtEnd ? 'end' : 'start' });
             state.scrollTop = nextAtEnd ? 1000000 : 0;
             state.scrollY = nextAtEnd ? 'end' : 'start';
             state.thumbOffset = nextAtEnd ? 100 : 0;
             state.scrolling = true;
-            // NOTE (plan T7, deferred): imperatively scrolling the live viewport
-            // (.scrollTop) needs a shared client-action primitive — a data-bind
-            // stamp only sets an attribute. Doing it inline captured an
-            // unserializable closure value (KV201), so the property-backed scroll
-            // binding is tracked as a follow-up; the state mutations above keep the
-            // thumb/aria-pressed contract correct.
           }}
         >
           <span>{state.scrollY === 'end' ? 'Back to top' : 'Jump to end'}</span>
