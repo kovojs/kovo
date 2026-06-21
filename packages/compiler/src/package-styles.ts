@@ -205,11 +205,28 @@ function extractComponentCssFromFiles(
   }
 
   return {
-    css: `${cssIrHeader}\n${normalizeServedCss(dedupeCss(chunks))}`,
+    css: `${cssIrHeader}\n${dedupeKeyframeBlocks(normalizeServedCss(dedupeCss(chunks)))}`,
     cssAssets,
     diagnostics,
     sourceFiles,
   };
+}
+
+/**
+ * Drop duplicate `@keyframes <name> { … }` blocks from the combined stylesheet,
+ * keeping the first occurrence. Each styled component file emits its own
+ * `@keyframes` block (from `style.keyframes`) into its CSS chunk, so a keyframe
+ * shared by several components would otherwise appear once per file after the
+ * chunks are concatenated. Dedup is by animation-name (deterministic
+ * `kv-<slug>-<hash>`), so distinct keyframes are preserved (SPEC.md §13.1).
+ */
+function dedupeKeyframeBlocks(css: string): string {
+  const seen = new Set<string>();
+  return css.replace(/@keyframes\s+([\w-]+)\s*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, (match, name) => {
+    if (seen.has(name as string)) return '';
+    seen.add(name as string);
+    return match;
+  });
 }
 
 function componentCssAssetForSource(
