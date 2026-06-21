@@ -7,13 +7,13 @@ authoring/verification/perf capabilities that the Part-1 substrate makes cheap a
 rules unless it is an explicit Part-2 capability that adds new accepted/emitted behavior.
 
 All checkboxes are **open** (`- [ ]`). File:line citations were spot-checked this session via grep
-(see "Verification provenance"); the *work itself* is unimplemented. Mark an item `[x]` only after the
+(see "Verification provenance"); the _work itself_ is unimplemented. Mark an item `[x]` only after the
 same session proves it against the gates named under "Neutrality gates".
 
 ## Thesis
 
 The compiler is a **source-patch + reparse pipeline**: `compile.ts` parses one TSX file into a flat
-typed `ComponentModuleModel`, runs a *hardcoded linear sequence* of passes that each emit
+typed `ComponentModuleModel`, runs a _hardcoded linear sequence_ of passes that each emit
 `SourceReplacement` string patches, re-parses the whole file between passes via `applyModelPatchPass`
 (`model-pipeline.ts` — the only seam), then string-templates four 1:1 artifacts (server/client/css/registry).
 
@@ -34,14 +34,14 @@ capability work (Part 2). The two parts relate as **substrate → payload**.
 
 ## Neutrality gates (read before claiming any Part-1 item neutral)
 
-The adversarial review surfaced that the obvious gate is the *wrong* one. Pick the oracle deliberately:
+The adversarial review surfaced that the obvious gate is the _wrong_ one. Pick the oracle deliberately:
 
 - **Fixpoint is NOT a valid neutrality proof for authored-source pass refactors.** `assertFixpoint`
   (`compile.ts:834-846`) recompiles emitted artifacts with `sourceProvenance:'compiler-emitted'`, which
   hits the `isCompilerIrArtifact` early-return (`compile.ts:90`). It proves only that the IR pass-through
   is stable, never that an authored-source pass change preserves output.
 - **Render-equivalence is the primary oracle, but it is weaker than advertised.**
-  `semanticRenderEquivalenceCheck` (`emit/server.ts:95`) runs *both* the expected and actual sides through
+  `semanticRenderEquivalenceCheck` (`emit/server.ts:95`) runs _both_ the expected and actual sides through
   the same `semanticRenderModel` walker and validates only the **server** artifact (never the client/delta
   path). Use it together with the golden corpus.
 - **Golden-output corpus + conformance is the real byte-level oracle:** `compiler-conformance.test.ts`,
@@ -53,8 +53,8 @@ The adversarial review surfaced that the obvious gate is the *wrong* one. Pick t
   and are covered by neither fixpoint nor render-equivalence. Snapshot `factHash` output before/after any
   change to query-update / graph / HMR facts (e.g. the non-enumerable `outputContext` channel at
   `query-updates.ts:782`).
-- **Cache-key soundness:** the dependency-footprint *producer* (`compile.ts:470-518`) and the cache-key
-  *narrower* (`compile-cache.ts:351-416`) express the read-set contract twice; snapshot computed cache keys
+- **Cache-key soundness:** the dependency-footprint _producer_ (`compile.ts:470-518`) and the cache-key
+  _narrower_ (`compile-cache.ts:351-416`) express the read-set contract twice; snapshot computed cache keys
   over the fixture corpus before/after touching either.
 - **Unchanged by every Part-1 item** (preserve exactly): source-derived handler names; 1:1 file mapping;
   teaching errors (rule 5); registry atomicity; the public/internal/generated import boundary (rule 8,
@@ -68,8 +68,13 @@ The adversarial review surfaced that the obvious gate is the *wrong* one. Pick t
 Tags: `id · priority · effort/risk`. "Unlocks" lists Part-2 ids. Items deliberately scoped so a single
 behavior change never hides inside a "neutral" move.
 
-- [ ] **FN1 · P0 · S/low — Hoist the render-plan token to a single shared module in `@kovojs/core`.**
-  - Problem: `RENDER_PLAN_GRAMMAR_VERSION` *and* the fingerprint hash function are duplicated byte-for-byte
+- [x] **FN1 · P0 · S/low — Hoist the render-plan token to a single shared module in `@kovojs/core`.** ✅ done
+  - Done: new `packages/core/src/render-plan-token.ts` (+ `internal/render-plan-token` subpath) owns
+    `RENDER_PLAN_GRAMMAR_VERSION` + `computeRenderPlanFingerprint`; `server/client-modules.ts` and
+    `compiler/compile.ts` re-export thin wrappers under the historical names (`computeCompilerRenderPlanFingerprint`
+    delegates). Verified: `client-modules.test.ts` + `compile-component.test.ts` (47 pass), api-surface gate (no new
+    violations), import-boundary, `tsc -p tsconfig.json` clean.
+  - Problem: `RENDER_PLAN_GRAMMAR_VERSION` _and_ the fingerprint hash function are duplicated byte-for-byte
     across compiler and server, hand-synced by comment. SPEC §5.2.1 mandates a single opaque build-stable
     token and KV416 fails the build on drift, so a one-character divergence is a silent correctness break
     (server accepts a foreign-shape delta / fails to detect deploy skew). Both packages already depend on `@kovojs/core`.
@@ -100,7 +105,7 @@ behavior change never hides inside a "neutral" move.
 - [ ] **FN3 · P1 · S/low — Delete the dead fact-invalidation + persistent-prune machinery (or commit to wiring it).**
   - Problem: `CompileCache.invalidateFacts` / `registryFactChanges` / `#inverseIndex` and
     `prunePersistentCompileCache` are fully implemented, exported via `internal.ts`, and tested, but have **zero
-    production callers** (only `internal.ts` re-exports + their own tests). Worse, the inverse index is *written*
+    production callers** (only `internal.ts` re-exports + their own tests). Worse, the inverse index is _written_
     on every compile while its only reader is never called — production pays per-compile indexing cost for nothing.
     The on-disk cache also has no GC/max-size/TTL wired anywhere.
   - Evidence: `compile-cache.ts:38`, `:115`, `:133`; `persistent-compile-cache.ts:122`; `internal.ts:7`, `:13`.
@@ -108,7 +113,7 @@ behavior change never hides inside a "neutral" move.
   - Approach: pick one coherent cache story. **Neutral branch:** remove `invalidateFacts` /
     `registryFactChanges` / `#inverseIndex` / `#indexEntry` / `compileDependencyFootprintFactKeys` /
     `prunePersistentCompileCache` from `internal.ts` and delete the dead code + tests (including the write-side
-    index machinery, not just the reader). **Or** commit to CAP8 and wire it (that path is *not* neutral). Do not leave half-wired.
+    index machinery, not just the reader). **Or** commit to CAP8 and wire it (that path is _not_ neutral). Do not leave half-wired.
   - Neutrality proof: deletion is strictly neutral — api-surface gate + grep confirm no consumer; removing the
     unused index-write also yields a small per-compile speedup.
   - Unlocks: CAP8 (mutually exclusive branch).
@@ -117,7 +122,7 @@ behavior change never hides inside a "neutral" move.
   - Problem: the canonical serializer is copied four times under two names; divergence would silently break
     cache-identity vs HMR fact-hash agreement.
   - Evidence: `fact-hash.ts:6` & `cache-identity.ts:121` (`canonicalJson`); `compile-cache.ts:428` &
-    `persistent-compile-cache.ts:197` (`stableJson`). *(Spot-check found the 4th copy the original map missed.)*
+    `persistent-compile-cache.ts:197` (`stableJson`). _(Spot-check found the 4th copy the original map missed.)_
   - Approach: export one `canonicalJson` from a shared internal module; all four import it. Confirm byte-identical
     output first. **Unify only the serializer, not the hash** — the fnv1a (fact-hash) vs sha256 (cache-identity /
     compile-cache) split is intentional.
@@ -137,32 +142,32 @@ behavior change never hides inside a "neutral" move.
     exposure unchanged, addressed by FN7.)
   - Unlocks: FN5.
 
-- [ ] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** *(keystone)*
-  - Problem: `compileComponentModule` is a ~250-line straight-line function in which both the pass *sequence*
+- [ ] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** _(keystone)_
+  - Problem: `compileComponentModule` is a ~250-line straight-line function in which both the pass _sequence_
     (structural+href lower → reparse → style → reparse → analyze → server-render → terminal emit) and the result
-    *assembly* (53-line literal inlining `mergeQueryUpdatePlans` / `mergeStyleUpdateCoverage` /
+    _assembly_ (53-line literal inlining `mergeQueryUpdatePlans` / `mergeStyleUpdateCoverage` /
     `dedupeOutputContextFacts` + 6 ad-hoc spreads) are hardcoded. Passes cannot be enumerated, reordered, profiled,
     individually tested, or attributed; each new fact category needs a hand-wired merge + result field. Note:
-    `structuralJsxPhaseOrder` *looks* like a pipeline descriptor but is never consulted by the orchestrator —
+    `structuralJsxPhaseOrder` _looks_ like a pipeline descriptor but is never consulted by the orchestrator —
     decorative, read only by a snapshot test (`structural-jsx.ts:112`, used only in `structural-jsx-ir.test.ts`).
   - Evidence: `compile.ts:106-342`, `:153-162`, `:290-342`, `:740-826`; `model-pipeline.ts:31-58`.
   - Approach, two sub-steps: **(a)** a `ResultBuilder` owning the canonical merge/dedupe/sort rules per fact
     category (move existing helpers verbatim) with `build() → CompileResult` — lower-risk, do first. **(b)** a
     `Pass` interface `{name, kind, run(state, ctx)}` + ordered array driven by the existing `applyModelPatchPass`
-    executor, encoding *today's exact order including the two reparse boundaries*. Critical: passes carry implicit
+    executor, encoding _today's exact order including the two reparse boundaries_. Critical: passes carry implicit
     ordering dependencies — `styleSpanProbe.handledSpans` feeds structural lowering's `skipInlineAttributeDeriveSpans`;
-    style extraction (`compile.ts:133`) runs on *structurally-patched* source/model; later analysis runs over the
-    *second* reparsed model. The registry must preserve this data threading relative to reparse boundaries.
+    style extraction (`compile.ts:133`) runs on _structurally-patched_ source/model; later analysis runs over the
+    _second_ reparsed model. The registry must preserve this data threading relative to reparse boundaries.
   - Neutrality proof: behavior-preserving iff the registry encodes the exact current order + reparse boundaries.
     Primary oracle = golden corpus diff + render-equivalence + `compiler-conformance.test.ts` /
     `compile-component.test.ts` — **NOT fixpoint**. Add a fact-hash snapshot.
   - Unlocks: CAP1, CAP3, CAP7, CAP8.
 
 - [ ] **FN6 · P1 · M/low — Split `emit/server.ts` into render-lowering / equivalence-gate / mutation-form / shared-helper modules.**
-  - Problem: `server.ts` (2239 lines, 95 functions) conflates four responsibilities — the render-*equivalence
-    gate* (`semanticRender*` + VM eval + normalizer), server-render *lowering* (`serverRenderPatches` + host-stamp
-    writers), enhanced-mutation-*form* lowering + KV231/238/242/243 diagnostics, and `mutationFormExplainFacts`
-    *graph facts*. The gate is a verifier living inside the emitter.
+  - Problem: `server.ts` (2239 lines, 95 functions) conflates four responsibilities — the render-_equivalence
+    gate_ (`semanticRender*` + VM eval + normalizer), server-render _lowering_ (`serverRenderPatches` + host-stamp
+    writers), enhanced-mutation-_form_ lowering + KV231/238/242/243 diagnostics, and `mutationFormExplainFacts`
+    _graph facts_. The gate is a verifier living inside the emitter.
   - Evidence: `emit/server.ts:95`, `:604`, `:683`, `:765`.
   - Approach: extract behind the existing exported entrypoints → `emit/server-render.ts`,
     `emit/render-equivalence.ts`, `emit/mutation-form.ts`, **plus** a `server-emit-shared` helper module (the four
@@ -187,9 +192,9 @@ behavior change never hides inside a "neutral" move.
     **Step 2 (larger)** — extend `scan/parse.ts` to emit typed clock-cadence + query-binding facts on the existing
     `ObjectLiteralEntry` path; collapse `style.ts`'s 5 internal parses into one shared parse handed in by
     `compile.ts`; fold `internal-graph`'s string-reparse into typed facts; keep `route-pages.ts` as a dedicated
-    route-grammar parse but *register* it with the guard.
+    route-grammar parse but _register_ it with the guard.
   - Neutrality proof: Step 1 neutral by construction. Step 2 must reproduce current fact **bytes** exactly
-    (including the naive `[^,}]+` cadence truncation at `internal-graph.ts:206-210` — *fixing* it is a behavior
+    (including the naive `[^,}]+` cadence truncation at `internal-graph.ts:206-210` — _fixing_ it is a behavior
     change, gate separately). Needs fixpoint/render-equivalence **plus new fact-level golden tests**; span-equality
     joins (`parse.ts:519-520`, `:568-571`) are load-bearing — preserve `start`/`openingEnd` exactly.
   - Unlocks: CAP1, CAP2, CAP7, CAP8.
@@ -258,12 +263,12 @@ behavior change never hides inside a "neutral" move.
 
 - [ ] **FN13 · P2 · S/low — Make the platform substitution table data-driven and drop the string round-trip.**
   - Problem: `platformSubstitutionFor` is an if/else ladder hard-gated on `tag==='button'` with method names
-    inline; `platformAttributes` builds attribute *strings* that `structural-jsx.ts:441-443` then re-parses by naive
+    inline; `platformAttributes` builds attribute _strings_ that `structural-jsx.ts:441-443` then re-parses by naive
     `split(' ')`/`split('=')` — fragile if any value contained a space or `=`. Adding a substitution touches matcher
-    + renderer + the fragile re-split.
+    - renderer + the fragile re-split.
   - Evidence: `lower/platform.ts:85-123`, `:147-157`; `lower/structural-jsx.ts:441-450`.
   - Approach: replace the ladder with a declarative table `{tag, method/action, kind, targetCheck,
-    attributes:[{name, valueFrom}]}` and have `lowerPlatformBehaviors` consume the structured attribute list directly
+attributes:[{name, valueFrom}]}` and have `lowerPlatformBehaviors` consume the structured attribute list directly
     (build `JsxIrAttribute` from typed fields), eliminating the round-trip.
   - Neutrality proof: removing the string re-parse is neutral today (all current values are `escapeAttribute` ids +
     fixed action keywords, space/equals-free). Covered by platform behavior unit tests + render-equivalence. (Only a
@@ -271,7 +276,7 @@ behavior change never hides inside a "neutral" move.
   - Unlocks: — (standalone cleanup; removes a fragile attribute-string round-trip).
 
 - [ ] **FN14 · P2 · S/low — Collapse the graph file trio into one canonical module + two thin facades.**
-  - Problem: `deriveAppGraph` et al. live in `internal-graph.ts` (632 lines, at package root, *outside* `analyze/`),
+  - Problem: `deriveAppGraph` et al. live in `internal-graph.ts` (632 lines, at package root, _outside_ `analyze/`),
     while `graph.ts` (public) and `internal/graph.ts` (internal) are 13-line facades. There is one
     `deriveAppGraph` implementation; the public/internal split is deliberate (rule 8) but the naming triple + root
     placement is confusing enough that the analysis prompt itself cited wrong paths.
@@ -291,16 +296,16 @@ Each item adds new accepted/emitted behavior (**not** neutral) and names its Par
 - [ ] **CAP1 · P1 — Unify the hand-written + derived optimism IR behind a typed compiler↔deriver channel, with editor-visible KV310.** (SPEC §10.4/§10.5/§10.6; `plans/data-layer-roadmap.md` v2)
   - Already implemented (do **not** re-build): the §10.5 derivation algebra ships in `@kovojs/drizzle` —
     `deriveOptimistic(effects, shape)` returns a `{kind:'derived', program}` JSON-patch program or `{kind:'punt',
-    reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifact (`drizzle/derive-codegen.ts`);
+reason}` (`drizzle/derive.ts:41`); `serializeDerivedOptimistic` emits the artifact (`drizzle/derive-codegen.ts`);
     it runs via the `kovo compile drizzle-optimistic <input.json> --out <artifact.ts>` CLI target
     (`cli/index.ts:2014-2064`, `commands-manifest.ts:226`) with `derived`/`punt`(reason)/`await-fragment` statuses;
     the commuting-diagram property suite exists (`drizzle/derive.test.ts:8`). This item closes the **integration**
-    gaps, not the algebra. (The `data-layer-roadmap.md` v2 checkbox reads open because that stage *bundles* derived
+    gaps, not the algebra. (The `data-layer-roadmap.md` v2 checkbox reads open because that stage _bundles_ derived
     optimism with live queries + a CDC adapter — coarser than the code; the deriver sub-part is largely built.)
   - Summary: (a) collapse the two transform representations into the single shared IR SPEC §10.4 already promises —
     today the compiler's optimism path carries **hand-written** transforms as raw source strings
     (`optimistic-inline.ts:144` `property.getText`) while the deriver produces a structured JSON-patch `program`
-    (`cli/index.ts:2052`), so generated/hand-written are *not* yet pairwise-interchangeable as §10.4 requires;
+    (`cli/index.ts:2052`), so generated/hand-written are _not_ yet pairwise-interchangeable as §10.4 requires;
     (b) replace the generated-JSON-file seam (`*.optimistic.json` → `kovo compile drizzle-optimistic`) between the
     per-component compiler and the deriver with a typed in-process channel — `compileComponentModule` already knows the
     query shapes, invalidation sets, and binding positions the deriver needs but feeds them only through generated
@@ -343,7 +348,7 @@ Each item adds new accepted/emitted behavior (**not** neutral) and names its Par
     chunks, with guard-recheck-per-push and instance-key routing proven at compile time, layered additively over the
     existing wire vocabulary.
   - Blocked by: no compiler handling of a `<kovo-live>` element — the only `kovo-live` tokens are emit-side attribute
-    names (`emit/server.ts:586`). Live targets are *inferred* from server-refresh targets
+    names (`emit/server.ts:586`). Live targets are _inferred_ from server-refresh targets
     (`componentHasInferredServerRefreshTarget`, `scan/parse.ts:545` → `findLiveTargetFacts`, `internal-graph.ts:132`),
     not parsed from an authored element. `QueryUpdateCoverageFact.status` (`types.ts:625`) has no `'live'` member, so
     liveness cannot even be expressed in the coverage model.
@@ -379,7 +384,7 @@ Each item adds new accepted/emitted behavior (**not** neutral) and names its Par
   - Prereqs: FN5, FN7.
   - Sketch: with FN5 each pass is an addressable, individually cacheable unit and FN7 gives one canonical program
     model. Add a parse memo (identical source strings reuse one `ts.SourceFile`) and a span→fact index (build it
-    *before* incrementalizing, or replace the fragile span-equality joins first). Extend the existing
+    _before_ incrementalizing, or replace the fragile span-equality joins first). Extend the existing
     `CompileDependencyFootprint` inverse-index (`types.ts:135-152`) from cross-module to per-pass. `fact-hash.ts` /
     `cache-identity.ts` supply the fingerprint primitives.
   - Payoff: sub-linear rebuild on edits; lower watch-mode latency; faster CI on large component trees.
@@ -410,7 +415,7 @@ Each item adds new accepted/emitted behavior (**not** neutral) and names its Par
   - Prereqs: FN3 (the **wire** branch — mutually exclusive with deletion), FN5.
   - Sketch: connect `invalidateFacts` into `handleHotUpdate` when a registry/graph fact changes across a rebuild, and
     call `prunePersistentCompileCache(maxEntries)` after writes. Gate with new watch-mode correctness tests — this is
-    **not** neutral (it changes *when* recompiles happen).
+    **not** neutral (it changes _when_ recompiles happen).
   - Payoff: faster, correct incremental dev/watch builds with a stable cache footprint.
 
 - [ ] **CAP10 · P2 — Machine-readable diagnostics + richer `kovo explain` decision graph.** (SPEC §5.2 rule 5; §5.3/§11.3/§11.4; `plans/devtools.md`)
@@ -466,7 +471,7 @@ fact-level golden tests for FN7 Step 2. Never rely on `assertFixpoint` to prove 
   host the full `InlineOptimistic*Fact` contract that both `@kovojs/compiler` and `@kovojs/drizzle` import without
   creating a dependency cycle.
 - **FN7 fact-truncation bugs:** the naive `[^,}]+` cadence capture (`internal-graph.ts:206-210`) is a latent bug;
-  the neutral move must preserve it byte-for-byte, then a *separate* tracked fix corrects it. Worth its own ledger item.
+  the neutral move must preserve it byte-for-byte, then a _separate_ tracked fix corrects it. Worth its own ledger item.
 - **Pass-framework scope (FN5):** ship just the linear pass list + `ResultBuilder`, or also a declared per-pass
   read-set (needed by CAP7) in the same slice? Leaning: linear first, read-sets when CAP7 starts.
 
