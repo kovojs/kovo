@@ -84,6 +84,15 @@ export const GalleryComboboxDemo = component({
             data-state={state.open ? 'open' : 'closed'}
             id="gallery-combobox-input"
             labelledBy="gallery-combobox-label"
+            onClick={() => {
+              // Open-on-pointer: the listbox renders hidden while closed, so a
+              // mouse user otherwise can never reach an option to click it (incl.
+              // re-selecting the current value). Highlight the current value so it
+              // is the active option on open. Mirrors select-demo's trigger.
+              if (state.open) return;
+              state.open = true;
+              state.highlightedValue = state.value;
+            }}
             onInput={() => {
               const result = _comboboxInput(Object(event), { value: state.inputValue });
               if (!result) return;

@@ -154,7 +154,10 @@ export const commandStyles = style.create({
     boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
     color: uiTheme.color.foreground,
     maxWidth: 512,
-    padding: 16,
+    // Edge-to-edge: the input header + list reach the rounded shell so there is
+    // no padding gutter around them (shadcn's command dialog framing).
+    overflow: 'hidden',
+    padding: 0,
     width: '100%',
     '::backdrop': {
       backgroundColor: 'rgb(0 0 0 / 0.2)',
@@ -170,38 +173,43 @@ export const commandStyles = style.create({
     paddingInline: 8,
     textAlign: 'center',
   },
+  // Header row: a leading search icon + the borderless input, with a bottom
+  // divider separating the search from the list (shadcn cmdk framing).
+  inputWrapper: {
+    alignItems: 'center',
+    borderBottomColor: uiTheme.color.border,
+    borderBottomStyle: 'solid',
+    borderBottomWidth: 1,
+    columnGap: 8,
+    display: 'flex',
+    paddingInline: 12,
+  },
+  inputIcon: {
+    color: uiTheme.color.foregroundMuted,
+    flexShrink: 0,
+    height: 16,
+    width: 16,
+  },
   input: {
-    backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.borderStrong,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
+    backgroundColor: 'transparent',
+    borderStyle: 'none',
+    borderWidth: 0,
     color: uiTheme.color.foreground,
+    flexGrow: 1,
     fontSize: 14,
-    height: 36,
+    height: 44,
+    minWidth: 0,
     outlineStyle: 'none',
-    paddingLeft: 32,
-    paddingRight: 12,
-    position: 'relative',
-    transitionProperty: 'background-color, border-color, box-shadow',
     width: '100%',
-    '::before': {
+    '::placeholder': {
       color: uiTheme.color.foregroundMuted,
-      content: '"\\2315"',
-      left: 12,
-      pointerEvents: 'none',
-      position: 'absolute',
     },
     '[data-placeholder]': {
       color: uiTheme.color.foregroundMuted,
     },
     ':disabled': {
-      backgroundColor: uiTheme.color.backgroundSubtleHigh,
       color: uiTheme.color.foregroundMuted,
       cursor: 'not-allowed',
-    },
-    ':focus-visible': {
-      boxShadow: uiTheme.shadow.focusRing,
     },
   },
   heading: {
@@ -220,7 +228,7 @@ export const commandStyles = style.create({
     borderRadius: uiTheme.radius.sm,
     borderStyle: 'none',
     borderWidth: 0,
-    color: uiTheme.color.foregroundMuted,
+    color: uiTheme.color.foreground,
     columnGap: 8,
     cursor: 'default',
     display: 'flex',
@@ -267,16 +275,11 @@ export const commandStyles = style.create({
     letterSpacing: '0.06em',
     marginLeft: 'auto',
   },
+  // Flush inside the dialog: no border/shadow/top-margin (the dialog is the
+  // surface), just a scrollable padded list.
   listbox: {
     backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-    marginTop: 12,
-    maxHeight: 256,
-    minWidth: 180,
+    maxHeight: 300,
     overflow: 'auto',
     padding: 4,
     '[data-state=closed]': {
@@ -426,33 +429,50 @@ export const CommandInput = component({
       ...(props.listboxId === undefined ? {} : { listboxId: props.listboxId }),
     });
     const styleAttrs = style.attrs(commandStyles.input, props.styles?.input);
+    const wrapperAttrs = style.attrs(commandStyles.inputWrapper);
+    const iconAttrs = style.attrs(commandStyles.inputIcon);
 
     return (
-      <input
-        {...styleAttrs}
-        {...passThroughProps(props)}
-        aria-activedescendant={attrs['aria-activedescendant']}
-        aria-autocomplete={attrs['aria-autocomplete']}
-        aria-controls={attrs['aria-controls']}
-        aria-describedby={attrs['aria-describedby']}
-        aria-expanded={attrs['aria-expanded']}
-        aria-invalid={attrs['aria-invalid']}
-        aria-labelledby={attrs['aria-labelledby']}
-        autocomplete={attrs.autocomplete}
-        data-disabled={attrs['data-disabled']}
-        data-invalid={attrs['data-invalid']}
-        data-required={attrs['data-required']}
-        data-state={attrs['data-state']}
-        disabled={attrs.disabled}
-        form={attrs.form}
-        id={attrs.id}
-        name={attrs.name}
-        placeholder={attrs.placeholder}
-        required={attrs.required}
-        role={attrs.role}
-        type={attrs.type}
-        value={attrs.value}
-      />
+      <div {...wrapperAttrs}>
+        <svg
+          {...iconAttrs}
+          aria-hidden="true"
+          fill="none"
+          stroke="currentColor"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          viewBox="0 0 24 24"
+        >
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </svg>
+        <input
+          {...styleAttrs}
+          {...passThroughProps(props)}
+          aria-activedescendant={attrs['aria-activedescendant']}
+          aria-autocomplete={attrs['aria-autocomplete']}
+          aria-controls={attrs['aria-controls']}
+          aria-describedby={attrs['aria-describedby']}
+          aria-expanded={attrs['aria-expanded']}
+          aria-invalid={attrs['aria-invalid']}
+          aria-labelledby={attrs['aria-labelledby']}
+          autocomplete={attrs.autocomplete}
+          data-disabled={attrs['data-disabled']}
+          data-invalid={attrs['data-invalid']}
+          data-required={attrs['data-required']}
+          data-state={attrs['data-state']}
+          disabled={attrs.disabled}
+          form={attrs.form}
+          id={attrs.id}
+          name={attrs.name}
+          placeholder={attrs.placeholder}
+          required={attrs.required}
+          role={attrs.role}
+          type={attrs.type}
+          value={attrs.value}
+        />
+      </div>
     );
   },
 });

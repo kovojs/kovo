@@ -69,6 +69,12 @@ export const accordionStyles = style.create({
   content: {
     display: 'grid',
     gridTemplateRows: '1fr',
+    // The collapsed 0fr track must clip its own overflow: the author display:grid
+    // rule defeats UA [hidden]{display:none} so the row-height transition can run,
+    // which means the closed panel stays in flow. Without overflow:hidden on the
+    // track, leading/sub-pixel residue of the first content line leaks past the
+    // collapsed row (the "second line cutoff when collapsed" defect).
+    overflow: 'hidden',
     transitionDuration: '200ms',
     transitionProperty: 'grid-template-rows',
     transitionTimingFunction: 'ease',

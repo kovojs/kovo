@@ -94,8 +94,21 @@ export const GalleryCommandDemo = component({
           open={state.open}
           titleId="gallery-command-title"
         >
-          <h2 id="gallery-command-title">Command menu</h2>
-          <p id="gallery-command-description">Search project actions.</p>
+          {/* Title + description stay in the DOM for aria-labelledby/describedby
+              but are visually hidden (sr-only) so the dialog body reads as just
+              the search header + list, like shadcn's command palette. */}
+          <h2
+            id="gallery-command-title"
+            style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+          >
+            Command menu
+          </h2>
+          <p
+            id="gallery-command-description"
+            style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+          >
+            Search project actions.
+          </p>
           <CommandInput
             {...commandState}
             id="gallery-command-input"
@@ -322,21 +335,41 @@ export const GalleryCommandDemo = component({
               No commands found.
             </CommandEmpty>
           </CommandListbox>
-          <CommandClose
-            {...commandState}
-            contentId={contentId}
-            data-state={state.open ? 'open' : 'closed'}
-            onClick={() => {
-              const result = _commandCloseClick(Object(event), { open: state.open });
-              if (result) state.open = result.open;
-            }}
-          >
-            Close
-          </CommandClose>
+          {/* shadcn's command palette has no in-body Close button (Escape /
+              backdrop / trigger toggle close it). Keep it in the DOM for the
+              native dialog-close invoker contract but visually hidden. */}
+          <span style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0">
+            <CommandClose
+              {...commandState}
+              contentId={contentId}
+              data-state={state.open ? 'open' : 'closed'}
+              onClick={() => {
+                const result = _commandCloseClick(Object(event), { open: state.open });
+                if (result) state.open = result.open;
+              }}
+            >
+              Close
+            </CommandClose>
+          </span>
         </CommandDialog>
-        <output data-demo-state="command-input">{state.inputValue || 'empty'}</output>
-        <output data-demo-state="command-key-canceled">{state.lastKeyAction}</output>
-        <output data-demo-state="command-value">
+        {/* Debug-state probes: kept for the gallery tests (textContent reads) but
+            visually hidden so they don't leak as stray body text. */}
+        <output
+          data-demo-state="command-input"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.inputValue || 'empty'}
+        </output>
+        <output
+          data-demo-state="command-key-canceled"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.lastKeyAction}
+        </output>
+        <output
+          data-demo-state="command-value"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
           {state.value === 'invite' ? 'Invite teammate' : 'Open dashboard'}
         </output>
       </Command>

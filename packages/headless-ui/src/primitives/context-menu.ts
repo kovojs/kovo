@@ -120,7 +120,17 @@ export interface ContextMenuTypeaheadResult extends ContextMenuMoveResult {
 export type ContextMenuPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
-export type ContextMenuTriggerEvent = Event & Readonly<{ clientX?: number; clientY?: number }>;
+export type ContextMenuTriggerEvent = Event &
+  Readonly<{
+    clientX?: number;
+    clientY?: number;
+    // SPEC.md §4.4/§4.6: the inline loader sets this when it has already canceled
+    // the native context menu synchronously (a chained handler runs after the
+    // awaited import — too late to suppress the native menu). It lets this handler
+    // tell that framework native-suppression apart from a genuine author
+    // preventDefault, so it still opens the styled menu instead of bailing.
+    kovoNativeDefaultManaged?: boolean;
+  }>;
 export type ContextMenuItemEvent = Event;
 export type ContextMenuKeyboardEvent = Event & {
   readonly key: string;
@@ -404,7 +414,11 @@ export function contextMenuTriggerContextMenu(
   state: ContextMenuState,
   options: ContextMenuChangeOptions = {},
 ): ContextMenuOpenChangeResult | undefined {
-  if (event.defaultPrevented) return;
+  // Bail only when an author (or prior chained handler) prevented the default —
+  // NOT when the inline loader has already canceled the native menu for us
+  // (SPEC.md §4.4): that synchronous suppression sets kovoNativeDefaultManaged, and
+  // this handler must still run to open the styled menu.
+  if (event.defaultPrevented && event.kovoNativeDefaultManaged !== true) return;
 
   const result = setContextMenuOpen(
     state,

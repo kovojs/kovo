@@ -104,7 +104,7 @@ export const sliderStyles = style.create({
     color: uiTheme.color.foreground,
     display: 'flex',
     fontSize: 14,
-    minHeight: 20,
+    minHeight: 24,
     position: 'relative',
     touchAction: 'none',
     width: '100%',
@@ -131,21 +131,36 @@ export const sliderStyles = style.create({
     boxShadow: '0 1px 2px rgb(0 0 0 / 0.2)',
     boxSizing: 'border-box',
     display: 'block',
-    height: 16,
-    marginLeft: -8,
+    height: 18,
+    marginLeft: -9,
     pointerEvents: 'none',
     position: 'absolute',
     top: '50%',
     transform: 'translateY(-50%)',
-    width: 16,
+    transitionProperty: 'box-shadow',
+    transitionDuration: '120ms',
+    width: 18,
     zIndex: 3,
+    // The thumb is keyboard-focusable (role=slider, tabIndex 0, onKeyDown), so a
+    // 4px translucent primary ring on focus gives the visible focus feedback the
+    // opacity-0 native-range overlay can't. The demo toggles data-dragging during
+    // pointer drag for the same ring (shadcn rings on hover+focus).
+    ':focus-visible': {
+      boxShadow:
+        '0 1px 2px rgb(0 0 0 / 0.2), 0 0 0 4px color-mix(in srgb, var(--kovo-theme-sys-color-primary) 40%, transparent)',
+      outlineStyle: 'none',
+    },
+    '[data-dragging]': {
+      boxShadow:
+        '0 1px 2px rgb(0 0 0 / 0.2), 0 0 0 4px color-mix(in srgb, var(--kovo-theme-sys-color-primary) 40%, transparent)',
+    },
     '[data-disabled]': {
       opacity: 0.5,
     },
     '[data-orientation=vertical]': {
       left: '50%',
       marginLeft: 0,
-      marginTop: -8,
+      marginTop: -9,
       top: 'auto',
       transform: 'translateX(-50%)',
     },

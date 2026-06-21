@@ -68,7 +68,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onKeyDown={() => {
               const result = _otpFieldKeyDown(Object(event), {
@@ -78,7 +90,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onPaste={() => {
               const result = _otpFieldPaste(Object(event), {
@@ -88,7 +112,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
           />
           <OtpFieldInput
@@ -108,7 +144,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onKeyDown={() => {
               const result = _otpFieldKeyDown(Object(event), {
@@ -118,7 +166,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onPaste={() => {
               const result = _otpFieldPaste(Object(event), {
@@ -128,7 +188,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
           />
           <OtpFieldInput
@@ -148,7 +220,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onKeyDown={() => {
               const result = _otpFieldKeyDown(Object(event), {
@@ -158,7 +242,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onPaste={() => {
               const result = _otpFieldPaste(Object(event), {
@@ -168,7 +264,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
           />
           <OtpFieldInput
@@ -188,7 +296,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onKeyDown={() => {
               const result = _otpFieldKeyDown(Object(event), {
@@ -198,7 +318,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
             onPaste={() => {
               const result = _otpFieldPaste(Object(event), {
@@ -208,7 +340,19 @@ export const GalleryOtpFieldDemo = component({
               });
               if (!result) return;
               if ('value' in result && typeof result.value === 'string') state.value = result.value;
-              if (typeof result.focusIndex === 'number') state.activeSlot = result.focusIndex;
+              if (typeof result.focusIndex === 'number') {
+                state.activeSlot = result.focusIndex;
+                // Roving focus: setting activeSlot only flips tabIndex; the next
+                // slot must be imperatively focused or typing/Backspace can't move
+                // across slots. Mirrors the accordion-demo focus idiom.
+                const root = Object(event)['target']?.closest?.(
+                  '[data-gallery-interactive="otp-field"]',
+                );
+                const next = Object(root)?.querySelector?.(
+                  `#gallery-interactive-otp-slot-${result.focusIndex}`,
+                );
+                Object(next)['focus']?.call(next);
+              }
             }}
           />
         </OtpFieldGroup>
