@@ -1,6 +1,4 @@
-import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import { dedupeBy } from '../shared.js';
 import type { CompileComponentOptions } from '../types.js';
@@ -12,7 +10,7 @@ interface LiteralNavigationTarget {
 }
 
 export function validateLiteralHrefs(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
   options: CompileComponentOptions,
 ): CompilerDiagnostic[] {
@@ -24,10 +22,9 @@ export function validateLiteralHrefs(
     return !routes.some((routePath) => routePathMatchesUrl(routePath, target.value));
   });
 
-  return dedupeBy(missing, (target) => target.value).map((target) => ({
-    ...diagnosticFor(options.fileName, 'KV220', source, target.index, target.length),
-    message: `${diagnosticDefinitions.KV220.message} ${target.value}`,
-  }));
+  return dedupeBy(missing, (target) => target.value).map((target) =>
+    diagnostics.at('KV220', { start: target.index, length: target.length }, target.value),
+  );
 }
 
 function literalNavigationTargets(model: ComponentModuleModel): LiteralNavigationTarget[] {

@@ -1,4 +1,4 @@
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes } from '../analyze/query-shapes.js';
 import {
   callExpressions,
@@ -14,25 +14,27 @@ import type { CompileComponentOptions, QueryShape } from '../types.js';
 import { isQueryShapeObject, isQueryShapeWrapper, unwrapQueryShape } from '../types.js';
 
 export function validateUntrackedClockReadsInDerives(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const call of callExpressions(model)) {
     if (call.name !== 'derive' || !call.exportedConstName) continue;
 
     const reads = call.argumentTemporalReads[1] ?? [];
     for (const read of reads) {
-      diagnostics.push({
-        ...diagnosticFor(fileName, 'KV315', source, read.start, read.end - read.start),
-        message: `${diagnosticFor(fileName, 'KV315').message} ${read.kind} in ${call.exportedConstName}`,
-      });
+      found.push(
+        diagnostics.at(
+          'KV315',
+          { start: read.start, length: read.end - read.start },
+          `${read.kind} in ${call.exportedConstName}`,
+        ),
+      );
     }
   }
 
-  return diagnostics;
+  return found;
 }
 
 interface ClockRead {
@@ -43,9 +45,8 @@ interface ClockRead {
 }
 
 export function validateDeclaredClockReadsInRender(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
   options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> = {},
 ): CompilerDiagnostic[] {
   const declaredClocks = new Set(componentOptionObjectKeys(model, 'clocks'));
@@ -53,24 +54,30 @@ export function validateDeclaredClockReadsInRender(
   const renderOnceSpans = callExpressions(model)
     .filter((call) => call.name === 'renderOnce')
     .map((call) => ({ end: call.end, start: call.start }));
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const read of renderedClockReads(model)) {
     if (renderOnceSpans.some((span) => read.start >= span.start && read.end <= span.end)) continue;
     if (declaredClocks.has(read.clock)) {
       if (clockSpecIsTickDriven(clockSpecs, read.clock)) continue;
 
-      diagnostics.push({
-        ...diagnosticFor(fileName, 'KV312', source, read.start, read.end - read.start),
-        message: `${diagnosticFor(fileName, 'KV312').message} now.${read.clock} unsupported cadence`,
-      });
+      found.push(
+        diagnostics.at(
+          'KV312',
+          { start: read.start, length: read.end - read.start },
+          `now.${read.clock} unsupported cadence`,
+        ),
+      );
       continue;
     }
 
-    diagnostics.push({
-      ...diagnosticFor(fileName, 'KV312', source, read.start, read.end - read.start),
-      message: `${diagnosticFor(fileName, 'KV312').message} now.${read.clock}`,
-    });
+    found.push(
+      diagnostics.at(
+        'KV312',
+        { start: read.start, length: read.end - read.start },
+        `now.${read.clock}`,
+      ),
+    );
   }
 
   const refreshedQueries = refreshedComponentQueryNames(model);
@@ -78,13 +85,12 @@ export function validateDeclaredClockReadsInRender(
     if (refreshedQueries.has(read.query)) continue;
     if (renderOnceSpans.some((span) => read.start >= span.start && read.end <= span.end)) continue;
 
-    diagnostics.push({
-      ...diagnosticFor(fileName, 'KV312', source, read.start, read.end - read.start),
-      message: `${diagnosticFor(fileName, 'KV312').message} ${read.path}`,
-    });
+    found.push(
+      diagnostics.at('KV312', { start: read.start, length: read.end - read.start }, read.path),
+    );
   }
 
-  return diagnostics;
+  return found;
 }
 
 function clockSpecIsTickDriven(clockSpecs: unknown, clockName: string): boolean {

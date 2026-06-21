@@ -1,6 +1,6 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
-import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
+import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { isUrlAttribute, type GeneratedOutputWriteFact } from '../output-context-facts.js';
 import {
   jsxElements,
@@ -9,7 +9,6 @@ import {
   type JsxElementModel,
   type SourceSpan,
 } from '../scan/parse.js';
-import type { CompileComponentOptions } from '../types.js';
 export type { OutputContext } from '../output-context-facts.js';
 
 export const runtimeOutputHelpers = {
@@ -26,22 +25,19 @@ export function templateStampHtmlEscapeExpression(valueExpression: string): stri
 }
 
 export function validateOutputContexts(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  options: CompileComponentOptions,
   compilerOwnedStyleSpans: readonly SourceSpan[] = [],
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const element of jsxElements(model)) {
-    diagnostics.push(
-      ...validateElementAttributes(source, element, options.fileName, compilerOwnedStyleSpans),
-    );
+    found.push(...validateElementAttributes(diagnostics, element, compilerOwnedStyleSpans));
   }
 
-  diagnostics.push(...validateComponentCssText(source, model, options.fileName));
+  found.push(...validateComponentCssText(diagnostics, model));
 
-  return diagnostics;
+  return found;
 }
 
 export function collectTrustedHtmlOutputContextFacts(
@@ -69,80 +65,68 @@ export function collectTrustedHtmlOutputContextFacts(
 }
 
 function validateElementAttributes(
-  source: string,
+  diagnostics: DiagnosticFactory,
   element: JsxElementModel,
-  fileName: string,
   compilerOwnedStyleSpans: readonly SourceSpan[],
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
   const hasExternalEscape = element.attributes.some((attribute) => attribute.name === 'external');
 
   for (const attribute of element.attributes) {
     if (isUrlAttribute(attribute.name)) {
-      diagnostics.push(...validateUrlAttribute(source, attribute, hasExternalEscape, fileName));
+      found.push(...validateUrlAttribute(diagnostics, attribute, hasExternalEscape));
       continue;
     }
 
     if (attribute.name === 'style') {
       if (spanContainsAttribute(compilerOwnedStyleSpans, attribute)) continue;
-      diagnostics.push(...validateStyleAttribute(source, attribute, fileName));
+      found.push(...validateStyleAttribute(diagnostics, attribute));
       continue;
     }
 
     if (attribute.name === 'data-bind:style') {
-      diagnostics.push(
-        outputContextDiagnostic({
-          detail: 'dynamic style attribute binding',
-          fileName,
-          length: attribute.end - attribute.start,
-          source,
+      found.push(
+        outputContextDiagnostic(diagnostics, 'dynamic style attribute binding', {
           start: attribute.start,
+          length: attribute.end - attribute.start,
         }),
       );
       continue;
     }
 
     if (attribute.name === 'data-derive-attr' && attribute.value === 'style') {
-      diagnostics.push(
-        outputContextDiagnostic({
-          detail: 'arbitrary dynamic CSS text',
-          fileName,
-          length: attribute.end - attribute.start,
-          source,
+      found.push(
+        outputContextDiagnostic(diagnostics, 'arbitrary dynamic CSS text', {
           start: attribute.start,
+          length: attribute.end - attribute.start,
         }),
       );
       continue;
     }
 
     if (isRawHtmlAttribute(attribute.name)) {
-      diagnostics.push(...validateRawHtmlAttribute(source, attribute, fileName));
+      found.push(...validateRawHtmlAttribute(diagnostics, attribute));
       continue;
     }
 
     // KV236: dynamic event-handler attributes (data-bind:on* or data-derive-attr on*)
     if (isDynamicEventHandlerAttribute(attribute)) {
-      diagnostics.push(
-        outputContextDiagnostic({
-          detail: `${attribute.name} is a dynamic event-handler sink (on* attribute)`,
-          fileName,
-          length: attribute.end - attribute.start,
-          source,
-          start: attribute.start,
-        }),
+      found.push(
+        outputContextDiagnostic(
+          diagnostics,
+          `${attribute.name} is a dynamic event-handler sink (on* attribute)`,
+          { start: attribute.start, length: attribute.end - attribute.start },
+        ),
       );
       continue;
     }
 
     // KV236: dynamic srcdoc attribute (data-bind:srcdoc or data-derive-attr srcdoc)
     if (isDynamicSrcdocAttribute(attribute)) {
-      diagnostics.push(
-        outputContextDiagnostic({
-          detail: `${attribute.name} is a dynamic srcdoc sink`,
-          fileName,
-          length: attribute.end - attribute.start,
-          source,
+      found.push(
+        outputContextDiagnostic(diagnostics, `${attribute.name} is a dynamic srcdoc sink`, {
           start: attribute.start,
+          length: attribute.end - attribute.start,
         }),
       );
       continue;
@@ -150,20 +134,17 @@ function validateElementAttributes(
 
     // KV236: dynamic formaction attribute (data-bind:formaction or data-derive-attr formaction)
     if (isDynamicFormactionAttribute(attribute)) {
-      diagnostics.push(
-        outputContextDiagnostic({
-          detail: `${attribute.name} is a dynamic formaction sink`,
-          fileName,
-          length: attribute.end - attribute.start,
-          source,
+      found.push(
+        outputContextDiagnostic(diagnostics, `${attribute.name} is a dynamic formaction sink`, {
           start: attribute.start,
+          length: attribute.end - attribute.start,
         }),
       );
       continue;
     }
   }
 
-  return diagnostics;
+  return found;
 }
 
 function spanContainsAttribute(
@@ -174,35 +155,30 @@ function spanContainsAttribute(
 }
 
 function validateUrlAttribute(
-  source: string,
+  diagnostics: DiagnosticFactory,
   attribute: JsxAttributeModel,
   hasExternalEscape: boolean,
-  fileName: string,
 ): CompilerDiagnostic[] {
   const value = literalAttributeStringValue(attribute);
   if (value === null) return [];
 
   if (hasUnsafeUrlScheme(value)) {
     return [
-      outputContextDiagnostic({
-        detail: `${attribute.name}=${JSON.stringify(value)} uses an unsafe URL scheme`,
-        fileName,
-        length: attribute.end - attribute.start,
-        source,
-        start: attribute.start,
-      }),
+      outputContextDiagnostic(
+        diagnostics,
+        `${attribute.name}=${JSON.stringify(value)} uses an unsafe URL scheme`,
+        { start: attribute.start, length: attribute.end - attribute.start },
+      ),
     ];
   }
 
   if (isExternalHttpUrl(value) && !hasExternalEscape) {
     return [
-      outputContextDiagnostic({
-        detail: `${attribute.name}=${JSON.stringify(value)} is an external literal URL without external`,
-        fileName,
-        length: attribute.end - attribute.start,
-        source,
-        start: attribute.start,
-      }),
+      outputContextDiagnostic(
+        diagnostics,
+        `${attribute.name}=${JSON.stringify(value)} is an external literal URL without external`,
+        { start: attribute.start, length: attribute.end - attribute.start },
+      ),
     ];
   }
 
@@ -210,83 +186,65 @@ function validateUrlAttribute(
 }
 
 function validateStyleAttribute(
-  source: string,
+  diagnostics: DiagnosticFactory,
   attribute: JsxAttributeModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  if (attribute.expression === undefined) return validateStaticCssText(source, attribute, fileName);
+  if (attribute.expression === undefined) return validateStaticCssText(diagnostics, attribute);
   if (attribute.expressionObjectEntries) return [];
 
   return [
-    outputContextDiagnostic({
-      detail: 'dynamic style text',
-      fileName,
-      length: attribute.end - attribute.start,
-      source,
+    outputContextDiagnostic(diagnostics, 'dynamic style text', {
       start: attribute.start,
+      length: attribute.end - attribute.start,
     }),
   ];
 }
 
 function validateStaticCssText(
-  source: string,
+  diagnostics: DiagnosticFactory,
   attribute: JsxAttributeModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   if (!attribute.value || !cssTextHasUnsafeUrl(attribute.value)) return [];
 
   return [
-    outputContextDiagnostic({
-      detail: 'style attribute contains an unsafe CSS url()',
-      fileName,
-      length: attribute.end - attribute.start,
-      source,
+    outputContextDiagnostic(diagnostics, 'style attribute contains an unsafe CSS url()', {
       start: attribute.start,
+      length: attribute.end - attribute.start,
     }),
   ];
 }
 
 function validateRawHtmlAttribute(
-  source: string,
+  diagnostics: DiagnosticFactory,
   attribute: JsxAttributeModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
   if (literalAttributeStringValue(attribute) === null) return [];
 
   return [
-    outputContextDiagnostic({
-      detail: `${attribute.name} receives a plain string; use Kovo TrustedHtml`,
-      fileName,
-      length: attribute.end - attribute.start,
-      source,
-      start: attribute.start,
-    }),
+    outputContextDiagnostic(
+      diagnostics,
+      `${attribute.name} receives a plain string; use Kovo TrustedHtml`,
+      { start: attribute.start, length: attribute.end - attribute.start },
+    ),
   ];
 }
 
 function validateComponentCssText(
-  source: string,
+  diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
-  fileName: string,
 ): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
+  const found: CompilerDiagnostic[] = [];
 
   for (const component of model.components) {
     for (const option of component.options) {
       if (option.key !== 'css' && option.key !== 'styles') continue;
       if (!option.staticTemplateValue || !cssTextHasUnsafeUrl(option.staticTemplateValue)) continue;
 
-      diagnostics.push(
-        outputContextDiagnostic({
-          detail: `${option.key} contains an unsafe CSS url()`,
-          fileName,
-          source,
-        }),
-      );
+      found.push(outputContextDiagnostic(diagnostics, `${option.key} contains an unsafe CSS url()`));
     }
   }
 
-  return diagnostics;
+  return found;
 }
 
 function literalAttributeStringValue(attribute: JsxAttributeModel): string | null {
@@ -401,22 +359,13 @@ function cssUrlValues(cssText: string): string[] {
   return values;
 }
 
-function outputContextDiagnostic({
-  detail,
-  fileName,
-  length,
-  source,
-  start,
-}: {
-  detail: string;
-  fileName: string;
-  length?: number;
-  source: string;
-  start?: number;
-}): CompilerDiagnostic {
+function outputContextDiagnostic(
+  diagnostics: DiagnosticFactory,
+  detail: string,
+  span?: { start?: number | undefined; length?: number | undefined },
+): CompilerDiagnostic {
   return {
-    ...diagnosticFor(fileName, 'KV236', source, start, length),
+    ...diagnostics.at('KV236', span, detail),
     help: diagnosticDefinitions.KV236.help,
-    message: `${diagnosticDefinitions.KV236.message} ${detail}`,
   };
 }
