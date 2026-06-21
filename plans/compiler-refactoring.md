@@ -9,24 +9,22 @@ rules unless it is an explicit Part-2 capability that adds new accepted/emitted 
 Mark an item `[x]` only after the same session proves it against the gates named under "Neutrality
 gates". File:line citations were spot-checked via grep (see "Verification provenance").
 
-**Implementation status (2026-06-20)** — **done & merged to `main`**: Part 1 — **FN1, FN2, FN3, FN4, FN6,
-FN8, FN9, FN10, FN12, FN13, FN14** (11 of 14); Part 2 — **CAP6, CAP9** (the two substrate-enabled gates).
-**Done on branch (pending integration):** **FN11** (`emitDerive` chokepoint).
+**Implementation status (2026-06-21)** — **done & merged to `main`**: Part 1 — **FN1–FN6, FN8–FN14** (FN5,
+FN11, and FN7 Step 1 added this round); Part 2 — **CAP6, CAP9**. All of Part 1 is now landed except FN7 Step 2.
 Each verified by tsc + the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts
-moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10 were implemented by parallel sub-agents
+moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10/FN11 were implemented by parallel sub-agents
 in isolated worktrees and integrated here.
 
 **Open / deferred (genuinely multi-session; the substrate above unblocks them):**
-- **FN5** — keystone pass-registry: the `ResultBuilder` half is a clean follow-up; the declarative `Pass`
-  registry is large and carries the YAGNI caveat noted on the item. Not started.
-- **FN7** — routing the 11 `createSourceFile` reparses through `scan/` (incl. cleaning `app-graph.ts` so it can
-  move under the guarded `analyze/` zone): the plan's single largest neutral refactor; each site must reproduce
-  fact bytes exactly. Not started.
+- **FN7 Step 2** — migrate each allowlisted `createSourceFile` site's fact extraction into `scan/parse.ts`
+  byte-exact (the 5 StyleX parses, route grammar, app-graph query-refresh, etc.), then widen
+  `isPostParseGuardedFile` to those files. Step 1 (the enforcing allowlist guard) is done; this cleanup half is
+  the plan's single largest neutral refactor and needs fact-level golden tests per site.
 - **Part 2 features** — **CAP1** (optimism IR unification + typed deriver channel), **CAP2** (`<kovo-live>` SSE),
-  **CAP3** (lists at scale), **CAP7** (incremental compile, needs FN5), **CAP8** (fact-driven dev — note FN3
-  removed the dead machinery, so this is rebuild-and-wire), **CAP10** (machine-readable diagnostics, builds on
-  FN9). Each is a cross-package feature warranting its own effort; not started here to avoid shipping
-  unverifiable/partial feature code to `main`.
+  **CAP3** (lists at scale), **CAP7** (incremental compile — now unblocked: needs FN5 ✓ + FN7 Step 2),
+  **CAP8** (fact-driven dev — note FN3 removed the dead machinery, so this is rebuild-and-wire), **CAP10**
+  (machine-readable diagnostics, builds on FN9 ✓). Each is a cross-package feature warranting its own effort;
+  not started here to avoid shipping unverifiable/partial feature code to `main`.
 
 ## Thesis
 
@@ -183,7 +181,16 @@ behavior change never hides inside a "neutral" move.
     exposure unchanged, addressed by FN7.)
   - Unlocks: FN5.
 
-- [ ] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** _(keystone)_
+- [x] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** ✅ done _(keystone)_
+  - Done: (a) `compile-result.ts` now owns the canonical per-fact-category merge/dedupe/sort rules
+    (`mergeQueryUpdatePlans`, `dedupeOutputContextFacts`, `mergeStyleUpdateCoverage` + private helpers), moved
+    verbatim out of `compile.ts`. (b) `lowering-pipeline.ts` expresses the lowering stage as a declarative ordered
+    `LOWERING_PASSES` list (style-span-probe → structural-jsx → navigation-standalone-href → reparse → style-extraction
+    → reparse), driven by `runLoweringPipeline`, encoding today's exact order + the two reparse boundaries; passes are
+    now enumerable so a later capability pass can be slotted at a declared position. `compile.ts` calls the pipeline and
+    consumes the typed result (its now-unused imports dropped). Updated the structural-boundary guard for the moved
+    `navigationStandaloneHrefLowering` call. Verified byte-neutral by the golden corpus + conformance +
+    render-equivalence + fact-hash (hmr-impact) oracles + full compiler suite (582 pass) + api-surface — NOT fixpoint.
   - Problem: `compileComponentModule` is a ~250-line straight-line function in which both the pass _sequence_
     (structural+href lower → reparse → style → reparse → analyze → server-render → terminal emit) and the result
     _assembly_ (53-line literal inlining `mergeQueryUpdatePlans` / `mergeStyleUpdateCoverage` /
@@ -229,7 +236,18 @@ behavior change never hides inside a "neutral" move.
     `render-equivalence-boundary`, `stamps`, `registry`, `server-emit-security`, `diagnostic-coverage-matrix`.
   - Unlocks: CAP6.
 
-- [ ] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.**
+- [ ] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.** ⏳ Step 1 done
+  - Step 1 done (enforce the boundary): `source-reparse-boundary.test.ts` enumerates every `ts.createSourceFile`
+    site in `compiler/src` outside `scan/` and pins them to a documented allowlist — a NEW reparse now fails loudly
+    and the existing 8 sites (app-graph, mutation-inputs, optimistic-inline, route-pages, style.ts ×5, and the emit/
+    gate/dead-import/live-target sites) are documented as the Step-2 worklist. This widens rule-9 to cover the
+    *structural* reparse form the conformance guard misses, across the whole compiler (not just the 4 zones).
+    Test-config only; zero behavior change.
+  - Step 2 remaining (the larger half): migrate each allowlisted site's fact extraction into `scan/parse.ts`
+    byte-exact (incl. the 5 StyleX parses + app-graph's query-refresh parse — which would also let `app-graph.ts`
+    move under the guarded `analyze/` zone, completing FN14's intent), then widen `isPostParseGuardedFile` to those
+    files. Each needs fact-level golden tests; this is the plan's single largest neutral refactor and is left for a
+    dedicated pass.
   - Problem: 11 production sites re-run `ts.createSourceFile` (plus `getText` re-reads) outside `scan/parse.ts`.
     The mechanical rule-9 guard only scans `lower|validate|analyze|emit` (+`graph.ts`), so the package-root files
     where source re-reads actually live are never inspected — exactly the gap (e.g. `internal-graph.ts` reparses a
