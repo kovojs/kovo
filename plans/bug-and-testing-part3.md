@@ -68,12 +68,13 @@ Lane → status (every box below is checked except the two noted):
 - **Lane B (build cache):** B1 (package.json+dist build id), B2 (aliased bootstrap imports + merge), B3
   (blob refcount), contested L8-2 (sha256 cache key) — done.
 - **Lanes C/D/E/F/G/H/J/K/L:** all confirmed + promoted items done (see per-lane boxes).
-- **Better-auth integration note:** I1/I3/L13-3 done. The I2 seam (`SessionProvider` → `{ value,
-setCookies }`, `onSessionSetCookie` sink, refresh-cookie capture) is implemented + unit-tested AND made
-  **backward-compatible** (the adapter detects the legacy bare-payload `getSession` shape used by the example
-  apps, so commerce/reference no longer regress). **I2 end-to-end is NOT fully wired** — the GET document
-  response header channel is `Record<string,string>` and cannot carry a `Set-Cookie` array, so refresh
-  cookies are captured at the lifecycle sink but not yet emitted on the page response. Left open; see Deferred.
+- **Better-auth integration note:** I1/I2/I3/L13-3 done. **I2 is now wired end-to-end** (follow-up commit on
+  `agent/i2-rolling-sessions`): the GET document response header channel was widened from
+  `Record<string,string>` to `ResponseHeaders` (array-capable, matching the mutation channel), and
+  `renderAppRouteDocumentResponse` passes an `onSessionSetCookie` sink that re-emits the provider's refresh
+  `Set-Cookie` headers onto every document outcome (success / 404 / 500). The `SessionProvider` → `{ value,
+setCookies }` envelope + `resolveLifecycleRequest` forwarding + backward-compatible bare-payload shape
+  detection remain. Proven by `app-document.test.ts` "rolling-session refresh cookies on GET documents".
 - **Deferred-stream ordering:** L2-deferred-1 (NaN floor), L2-deferred-2 (author-order fragments within a
   chunk), L2-deferred-4 (register collision parity) — done. **L2-deferred-3 (contested, low) NOT undertaken**
   — implementing it as global query hoisting changed the canonical wire byte layout (`fixtures/wire/defer-stream.http`),
@@ -82,10 +83,6 @@ setCookies }`, `onSessionSetCookie` sink, refresh-cookie capture) is implemented
 
 **Deferred (documented, not silently dropped):**
 
-- **I2 end-to-end** — wiring `onSessionSetCookie` into the GET document/route response requires reworking the
-  document response header channel to carry a `Set-Cookie` array (a larger change to `RoutePageResponse` /
-  `document-core` than this slice). The seam + backward-compat ship; rolling-session refresh emission is the
-  remaining step.
 - **L2-deferred-3** — contested-low; global query hoisting would re-bake the canonical deferred wire format
   for a cross-chunk producer/consumer split that does not occur under the enforced co-location invariant.
 
@@ -339,7 +336,7 @@ This lane decides whether the framework's two headline guarantees actually hold:
   - **Test:** `index.credential-mutations.test.ts` — sign-in returns `…; SameSite=None; Partitioned` → emitted `Set-Cookie` contains `; Partitioned`.
   - **Verified:** both verifiers traced the drop site and confirmed installed better-auth@1.6.17 emits `Partitioned`.
 
-- [ ] **I2 (high, promoted) — `betterAuthSession` drops Better Auth's session-refresh / cookie-cache `Set-Cookie` headers, so rolling sessions never extend** `impl-bug` (L13-1) — _seam done + backward-compatible + unit-tested; end-to-end GET-response cookie emission DEFERRED (the document header channel cannot carry a Set-Cookie array — see Execution status)._
+- [x] **I2 (high, promoted) — `betterAuthSession` drops Better Auth's session-refresh / cookie-cache `Set-Cookie` headers, so rolling sessions never extend** `impl-bug` (L13-1) — _done end-to-end: `SessionProvider` `{ value, setCookies }` envelope → `resolveLifecycleRequest` `onSessionSetCookie` sink → `renderAppRouteDocumentResponse` re-emits refresh `Set-Cookie` on the document response (header channel widened to `ResponseHeaders`). Test: `app-document.test.ts` "rolling-session refresh cookies on GET documents"._
   - **Where:** `better-auth/src/session.ts:40-46` (`auth.api.getSession({ headers })` without `asResponse:true`; returns only `{session,user}`); `SessionProvider` returns only `SessionValue`, no cookie channel (`server/src/guards.ts:115-117`). Better Auth emits fresh `Set-Cookie` on `updateAge` and `cookieCache` (`dist/api/routes/session.mjs:233-305`).
   - **Defect:** with default rolling sessions (`expiresIn=7d, updateAge=1d`) and/or `cookieCache.enabled`, every authenticated GET calls `betterAuthSession` which reads only the payload and never the response headers Better Auth wrote. Result: (1) rolling expiry never reaches the browser → a continuously-active user is hard-logged-out at the original 7d boundary (silent session-loss regression vs raw Better Auth); (2) the cookie cache never populates.
   - **Fix:** call `getSession` with `asResponse:true`, then `forwardBetterAuthSetCookie(response.headers, context)` against a per-GET cookie sink the framework provides to `sessionProvider` (requires extending the `SessionProvider` contract); or document the limitation and require disabling rolling/cookie-cache with this adapter.

@@ -651,7 +651,7 @@ function previousHmrBuildToken(endpointUrl: URL, request: IncomingMessage): stri
 function injectKovoHmrScriptIntoRouteResponse(response: RoutePageResponse): RoutePageResponse {
   if (
     typeof response.body !== 'string' ||
-    !shouldInjectKovoHmrScript(response.status, response.headers['Content-Type'], response.body)
+    !shouldInjectKovoHmrScript(response.status, readHeader(response.headers, 'Content-Type'), response.body)
   ) {
     return response;
   }

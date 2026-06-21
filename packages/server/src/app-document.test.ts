@@ -478,3 +478,62 @@ describe('server app document boundary', () => {
     expect(forbiddenResponse.body).not.toContain('data-app-shell');
   });
 });
+
+// ─── part-3 I2: rolling-session refresh cookies on GET documents ──────────────
+
+describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
+  it('forwards a session provider\'s refresh Set-Cookie headers onto the document response', async () => {
+    // SPEC §6.5 / §9.1.1:854: a rolling/refresh session provider (e.g. Better Auth
+    // updateAge/cookieCache) emits fresh Set-Cookie headers on each authenticated GET via the
+    // `{ value, setCookies }` provider envelope. The framework MUST re-emit them on the page
+    // response so a continuously-active user's session actually extends. Before this fix the
+    // GET document path never passed `onSessionSetCookie`, so the refresh cookies were dropped
+    // and the session was silently hard-logged-out at the original boundary.
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider: () => ({
+        setCookies: [
+          'session_token=rolled; Path=/; HttpOnly; SameSite=Lax',
+          'session_data=cache; Path=/; HttpOnly',
+        ],
+        value: { user: { id: 'u1' } },
+      }),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    // Both refresh cookies are emitted as a Set-Cookie header array (webResponseHeaders
+    // appends each as a separate Set-Cookie on the wire).
+    expect(response.headers['Set-Cookie']).toEqual([
+      'session_token=rolled; Path=/; HttpOnly; SameSite=Lax',
+      'session_data=cache; Path=/; HttpOnly',
+    ]);
+  });
+
+  it('emits no Set-Cookie when the session provider returns a plain value (no refresh)', async () => {
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider: () => ({ user: { id: 'u1' } }),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['Set-Cookie']).toBeUndefined();
+  });
+});

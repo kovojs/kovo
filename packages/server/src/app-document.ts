@@ -1,7 +1,11 @@
 import { reportServerError } from './diagnostics.js';
 import { renderErrorDocument, renderRouteDocumentResponse } from './document-core.js';
 import type { PageHintOptions } from './hints.js';
-import { routeResponseToDocumentResponse, type RoutePageResponse } from './response.js';
+import {
+  appendResponseHeader,
+  routeResponseToDocumentResponse,
+  type RoutePageResponse,
+} from './response.js';
 import {
   renderRoutePageResponse,
   routeHasBoundary,
@@ -35,6 +39,12 @@ export async function renderAppRouteDocumentResponse({
     params,
     search,
   };
+  // part-3 I2 (SPEC §6.5, §9.1.1:854): a rolling/refresh session provider (e.g. Better Auth
+  // `updateAge`/`cookieCache`) emits fresh `Set-Cookie` headers on each authenticated GET via the
+  // `{ value, setCookies }` provider envelope. The route lifecycle forwards them to this sink; we
+  // re-emit them on the document response so a continuously-active user's session actually extends
+  // instead of being hard-logged-out at the original boundary.
+  const refreshSetCookies: string[] = [];
   const routeResponse = await renderRoutePageResponse(
     route,
     routeInput,
@@ -56,18 +66,24 @@ export async function renderAppRouteDocumentResponse({
         : { mutationFailure: jsxContext.mutationFailure }),
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
+      onSessionSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
       renderForbidden: async () =>
         appErrorDocumentResponseBody(await renderAppErrorDocumentResponse(app, request, 403)),
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
     },
   );
 
+  const withRefreshCookies = (response: RoutePageResponse): RoutePageResponse => {
+    for (const cookie of refreshSetCookies) appendResponseHeader(response.headers, 'Set-Cookie', cookie);
+    return response;
+  };
+
   if (routeResponse.status === 404 && !routeHasBoundary(route, 'notFound')) {
-    return renderAppErrorDocumentResponse(app, request, 404);
+    return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 404));
   }
 
   if (routeResponse.status === 500 && !routeHasBoundary(route, 'error')) {
-    return renderAppErrorDocumentResponse(app, request, 500);
+    return withRefreshCookies(await renderAppErrorDocumentResponse(app, request, 500));
   }
 
   // Stamp the build-global render-plan version token so the client can detect
@@ -81,20 +97,22 @@ export async function renderAppRouteDocumentResponse({
   // sessionProvider here (it already ran once for the guarded route).
   const sessionFingerprint = sessionFingerprintFromRequest(request);
 
-  return renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
-    // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
-    // always non-empty so the carve-out is no longer needed (DEPLOY-3).
-    buildToken,
-    hints: mergeAppRouteHints(app, route),
-    ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
-    ...(app.document.template === undefined ? {} : { template: app.document.template }),
-    // bugs-1 F34: a guarded route renders session-dependent content; mark its
-    // document no-store so a Back/bfcache restore can't show it after logout.
-    ...(route.guard === undefined ? {} : { noStore: true }),
-    // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
-    // cross-principal BroadcastChannel discard (SPEC §9.3).
-    ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
-  });
+  return withRefreshCookies(
+    renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
+      // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
+      // always non-empty so the carve-out is no longer needed (DEPLOY-3).
+      buildToken,
+      hints: mergeAppRouteHints(app, route),
+      ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+      ...(app.document.template === undefined ? {} : { template: app.document.template }),
+      // bugs-1 F34: a guarded route renders session-dependent content; mark its
+      // document no-store so a Back/bfcache restore can't show it after logout.
+      ...(route.guard === undefined ? {} : { noStore: true }),
+      // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
+      // cross-principal BroadcastChannel discard (SPEC §9.3).
+      ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
+    }),
+  );
 }
 
 /**

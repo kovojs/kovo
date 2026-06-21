@@ -13,7 +13,12 @@ import {
   type PageHints,
   type RouteMetaSource,
 } from './hints.js';
-import { readHeader, type DocumentRouteResponseBase, type ServerResponseBase } from './response.js';
+import {
+  readHeader,
+  type DocumentRouteResponseBase,
+  type ResponseHeaders,
+  type ServerResponseBase,
+} from './response.js';
 import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
 /**
@@ -126,7 +131,7 @@ export interface DocumentRenderResult {
 /** @internal */
 export interface DeferredDocumentRenderResult extends ServerResponseBase<
   string,
-  Record<string, string>,
+  ResponseHeaders,
   200
 > {
   csp: CspInlineMetadata;
@@ -452,10 +457,10 @@ function withoutStaticTitleMeta(metas: readonly RouteMetaSource[]): readonly Rou
 }
 
 function mergeDocumentHeaders(
-  headers: Record<string, string>,
+  headers: ResponseHeaders,
   earlyHints: PageHints['earlyHints'],
-): Record<string, string> {
-  const merged = { ...headers };
+): ResponseHeaders {
+  const merged: ResponseHeaders = { ...headers };
 
   for (const [name, value] of Object.entries(earlyHints)) {
     const existingName = findHeaderRecordName(merged, name);
@@ -470,7 +475,7 @@ function mergeDocumentHeaders(
   return merged;
 }
 
-function findHeaderRecordName(headers: Record<string, string>, name: string): string | undefined {
+function findHeaderRecordName(headers: ResponseHeaders, name: string): string | undefined {
   const normalized = name.toLowerCase();
   return Object.keys(headers).find((headerName) => headerName.toLowerCase() === normalized);
 }

@@ -59,16 +59,21 @@ export interface RouteStreamOptions extends RouteFileOptions {
   disposition?: 'attachment' | 'inline';
 }
 
-/** A fully rendered route HTTP response (status, headers, body). */
+/**
+ * A fully rendered route HTTP response (status, headers, body). Headers use
+ * {@link ResponseHeaders} so the document path can carry multiple `Set-Cookie`
+ * values (e.g. a rolling-session refresh + cookie-cache cookie, part-3 I2),
+ * matching the mutation response channel.
+ */
 export interface RoutePageResponse extends ServerResponseBase<
   RouteResponseBody,
-  Record<string, string>,
+  ResponseHeaders,
   RouteResponseStatus
 > {}
 
 export interface DocumentRouteResponseBase extends ServerResponseBase<
   DocumentRouteResponseBody,
-  Record<string, string>,
+  ResponseHeaders,
   RouteResponseStatus
 > {}
 
@@ -223,7 +228,7 @@ export function retryAfterHeaders(result: { retryAfter?: number }): Record<strin
 }
 
 export function routeResponseToWebResponse(
-  response: ServerResponseBase<RouteResponseBody, Record<string, string>>,
+  response: ServerResponseBase<RouteResponseBody, ResponseHeaders>,
   request: Pick<Request, 'method'>,
 ): Response {
   return serverResponseToWebResponse(response, request);
