@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import { cspHashAttribute, cspSha256, type CspInlineMetadata } from './csp.js';
 import type { StylesheetAsset } from './hints.js';
 import type { ServerResponseBase } from './response.js';
@@ -58,7 +60,22 @@ export interface DeferredStreamResponse extends ServerResponseBase<
  * @internal
  */
 export function renderDeferredStream(options: DeferredStreamOptions): DeferredStreamResponse {
-  const boundary = options.boundary ?? 'kovo-boundary';
+  const baseBoundary = options.boundary ?? 'kovo-boundary';
+  // L13-1 (bugs-part4): the chunk separator is a multipart-style line `--<boundary>`.
+  // Fragment content that contains a standalone `--<boundary>` line (a newline + the literal)
+  // forges a chunk boundary — the client splits on it mid-content, truncating the first
+  // fragment and dropping the later chunk. Serialize the chunk CONTENT first (queries +
+  // fragments only, never the framework's own markers/apply scripts), then choose a boundary
+  // that never appears as a `--<boundary>` / `--<boundary>--` content line. When nothing
+  // collides we keep `baseBoundary` verbatim so the canonical wire byte layout (the golden
+  // `defer-stream.http` fixture) is unchanged; only a real collision re-rolls to a
+  // high-entropy `<base>-<token>` variant and re-checks.
+  const serializedChunks = sortDeferredChunks(options.chunks).map((chunk) => [
+    ...renderDeferredQueryChunks(chunk.queries ?? []),
+    ...chunk.fragments.map(renderDeferredFragmentChunk),
+  ]);
+  const contentLines = collectContentLines(serializedChunks);
+  const boundary = chooseNonCollidingBoundary(baseBoundary, contentLines);
   // K8 / SPEC: the inline apply and cleanup scripts must reference the configurable
   // boundary, not the hardcoded 'kovo-boundary' literal. Interpolate `--${boundary}`
   // so non-default boundaries work correctly.
@@ -84,13 +101,8 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
   // within-chunk priority sort would reorder same-target append/replace pairs (pagination
   // rows out of order, append-before-cleanup). Preserve author order INSIDE a chunk; only
   // chunk-level priority ordering remains (documented behavior).
-  const chunks = sortDeferredChunks(options.chunks).map((chunk) =>
-    [
-      `--${boundary}`,
-      ...renderDeferredQueryChunks(chunk.queries ?? []),
-      ...chunk.fragments.map(renderDeferredFragmentChunk),
-      deferredChunkApplyScript,
-    ].join('\n'),
+  const chunks = serializedChunks.map((chunkLines) =>
+    [`--${boundary}`, ...chunkLines, deferredChunkApplyScript].join('\n'),
   );
 
   return {
@@ -108,6 +120,51 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
     },
     status: 200,
   };
+}
+
+/**
+ * L13-1 (bugs-part4): split every serialized chunk-content string into its physical lines so
+ * a boundary-collision check sees the exact byte lines the client splits on. The framework's
+ * own boundary markers and apply/cleanup scripts are NOT included here — only attacker-reachable
+ * query/fragment content — so a content line equal to `--<boundary>` is the forged-boundary case.
+ */
+function collectContentLines(serializedChunks: readonly (readonly string[])[]): string[] {
+  const lines: string[] = [];
+  for (const chunkLines of serializedChunks) {
+    for (const content of chunkLines) {
+      for (const line of content.split('\n')) lines.push(line);
+    }
+  }
+  return lines;
+}
+
+/**
+ * L13-1 (bugs-part4): pick a boundary token whose `--<boundary>` / `--<boundary>--` separator
+ * lines never appear verbatim as a content line. Keeps `baseBoundary` when it is collision-free
+ * (preserving the canonical wire byte layout); otherwise re-rolls to a high-entropy
+ * `<base>-<token>` variant and re-checks until it is unique. The token search space (128 bits)
+ * makes a forced collision after the first re-roll vanishingly unlikely, but the loop re-checks
+ * every roll so correctness never depends on that probability.
+ */
+function chooseNonCollidingBoundary(baseBoundary: string, contentLines: readonly string[]): string {
+  if (!boundaryCollides(baseBoundary, contentLines)) return baseBoundary;
+  for (;;) {
+    const candidate = `${baseBoundary}-${randomBoundaryToken()}`;
+    if (!boundaryCollides(candidate, contentLines)) return candidate;
+  }
+}
+
+function boundaryCollides(boundary: string, contentLines: readonly string[]): boolean {
+  const marker = `--${boundary}`;
+  const closeMarker = `--${boundary}--`;
+  return contentLines.some((line) => line === marker || line === closeMarker);
+}
+
+function randomBoundaryToken(): string {
+  // 128 bits of entropy as lowercase hex (HTML/attribute-safe, no characters that could be
+  // mistaken for boundary or markup syntax). `node:crypto` matches the rest of the server
+  // package (csp/csrf) instead of relying on a global `crypto`.
+  return randomBytes(16).toString('hex');
 }
 
 function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {

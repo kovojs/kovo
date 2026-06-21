@@ -279,6 +279,9 @@ describe('decoded mutation response apply', () => {
         controller.enqueue(
           encoder.encode('lo</kovo-text><kovo-query name="chat">{"count":1}</kovo-query>'),
         );
+        // I1 (SPEC §9.1:810): a confirmed stream terminates with <kovo-done> (reason
+        // defaults to "complete"); the server always emits it on a clean completion.
+        controller.enqueue(encoder.encode('<kovo-done></kovo-done>'));
         controller.close();
       },
     });
@@ -305,11 +308,15 @@ describe('decoded mutation response apply', () => {
     expect(applied.streams).toEqual(['assistant:a1']);
   });
 
-  it('marks the stream target failed on a terminal <kovo-done reason="error"> (no silent partial)', async () => {
-    // SPEC §9.1: the modular streaming runtime must honor <kovo-done reason!="complete"> and mark
-    // the partial assistant answer failed — not silently flush it as confirmed (parity with the
-    // inline loader). The stream ends cleanly (HTTP 200, no thrown reader error).
+  it('reverts applied query/fragment truth and signals failure on a non-complete <kovo-done> (I1)', async () => {
+    // I1 (SPEC §9.1:810): a streaming mutation that ends with <kovo-done reason!="complete">
+    // applies query truths + fragment morphs PROGRESSIVELY, but the partial is NOT confirmed.
+    // The runtime must (1) revert the partially-applied query truth (not leave it committed),
+    // (2) mark the stream-text target failed, and (3) signal failure to the caller (throw) so
+    // the form is marked failed and server truth is refetched — never return a success result.
     const store = createQueryStore();
+    // Seed a pre-stream server truth for `chat` so we can prove the revert restores it.
+    store.set('chat', { count: 0 });
     const root = new FakeMorphRoot();
     const onError = vi.fn();
     const streamTarget = new FakeQueryBindingElement(
@@ -328,15 +335,127 @@ describe('decoded mutation response apply', () => {
             '<kovo-fragment target="messages" mode="append"><article data-stream-text="assistant:a1"></article></kovo-fragment>',
           ),
         );
+        // A query truth applies mid-stream (count -> 99) before the failure terminator.
+        controller.enqueue(encoder.encode('<kovo-query name="chat">{"count":99}</kovo-query>'));
         controller.enqueue(encoder.encode('<kovo-text target="assistant:a1">partial</kovo-text>'));
         controller.enqueue(encoder.encode('<kovo-done reason="error"></kovo-done>'));
         controller.close();
       },
     });
 
-    await applyStreamingMutationResponseBodyToRuntime({ body, onError, root, store });
+    // (3) The apply must throw so the caller marks the form failed (not return success).
+    await expect(
+      applyStreamingMutationResponseBodyToRuntime({ body, onError, root, store }),
+    ).rejects.toThrow(/not confirmed/);
 
+    // (1) The query truth is reverted to its pre-stream value (not the unconfirmed 99).
+    expect(store.get('chat')).toEqual({ count: 0 });
+    // (2) The stream-text target is marked failed and the error is reported.
     expect(streamTarget.getAttribute('data-stream-state')).toBe('error');
+    expect(onError).toHaveBeenCalled();
+  });
+
+  it('reverts a newly-introduced query to undefined on an unconfirmed stream (I1)', async () => {
+    // I1: a query with no pre-stream value must be DELETED on revert (no fabricated empty truth).
+    const store = createQueryStore();
+    const onError = vi.fn();
+    const root = new FakeMorphRoot();
+    root.querySelectorAll = () => [];
+
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('<kovo-query name="cart">{"count":7}</kovo-query>'));
+        controller.enqueue(encoder.encode('<kovo-done reason="aborted"></kovo-done>'));
+        controller.close();
+      },
+    });
+
+    await expect(
+      applyStreamingMutationResponseBodyToRuntime({ body, onError, root, store }),
+    ).rejects.toThrow(/not confirmed/);
+    expect(store.get('cart')).toBeUndefined();
+    expect(onError).toHaveBeenCalled();
+  });
+
+  it('signals failure when a stream is interrupted with no <kovo-done> terminator (I1)', async () => {
+    // I1 (SPEC §9.1:810): a clean server stream ALWAYS ends with <kovo-done>. A stream that
+    // closes the reader with no terminator is an interruption — the partial must not be
+    // presented as confirmed; the runtime reverts and signals failure.
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    const onError = vi.fn();
+    const root = new FakeMorphRoot();
+    root.querySelectorAll = () => [];
+
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode('<kovo-query name="cart">{"count":42}</kovo-query>'),
+        );
+        controller.close();
+      },
+    });
+
+    await expect(
+      applyStreamingMutationResponseBodyToRuntime({ body, onError, root, store }),
+    ).rejects.toThrow(/not confirmed/);
+    expect(store.get('cart')).toEqual({ count: 1 });
+    expect(onError).toHaveBeenCalled();
+  });
+
+  it('cancels the reader and stops applying when the abort signal fires mid-stream (L13-3)', async () => {
+    // L13-3 (SPEC §9.1:810): an aborted stream (form unmount, user cancel, navigation) must stop
+    // committing chunks and cancel the reader — not keep applying. The first chunk's query truth
+    // applies, then the signal aborts before the second chunk is applied: the second chunk must
+    // NOT reach the store, the reader is cancelled, the store reverts, and the apply throws.
+    const store = createQueryStore();
+    store.set('cart', { count: 1 });
+    const onError = vi.fn();
+    const root = new FakeMorphRoot();
+    root.querySelectorAll = () => [];
+
+    const controller = new AbortController();
+    let cancelled = false;
+    let pulls = 0;
+
+    const body = new ReadableStream<Uint8Array>({
+      cancel() {
+        cancelled = true;
+      },
+      pull(streamController) {
+        const encoder = new TextEncoder();
+        pulls += 1;
+        if (pulls === 1) {
+          streamController.enqueue(
+            encoder.encode('<kovo-query name="cart">{"count":2}</kovo-query>'),
+          );
+          return;
+        }
+        // Abort BEFORE handing over the second chunk; the apply loop's post-read abort
+        // check must cancel the reader and stop before applying `{count:3}`.
+        controller.abort();
+        streamController.enqueue(encoder.encode('<kovo-query name="cart">{"count":3}</kovo-query>'));
+      },
+    });
+
+    await expect(
+      applyStreamingMutationResponseBodyToRuntime({
+        body,
+        onError,
+        root,
+        store,
+        streamText: { signal: controller.signal },
+      }),
+    ).rejects.toBeDefined();
+
+    // The second chunk never applied (store does not hold the unconfirmed {count:3})...
+    expect(store.get('cart')).not.toEqual({ count: 3 });
+    // ...the touched query reverts to its pre-stream value...
+    expect(store.get('cart')).toEqual({ count: 1 });
+    // ...the reader was cancelled (not left dangling)...
+    expect(cancelled).toBe(true);
+    // ...and the failure is reported.
     expect(onError).toHaveBeenCalled();
   });
 
@@ -436,6 +555,9 @@ describe('decoded mutation response apply', () => {
           controller.enqueue(
             new TextEncoder().encode('<kovo-text target="assistant:a1">Hi</kovo-text>'),
           );
+          // I1 (SPEC §9.1:810): clean stream terminator so this exercises a successful
+          // (renderer-failing) completion, not an interrupted/unconfirmed stream.
+          controller.enqueue(new TextEncoder().encode('<kovo-done></kovo-done>'));
           controller.close();
         },
       }),

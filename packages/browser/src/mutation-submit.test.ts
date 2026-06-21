@@ -313,6 +313,9 @@ describe('enhanced mutation submit', () => {
               '<kovo-text target="assistant:a1">Hello</kovo-text><kovo-query name="chat">{"count":1}</kovo-query>',
             ),
           );
+          // I1 (SPEC §9.1:810): a confirmed stream terminates with <kovo-done> (reason
+          // defaults to "complete"); the server always emits it on a clean completion.
+          controller.enqueue(encoder.encode('<kovo-done></kovo-done>'));
           controller.close();
         },
       }),

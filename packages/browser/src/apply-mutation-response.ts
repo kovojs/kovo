@@ -218,6 +218,34 @@ export async function applyStreamingMutationResponseBodyToRuntime(
           }),
         })
       : options.streamText?.buffer;
+
+  // I1 (bugs-part4, SPEC §9.1:810): a streaming mutation applies query truths and fragment
+  // morphs progressively, but the terminal `reason` is only known after the whole stream. A
+  // non-`complete` <kovo-done reason> (or a stream that ends with no done marker at all — an
+  // interruption; a clean server stream ALWAYS terminates with <kovo-done>) means the response
+  // is NOT confirmed: the runtime must not present the partial as success. We snapshot the
+  // pre-apply value of every touched query the first time it arrives so we can REVERT the query
+  // truth, and then throw so the caller marks the submitted form failed and refetches server
+  // truth (matching the buffered path's failure handling) instead of returning a success result.
+  const queryRevertLog = new Map<string, { key?: string; name: string; previousValue: unknown }>();
+  const callerBeforeApplyQueries = applyOptions.beforeApplyQueries;
+  const trackingApplyOptions: ApplyMutationResponseChunksToRuntimeOptions = {
+    ...applyOptions,
+    beforeApplyQueries(queries) {
+      for (const query of queries) {
+        const storeKey = query.key === undefined ? query.name : `${query.name} ${query.key}`;
+        if (!queryRevertLog.has(storeKey)) {
+          queryRevertLog.set(storeKey, {
+            ...definedProps({ key: query.key }),
+            name: query.name,
+            previousValue: options.store.get(query.name, query.key),
+          });
+        }
+      }
+      callerBeforeApplyQueries?.(queries);
+    },
+  };
+
   let pending = '';
   // SPEC §9.1: scan the full streamed body for a terminal <kovo-done reason="..."> marker so the
   // modular path can detect an aborted/failed stream (reason !== 'complete') and mark it failed
@@ -225,16 +253,34 @@ export async function applyStreamingMutationResponseBodyToRuntime(
   let rawForDone = '';
   let aggregate: AppliedMutationResponse | AppliedMutationResponseWithRoot | undefined;
 
+  // L13-3 (bugs-part4, SPEC §9.1:810): a caller-provided abort signal (form unmount, user
+  // cancel, navigation) must stop the apply mid-stream — otherwise chunks keep committing and
+  // the reader is never cancelled. We watch the caller's `streamText.signal` (the internal
+  // controller, created only when the caller passed none, is OUR abort source, not a watch).
+  const abortSignal = options.streamText?.signal;
+
   try {
     while (true) {
+      // L13-3: check the abort signal before each read so an abort observed between reads stops
+      // applying immediately, cancels the reader, and fails (rather than committing more chunks).
+      if (abortSignal?.aborted) {
+        await reader.cancel();
+        throw abortStreamError(abortSignal);
+      }
       const read = await reader.read();
       if (read.done) break;
+      // L13-3: an abort that lands while a read was in flight must also halt before we apply
+      // the just-read chunk to the store / morph the DOM.
+      if (abortSignal?.aborted) {
+        await reader.cancel();
+        throw abortStreamError(abortSignal);
+      }
       const chunk = decoder.decode(read.value, { stream: true });
       rawForDone += chunk;
       pending += chunk;
       const result = flushCompleteMutationResponsePrefix(
         pending,
-        applyOptionsWithStreamTextBuffer(applyOptions, streamTextBuffer),
+        applyOptionsWithStreamTextBuffer(trackingApplyOptions, streamTextBuffer),
       );
       pending = result.pending;
       aggregate = mergeAppliedMutationResponses(aggregate, result.applied);
@@ -248,30 +294,81 @@ export async function applyStreamingMutationResponseBodyToRuntime(
         aggregate,
         applyMutationResponseChunksToRuntime(
           readMutationResponseBodyChunks(pending, options.onError),
-          applyOptionsWithStreamTextBuffer(applyOptions, streamTextBuffer),
+          applyOptionsWithStreamTextBuffer(trackingApplyOptions, streamTextBuffer),
         ),
       );
     }
 
+    // I1 (SPEC §9.1:810): a confirmed stream ends with <kovo-done reason="complete"> (the server
+    // always emits a terminator). A non-complete reason OR a missing terminator (interrupted
+    // connection) is a failure — do not return the partial as success.
     const doneReason = readStreamDoneReason(rawForDone);
-    if (doneReason !== undefined && doneReason !== 'complete') {
-      const error = new Error(
-        `Streaming mutation ended with <kovo-done reason="${doneReason}">; the partial response is not confirmed.`,
-      );
-      reportRuntimeError(options.onError, error);
-      await streamTextBuffer?.fail(error);
-    } else {
+    if (doneReason === 'complete') {
       await streamTextBuffer?.flush('completion');
+      return aggregate ?? emptyAppliedMutationResponse(options.root);
     }
+
+    // Throw into the unified failure handler below (revert + report + fail).
+    throw new Error(
+      doneReason === undefined
+        ? 'Streaming mutation ended without a <kovo-done> terminator; the partial response is not confirmed.'
+        : `Streaming mutation ended with <kovo-done reason="${doneReason}">; the partial response is not confirmed.`,
+    );
   } catch (error) {
+    // I1 + L13-3 (SPEC §9.1:810): every failure path (non-complete done, interrupted stream,
+    // mid-stream abort, reader error) converges here. Revert the partially-applied query truths
+    // to their pre-stream values so the store keeps no unconfirmed data, abort the stream-text
+    // buffer (marks the stream-text targets failed), report once, and re-throw so the caller
+    // marks the submitted form failed and refetches server truth (fragment morphs are reconciled
+    // by that form-failure refetch). Never return the partial as a success result.
     streamAbortController?.abort();
-    await streamTextBuffer?.fail(error);
+    revertAppliedQueries(options.store, queryRevertLog);
+    if (streamTextBuffer) {
+      // The buffer's `fail` marks stream-text targets failed AND reports via its onError
+      // (constructed from options.onError), so reporting once here would double-fire.
+      await streamTextBuffer.fail(error);
+    } else {
+      // No stream-text buffer (rootless apply): report the failure directly so the caller
+      // still observes it before the throw.
+      reportRuntimeError(options.onError, error);
+    }
     throw error;
   } finally {
     reader.releaseLock();
   }
+}
 
-  return aggregate ?? emptyAppliedMutationResponse(options.root);
+/**
+ * L13-3 (bugs-part4, SPEC §9.1:810): the failure thrown when a caller-provided abort signal
+ * fires mid-stream. Prefer the signal's `reason` when present (e.g. the caller's own
+ * AbortError/Error), else a DOMException `AbortError` (falling back to a plain Error in
+ * environments without DOMException).
+ */
+function abortStreamError(signal: AbortSignal): unknown {
+  if (signal.reason !== undefined) return signal.reason;
+  try {
+    return new DOMException('Streaming mutation aborted; the partial response is not confirmed.', 'AbortError');
+  } catch {
+    return new Error('Streaming mutation aborted; the partial response is not confirmed.');
+  }
+}
+
+/**
+ * I1 (bugs-part4, SPEC §9.1:810): restore every query touched by an unconfirmed streaming
+ * mutation to the value it held before the stream began. A query that had no prior value is
+ * deleted so the store reverts to its true pre-stream shape (no fabricated empty truth).
+ */
+function revertAppliedQueries(
+  store: QueryStore,
+  revertLog: ReadonlyMap<string, { key?: string; name: string; previousValue: unknown }>,
+): void {
+  for (const entry of revertLog.values()) {
+    if (entry.previousValue === undefined) {
+      store.delete(entry.name, entry.key);
+    } else {
+      store.set(entry.name, entry.previousValue, entry.key);
+    }
+  }
 }
 
 /**

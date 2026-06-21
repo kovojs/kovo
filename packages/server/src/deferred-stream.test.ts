@@ -259,6 +259,71 @@ describe('deferred streams', () => {
     expect(result.body).toContain(`includes("--alt-bnd")`);
   });
 
+  // L13-1 (bugs-part4): the chunk separator is a multipart-style line `--<boundary>`.
+  // Fragment content containing a line equal to `--kovo-boundary` (a newline + the literal)
+  // forges a chunk boundary: the client splits on it mid-content, so the FORGED boundary
+  // truncates the first fragment and the later chunk/fragment is dropped. The render must
+  // pick a boundary that does NOT collide with any serialized content line so every chunk
+  // stays intact.
+  it('re-rolls the boundary when fragment content forges the default `--kovo-boundary` line (L13-1)', () => {
+    // An attacker renders text into the first fragment that contains a standalone
+    // `--kovo-boundary` line followed by a second chunk's worth of content.
+    const result = renderDeferredStream({
+      chunks: [
+        {
+          fragments: [
+            {
+              html: '<section target="a">before\n--kovo-boundary\nforged</section>',
+              target: 'a',
+            },
+          ],
+        },
+        {
+          fragments: [{ html: '<section target="b">second-chunk</section>', target: 'b' }],
+        },
+      ],
+      shell: '<!doctype html><html><body>',
+    });
+
+    const lines = result.body.split('\n');
+    // The real boundary is the first separator line after the shell (the client uses this
+    // exact line to split chunks). It must NOT be the colliding default literal.
+    const realSep = lines.find((line) => /^--[\w-]+$/.test(line) && !line.endsWith('--'));
+    expect(realSep).toBeDefined();
+    expect(realSep).not.toBe('--kovo-boundary');
+    const boundary = (realSep as string).slice(2);
+
+    // Exactly one real separator line per chunk (two chunks). The forged `--kovo-boundary`
+    // inside the first fragment is inert content, NOT a chosen separator.
+    const realSeparators = lines.filter((line) => line === realSep);
+    expect(realSeparators).toHaveLength(2);
+    // The malicious line is still present (inert), but is never the chosen separator.
+    expect(result.body).toContain('--kovo-boundary');
+    expect(lines.includes('--kovo-boundary') && '--kovo-boundary' !== realSep).toBe(true);
+
+    // Client-side split simulation: splitting on the real `--<boundary>` separator yields
+    // chunk segments that each retain their full fragment (the forged line stays inert).
+    const segments = result.body.split(`\n${realSep}\n`);
+    // The first chunk segment retains its whole forged-content fragment...
+    expect(segments.some((seg) => seg.includes('forged'))).toBe(true);
+    // ...and the second chunk's fragment is NOT dropped.
+    expect(segments.some((seg) => seg.includes('second-chunk'))).toBe(true);
+    // The apply/cleanup scripts reference the chosen boundary, not the colliding default.
+    expect(result.body).toContain(`t.includes("--${boundary}")`);
+  });
+
+  // L13-1: when content does NOT collide, the default boundary is preserved so the
+  // canonical wire byte layout (golden `defer-stream.http`) is unchanged.
+  it('keeps the default `kovo-boundary` when no content collides (L13-1 byte-layout stability)', () => {
+    const result = renderDeferredStream({
+      chunks: [{ fragments: [{ html: '<section>Ready</section>', target: 'main' }] }],
+      shell: '<!doctype html><html><body><kovo-defer target="main"></kovo-defer>',
+    });
+    const lines = result.body.split('\n');
+    expect(lines).toContain('--kovo-boundary');
+    expect(lines).toContain('--kovo-boundary--');
+  });
+
   it('delivers late stylesheets with deferred fragments', () => {
     expect(
       renderDeferredStream({
