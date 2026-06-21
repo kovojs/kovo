@@ -197,9 +197,9 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
 
     expect(
-      audit.scopeAudits.map((a) => ({ name: a.name, scope: a.scope })).sort((x, y) =>
-        x.name.localeCompare(y.name),
-      ),
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
     ).toEqual([
       { name: 'orderById', scope: 'args' },
       { name: 'orderMine', scope: 'session' },
@@ -245,9 +245,9 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
 
     expect(
-      audit.scopeAudits.map((a) => ({ name: a.name, scope: a.scope })).sort((x, y) =>
-        x.name.localeCompare(y.name),
-      ),
+      audit.scopeAudits
+        .map((a) => ({ name: a.name, scope: a.scope }))
+        .sort((x, y) => x.name.localeCompare(y.name)),
     ).toEqual([
       { name: 'ordersForUser', scope: 'args' },
       { name: 'ordersMine', scope: 'session' },

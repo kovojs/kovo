@@ -409,9 +409,7 @@ function inlineLoaderScript(): { csp: CspInlineMetadata; html: string } {
  * against the same data the page rendered. The instance `key` is separate; meta
  * derives from the named query value.
  */
-function queryValuesByName(
-  queries: readonly QueryScriptRenderOptions[],
-): Record<string, unknown> {
+function queryValuesByName(queries: readonly QueryScriptRenderOptions[]): Record<string, unknown> {
   const byName: Record<string, unknown> = {};
   for (const query of queries) {
     byName[query.name] = query.value;
@@ -469,7 +467,13 @@ function mergeDocumentHeaders(
       continue;
     }
 
-    merged[existingName] = `${merged[existingName]}, ${value}`;
+    const existingValue = merged[existingName];
+    merged[existingName] =
+      existingValue === undefined
+        ? value
+        : Array.isArray(existingValue)
+          ? [...existingValue, value]
+          : `${existingValue}, ${value}`;
   }
 
   return merged;

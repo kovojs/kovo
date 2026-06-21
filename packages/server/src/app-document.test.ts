@@ -482,7 +482,7 @@ describe('server app document boundary', () => {
 // ─── part-3 I2: rolling-session refresh cookies on GET documents ──────────────
 
 describe('rolling-session refresh cookies on GET documents (part-3 I2)', () => {
-  it('forwards a session provider\'s refresh Set-Cookie headers onto the document response', async () => {
+  it("forwards a session provider's refresh Set-Cookie headers onto the document response", async () => {
     // SPEC §6.5 / §9.1.1:854: a rolling/refresh session provider (e.g. Better Auth
     // updateAge/cookieCache) emits fresh Set-Cookie headers on each authenticated GET via the
     // `{ value, setCookies }` provider envelope. The framework MUST re-emit them on the page

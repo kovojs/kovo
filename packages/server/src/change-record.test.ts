@@ -91,7 +91,10 @@ describe('server change records', () => {
       ),
     ).toBe(true);
     expect(
-      changeRecordTouchesQueryInstance({ domain: 'cart', keys: ['u7'], via: 'carts' }, 'cartTotal:u7'),
+      changeRecordTouchesQueryInstance(
+        { domain: 'cart', keys: ['u7'], via: 'carts' },
+        'cartTotal:u7',
+      ),
     ).toBe(true);
     expect(
       changeRecordTouchesQueryInstance(

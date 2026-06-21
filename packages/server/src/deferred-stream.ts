@@ -138,14 +138,16 @@ function stablePrioritySort<Value>(
   values: readonly Value[],
   priorityFor: (value: Value) => DeferredPriority | undefined,
 ): Value[] {
-  return values
-    .map((value, index) => ({ index, priority: priorityRank(priorityFor(value)), value }))
-    // L2-deferred-1 (bugs-part3): `right.priority - left.priority` is NaN-poisoned when
-    // a priority is non-finite, making the comparator non-transitive (implementation-
-    // defined order). `priorityRank` already coerces non-finite to the normal floor (0),
-    // so the subtraction is always finite; the `|| index` tiebreak keeps it stable.
-    .sort((left, right) => right.priority - left.priority || left.index - right.index)
-    .map((entry) => entry.value);
+  return (
+    values
+      .map((value, index) => ({ index, priority: priorityRank(priorityFor(value)), value }))
+      // L2-deferred-1 (bugs-part3): `right.priority - left.priority` is NaN-poisoned when
+      // a priority is non-finite, making the comparator non-transitive (implementation-
+      // defined order). `priorityRank` already coerces non-finite to the normal floor (0),
+      // so the subtraction is always finite; the `|| index` tiebreak keeps it stable.
+      .sort((left, right) => right.priority - left.priority || left.index - right.index)
+      .map((entry) => entry.value)
+  );
 }
 
 function priorityRank(priority: DeferredPriority | undefined): number {

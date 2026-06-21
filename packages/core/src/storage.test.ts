@@ -183,7 +183,9 @@ describe('storage adapters', () => {
     it('throws identically on put/get/stat/stream for every adapter', async () => {
       for (const { name, storage } of await adapters()) {
         for (const key of reservedKeys) {
-          await expect(storage.put(key, 'HACK'), `${name} put(${key})`).rejects.toThrow(/reserved/u);
+          await expect(storage.put(key, 'HACK'), `${name} put(${key})`).rejects.toThrow(
+            /reserved/u,
+          );
           await expect(storage.get(key), `${name} get(${key})`).rejects.toThrow(/reserved/u);
           await expect(storage.stat(key), `${name} stat(${key})`).rejects.toThrow(/reserved/u);
           await expect(storage.stream(key), `${name} stream(${key})`).rejects.toThrow(/reserved/u);
@@ -206,7 +208,9 @@ describe('storage adapters', () => {
         const put = await storage.put('photo.png', 'IMG', { contentType: 'image/png' });
 
         // The attack: a key landing on photo.png's sidecar must be rejected, not written.
-        await expect(storage.put('photo.png.kovo-storage.json', 'HACK')).rejects.toThrow(/reserved/u);
+        await expect(storage.put('photo.png.kovo-storage.json', 'HACK')).rejects.toThrow(
+          /reserved/u,
+        );
 
         const get = await storage.get('photo.png');
         expect(bytesToText(get?.body)).toBe('IMG');
