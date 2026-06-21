@@ -372,6 +372,88 @@ describe('inline loader delegated handlers', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'applies data-bind-prop:checked/indeterminate/scrollTop live properties through %s (SPEC §4.8)',
+    async (_name, installSource) => {
+      // SPEC.md §4.8 data-bind-prop: the inline loader must assign the live
+      // property after a handler re-render, not just the companion attribute.
+      const host = new FakeStatefulBindingElement({
+        'kovo-state': '{"checked":"indeterminate","scrollTop":0}',
+        'on:click': '/c/checkbox.js#toggle',
+      });
+      const input = new FakeStatefulBindingElement(
+        {
+          checked: '',
+          'data-bind:checked': '/c/checkbox.js#isChecked',
+          'data-bind-prop:checked': '/c/checkbox.js#isChecked',
+          'data-bind-prop:indeterminate': '/c/checkbox.js#isIndeterminate',
+          type: 'checkbox',
+        },
+        { checked: false, indeterminate: false, parent: host },
+      );
+      const viewport = new FakeStatefulBindingElement(
+        { 'data-bind-prop:scrolltop': 'state.scrollTop' },
+        { parent: host, scrollTop: 0 },
+      );
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        importModule: globalRecord.__kovoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => Promise<void>>();
+      const importModule = vi.fn(async () => ({
+        isChecked: {
+          run(value: unknown) {
+            return (value as { checked: unknown }).checked === true ? '' : null;
+          },
+        },
+        isIndeterminate: {
+          run(value: unknown) {
+            return (value as { checked: unknown }).checked === 'indeterminate' ? '' : null;
+          },
+        },
+        toggle(_event: unknown, ctx: { state: { checked: unknown; scrollTop: number } }) {
+          ctx.state.checked = true;
+          ctx.state.scrollTop = 320;
+        },
+      }));
+
+      try {
+        globalRecord.addEventListener = (
+          type: string,
+          listener: (event: unknown) => Promise<void>,
+        ) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.document = {
+          querySelectorAll() {
+            return [];
+          },
+        };
+
+        installSource(importModule, globalRecord);
+
+        await listeners.get('click')?.({ target: host, type: 'click' });
+
+        // After the handler: state.checked=true, state.scrollTop=320.
+        expect(input.checked).toBe(true);
+        expect(input.indeterminate).toBe(false);
+        expect(viewport.scrollTop).toBe(320);
+      } finally {
+        Object.assign(globalRecord, {
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'keeps inline delegated error messages in parity through %s',
     async (_name, installSource) => {
       // SPEC.md §4.4: handler resolution failures are part of the shipped loader contract.

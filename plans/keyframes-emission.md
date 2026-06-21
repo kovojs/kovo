@@ -6,8 +6,17 @@ keyframe animations. Today it is **name-only**, which is why the gallery UX over
 skeleton pulse, progress indeterminate slide, and tabs fade (`plans/better-components-ux.md` D /
 `plans/more-ui-primitives.md` D). This plan implements the emission and restores those animations.
 
-**Status (2026-06-20):** Planning. Framework feature (`@kovojs/style` engine + compiler extractor).
-Core-extractor change → high blast radius; sequence engine-first, then compiler, then restore.
+**Status (2026-06-20):** Implemented end-to-end on `agent/keyframes-emission`. Engine emits the
+`@keyframes` block via `createKeyframes` (`{ name, css }` on `@kovojs/style/internal`); the compiler
+extractor recognizes `style.keyframes`, binds the name (lifts KV236), and threads the deduped block into
+extracted CSS; skeleton pulse / progress indeterminate slide / tabs panel fade restored.
+
+**Latest verification:** `npx vitest run packages/style packages/compiler/src/{package-styles,style}.test.ts
+packages/ui/src/{skeleton,progress,tabs}.stylex.test.tsx packages/cli/src/index.kovo-add.test.ts` → 68
+passed. Full `packages/ui packages/compiler` → 762 passed. `vp check --no-fmt` on
+`packages/{style,compiler,ui}/src` → clean. `api-surface-gate` baseline unchanged (new exports are
+`@internal`). Build: `site/scripts/emit-ui-css.mjs` emits each `@keyframes` once with linked
+`animation-name` atoms.
 
 **Behavior source of truth:** `SPEC.md` (§6.1.1 atomic CSS, §13.1 StyleX component styles extract into
 CSS assets, §5.2 typed-facts extraction / **KV236**), `rules/compiler-hard-rules.md`,
@@ -60,40 +69,42 @@ Implement keyframes CSS end-to-end, mirroring how `defineVars`/`createTheme` are
 
 ### Phase 0 — Investigation
 
-- [ ] Engine: read `keyframes()` (`engine.ts:459`) + `createAtomicStyles`/`emitAtomicCss` to find the
-      declaration-normalization helpers to reuse and the structured-result shape to extend.
-- [ ] Compiler: read the `defineVars`/`createTheme` recognition + `staticValues` population (`style.ts`
-      ~L280–315) and the KV236 site (~L1251); read `package-styles.ts` CSS assembly (`chunks` +
-      `dedupeCss`) for where `@keyframes` blocks attach + dedup.
-- [ ] A5 gate: `package-styles.test.ts` expectations (currently empty) — keyframes components must stay
-      out of the "unstyled" list once emission lands.
+- [x] Engine: `keyframes()` (engine.ts), `createAtomicStyles`/`emitAtomicCss`, and the shared
+      `cssLengthValue`/`toKebabCase` declaration normalization in `internal.ts` reviewed.
+- [x] Compiler: `defineVars`/`createTheme` recognition + `staticValues` (`style.ts` collectStyleEnvironment),
+      KV236 site (`staticStyleDiagnostic`), and `package-styles.ts` `chunks`→`dedupeCss` assembly reviewed.
+- [x] A5 gate: `package-styles.test.ts` `diagnostics` must stay `[]` with keyframes components present.
 
 ### Phase 1 — Engine: emit `@keyframes` CSS
 
-- [ ] Keyframes-CSS emitter (frames → `@keyframes <name> { … }`) reusing declaration normalization;
-      structured `{ name, css }` via `@kovojs/style/internal`; include in `emitAtomicCss`.
-- [ ] Engine unit tests: frames → expected CSS, unit/normalization parity with atomic rules, stable
-      deterministic name.
+- [x] `createKeyframes(frames, identity)` → `{ name, css }` reusing `cssLengthValue` + kebab-casing;
+      exported via `@kovojs/style/internal`; `emitAtomicCss` gains a `keyframes` option (deduped, outside
+      `@layer`). `keyframes()` delegates (name unchanged). engine.ts.
+- [x] Engine unit tests: frames→CSS, unit/casing parity with atomic rules, stable name, emitAtomicCss
+      dedup. `packages/style/src/index.test.ts` (32 passed).
 
 ### Phase 2 — Compiler: recognize + extract + thread keyframes
 
-- [ ] Recognize `style.keyframes(...)`; add the name to `staticValues` (lift KV236 for keyframes
-      consts); collect the `@keyframes` block and thread it into the extracted component CSS, deduped.
-- [ ] Compiler tests: extractor unit test (keyframes const resolves + block emitted); A5 gate stays
-      empty with a keyframes-using component; `kovo add` vendor test (no KV236 on vendored component).
+- [x] `styleKeyframesCall`/`isStyleKeyframesCall` recognize `style.keyframes(...)`; name added to
+      `staticValues` (lifts KV236); `@keyframes` blocks threaded via `emitAtomicCss({ keyframes })` and
+      deduped across the combined stylesheet in `package-styles.ts` (`dedupeKeyframeBlocks`).
+- [x] Compiler tests: extractor unit test (block emitted, no KV236) in `style.test.ts`; A5 gate empty +
+      each block once in `package-styles.test.ts`; `index.kovo-add.test.ts` green (vendored skeleton/
+      progress/tabs compile with `diagnostics: []`).
 
 ### Phase 3 — Restore the animations
 
-- [ ] Re-add keyframes to `skeleton.tsx` (pulse), `progress.tsx` (indeterminate slide), `tabs.tsx`
-      (panel fade); update the three `*.stylex.test.tsx` snapshots to include `@keyframes` + animation
-      classes; confirm A5 gate empty + `kovo add` green.
-- [ ] (Optional) verify the rendered `kovo-ui.css` contains the `@keyframes` blocks once, via the
-      site/gallery build.
+- [x] keyframes restored: `skeleton.tsx` (pulse), `progress.tsx` (indeterminate slide), `tabs.tsx`
+      (panel fade); `progress.stylex.test.tsx.snap` updated; skeleton/tabs inline assertions updated;
+      A5 gate empty + `kovo add` green.
+- [x] `site/scripts/emit-ui-css.mjs` build: `kovo-ui.css` carries each `@keyframes` once
+      (`kv-skeleton-pulse-*`, `kv-progress-indeterminate-*`, `kv-tabs-panel-fade-*`) with matching
+      `animation-name` atoms.
 
 ### Phase 4 — Docs
 
-- [ ] SPEC §13.1/§6.1.1 note that `style.keyframes` extracts an `@keyframes` asset; `api-surface` if any
-      new export.
+- [x] SPEC §13.1 notes `style.keyframes(...)` extracts a deduped `@keyframes` asset. New exports
+      (`createKeyframes`, `KeyframesResult`) are `@internal`; api-surface baseline unchanged.
 
 ---
 

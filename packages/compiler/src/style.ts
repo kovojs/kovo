@@ -11,9 +11,11 @@ import {
 } from '@kovojs/style';
 import {
   createAtomicStyles,
+  createKeyframes,
   emitAtomicCss,
   type AtomicRule,
   type CompiledStyle,
+  type KeyframesResult,
 } from '@kovojs/style/internal';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
@@ -63,6 +65,7 @@ interface StyleEnvironment {
   readonly diagnostics: readonly CompilerDiagnostic[];
   readonly provenanceReplacements: readonly SourceReplacement[];
   readonly rules: readonly AtomicRule[];
+  readonly keyframes: readonly KeyframesResult[];
   readonly usages: readonly StyleRuleUsage[];
   readonly bindings: ReadonlyMap<string, StyleBinding>;
 }
@@ -94,6 +97,18 @@ function defineVarsWithIdentity(
       identity: StyleIdentityOptions,
     ) => ReturnType<typeof defineVars<Record<string, CssValue>>>
   )(tokens, identity);
+}
+
+function createKeyframesWithIdentity(
+  frames: Record<string, StyleObject>,
+  identity: StyleIdentityOptions,
+): KeyframesResult {
+  return (
+    createKeyframes as (
+      frames: Record<string, StyleObject>,
+      identity: StyleIdentityOptions,
+    ) => KeyframesResult
+  )(frames, identity);
 }
 
 function createThemeWithIdentity<Tokens extends Record<string, CssValue>>(
@@ -162,6 +177,7 @@ export function extractKovoStyles(
   if (
     environment.bindings.size === 0 &&
     environment.rules.length === 0 &&
+    environment.keyframes.length === 0 &&
     environment.diagnostics.length === 0
   ) {
     return emptyStyleExtraction();
@@ -180,7 +196,13 @@ export function extractKovoStyles(
           handledSpans: [],
           replacements: [],
         };
-  const css = environment.rules.length > 0 ? emitAtomicCss(environment.rules) : null;
+  // Thread any `style.keyframes` blocks into the extracted CSS alongside the
+  // atomic rules. `emitAtomicCss` dedupes them by name (so a keyframe used by
+  // several rules emits once) and leads with them, outside `@layer`. SPEC.md §13.1.
+  const css =
+    environment.rules.length > 0 || environment.keyframes.length > 0
+      ? emitAtomicCss(environment.rules, { keyframes: environment.keyframes })
+      : null;
 
   return {
     css,
@@ -270,6 +292,7 @@ function collectStyleEnvironment(
   const diagnostics: CompilerDiagnostic[] = [];
   const provenanceReplacements: SourceReplacement[] = [];
   const rules: AtomicRule[] = [];
+  const keyframes: KeyframesResult[] = [];
   const usages: StyleRuleUsage[] = [];
   const staticValues = new Map<string, unknown>([
     ...collectLocalStaticValues(sourceFile, styleImports),
@@ -283,6 +306,24 @@ function collectStyleEnvironment(
     if (!ts.isVariableStatement(statement)) continue;
     for (const node of statement.declarationList.declarations) {
       if (!ts.isIdentifier(node.name)) continue;
+
+      // `const pulse = style.keyframes({ … }, identity?)`: resolve the frames into
+      // an `@keyframes` block and bind the const name to the deterministic
+      // animation-name so `animationName: pulse` extracts as a literal (lifts
+      // KV236 for keyframes consts). SPEC.md §13.1.
+      const frames = styleKeyframesCall(node.initializer, styleImports, localObjects, staticValues);
+      if (frames) {
+        const result = createKeyframesWithIdentity(frames.frames, {
+          namespace: frames.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
+          source: frames.options.source ?? fileName,
+        });
+        staticValues.set(node.name.text, result.name);
+        keyframes.push(result);
+        continue;
+      } else if (isStyleKeyframesCall(node.initializer, styleImports.namespaces)) {
+        diagnostics.push(staticStyleDiagnostic(fileName, source, node, 'style.keyframes'));
+        continue;
+      }
 
       const vars = styleDefineVarsCall(node.initializer, styleImports.namespaces);
       if (vars) {
@@ -361,7 +402,7 @@ function collectStyleEnvironment(
     }
   }
 
-  return { bindings, diagnostics, provenanceReplacements, rules, usages };
+  return { bindings, diagnostics, keyframes, provenanceReplacements, rules, usages };
 }
 
 function collectImportedStaticValues(
@@ -625,6 +666,45 @@ function styleCreateThemeCall(
     options: styleIdentityOptionsFromObject(optionsArgument),
     overrides: overridesArgument,
   };
+}
+
+function styleKeyframesCall(
+  initializer: ts.Expression | undefined,
+  styleImports: StyleImports,
+  localObjects: LocalObjectLiterals,
+  staticValues: ReadonlyMap<string, unknown>,
+): {
+  readonly frames: Record<string, StyleObject>;
+  readonly options: StyleIdentityOptions;
+} | null {
+  if (!isStyleKeyframesCall(initializer, styleImports.namespaces)) return null;
+
+  const [framesArgument, optionsArgument] = initializer.arguments;
+  if (!framesArgument || !ts.isObjectLiteralExpression(framesArgument)) return null;
+
+  // A keyframes object is `{ '<step>': { <declarations> } }` — the same
+  // key→style-object shape `style.create` namespaces use, so the per-step
+  // declaration resolution (static primitives, theme tokens, spreads) is shared.
+  const frames = styleNamespacesFromObject(
+    framesArgument,
+    localObjects,
+    staticValues,
+    styleImports,
+  );
+  if (!frames) return null;
+
+  return { frames, options: styleIdentityOptionsFromObject(optionsArgument) };
+}
+
+function isStyleKeyframesCall(
+  initializer: ts.Expression | undefined,
+  styleNamespaces: ReadonlySet<string>,
+): initializer is ts.CallExpression {
+  if (!initializer || !ts.isCallExpression(initializer)) return false;
+  if (!ts.isPropertyAccessExpression(initializer.expression)) return false;
+  if (initializer.expression.name.text !== 'keyframes') return false;
+  if (!ts.isIdentifier(initializer.expression.expression)) return false;
+  return styleNamespaces.has(initializer.expression.expression.text);
 }
 
 function styleNamespacesFromObject(

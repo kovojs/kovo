@@ -361,6 +361,8 @@ Every `data-bind:<attr>` write into a URL-scheme attribute MUST scheme-allowlist
 
 The escape hatch is a typed, named, public Kovo API (`trustedHtml(value)` / `trustedUrl(value)`, importable only from a documented public entrypoint per §5.2 #8) that brands its argument as author-vouched. A binding may reach an unsafe context only when its lowered value is a `trustedHtml`/`trustedUrl` brand; the brand is the only thing that suppresses KV236, it is visible in source and in `kovo explain component`, and it is never derivable by the compiler (so the author always writes it explicitly — the inverse of the "TSX never requires a string the compiler can derive" rule, applied to trust). A trusted value carries no escaping obligation onto the framework; producing it from unvalidated query data is the documented hazard the brand makes auditable.
 
+**Live-property bindings (`data-bind-prop:<prop>`) — the property-authoritative addendum.** A handful of attributes are _property-authoritative_: once the live DOM property is dirtied by user interaction (or script), the browser stops reflecting the attribute onto the property, so an attribute-only `data-bind:<attr>` write silently fails to update the observed state — `FormData` reads `input.checked`, not the `checked` attribute; `.indeterminate`/`.scrollTop`/`.scrollLeft` are not HTML attributes at all. For a **closed, security-reviewed allowlist** — `checked`, `indeterminate`, `value` (form controls), `scrollTop`, `scrollLeft`, `selected`, `open` — the compiler additionally emits a companion `data-bind-prop:<prop>` stamp alongside the SSR attribute and `data-bind:<attr>`, and the loader applies it by **assigning the live element property** (`el[prop] = coerce(prop, value)`: boolean for `checked`/`indeterminate`/`selected`/`open`, number for `scrollTop`/`scrollLeft`, string for `value`) on hydration and after every derive/morph re-render — the property write runs _after_ the attribute patch. The SSR attribute is unchanged, so first paint and no-JS stay correct and render-equivalence (§5.2 #3) treats `data-bind-prop:*` as a non-attribute output (byte-identical visible HTML; the property write is the extra output). This is not an author surface: a component still writes `checked={…}`/`scrollTop={…}` and the compiler derives both stamps from the one fact. **The allowlist is the security boundary** — `data-bind-prop:*` is never emitted or applied for any other property, and the unsafe sinks (`innerHTML`/`outerHTML`/`srcdoc`/`on*`) stay forbidden (KV236); the runtime ignores a non-allowlisted property defensively.
+
 **2. Named derives — the expression layer.** A derive is a named, exported, pure function with declared inputs — exactly parallel to handlers:
 
 ```ts
@@ -1392,12 +1394,15 @@ explanatory examples:
 
 Kovo component styles are authored as TSX/JSX source with `@kovojs/style`
 objects. The compiler may extract static `style.create(...)`, `style.defineVars(...)`,
-`style.createTheme(...)`, and compiler-known imported token references into
-ordinary CSS assets, but it may not turn lowered style IR into a second
-app-authoring surface (§5.2). Extracted rules are global atomic CSS with stable
-provenance, not shadow-DOM scoped rules; components remain light DOM so form
-participation, IDREFs, and accessibility relationships cross component
-boundaries.
+`style.createTheme(...)`, `style.keyframes(...)`, and compiler-known imported token
+references into ordinary CSS assets, but it may not turn lowered style IR into a
+second app-authoring surface (§5.2). Extracted rules are global atomic CSS with
+stable provenance, not shadow-DOM scoped rules; components remain light DOM so
+form participation, IDREFs, and accessibility relationships cross component
+boundaries. A static `style.keyframes(...)` const resolves to a deterministic
+animation-name; the extractor binds that name (so an `animationName` reference
+lowers to a literal) and emits the matching `@keyframes` block once into the CSS
+asset, deduped by name across the components that share it.
 
 Theme tokens are document CSS custom properties. A seed-generated Kovo theme
 emits reference palette variables such as `--kovo-theme-ref-palette-primary-40`

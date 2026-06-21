@@ -2,6 +2,7 @@
 import { component } from '@kovojs/core';
 import { checkboxTriggerClick as _checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
 import { checkboxGroupItemClick as _checkboxGroupItemClick } from '@kovojs/headless-ui/checkbox-group';
+import { Checkbox } from '@kovojs/ui/checkbox';
 import {
   CheckboxGroup,
   CheckboxGroupControl,
@@ -47,37 +48,32 @@ export const GalleryCheckboxGroupDemo = component({
         <h3 id="gallery-checkbox-group-label" style="font-size:0.875rem;font-weight:500">
           Notifications
         </h3>
-        <label style="display:inline-flex;align-items:center;gap:0.5rem">
-          <input
-            aria-checked={
-              state.value === 'updates,billing' ? 'true' : state.value === '' ? 'false' : 'mixed'
-            }
-            checked={state.value === 'updates,billing'}
-            data-state={
-              state.value === 'updates,billing'
-                ? 'checked'
-                : state.value === ''
-                  ? 'unchecked'
-                  : 'indeterminate'
-            }
-            id="gallery-checkbox-group-all"
-            indeterminate={state.value !== '' && state.value !== 'updates,billing'}
-            onClick={() => {
-              const result = _checkboxTriggerClick(Object(event), {
-                checked:
-                  state.value === 'updates,billing'
-                    ? true
-                    : state.value === ''
-                      ? false
-                      : 'indeterminate',
-              });
-              if (!result) return;
-              state.value = result.checked === true ? 'updates,billing' : '';
-            }}
-            type="checkbox"
-          />
-          <span>All notifications</span>
-        </label>
+        {/* C unblock (plans/more-ui-primitives.md): the styled select-all
+            Checkbox. data-bind-prop:checked / :indeterminate keep the inner
+            input's dirty .checked / .indeterminate properties correct after
+            interaction (SPEC §4.8), so the native form/a11y state stays right
+            across select-all on/off/indeterminate without a bare-input downgrade.
+            It carries no `name`, so it never joins the form's FormData. */}
+        <Checkbox
+          checked={
+            state.value === 'updates,billing' ? true : state.value === '' ? false : 'indeterminate'
+          }
+          id="gallery-checkbox-group-all"
+          onClick={() => {
+            const result = _checkboxTriggerClick(Object(event), {
+              checked:
+                state.value === 'updates,billing'
+                  ? true
+                  : state.value === ''
+                    ? false
+                    : 'indeterminate',
+            });
+            if (!result) return;
+            state.value = result.checked === true ? 'updates,billing' : '';
+          }}
+        >
+          All notifications
+        </Checkbox>
         <CheckboxGroupItem {...updatesState}>
           <CheckboxGroupControl
             {...updatesState}
