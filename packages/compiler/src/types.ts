@@ -450,6 +450,20 @@ export function elementParamAttributeNameFromPropertyName(name: string): string 
     .toLowerCase()}`;
 }
 
+// SPEC §4.3 / §4.6 (KV231): when two element-params in one handler share a terminal property name
+// (e.g. `item.id` and `item.parent.id` both terminate in `id`), the default terminal-derived name
+// collides — the browser would keep only the first `data-p-*` attribute and both `ctx.params` reads
+// would resolve to the same value. Derive a unique, human-readable param name from the full member
+// path (dropping the binding root) so each member gets its own distinct attribute and slot. The
+// result is normalized identically to `elementParamAttributeNameFromPropertyName` so the
+// `elementParamNameFromAttribute` round-trip used by client emit yields a valid `ctx.params.<name>`.
+export function elementParamAttributeNameFromPath(path: string): string {
+  // Drop the binding root (`item.parent.id` → `parent.id`); a single-segment path keeps as-is.
+  const segments = path.split('.');
+  const withoutRoot = segments.length > 1 ? segments.slice(1) : segments;
+  return elementParamAttributeNameFromPropertyName(withoutRoot.join('-'));
+}
+
 export function elementParamNameFromAttribute(attributeName: string): string {
   return attributeName
     .replace(/^data-p-/, '')

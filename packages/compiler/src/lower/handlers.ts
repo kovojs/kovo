@@ -20,7 +20,10 @@ import type {
   ElementParamType,
   HandlerLowering,
 } from '../types.js';
-import { elementParamAttributeNameFromPropertyName } from '../types.js';
+import {
+  elementParamAttributeNameFromPath,
+  elementParamAttributeNameFromPropertyName,
+} from '../types.js';
 
 export function lowerEventHandlers(
   options: CompileComponentOptions,
@@ -387,14 +390,41 @@ function extractElementParams(
         ...serializableBareReferences(zeroArgArrow, eligibleBareReferenceNames, localNames),
       ];
 
-  return dedupeElementParamCandidates(candidates).map((candidate) => ({
-    attributeName: elementParamAttributeNameFromPropertyName(candidate.terminalName),
-    expression: candidate.expression,
-    type:
-      candidate.type ??
-      inferElementParamType(candidate.expression, zeroArgArrow, parsedPropertyAccesses),
-    value: `{${candidate.expression}}`,
-  }));
+  return assignElementParamAttributeNames(dedupeElementParamCandidates(candidates)).map(
+    ({ attributeName, candidate }) => ({
+      attributeName,
+      expression: candidate.expression,
+      type:
+        candidate.type ??
+        inferElementParamType(candidate.expression, zeroArgArrow, parsedPropertyAccesses),
+      value: `{${candidate.expression}}`,
+    }),
+  );
+}
+
+// SPEC §4.3 / §4.6 (KV231): assign each distinct member expression its OWN `data-p-*` attribute
+// name. The default name comes from the terminal property; when two distinct expressions share a
+// terminal (`item.id` vs `item.parent.id` → both `data-p-id`), the collision is resolved by deriving
+// a path-based name (`data-p-parent-id`), with a numeric suffix as a last-resort tiebreaker. Candidates
+// are already deduped by expression, so identical members still collapse to a single param/slot.
+function assignElementParamAttributeNames(
+  candidates: readonly ElementParamCandidate[],
+): Array<{ attributeName: string; candidate: ElementParamCandidate }> {
+  const used = new Set<string>();
+  return candidates.map((candidate) => {
+    const preferred = elementParamAttributeNameFromPropertyName(candidate.terminalName);
+    let attributeName = preferred;
+    if (used.has(attributeName)) {
+      attributeName = elementParamAttributeNameFromPath(candidate.expression);
+    }
+    if (used.has(attributeName)) {
+      let suffix = 2;
+      while (used.has(`${preferred}-${suffix}`)) suffix += 1;
+      attributeName = `${preferred}-${suffix}`;
+    }
+    used.add(attributeName);
+    return { attributeName, candidate };
+  });
 }
 
 function elementParamCandidateFromAccess(access: PropertyAccessPathModel): ElementParamCandidate {

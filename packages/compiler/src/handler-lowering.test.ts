@@ -650,6 +650,41 @@ export const CartActions = component({
     );
   });
 
+  // SPEC §4.3 / §4.6 (KV231): two element-params that share a terminal property name must NOT
+  // collapse onto one `data-p-*` attribute and one `ctx.params` slot. The browser keeps only the
+  // first of two identical attributes, and the client call would resolve both arguments to the same
+  // value, so the handler silently receives the wrong argument. Each distinct member expression
+  // must get its own disambiguated param name end-to-end (server attribute + client `ctx.params`).
+  it('disambiguates two element params that share a terminal property name', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart/cart-actions.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+export const CartActions = component({
+  render: () => (
+    <button onClick={() => swap(item.id, item.parent.id)}>Swap</button>
+  ),
+});
+`,
+    });
+
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    // Each distinct member expression keeps its own data-p-* attribute and value.
+    expect(serverSource).toContain('data-p-id="{item.id}"');
+    expect(serverSource).toContain('data-p-parent-id="{item.parent.id}"');
+
+    // The colliding `data-p-id` must not be emitted twice (the browser would keep only the first).
+    const idAttrMatches = serverSource.match(/data-p-id="/g) ?? [];
+    expect(idAttrMatches).toHaveLength(1);
+
+    // Each client argument maps to its OWN param slot — not both to ctx.params.id.
+    expect(clientSource).toContain('return swap(ctx.params.id, ctx.params.parentId);');
+    expect(clientSource).not.toContain('swap(ctx.params.id, ctx.params.id)');
+  });
+
   it('extracts and rewrites handlers with nested object and block expressions', () => {
     const result = compileComponentModule({
       fileName: 'components/cart/cart-actions.tsx',
