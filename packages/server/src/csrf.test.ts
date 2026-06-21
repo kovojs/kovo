@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { csrfField, csrfToken, validateCsrfToken } from './csrf.js';
-import { mutation as defineMutation, renderMutationResponse, runMutation } from './mutation.js';
+import {
+  mutation as defineMutation,
+  renderMutationResponse,
+  renderNoJsMutationResponse,
+  runMutation,
+} from './mutation.js';
 import type { MutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 
@@ -184,6 +189,61 @@ describe('mutation CSRF enforcement', () => {
     expect(getCalls).toBe(0);
     expect(writes).toBe(0);
     expect(response).toMatchObject({ status: 422 });
+    expect(response.body).toContain('data-error-code="CSRF"');
+  });
+
+  // G2 (SPEC §6.6:735): the no-JS mutation path must validate CSRF FIRST — before the
+  // guard lifecycle and before any replay reservation — mirroring the wire path
+  // (renderMutationResponse). A CSRF-invalid POST must NOT increment a stateful guard
+  // (rateLimit budget exhaustion) or occupy a replay slot.
+  it('G2: no-JS path validates CSRF before running guards or reserving replay', async () => {
+    const request = { session: { id: 's1' } };
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-secret',
+      sessionId(candidate: typeof request) {
+        return candidate.session.id;
+      },
+    };
+    let guardRuns = 0;
+    let handlerRuns = 0;
+    let storeTouches = 0;
+    const replayStore = {
+      get(): never {
+        storeTouches += 1;
+        throw new Error('replay get must not run before CSRF validation');
+      },
+      reserve(): never {
+        storeTouches += 1;
+        throw new Error('replay reserve must not run before CSRF validation');
+      },
+    };
+    const addToCart = defineMutation('cart/add', {
+      csrf,
+      guard: () => {
+        guardRuns += 1;
+        return true;
+      },
+      input: s.object({ productId: s.string() }),
+      handler(input: { productId: string }) {
+        handlerRuns += 1;
+        return input.productId;
+      },
+    });
+
+    const response = await renderNoJsMutationResponse(addToCart, {
+      idem: 'idem_g2',
+      // No 'csrf' field in the body → CSRF validation must fail.
+      rawInput: { 'Kovo-Idem': 'idem_g2', productId: 'p1' },
+      redirectTo: '/cart',
+      replayStore,
+      request,
+    });
+
+    expect(guardRuns).toBe(0);
+    expect(handlerRuns).toBe(0);
+    expect(storeTouches).toBe(0);
+    expect(response.status).toBe(422);
     expect(response.body).toContain('data-error-code="CSRF"');
   });
 });

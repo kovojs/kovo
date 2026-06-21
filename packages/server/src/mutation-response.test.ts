@@ -1175,6 +1175,42 @@ describe('server mutation primitives', () => {
 
     expect(finallyRan).toBe(true);
   });
+
+  // L10-1 (SPEC §9): a streaming mutation generator that throws mid-stream must report
+  // the error via onError AND emit a <kovo-done reason="error"> failure terminator so the
+  // client observes a clean end-of-stream instead of a silent hang.
+  it('L10-1: streaming generator that throws mid-stream reports onError and emits a done terminator', async () => {
+    const onError = vi.fn();
+    const thrown = new Error('stream boom');
+    const sendMessage = mutation('chat/stream-error', {
+      input: s.object({ body: s.string() }),
+      handler: (input) => input,
+      *stream() {
+        yield stream.text('assistant:a1', 'partial');
+        throw thrown;
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(sendMessage, {
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Stream': 'true' },
+      onError,
+      rawInput: { body: 'hi' },
+      redirectTo: '/chat',
+      request: {},
+    });
+
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    const body = await readResponseBody(response.body);
+    expect(body).toContain('<kovo-text target="assistant:a1">partial</kovo-text>');
+    expect(body).toContain('<kovo-done reason="error">');
+
+    expect(onError).toHaveBeenCalledWith(thrown, {
+      mutationKey: 'chat/stream-error',
+      operation: 'mutation-stream',
+      request: {},
+      targets: [],
+    });
+  });
 });
 
 async function readResponseBody(body: ReadableStream<Uint8Array> | string): Promise<string> {

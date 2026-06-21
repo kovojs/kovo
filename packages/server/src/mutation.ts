@@ -859,6 +859,18 @@ export async function renderMutationResponse<
       }),
       finalResponse,
       reservation,
+      // L10-1 (SPEC §9): thread the error hook + diagnostic context so a generator that
+      // throws mid-stream reports via onError and emits a failure terminator instead of
+      // silently hanging the client.
+      {
+        onError: wireRequest.onError,
+        context: {
+          mutationKey: definition.key,
+          operation: 'mutation-stream',
+          request: wireRequest.request,
+          ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
+        },
+      },
     );
   }
 
@@ -930,10 +942,28 @@ async function renderSuccessfulMutationWireResponse<
   };
 }
 
+/**
+ * L10-1 (SPEC §9): error-reporting context threaded into the streaming render so a
+ * generator that throws mid-stream can report via `onError` and emit a failure
+ * terminator. `'mutation-stream'` is not yet a member of the shared
+ * `ServerErrorDiagnosticContext.operation` union, so the context is cast at the
+ * reporting boundary; the runtime value the diagnostic hook observes is unchanged.
+ */
+interface StreamingMutationErrorContext {
+  context: {
+    mutationKey: string;
+    operation: string;
+    request: unknown;
+    targets?: readonly string[] | undefined;
+  };
+  onError?: import('./diagnostics.js').ServerErrorHandler | undefined;
+}
+
 function renderStreamingMutationWireResponse(
   chunks: MutationStreamSource<unknown, unknown, unknown>,
   finalResponse: BufferedMutationWireResponse,
   reservation?: MutationReplayReservation<BufferedMutationWireResponse>,
+  errorContext?: StreamingMutationErrorContext,
 ): MutationWireResponse {
   const encoder = new TextEncoder();
   // H4 (SPEC §9): retain a reference to the raw source iterator so the cancel
@@ -988,7 +1018,26 @@ function renderStreamingMutationWireResponse(
             status: finalResponse.status,
           });
         } catch (error) {
-          controller.error(error);
+          // L10-1 (SPEC §9): a streaming generator threw mid-stream. Report it via the
+          // server error hook and emit a `<kovo-done reason="error">` terminator so the
+          // client observes a clean, in-band end-of-stream (mirroring the explicit
+          // `stream.done({ reason: 'error' })` path) instead of a silent hang. The
+          // reservation is aborted, never committed, so the failed stream is not replayed.
+          if (errorContext) {
+            reportServerError(
+              errorContext.onError,
+              error,
+              errorContext.context as import('./diagnostics.js').ServerErrorDiagnosticContext,
+            );
+          }
+          try {
+            enqueue(renderDoneWireHtml({ reason: 'error' }));
+            controller.close();
+          } catch {
+            // The controller may already be errored/closed (e.g. the consumer cancelled
+            // concurrently); fall back to surfacing the original error on the stream.
+            controller.error(error);
+          }
           // Do not commit on error; let the reservation remain pending/aborted.
           reservation?.abort?.();
         }
@@ -1039,7 +1088,16 @@ export async function* coalesceMutationStreamChunks(
         ? new Promise<'flush'>((resolve) => setTimeout(() => resolve('flush'), maxDelayMs))
         : undefined;
 
-    const next = timer === undefined ? await pendingRead : await Promise.race([pendingRead, timer]);
+    let next: IteratorResult<MutationStreamChunk> | 'flush';
+    try {
+      next = timer === undefined ? await pendingRead : await Promise.race([pendingRead, timer]);
+    } catch (error) {
+      // L10-1 (SPEC §9): the source generator threw mid-stream. Flush any buffered text
+      // so already-yielded partial output is not lost, then propagate the error so the
+      // streaming render's catch can report it and emit the failure terminator.
+      yield* flush();
+      throw error;
+    }
     if (next === 'flush') {
       yield* flush();
       continue;
@@ -1295,6 +1353,29 @@ export async function renderNoJsMutationResponse<
   // (emitted by SRV-OUTPUT) or from the explicit `idem` option; also accept it from
   // the raw input object for callers that pre-parse form bodies.
   const csrf = mutationCsrfOptions(definition, noJsRequest.csrf);
+
+  // G2 (SPEC §6.6:735): validate CSRF FIRST — before the guard lifecycle and before any
+  // replay reservation — mirroring the wire path (renderMutationResponse). Otherwise a
+  // CSRF-invalid POST would still run a stateful `guards.rateLimit` (exhausting the
+  // victim's budget) and occupy a replay slot. The inner `runMutation` CSRF check below
+  // remains as defense-in-depth. Renders the failure through the same 422 page path as a
+  // handler-returned CSRF failure so no-JS clients see a consistent response.
+  if (csrf === undefined || (csrf !== false && !validateCsrfToken(noJsRequest.rawInput, noJsRequest.request, csrf))) {
+    const failure: MutationFail = {
+      error: { code: 'CSRF', payload: {} },
+      ok: false,
+      status: 422,
+    };
+    const body = noJsRequest.renderFailurePage
+      ? await noJsRequest.renderFailurePage(failure)
+      : renderDefaultFailurePage(failure);
+    return {
+      body,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 422,
+    };
+  }
+
   const idem =
     noJsRequest.idem ??
     (typeof noJsRequest.rawInput === 'object' &&
@@ -1833,15 +1914,48 @@ function selectMutationResponseTargets<Request>(
 
   const renderersByTarget = fragmentRenderersByTarget(input.fragmentRenderers);
   const liveRenderersByComponent = liveTargetRenderersByComponent(input.liveTargetRenderers);
+
+  // K2 (SPEC §9.5): build O(N) indices over the (capped) client-supplied live targets and
+  // descriptors so per-query/per-renderer matching is O(1) lookups instead of the prior
+  // O(N·M) `liveTargets.some`/`.find` and per-descriptor renderer scans (a >1000× DoS when
+  // N is attacker-controlled). Total cost drops from O(N·M) to O(N+M).
+  //
+  // - `liveTargetsByTarget`: target → live target (replaces the `.find` by target).
+  // - `liveTargetDeps`: union of every live target's dep tokens (any-target dep match).
+  // - `planCoveredDeps`: dep tokens carried by *plan-covered* live targets only (the
+  //   `targetIsPlanCovered && depsMatch` variant in the rerunQueries filter).
+  // - `descriptorRendererQueryTokens`: union of all registered-descriptor renderer query
+  //   names (replaces the per-descriptor `renderer.queries.some(tokens.includes)` scans).
+  const liveTargetsByTarget = new Map<string, MutationLiveTarget>();
+  const liveTargetDeps = new Set<string>();
+  const planCoveredDeps = new Set<string>();
+  for (const liveTarget of input.liveTargets) {
+    if (!liveTargetsByTarget.has(liveTarget.target)) {
+      liveTargetsByTarget.set(liveTarget.target, liveTarget);
+    }
+    const planCovered = targetIsPlanCovered(liveTarget.target, renderersByTarget);
+    for (const dep of liveTarget.deps) {
+      liveTargetDeps.add(dep);
+      if (planCovered) planCoveredDeps.add(dep);
+    }
+  }
+
+  const descriptorRendererQueryTokens = new Set<string>();
+  for (const descriptor of input.liveTargetDescriptors) {
+    const renderer = liveRenderersByComponent.get(descriptor.component);
+    if (!renderer?.queries) continue;
+    for (const rendererQuery of renderer.queries) descriptorRendererQueryTokens.add(rendererQuery);
+  }
+
+  const tokensHitDescriptorRenderer = (tokens: readonly string[]): boolean =>
+    tokens.some((token) => descriptorRendererQueryTokens.has(token));
+
   const affectedQueryTokens = new Set<string>();
   for (const query of input.rerunQueries) {
     const tokens = queryRerunTokens(query);
     if (
-      input.liveTargets.some((target) => depsMatch(target, tokens)) ||
-      input.liveTargetDescriptors.some((descriptor) => {
-        const renderer = liveRenderersByComponent.get(descriptor.component);
-        return renderer?.queries?.some((rendererQuery) => tokens.includes(rendererQuery)) ?? false;
-      })
+      tokens.some((token) => liveTargetDeps.has(token)) ||
+      tokensHitDescriptorRenderer(tokens)
     ) {
       for (const token of tokens) affectedQueryTokens.add(token);
     }
@@ -1849,26 +1963,15 @@ function selectMutationResponseTargets<Request>(
 
   const rerunQueries = input.rerunQueries.filter((query) => {
     const tokens = queryRerunTokens(query);
-    if (
-      !input.liveTargets?.some(
-        (target) =>
-          targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
-      ) &&
-      !input.liveTargetDescriptors.some((descriptor) => {
-        const renderer = liveRenderersByComponent.get(descriptor.component);
-        return renderer?.queries?.some((rendererQuery) => tokens.includes(rendererQuery)) ?? false;
-      })
-    ) {
-      return false;
-    }
-
-    return true;
+    return (
+      tokens.some((token) => planCoveredDeps.has(token)) || tokensHitDescriptorRenderer(tokens)
+    );
   });
 
   const fragmentTargets = input.fragmentRenderers
     .filter((renderer) => {
       if (renderer.updateCoverage === 'plan') return false;
-      const liveTarget = input.liveTargets?.find((target) => target.target === renderer.target);
+      const liveTarget = liveTargetsByTarget.get(renderer.target);
       return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
     })
     .map((renderer) => renderer.target);
@@ -1877,9 +1980,9 @@ function selectMutationResponseTargets<Request>(
     if (renderersByTarget.has(descriptor.target)) return false;
     const renderer = liveRenderersByComponent.get(descriptor.component);
     if (!renderer) return false;
-    const liveTarget = input.liveTargets?.find((target) => target.target === descriptor.target);
     const rendererQueries = renderer.queries ?? [];
     if (rendererQueries.some((query) => affectedQueryTokens.has(query))) return true;
+    const liveTarget = liveTargetsByTarget.get(descriptor.target);
     return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
   });
 

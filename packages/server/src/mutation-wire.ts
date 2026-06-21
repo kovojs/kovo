@@ -332,13 +332,35 @@ export function mutationWireRequestFromHeaders<Request>(
   };
 }
 
+/**
+ * @internal K2 (SPEC §9.5): hard cap on the number of client-supplied live-target /
+ * live-target-descriptor entries parsed from a single mutation request. Without this,
+ * an attacker-controlled `Kovo-Targets` / `Kovo-Live-Targets` header amplifies one
+ * mutation into N component renders plus O(N·M) selection scans — a >1000× DoS. The
+ * limit is generous relative to any real render plan (a page rarely refreshes more than
+ * a handful of live regions per mutation) but bounds the worst case.
+ */
+export const MAX_MUTATION_WIRE_TARGETS = 64;
+
 function parseLiveTargetHeader(value: string): MutationLiveTarget[] {
+  // K2 (SPEC §9.5): cap the raw entry list BEFORE per-entry parse so a flood header costs
+  // O(cap) parse work, not O(N). Dedup further shrinks the post-cap set.
   return dedupeLiveTargets(
-    value
-      .split(/[;,]/)
+    capEntries(value.split(/[;,]/))
       .map((entry) => parseLiveTargetEntry(entry))
       .filter((entry): entry is MutationLiveTarget => entry !== null),
   );
+}
+
+/**
+ * K2 (SPEC §9.5): bound a parsed entry list to {@link MAX_MUTATION_WIRE_TARGETS}. Applied
+ * before dedup so the cap is on the post-filter distinct-enough set; dedup further shrinks
+ * it. Capping here (parse time) keeps the rendered count and selection cost bounded.
+ */
+function capEntries<T>(entries: readonly T[]): T[] {
+  return entries.length > MAX_MUTATION_WIRE_TARGETS
+    ? entries.slice(0, MAX_MUTATION_WIRE_TARGETS)
+    : [...entries];
 }
 
 function parseLiveTargetEntry(entry: string): MutationLiveTarget | null {
@@ -365,8 +387,10 @@ function readTargetDeps(value: string): string[] {
 }
 
 function parseLiveTargetDescriptorHeader(value: string): MutationLiveTargetDescriptor[] {
+  // K2 (SPEC §9.5): cap the raw entry list BEFORE per-entry parse (each entry runs a
+  // JSON.parse for its props) so a flood header costs O(cap) parse work, not O(N).
   return dedupeLiveTargetDescriptors(
-    splitLiveTargetDescriptorEntries(value)
+    capEntries(splitLiveTargetDescriptorEntries(value))
       .map((entry) => parseLiveTargetDescriptorEntry(entry))
       .filter((entry): entry is MutationLiveTargetDescriptor => entry !== null),
   );
