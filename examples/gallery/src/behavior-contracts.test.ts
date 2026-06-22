@@ -401,7 +401,10 @@ const expectedBehaviorSnippets: Partial<Record<GalleryRoute['path'], readonly st
   '/components/hover-card': [
     'href="/team/ada"',
     'kovo-hover-card="gallery-hover-card-content"',
-    'popover="manual"',
+    // No `popover="manual"`: a manual popover stayed display:none (never got the
+    // imperative showPopover() call), so the card never appeared. Visibility is
+    // governed by data-state/hidden instead (static fixture renders the open state).
+    'data-state="open"',
     'id="gallery-hover-card-content"',
   ],
   '/components/menubar': [

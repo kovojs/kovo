@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
@@ -97,7 +97,15 @@ describe('gallery demo fixtures', () => {
       const route = galleryRoutes.find((candidate) => candidate.path === path);
       if (!route) throw new Error(`Missing gallery route fixture for ${path}`);
 
-      expect(readVisualFixture(fileName)).toBe(`${renderGalleryRoute(route)}\n`);
+      // Opt-in regeneration: `UPDATE_VISUAL_FIXTURES=1 vitest run demo-fixtures` rewrites the
+      // committed `visual-fixtures/*.html.txt` from the current styled render (used after an
+      // intentional component/demo change), then the default assertion mode pins them.
+      const rendered = `${renderGalleryRoute(route)}\n`;
+      if (process.env.UPDATE_VISUAL_FIXTURES) {
+        writeFileSync(new URL(`./visual-fixtures/${fileName}`, import.meta.url), rendered);
+      } else {
+        expect(readVisualFixture(fileName)).toBe(rendered);
+      }
     }
   });
 
@@ -280,7 +288,11 @@ describe('gallery demo fixtures', () => {
     expect(avatar.html).toContain('decoding="async"');
     expect(avatar.html).toContain('loading="lazy"');
     expect(avatar.html).toContain('sizes="40px"');
-    expect(avatar.html).toContain('srcset="/avatars/ada@2x.png 2x"');
+    // Loaded avatars now use committed same-origin SVG assets (a data: URI is
+    // neutralized to "#" by the compiler src sanitizer); the retina srcSet that
+    // 404'd was removed.
+    expect(avatar.html).toContain('src="/avatars/ada.svg"');
+    expect(avatar.html).not.toContain('ada@2x.png');
     expect(avatar.html).toContain('data-delay="250"');
     expect(avatar.html).toContain('data-state="loaded"');
     expect(avatar.html).toContain('hidden>GH</span>');
@@ -417,7 +429,9 @@ describe('gallery demo fixtures', () => {
 
     expect(hoverCard.html).toContain('data-gallery-demo="hover-card"');
     expect(hoverCard.html).toContain('kovo-hover-card="gallery-hover-card-content"');
-    expect(hoverCard.html).toContain('popover="manual"');
+    // hover-card no longer uses a manual popover (it never received showPopover(),
+    // so it stayed display:none); visibility is governed by data-state/hidden.
+    expect(hoverCard.html).not.toContain('popover="manual"');
 
     expect(popover.html).toContain('data-gallery-demo="popover"');
     expect(popover.html).toContain('popovertarget="gallery-popover-content"');

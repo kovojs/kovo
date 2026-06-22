@@ -125,7 +125,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(autocomplete).toContain('data-gallery-interactive="autocomplete"');
     expect(autocomplete).toContain(
-      'kovo-state=\'{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}\'',
+      'kovo-state=\'{"highlightedValue":"design","inputValue":"","open":false,"value":"design"}\'',
     );
     expect(autocomplete).toContain('<AutocompleteInput');
     expect(autocomplete).toContain(
@@ -186,7 +186,7 @@ describe('compiled interactive gallery demos', () => {
 
     expect(combobox).toContain('data-gallery-interactive="combobox"');
     expect(combobox).toContain(
-      'kovo-state=\'{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}\'',
+      'kovo-state=\'{"highlightedValue":"austin","inputValue":"","open":false,"value":"austin"}\'',
     );
     expect(combobox).toContain('<ComboboxInput');
     expect(combobox).toContain('id="gallery-combobox-form" data-gallery-form="combobox"');

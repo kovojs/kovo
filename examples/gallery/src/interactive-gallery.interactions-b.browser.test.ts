@@ -558,7 +558,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(imports.at(-1)).toBe('/c/src/interactive/progress-demo.client.js');
       expect(root.getAttribute('kovo-state')).toBe('{"value":100}');
       expect(currentProgress.value).toBe(100);
-      expect(currentProgress.getAttribute('data-state')).toBe('loading');
+      // data-state is now reactive (was frozen at the SSR 'loading'): value=max ⇒ complete.
+      expect(currentProgress.getAttribute('data-state')).toBe('complete');
       expect(currentProgress.getAttribute('aria-valuetext')).toBe('100 percent uploaded');
       expect(currentOutput.textContent).toBe('100%');
     });
@@ -577,7 +578,8 @@ describe('compiled interactive gallery demos in the browser', () => {
 
       expect(root.getAttribute('kovo-state')).toBe('{"value":null}');
       expect(currentProgress.hasAttribute('value')).toBe(false);
-      expect(currentProgress.getAttribute('data-state')).toBe('loading');
+      // Reactive data-state: value=null ⇒ indeterminate (was frozen at 'loading').
+      expect(currentProgress.getAttribute('data-state')).toBe('indeterminate');
       expect(currentProgress.getAttribute('aria-valuetext')).toBe('Upload pending');
       expect(currentOutput.textContent).toBe('pending');
     });
@@ -896,17 +898,16 @@ describe('compiled interactive gallery demos in the browser', () => {
         root.querySelector<HTMLOutputElement>('[data-demo-state="toggle-group-value"]'),
       );
 
-      expect(root.getAttribute('kovo-state')).toBe(
-        '{"activeValue":"italic","value":"bold,italic"}',
-      );
-      expect(currentBold.getAttribute('aria-pressed')).toBe('true');
-      expect(currentBold.getAttribute('data-state')).toBe('pressed');
+      // Single-select: selecting italic replaces bold (siblings deselect).
+      expect(root.getAttribute('kovo-state')).toBe('{"activeValue":"italic","value":"italic"}');
+      expect(currentBold.getAttribute('aria-pressed')).toBe('false');
+      expect(currentBold.getAttribute('data-state')).toBe('off');
       expect(currentItalic.getAttribute('aria-pressed')).toBe('true');
       expect(currentItalic.getAttribute('data-state')).toBe('pressed');
-      expect(currentOutput.textContent).toBe('bold,italic');
+      expect(currentOutput.textContent).toBe('italic');
     });
 
-    // SPEC §12.1: the toggle-group multi-pressed/roving state after keyboard move and
+    // SPEC §12.1: the toggle-group single-pressed/roving state after keyboard move and
     // press must stay axe-clean, including the disabled item.
     await expectNoAxeViolations(root);
   });
@@ -1604,7 +1605,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(trigger.getAttribute('kovo-hover-card')).toBe('gallery-hover-card-content');
     expect(trigger.getAttribute('aria-controls')).toBeNull();
     expect(trigger.getAttribute('aria-expanded')).toBeNull();
-    expect(content.getAttribute('popover')).toBe('manual');
+    // No longer a manual popover (it stayed display:none without an imperative
+    // showPopover()); visibility is governed by hidden + [data-state] instead.
+    expect(content.getAttribute('popover')).toBeNull();
     expect(content.hidden).toBe(true);
     expect(content.matches(':popover-open')).toBe(false);
     expect(output.textContent).toBe('closed');

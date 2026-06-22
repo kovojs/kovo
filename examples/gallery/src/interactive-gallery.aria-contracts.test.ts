@@ -490,17 +490,19 @@ describe('compiled interactive gallery demos', () => {
         signal,
         state: toggleGroupState,
       });
-      expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
+      // Single-select: clicking italic REPLACES bold (siblings deselect), so value
+      // is just 'italic' and bold is no longer pressed.
+      expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'italic' });
       expect(
         deriveRun(
           toggleGroup,
           'GalleryToggleGroupDemo$button_aria_pressed_derive',
           toggleGroupState,
         ),
-      ).toBe('true');
+      ).toBe('false');
       expect(
         deriveRun(toggleGroup, 'GalleryToggleGroupDemo$button_data_state_derive', toggleGroupState),
-      ).toBe('pressed');
+      ).toBe('off');
       expect(
         deriveRun(
           toggleGroup,
@@ -517,7 +519,7 @@ describe('compiled interactive gallery demos', () => {
       ).toBe('pressed');
       expect(
         deriveRun(toggleGroup, 'GalleryToggleGroupDemo$output_text_derive', toggleGroupState),
-      ).toBe('bold,italic');
+      ).toBe('italic');
 
       const toast = evaluateClientModule('toast-demo.client.js', { document });
       const toastState = {

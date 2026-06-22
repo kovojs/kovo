@@ -294,15 +294,17 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
 
     expect(root.getAttribute('kovo-state')).toBe(
-      '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
+      '{"highlightedValue":"austin","inputValue":"","open":false,"value":"austin"}',
     );
     expect(input.getAttribute('role')).toBe('combobox');
     expect(input.getAttribute('aria-expanded')).toBe('false');
     expect(input.getAttribute('aria-controls')).toBe('gallery-combobox-listbox');
     expect(input.name).toBe('gallery-city');
     expect(input.form).toBe(form);
-    expect(input.value).toBe('austin');
-    expect(new FormData(form).get('gallery-city')).toBe('austin');
+    // Seeded empty so the listbox isn't stuck pre-filtered to the current value
+    // (the "does not filter" fix); the query is typed/cleared by the user.
+    expect(input.value).toBe('');
+    expect(new FormData(form).get('gallery-city')).toBe('');
     expect(listbox.hidden).toBe(true);
     expect(chicago.getAttribute('role')).toBe('option');
     expect(output.textContent).toBe('Austin');
@@ -373,6 +375,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
 
+      // Selecting Austin (value changed chicago→austin) syncs inputValue to the label.
       expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
       );
@@ -413,7 +416,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       const currentListbox = required(root.querySelector<HTMLElement>('#gallery-combobox-listbox'));
       expect(currentListbox.hidden).toBe(true);
       expect(root.getAttribute('kovo-state')).toBe(
-        '{"highlightedValue":"austin","inputValue":"austin","open":false,"value":"austin"}',
+        '{"highlightedValue":"austin","inputValue":"","open":false,"value":"austin"}',
       );
     });
   });
@@ -431,15 +434,17 @@ describe('compiled interactive gallery demos in the browser', () => {
     });
 
     expect(root.getAttribute('kovo-state')).toBe(
-      '{"highlightedValue":"design","inputValue":"de","open":false,"value":"design"}',
+      '{"highlightedValue":"design","inputValue":"","open":false,"value":"design"}',
     );
     expect(input.getAttribute('role')).toBe('combobox');
     expect(input.getAttribute('aria-expanded')).toBe('false');
     expect(input.getAttribute('aria-controls')).toBe('gallery-autocomplete-list');
     expect(input.name).toBe('gallery-tag');
     expect(input.form).toBe(form);
-    expect(input.value).toBe('de');
-    expect(new FormData(form).get('gallery-tag')).toBe('de');
+    // Seeded empty (was 'de'): non-prefix queries no longer hide everything and
+    // the list isn't pre-filtered on load.
+    expect(input.value).toBe('');
+    expect(new FormData(form).get('gallery-tag')).toBe('');
     expect(listbox.getAttribute('role')).toBe('listbox');
     expect(listbox.hidden).toBe(true);
     expect(output.textContent).toBe('Design');
@@ -1029,11 +1034,14 @@ describe('compiled interactive gallery demos in the browser', () => {
     const output = required(root.querySelector<HTMLOutputElement>('[data-demo-state="otp-value"]'));
     const { imports } = installInteractiveGalleryLoader(root, { events: ['keydown', 'paste'] });
 
+    // Backspace on the empty active slot (2) now walks focus left to the previous
+    // slot (1) so repeated Backspace can delete across slots — the "can't delete
+    // multiple numbers" fix. The value is unchanged on this first press.
     third.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Backspace' }));
 
     await vi.waitFor(() => {
       expect(imports.at(-1)).toBe('/c/src/interactive/otp-field-demo.client.js');
-      expect(root.getAttribute('kovo-state')).toBe('{"activeSlot":2,"value":"12"}');
+      expect(root.getAttribute('kovo-state')).toBe('{"activeSlot":1,"value":"12"}');
       expect(root.hasAttribute('data-complete')).toBe(false);
       expect(hidden.value).toBe('12');
       expect(new FormData(form).get('gallery-otp-code')).toBe('12');

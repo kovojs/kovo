@@ -192,9 +192,11 @@ describe('compiled interactive gallery demos', () => {
       signal,
       state: comboboxState,
     });
+    // Open-on-pointer now clears the typed query so the listbox isn't stuck
+    // pre-filtered to the current value (the "does not filter" report).
     expect(comboboxState).toEqual({
       highlightedValue: 'austin',
-      inputValue: 'austin',
+      inputValue: '',
       open: true,
       value: 'austin',
     });
@@ -1162,7 +1164,8 @@ describe('compiled interactive gallery demos', () => {
       signal,
       state: toggleGroupState,
     });
-    expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'bold,italic' });
+    // Single-select: clicking italic replaces bold (siblings deselect).
+    expect(toggleGroupState).toEqual({ activeValue: 'italic', value: 'italic' });
 
     const toastState = { activeCount: 0, activeOpen: false, previousCount: 0, previousOpen: false };
     clientHandler(toast, 'GalleryToastDemo$button_click')(new Event('click'), {
