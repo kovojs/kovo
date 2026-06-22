@@ -3,7 +3,7 @@ import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
-import { mutationInputFactsFromSource, type LocalMutationInputFact } from '../mutation-inputs.js';
+import { mutationInputFactsFromSource, type LocalMutationInputFact } from '../scan/mutation-inputs.js';
 import {
   componentRenderSlotsParam,
   type ComponentModuleModel,

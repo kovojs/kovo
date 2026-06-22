@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
-import type { MutationInputFieldCoercion, MutationInputFieldFact } from './types.js';
+import type { MutationInputFieldCoercion, MutationInputFieldFact } from '../types.js';
 
 const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))
