@@ -34,7 +34,6 @@ const ALLOWED_REPARSE_FILES: ReadonlyMap<string, string> = new Map([
     'emit/live-target-renderers.ts',
     'generated-artifact: renderer-export synthesis over the EMITTED lowered module, not app source',
   ],
-  ['style.ts', 'FN7 pending: StyleX extraction component re-parses (collapse onto scan SourceFile)'],
 ]);
 
 function compilerSourceFiles(): string[] {
