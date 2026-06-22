@@ -543,7 +543,11 @@ const landingStyles = style.create(
       left: '18%',
       width: '54%',
     },
-    spaS3: { background: 'color-mix(in srgb, var(--teal) 45%, var(--panel))', left: '72%', width: '28%' },
+    spaS3: {
+      background: 'color-mix(in srgb, var(--teal) 45%, var(--panel))',
+      left: '72%',
+      width: '28%',
+    },
     mpaS1: { background: 'var(--faint)', left: 0, width: '10%' },
     mpaS3: {
       background:
@@ -632,10 +636,10 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
           <em style={landingStyles.taglineEm}>HTML</em>.
         </p>
         <p style={landingStyles.sub}>
-          {BRAND} is the web framework that <b style={landingStyles.strong}>hands your agent the
-          fix</b> -- database to DOM. AI coding agents get a precise error and know exactly what to
-          change, and your users get pages that are real HTML,{' '}
-          <b style={landingStyles.strong}>interactive at first paint</b>.
+          {BRAND} is the web framework that{' '}
+          <b style={landingStyles.strong}>hands your agent the fix</b> -- database to DOM. AI coding
+          agents get a precise error and know exactly what to change, and your users get pages that
+          are real HTML, <b style={landingStyles.strong}>interactive at first paint</b>.
         </p>
         <span style={landingStyles.noJs}>&#10003; No JS required on load</span>
         <div style={landingStyles.try}>
