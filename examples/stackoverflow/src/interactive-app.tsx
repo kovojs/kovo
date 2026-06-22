@@ -17,7 +17,12 @@ import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/se
 
 import { QuestionDetailRegion } from './components/question-detail.js';
 import { QuestionListRegion } from './components/question-list.js';
-import { SoShell } from './components/chrome.js';
+import { TaggedQuestionsRegion } from './components/tagged-questions.js';
+import { TagsPage } from './components/tags-page.js';
+import { UserProfileRegion } from './components/user-profile.js';
+import { UsersPage } from './components/users-page.js';
+import { SoShell, type NavSection } from './components/chrome.js';
+import { homeRail, questionRail, withRail } from './components/right-rail.js';
 import { createSoDb, type SoDb } from './db.js';
 import { seedSoDemo } from './demo-data.js';
 import { postAnswerMutation, postQuestionMutation, voteUpMutation } from './mutations.js';
@@ -30,11 +35,11 @@ import {
 } from './queries.js';
 import { soTheme } from './theme.js';
 
-// SPEC.md §9.1: the Stack Overflow example as a fully interactive Kovo app. It
-// registers the postQuestion / postAnswer / voteUp mutations and lets generated
-// live-target renderers refresh visible query-backed regions from server truth.
-// The native `enhance` forms POST to `/_m/*`; served by the Node server
-// (scripts/serve.mjs), the inline loader morphs the re-rendered region.
+// SPEC.md §9.1: KovOverflow — the Stack Overflow example as a fully interactive
+// Kovo app. It registers the postQuestion / postAnswer / voteUp mutations and
+// lets generated live-target renderers refresh visible query-backed regions from
+// server truth. The native `enhance` forms POST to `/_m/*`; served by the Node
+// server (scripts/serve.mjs), the inline loader morphs the re-rendered region.
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
 const soStylesheets = [
@@ -44,19 +49,17 @@ const soStylesheets = [
   }),
 ] as const;
 const demoSession = { id: 'demo-session', user: { id: 'demo-viewer', roles: ['member'] as const } };
-const soStaticQuestionPaths = [
-  '/questions/q1',
-  '/questions/q2',
-  '/questions/q3',
-  '/questions/q4',
-  '/questions/q5',
-  '/questions/q6',
-  '/questions/q7',
-] as const;
+const soStaticQuestionPaths = Array.from({ length: 14 }, (_unused, index) => `/questions/q${index + 1}`);
 
-const SoLayout = layout({
-  render: (_queries, _state, { children }) => <SoShell>{children}</SoShell>,
-});
+// One layout per nav section so the shell can highlight the active sidebar item
+// without threading the request URL through the render slots.
+const soLayout = (active: NavSection) =>
+  layout({
+    render: (_queries, _state, { children }) => <SoShell active={active}>{children}</SoShell>,
+  });
+const QuestionsLayout = soLayout('questions');
+const TagsLayout = soLayout('tags');
+const UsersLayout = soLayout('users');
 
 // SPEC.md §4.2: the source-served route still needs the same derived component
 // identities as lowered components so runtime root stamps advertise morphable
@@ -153,9 +156,9 @@ export interface BuildSoInteractiveAppOptions {
 }
 
 /**
- * Build the interactive Stack Overflow app over a (seeded) PGlite database. Pass
- * an existing `db` to share state with an already-rendered shell; otherwise a
- * fresh seeded database is created. The returned handler is what the Node server
+ * Build the interactive KovOverflow app over a (seeded) PGlite database. Pass an
+ * existing `db` to share state with an already-rendered shell; otherwise a fresh
+ * seeded database is created. The returned handler is what the Node server
  * (scripts/serve.mjs) serves — mutations round-trip natively over PGlite.
  */
 export async function buildSoInteractiveApp(
@@ -173,13 +176,33 @@ export async function buildSoInteractiveApp(
   // JSX composition lets the component query declarations load question +
   // answers from PGlite by `params.id`.
   const questionDetailRoute = route('/questions/:id', {
-    meta: { description: 'Question detail', title: 'Question · Stack Overflow' },
+    meta: { description: 'Question detail', title: 'Question · KovOverflow' },
     params: s.object({ id: s.string() }),
     staticPaths: soStaticQuestionPaths,
     page({ params }: { params: { id: string } }) {
-      return <QuestionDetailRegion questionId={params.id} />;
+      return withRail(<QuestionDetailRegion questionId={params.id} />, questionRail(params.id));
     },
-    layout: SoLayout,
+    layout: QuestionsLayout,
+    stylesheets: soStylesheets,
+  });
+
+  const taggedQuestionsRoute = route('/questions/tagged/:tag', {
+    meta: { description: 'Questions filtered by tag', title: 'Tagged questions · KovOverflow' },
+    params: s.object({ tag: s.string() }),
+    page({ params }: { params: { tag: string } }) {
+      return <TaggedQuestionsRegion tag={params.tag} />;
+    },
+    layout: TagsLayout,
+    stylesheets: soStylesheets,
+  });
+
+  const userProfileRoute = route('/users/:id', {
+    meta: { description: 'Member profile', title: 'User · KovOverflow' },
+    params: s.object({ id: s.string() }),
+    page({ params }: { params: { id: string } }) {
+      return <UserProfileRegion userId={params.id} />;
+    },
+    layout: UsersLayout,
     stylesheets: soStylesheets,
   });
 
@@ -194,15 +217,33 @@ export async function buildSoInteractiveApp(
       route('/', {
         meta: {
           description: 'Top developer questions and answers.',
-          title: 'Questions · Stack Overflow',
+          title: 'Questions · KovOverflow',
         },
         page() {
-          return <QuestionListRegion />;
+          return withRail(<QuestionListRegion />, homeRail());
         },
-        layout: SoLayout,
+        layout: QuestionsLayout,
         stylesheets: soStylesheets,
       }),
+      taggedQuestionsRoute,
       questionDetailRoute,
+      route('/tags', {
+        meta: { description: 'Browse questions by tag.', title: 'Tags · KovOverflow' },
+        page() {
+          return <TagsPage />;
+        },
+        layout: TagsLayout,
+        stylesheets: soStylesheets,
+      }),
+      route('/users', {
+        meta: { description: 'The KovOverflow community.', title: 'Users · KovOverflow' },
+        page() {
+          return <UsersPage />;
+        },
+        layout: UsersLayout,
+        stylesheets: soStylesheets,
+      }),
+      userProfileRoute,
     ],
     sessionProvider: () => demoSession,
   });

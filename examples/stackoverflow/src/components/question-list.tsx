@@ -5,20 +5,27 @@ import * as style from '@kovojs/style';
 import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
-import {
-  compactCount,
-  freshId,
-  parseTags,
-  renderTags,
-  renderUserCard,
-  viewsFor,
-  voteButton,
-} from '../components/chrome.js';
+import { freshId } from '../components/chrome.js';
+import { cardStyles, newestFirst, renderQuestionRow } from '../components/question-card.js';
+
+// Palette inlined as a same-file literal (StyleX-style extraction resolves only
+// same-file literals; SPEC §13.1). Mirrors the `so` palette in chrome.tsx.
+const so = {
+  bodyBg: '#f1f2f3',
+  white: '#ffffff',
+  border: '#e3e6e8',
+  borderMed: '#d6d9dc',
+  text: '#0c0d0e',
+  textSecondary: '#232629',
+  textMuted: '#525960',
+  blue: '#0a95ff',
+  blueHover: '#0074cc',
+  blueText: '#ffffff',
+} as const;
 
 // Question list for `/`. It reads the question rowset and total vote score, then
-// renders the Stack Overflow "All Questions" header, the filter tabs, the
-// question rows (stat rail + title + excerpt + tags + user card), and the
-// ask-a-question composer.
+// renders the KovOverflow "All Questions" header, the filter tabs, the question
+// rows (stat rail + title + excerpt + tags + user card), and the ask composer.
 
 type QuestionListQueryResult = Awaited<ReturnType<typeof questionList.load>>;
 type QuestionScoreQueryResult = Awaited<ReturnType<typeof questionScore.load>>;
@@ -36,33 +43,27 @@ const defaultQuestionListRenderSlots: QuestionListRenderSlots = {
 
 const listStyles = style.create(
   {
-    // ---- Page header ---------------------------------------------------------
     pageHead: {
       alignItems: 'center',
       display: 'flex',
       gap: 16,
       justifyContent: 'space-between',
-      marginBlockEnd: 12,
+      marginBlockEnd: 14,
     },
-    pageTitle: {
-      color: '#0c0d0e',
-      fontSize: 27,
-      fontWeight: 400,
-      margin: 0,
-    },
+    pageTitle: { color: so.text, fontSize: 27, fontWeight: 400, margin: 0 },
     askButton: {
-      backgroundColor: '#0a95ff',
-      borderColor: '#0a95ff',
+      backgroundColor: so.blue,
+      borderColor: so.blue,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#ffffff',
+      color: so.blueText,
       flexShrink: 0,
       fontSize: 13,
       paddingBlock: 10,
       paddingInline: 11,
       textDecoration: 'none',
-      ':hover': { backgroundColor: '#0074cc' },
+      ':hover': { backgroundColor: so.blueHover },
     },
     subHead: {
       alignItems: 'center',
@@ -70,15 +71,11 @@ const listStyles = style.create(
       flexWrap: 'wrap',
       gap: 12,
       justifyContent: 'space-between',
-      marginBlockEnd: 16,
+      marginBlockEnd: 14,
     },
-    count: {
-      color: '#232629',
-      fontSize: 17,
-    },
-    // ---- Filter tabs ---------------------------------------------------------
+    count: { color: so.textSecondary, fontSize: 17 },
     tabs: {
-      borderColor: '#d6d9dc',
+      borderColor: so.borderMed,
       borderRadius: 6,
       borderStyle: 'solid',
       borderWidth: 1,
@@ -86,247 +83,71 @@ const listStyles = style.create(
       overflow: 'hidden',
     },
     tab: {
-      borderInlineStartColor: '#d6d9dc',
+      borderInlineStartColor: so.borderMed,
       borderInlineStartStyle: 'solid',
       borderInlineStartWidth: 1,
-      color: '#525960',
+      color: so.textMuted,
       fontSize: 13,
       paddingBlock: 8,
       paddingInline: 11,
       textDecoration: 'none',
-      ':hover': { backgroundColor: '#f8f9f9', color: '#232629' },
+      ':hover': { backgroundColor: '#f8f9f9', color: so.textSecondary },
     },
-    tabFirst: {
-      borderInlineStartWidth: 0,
-    },
-    tabActive: {
-      backgroundColor: '#f1f2f3',
-      color: '#232629',
-    },
-    // ---- Question rows -------------------------------------------------------
-    list: {
-      borderTopColor: '#e3e6e8',
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      listStyle: 'none',
-      margin: 0,
-      padding: 0,
-    },
-    row: {
-      borderBottomColor: '#e3e6e8',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      display: 'flex',
-      gap: 16,
-      paddingBlock: 16,
-    },
-    stats: {
-      color: '#525960',
-      display: 'flex',
-      flexDirection: 'column',
-      flexShrink: 0,
-      fontSize: 13,
-      gap: 8,
-      paddingTop: 2,
-      width: 90,
-    },
-    statVotes: {
-      alignItems: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 3,
-    },
-    statVotesLabel: {
-      color: '#525960',
-      fontSize: 13,
-      lineHeight: 1,
-    },
-    statBox: {
-      alignItems: 'center',
-      borderColor: '#2f6f44',
-      borderRadius: 4,
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: '#2f6f44',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 2,
-      paddingBlock: 4,
-      paddingInline: 6,
-    },
-    statBoxNum: {
-      fontSize: 15,
-      fontVariantNumeric: 'tabular-nums',
-      fontWeight: 400,
-      lineHeight: 1,
-    },
-    statBoxLabel: {
-      fontSize: 12,
-      lineHeight: 1,
-    },
-    statPlain: {
-      alignItems: 'center',
-      color: '#525960',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 2,
-      paddingBlock: 4,
-    },
-    statViews: {
-      color: '#6a737c',
-      fontSize: 12,
-      textAlign: 'center',
-    },
-    rowMain: {
-      display: 'grid',
-      flex: '1 1 0%',
-      gap: 6,
-      minWidth: 0,
-    },
-    rowTitle: {
-      color: '#0074cc',
-      fontSize: 17,
-      fontWeight: 400,
-      lineHeight: 1.3,
-      textDecoration: 'none',
-      ':hover': { color: '#0a95ff' },
-    },
-    rowExcerpt: {
-      color: '#525960',
-      display: '-webkit-box',
-      fontSize: 13,
-      lineHeight: 1.5,
-      margin: 0,
-      overflow: 'hidden',
-      WebkitBoxOrient: 'vertical',
-      WebkitLineClamp: 2,
-    },
-    rowMeta: {
-      alignItems: 'flex-end',
-      columnGap: 12,
-      display: 'flex',
-      flexWrap: 'wrap',
-      justifyContent: 'space-between',
-      marginBlockStart: 4,
-      rowGap: 8,
-    },
-    // ---- Ask composer --------------------------------------------------------
+    tabFirst: { borderInlineStartWidth: 0 },
+    tabActive: { backgroundColor: so.bodyBg, color: so.textSecondary },
     composer: {
-      backgroundColor: '#fdf7e3',
-      borderColor: '#f1e5bc',
-      borderRadius: 6,
+      backgroundColor: so.white,
+      borderColor: so.borderMed,
+      borderRadius: 7,
       borderStyle: 'solid',
       borderWidth: 1,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
       display: 'grid',
       gap: 10,
       marginBlockStart: 28,
-      padding: 16,
+      padding: 18,
     },
-    composerTitle: {
-      color: '#0c0d0e',
-      fontSize: 15,
-      fontWeight: 600,
-      margin: 0,
-    },
-    composerHint: {
-      color: '#525960',
-      fontSize: 13,
-      marginBlock: 0,
-    },
-    label: {
-      color: '#0c0d0e',
-      fontSize: 14,
-      fontWeight: 600,
-    },
+    composerTitle: { color: so.text, fontSize: 18, fontWeight: 600, margin: 0 },
+    composerHint: { color: so.textMuted, fontSize: 13, marginBlock: 0 },
+    label: { color: so.text, fontSize: 14, fontWeight: 600 },
     input: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d6d9dc',
+      backgroundColor: so.white,
+      borderColor: so.borderMed,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
       boxSizing: 'border-box',
-      color: '#0c0d0e',
+      color: so.text,
       fontSize: 13,
       paddingBlock: 9,
       paddingInline: 11,
       width: '100%',
       ':focus': {
-        borderColor: '#0a95ff',
+        borderColor: so.blue,
         boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
         outline: 'none',
       },
     },
-    textarea: {
-      lineHeight: 1.5,
-      resize: 'vertical',
-    },
-    composerActions: {
-      display: 'flex',
-      justifyContent: 'flex-start',
-    },
+    textarea: { lineHeight: 1.5, resize: 'vertical' },
+    composerActions: { display: 'flex', justifyContent: 'flex-start' },
     submitButton: {
-      backgroundColor: '#0a95ff',
-      borderColor: '#0a95ff',
+      backgroundColor: so.blue,
+      borderColor: so.blue,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#ffffff',
+      color: so.blueText,
       fontSize: 13,
       paddingBlock: 10,
       paddingInline: 11,
-      ':hover': { backgroundColor: '#0074cc' },
+      ':hover': { backgroundColor: so.blueHover },
     },
-    error: {
-      color: '#c22e32',
-      fontSize: 13,
-    },
+    error: { color: '#c22e32', fontSize: 13 },
   },
   { namespace: 'list', source: 'components/question-list.tsx' },
 );
 
-function renderAnswerStat(answerCount: number): string {
-  if (answerCount > 0) {
-    return (
-      <div style={listStyles.statBox}>
-        <span style={listStyles.statBoxNum}>{answerCount}</span>
-        <span style={listStyles.statBoxLabel}>{answerCount === 1 ? 'answer' : 'answers'}</span>
-      </div>
-    );
-  }
-  return (
-    <div style={listStyles.statPlain}>
-      <span style={listStyles.statBoxNum}>0</span>
-      <span style={listStyles.statBoxLabel}>answers</span>
-    </div>
-  );
-}
-
-function renderQuestionRow(question: QuestionListItem): string {
-  const tags = parseTags(question.tags);
-  const views = viewsFor(question.id, question.score);
-  return (
-    <li kovo-key={question.id} style={listStyles.row}>
-      <div style={listStyles.stats}>
-        <div style={listStyles.statVotes}>
-          {voteButton(question.id, question.score)}
-          <span style={listStyles.statVotesLabel}>votes</span>
-        </div>
-        {renderAnswerStat(question.answerCount)}
-        <span style={listStyles.statViews}>{`${compactCount(views)} views`}</span>
-      </div>
-      <div style={listStyles.rowMain}>
-        <a style={listStyles.rowTitle} href={`/questions/${question.id}`}>
-          {question.title}
-        </a>
-        {question.body ? <p style={listStyles.rowExcerpt}>{question.body}</p> : ''}
-        <div style={listStyles.rowMeta}>
-          {renderTags(tags)}
-          {renderUserCard(question.authorName, question.createdAt, 'asked')}
-        </div>
-      </div>
-    </li>
-  );
-}
+const FILTER_TABS = ['Newest', 'Active', 'Bountied', 'Unanswered'] as const;
 
 // Interactive region rendered inside the full page and fragment responses.
 export const QuestionListRegion = component({
@@ -343,7 +164,7 @@ export const QuestionListRegion = component({
     _state,
     _slots: QuestionListRenderSlots = defaultQuestionListRenderSlots,
   ) => {
-    const questions = questionList.items;
+    const questions = newestFirst(questionList.items as QuestionListItem[]);
     const totalVotes = questionScore.score;
 
     return (
@@ -355,24 +176,28 @@ export const QuestionListRegion = component({
           </a>
         </div>
         <div style={listStyles.subHead}>
-          <span style={listStyles.count}>{questions.length.toLocaleString('en-US')} questions</span>
+          <span style={listStyles.count}>
+            {questions.length.toLocaleString('en-US')} questions
+          </span>
           <div style={listStyles.tabs}>
-            <a href="/" style={[listStyles.tab, listStyles.tabFirst, listStyles.tabActive]}>
-              Newest
-            </a>
-            <a href="/" style={listStyles.tab}>
-              Active
-            </a>
-            <a href="/" style={listStyles.tab}>
-              Bountied
-            </a>
-            <a href="/" style={listStyles.tab}>
-              Unanswered
-            </a>
+            {FILTER_TABS.map((tab, index) => (
+              <a
+                href="/"
+                style={
+                  index === 0
+                    ? [listStyles.tab, listStyles.tabFirst, listStyles.tabActive]
+                    : listStyles.tab
+                }
+              >
+                {tab}
+              </a>
+            ))}
           </div>
         </div>
 
-        <ul style={listStyles.list}>{questions.map((question) => renderQuestionRow(question))}</ul>
+        <ul style={cardStyles.list}>
+          {questions.map((question) => renderQuestionRow(question, { interactive: true }))}
+        </ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
         <form enhance mutation={postQuestionMutation} id="ask-question" style={listStyles.composer}>
@@ -380,8 +205,8 @@ export const QuestionListRegion = component({
           <input type="hidden" name="authorId" value="demo-viewer" />
           <p style={listStyles.composerTitle}>Ask a public question</p>
           <p style={listStyles.composerHint}>
-            {totalVotes} votes cast across the community — be specific and imagine you're asking
-            another person.
+            {totalVotes.toLocaleString('en-US')} votes cast across the community — be specific and
+            imagine you&rsquo;re asking another person.
           </p>
           <label style={listStyles.label} for="ask-title">
             Title
