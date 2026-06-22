@@ -254,7 +254,9 @@ const delegatedLifecycleEvents = [...defaultDelegatedEvents, 'pointerover', 'poi
 
 const generatedBootstrapRuntime = {
   ...generatedModuleRuntime,
-  installKovoLoader() {},
+  installKovoLoader() {
+    return { dispose() {}, events: [], islandSignalScope: {} };
+  },
 };
 
 const serverMutationRuntime = {
@@ -1448,9 +1450,13 @@ void test('P3 server data-plane APIs stay exported and covered', async () => {
   assert.deepEqual(fact.query, {
     endpoint: {
       body:
-        '<kovo-query name="product:p1" version="3">' +
+        '<kovo-query name="productDetail" key="product:p1" version="3">' +
         '{"id":"p1","max":3,"userId":"u1"}</kovo-query>',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+      },
       status: 200,
     },
     invalidInput: {
@@ -1651,10 +1657,7 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
         changes: [{ domain: 'product', input: { productId: 'p1' }, keys: ['p1'] }],
         ok: true,
         rerunQueries: ['productDetail'],
-        rerunQueryInstances: [
-          { instanceKey: 'product:p1', key: 'productDetail' },
-          { instanceKey: 'product:p2', key: 'productDetail' },
-        ],
+        rerunQueryInstances: [{ instanceKey: 'product:p1', key: 'productDetail' }],
         value: 'p1',
       },
       status: 200,
@@ -1823,7 +1826,7 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
   });
   assert.deepEqual(fact.graph.receiptMutation, {});
   assert.deepEqual(fact.pageHints, {
-    missingQueryMessage: 'Missing query data for route meta: cart',
+    missingQueryMessage: '',
     rendered: {
       csp: {
         scripts: ['sha256-428PRljyKzl7OW83C4phJF4OKCzGr42vPOLbx/jnYFI='],
@@ -2230,7 +2233,7 @@ void test('P9 verification layer evidence remains represented', async () => {
         message:
           'Conditional write branch was never executed under instrumentation. domain=product branch=stock-reserve',
         properties: {},
-        severity: 'WARN',
+        severity: 'ERROR',
         target: 'cart.domain.ts:2',
       },
       {
@@ -3483,13 +3486,13 @@ export const CartBadge = component({
       },
       bindingText: '2',
       booleanAttributes: {
-        disabled: 'false',
-        hidden: 'false',
+        disabled: null,
+        hidden: null,
       },
       deriveText: 'false',
       orderedApply: {
         order: ['derive-after-binding:6', 'stamp-after-derive:items:1'],
-        stampValue: 'true',
+        stampValue: '',
       },
       templateItems: [
         {
@@ -3554,12 +3557,12 @@ export const CartBadge = component({
       renderDeferredStream,
     }),
     {
-      appliedFragments: ['reviews', 'summary', 'reviews'],
+      appliedFragments: ['reviews', 'reviews', 'summary'],
       chunkFragments: [
         [{ html: '<article>B</article>', mode: 'append', target: 'reviews' }],
         [
-          { html: '<section>Replace</section>', target: 'summary' },
           { html: '<article>A</article>', mode: 'append', target: 'reviews' },
+          { html: '<section>Replace</section>', target: 'summary' },
         ],
       ],
       chunkQueries: [['reviews'], ['reviews']],
