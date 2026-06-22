@@ -77,7 +77,10 @@ export function hoverCardContentAttributes(
     ...openState(options.open),
     hidden: !options.open,
     ...(options.contentId === undefined ? {} : { id: options.contentId }),
-    popover: 'manual',
+    // No `popover` attribute: a manual popover stays `display:none` until an
+    // imperative showPopover() call, which the gallery/demo path never makes, so
+    // the card never appeared. Visibility is governed instead by the reactive
+    // `hidden` + `[data-state=closed]{display:none}` the call site already drives.
   });
 }
 

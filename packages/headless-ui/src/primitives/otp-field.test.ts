@@ -268,6 +268,45 @@ describe('headless-ui otp-field primitive', () => {
     expect(deleteEvent.defaultPrevented).toBe(true);
   });
 
+  // Bug: "cannot delete multiple numbers" — Backspace on an already-empty slot
+  // used to no-op (focus never moved), so the user could not keep deleting the
+  // previous digits. Backspace on an empty slot with a previous slot must walk
+  // focus left so repeated Backspace clears digits across slots, while Backspace
+  // on a filled slot must still clear exactly that slot's digit.
+  it('walks focus left when Backspace lands on an empty slot', () => {
+    // Filled "12" with slots 2 and 3 empty: Backspace on the empty slot 2 seeks
+    // left to slot 1 instead of getting stuck.
+    const emptySlotEvent = otpKeyboardEvent('Backspace', '');
+    const emptySlotResult = otpFieldKeyDown(emptySlotEvent, {
+      length: 4,
+      slotIndex: 2,
+      value: '12',
+    });
+    expect(emptySlotResult).toEqual({ focusIndex: 1 });
+    expect(emptySlotEvent.defaultPrevented).toBe(true);
+
+    // Backspace on the now-focused filled slot 1 still clears exactly one digit.
+    const filledSlotEvent = otpKeyboardEvent('Backspace', '2');
+    const filledSlotResult = otpFieldKeyDown(filledSlotEvent, {
+      length: 4,
+      slotIndex: 1,
+      value: '12',
+    });
+    expect(filledSlotResult).toMatchObject({ changed: true, focusIndex: 1, value: '1' });
+    expect(filledSlotEvent.defaultPrevented).toBe(true);
+
+    // Backspace on the first slot when it is already empty stays put (no
+    // previous slot to walk into).
+    const firstSlotEvent = otpKeyboardEvent('Backspace', '');
+    const firstSlotResult = otpFieldKeyDown(firstSlotEvent, {
+      length: 4,
+      slotIndex: 0,
+      value: '',
+    });
+    expect(firstSlotResult).toMatchObject({ changed: false, value: '' });
+    expect(firstSlotEvent.defaultPrevented).toBe(true);
+  });
+
   it('moves focus for arrow and edge keys', () => {
     expect(otpFieldMoveFocus({ length: 4 }, 1, 'ArrowLeft')).toEqual({ focusIndex: 0 });
     expect(otpFieldMoveFocus({ length: 4 }, 1, 'ArrowRight')).toEqual({ focusIndex: 2 });

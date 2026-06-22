@@ -32,7 +32,7 @@ import {
 } from './hover-card.js';
 
 describe('headless-ui hover-card primitive', () => {
-  it('builds root, trigger, and native manual popover content attributes', () => {
+  it('builds root, trigger, and content attributes (no manual popover; visibility via data-state/hidden)', () => {
     expect(hoverCardRootAttributes({ open: true })).toEqual({
       'data-state': 'open',
     });
@@ -60,13 +60,11 @@ describe('headless-ui hover-card primitive', () => {
       'data-state': 'open',
       hidden: false,
       id: 'profile-card',
-      popover: 'manual',
     });
     expect(hoverCardContentAttributes({ contentId: 'profile-card', open: false })).toEqual({
       'data-state': 'closed',
       hidden: true,
       id: 'profile-card',
-      popover: 'manual',
     });
   });
 

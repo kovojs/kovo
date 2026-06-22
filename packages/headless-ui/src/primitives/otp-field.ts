@@ -260,7 +260,18 @@ export function otpFieldKeyDown(
   if (event.defaultPrevented) return;
 
   if (event.key === 'Backspace' || event.key === 'Delete') {
-    const result = setOtpFieldSlotValue(state, state.slotIndex, '', 'delete', options);
+    const slotIndex = normalizeOtpFieldSlotIndex(state, state.slotIndex);
+    const slotWasEmpty = otpFieldSlotValue(state, slotIndex) === '';
+
+    // When Backspace lands on an already-empty slot, clearing the current slot
+    // cannot make progress; instead walk focus left so repeated Backspace can
+    // seek and clear the previous digits rather than getting stuck in place.
+    if (event.key === 'Backspace' && slotWasEmpty && slotIndex > 0) {
+      event.preventDefault();
+      return { focusIndex: slotIndex - 1 };
+    }
+
+    const result = setOtpFieldSlotValue(state, slotIndex, '', 'delete', options);
     if (!result.changed) {
       restoreOtpFieldSlotTargetValue(event.currentTarget ?? null, state, result.value);
     }
