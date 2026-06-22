@@ -92,7 +92,7 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - run: vp exec playwright install --with-deps chromium
+      - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run integration
 
   build:
