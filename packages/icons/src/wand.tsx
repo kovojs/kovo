@@ -1,0 +1,19 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Wand icon (Lucide). https://lucide.dev/icons/wand */
+export function Wand(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M15 4V2"></path>
+      <path d="M15 16v-2"></path>
+      <path d="M8 9h2"></path>
+      <path d="M20 9h2"></path>
+      <path d="M17.8 11.8 19 13"></path>
+      <path d="M15 9h.01"></path>
+      <path d="M17.8 6.2 19 5"></path>
+      <path d="m3 21 9-9"></path>
+      <path d="M12.2 6.2 11 5"></path>
+    </svg>
+  );
+}

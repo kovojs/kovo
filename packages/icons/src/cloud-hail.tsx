@@ -1,0 +1,17 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Cloud Hail icon (Lucide). https://lucide.dev/icons/cloud-hail */
+export function CloudHail(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+      <path d="M16 14v2"></path>
+      <path d="M8 14v2"></path>
+      <path d="M16 20h.01"></path>
+      <path d="M8 20h.01"></path>
+      <path d="M12 16v2"></path>
+      <path d="M12 22h.01"></path>
+    </svg>
+  );
+}

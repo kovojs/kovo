@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Chart Gantt icon (Lucide). https://lucide.dev/icons/chart-gantt */
+export function ChartGantt(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M10 6h8"></path>
+      <path d="M12 16h6"></path>
+      <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>
+      <path d="M8 11h7"></path>
+    </svg>
+  );
+}

@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Pipette icon (Lucide). https://lucide.dev/icons/pipette */
+export function Pipette(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="m12 9-8.414 8.414A2 2 0 0 0 3 18.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 3.828 21h1.344a2 2 0 0 0 1.414-.586L15 12"></path>
+      <path d="m18 9 .4.4a1 1 0 1 1-3 3l-3.8-3.8a1 1 0 1 1 3-3l.4.4 3.4-3.4a1 1 0 1 1 3 3z"></path>
+      <path d="m2 22 .414-.414"></path>
+    </svg>
+  );
+}

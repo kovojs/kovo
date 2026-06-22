@@ -1,0 +1,15 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Vibrate Off icon (Lucide). https://lucide.dev/icons/vibrate-off */
+export function VibrateOff(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="m2 8 2 2-2 2 2 2-2 2"></path>
+      <path d="m22 8-2 2 2 2-2 2 2 2"></path>
+      <path d="M8 8v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2"></path>
+      <path d="M16 10.34V6c0-.55-.45-1-1-1h-4.34"></path>
+      <line x1="2" x2="22" y1="2" y2="22"></line>
+    </svg>
+  );
+}

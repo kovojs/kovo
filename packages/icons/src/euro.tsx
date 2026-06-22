@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Euro icon (Lucide). https://lucide.dev/icons/euro */
+export function Euro(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M4 10h12"></path>
+      <path d="M4 14h9"></path>
+      <path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"></path>
+    </svg>
+  );
+}

@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Umbrella icon (Lucide). https://lucide.dev/icons/umbrella */
+export function Umbrella(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 13v7a2 2 0 0 0 4 0"></path>
+      <path d="M12 2v2"></path>
+      <path d="M20.992 13a1 1 0 0 0 .97-1.274 10.284 10.284 0 0 0-19.923 0A1 1 0 0 0 3 13z"></path>
+    </svg>
+  );
+}

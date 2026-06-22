@@ -1,0 +1,20 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Message Square Dashed icon (Lucide). https://lucide.dev/icons/message-square-dashed */
+export function MessageSquareDashed(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M14 3h2"></path>
+      <path d="M16 19h-2"></path>
+      <path d="M2 12v-2"></path>
+      <path d="M2 16v5.286a.71.71 0 0 0 1.212.502l1.149-1.149"></path>
+      <path d="M20 19a2 2 0 0 0 2-2v-1"></path>
+      <path d="M22 10v2"></path>
+      <path d="M22 6V5a2 2 0 0 0-2-2"></path>
+      <path d="M4 3a2 2 0 0 0-2 2v1"></path>
+      <path d="M8 19h2"></path>
+      <path d="M8 3h2"></path>
+    </svg>
+  );
+}

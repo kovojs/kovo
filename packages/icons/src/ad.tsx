@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Ad icon (Lucide). https://lucide.dev/icons/ad */
+export function Ad(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M10 13H6"></path>
+      <path d="M10 15v-4a2 2 0 0 0-4 0v4"></path>
+      <path d="M14 14.5a.5.5 0 0 0 .5.5h1a2.5 2.5 0 0 0 2.5-2.5v-1A2.5 2.5 0 0 0 15.5 9h-1a.5.5 0 0 0-.5.5z"></path>
+      <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+    </svg>
+  );
+}

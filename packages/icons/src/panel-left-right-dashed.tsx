@@ -1,0 +1,19 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Panel Left Right Dashed icon (Lucide). https://lucide.dev/icons/panel-left-right-dashed */
+export function PanelLeftRightDashed(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M15 10V9"></path>
+      <path d="M15 15v-1"></path>
+      <path d="M15 21v-2"></path>
+      <path d="M15 5V3"></path>
+      <path d="M9 10V9"></path>
+      <path d="M9 15v-1"></path>
+      <path d="M9 21v-2"></path>
+      <path d="M9 5V3"></path>
+      <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+    </svg>
+  );
+}

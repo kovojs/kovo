@@ -1,0 +1,16 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Landmark icon (Lucide). https://lucide.dev/icons/landmark */
+export function Landmark(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M10 18v-7"></path>
+      <path d="M11.119 2.205a2 2 0 0 1 1.762 0l7.84 3.846A.5.5 0 0 1 20.5 7h-17a.5.5 0 0 1-.22-.949z"></path>
+      <path d="M14 18v-7"></path>
+      <path d="M18 18v-7"></path>
+      <path d="M3 22h18"></path>
+      <path d="M6 18v-7"></path>
+    </svg>
+  );
+}

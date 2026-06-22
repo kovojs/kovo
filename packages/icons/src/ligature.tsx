@@ -1,0 +1,15 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Ligature icon (Lucide). https://lucide.dev/icons/ligature */
+export function Ligature(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M14 12h2v8"></path>
+      <path d="M14 20h4"></path>
+      <path d="M6 12h4"></path>
+      <path d="M6 20h4"></path>
+      <path d="M8 20V8a4 4 0 0 1 7.464-2"></path>
+    </svg>
+  );
+}

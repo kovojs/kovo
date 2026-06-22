@@ -1,0 +1,19 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Sun Medium icon (Lucide). https://lucide.dev/icons/sun-medium */
+export function SunMedium(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <circle cx="12" cy="12" r="4"></circle>
+      <path d="M12 3v1"></path>
+      <path d="M12 20v1"></path>
+      <path d="M3 12h1"></path>
+      <path d="M20 12h1"></path>
+      <path d="m18.364 5.636-.707.707"></path>
+      <path d="m6.343 17.657-.707.707"></path>
+      <path d="m5.636 5.636.707.707"></path>
+      <path d="m17.657 17.657.707.707"></path>
+    </svg>
+  );
+}

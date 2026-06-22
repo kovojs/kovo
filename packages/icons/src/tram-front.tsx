@@ -1,0 +1,17 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Tram Front icon (Lucide). https://lucide.dev/icons/tram-front */
+export function TramFront(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <rect width="16" height="16" x="4" y="3" rx="2"></rect>
+      <path d="M4 11h16"></path>
+      <path d="M12 3v8"></path>
+      <path d="m8 19-2 3"></path>
+      <path d="m18 22-2-3"></path>
+      <path d="M8 15h.01"></path>
+      <path d="M16 15h.01"></path>
+    </svg>
+  );
+}

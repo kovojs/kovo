@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Circle Off icon (Lucide). https://lucide.dev/icons/circle-off */
+export function CircleOff(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="m2 2 20 20"></path>
+      <path d="M8.35 2.69A10 10 0 0 1 21.3 15.65"></path>
+      <path d="M19.08 19.08A10 10 0 1 1 4.92 4.92"></path>
+    </svg>
+  );
+}

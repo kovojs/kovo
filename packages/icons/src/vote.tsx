@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Vote icon (Lucide). https://lucide.dev/icons/vote */
+export function Vote(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="m9 12 2 2 4-4"></path>
+      <path d="M5 7c0-1.1.9-2 2-2h10a2 2 0 0 1 2 2v12H5V7Z"></path>
+      <path d="M22 19H2"></path>
+    </svg>
+  );
+}

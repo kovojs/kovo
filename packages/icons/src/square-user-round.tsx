@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Square User Round icon (Lucide). https://lucide.dev/icons/square-user-round */
+export function SquareUserRound(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M18 21a6 6 0 0 0-12 0"></path>
+      <circle cx="12" cy="11" r="4"></circle>
+      <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+    </svg>
+  );
+}

@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Lasso icon (Lucide). https://lucide.dev/icons/lasso */
+export function Lasso(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M3.704 14.467a10 8 0 1 1 3.115 2.375"></path>
+      <path d="M7 22a5 5 0 0 1-2-3.994"></path>
+      <circle cx="5" cy="16" r="2"></circle>
+    </svg>
+  );
+}

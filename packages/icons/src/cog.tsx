@@ -1,0 +1,24 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Cog icon (Lucide). https://lucide.dev/icons/cog */
+export function Cog(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M11 10.27 7 3.34"></path>
+      <path d="m11 13.73-4 6.93"></path>
+      <path d="M12 22v-2"></path>
+      <path d="M12 2v2"></path>
+      <path d="M14 12h8"></path>
+      <path d="m17 20.66-1-1.73"></path>
+      <path d="m17 3.34-1 1.73"></path>
+      <path d="M2 12h2"></path>
+      <path d="m20.66 17-1.73-1"></path>
+      <path d="m20.66 7-1.73 1"></path>
+      <path d="m3.34 17 1.73-1"></path>
+      <path d="m3.34 7 1.73 1"></path>
+      <circle cx="12" cy="12" r="2"></circle>
+      <circle cx="12" cy="12" r="8"></circle>
+    </svg>
+  );
+}

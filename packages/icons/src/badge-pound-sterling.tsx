@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Badge Pound Sterling icon (Lucide). https://lucide.dev/icons/badge-pound-sterling */
+export function BadgePoundSterling(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"></path>
+      <path d="M8 12h4"></path>
+      <path d="M10 16V9.5a2.5 2.5 0 0 1 5 0"></path>
+      <path d="M8 16h7"></path>
+    </svg>
+  );
+}

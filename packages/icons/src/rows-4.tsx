@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Rows 4 icon (Lucide). https://lucide.dev/icons/rows-4 */
+export function Rows4(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+      <path d="M21 7.5H3"></path>
+      <path d="M21 12H3"></path>
+      <path d="M21 16.5H3"></path>
+    </svg>
+  );
+}

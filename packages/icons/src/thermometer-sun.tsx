@@ -1,0 +1,16 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Thermometer Sun icon (Lucide). https://lucide.dev/icons/thermometer-sun */
+export function ThermometerSun(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 2v2"></path>
+      <path d="M12 8a4 4 0 0 0-1.645 7.647"></path>
+      <path d="M2 12h2"></path>
+      <path d="M20 14.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0z"></path>
+      <path d="m4.93 4.93 1.41 1.41"></path>
+      <path d="m6.34 17.66-1.41 1.41"></path>
+    </svg>
+  );
+}

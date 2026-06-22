@@ -1,0 +1,15 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Text Search icon (Lucide). https://lucide.dev/icons/text-search */
+export function TextSearch(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M21 5H3"></path>
+      <path d="M10 12H3"></path>
+      <path d="M10 19H3"></path>
+      <circle cx="17" cy="15" r="3"></circle>
+      <path d="m21 19-1.9-1.9"></path>
+    </svg>
+  );
+}

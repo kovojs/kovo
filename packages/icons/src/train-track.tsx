@@ -1,0 +1,17 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Train Track icon (Lucide). https://lucide.dev/icons/train-track */
+export function TrainTrack(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M2 17 17 2"></path>
+      <path d="m2 14 8 8"></path>
+      <path d="m5 11 8 8"></path>
+      <path d="m8 8 8 8"></path>
+      <path d="m11 5 8 8"></path>
+      <path d="m14 2 8 8"></path>
+      <path d="M7 22 22 7"></path>
+    </svg>
+  );
+}

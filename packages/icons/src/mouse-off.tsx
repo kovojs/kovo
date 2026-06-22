@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Mouse Off icon (Lucide). https://lucide.dev/icons/mouse-off */
+export function MouseOff(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 6v.343"></path>
+      <path d="M18.218 18.218A7 7 0 0 1 5 15V9a7 7 0 0 1 .782-3.218"></path>
+      <path d="M19 13.343V9A7 7 0 0 0 8.56 2.902"></path>
+      <path d="M22 22 2 2"></path>
+    </svg>
+  );
+}

@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Mouse Left icon (Lucide). https://lucide.dev/icons/mouse-left */
+export function MouseLeft(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 7.318V10"></path>
+      <path d="M5 10v5a7 7 0 0 0 14 0V9c0-3.527-2.608-6.515-6-7"></path>
+      <circle cx="7" cy="4" r="2"></circle>
+    </svg>
+  );
+}

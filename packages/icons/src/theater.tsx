@@ -1,0 +1,19 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Theater icon (Lucide). https://lucide.dev/icons/theater */
+export function Theater(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M2 10s3-3 3-8"></path>
+      <path d="M22 10s-3-3-3-8"></path>
+      <path d="M10 2c0 4.4-3.6 8-8 8"></path>
+      <path d="M14 2c0 4.4 3.6 8 8 8"></path>
+      <path d="M2 10s2 2 2 5"></path>
+      <path d="M22 10s-2 2-2 5"></path>
+      <path d="M8 15h8"></path>
+      <path d="M2 22v-1a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1"></path>
+      <path d="M14 22v-1a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1"></path>
+    </svg>
+  );
+}

@@ -1,0 +1,16 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Align Horizontal Distribute Center icon (Lucide). https://lucide.dev/icons/align-horizontal-distribute-center */
+export function AlignHorizontalDistributeCenter(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <rect width="6" height="14" x="4" y="5" rx="2"></rect>
+      <rect width="6" height="10" x="14" y="7" rx="2"></rect>
+      <path d="M17 22v-5"></path>
+      <path d="M17 7V2"></path>
+      <path d="M7 22v-3"></path>
+      <path d="M7 5V2"></path>
+    </svg>
+  );
+}

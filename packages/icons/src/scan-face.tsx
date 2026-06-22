@@ -1,0 +1,17 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Scan Face icon (Lucide). https://lucide.dev/icons/scan-face */
+export function ScanFace(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+      <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+      <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+      <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+      <path d="M8 14s1.5 2 4 2 4-2 4-2"></path>
+      <path d="M9 9h.01"></path>
+      <path d="M15 9h.01"></path>
+    </svg>
+  );
+}

@@ -1,0 +1,15 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Bath icon (Lucide). https://lucide.dev/icons/bath */
+export function Bath(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M10 4 8 6"></path>
+      <path d="M17 19v2"></path>
+      <path d="M2 12h20"></path>
+      <path d="M7 19v2"></path>
+      <path d="M9 5 7.621 3.621A2.121 2.121 0 0 0 4 5v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"></path>
+    </svg>
+  );
+}

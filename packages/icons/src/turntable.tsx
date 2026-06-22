@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Turntable icon (Lucide). https://lucide.dev/icons/turntable */
+export function Turntable(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M10 12.01h.01"></path>
+      <path d="M18 8v4a8 8 0 0 1-1.07 4"></path>
+      <circle cx="10" cy="12" r="4"></circle>
+      <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+    </svg>
+  );
+}

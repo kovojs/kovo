@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Anchor icon (Lucide). https://lucide.dev/icons/anchor */
+export function Anchor(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 6v16"></path>
+      <path d="m19 13 2-1a9 9 0 0 1-18 0l2 1"></path>
+      <path d="M9 11h6"></path>
+      <circle cx="12" cy="4" r="2"></circle>
+    </svg>
+  );
+}

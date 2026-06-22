@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Cloud Download icon (Lucide). https://lucide.dev/icons/cloud-download */
+export function CloudDownload(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 13v8l-4-4"></path>
+      <path d="m12 21 4-4"></path>
+      <path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"></path>
+    </svg>
+  );
+}

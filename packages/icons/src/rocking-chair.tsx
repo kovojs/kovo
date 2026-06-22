@@ -1,0 +1,14 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Rocking Chair icon (Lucide). https://lucide.dev/icons/rocking-chair */
+export function RockingChair(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="m15 13 3.708 7.416"></path>
+      <path d="M3 19a15 15 0 0 0 18 0"></path>
+      <path d="m3 2 3.21 9.633A2 2 0 0 0 8.109 13H18"></path>
+      <path d="m9 13-3.708 7.416"></path>
+    </svg>
+  );
+}

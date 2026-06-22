@@ -1,0 +1,16 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Package X icon (Lucide). https://lucide.dev/icons/package-x */
+export function PackageX(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 22V12"></path>
+      <path d="m16.5 14.5 5 5"></path>
+      <path d="m16.5 19.5 5-5"></path>
+      <path d="M21 10.5V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.729l7 4a2 2 0 0 0 2 .001l.13-.074"></path>
+      <path d="M3.29 7 12 12l8.71-5"></path>
+      <path d="m7.5 4.27 8.997 5.148"></path>
+    </svg>
+  );
+}

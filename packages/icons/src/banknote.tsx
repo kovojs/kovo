@@ -1,0 +1,13 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Banknote icon (Lucide). https://lucide.dev/icons/banknote */
+export function Banknote(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <rect width="20" height="12" x="2" y="6" rx="2"></rect>
+      <circle cx="12" cy="12" r="2"></circle>
+      <path d="M6 12h.01M18 12h.01"></path>
+    </svg>
+  );
+}

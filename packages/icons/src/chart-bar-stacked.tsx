@@ -1,0 +1,15 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Chart Bar Stacked icon (Lucide). https://lucide.dev/icons/chart-bar-stacked */
+export function ChartBarStacked(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M11 13v4"></path>
+      <path d="M15 5v4"></path>
+      <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>
+      <rect x="7" y="13" width="9" height="4" rx="1"></rect>
+      <rect x="7" y="5" width="12" height="4" rx="1"></rect>
+    </svg>
+  );
+}

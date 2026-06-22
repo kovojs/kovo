@@ -1,0 +1,17 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Blinds icon (Lucide). https://lucide.dev/icons/blinds */
+export function Blinds(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M3 3h18"></path>
+      <path d="M20 7H8"></path>
+      <path d="M20 11H8"></path>
+      <path d="M10 19h10"></path>
+      <path d="M8 15h12"></path>
+      <path d="M4 3v14"></path>
+      <circle cx="4" cy="19" r="2"></circle>
+    </svg>
+  );
+}

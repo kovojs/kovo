@@ -1,0 +1,15 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Monitor Pause icon (Lucide). https://lucide.dev/icons/monitor-pause */
+export function MonitorPause(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M10 13V7"></path>
+      <path d="M14 13V7"></path>
+      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+      <path d="M12 17v4"></path>
+      <path d="M8 21h8"></path>
+    </svg>
+  );
+}

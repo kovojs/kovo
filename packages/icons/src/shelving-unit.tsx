@@ -1,0 +1,17 @@
+/** @jsxImportSource @kovojs/server */
+import { iconRootAttrs, type IconProps } from './icon-base.js';
+
+/** Shelving Unit icon (Lucide). https://lucide.dev/icons/shelving-unit */
+export function ShelvingUnit(props: IconProps = {}): string {
+  return (
+    <svg {...iconRootAttrs(props)}>
+      <path d="M12 12V9a1 1 0 0 0-1-1H9a1 1 0 0 0-1 1v3"></path>
+      <path d="M16 20v-3a1 1 0 0 0-1-1h-2a1 1 0 0 0-1 1v3"></path>
+      <path d="M20 22V2"></path>
+      <path d="M4 12h16"></path>
+      <path d="M4 20h16"></path>
+      <path d="M4 2v20"></path>
+      <path d="M4 4h16"></path>
+    </svg>
+  );
+}
