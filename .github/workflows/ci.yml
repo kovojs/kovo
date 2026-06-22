@@ -133,6 +133,7 @@ jobs:
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp run build
+      - run: vp exec playwright install --with-deps chromium
       - run: vp run p10-perf
 
   compiler-perf:
