@@ -16,6 +16,9 @@ const galleryStyles = style.create(
       borderColor: 'var(--edge)',
       borderStyle: 'solid',
       borderWidth: 1,
+      // Component fixtures can be wider than a phone; scroll inside the frame
+      // rather than stretching the page.
+      overflowX: 'auto',
       padding: '1.25rem',
       '[data-gallery-demo-shell] [data-gallery-demo]': {
         display: 'grid',
@@ -131,7 +134,7 @@ export interface GalleryPageInput {
 }
 
 function galleryUrl(routePath: string): string {
-  return `/gallery${routePath}/`;
+  return `${routePath}/`;
 }
 
 /** Gallery component route page content. */
@@ -144,11 +147,11 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
   return (
     <div style={galleryStyles.page}>
       <header style={galleryStyles.head}>
-        <p style={galleryStyles.headEyebrow}>Gallery</p>
+        <p style={galleryStyles.headEyebrow}>Components</p>
         <h1 style={galleryStyles.headTitle}>{escapeHtml(route.title)}</h1>
         <p style={galleryStyles.headBlurb}>{blurb}</p>
       </header>
-      <nav style={galleryStyles.nav} aria-label="Gallery components">
+      <nav style={galleryStyles.nav} aria-label="Components">
         {routes.map((candidate) => (
           <a
             href={galleryUrl(candidate.path)}

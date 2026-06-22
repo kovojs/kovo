@@ -92,6 +92,10 @@ export interface NavLink {
 }
 
 export interface NavGroup {
+  /** Section key (docs/tutorial/guides/api/reference/components/examples). Drives
+   * the context-dependent sidebar split: "learn" sections group together, the
+   * rest group together, so a reader only sees the family they're browsing. */
+  key: string;
   pages: NavLink[];
   title: string;
 }
@@ -132,11 +136,11 @@ const SECTIONS = [
 
 export const SECTION_INTROS: Record<string, string> = {
   api: 'Generated reference for every public package — types, functions, and the contracts they keep.',
+  components:
+    'Rendered component fixtures covering the headless primitive contracts and the styled UI package.',
   docs: 'Install Kovo, absorb the mental model, and find your way around a project.',
   examples:
     'Complete Kovo apps you can run in the browser, embedded beside the authored source that renders them.',
-  gallery:
-    'Rendered component fixtures covering the headless primitive contracts and the styled UI package.',
   guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',
   reference:
     'Everything generated from the framework itself — the per-package API reference, the diagnostics catalog, and the normative specification.',
@@ -340,16 +344,18 @@ async function buildSiteContent(): Promise<SiteContent> {
   };
 }
 
-/** Global sidebar groups: every content section plus the Gallery + Examples
- * section landings (their per-page lists are owned by those route modules). */
+/** Global sidebar groups: every content section plus the Components + Examples
+ * section landings (their per-page lists are owned by those route modules). Each
+ * group carries its section `key` so the chrome can split the sidebar by family. */
 function navGroups(sections: DocSection[]): NavGroup[] {
   const groups: NavGroup[] = sections
     .filter((section) => section.pages.length > 0)
     .map((section) => ({
+      key: section.key,
       pages: section.pages.map((page) => ({ title: page.title, url: page.url })),
       title: section.title,
     }));
-  groups.push({ pages: [{ title: 'Gallery', url: '/gallery/' }], title: 'Gallery' });
-  groups.push({ pages: [{ title: 'Examples', url: '/examples/' }], title: 'Examples' });
+  groups.push({ key: 'components', pages: [{ title: 'Components', url: '/components/' }], title: 'Components' });
+  groups.push({ key: 'examples', pages: [{ title: 'Examples', url: '/examples/' }], title: 'Examples' });
   return groups;
 }

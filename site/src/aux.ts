@@ -33,7 +33,7 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
   // Synthetic Examples section so the agent layer surfaces the runnable example
   // apps (otherwise a bespoke human-only route family invisible to llms.txt).
   const examplesSection = await buildExamplesLlmsSection({ repoRootPath });
-  // Gallery before Examples to match the human sidebar order (content.ts navGroups).
+  // Components before Examples to match the human sidebar order (content.ts navGroups).
   const sections = [...content.sections, buildGalleryLlmsSection(SITE_ORIGIN), examplesSection];
 
   // Search index.

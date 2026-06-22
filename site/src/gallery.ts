@@ -12,17 +12,17 @@ import { galleryComponentCatalog } from '../../examples/gallery/src/component-ca
 import type { GalleryRouteView } from './components/gallery.js';
 import type { DocsRouteContent } from './route-data.js';
 
-// Authored one-liner per component (component-catalog.ts), used on the /gallery/
+// Authored one-liner per component (component-catalog.ts), used on the /components/
 // index and surfaced to agents via aux.ts. Kept 1:1 with galleryRoutes by
 // component-catalog.test.ts.
 const gallerySummaries = new Map<string, string>(
   galleryComponentCatalog.map((entry) => [entry.component, entry.summary]),
 );
 
-// Gallery section: rendered component fixtures + compiled interactive demos.
+// Components section: rendered component fixtures + compiled interactive demos.
 //
-// CONTRACT (owned by this module): build route-page data for the /gallery/
-// index, the retired /gallery/interactive/ page, and one /gallery/components/<name>/
+// CONTRACT (owned by this module): build route-page data for the /components/
+// index, the retired /components/interactive/ page, and one /components/<name>/
 // page per fixture by SSR-loading examples/gallery/src fixtures, folding the
 // compiled interactive demo into each component page, and registering the
 // interactive demos' client modules into the passed registry (so the export
@@ -69,8 +69,12 @@ function contentHash(source: string): string {
   return createHash('sha256').update(source).digest('hex').slice(0, 12);
 }
 
+// Component route paths are already authored as `/components/<name>` in
+// demo-fixtures.tsx, so the docs URL is the path plus a trailing slash. The
+// section was renamed from "gallery" to "components"; the index lives at
+// `/components/`.
 function galleryUrl(galleryRoutePath: string): string {
-  return `/gallery${galleryRoutePath}/`;
+  return `${galleryRoutePath}/`;
 }
 
 /** SSR-load the gallery fixtures (static styled), the compiled interactive demos,
@@ -271,13 +275,14 @@ function extractBehaviorContract(staticHtml: string): string {
   return match ? match[0] : '';
 }
 
-/** Re-root the gallery demo's internal links into the docs /gallery/ namespace so
- * they resolve on the static host (and the W9 link gate passes). */
+/** Re-root the gallery demo's internal links into the docs /components/ namespace
+ * so they resolve on the static host (and the W9 link gate passes). Component
+ * links are authored as `/components/<name>` and need only a trailing slash. */
 function rewriteGalleryDemoHrefs(html: string, galleryRoute: GalleryRoute): string {
   return html.replace(
-    /\shref="\/(?!assets\/|c\/|docs\/|tutorial\/|guides\/|gallery\/|api\/|spec\/|fonts\/|llms\.txt|$)([^"]*)"/g,
+    /\shref="\/(?!assets\/|c\/|docs\/|tutorial\/|guides\/|examples\/|api\/|reference\/|spec\/|fonts\/|llms\.txt|$)([^"]*)"/g,
     (_match, href: string) => {
-      if (href.startsWith('components/')) return ` href="/gallery/${href}/"`;
+      if (href.startsWith('components/')) return ` href="/${href}/"`;
       return ` href="${galleryUrl(galleryRoute.path)}"`;
     },
   );
@@ -317,54 +322,54 @@ export async function buildGalleryRoutePages({
 
   const pages: GalleryRoutePageData[] = [];
 
-  // 1. The /gallery/ index route.
+  // 1. The /components/ index route.
   pages.push({
-    activePath: '/gallery/',
+    activePath: '/components/',
     content: {
       kind: 'section-index',
       section: {
-        key: 'gallery',
+        key: 'components',
         pages: galleryRoutes.map((galleryRoute) => ({
           description: gallerySummaries.get(galleryRoute.component),
           title: galleryRoute.title,
           url: galleryUrl(galleryRoute.path),
         })),
-        title: 'Gallery',
+        title: 'Components',
       },
     },
     meta: {
-      description: 'Kovo component gallery — rendered headless and styled component fixtures.',
-      title: 'Gallery · Kovo',
+      description: 'Kovo components — rendered headless and styled component fixtures.',
+      title: 'Components · Kovo',
     },
-    url: '/gallery/',
+    url: '/components/',
   });
 
-  // 2. The retired /gallery/interactive/ URL remains a normal TSX docs route so
-  // enhanced navigation has route/page metadata on every docs-site document.
+  // 2. The retired /components/interactive/ URL remains a normal TSX docs route
+  // so enhanced navigation has route/page metadata on every docs-site document.
   pages.push({
-    activePath: '/gallery/',
+    activePath: '/components/',
     content: {
       kind: 'section-index',
       section: {
-        key: 'gallery',
+        key: 'components',
         pages: [
           {
             description: 'The interactive gallery now lives inside each component fixture.',
-            title: 'Component Gallery',
-            url: '/gallery/',
+            title: 'Components',
+            url: '/components/',
           },
         ],
-        title: 'Gallery moved',
+        title: 'Components moved',
       },
     },
     meta: {
-      description: 'The interactive gallery has moved into the component gallery.',
-      title: 'Gallery · Kovo',
+      description: 'The interactive gallery has moved into the component pages.',
+      title: 'Components · Kovo',
     },
-    url: '/gallery/interactive/',
+    url: '/components/interactive/',
   });
 
-  // 3. One /gallery/components/<path>/ route per fixture: render the compiled
+  // 3. One /components/<path>/ route per fixture: render the compiled
   // interactive demo when one exists (with the behavior-contract table lifted from
   // the static fixture) else the static styled fixture; set modulepreloads on
   // pages with an interactive demo.
