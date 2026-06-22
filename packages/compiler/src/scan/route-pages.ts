@@ -4,7 +4,7 @@ import * as ts from 'typescript';
 
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
-import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
+import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
 import type {
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
@@ -14,10 +14,10 @@ import type {
   RoutePageFact,
   RoutePageLayoutFact,
   RouteNavigationSegmentFact,
-} from './types.js';
-import type { StaticLiteralValue } from './scan/object.js';
-import { applySourceReplacements, replaceExtension, type SourceReplacement } from './shared.js';
-import { compileArtifactFileNames } from './types.js';
+} from '../types.js';
+import type { StaticLiteralValue } from './object.js';
+import { applySourceReplacements, replaceExtension, type SourceReplacement } from '../shared.js';
+import { compileArtifactFileNames } from '../types.js';
 
 const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))

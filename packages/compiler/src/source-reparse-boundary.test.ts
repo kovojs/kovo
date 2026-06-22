@@ -35,8 +35,6 @@ const ALLOWED_REPARSE_FILES: ReadonlyMap<string, string> = new Map([
     'generated-artifact: renderer-export synthesis over the EMITTED lowered module, not app source',
   ],
   ['mutation-inputs.ts', 'FN7 pending: inline mutation input-field extraction (migrate to scan/)'],
-  ['optimistic-inline.ts', 'FN7 pending: relocate into scan/ (separate-module optimistic-plan scanner)'],
-  ['route-pages.ts', 'FN7 pending: relocate into scan/ (separate-module route-grammar scanner)'],
   ['style.ts', 'FN7 pending: StyleX extraction component re-parses (collapse onto scan SourceFile)'],
 ]);
 

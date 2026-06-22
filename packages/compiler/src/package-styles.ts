@@ -17,7 +17,7 @@ import {
   type PackageComponentPrefixDiscoveryOptions,
 } from './package-prefixes.js';
 import { firstComponentModel, parseComponentModule } from './scan/parse.js';
-import { compileRouteModule } from './route-pages.js';
+import { compileRouteModule } from './scan/route-pages.js';
 import { extractKovoStyles } from './style.js';
 import type { RoutePageFact } from './types.js';
 

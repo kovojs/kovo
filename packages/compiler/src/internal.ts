@@ -85,11 +85,11 @@ export { mutationInputFactsFromSource } from './mutation-inputs.js';
 export type {
   InlineOptimisticPlanFact,
   InlineOptimisticTransformFact,
-} from './optimistic-inline.js';
+} from './scan/optimistic-inline.js';
 export {
   inlineOptimisticPlansFromSource,
   serializeInlineOptimisticPlanIr,
-} from './optimistic-inline.js';
+} from './scan/optimistic-inline.js';
 export {
   createEmptyCompileResult,
   queryShapeFactDiagnostics,
