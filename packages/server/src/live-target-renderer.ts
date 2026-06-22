@@ -11,6 +11,7 @@ import {
   renderComponent,
   type ComponentRenderOptions,
 } from './component-render.js';
+import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
@@ -139,10 +140,10 @@ function componentQueryBinding<Request>(
   binding: unknown,
 ): ComponentLiveTargetQueryBinding<Request> | undefined {
   if (isQueryArgsBinding<Request>(binding)) {
-    return { args: binding.args, name, query: binding.query };
+    return { args: binding.args, name, query: queryWithGeneratedReads(binding.query) };
   }
   if (isQueryDefinition<Request>(binding)) {
-    return { name, query: binding };
+    return { name, query: queryWithGeneratedReads(binding) };
   }
   return undefined;
 }

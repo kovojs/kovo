@@ -26,6 +26,7 @@ import {
   streamTextTargetRenderLowering,
 } from './mutation-form.js';
 import { writerConflictDiagnostic } from './server-emit-shared.js';
+import { queryExpressionFromBinding } from '../scan/query-binding.js';
 
 export interface EmittedServerModule {
   executableSource: string;
@@ -530,53 +531,6 @@ function queryKeyExpressionForBinding(entry: ObjectLiteralEntry): string | null 
   if (!queryExpression) return null;
   if (queryExpression === entry.key || queryExpression === `${entry.key}Query`) return null;
   return `${queryExpression}.key ?? ${JSON.stringify(entry.key)}`;
-}
-
-function queryExpressionFromBinding(expressionSource: string): string | null {
-  const sourceFile = ts.createSourceFile(
-    'query-binding.tsx',
-    `const __binding = ${expressionSource};`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
-  const statement = sourceFile.statements[0];
-  if (!statement || !ts.isVariableStatement(statement)) return null;
-  const expression = statement.declarationList.declarations[0]?.initializer;
-  if (!expression) return null;
-
-  const unwrappedExpression = unwrapQueryRefreshExpression(expression);
-  if (
-    ts.isCallExpression(unwrappedExpression) &&
-    ts.isPropertyAccessExpression(unwrappedExpression.expression) &&
-    unwrappedExpression.expression.name.text === 'args'
-  ) {
-    return queryKeyReadableExpression(
-      unwrapQueryRefreshExpression(unwrappedExpression.expression.expression),
-      sourceFile,
-    );
-  }
-
-  return queryKeyReadableExpression(unwrappedExpression, sourceFile);
-}
-
-function unwrapQueryRefreshExpression(expression: ts.Expression): ts.Expression {
-  if (
-    ts.isCallExpression(expression) &&
-    ts.isPropertyAccessExpression(expression.expression) &&
-    expression.expression.name.text === 'refresh'
-  ) {
-    return unwrapQueryRefreshExpression(expression.expression.expression);
-  }
-  return expression;
-}
-
-function queryKeyReadableExpression(
-  expression: ts.Expression,
-  sourceFile: ts.SourceFile,
-): string | null {
-  if (ts.isObjectLiteralExpression(expression)) return null;
-  return expression.getText(sourceFile);
 }
 
 function mergeDepValues(

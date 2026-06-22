@@ -163,6 +163,23 @@ function installInlineKovoLoader(im) {
     );
   const wa = (el, name, val) => {
     if ((name === 'checked' || name === 'indeterminate') && val === false) val = null;
+    // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
+    // lives in the top layer. Toggling its open attribute alone never exits the
+    // top layer (it stays :modal with an inert backdrop intercepting every
+    // click), so drive the reactive open/close through the dialog methods that
+    // keep top-layer state in sync. Guards keep this idempotent against the
+    // native invoker call that opens the dialog on the same activation.
+    if (name === 'open' && el.localName === 'dialog' && typeof el.close === 'function') {
+      if (val != null && val !== false) {
+        if (!el.open) {
+          if (el.getAttribute?.('aria-modal') === 'true' && typeof el.showModal === 'function') {
+            el.showModal();
+          } else if (typeof el.show === 'function') el.show();
+          else el.setAttribute('open', '');
+        }
+      } else if (el.open) el.close();
+      return;
+    }
     if (val == null) el.removeAttribute?.(name);
     else el.setAttribute?.(name, fb(val));
     if (name === 'value' && el.value !== undefined) {
@@ -615,15 +632,18 @@ function installInlineKovoLoader(im) {
   const sef = (event, form) => {
     event.preventDefault();
     const streaming = form.getAttribute?.('data-mutation-stream') !== null;
+    const body = new FormData(form, event.submitter);
+    const formIdem = body.get?.('Kovo-Idem');
+    const idem = typeof formIdem === 'string' && formIdem !== '' ? formIdem : ci();
     fetch(form.action, {
-      body: new FormData(form, event.submitter),
+      body,
       headers: {
         Accept: streaming
           ? 'text/vnd.kovo.fragment+html; stream=1'
           : 'text/vnd.kovo.fragment+html',
         'Kovo-Form-Target': targetIdentity(form),
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': ci(),
+        'Kovo-Idem': String(idem),
         'Kovo-Live-Targets': rlt().join('; '),
         ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
         'Kovo-Targets': rt().join('; '),

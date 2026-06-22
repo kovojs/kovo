@@ -9,17 +9,17 @@ rules unless it is an explicit Part-2 capability that adds new accepted/emitted 
 Mark an item `[x]` only after the same session proves it against the gates named under "Neutrality
 gates". File:line citations were spot-checked via grep (see "Verification provenance").
 
-**Implementation status (2026-06-21)** — **done & merged to `main`**: Part 1 — **FN1–FN6, FN8–FN14** (FN5,
-FN11, and FN7 Step 1 added this round); Part 2 — **CAP6, CAP9**. All of Part 1 is now landed except FN7 Step 2.
-Each verified by tsc + the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts
-moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10/FN11 were implemented by parallel sub-agents
-in isolated worktrees and integrated here.
+**Implementation status (2026-06-22)** — **ALL of Part 1 (FN1–FN14) done & merged to `main`**; Part 2 —
+**CAP6, CAP9**. FN7's createSourceFile reparse migration is now complete (all app-source parsing lives in
+`scan/`; only the two rule-9-permitted `emit/` generated-artifact parses remain). Each item verified by tsc +
+the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts moved) + api-surface,
+committed as its own checkpoint. FN6/FN9/FN10/FN11 and two FN7 relocations were done by parallel sub-agents in
+isolated worktrees and integrated here.
 
 **Open / deferred (genuinely multi-session; the substrate above unblocks them):**
-- **FN7 Step 2** — migrate each allowlisted `createSourceFile` site's fact extraction into `scan/parse.ts`
-  byte-exact (the 5 StyleX parses, route grammar, app-graph query-refresh, etc.), then widen
-  `isPostParseGuardedFile` to those files. Step 1 (the enforcing allowlist guard) is done; this cleanup half is
-  the plan's single largest neutral refactor and needs fact-level golden tests per site.
+- **FN7 adjacent follow-ups** (separate rule-9 facet): widen `isPostParseGuardedFile` to `app-graph.ts`/`style.ts`
+  and move `app-graph.ts` under `analyze/` — both first need their decision-shaped `getText`/regex source reads
+  cleaned (e.g. app-graph's clock-cadence regex). Not part of the createSourceFile migration (which is done).
 - **Part 2 features** — **CAP1** (optimism IR unification + typed deriver channel), **CAP2** (`<kovo-live>` SSE),
   **CAP3** (lists at scale), **CAP7** (incremental compile — now unblocked: needs FN5 ✓ + FN7 Step 2),
   **CAP8** (fact-driven dev — note FN3 removed the dead machinery, so this is rebuild-and-wire), **CAP10**
@@ -236,18 +236,22 @@ behavior change never hides inside a "neutral" move.
     `render-equivalence-boundary`, `stamps`, `registry`, `server-emit-security`, `diagnostic-coverage-matrix`.
   - Unlocks: CAP6.
 
-- [ ] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.** ⏳ Step 1 done
-  - Step 1 done (enforce the boundary): `source-reparse-boundary.test.ts` enumerates every `ts.createSourceFile`
-    site in `compiler/src` outside `scan/` and pins them to a documented allowlist — a NEW reparse now fails loudly
-    and the existing 8 sites (app-graph, mutation-inputs, optimistic-inline, route-pages, style.ts ×5, and the emit/
-    gate/dead-import/live-target sites) are documented as the Step-2 worklist. This widens rule-9 to cover the
-    *structural* reparse form the conformance guard misses, across the whole compiler (not just the 4 zones).
-    Test-config only; zero behavior change.
-  - Step 2 remaining (the larger half): migrate each allowlisted site's fact extraction into `scan/parse.ts`
-    byte-exact (incl. the 5 StyleX parses + app-graph's query-refresh parse — which would also let `app-graph.ts`
-    move under the guarded `analyze/` zone, completing FN14's intent), then widen `isPostParseGuardedFile` to those
-    files. Each needs fact-level golden tests; this is the plan's single largest neutral refactor and is left for a
-    dedicated pass.
+- [x] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.** ✅ done (createSourceFile migration complete)
+  - Done: a new `source-reparse-boundary.test.ts` widens rule-9 to the *structural* `ts.createSourceFile` reparse
+    form (which the conformance guard misses), pinning every site outside `scan/` to an allowlist. Then every
+    app-source reparse was migrated: query-binding parsing **consolidated** into `scan/query-binding.ts` (app-graph +
+    emit/server-render had duplicated helpers re-parsing the same `queries` entry value); `route-pages`,
+    `optimistic-inline`, `mutation-inputs` **relocated** wholesale into `scan/`; and `style.ts`'s 5 StyleX parses
+    **folded** onto the scanner's retained `model.sourceFile` (per-pass identity preserved across the pipeline's two
+    `extractKovoStyles` calls) with the two cross-source parses routed through `scan/parseSourceFile`. The only
+    `createSourceFile`s left outside `scan/` are `emit/dead-imports` + `emit/live-target-renderers`, **reclassified as
+    rule-9-PERMITTED** generated-artifact parses (they read the emitted lowered module, not app source). All verified
+    byte-neutral (conformance + render-equivalence + registry + style/css/package-styles + the moved tests; full
+    compiler suite 583 pass; api-surface unchanged).
+  - Adjacent follow-ups (separate rule-9 facet, NOT createSourceFile): widening `isPostParseGuardedFile` to
+    `app-graph.ts`/`style.ts` and moving `app-graph.ts` under `analyze/` (FN14's deferred intent) first require
+    cleaning their decision-shaped `getText`/regex source reads (e.g. app-graph's clock-cadence regex) — out of scope
+    for the reparse migration; tracked for a dedicated pass.
   - Problem: 11 production sites re-run `ts.createSourceFile` (plus `getText` re-reads) outside `scan/parse.ts`.
     The mechanical rule-9 guard only scans `lower|validate|analyze|emit` (+`graph.ts`), so the package-root files
     where source re-reads actually live are never inspected — exactly the gap (e.g. `internal-graph.ts` reparses a

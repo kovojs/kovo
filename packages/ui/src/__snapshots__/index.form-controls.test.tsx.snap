@@ -3,31 +3,31 @@
 exports[`@kovojs/ui styled package foundation > wraps field and fieldset primitives as styled native form wiring 1`] = `
 {
   "fieldControlClasses": [
-    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-16sfjy kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-bd-hrxrf1 kv-field-box-sfjrkv kv-field-outline-1xfacz kv-field-bd-7fy1o5 kv-field-box-13c28d kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
   ],
   "fieldDescriptionClasses": [
     "kv-field-fg-zzbnl3 kv-field-font-1ditt9",
   ],
   "fieldErrorClasses": [
-    "kv-field-fg-4ldrhq kv-field-font-1ditt9 kv-field-font-oqvzpu",
+    "kv-field-fg-4ldrhq kv-field-font-1ditt9",
   ],
   "fieldLabelClasses": [
-    "kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-line-md0e74 kv-field-cursor-1uohhp kv-field-opacity-1cqgy8",
+    "kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-font-1a16ze kv-field-line-md0e74 kv-field-cursor-1uohhp kv-field-opacity-1cqgy8 kv-field-font-28jb4h",
   ],
   "fieldSelectClasses": [
-    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-16sfjy kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
+    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-bd-hrxrf1 kv-field-box-sfjrkv kv-field-outline-1xfacz kv-field-bd-7fy1o5 kv-field-box-13c28d kv-field-h-h29v56 kv-field-pad-kmh0h7 kv-field-pad-7oar2q",
   ],
   "fieldSelectOptionClasses": [
     "kv-field-fg-tkbfam kv-field-fg-p2kepe",
   ],
   "fieldTextareaClasses": [
-    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-outline-16sfjy kv-field-outline-1ukfww kv-field-outline-6gshig kv-field-outline-6qyzyk kv-field-outline-trppu5 kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q",
+    "kv-field-bg-u75tmf kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-box-2a3fpd kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-transition-1a01zd kv-field-w-1sau09 kv-field-fg-1208a8 kv-field-bd-squ24i kv-field-bg-1q497l kv-field-cursor-1evm4m kv-field-opacity-1n7u7a kv-field-bd-hrxrf1 kv-field-box-sfjrkv kv-field-outline-1xfacz kv-field-bd-7fy1o5 kv-field-box-13c28d kv-field-min-1pjmnv kv-field-pad-kmxu12 kv-field-pad-7oar2q",
   ],
   "fieldsetClasses": [
     "kv-field-bd-13i1kt kv-field-bd-28g5u0 kv-field-bd-1aw25w kv-field-bd-11qmhr kv-field-fg-tkbfam kv-field-d-6zozkp kv-field-font-1ditt9 kv-field-pad-g8j5fv kv-field-row-zmgosv kv-field-opacity-r0fqdm kv-field-bd-12jlqi",
   ],
   "fieldsetLegendClasses": [
-    "kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-font-oqvzpu kv-field-pad-135yro",
+    "kv-field-fg-tkbfam kv-field-font-1ditt9 kv-field-font-1a16ze kv-field-pad-135yro",
   ],
 }
 `;

@@ -269,16 +269,26 @@ export interface ComponentModuleModel {
   mutationHandlers: readonly MutationHandlerModel[];
   namedImports: readonly NamedImportModel[];
   renderSourceReturns: readonly StringRenderModel[];
+  /**
+   * @internal FN7: the scanner's own parsed `ts.SourceFile`, retained so phases like StyleX
+   * extraction reuse it instead of re-parsing the component. Non-enumerable so the model stays a
+   * serializable fact bag (it is never JSON.stringified/hashed; this keeps it that way).
+   */
+  readonly sourceFile: ts.SourceFile;
+}
+
+/**
+ * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
+ * and it is shared with the other compiler phases that must read app source (StyleX extraction and
+ * its imported static-value modules) so the `ts.createSourceFile` boundary lives only in scan/
+ * (SPEC.md §5.2 rule 9).
+ */
+export function parseSourceFile(fileName: string, source: string): ts.SourceFile {
+  return ts.createSourceFile(fileName, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 }
 
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const sourceFile = parseSourceFile(fileName, source);
   const calls: CallExpressionModel[] = [];
   const components: ComponentModel[] = [];
   const jsxComments: JsxCommentModel[] = [];
@@ -332,7 +342,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
 
   visit(sourceFile);
 
-  return {
+  const model: ComponentModuleModel = {
     calls,
     components,
     jsxComments,
@@ -343,7 +353,12 @@ export function parseComponentModule(fileName: string, source: string): Componen
     mutationHandlers,
     namedImports,
     renderSourceReturns,
+    sourceFile,
   };
+  // FN7: keep the scanner's SourceFile non-enumerable so post-parse phases (StyleX extraction)
+  // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
+  Object.defineProperty(model, 'sourceFile', { enumerable: false });
+  return model;
 }
 
 function moduleSpecifierModel(node: ts.Node): ModuleSpecifierModel | null {

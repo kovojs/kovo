@@ -48,7 +48,7 @@ exports[`@kovojs/ui styled package foundation > wraps the headless slider primit
     "kv-slider-bg-i66t48 kv-slider-bd-107bxv kv-slider-d-2v1w0t kv-slider-h-i8ke14 kv-slider-left-1hp4pw kv-slider-position-1uzy1e kv-slider-top-1or6xt kv-slider-bottom-oh78t9 kv-slider-h-yvrc1u kv-slider-top-1y78xo kv-slider-w-1av78l",
   ],
   "sliderThumbClasses": [
-    "kv-slider-bg-1k3lw kv-slider-bd-1knr32 kv-slider-bd-107bxv kv-slider-bd-38e0zs kv-slider-bd-n0997g kv-slider-box-1wr38g kv-slider-box-16i87o kv-slider-d-2v1w0t kv-slider-h-6g3xs5 kv-slider-m-1x7bjp kv-slider-pointer-1la3mg kv-slider-position-1uzy1e kv-slider-top-8qz0n0 kv-slider-transform-p6u7es kv-slider-w-15ogf6 kv-slider-z-rx4oct kv-slider-opacity-1wmp2v kv-slider-left-59h0aa kv-slider-m-167ho2 kv-slider-m-1o1fq6 kv-slider-top-1y78xo kv-slider-transform-x8fqnr",
+    "kv-slider-bg-1k3lw kv-slider-bd-1knr32 kv-slider-bd-107bxv kv-slider-bd-38e0zs kv-slider-bd-n0997g kv-slider-box-1wr38g kv-slider-box-16i87o kv-slider-d-2v1w0t kv-slider-h-sx3tl7 kv-slider-m-1uxc1x kv-slider-pointer-1la3mg kv-slider-position-1uzy1e kv-slider-top-8qz0n0 kv-slider-transform-p6u7es kv-slider-transition-1bzz25 kv-slider-transition-1xe1oo kv-slider-w-unp9zc kv-slider-z-rx4oct kv-slider-box-1j24v0 kv-slider-outline-93rwea kv-slider-box-1fj8fr kv-slider-opacity-1wmp2v kv-slider-left-59h0aa kv-slider-m-167ho2 kv-slider-m-1imhuj kv-slider-top-1y78xo kv-slider-transform-x8fqnr",
   ],
   "sliderTrackClasses": [
     "kv-slider-bg-1d9puy kv-slider-bd-107bxv kv-slider-h-1nw963 kv-slider-overflow-qsrrc2 kv-slider-position-ojetho kv-slider-w-lhhf6b kv-slider-h-1o2ip7 kv-slider-w-hg3bhc",

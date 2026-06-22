@@ -20,9 +20,9 @@ describe('fragment target lookup', () => {
     // <kovo-defer> host when the fragment protocol delivers the real subtree.
     expect(findFragmentTargetElement(root, 'reviews:p1')).toBe(target);
     expect(selectors).toEqual([
-      '[kovo-c="reviews:p1"]',
-      '[id="reviews:p1"]',
       '[kovo-fragment-target="reviews:p1"]',
+      '[id="reviews:p1"]',
+      '[kovo-c="reviews:p1"]',
       'kovo-defer[target="reviews:p1"]',
     ]);
   });

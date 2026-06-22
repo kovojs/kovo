@@ -59,6 +59,16 @@
   box-sizing: border-box;
 }
 
+/* The header GitHub link collapses into the mobile menu below 48rem. This lives
+   here (unlayered) rather than as a style atom so it always wins over the
+   @layer-scoped atomic display — atom source order can't guarantee a base +
+   media-query display override resolves the same at both breakpoints. */
+@media (max-width: 47.999rem) {
+  [data-header-github] {
+    display: none;
+  }
+}
+
 html {
   color-scheme: light;
   font-family: var(--font-sans);
@@ -146,6 +156,13 @@ canvas {
    The content pipeline emits plain semantic HTML; these rules style
    generated prose under the route-boundary [data-prose] hook so .md
    mirrors stay clean. */
+/* Long inline tokens (paths, identifiers, URLs) must wrap rather than push the
+   page wider than the viewport on narrow screens. Code windows and tables keep
+   their own horizontal scroll (below). */
+[data-prose] {
+  overflow-wrap: break-word;
+}
+
 [data-prose] h1 {
   font-size: 2.2rem;
   font-weight: 750;
@@ -227,6 +244,7 @@ canvas {
   border: 1px solid var(--edge-soft);
   font-family: var(--font-mono);
   font-size: 0.84em;
+  overflow-wrap: anywhere;
   padding: 0.1rem 0.3rem;
 }
 

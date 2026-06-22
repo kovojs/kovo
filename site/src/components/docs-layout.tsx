@@ -11,6 +11,7 @@ import {
   SiteFooter,
   SiteHeader,
   renderToc,
+  sidebarGroupsForPath,
   type ClientHrefs,
 } from './chrome.js';
 import { ExampleSplit } from './example-split.js';
@@ -72,16 +73,19 @@ const docsLayoutStyles = style.create(
     mobileBody: {
       paddingTop: '1.1rem',
     },
+    // In-article sidebar disclosure: shown by default (mobile), hidden once the
+    // left rail appears at 64rem. Mobile-first so the default has no competing
+    // media rule at narrow widths (see the rails note below).
     mobileMenu: {
       borderColor: 'var(--edge)',
       borderStyle: 'solid',
       borderWidth: 1,
-      display: 'none',
+      display: 'block',
       fontSize: '0.84rem',
       marginBottom: '2rem',
       padding: '0.8rem 1rem',
-      '@media (max-width: 63.999rem)': {
-        display: 'block',
+      '@media (min-width: 64rem)': {
+        display: 'none',
       },
     },
     mobileSummary: {
@@ -132,12 +136,15 @@ const docsLayoutStyles = style.create(
     sectionGrid: {
       display: 'grid',
       gap: '0.9rem',
-      gridTemplateColumns: 'repeat(2, 1fr)',
+      // Mobile-first single column, widening to two from 48rem up. (A base
+      // two-column value with a max-width override is unreliable: the atomic
+      // CSS can emit the base after the media rule, so it wins at every width.)
+      gridTemplateColumns: '1fr',
       listStyle: 'none',
       margin: 0,
       padding: 0,
-      '@media (max-width: 48rem)': {
-        gridTemplateColumns: '1fr',
+      '@media (min-width: 48rem)': {
+        gridTemplateColumns: 'repeat(2, 1fr)',
       },
     },
     sectionHead: {
@@ -169,17 +176,22 @@ const docsLayoutStyles = style.create(
       letterSpacing: '0.12em',
       marginBottom: '0.6rem',
     },
+    // Mobile-first: rails are hidden by default and only appear at wider
+    // breakpoints. A default-visible element with a max-width hide is unreliable
+    // here — the atomic CSS can order the base `display` after the media rule,
+    // so it wins at every width and the rail never collapses on mobile.
     sidebarRail: {
-      display: 'block',
-      '@media (max-width: 63.999rem)': {
-        display: 'none',
+      display: 'none',
+      '@media (min-width: 64rem)': {
+        display: 'block',
       },
     },
     tocRail: {
+      display: 'none',
       flexShrink: 0,
       width: '14rem',
-      '@media (max-width: 79.999rem)': {
-        display: 'none',
+      '@media (min-width: 80rem)': {
+        display: 'block',
       },
     },
   },
@@ -198,7 +210,13 @@ export function DocsRoutePage({
   page: DocsRoutePageData;
 }): string {
   const { activePath, apiSidebar, content, eyebrow, groups, headings = [], next, prev } = page;
-  const sidebar = DocsSidebar.definition.render({ activePath, groups });
+  // Show only the sidebar family for this page: the learning path (Getting
+  // Started + Tutorial + Guides) together, or Components/Examples/reference
+  // together — so the rail stays scoped to what the reader is browsing.
+  const sidebar = DocsSidebar.definition.render({
+    activePath,
+    groups: sidebarGroupsForPath(groups, activePath),
+  });
   const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
 
   return (

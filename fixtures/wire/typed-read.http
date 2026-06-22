@@ -11,4 +11,4 @@ Content-Type: text/html; charset=utf-8
 Cache-Control: private, no-store
 Vary: Cookie
 
-<kovo-query name="product:p1">{"name":"Mug","stock":4}</kovo-query>
+<kovo-query name="product" key="product:p1">{"name":"Mug","stock":4}</kovo-query>
