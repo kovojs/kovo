@@ -602,10 +602,7 @@ export const SiteHeader = component({
                 return (
                   <a
                     href={item.url}
-                    style={[
-                      chromeStyles.mobilePanelLink,
-                      active && chromeStyles.navLinkActive,
-                    ]}
+                    style={[chromeStyles.mobilePanelLink, active && chromeStyles.navLinkActive]}
                   >
                     {escapeHtml(item.title)}
                   </a>

@@ -355,7 +355,15 @@ function navGroups(sections: DocSection[]): NavGroup[] {
       pages: section.pages.map((page) => ({ title: page.title, url: page.url })),
       title: section.title,
     }));
-  groups.push({ key: 'components', pages: [{ title: 'Components', url: '/components/' }], title: 'Components' });
-  groups.push({ key: 'examples', pages: [{ title: 'Examples', url: '/examples/' }], title: 'Examples' });
+  groups.push({
+    key: 'components',
+    pages: [{ title: 'Components', url: '/components/' }],
+    title: 'Components',
+  });
+  groups.push({
+    key: 'examples',
+    pages: [{ title: 'Examples', url: '/examples/' }],
+    title: 'Examples',
+  });
   return groups;
 }
