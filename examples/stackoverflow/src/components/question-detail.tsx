@@ -16,15 +16,32 @@ import {
   voteButton,
 } from '../components/chrome.js';
 
+// Palette inlined as a same-file literal (StyleX-style extraction resolves only
+// same-file literals; SPEC §13.1). Mirrors the `so` palette in chrome.tsx.
+const so = {
+  white: '#ffffff',
+  border: '#e3e6e8',
+  borderMed: '#d6d9dc',
+  text: '#0c0d0e',
+  textSecondary: '#232629',
+  textMuted: '#525960',
+  textLight: '#6a737c',
+  link: '#0074cc',
+  linkHover: '#0a95ff',
+  blue: '#0a95ff',
+  blueHover: '#0074cc',
+  blueText: '#ffffff',
+  acceptedText: '#3d8b5f',
+} as const;
+
 // Question detail for `/questions/:id`: the question post, its answers, and the
 // answer composer — laid out like a Stack Overflow question page (vote gutter,
 // post body, tags, user card, then the answer list and "Your Answer" form).
 
 const detailStyles = style.create(
   {
-    // ---- Question header -----------------------------------------------------
     header: {
-      borderBottomColor: '#e3e6e8',
+      borderBottomColor: so.border,
       borderBottomStyle: 'solid',
       borderBottomWidth: 1,
       paddingBlockEnd: 12,
@@ -36,67 +53,85 @@ const detailStyles = style.create(
       justifyContent: 'space-between',
     },
     detailTitle: {
-      color: '#0c0d0e',
-      fontSize: 27,
+      color: so.text,
+      fontSize: 26,
       fontWeight: 400,
       lineHeight: 1.3,
       margin: 0,
     },
     askButton: {
-      backgroundColor: '#0a95ff',
-      borderColor: '#0a95ff',
+      backgroundColor: so.blue,
+      borderColor: so.blue,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#ffffff',
+      color: so.blueText,
       flexShrink: 0,
       fontSize: 13,
       paddingBlock: 10,
       paddingInline: 11,
       textDecoration: 'none',
-      ':hover': { backgroundColor: '#0074cc' },
+      ':hover': { backgroundColor: so.blueHover },
     },
     metaRow: {
-      color: '#525960',
+      color: so.textMuted,
       display: 'flex',
       flexWrap: 'wrap',
       fontSize: 13,
       gap: 16,
       marginBlockStart: 8,
     },
-    metaLabel: { color: '#6a737c' },
-    metaValue: { color: '#232629' },
-    // ---- Post (question + answer) layout ------------------------------------
+    metaLabel: { color: so.textLight },
+    metaValue: { color: so.textSecondary },
     post: {
-      borderBottomColor: '#e3e6e8',
+      borderBottomColor: so.border,
       borderBottomStyle: 'solid',
       borderBottomWidth: 1,
       display: 'flex',
       gap: 16,
       paddingBlock: 16,
+      '@media (max-width: 600px)': { gap: 10 },
     },
+    postAccepted: { backgroundColor: '#fbfdfb' },
     gutter: {
       alignItems: 'center',
+      color: so.textLight,
       display: 'flex',
       flexDirection: 'column',
       flexShrink: 0,
-      gap: 2,
+      gap: 4,
       width: 42,
     },
-    acceptMark: {
-      color: '#3d8b5f',
-      fontSize: 28,
-      lineHeight: 1,
-      marginBlockStart: 4,
-    },
-    postMain: {
+    voteArrow: {
+      alignItems: 'center',
+      borderColor: so.borderMed,
+      borderRadius: 1000,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: so.textLight,
       display: 'grid',
-      flex: '1 1 0%',
-      gap: 14,
-      minWidth: 0,
+      fontSize: 11,
+      height: 26,
+      lineHeight: 1,
+      placeItems: 'center',
+      width: 26,
     },
+    voteNum: {
+      color: so.textSecondary,
+      fontSize: 19,
+      fontVariantNumeric: 'tabular-nums',
+      fontWeight: 500,
+      lineHeight: 1,
+    },
+    acceptCheck: {
+      color: so.acceptedText,
+      fontSize: 26,
+      lineHeight: 1,
+      marginBlockStart: 2,
+    },
+    postMain: { display: 'grid', flex: '1 1 0%', gap: 14, minWidth: 0 },
     body: {
-      color: '#0c0d0e',
+      color: so.text,
       fontSize: 15,
       lineHeight: 1.65,
       margin: 0,
@@ -109,98 +144,79 @@ const detailStyles = style.create(
       gap: 12,
       justifyContent: 'space-between',
     },
-    // ---- Answers -------------------------------------------------------------
     answersHead: {
       alignItems: 'center',
       display: 'flex',
       gap: 12,
       justifyContent: 'space-between',
       marginBlockStart: 24,
+      marginBlockEnd: 4,
     },
-    answersTitle: {
-      color: '#0c0d0e',
-      fontSize: 19,
-      fontWeight: 400,
-      margin: 0,
+    answersTitle: { color: so.text, fontSize: 19, fontWeight: 400, margin: 0 },
+    sortControl: {
+      borderColor: so.borderMed,
+      borderRadius: 4,
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: so.textMuted,
+      fontSize: 12,
+      paddingBlock: 5,
+      paddingInline: 8,
     },
-    answerList: {
-      listStyle: 'none',
-      margin: 0,
-      padding: 0,
-    },
-    acceptedNote: {
+    answerList: { listStyle: 'none', margin: 0, padding: 0 },
+    acceptedBadge: {
       alignItems: 'center',
-      color: '#3d8b5f',
+      color: so.acceptedText,
       display: 'inline-flex',
       fontSize: 13,
       fontWeight: 600,
-      gap: 4,
+      gap: 5,
     },
-    // ---- Answer composer -----------------------------------------------------
-    composer: {
-      display: 'grid',
-      gap: 12,
-      marginBlockStart: 28,
-    },
-    composerTitle: {
-      color: '#0c0d0e',
-      fontSize: 19,
-      fontWeight: 400,
-      margin: 0,
-    },
+    acceptedCheckSm: { fontSize: 15, lineHeight: 1 },
+    composer: { display: 'grid', gap: 12, marginBlockStart: 28 },
+    composerTitle: { color: so.text, fontSize: 19, fontWeight: 400, margin: 0 },
     input: {
-      backgroundColor: '#ffffff',
-      borderColor: '#d6d9dc',
+      backgroundColor: so.white,
+      borderColor: so.borderMed,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
       boxSizing: 'border-box',
-      color: '#0c0d0e',
+      color: so.text,
       fontSize: 13,
       paddingBlock: 9,
       paddingInline: 11,
       width: '100%',
       ':focus': {
-        borderColor: '#0a95ff',
+        borderColor: so.blue,
         boxShadow: '0 0 0 4px rgba(10,149,255,0.15)',
         outline: 'none',
       },
     },
-    textarea: {
-      lineHeight: 1.5,
-      resize: 'vertical',
-    },
-    composerActions: {
-      display: 'flex',
-      justifyContent: 'flex-start',
-    },
+    textarea: { lineHeight: 1.5, resize: 'vertical' },
+    composerActions: { display: 'flex', justifyContent: 'flex-start' },
     submitButton: {
-      backgroundColor: '#0a95ff',
-      borderColor: '#0a95ff',
+      backgroundColor: so.blue,
+      borderColor: so.blue,
       borderRadius: 4,
       borderStyle: 'solid',
       borderWidth: 1,
-      color: '#ffffff',
+      color: so.blueText,
       fontSize: 13,
       paddingBlock: 10,
       paddingInline: 11,
-      ':hover': { backgroundColor: '#0074cc' },
+      ':hover': { backgroundColor: so.blueHover },
     },
-    // ---- Not-found ----------------------------------------------------------
-    notFound: {
-      color: '#525960',
-      fontSize: 15,
-      paddingBlock: 24,
-    },
+    notFound: { color: so.textMuted, fontSize: 15, paddingBlock: 24 },
     back: {
       alignItems: 'center',
-      color: '#0074cc',
+      color: so.link,
       display: 'inline-flex',
       fontSize: 13,
       gap: 6,
       marginBlockEnd: 12,
       textDecoration: 'none',
-      ':hover': { color: '#0a95ff' },
+      ':hover': { color: so.linkHover },
     },
   },
   { namespace: 'detail', source: 'components/question-detail.tsx' },
@@ -215,9 +231,7 @@ function renderQuestionPost(question: QuestionDetailResult): string {
         <p style={detailStyles.body}>{question.body}</p>
         <div style={detailStyles.postFooter}>
           {renderTags(tags)}
-          {question.authorName
-            ? renderUserCard(question.authorName, question.createdAt, 'asked')
-            : ''}
+          {renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked')}
         </div>
       </div>
     </div>
@@ -226,16 +240,30 @@ function renderQuestionPost(question: QuestionDetailResult): string {
 
 function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
   return (
-    <li kovo-key={answer.id} style={detailStyles.post}>
+    <li
+      kovo-key={answer.id}
+      style={answer.accepted ? [detailStyles.post, detailStyles.postAccepted] : detailStyles.post}
+    >
       <div style={detailStyles.gutter}>
-        <span style={detailStyles.body} />
-        {/* Answer scores are static in the demo (only questions are votable). */}
-        {answer.accepted ? <span style={detailStyles.acceptMark}>&#10003;</span> : ''}
+        <span style={detailStyles.voteArrow} aria-hidden="true">
+          &#9650;
+        </span>
+        <span style={detailStyles.voteNum}>{answer.score}</span>
+        <span style={detailStyles.voteArrow} aria-hidden="true">
+          &#9660;
+        </span>
+        {answer.accepted ? (
+          <span style={detailStyles.acceptCheck} aria-label="Accepted">
+            &#10003;
+          </span>
+        ) : (
+          ''
+        )}
       </div>
       <div style={detailStyles.postMain}>
         {answer.accepted ? (
-          <span style={detailStyles.acceptedNote}>
-            <span>&#10003;</span> Accepted answer
+          <span style={detailStyles.acceptedBadge}>
+            <span style={detailStyles.acceptedCheckSm}>&#10003;</span> Accepted answer
           </span>
         ) : (
           ''
@@ -243,11 +271,19 @@ function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
         <p style={detailStyles.body}>{answer.body}</p>
         <div style={detailStyles.postFooter}>
           <span />
-          {answer.authorName ? renderUserCard(answer.authorName, answer.createdAt, 'answered') : ''}
+          {renderUserCard(answer.authorId, answer.authorName, answer.createdAt, 'answered')}
         </div>
       </div>
     </li>
   );
+}
+
+// Accepted answer first, then by score (desc) — Stack Overflow's default order.
+function sortedAnswers(answers: QuestionAnswersResult): QuestionAnswersResult {
+  return [...answers].sort((left, right) => {
+    if (left.accepted !== right.accepted) return left.accepted ? -1 : 1;
+    return right.score - left.score;
+  });
 }
 
 // Interactive region rendered inside the full page and fragment responses.
@@ -285,7 +321,8 @@ export const QuestionDetailRegion = component({
     }
 
     const views = viewsFor(question.id, question.score);
-    const asked = question.createdAt ? relativeTime(question.createdAt) : 'recently';
+    const asked = relativeTime(question.createdAt);
+    const ordered = sortedAnswers(answers);
     return (
       <div>
         <div style={detailStyles.header}>
@@ -313,8 +350,9 @@ export const QuestionDetailRegion = component({
           <h2 style={detailStyles.answersTitle}>
             {question.answerCount} {question.answerCount === 1 ? 'Answer' : 'Answers'}
           </h2>
+          <span style={detailStyles.sortControl}>Sorted by: Highest score</span>
         </div>
-        <ul style={detailStyles.answerList}>{answers.map(renderAnswerPost)}</ul>
+        <ul style={detailStyles.answerList}>{ordered.map(renderAnswerPost)}</ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
         <form enhance mutation={postAnswerMutation} id="your-answer" style={detailStyles.composer}>

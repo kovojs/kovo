@@ -18,6 +18,23 @@
 
 body {
   margin: 0;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(244, 128, 36, 0.22);
+}
+
+/* The mobile menu is a no-JS <details> disclosure; hide the native marker so the
+   hamburger button reads as a button, not a list item. */
+summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+summary::-webkit-details-marker {
+  display: none;
 }
 
 button,
