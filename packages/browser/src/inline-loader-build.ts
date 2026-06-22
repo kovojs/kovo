@@ -163,6 +163,23 @@ function installInlineKovoLoader(im) {
     );
   const wa = (el, name, val) => {
     if ((name === 'checked' || name === 'indeterminate') && val === false) val = null;
+    // SPEC.md section 5.2.4: a dialog opened via the native show-modal invoker
+    // lives in the top layer. Toggling its open attribute alone never exits the
+    // top layer (it stays :modal with an inert backdrop intercepting every
+    // click), so drive the reactive open/close through the dialog methods that
+    // keep top-layer state in sync. Guards keep this idempotent against the
+    // native invoker call that opens the dialog on the same activation.
+    if (name === 'open' && el.localName === 'dialog' && typeof el.close === 'function') {
+      if (val != null && val !== false) {
+        if (!el.open) {
+          if (el.getAttribute?.('aria-modal') === 'true' && typeof el.showModal === 'function') {
+            el.showModal();
+          } else if (typeof el.show === 'function') el.show();
+          else el.setAttribute('open', '');
+        }
+      } else if (el.open) el.close();
+      return;
+    }
     if (val == null) el.removeAttribute?.(name);
     else el.setAttribute?.(name, fb(val));
     if (name === 'value' && el.value !== undefined) {
@@ -286,6 +303,15 @@ function installInlineKovoLoader(im) {
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
       .filter(Boolean);
+  const sq = (value) =>
+    value.replace(/[\n\r\f"\\]/g, (char) => {
+      if (char === '\n') return '\\a ';
+      if (char === '\r') return '\\d ';
+      if (char === '\f') return '\\c ';
+      return '\\' + char;
+    });
+  const hsaf = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
+  const hsc = (value) => hsaf(value) && !value.includes(':');
   const targetIdentity = (el) =>
     el.getAttribute('kovo-fragment-target') ??
     el.getAttribute('id') ??
@@ -307,6 +333,7 @@ function installInlineKovoLoader(im) {
         .map((el) => {
           const deps = rd(el.getAttribute('kovo-deps'));
           const target = targetIdentity(el);
+          if (!hsaf(target) || !deps.every(hsaf)) return '';
           return target && (deps.length ? target + '=' + deps.join(' ') : target);
         })
         .filter(Boolean)
@@ -317,24 +344,25 @@ function installInlineKovoLoader(im) {
     const targets = [];
     for (const el of doc.querySelectorAll('[kovo-deps]')) {
       const target = targetIdentity(el);
+      const component = liveTargetIdentity(el);
+      if (!hsaf(target) || !hsc(component)) continue;
       if (!target || seen.has(target)) continue;
       seen.add(target);
-      targets.push(target + '#' + liveTargetIdentity(el) + ':' + JSON.stringify(liveProps(el)));
+      targets.push(target + '#' + component + ':' + JSON.stringify(liveProps(el)));
     }
     return targets;
   };
-  // SPEC.md §9.1 + security finding M10: fragment targets round-trip un-escaped
-  // wire data into CSS selectors, so a malformed target containing quote/bracket
-  // characters throws a SyntaxError that would abort the whole apply pass. Guard
-  // the lookups so a malformed selector degrades to "no target found" instead of
-  // throwing.
+  // SPEC.md §9.1: inline fragment apply uses the same escaped target lookup
+  // precedence as the modular runtime and Kovo-Targets collection.
   const ft = (target) => {
     try {
+      const selectorTarget = sq(target);
       return (
-        doc.querySelector('[kovo-c="' + target + '"]') ??
+        doc.querySelector('[kovo-fragment-target="' + selectorTarget + '"]') ??
         doc.getElementById(target) ??
-        doc.querySelector('[kovo-fragment-target="' + target + '"]') ??
-        doc.querySelector('kovo-defer[target="' + target + '"]')
+        doc.querySelector('[id="' + selectorTarget + '"]') ??
+        doc.querySelector('[kovo-c="' + selectorTarget + '"]') ??
+        doc.querySelector('kovo-defer[target="' + selectorTarget + '"]')
       );
     } catch {
       return;
@@ -526,12 +554,6 @@ function installInlineKovoLoader(im) {
     at(chunks.texts);
   };
   globalThis.__kovo_a = ab;
-  const sq = (value) => value.replace(/[\n\r\f"\\]/g, (char) => {
-    if (char === '\n') return '\\a ';
-    if (char === '\r') return '\\d ';
-    if (char === '\f') return '\\c ';
-    return '\\' + char;
-  });
   const st = {};
   const se = {};
   const sft = (target) => {
@@ -610,15 +632,18 @@ function installInlineKovoLoader(im) {
   const sef = (event, form) => {
     event.preventDefault();
     const streaming = form.getAttribute?.('data-mutation-stream') !== null;
+    const body = new FormData(form, event.submitter);
+    const formIdem = body.get?.('Kovo-Idem');
+    const idem = typeof formIdem === 'string' && formIdem !== '' ? formIdem : ci();
     fetch(form.action, {
-      body: new FormData(form, event.submitter),
+      body,
       headers: {
         Accept: streaming
           ? 'text/vnd.kovo.fragment+html; stream=1'
           : 'text/vnd.kovo.fragment+html',
         'Kovo-Form-Target': targetIdentity(form),
         'Kovo-Fragment': 'true',
-        'Kovo-Idem': ci(),
+        'Kovo-Idem': String(idem),
         'Kovo-Live-Targets': rlt().join('; '),
         ...(streaming ? { 'Kovo-Stream': 'true' } : {}),
         'Kovo-Targets': rt().join('; '),

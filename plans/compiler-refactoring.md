@@ -9,25 +9,22 @@ rules unless it is an explicit Part-2 capability that adds new accepted/emitted 
 Mark an item `[x]` only after the same session proves it against the gates named under "Neutrality
 gates". File:line citations were spot-checked via grep (see "Verification provenance").
 
-**Implementation status (2026-06-20)** — **done & merged to `main`**: Part 1 — **FN1, FN2, FN3, FN4, FN6,
-FN8, FN9, FN10, FN12, FN13, FN14** (11 of 14); Part 2 — **CAP6, CAP9** (the two substrate-enabled gates).
-Each verified by tsc + the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts
-moved) + api-surface, committed as its own checkpoint. FN6/FN9/FN10 were implemented by parallel sub-agents
-in isolated worktrees and integrated here.
+**Implementation status (2026-06-22)** — **ALL of Part 1 (FN1–FN14) done & merged to `main`**; Part 2 —
+**CAP6, CAP9**. FN7's createSourceFile reparse migration is now complete (all app-source parsing lives in
+`scan/`; only the two rule-9-permitted `emit/` generated-artifact parses remain). Each item verified by tsc +
+the golden/conformance/render-equivalence oracles (+ fact-hash snapshots where facts moved) + api-surface,
+committed as its own checkpoint. FN6/FN9/FN10/FN11 and two FN7 relocations were done by parallel sub-agents in
+isolated worktrees and integrated here.
 
 **Open / deferred (genuinely multi-session; the substrate above unblocks them):**
-- **FN5** — keystone pass-registry: the `ResultBuilder` half is a clean follow-up; the declarative `Pass`
-  registry is large and carries the YAGNI caveat noted on the item. Not started.
-- **FN7** — routing the 11 `createSourceFile` reparses through `scan/` (incl. cleaning `app-graph.ts` so it can
-  move under the guarded `analyze/` zone): the plan's single largest neutral refactor; each site must reproduce
-  fact bytes exactly. Not started.
-- **FN11** — `emitDerive` chokepoint: the 4 derive sites have divergent shapes (`: any` vs not, literal vs
-  `JSON.stringify` inputs) that make a byte-neutral helper error-prone. Not started.
+- **FN7 adjacent follow-ups** (separate rule-9 facet): widen `isPostParseGuardedFile` to `app-graph.ts`/`style.ts`
+  and move `app-graph.ts` under `analyze/` — both first need their decision-shaped `getText`/regex source reads
+  cleaned (e.g. app-graph's clock-cadence regex). Not part of the createSourceFile migration (which is done).
 - **Part 2 features** — **CAP1** (optimism IR unification + typed deriver channel), **CAP2** (`<kovo-live>` SSE),
-  **CAP3** (lists at scale), **CAP7** (incremental compile, needs FN5), **CAP8** (fact-driven dev — note FN3
-  removed the dead machinery, so this is rebuild-and-wire), **CAP10** (machine-readable diagnostics, builds on
-  FN9). Each is a cross-package feature warranting its own effort; not started here to avoid shipping
-  unverifiable/partial feature code to `main`.
+  **CAP3** (lists at scale), **CAP7** (incremental compile — now unblocked: needs FN5 ✓ + FN7 Step 2),
+  **CAP8** (fact-driven dev — note FN3 removed the dead machinery, so this is rebuild-and-wire), **CAP10**
+  (machine-readable diagnostics, builds on FN9 ✓). Each is a cross-package feature warranting its own effort;
+  not started here to avoid shipping unverifiable/partial feature code to `main`.
 
 ## Thesis
 
@@ -184,7 +181,16 @@ behavior change never hides inside a "neutral" move.
     exposure unchanged, addressed by FN7.)
   - Unlocks: FN5.
 
-- [ ] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** _(keystone)_
+- [x] **FN5 · P0 · L/med — Extract a declarative pass list + `CompileResult` builder from the inline orchestrator.** ✅ done _(keystone)_
+  - Done: (a) `compile-result.ts` now owns the canonical per-fact-category merge/dedupe/sort rules
+    (`mergeQueryUpdatePlans`, `dedupeOutputContextFacts`, `mergeStyleUpdateCoverage` + private helpers), moved
+    verbatim out of `compile.ts`. (b) `lowering-pipeline.ts` expresses the lowering stage as a declarative ordered
+    `LOWERING_PASSES` list (style-span-probe → structural-jsx → navigation-standalone-href → reparse → style-extraction
+    → reparse), driven by `runLoweringPipeline`, encoding today's exact order + the two reparse boundaries; passes are
+    now enumerable so a later capability pass can be slotted at a declared position. `compile.ts` calls the pipeline and
+    consumes the typed result (its now-unused imports dropped). Updated the structural-boundary guard for the moved
+    `navigationStandaloneHrefLowering` call. Verified byte-neutral by the golden corpus + conformance +
+    render-equivalence + fact-hash (hmr-impact) oracles + full compiler suite (582 pass) + api-surface — NOT fixpoint.
   - Problem: `compileComponentModule` is a ~250-line straight-line function in which both the pass _sequence_
     (structural+href lower → reparse → style → reparse → analyze → server-render → terminal emit) and the result
     _assembly_ (53-line literal inlining `mergeQueryUpdatePlans` / `mergeStyleUpdateCoverage` /
@@ -230,7 +236,22 @@ behavior change never hides inside a "neutral" move.
     `render-equivalence-boundary`, `stamps`, `registry`, `server-emit-security`, `diagnostic-coverage-matrix`.
   - Unlocks: CAP6.
 
-- [ ] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.**
+- [x] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.** ✅ done (createSourceFile migration complete)
+  - Done: a new `source-reparse-boundary.test.ts` widens rule-9 to the *structural* `ts.createSourceFile` reparse
+    form (which the conformance guard misses), pinning every site outside `scan/` to an allowlist. Then every
+    app-source reparse was migrated: query-binding parsing **consolidated** into `scan/query-binding.ts` (app-graph +
+    emit/server-render had duplicated helpers re-parsing the same `queries` entry value); `route-pages`,
+    `optimistic-inline`, `mutation-inputs` **relocated** wholesale into `scan/`; and `style.ts`'s 5 StyleX parses
+    **folded** onto the scanner's retained `model.sourceFile` (per-pass identity preserved across the pipeline's two
+    `extractKovoStyles` calls) with the two cross-source parses routed through `scan/parseSourceFile`. The only
+    `createSourceFile`s left outside `scan/` are `emit/dead-imports` + `emit/live-target-renderers`, **reclassified as
+    rule-9-PERMITTED** generated-artifact parses (they read the emitted lowered module, not app source). All verified
+    byte-neutral (conformance + render-equivalence + registry + style/css/package-styles + the moved tests; full
+    compiler suite 583 pass; api-surface unchanged).
+  - Adjacent follow-ups (separate rule-9 facet, NOT createSourceFile): widening `isPostParseGuardedFile` to
+    `app-graph.ts`/`style.ts` and moving `app-graph.ts` under `analyze/` (FN14's deferred intent) first require
+    cleaning their decision-shaped `getText`/regex source reads (e.g. app-graph's clock-cadence regex) — out of scope
+    for the reparse migration; tracked for a dedicated pass.
   - Problem: 11 production sites re-run `ts.createSourceFile` (plus `getText` re-reads) outside `scan/parse.ts`.
     The mechanical rule-9 guard only scans `lower|validate|analyze|emit` (+`graph.ts`), so the package-root files
     where source re-reads actually live are never inspected — exactly the gap (e.g. `internal-graph.ts` reparses a
@@ -323,20 +344,19 @@ behavior change never hides inside a "neutral" move.
     `compiler-conformance.test.ts` + migrated unit tests + `structural-boundary.test.ts`.
   - Unlocks: FN11, CAP3.
 
-- [ ] **FN11 · P1 · M/med — Consolidate derive emission into one helper owning the `(exportName, inputs, params, expression, sink, context)` contract.**
-  - Problem: the `export const X = derive([inputs], (params) => expr)` pattern + matching
-    `StateDeriveFact`/`GeneratedOutputWriteFact` construction is hand-assembled with string templates at 6 sites (4
-    in `structural-jsx.ts`, 2 in legacy `inline-derives.ts`), with genuinely differing shapes (`JSON.stringify`'d vs
-    literal inputs, `: any` annotations). The derive ABI is implicit and per-site, so any v2 metadata
-    (effect/shape mapping, punt reason) must be edited in every copy.
-  - Evidence: `lower/structural-jsx.ts:555`, `:740`, `:1347`, `:1383`.
-  - Approach: add `emitDerive(ctx, {baseName, inputs, params, expression, source, attr?, sink, context})` that
-    allocates the export name, pushes the derive string, and records the facts; rewrite call sites. Must reproduce
-    each site's exact input-format/param-typing variations byte-for-byte. **Sequence after FN12** so only the 4
-    production sites remain.
-  - Neutrality proof: generated strings + fact records byte-identical (snapshot emitted IR for gallery fixtures) +
-    render-equivalence + fact-hash snapshot. Slightly more error-prone than a pure move (inter-site shape differences).
-  - Unlocks: CAP1.
+- [x] **FN11 · P1 · M/med — Consolidate derive emission into one helper owning the `(exportName, inputs, params, expression, sink, context)` contract.** ✅ done
+  - Done: added `emitDerive(EmitDeriveOptions)` in `lower/structural-jsx.ts` (owns export-name allocation via
+    `nextExportName`, the lone `export const X = derive(<inputs>, (<params>) => <expr>);` template, and the
+    `StateDeriveFact`/`GeneratedOutputWriteFact` pushes). All production derive sites route through it:
+    `lowerAttributeDerive`, `lowerPrimitiveIndeterminateProp`, `lowerPrimitiveReactiveAttribute`, `recordStateDerive`,
+    `recordQueryTextDerive`. Callers pass already-formatted `inputs`/`params` strings + fully-built fact objects, so
+    each site's load-bearing shape (`JSON.stringify`'d vs literal `["state"]` inputs; `: any` vs un-annotated params;
+    per-site fact fields; shared-vs-distinct outputContext object identity) stays byte- and identity-neutral. There is
+    now exactly one `= derive(` template and one `nextExportName` caller in the file.
+  - Verified (byte-neutral): tsc clean; `vitest --run packages/compiler` 582/582 (61 files), incl.
+    `render-equivalence-boundary` + `compiler-conformance` (byte-identical emitted module/stamp guards) +
+    `structural-jsx-ir` + `state-bindings`/`state-events` + `stamps`; `node scripts/api-surface-gate.mjs` exit 0
+    (baseline 1338 unchanged). Unlocks CAP1.
 
 - [x] **FN13 · P2 · S/low — Make the platform substitution table data-driven and drop the string round-trip.** ✅ done
   - Done: dialog method matching became a `dialogActionByMethod` table (mirroring the popover one); `platformAttributes`

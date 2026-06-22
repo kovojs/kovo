@@ -74,8 +74,7 @@ type CompilerValidator = (context: ResolvedValidatorContext) => readonly Compile
 const compilerValidators: readonly CompilerValidator[] = [
   ({ mappedDiagnostics, model }) => validateServerFactsInLocalState(mappedDiagnostics, model),
   ({ loweredDiagnostics, model }) => validateReservedQueryNames(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model }) =>
-    validateRemovedFragmentTargetOption(loweredDiagnostics, model),
+  ({ loweredDiagnostics, model }) => validateRemovedFragmentTargetOption(loweredDiagnostics, model),
   ({ loweredDiagnostics, model }) =>
     validateHandAuthoredFragmentTargetStamp(loweredDiagnostics, model),
   ({ loweredDiagnostics, model, options }) =>
@@ -123,7 +122,10 @@ export function collectCompilerDiagnostics(context: ValidatorContext): CompilerD
   const resolved: ResolvedValidatorContext = {
     ...context,
     loweredDiagnostics: createDiagnosticFactory(context.options.fileName, context.source),
-    originalDiagnostics: createDiagnosticFactory(context.options.fileName, context.diagnosticSource),
+    originalDiagnostics: createDiagnosticFactory(
+      context.options.fileName,
+      context.diagnosticSource,
+    ),
     mappedDiagnostics: createDiagnosticFactory(
       context.options.fileName,
       context.diagnosticSource,

@@ -573,6 +573,9 @@ function writeQueryPlanElement(element: QueryBindingElement, rendered: string): 
 }
 
 function removeBoundAttribute(element: QueryBindingElement, name: string): void {
+  // SPEC §5.2.4: closing a <dialog> by removing `open` never exits the top layer;
+  // route through dialog.close() so a show-modal dialog leaves the top layer.
+  if (name === 'open' && reconcileDialogOpen(element, null)) return;
   element.removeAttribute?.(name);
   if (name === 'value' && element.value !== undefined && shouldClearRemovedValueProperty(element)) {
     element.value = '';
@@ -609,10 +612,44 @@ const BOOLEAN_PRESENCE_ATTRIBUTES = new Set([
   'selected',
 ]);
 
+// SPEC §5.2.4: a <dialog> opened via the native show-modal invoker lives in the
+// top layer. Reflecting the reactive open state with setAttribute/removeAttribute
+// alone never exits the top layer — the dialog stays :modal with an inert backdrop
+// intercepting every click — so drive open/close through the dialog methods that
+// keep top-layer state in sync. Returns true when it owned the write.
+interface DialogElementLike {
+  close?: () => void;
+  open?: boolean;
+  show?: () => void;
+  showModal?: () => void;
+}
+
+function reconcileDialogOpen(element: QueryBindingElement, value: unknown): boolean {
+  if (element.tagName?.toLowerCase() !== 'dialog') return false;
+  const dialog = element as QueryBindingElement & DialogElementLike;
+  if (typeof dialog.close !== 'function') return false;
+
+  if (value === false || value == null) {
+    if (dialog.open) dialog.close();
+  } else if (!dialog.open) {
+    // Idempotent against the native show-modal invoker, which opens the dialog on
+    // the same activation before this reactive write runs.
+    if (element.getAttribute?.('aria-modal') === 'true' && typeof dialog.showModal === 'function') {
+      dialog.showModal();
+    } else if (typeof dialog.show === 'function') {
+      dialog.show();
+    } else {
+      element.setAttribute?.('open', '');
+    }
+  }
+  return true;
+}
+
 function setBoundAttribute(element: QueryBindingElement, name: string, value: unknown): void {
   // J3 (SPEC §4.6/§4.8): HTML boolean-presence attributes must remove on false/null/undefined,
   // and set to '' (present) on any other value including true, '', and non-null strings.
   // This covers both query-source raw booleans and state-derive '' / null patterns.
+  if (name === 'open' && reconcileDialogOpen(element, value)) return;
   if (BOOLEAN_PRESENCE_ATTRIBUTES.has(name)) {
     if (value === false || value == null) {
       removeBoundAttribute(element, name);

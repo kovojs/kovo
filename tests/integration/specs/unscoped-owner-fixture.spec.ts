@@ -25,12 +25,12 @@ test('owner-scoped route and typed read only expose rows for the session owner',
   const ownQuery = await page.request.get('/_q/owner-invoice?id=inv-u1');
   expect(ownQuery.status()).toBe(200);
   await expect(ownQuery.text()).resolves.toContain(
-    '<kovo-query name="owner-invoice:inv-u1">{"invoice":{"id":"inv-u1","owner_id":"u1","total":31}}</kovo-query>',
+    '<kovo-query name="owner-invoice" key="owner-invoice:inv-u1">{"invoice":{"id":"inv-u1","owner_id":"u1","total":31}}</kovo-query>',
   );
 
   const crossOwnerQuery = await page.request.get('/_q/owner-invoice?id=inv-u2');
   expect(crossOwnerQuery.status()).toBe(200);
   await expect(crossOwnerQuery.text()).resolves.toBe(
-    '<kovo-query name="owner-invoice:inv-u2">{"invoice":null}</kovo-query>',
+    '<kovo-query name="owner-invoice" key="owner-invoice:inv-u2">{"invoice":null}</kovo-query>',
   );
 });

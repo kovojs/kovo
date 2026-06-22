@@ -24,6 +24,7 @@ import type { StyleRuleUsage } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan/parse.js';
+import { parseSourceFile } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
 import type {
   CompileComponentOptions,
@@ -163,8 +164,8 @@ export function extractKovoStyles(
     readonly resolveStaticImport?: StyleStaticImportResolver;
   } = {},
 ): KovoStyleExtraction {
-  const styleImports = styleImportsFromSource(source, fileName);
-  const importedStaticValues = collectImportedStaticValues(fileName, source, options);
+  const styleImports = styleImportsFromSourceFile(model.sourceFile);
+  const importedStaticValues = collectImportedStaticValues(fileName, model.sourceFile, options);
   if (
     styleImports.namespaces.size === 0 &&
     styleImports.publicTokenNames.size === 0 &&
@@ -173,7 +174,13 @@ export function extractKovoStyles(
     return emptyStyleExtraction();
   }
 
-  const environment = collectStyleEnvironment(fileName, source, styleImports, importedStaticValues);
+  const environment = collectStyleEnvironment(
+    fileName,
+    source,
+    model.sourceFile,
+    styleImports,
+    importedStaticValues,
+  );
   if (
     environment.bindings.size === 0 &&
     environment.rules.length === 0 &&
@@ -245,14 +252,7 @@ interface StyleImports {
   readonly publicTokenNames: ReadonlySet<string>;
 }
 
-function styleImportsFromSource(source: string, fileName: string): StyleImports {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+function styleImportsFromSourceFile(sourceFile: ts.SourceFile): StyleImports {
   const namespaces = new Set<string>();
   const publicTokenNames = new Set<string>();
 
@@ -278,16 +278,10 @@ function styleImportsFromSource(source: string, fileName: string): StyleImports 
 function collectStyleEnvironment(
   fileName: string,
   source: string,
+  sourceFile: ts.SourceFile,
   styleImports: StyleImports,
   importedStaticValues: ReadonlyMap<string, unknown> = new Map(),
 ): StyleEnvironment {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
   const bindings = new Map<string, StyleBinding>();
   const diagnostics: CompilerDiagnostic[] = [];
   const provenanceReplacements: SourceReplacement[] = [];
@@ -407,17 +401,10 @@ function collectStyleEnvironment(
 
 function collectImportedStaticValues(
   fileName: string,
-  source: string,
+  sourceFile: ts.SourceFile,
   options: { readonly resolveStaticImport?: StyleStaticImportResolver },
 ): ReadonlyMap<string, unknown> {
   if (!options.resolveStaticImport) return new Map();
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
   const imports = importedStaticValueRequests(sourceFile);
   if (imports.length === 0) return new Map();
 
@@ -435,7 +422,7 @@ function collectImportedStaticValues(
     const importedValues = evaluateExportedStaticValues(
       `${fileName}#${specifier}`,
       importedSource,
-      styleImportsFromSource(importedSource, `${fileName}#${specifier}`),
+      styleImportsFromSourceFile(parseSourceFile(`${fileName}#${specifier}`, importedSource)),
     );
     for (const entry of entries) {
       if (!importedValues.has(entry.importName)) continue;
@@ -498,13 +485,7 @@ function evaluateExportedStaticValues(
   source: string,
   styleImports: StyleImports,
 ): ReadonlyMap<string, unknown> {
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const sourceFile = parseSourceFile(fileName, source);
   const staticValues = new Map<string, unknown>();
   const exportedNames = new Set<string>();
   for (const statement of sourceFile.statements) {
@@ -1270,13 +1251,7 @@ function styleUpdateCoverage(
 }
 
 function parseExpression(source: string): ParsedExpression | null {
-  const sourceFile = ts.createSourceFile(
-    'style-expression.tsx',
-    `const __kovoStyleExpression = ${source};`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const sourceFile = parseSourceFile('style-expression.tsx', `const __kovoStyleExpression = ${source};`);
   const statement = sourceFile.statements[0];
   if (!statement || !ts.isVariableStatement(statement)) return null;
   const declaration = statement.declarationList.declarations[0];

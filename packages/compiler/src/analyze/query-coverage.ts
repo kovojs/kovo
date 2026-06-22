@@ -2,10 +2,7 @@
 // `statusCoveredPaths` / `planCoveredPaths` precedence checks, and dedupe keys.
 // Extracted verbatim from `analyze/query-updates.ts` for the FN10 decomposition.
 // SPEC.md §5.x query-update facts. Behavior-neutral: emitted bytes unchanged.
-import {
-  queryNameFromPath,
-  queryPathUsesKnownQuery,
-} from './query-shapes.js';
+import { queryNameFromPath, queryPathUsesKnownQuery } from './query-shapes.js';
 import { isStatePath } from './query-internal.js';
 import {
   callExpressions,

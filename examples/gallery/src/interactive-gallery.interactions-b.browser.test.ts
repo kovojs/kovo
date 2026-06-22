@@ -1353,12 +1353,23 @@ describe('compiled interactive gallery demos in the browser', () => {
 
     trigger.click();
 
+    // An outside sentinel proves the rest of the page stays interactive after the
+    // command palette closes (regression: a show-modal dialog closed only by
+    // removing its `open` attribute stays in the top layer and inertizes the page).
+    const outside = document.createElement('button');
+    let outsideClicks = 0;
+    outside.addEventListener('click', () => (outsideClicks += 1));
+    document.body.append(outside);
+
     await vi.waitFor(() => {
       expect(imports.at(-1)).toBe('/c/src/interactive/command-demo.client.js');
       expect(commandRoot.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"dashboard","inputValue":"","lastKeyAction":"idle","open":true,"value":"dashboard"}',
       );
       expect(dialog.open).toBe(true);
+      // The native show-modal invoker puts the dialog in the top layer, so the
+      // open state must be a real modal, not just an `open` attribute.
+      expect(dialog.matches(':modal')).toBe(true);
     });
 
     input.value = 'invite';
@@ -1392,9 +1403,19 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
       expect(selectedEnter.defaultPrevented).toBe(true);
       expect(dialog.open).toBe(false);
+      // Selecting an item closes via Kovo state alone; the reactive open write
+      // must call dialog.close() so the dialog leaves the top layer instead of
+      // lingering as an invisible inert backdrop over the page.
+      expect(dialog.matches(':modal')).toBe(false);
       expect(commandKeyCanceled.textContent).toBe('selected');
       expect(commandValue.textContent).toBe('Invite teammate');
     });
+
+    // With the dialog out of the top layer, the rest of the page is interactive
+    // again: a click on the outside sentinel reaches its handler.
+    outside.click();
+    expect(outsideClicks).toBe(1);
+    outside.remove();
 
     const toastRoot = await mountInteractiveDemo(GalleryToastDemo);
     const showToast = required(toastRoot.querySelector<HTMLButtonElement>('[data-toast-show]'));

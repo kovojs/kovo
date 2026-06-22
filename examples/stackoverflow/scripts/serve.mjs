@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { createServer as createNodeServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,6 +57,7 @@ export async function createSoServeServer({
   port = Number(process.env.PORT ?? 5176),
   strictPort = false,
 } = {}) {
+  emitGeneratedGraph();
   const vite = await createViteServer({
     appType: 'custom',
     configFile: fileURLToPath(new URL('../vite.config.ts', import.meta.url)),
@@ -63,6 +65,7 @@ export async function createSoServeServer({
     root: soRoot,
     server: { middlewareMode: true },
   });
+  await vite.ssrLoadModule('/src/generated/touch-graph.ts');
   const server = createNodeServer((req, res) => {
     void tryServeBuiltAsset(req, res).then((served) => {
       if (!served) vite.middlewares(req, res);
@@ -83,6 +86,13 @@ export async function createSoServeServer({
     server,
     vite,
   };
+}
+
+function emitGeneratedGraph() {
+  execFileSync(process.execPath, [fileURLToPath(new URL('./emit-graph.mjs', import.meta.url))], {
+    cwd: soRoot,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
 }
 
 if (isMainModule()) {

@@ -294,8 +294,10 @@ export function write<
 
 /** @internal */
 export interface QueryRerun {
+  input?: unknown;
   instanceKey?: string;
   key: string;
+  whole?: boolean;
 }
 
 /** @internal */
@@ -880,10 +882,12 @@ async function renderSuccessfulMutationWireResponse<
   renderInput: unknown,
 ): Promise<BufferedMutationWireResponse> {
   const selection = selectMutationResponseTargets({
+    changes: result.changes,
     fragmentRenderers: wireRequest.fragmentRenderers ?? [],
     liveTargetDescriptors: wireRequest.liveTargetDescriptors ?? [],
     liveTargetRenderers: wireRequest.liveTargetRenderers ?? [],
     liveTargets: wireRequest.liveTargets,
+    queryDefinitions: definition.registry?.queries ?? [],
     rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
     targets: wireRequest.targets ?? [],
   });
@@ -1599,6 +1603,12 @@ function queriesToRerun(
       return {
         ...(instanceKey === undefined ? {} : { instanceKey }),
         key: queryDefinition.key,
+        ...(instanceKey !== undefined &&
+        changes.some((change) =>
+          queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, input),
+        )
+          ? { whole: true }
+          : {}),
       };
     });
 }
@@ -1616,10 +1626,33 @@ function queryTouchedByChange(
   return changeRecordTouchesQueryInstance(change, instanceKey);
 }
 
+function queryChangeInvalidatesWholeQueryInstance(
+  queryDefinition: QueryDefinition,
+  change: ChangeRecord,
+  input: unknown,
+): boolean {
+  if (!(queryDefinition.reads ?? []).some((read) => read.key === change.domain)) return false;
+  if ((change.keys?.length ?? 0) === 0) return true;
+
+  const instanceKey = readQueryInstanceKey(queryDefinition, input);
+  if (instanceKey === undefined) return true;
+
+  return canonicalSingleRowQueryValue(change.domain, instanceKey) === undefined;
+}
+
+function canonicalSingleRowQueryValue(domain: string, instanceKey: string): string | undefined {
+  const prefix = `${domain}:`;
+  if (!instanceKey.startsWith(prefix)) return undefined;
+
+  const value = instanceKey.slice(prefix.length);
+  if (!value || value.includes(':')) return undefined;
+  return value;
+}
+
 async function renderQueryChunks(
   queries: readonly QueryDefinition[],
   rerunQueries: readonly QueryRerun[],
-  input: unknown,
+  defaultInput: unknown,
   request: unknown,
   changes: readonly ChangeRecord[],
 ): Promise<string[]> {
@@ -1629,10 +1662,14 @@ async function renderQueryChunks(
   const affectedKeysByDomain = buildAffectedKeysByDomain(changes);
 
   for (const queryDefinition of queries) {
-    if (!rerunQueries.some((target) => queryMatchesRerun(queryDefinition, input, target))) {
+    const rerunQuery = rerunQueries.find((target) =>
+      queryMatchesRerun(queryDefinition, defaultInput, target),
+    );
+    if (rerunQuery === undefined) {
       continue;
     }
 
+    const input = rerunQuery.input ?? defaultInput;
     const result = await runQuery(queryDefinition, input, request);
     if (!result.ok) {
       throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
@@ -1648,11 +1685,12 @@ async function renderQueryChunks(
 
 function queryMatchesRerun(
   queryDefinition: QueryDefinition,
-  input: unknown,
+  defaultInput: unknown,
   target: QueryRerun,
 ): boolean {
   if (queryDefinition.key !== target.key) return false;
 
+  const input = target.input ?? defaultInput;
   return readQueryInstanceKey(queryDefinition, input) === target.instanceKey;
 }
 
@@ -1802,10 +1840,12 @@ function liveTargetRenderersByComponent<Request>(
 }
 
 interface MutationResponseSelectionInput<Request> {
+  changes: readonly ChangeRecord[];
   fragmentRenderers: readonly FragmentRenderer[];
   liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
   liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[] | undefined;
+  queryDefinitions: readonly QueryDefinition[];
   rerunQueries: readonly QueryRerun[];
   targets: readonly string[];
 }
@@ -1831,44 +1871,48 @@ function selectMutationResponseTargets<Request>(
     return { fragmentTargets: [], liveTargetDescriptors: [], rerunQueries: [] };
   }
 
+  const liveTargets = input.liveTargets;
   const renderersByTarget = fragmentRenderersByTarget(input.fragmentRenderers);
   const liveRenderersByComponent = liveTargetRenderersByComponent(input.liveTargetRenderers);
   const affectedQueryTokens = new Set<string>();
   for (const query of input.rerunQueries) {
     const tokens = queryRerunTokens(query);
-    if (
-      input.liveTargets.some((target) => depsMatch(target, tokens)) ||
-      input.liveTargetDescriptors.some((descriptor) => {
-        const renderer = liveRenderersByComponent.get(descriptor.component);
-        return renderer?.queries?.some((rendererQuery) => tokens.includes(rendererQuery)) ?? false;
-      })
-    ) {
-      for (const token of tokens) affectedQueryTokens.add(token);
+    if (liveTargets.some((target) => depsMatch(target, tokens))) {
+      addQueryTokens(affectedQueryTokens, tokens);
+    }
+  }
+
+  const descriptorReruns = new Map<MutationLiveTargetDescriptor, readonly QueryRerun[]>();
+  for (const descriptor of input.liveTargetDescriptors) {
+    const renderer = liveRenderersByComponent.get(descriptor.component);
+    const liveTarget = liveTargets.find((target) => target.target === descriptor.target);
+    if (!renderer || liveTarget === undefined) continue;
+
+    const reruns = liveTargetDescriptorQueryReruns(
+      renderer,
+      descriptor,
+      input.queryDefinitions,
+      input.changes,
+    );
+    descriptorReruns.set(descriptor, reruns);
+
+    if (reruns.some((query) => depsMatch(liveTarget, queryRerunTokens(query)))) {
+      for (const query of reruns) addQueryTokens(affectedQueryTokens, queryRerunTokens(query));
     }
   }
 
   const rerunQueries = input.rerunQueries.filter((query) => {
     const tokens = queryRerunTokens(query);
-    if (
-      !input.liveTargets?.some(
-        (target) =>
-          targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
-      ) &&
-      !input.liveTargetDescriptors.some((descriptor) => {
-        const renderer = liveRenderersByComponent.get(descriptor.component);
-        return renderer?.queries?.some((rendererQuery) => tokens.includes(rendererQuery)) ?? false;
-      })
-    ) {
-      return false;
-    }
-
-    return true;
+    return liveTargets.some(
+      (target) =>
+        targetIsPlanCovered(target.target, renderersByTarget) && depsMatch(target, tokens),
+    );
   });
 
   const fragmentTargets = input.fragmentRenderers
     .filter((renderer) => {
       if (renderer.updateCoverage === 'plan') return false;
-      const liveTarget = input.liveTargets?.find((target) => target.target === renderer.target);
+      const liveTarget = liveTargets.find((target) => target.target === renderer.target);
       return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
     })
     .map((renderer) => renderer.target);
@@ -1877,13 +1921,100 @@ function selectMutationResponseTargets<Request>(
     if (renderersByTarget.has(descriptor.target)) return false;
     const renderer = liveRenderersByComponent.get(descriptor.component);
     if (!renderer) return false;
-    const liveTarget = input.liveTargets?.find((target) => target.target === descriptor.target);
-    const rendererQueries = renderer.queries ?? [];
-    if (rendererQueries.some((query) => affectedQueryTokens.has(query))) return true;
-    return liveTarget !== undefined && depsMatch(liveTarget, affectedQueryTokens);
+    const liveTarget = liveTargets.find((target) => target.target === descriptor.target);
+    if (liveTarget === undefined) return false;
+
+    const reruns = descriptorReruns.get(descriptor) ?? [];
+    return reruns.some((query) => depsMatch(liveTarget, queryRerunTokens(query)));
   });
 
-  return { fragmentTargets, liveTargetDescriptors, rerunQueries };
+  return {
+    fragmentTargets,
+    liveTargetDescriptors,
+    rerunQueries: mergeQueryReruns([
+      ...rerunQueries,
+      ...liveTargetDescriptors.flatMap((descriptor) => descriptorReruns.get(descriptor) ?? []),
+    ]),
+  };
+}
+
+interface LiveTargetRendererQueryBinding {
+  args?: (props: Record<string, unknown>) => unknown;
+  query: QueryDefinition;
+}
+
+type LiveTargetRendererWithQueryBindings<Request> = LiveTargetRenderer<Request> & {
+  queryBindings?: readonly LiveTargetRendererQueryBinding[];
+};
+
+function liveTargetDescriptorQueryReruns<Request>(
+  renderer: LiveTargetRenderer<Request>,
+  descriptor: MutationLiveTargetDescriptor,
+  queryDefinitions: readonly QueryDefinition[],
+  changes: readonly ChangeRecord[],
+): QueryRerun[] {
+  const bindings = liveTargetRendererQueryBindings(renderer, queryDefinitions);
+  const reruns: QueryRerun[] = [];
+
+  for (const binding of bindings) {
+    const queryInput = binding.args ? binding.args(descriptor.props) : undefined;
+    if (!changes.some((change) => queryTouchedByChange(binding.query, change, queryInput))) {
+      continue;
+    }
+
+    const instanceKey = readQueryInstanceKey(binding.query, queryInput);
+    reruns.push({
+      input: queryInput,
+      ...(instanceKey === undefined ? {} : { instanceKey }),
+      key: binding.query.key,
+      ...(instanceKey !== undefined &&
+      changes.some((change) =>
+        queryChangeInvalidatesWholeQueryInstance(binding.query, change, queryInput),
+      )
+        ? { whole: true }
+        : {}),
+    });
+  }
+
+  return mergeQueryReruns(reruns);
+}
+
+function liveTargetRendererQueryBindings<Request>(
+  renderer: LiveTargetRenderer<Request>,
+  queryDefinitions: readonly QueryDefinition[],
+): readonly LiveTargetRendererQueryBinding[] {
+  const rendererWithBindings = renderer as LiveTargetRendererWithQueryBindings<Request>;
+  if (rendererWithBindings.queryBindings) return rendererWithBindings.queryBindings;
+  if (renderer.queryDefinitions) {
+    return renderer.queryDefinitions.map((queryDefinition) => ({ query: queryDefinition }));
+  }
+
+  return (renderer.queries ?? []).flatMap((queryKey) => {
+    const queryDefinition = queryDefinitions.find((candidate) => candidate.key === queryKey);
+    return queryDefinition === undefined ? [] : [{ query: queryDefinition }];
+  });
+}
+
+function mergeQueryReruns(queries: readonly QueryRerun[]): QueryRerun[] {
+  const byIdentity = new Map<string, QueryRerun>();
+  for (const query of queries) {
+    const identity = `${query.key}\0${query.instanceKey ?? ''}`;
+    const existing = byIdentity.get(identity);
+    byIdentity.set(identity, {
+      ...query,
+      ...(existing?.input !== undefined && query.input === undefined
+        ? { input: existing.input }
+        : {}),
+      ...((existing?.whole === true || query.whole === true) && query.instanceKey !== undefined
+        ? { whole: true }
+        : {}),
+    });
+  }
+  return [...byIdentity.values()];
+}
+
+function addQueryTokens(target: Set<string>, tokens: readonly string[]): void {
+  for (const token of tokens) target.add(token);
 }
 
 function fragmentRenderersByTarget(
@@ -1906,7 +2037,8 @@ function targetIsPlanCovered(
 }
 
 function queryRerunTokens(query: QueryRerun): string[] {
-  return query.instanceKey === undefined ? [query.key] : [query.key, query.instanceKey];
+  if (query.instanceKey === undefined) return [query.key];
+  return query.whole === true ? [query.key, query.instanceKey] : [query.instanceKey];
 }
 
 function depsMatch(

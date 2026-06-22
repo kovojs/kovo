@@ -69,7 +69,7 @@ export interface FetchedEnhancedMutation {
 
 export async function fetchEnhancedMutation(
   options: FetchEnhancedMutationOptions,
-  idem = options.idem ?? createMutationIdem(),
+  idem = options.idem ?? readFormDataIdem(options.formData) ?? createMutationIdem(),
 ): Promise<FetchedEnhancedMutation> {
   const targetSnapshot = readLiveTargetSnapshot(options.root);
   const submittedFormTarget = readSubmittedFormTarget(options.form);
@@ -104,6 +104,18 @@ export async function fetchEnhancedMutation(
     ...(options.streaming && response.body ? { streamBody: response.body } : {}),
     targets: targetSnapshot.targets,
   };
+}
+
+function readFormDataIdem(formData: unknown): string | undefined {
+  if (
+    formData === null ||
+    typeof formData !== 'object' ||
+    typeof (formData as { get?: unknown }).get !== 'function'
+  ) {
+    return undefined;
+  }
+  const value = (formData as { get(name: string): unknown }).get('Kovo-Idem');
+  return typeof value === 'string' && value !== '' ? value : undefined;
 }
 
 function readSubmittedFormTarget(form: EnhancedFormLike): string | undefined {

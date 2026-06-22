@@ -11,6 +11,7 @@ import {
   renderComponent,
   type ComponentRenderOptions,
 } from './component-render.js';
+import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
@@ -59,10 +60,13 @@ export function componentLiveTargetRenderer<
   const queryBindings =
     options.queries ?? componentLiveTargetQueryBindings<Request>(options.component);
 
-  return {
+  const renderer: LiveTargetRenderer<Request> & {
+    queryBindings: readonly ComponentLiveTargetQueryBinding<Request>[];
+  } = {
     component: options.componentId,
     ...componentLiveTargetErrorBoundary(options),
     queries: queryBindings.map((binding) => binding.query.key),
+    queryBindings,
     queryDefinitions: queryBindings.map((binding) => binding.query),
     async render(context) {
       const queries = await loadLiveTargetQueries(queryBindings, context);
@@ -86,6 +90,8 @@ export function componentLiveTargetRenderer<
       );
     },
   };
+
+  return renderer;
 }
 
 function componentLiveTargetErrorBoundary<
@@ -134,10 +140,10 @@ function componentQueryBinding<Request>(
   binding: unknown,
 ): ComponentLiveTargetQueryBinding<Request> | undefined {
   if (isQueryArgsBinding<Request>(binding)) {
-    return { args: binding.args, name, query: binding.query };
+    return { args: binding.args, name, query: queryWithGeneratedReads(binding.query) };
   }
   if (isQueryDefinition<Request>(binding)) {
-    return { name, query: binding };
+    return { name, query: queryWithGeneratedReads(binding) };
   }
   return undefined;
 }

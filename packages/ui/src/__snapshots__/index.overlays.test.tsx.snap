@@ -31,19 +31,19 @@ exports[`@kovojs/ui styled package foundation > wraps H3 menu primitives as styl
 exports[`@kovojs/ui styled package foundation > wraps command primitive as a styled native dialog combobox 1`] = `
 {
   "commandDialogClasses": [
-    "kv-command-bg-ps1te2 kv-command-bd-cccmhn kv-command-bd-z22d4x kv-command-bd-k0aj7y kv-command-bd-t826nz kv-command-box-jdt9qr kv-command-fg-1aikyw kv-command-max-o30rta kv-command-pad-z0kd9j kv-command-w-d0w75t kv-command-bg-u81l6k kv-command-d-1yj8xg",
+    "kv-command-bg-ps1te2 kv-command-bd-cccmhn kv-command-bd-z22d4x kv-command-bd-k0aj7y kv-command-bd-t826nz kv-command-box-jdt9qr kv-command-fg-1aikyw kv-command-max-o30rta kv-command-overflow-qxflyf kv-command-pad-yb6rck kv-command-w-d0w75t kv-command-bg-u81l6k kv-command-d-1yj8xg",
   ],
   "commandInputClasses": [
-    "kv-command-bg-ps1te2 kv-command-bd-1u2qp7 kv-command-bd-1oyuq7 kv-command-bd-k0aj7y kv-command-bd-t826nz kv-command-fg-1aikyw kv-command-font-x31h30 kv-command-h-1crj27 kv-command-outline-1ipo24 kv-command-pad-1bof4l kv-command-pad-1seqdf kv-command-position-18liaz kv-command-transition-cgdjqu kv-command-w-d0w75t kv-command-fg-8wy5v4 kv-command-content-1pkf17 kv-command-left-g9x3bu kv-command-pointer-vqgrf3 kv-command-position-6old2e kv-command-fg-1haook kv-command-bg-1e4j2n kv-command-fg-1m99ep kv-command-cursor-1guhaf kv-command-box-ny329w",
+    "kv-command-bg-qlldal kv-command-bd-cgc8mr kv-command-bd-1dcai2 kv-command-fg-1aikyw kv-command-flex-1fmd79 kv-command-font-x31h30 kv-command-h-1gq52d kv-command-min-obe1yq kv-command-outline-1ipo24 kv-command-w-d0w75t kv-command-fg-jp7jvg kv-command-fg-1haook kv-command-fg-1m99ep kv-command-cursor-1guhaf",
   ],
   "commandItemClasses": [
-    "kv-command-align-1iqt7n kv-command-appearance-d7jk67 kv-command-bg-qlldal kv-command-bd-1bvzuz kv-command-bd-cgc8mr kv-command-bd-1dcai2 kv-command-fg-mkf2hl kv-command-column-1wng6t kv-command-cursor-1jaxik kv-command-d-10jo0b kv-command-font-p9ytdf kv-command-font-x31h30 kv-command-outline-1ipo24 kv-command-pad-1azqcz kv-command-pad-1sffoe kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1q3l4u kv-command-fg-1bqj3j kv-command-font-1yiuj1 kv-command-bg-16otgw kv-command-fg-1smpc6 kv-command-outline-yk6kpw kv-command-outline-1y2ffr kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-7f2iq kv-command-fg-1w0uxh",
+    "kv-command-align-1iqt7n kv-command-appearance-d7jk67 kv-command-bg-qlldal kv-command-bd-1bvzuz kv-command-bd-cgc8mr kv-command-bd-1dcai2 kv-command-fg-1aikyw kv-command-column-1si4q5 kv-command-cursor-1jaxik kv-command-d-13broj kv-command-font-p9ytdf kv-command-font-x31h30 kv-command-outline-1ipo24 kv-command-pad-1azqcz kv-command-pad-1sffoe kv-command-text-k66u5a kv-command-w-d0w75t kv-command-opacity-1icjyx kv-command-pointer-1bgayk kv-command-bg-1q3l4u kv-command-fg-1bqj3j kv-command-font-1yiuj1 kv-command-bg-16otgw kv-command-fg-1smpc6 kv-command-outline-yk6kpw kv-command-outline-1y2ffr kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-7f2iq kv-command-fg-1w0uxh",
   ],
   "commandListboxClasses": [
-    "kv-command-bg-ps1te2 kv-command-bd-cccmhn kv-command-bd-1oyuq7 kv-command-bd-k0aj7y kv-command-bd-t826nz kv-command-box-jdt9qr kv-command-m-pm48zt kv-command-max-1l3700 kv-command-min-qyj00s kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg kv-command-d-y6pz22",
+    "kv-command-bg-ps1te2 kv-command-max-pnbet5 kv-command-overflow-1grxml kv-command-pad-spfybb kv-command-d-1yj8xg kv-command-d-y6pz22",
   ],
   "commandTriggerClasses": [
-    "kv-command-align-1iqt7n kv-command-bg-ps1te2 kv-command-bd-1u2qp7 kv-command-bd-1oyuq7 kv-command-bd-k0aj7y kv-command-bd-t826nz kv-command-box-kdtwje kv-command-fg-1aikyw kv-command-d-xsx1ae kv-command-font-x31h30 kv-command-font-7w9m0m kv-command-h-1crj27 kv-command-justify-fb6poo kv-command-pad-raz2zz kv-command-transition-14fi7d kv-command-bg-1msney kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-yk6kpw kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1ebzac",
+    "kv-command-align-1iqt7n kv-command-bg-ps1te2 kv-command-bd-w8fr6h kv-command-bd-1u9xv6 kv-command-bd-k0aj7y kv-command-bd-t826nz kv-command-box-kdtwje kv-command-fg-1aikyw kv-command-d-xsx1ae kv-command-font-x31h30 kv-command-font-7w9m0m kv-command-h-ln0fuf kv-command-justify-fb6poo kv-command-pad-etc212 kv-command-transition-14fi7d kv-command-bg-1msney kv-command-cursor-1guhaf kv-command-opacity-kqyp6b kv-command-outline-yk6kpw kv-command-outline-ervi1a kv-command-outline-t32sn9 kv-command-outline-l3281x kv-command-bg-1ebzac",
   ],
 }
 `;

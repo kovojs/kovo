@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { compileRouteModule } from './route-pages.js';
+import { compileRouteModule } from './scan/route-pages.js';
 
 describe('compileRouteModule', () => {
   it('extracts component calls from JSX-authored route pages', () => {

@@ -13,7 +13,7 @@ test('typed read endpoint coerces search args and returns the canonical instance
   const response = await page.request.get('/_q/product?id=p2&max=800');
   expect(response.status()).toBe(200);
   await expect(response.text()).resolves.toBe(
-    '<kovo-query name="product:p2">{"id":"p2","name":"Notebook","price":799,"withinBudget":true}</kovo-query>',
+    '<kovo-query name="product" key="product:p2">{"id":"p2","name":"Notebook","price":799,"withinBudget":true}</kovo-query>',
   );
   // SPEC §9.4 (bugs-1 F35): /_q reads are per-user, session-dependent data behind a
   // per-read guard, so they carry a private, uncacheable, cookie-keyed posture — a shared
@@ -24,7 +24,7 @@ test('typed read endpoint coerces search args and returns the canonical instance
   const coercedDefault = await page.request.get('/_q/product?id=p1');
   expect(coercedDefault.status()).toBe(200);
   await expect(coercedDefault.text()).resolves.toContain(
-    '<kovo-query name="product:p1">{"id":"p1","name":"Pen","price":199,"withinBudget":true}</kovo-query>',
+    '<kovo-query name="product" key="product:p1">{"id":"p1","name":"Pen","price":199,"withinBudget":true}</kovo-query>',
   );
 });
 

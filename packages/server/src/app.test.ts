@@ -766,6 +766,8 @@ describe('server createApp request shell', () => {
         liveTargetRenderers: [
           {
             component: 'components/cart/panel',
+            queries: ['cart'],
+            queryDefinitions: [cartQuery],
             render: renderCartPanel,
           },
         ],

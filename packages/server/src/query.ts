@@ -575,8 +575,8 @@ function renderQueryEndpointChunk<const Key extends string, Value, Input, Reques
   const key = readQueryInstanceKey(queryDefinition, input);
 
   return renderQueryWireHtml({
-    key: undefined,
-    name: key ?? queryDefinition.key,
+    key,
+    name: queryDefinition.key,
     value,
     version: readQueryVersion(queryDefinition, input, value),
   });

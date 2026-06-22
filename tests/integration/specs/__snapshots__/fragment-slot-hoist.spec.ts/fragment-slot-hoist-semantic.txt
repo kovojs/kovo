@@ -1,4 +1,4 @@
-<section data-derive-attr="data-account" data-derive="slotBalance.BalanceShell$section_data_account_derive" kovo-c="balance-shell" kovo-deps="slotBalance" kovo-fragment-target="balance-shell">
+<section data-derive-attr="data-account" data-derive="slotBalance.BalanceShell$section_data_account_derive" kovo-c="balance-shell" kovo-deps="slotBalance slotBalance" kovo-fragment-target="balance-shell">
   <h1>
     "Account"
     <span data-bind="slotBalance.accountId">

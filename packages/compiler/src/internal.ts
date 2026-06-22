@@ -80,16 +80,16 @@ export type {
   StateDeriveReferenceFact,
   ViewTransitionStamp,
 } from './types.js';
-export type { LocalMutationInputFact } from './mutation-inputs.js';
-export { mutationInputFactsFromSource } from './mutation-inputs.js';
+export type { LocalMutationInputFact } from './scan/mutation-inputs.js';
+export { mutationInputFactsFromSource } from './scan/mutation-inputs.js';
 export type {
   InlineOptimisticPlanFact,
   InlineOptimisticTransformFact,
-} from './optimistic-inline.js';
+} from './scan/optimistic-inline.js';
 export {
   inlineOptimisticPlansFromSource,
   serializeInlineOptimisticPlanIr,
-} from './optimistic-inline.js';
+} from './scan/optimistic-inline.js';
 export {
   createEmptyCompileResult,
   queryShapeFactDiagnostics,

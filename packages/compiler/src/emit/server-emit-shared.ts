@@ -5,11 +5,7 @@ import {
   outputContextForAttribute,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
-import type {
-  ComponentModuleModel,
-  JsxAttributeModel,
-  JsxElementModel,
-} from '../scan/parse.js';
+import type { ComponentModuleModel, JsxAttributeModel, JsxElementModel } from '../scan/parse.js';
 import { componentOptionObjectEntries, componentRenderSlotsParam } from '../scan/parse.js';
 import { escapeAttribute, kebabCase, type SourceReplacement } from '../shared.js';
 import type { RegistryFacts } from '../types.js';
@@ -251,7 +247,9 @@ export function importsMutationCsrfField(model: ComponentModuleModel): boolean {
   );
 }
 
-export function enhancedMutationFormConflicts(element: JsxElementModel): EnhancedMutationFormConflict[] {
+export function enhancedMutationFormConflicts(
+  element: JsxElementModel,
+): EnhancedMutationFormConflict[] {
   return element.attributes
     .filter((attribute) =>
       [
@@ -327,7 +325,9 @@ export function enhancedMutationFormBinding(
   };
 }
 
-export function staticStringAttributeValue(attribute: JsxAttributeModel | undefined): string | null {
+export function staticStringAttributeValue(
+  attribute: JsxAttributeModel | undefined,
+): string | null {
   if (!attribute) return null;
   if (attribute.value !== undefined) return attribute.value;
   if (typeof attribute.expressionStaticValue === 'string') return attribute.expressionStaticValue;

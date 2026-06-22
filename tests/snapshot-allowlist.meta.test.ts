@@ -1,7 +1,7 @@
 // Snapshot-allowlist meta-test: guards that KOVO_SEMANTIC_ATTRS in
 // packages/test/src/integration/semantic-snapshot.ts stays in lockstep with
 // the `isGeneratedOnlyRenderAttribute` predicate in
-// packages/compiler/src/emit/server.ts (SPEC §5.2/§4.8).
+// packages/compiler/src/emit/render-equivalence.ts (SPEC §5.2/§4.8).
 //
 // The comment in semantic-snapshot.ts explicitly requires lockstep between the
 // two (line 10): "The set of kept generated attributes is intentionally aligned
@@ -13,7 +13,7 @@
 // If you add a new kovo-* or data-bind* attr to KOVO_SEMANTIC_ATTRS and this
 // test fails, you must either:
 //   a) add the attr to isGeneratedOnlyRenderAttribute in
-//      packages/compiler/src/emit/server.ts (preferred), OR
+//      packages/compiler/src/emit/render-equivalence.ts (preferred), OR
 //   b) add it to KNOWN_EXCEPTIONS below with a justification comment.
 
 import { describe, expect, it } from 'vitest';
@@ -28,12 +28,17 @@ const REPO_ROOT = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)),
 
 // Read the compiler predicate source so we can do lockstep assertions
 // without needing to export the private function.
-const SERVER_TS = path.join(REPO_ROOT, 'packages/compiler/src/emit/server.ts');
+const RENDER_EQUIVALENCE_TS = path.join(
+  REPO_ROOT,
+  'packages/compiler/src/emit/render-equivalence.ts',
+);
 
 function readPredicateBody(): string {
-  const source = fs.readFileSync(SERVER_TS, 'utf8');
+  const source = fs.readFileSync(RENDER_EQUIVALENCE_TS, 'utf8');
   const start = source.indexOf('function isGeneratedOnlyRenderAttribute(');
-  if (start === -1) throw new Error('isGeneratedOnlyRenderAttribute not found in server.ts');
+  if (start === -1) {
+    throw new Error('isGeneratedOnlyRenderAttribute not found in render-equivalence.ts');
+  }
   // Grab from the function start to the closing brace (function is non-nested).
   let depth = 0;
   let i = source.indexOf('{', start);
@@ -76,7 +81,7 @@ describe('snapshot-allowlist ↔ isGeneratedOnlyRenderAttribute lockstep', () =>
     expect(KOVO_SEMANTIC_ATTRS.length).toBeGreaterThan(0);
   });
 
-  it('isGeneratedOnlyRenderAttribute exists in packages/compiler/src/emit/server.ts', () => {
+  it('isGeneratedOnlyRenderAttribute exists in packages/compiler/src/emit/render-equivalence.ts', () => {
     const body = readPredicateBody();
     expect(body.length).toBeGreaterThan(0);
     // Spot-check: must recognise a core generated stamp.

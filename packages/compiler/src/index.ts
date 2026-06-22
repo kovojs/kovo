@@ -23,7 +23,7 @@ export type {
 } from './vite.js';
 export { deriveAppGraph } from './graph.js';
 export { composePageComponentArtifacts } from './page-composition.js';
-export { compileRouteModule } from './route-pages.js';
+export { compileRouteModule } from './scan/route-pages.js';
 export type {
   CompileComponentOptions,
   CompileResult,

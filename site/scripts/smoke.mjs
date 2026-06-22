@@ -71,9 +71,9 @@ try {
     (await noJsPage.locator('body').textContent())?.includes('hands your agent the fix'),
     'no-JS: landing tagline renders',
   );
-  await noJsPage.click('a[href="/docs/installation/"]');
+  await noJsPage.click('a[href="/docs/why-kovo/"]');
   check(
-    (await noJsPage.locator('h1').first().textContent())?.includes('Installation'),
+    (await noJsPage.locator('h1').first().textContent())?.includes('Why Kovo'),
     'no-JS: navigation to docs works',
   );
   await noJsPage.goto(`${origin}/spec/`);
@@ -219,13 +219,13 @@ try {
   });
   // The interactive demos are folded into the component gallery pages; the
   // accordion page carries the compiled demo (wrapped as #accordion-demo).
-  await page.goto(`${origin}/gallery/components/accordion/`, { waitUntil: 'networkidle' });
+  await page.goto(`${origin}/components/accordion/`, { waitUntil: 'networkidle' });
   check(
     await page
       .locator('#accordion-demo')
       .count()
       .then((count) => count === 1),
-    'JS: folded accordion gallery page renders the interactive demo',
+    'JS: folded accordion component page renders the interactive demo',
   );
   const accordionButton = page
     .locator('#accordion-demo button[on\\:click*="accordion-demo.client.js"]')
@@ -238,7 +238,7 @@ try {
     galleryScripts.some((script) => script.endsWith('/interactive/accordion-demo.client.js')),
     'JS: interactive gallery client module loads on interaction',
   );
-  await page.goto(`${origin}/gallery/components/toggle/`, { waitUntil: 'networkidle' });
+  await page.goto(`${origin}/components/toggle/`, { waitUntil: 'networkidle' });
   const toggleButton = page.locator('#toggle-demo button[on\\:click*="toggle-demo.client.js"]');
   await toggleButton.click();
   await page.waitForFunction(
@@ -247,7 +247,7 @@ try {
   );
   check(
     galleryScripts.some((script) => script.endsWith('/interactive/toggle-demo.client.js')),
-    'JS: folded toggle gallery page runs the compiled handler',
+    'JS: folded toggle component page runs the compiled handler',
   );
 
   // Examples: public demo services are configured as sandboxed iframes while the

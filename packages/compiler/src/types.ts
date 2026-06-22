@@ -247,6 +247,7 @@ export interface RouteNavigationSegmentFact {
 
 /** One component invocation found under a JSX-authored route page. */
 export interface RoutePageComponentFact {
+  exportName?: string;
   keyExpression?: string;
   localName: string;
   props: readonly RoutePageComponentPropFact[];

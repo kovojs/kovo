@@ -47,6 +47,14 @@ describe('wire parser HTML entity handling', () => {
     ).toEqual({ key: 'product>p1', name: 'product', value: { stock: 7 } });
   });
 
+  it('keeps query endpoint instance keys separate from declared query names', () => {
+    // SPEC.md §9.4/§10.2: /_q chunks use the declared query key as `name` and
+    // the canonical instance identity as `key`, even when that key contains colons.
+    expect(
+      readQueryChunks('<kovo-query name="productDetail" key="product:p1">{"id":"p1"}</kovo-query>'),
+    ).toEqual([{ key: 'product:p1', name: 'productDetail', value: { id: 'p1' } }]);
+  });
+
   it('normalizes canonical query instance names into the shared query chunk shape', () => {
     // SPEC.md §9.4/§10.2: typed reads and hydration carry instance keys as
     // `query:key`; runtime apply paths decode that once before hitting the store.
