@@ -584,33 +584,18 @@ export function AccordionDemo(): string {
   );
 }
 
-// Inline data-URI SVG portraits so the gallery avatars render real, loaded
-// images without depending on /avatars/*.png assets that 404 in the static
-// build. Each is a self-contained `image/svg+xml` document (gradient disc +
-// monogram) that the browser decodes synchronously, so the styled photo paints
-// over the initials fallback. Avatar load/error detection (flipping data-state
-// on the live <img>) is a client island deferred to shared infra; here the
-// static demo shows the loaded/loading/error visuals directly.
-function avatarSvg(initials: string, from: string, to: string): string {
-  const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">` +
-    `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
-    `<stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/>` +
-    `</linearGradient></defs>` +
-    `<rect width="80" height="80" fill="url(#g)"/>` +
-    `<text x="40" y="40" fill="#ffffff" font-family="ui-sans-serif,system-ui,sans-serif" ` +
-    `font-size="32" font-weight="600" text-anchor="middle" dominant-baseline="central">${initials}</text>` +
-    `</svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
+// Real, same-origin SVG portraits served from site/public/avatars/. A data-URI
+// would be neutralized to "#" by the compiler's `src` output-sanitizer (data: is
+// not an allowed scheme), so the loaded avatars must be committed static assets
+// (gradient disc + monogram). The `error` fixture intentionally points at a
+// missing file to exercise the initials fallback / data-state="error" visual.
 export function AvatarDemo(): string {
   const loading = {
-    src: avatarSvg('AL', '#0ea5e9', '#2563eb'),
+    src: '/avatars/ada.svg',
     status: 'loading' as const,
   };
   const loaded = {
-    src: avatarSvg('GH', '#10b981', '#059669'),
+    src: '/avatars/grace.svg',
     status: 'loaded' as const,
   };
   const error = {
@@ -634,7 +619,6 @@ export function AvatarDemo(): string {
               decoding: 'async',
               loading: 'lazy',
               sizes: '40px',
-              srcSet: '/avatars/ada@2x.png 2x',
             }) + AvatarFallback.definition.render({ ...loading, children: 'AL', delayMs: 250 }),
           label: 'Ada Lovelace avatar',
         })}
@@ -2420,45 +2404,23 @@ export function DrawerDemo(): string {
 }
 
 export function SkeletonDemo(): string {
-  const skeletonDemoStyles = style.create({
-    // A content silhouette (circular avatar + two text lines) so the demo reads
-    // as "a profile row is loading" instead of two anonymous gray blocks — the
-    // shadcn skeleton card shape.
-    row: {
-      alignItems: 'center',
-      columnGap: 12,
-      display: 'flex',
-    },
-    avatar: {
-      borderRadius: '50%',
-      height: 48,
-      width: 48,
-    },
-    lines: {
-      display: 'grid',
-      rowGap: 8,
-    },
-    lineLg: {
-      height: 16,
-      width: 220,
-    },
-    lineSm: {
-      height: 16,
-      width: 160,
-    },
-  });
-
+  // A content silhouette (circular avatar + two text lines) so the demo reads
+  // as "a profile row is loading" instead of two anonymous gray blocks — the
+  // shadcn skeleton card shape. The Skeleton component's own background/shimmer
+  // comes from @kovojs/ui CSS; only the demo-local sizing/layout is inlined,
+  // because app-authored style.create(...) atoms in demo files are not collected
+  // by the build and would render as 0px.
   return (
     <section data-gallery-demo="skeleton">
       <p data-demo-summary="no-js">
         Skeleton is decorative loading markup hidden from assistive technology.
       </p>
       <div data-ui-demo="skeleton">
-        <div {...style.attrs(skeletonDemoStyles.row)}>
-          {Skeleton.definition.render({ style: skeletonDemoStyles.avatar })}
-          <div {...style.attrs(skeletonDemoStyles.lines)}>
-            {Skeleton.definition.render({ style: skeletonDemoStyles.lineLg })}
-            {Skeleton.definition.render({ style: skeletonDemoStyles.lineSm })}
+        <div style={{ alignItems: 'center', columnGap: 12, display: 'flex' }}>
+          {Skeleton.definition.render({ style: [null, { borderRadius: '50%', height: 48, width: 48 }] })}
+          <div style={{ display: 'grid', rowGap: 8 }}>
+            {Skeleton.definition.render({ style: [null, { height: 16, width: 220 }] })}
+            {Skeleton.definition.render({ style: [null, { height: 16, width: 160 }] })}
           </div>
         </div>
       </div>

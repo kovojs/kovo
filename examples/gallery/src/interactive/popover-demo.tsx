@@ -14,13 +14,28 @@ export const GalleryPopoverDemo = component({
   render: (_queries: Record<string, never>, state: GalleryPopoverDemoState) => {
     const contentId = 'gallery-popover-content';
 
+    // Popover is not in the compiler's primitive-reactive registry, so the
+    // content's visibility attr (`data-state`, computed inside PopoverContent) is
+    // frozen at SSR unless hand-written here at the call site. Writing `data-state`
+    // makes the compiler emit data-bind:data-state, which the component forwards
+    // (passThroughProps) so `[data-state=closed]{display:none}` toggles on open.
+    // (See plans/bad-components.md — a registry entry is the longer-term fix.)
     return (
-      <Popover data-gallery-interactive="popover" open={state.open}>
-        <PopoverTrigger contentId={contentId} open={state.open}>
+      <Popover
+        data-gallery-interactive="popover"
+        data-state={state.open ? 'open' : 'closed'}
+        open={state.open}
+      >
+        <PopoverTrigger
+          contentId={contentId}
+          data-state={state.open ? 'open' : 'closed'}
+          open={state.open}
+        >
           Delivery window
         </PopoverTrigger>
         <PopoverContent
           contentId={contentId}
+          data-state={state.open ? 'open' : 'closed'}
           onBeforeToggle={() => {
             const result = _popoverBeforeToggle(Object(event), { open: state.open });
             if (!result) return;

@@ -75,7 +75,8 @@ export const galleryComponentCatalog: readonly GalleryComponentEntry[] = Object.
   },
   {
     component: 'collapsible',
-    summary: 'A single trigger that shows or hides one associated region.',
+    summary:
+      'A native <details>/<summary> reveal that expands or collapses one region and works without JavaScript — the simplest progressive-enhancement show/hide.',
     title: 'Collapsible',
   },
   {
@@ -101,7 +102,8 @@ export const galleryComponentCatalog: readonly GalleryComponentEntry[] = Object.
   },
   {
     component: 'disclosure',
-    summary: 'A button that toggles the visibility of a single block of supplementary content.',
+    summary:
+      'A scripted reveal pairing a <button aria-expanded> trigger with a controlled region, for show/hide cases that need full control over a non-native trigger and content.',
     title: 'Disclosure',
   },
   {

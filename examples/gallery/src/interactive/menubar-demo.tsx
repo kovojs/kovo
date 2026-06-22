@@ -115,6 +115,11 @@ export const GalleryMenubarDemo = component({
           );
         }}
       >
+        {/* Positioned anchor: the submenu is rendered position:absolute, so wrap
+            the trigger Menubar + its dropdown in a position:relative,
+            inline-block box so the menu anchors to the trigger instead of the
+            viewport (and no longer covers the button). */}
+        <div style="position:relative;display:inline-block">
         <Menubar {...rootState}>
           <MenubarItem
             {...rootState}
@@ -319,6 +324,7 @@ export const GalleryMenubarDemo = component({
             Import
           </MenubarItem>
         </MenubarSubmenu>
+        </div>
         <output
           data-demo-state="menubar-active"
           style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"

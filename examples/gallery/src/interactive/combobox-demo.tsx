@@ -31,7 +31,7 @@ const cityOptions: readonly ComboboxItem[] = Object.freeze([
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryComboboxDemo = component({
-  state: () => ({ highlightedValue: 'austin', inputValue: 'austin', open: false, value: 'austin' }),
+  state: () => ({ highlightedValue: 'austin', inputValue: '', open: false, value: 'austin' }),
   render: (_queries: Record<string, never>, state: GalleryComboboxDemoState) => {
     const listboxId = 'gallery-combobox-listbox';
     const inputState = {
@@ -91,6 +91,9 @@ export const GalleryComboboxDemo = component({
               // is the active option on open. Mirrors select-demo's trigger.
               if (state.open) return;
               state.open = true;
+              // Clear any typed text on reopen so the listbox shows all options
+              // again instead of staying filtered by a previous query.
+              state.inputValue = '';
               state.highlightedValue = state.value;
             }}
             onInput={() => {

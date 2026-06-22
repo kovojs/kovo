@@ -1,6 +1,9 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import { toolbarKeyDown as _toolbarKeyDown } from '@kovojs/headless-ui/toolbar';
+import { Bold } from '@kovojs/icons/bold';
+import { Italic } from '@kovojs/icons/italic';
+import { Link } from '@kovojs/icons/link';
 import { Toolbar, ToolbarButton, ToolbarItem } from '@kovojs/ui/toolbar';
 
 export interface GalleryToolbarDemoState {
@@ -47,6 +50,7 @@ export const GalleryToolbarDemo = component({
           <ToolbarItem {...boldState}>
             <ToolbarButton
               {...boldState}
+              aria-label="Bold"
               aria-pressed={String(state.pressedValue === 'bold')}
               data-pressed={String(state.pressedValue === 'bold')}
               id="gallery-toolbar-bold"
@@ -57,22 +61,24 @@ export const GalleryToolbarDemo = component({
               pressed={state.pressedValue === 'bold'}
               tabIndex={state.activeValue === 'bold' ? 0 : -1}
             >
-              Bold
+              <Bold />
             </ToolbarButton>
           </ToolbarItem>
           <ToolbarItem {...italicState}>
             <ToolbarButton
               {...italicState}
+              aria-label="Italic"
               id="gallery-toolbar-italic"
               pressed={false}
               tabIndex={-1}
             >
-              Italic
+              <Italic />
             </ToolbarButton>
           </ToolbarItem>
           <ToolbarItem {...linkState}>
             <ToolbarButton
               {...linkState}
+              aria-label="Link"
               aria-pressed={String(state.pressedValue === 'link')}
               data-pressed={String(state.pressedValue === 'link')}
               id="gallery-toolbar-link"
@@ -83,7 +89,7 @@ export const GalleryToolbarDemo = component({
               pressed={state.pressedValue === 'link'}
               tabIndex={state.activeValue === 'link' ? 0 : -1}
             >
-              Link
+              <Link />
             </ToolbarButton>
           </ToolbarItem>
         </Toolbar>

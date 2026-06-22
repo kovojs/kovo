@@ -22,13 +22,11 @@ const toggleItems = Object.freeze([
 export const GalleryToggleGroupDemo = component({
   state: () => ({ activeValue: 'bold', value: 'bold' }),
   render: (_queries: Record<string, never>, state: GalleryToggleGroupDemoState) => {
-    const selectedValues =
-      state.value === 'bold,italic' ? ['bold', 'italic'] : state.value === '' ? [] : [state.value];
     const groupState = {
       activeValue: state.activeValue,
       items: toggleItems,
-      type: 'multiple' as const,
-      value: selectedValues,
+      type: 'single' as const,
+      value: state.value,
     };
     const boldState = { ...groupState, itemValue: 'bold' };
     const strikeState = { ...groupState, itemValue: 'strike' };
@@ -49,13 +47,8 @@ export const GalleryToggleGroupDemo = component({
             const result = _toggleGroupKeyDown(Object(event), {
               activeValue: state.activeValue,
               items: [{ value: 'bold' }, { disabled: true, value: 'strike' }, { value: 'italic' }],
-              type: 'multiple',
-              value:
-                state.value === 'bold,italic'
-                  ? ['bold', 'italic']
-                  : state.value === ''
-                    ? []
-                    : [state.value],
+              type: 'single',
+              value: state.value,
             });
             if (!result?.value) return;
             state.activeValue = result.value;
@@ -67,10 +60,8 @@ export const GalleryToggleGroupDemo = component({
           <ToggleGroupItem {...boldState}>
             <ToggleGroupButton
               {...boldState}
-              aria-pressed={String(state.value === 'bold' || state.value === 'bold,italic')}
-              data-state={
-                state.value === 'bold' || state.value === 'bold,italic' ? 'pressed' : 'off'
-              }
+              aria-pressed={String(state.value === 'bold')}
+              data-state={state.value === 'bold' ? 'pressed' : 'off'}
               id="gallery-toggle-group-bold"
               onClick={() => {
                 const result = _toggleGroupItemClick(Object(event), {
@@ -80,13 +71,8 @@ export const GalleryToggleGroupDemo = component({
                     { disabled: true, value: 'strike' },
                     { value: 'italic' },
                   ],
-                  type: 'multiple',
-                  value:
-                    state.value === 'bold,italic'
-                      ? ['bold', 'italic']
-                      : state.value === ''
-                        ? []
-                        : [state.value],
+                  type: 'single',
+                  value: state.value,
                 });
                 if (!result) return;
                 state.activeValue = 'bold';
@@ -111,10 +97,8 @@ export const GalleryToggleGroupDemo = component({
           <ToggleGroupItem {...italicState}>
             <ToggleGroupButton
               {...italicState}
-              aria-pressed={String(state.value === 'italic' || state.value === 'bold,italic')}
-              data-state={
-                state.value === 'italic' || state.value === 'bold,italic' ? 'pressed' : 'off'
-              }
+              aria-pressed={String(state.value === 'italic')}
+              data-state={state.value === 'italic' ? 'pressed' : 'off'}
               id="gallery-toggle-group-italic"
               onClick={() => {
                 const result = _toggleGroupItemClick(Object(event), {
@@ -124,13 +108,8 @@ export const GalleryToggleGroupDemo = component({
                     { disabled: true, value: 'strike' },
                     { value: 'italic' },
                   ],
-                  type: 'multiple',
-                  value:
-                    state.value === 'bold,italic'
-                      ? ['bold', 'italic']
-                      : state.value === ''
-                        ? []
-                        : [state.value],
+                  type: 'single',
+                  value: state.value,
                 });
                 if (!result) return;
                 state.activeValue = 'italic';

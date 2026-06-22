@@ -40,7 +40,7 @@ const tagOptions: readonly AutocompleteItem[] = Object.freeze([
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
 export const GalleryAutocompleteDemo = component({
-  state: () => ({ highlightedValue: 'design', inputValue: 'de', open: false, value: 'design' }),
+  state: () => ({ highlightedValue: 'design', inputValue: '', open: false, value: 'design' }),
   render: (_queries: Record<string, never>, state: GalleryAutocompleteDemoState) => {
     const listId = 'gallery-autocomplete-list';
     const autocompleteState = {
@@ -149,9 +149,14 @@ export const GalleryAutocompleteDemo = component({
               if (!result) return;
 
               if ('value' in result) {
+                // B5 (UX): pressing Enter selects the highlighted suggestion and
+                // closes the list even when re-selecting the current value
+                // (changed:false). Apply open/inputValue unconditionally (mirrors
+                // the option onClick handlers); only commit the value/highlight on
+                // an actual change.
+                state.open = result.open.open;
+                state.inputValue = result.inputValue.inputValue;
                 if (result.value.changed) {
-                  state.inputValue = result.inputValue.inputValue;
-                  state.open = result.open.open;
                   state.value = result.value.value ?? state.value;
                   state.highlightedValue = state.value;
                 }
@@ -181,7 +186,7 @@ export const GalleryAutocompleteDemo = component({
               data-state={state.value === 'design' ? 'checked' : 'unchecked'}
               hidden={
                 state.inputValue !== '' &&
-                !'design'.startsWith(state.inputValue.toLocaleLowerCase())
+                !'design'.includes(state.inputValue.toLocaleLowerCase())
               }
               id="gallery-autocomplete-list-option-0"
               itemLabel="Design"
@@ -233,7 +238,7 @@ export const GalleryAutocompleteDemo = component({
               data-state={state.value === 'development' ? 'checked' : 'unchecked'}
               hidden={
                 state.inputValue !== '' &&
-                !'development'.startsWith(state.inputValue.toLocaleLowerCase())
+                !'development'.includes(state.inputValue.toLocaleLowerCase())
               }
               id="gallery-autocomplete-list-option-2"
               itemValue="development"

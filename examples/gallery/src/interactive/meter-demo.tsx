@@ -39,6 +39,10 @@ export const GalleryMeterDemo = component({
         <label for="gallery-meter-value">Storage capacity</label>
         <Meter
           aria-valuetext={`${state.value} percent capacity`}
+          // `data-state` (color) was already reactive; the reactive `style` width
+          // is what makes the visible bar move. Both are forwarded to the
+          // indicator span via bindingProps so "Optimize capacity" updates the fill
+          // instead of only the sr-only native <meter>. min=0/max=100 ⇒ width=value%.
           data-state={state.dataState}
           high={meterState.high}
           id="gallery-meter-value"
@@ -46,6 +50,7 @@ export const GalleryMeterDemo = component({
           max={meterState.max}
           min={meterState.min}
           optimum={meterState.optimum}
+          style={{ width: `${state.value}%` }}
           value={state.value}
           valueText={meterState.valueText}
         >
