@@ -6,6 +6,7 @@ import {
   dialogRootAttributes,
   dialogTriggerAttributes,
 } from '@kovojs/headless-ui/dialog';
+import { X } from '@kovojs/icons/x';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
@@ -84,36 +85,51 @@ export const sheetStyles = style.create({
     fontSize: 14,
   },
   close: {
+    // shadcn-style: borderless icon-only dismiss floating in the top-right corner
+    // (out of the column flow) instead of a bordered text button at the bottom.
     alignItems: 'center',
-    backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.borderStrong,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-    color: uiTheme.color.foreground,
+    appearance: 'none',
+    backgroundColor: 'transparent',
+    borderRadius: uiTheme.radius.sm,
+    borderStyle: 'none',
+    borderWidth: 0,
+    color: uiTheme.color.foregroundMuted,
+    cursor: 'pointer',
     display: 'inline-flex',
-    fontSize: 14,
-    fontWeight: 500,
     height: 32,
     justifyContent: 'center',
-    paddingInline: 10,
-    transitionProperty: 'background-color',
-    width: 'fit-content',
+    padding: 0,
+    position: 'absolute',
+    right: 16,
+    top: 16,
+    transitionProperty: 'background-color, color',
+    width: 32,
     ':disabled': {
       opacity: 0.5,
       pointerEvents: 'none',
     },
-    ':hover': {
-      backgroundColor: uiTheme.color.backgroundRaised,
+    ':focus-visible': {
+      outlineColor: uiTheme.color.accent,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
     },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      color: uiTheme.color.foreground,
+    },
+  },
+  // Sizes the X icon down from the 24px Lucide default to a compact 16px glyph.
+  closeIcon: {
+    height: 16,
+    width: 16,
   },
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,
     borderStyle: 'solid',
     borderWidth: 0,
-    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    boxShadow: '0 8px 24px rgb(0 0 0 / 0.12)',
     color: uiTheme.color.foreground,
     display: 'flex',
     flexDirection: 'column',
@@ -329,6 +345,7 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
         <button
           {...closeStyleAttrs}
           {...passThroughProps(props)}
+          aria-label={escapeHtml(props.closeLabel ?? 'Close')}
           command={closeAttrs.command}
           commandfor={closeAttrs.commandfor}
           data-disabled={closeAttrs['data-disabled']}
@@ -336,7 +353,9 @@ function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
           disabled={closeAttrs.disabled}
           type={closeAttrs.type}
         >
-          {escapeHtml(props.closeLabel ?? 'Close')}
+          {/* shadcn-style: icon-only X dismiss; the accessible name lives on the
+              button's aria-label, so the icon itself stays decorative. */}
+          <X style={sheetStyles.closeIcon} aria-hidden="true" />
         </button>
       </dialog>
     </div>
@@ -479,6 +498,7 @@ export const SheetClose = component({
       <button
         {...styleAttrs}
         {...passThroughProps(props)}
+        aria-label="Close"
         command={attrs.command}
         commandfor={attrs.commandfor}
         data-disabled={attrs['data-disabled']}
@@ -487,7 +507,9 @@ export const SheetClose = component({
         id={props.id}
         type={attrs.type}
       >
-        {props.children ?? 'Close'}
+        {/* shadcn-style: default to an icon-only X dismiss (accessible name on the
+            button's aria-label); a caller may still pass custom children. */}
+        {props.children ?? <X style={sheetStyles.closeIcon} aria-hidden="true" />}
       </button>
     );
   },

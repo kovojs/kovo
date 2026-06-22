@@ -17,6 +17,19 @@ import { passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
+// "sonner"-like enter/exit motion keyed on [data-state] (open/closed): a subtle
+// slide-in + fade. The `style.keyframes` name is resolved by the StyleX extractor,
+// which emits the `@keyframes` block into the served CSS (SPEC.md §13.1). We never
+// transition `display`; visibility is still toggled via the [data-state=closed]
+// `display:none` rule on the root.
+const toastEnter = style.keyframes(
+  {
+    '0%': { opacity: 0, transform: 'translateY(8px)' },
+    '100%': { opacity: 1, transform: 'translateY(0)' },
+  },
+  { namespace: 'toastEnter', source: 'toast.tsx' },
+);
+
 export interface ToastStyleOverrides {
   action?: style.StyleInput;
   close?: style.StyleInput;
@@ -144,12 +157,21 @@ export const toastStyles = style.create({
     gridColumnStart: 1,
   },
   root: {
+    // "sonner"-like: every variant sits on the neutral surface; the variant
+    // semantics read as a thin left-edge accent (see [data-variant=*] below)
+    // instead of flooding the whole toast with a pastel hue. Keeps the Material
+    // skin (per MEMORY ui-shadcn-parity-material-skin) but at a calmer intensity.
     backgroundColor: uiTheme.color.background,
+    // Variant accent rides the left border; reset to neutral here so a left edge
+    // without a [data-variant] doesn't show a stray colored stripe.
     borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
+    borderLeftColor: uiTheme.color.border,
+    borderLeftWidth: 3,
+    borderRadius: uiTheme.radius.lg,
     borderStyle: 'solid',
     borderWidth: 1,
-    boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+    // Single soft drop shadow (was a heavier two-layer shadow).
+    boxShadow: '0 4px 12px rgb(0 0 0 / 0.08)',
     color: uiTheme.color.foreground,
     // better-components-ux: inline layout [content | actions/close] instead of a
     // single full-width column where every child became a stacked full-width bar.
@@ -160,36 +182,33 @@ export const toastStyles = style.create({
     fontSize: 14,
     gridTemplateColumns: '1fr auto',
     alignItems: 'start',
-    padding: 16,
+    padding: 12,
     rowGap: 4,
     '[data-disabled]': {
       opacity: 0.5,
     },
+    // Subtle enter motion on open; no `display` transition (visibility toggles via
+    // the [data-state=closed] display:none below).
+    '[data-state=open]': {
+      animationDuration: '180ms',
+      animationName: toastEnter,
+      animationTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)',
+    },
     '[data-state=closed]': {
       display: 'none',
     },
+    // Variant semantics expressed as a left-edge accent only; background stays neutral.
     '[data-variant=error]': {
-      backgroundColor: uiTheme.color.danger.background,
-      borderColor: uiTheme.color.danger.border,
+      borderLeftColor: uiTheme.color.danger.border,
     },
-    // better-components-ux: soften the info/success fills to a quieter component-
-    // local tone. The full container hue reads as a loud bar; layering a faint
-    // surface over the semantic background keeps the Material hue (per MEMORY
-    // ui-shadcn-parity-material-skin) but at a calmer intensity. Only the border
-    // keeps the saturated semantic color as the accent.
     '[data-variant=info]': {
-      backgroundColor: uiTheme.color.info.background,
-      backgroundImage: 'linear-gradient(0deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55))',
-      borderColor: uiTheme.color.info.border,
+      borderLeftColor: uiTheme.color.info.border,
     },
     '[data-variant=success]': {
-      backgroundColor: uiTheme.color.success.background,
-      backgroundImage: 'linear-gradient(0deg, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0.55))',
-      borderColor: uiTheme.color.success.border,
+      borderLeftColor: uiTheme.color.success.border,
     },
     '[data-variant=warning]': {
-      backgroundColor: uiTheme.color.warning.background,
-      borderColor: uiTheme.color.warning.border,
+      borderLeftColor: uiTheme.color.warning.border,
     },
   },
   title: {

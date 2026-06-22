@@ -11,6 +11,7 @@ import {
   navigationMenuViewportAttributes,
   type NavigationMenuItem as HeadlessNavigationMenuItem,
 } from '@kovojs/headless-ui/navigation-menu';
+import { ChevronDown } from '@kovojs/icons/chevron-down';
 import * as style from '@kovojs/style';
 
 import type { CollectionOrientation, TextDirection } from './navigation-types.js';
@@ -107,11 +108,21 @@ export const navigationMenuStyles = style.create({
     padding: 12,
     position: 'absolute',
     zIndex: 50,
+    // Subtle open/close motion: fade + small slide. We animate opacity/transform
+    // only — `display` is toggled (not transitioned) by the [data-state] rules so
+    // the panel still fully unmounts from layout when closed.
+    transitionDuration: '160ms',
+    transitionProperty: 'opacity, transform',
+    transitionTimingFunction: 'cubic-bezier(0.32, 0.72, 0, 1)',
     '[data-state=closed]': {
       display: 'none',
+      opacity: 0,
+      transform: 'translateY(-4px)',
     },
     '[data-state=open]': {
       display: 'block',
+      opacity: 1,
+      transform: 'translateY(0)',
     },
   },
   indicator: {
@@ -159,13 +170,10 @@ export const navigationMenuStyles = style.create({
     },
   },
   list: {
+    // De-boxed (shadcn-style): no border/shadow on the menubar itself so it isn't
+    // double-chromed above the bordered content panel; it's just a row of triggers.
     alignItems: 'center',
-    backgroundColor: uiTheme.color.background,
-    borderColor: uiTheme.color.border,
-    borderRadius: uiTheme.radius.md,
-    borderStyle: 'solid',
-    borderWidth: 1,
-    boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
+    backgroundColor: 'transparent',
     display: 'flex',
     gap: 4,
     listStyle: 'none',
@@ -198,23 +206,14 @@ export const navigationMenuStyles = style.create({
     font: 'inherit',
     fontSize: 14,
     fontWeight: 500,
+    // shadcn-style: real ChevronDown icon child (see triggerIcon) instead of a CSS
+    // rotated-border caret; gap spaces the label from the icon.
+    gap: 4,
     height: 36,
     outlineStyle: 'none',
     paddingInline: 12,
     textAlign: 'left',
     transitionProperty: 'background-color, color',
-    '::after': {
-      borderColor: uiTheme.color.foregroundMuted,
-      borderStyle: 'solid',
-      borderWidth: '0 2px 2px 0',
-      content: '""',
-      flexShrink: 0,
-      height: 7,
-      marginLeft: 8,
-      transform: 'rotate(45deg)',
-      transitionProperty: 'transform',
-      width: 7,
-    },
     '[data-disabled]': {
       opacity: 0.5,
       pointerEvents: 'none',
@@ -225,9 +224,6 @@ export const navigationMenuStyles = style.create({
     '[data-state=open]': {
       backgroundColor: uiTheme.color.backgroundSubtleHigh,
     },
-    '[data-state=open]::after': {
-      transform: 'rotate(-135deg)',
-    },
     ':focus-visible': {
       outlineColor: uiTheme.color.accent,
       outlineOffset: 2,
@@ -236,6 +232,20 @@ export const navigationMenuStyles = style.create({
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
+  },
+  // ChevronDown affordance on the trigger. Sized down from the 24px Lucide default
+  // and tinted muted; it carries the trigger's [data-state] (forwarded to the svg)
+  // so it can rotate 180deg when the menu is open via a transform transition.
+  triggerIcon: {
+    color: uiTheme.color.foregroundMuted,
+    flexShrink: 0,
+    height: 16,
+    transitionProperty: 'transform',
+    transitionDuration: '200ms',
+    width: 16,
+    '[data-state=open]': {
+      transform: 'rotate(180deg)',
     },
   },
   viewport: {
@@ -373,6 +383,9 @@ export const NavigationMenuTrigger = component({
             markup); itemLabel/itemValue are scalar text data props a caller fills from
             data, so escape only that fallback to neutralize injected `<img onerror=...>`. */}
         {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
+        {/* shadcn-style chevron: a real (decorative) icon child carrying the trigger's
+            [data-state] so triggerIcon can rotate it 180deg when the menu is open. */}
+        <ChevronDown style={navigationMenuStyles.triggerIcon} data-state={attrs['data-state']} />
       </button>
     );
   },

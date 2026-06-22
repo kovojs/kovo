@@ -2,7 +2,7 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
-import { passThroughProps } from './pass-through.js';
+import { bindingProps, passThroughProps } from './pass-through.js';
 import { meterRootAttributes } from '@kovojs/headless-ui/meter';
 
 import { uiTheme } from './theme.js';
@@ -99,8 +99,11 @@ export const Meter = component({
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
     const slots = props.styles;
-    const rootOverride = props.style;
-    const rootStyleAttrs = style.attrs(meterStyles.root, slots?.root, rootOverride);
+    // The `style` prop is NOT applied to the root track: a call-site reactive
+    // `style={{ width }}` (the only way to emit a `data-bind:style`) would
+    // otherwise shrink the whole track. It is forwarded as the indicator fill
+    // binding below (see bindingProps) so the visible bar can animate client-side.
+    const rootStyleAttrs = style.attrs(meterStyles.root, slots?.root);
     const nativeStyleAttrs = style.attrs(meterStyles.native, slots?.native);
     const indicatorStyleAttrs = style.attrs(meterStyles.indicator, slots?.indicator);
     const indicatorWidth = fillStyle(attrs['data-value'], attrs['data-min'], attrs['data-max']);
@@ -129,6 +132,7 @@ export const Meter = component({
         </meter>
         <span
           {...indicatorStyleAttrs}
+          {...bindingProps(props, ['style', 'data-state'])}
           aria-hidden="true"
           data-state={attrs['data-state']}
           style={{ width: indicatorWidth }}

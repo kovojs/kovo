@@ -56,7 +56,7 @@ const variants = style.create({
       outlineColor: uiTheme.color.accent,
     },
     ':hover': {
-      backgroundColor: uiTheme.color.backgroundRaised,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
     },
   },
   subtle: {

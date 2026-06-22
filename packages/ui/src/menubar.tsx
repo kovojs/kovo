@@ -164,11 +164,13 @@ export const menubarStyles = style.create({
     flexDirection: 'column',
     fontSize: 14,
     gap: 2,
+    left: 0,
     marginTop: 4,
     minWidth: 180,
     outlineStyle: 'none',
     padding: 4,
     position: 'absolute',
+    top: '100%',
     zIndex: 50,
     '[data-state=closed]': {
       display: 'none',

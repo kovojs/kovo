@@ -2,7 +2,7 @@
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
-import { passThroughProps } from './pass-through.js';
+import { bindingProps, passThroughProps } from './pass-through.js';
 import { progressRootAttributes } from '@kovojs/headless-ui/progress';
 
 import { uiTheme } from './theme.js';
@@ -97,8 +97,11 @@ export const Progress = component({
       ...(props.valueText === undefined ? {} : { valueText: props.valueText }),
     });
     const slots = props.styles;
-    const rootOverride = props.style;
-    const rootStyleAttrs = style.attrs(progressStyles.root, slots?.root, rootOverride);
+    // The `style` prop is NOT applied to the root track: a call-site reactive
+    // `style={{ width }}` (the only way to emit a `data-bind:style`) would
+    // otherwise shrink the whole track. It is forwarded as the indicator fill
+    // binding below (see bindingProps) so the visible bar can animate client-side.
+    const rootStyleAttrs = style.attrs(progressStyles.root, slots?.root);
     const nativeStyleAttrs = style.attrs(progressStyles.native, slots?.native);
     const indicatorStyleAttrs = style.attrs(progressStyles.indicator, slots?.indicator);
     const indicatorWidth = fillStyle(attrs['data-value'], attrs['data-max']);
@@ -119,6 +122,7 @@ export const Progress = component({
         </progress>
         <span
           {...indicatorStyleAttrs}
+          {...bindingProps(props, ['style', 'data-state'])}
           aria-hidden="true"
           data-state={attrs['data-state']}
           style={{ width: indicatorWidth }}

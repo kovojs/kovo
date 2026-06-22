@@ -570,7 +570,13 @@ export const CommandEmpty = component({
     const styleAttrs = style.attrs(commandStyles.empty, props.styles?.empty);
 
     return (
-      <div {...styleAttrs} data-empty={attrs['data-empty']} hidden={attrs.hidden} id={attrs.id}>
+      <div
+        {...styleAttrs}
+        {...passThroughProps(props)}
+        data-empty={attrs['data-empty']}
+        hidden={attrs.hidden}
+        id={attrs.id}
+      >
         {props.children ?? 'No results'}
       </div>
     );
@@ -582,7 +588,7 @@ export const CommandValue = component({
     const styleAttrs = style.attrs(commandStyles.value, props.styles?.value);
 
     return (
-      <span {...styleAttrs} id={props.id}>
+      <span {...styleAttrs} {...passThroughProps(props)} id={props.id}>
         {escapeHtml(commandValueText(props))}
       </span>
     );

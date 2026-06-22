@@ -282,9 +282,15 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disabledHoverCardTrigger).toContain('data-disabled="" data-state="closed"');
     expect(disabledHoverCardTrigger).not.toContain('href=');
     expect(disabledHoverCardTrigger).not.toContain('kovo-hover-card=');
-    expect(HoverCardContent.definition.render({ contentId: 'profile-card', open: true })).toContain(
-      'popover="manual"',
-    );
+    // The hover-card content no longer uses a manual popover (it never received
+    // the imperative showPopover() call, so it stayed display:none and the card
+    // never appeared). Visibility is governed by data-state/hidden instead.
+    const openHoverCardContent = HoverCardContent.definition.render({
+      contentId: 'profile-card',
+      open: true,
+    });
+    expect(openHoverCardContent).not.toContain('popover=');
+    expect(openHoverCardContent).toContain('data-state="open"');
     expect(
       PopoverTrigger.definition.render({ children: 'Filters', contentId: 'filters', open: true }),
     ).toContain('popovertarget="filters"');

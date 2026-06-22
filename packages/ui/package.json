@@ -243,6 +243,7 @@
   "dependencies": {
     "@kovojs/core": "workspace:*",
     "@kovojs/headless-ui": "workspace:*",
+    "@kovojs/icons": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*"
   },

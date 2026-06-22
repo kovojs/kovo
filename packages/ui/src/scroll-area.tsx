@@ -146,11 +146,15 @@ export const scrollAreaStyles = style.create({
     outlineStyle: 'none',
     overflow: 'auto',
     padding: 16,
+    scrollbarWidth: 'none',
     '[data-disabled]': {
       cursor: 'not-allowed',
     },
     ':focus-visible': {
       boxShadow: uiTheme.shadow.focusRingInset,
+    },
+    '::-webkit-scrollbar': {
+      display: 'none',
     },
   },
 });

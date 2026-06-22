@@ -8,6 +8,7 @@ import {
   alertDialogTriggerAttributes,
   type AlertDialogActionIntent,
 } from '@kovojs/headless-ui/alert-dialog';
+import { X } from '@kovojs/icons/x';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
@@ -17,6 +18,7 @@ import { uiTheme } from './theme.js';
 export interface AlertDialogStyleOverrides {
   action?: style.StyleInput;
   cancel?: style.StyleInput;
+  close?: style.StyleInput;
   content?: style.StyleInput;
   description?: style.StyleInput;
   footer?: style.StyleInput;
@@ -141,6 +143,42 @@ export const alertDialogStyles = style.create({
     },
     ':hover': {
       backgroundColor: uiTheme.color.backgroundRaised,
+    },
+  },
+  close: {
+    alignItems: 'center',
+    appearance: 'none',
+    backgroundColor: 'transparent',
+    borderRadius: uiTheme.radius.md,
+    borderStyle: 'none',
+    borderWidth: 0,
+    color: uiTheme.color.foregroundMuted,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    height: 28,
+    justifyContent: 'center',
+    lineHeight: 1,
+    opacity: 0.7,
+    padding: 0,
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    transitionProperty: 'background-color, color, opacity',
+    width: 28,
+    ':disabled': {
+      opacity: 0.5,
+      pointerEvents: 'none',
+    },
+    ':focus-visible': {
+      outlineColor: uiTheme.color.accent,
+      outlineOffset: 2,
+      outlineStyle: 'solid',
+      outlineWidth: 2,
+    },
+    ':hover': {
+      backgroundColor: uiTheme.color.backgroundRaised,
+      color: uiTheme.color.foreground,
+      opacity: 1,
     },
   },
   content: {
@@ -300,6 +338,16 @@ export const AlertDialogContent = component({
       ...(props.titleId === undefined ? {} : { titleId: props.titleId }),
     });
     const styleAttrs = style.attrs(alertDialogStyles.content, props.styles?.content);
+    // Top-right "X" affordance. It closes through the native invoker exactly like
+    // AlertDialogCancel (command='request-close'/commandfor=contentId); reusing the
+    // cancel attributes keeps that wiring in one place. An accessible name is
+    // required (rules/accessibility-conformance.md). This does NOT enable backdrop
+    // light-dismiss — alert dialogs still require an explicit choice.
+    const closeAttrs = alertDialogCancelAttributes({
+      ...alertDialogState(props),
+      ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
+    });
+    const closeStyleAttrs = style.attrs(alertDialogStyles.close, props.styles?.close);
 
     return (
       <dialog
@@ -313,6 +361,18 @@ export const AlertDialogContent = component({
         open={attrs.open}
         role={attrs.role}
       >
+        <button
+          {...closeStyleAttrs}
+          aria-label="Close"
+          command={closeAttrs.command}
+          commandfor={closeAttrs.commandfor}
+          data-disabled={closeAttrs['data-disabled']}
+          data-state={closeAttrs['data-state']}
+          disabled={closeAttrs.disabled}
+          type={closeAttrs.type}
+        >
+          <X aria-hidden="true" />
+        </button>
         {props.children}
       </dialog>
     );
