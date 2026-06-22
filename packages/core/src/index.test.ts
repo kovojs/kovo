@@ -429,9 +429,7 @@ describe('core authoring APIs', () => {
       location: '/users/42',
       status: 303,
     });
-    expect(href('/files/:name.json', { params: { 'name.json': 'report' } })).toBe(
-      '/files/report',
-    );
+    expect(href('/files/:name.json', { params: { 'name.json': 'report' } })).toBe('/files/report');
 
     const assertMissingParam = () => {
       // @ts-expect-error id is required by the route path.

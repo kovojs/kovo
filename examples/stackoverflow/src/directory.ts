@@ -182,17 +182,14 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
     'Tools and practices for tracking and managing changes to source code over time.',
   docker:
     'Docker packages applications into containers so they run the same everywhere. Use for build, image, and runtime questions.',
-  'async-await':
-    'Syntax for writing asynchronous, promise-based code as if it were synchronous.',
+  'async-await': 'Syntax for writing asynchronous, promise-based code as if it were synchronous.',
   promises:
     'A Promise represents the eventual completion (or failure) of an asynchronous operation and its resulting value.',
   closures:
     'A closure is a function bundled together with references to its surrounding state (its lexical scope).',
   scope: 'The region of a program where a binding (variable, function) is accessible.',
-  hooks:
-    'React Hooks let you use state and other React features without writing a class.',
-  performance:
-    'For questions about measuring and improving the speed and resource usage of code.',
+  hooks: 'React Hooks let you use state and other React features without writing a class.',
+  performance: 'For questions about measuring and improving the speed and resource usage of code.',
   'node.js':
     'Node.js is an event-driven, non-blocking I/O runtime for executing JavaScript outside the browser.',
   testing:
@@ -201,24 +198,15 @@ export const TAG_DESCRIPTIONS: Record<string, string> = {
   'floating-point':
     'For questions about the representation and arithmetic of real numbers on computers (IEEE 754).',
   kovo: 'Kovo is a compiler-first web framework with server-rendered, zero-hydration interactivity and derived optimistic UI.',
-  drizzle:
-    'Drizzle ORM is a lightweight, typed SQL query builder for TypeScript.',
+  drizzle: 'Drizzle ORM is a lightweight, typed SQL query builder for TypeScript.',
   'optimistic-ui':
     'A UI pattern where the interface updates immediately on an action and reconciles with the server response.',
   pglite: 'PGlite is a WASM build of Postgres that runs in-process, in the browser or in Node.',
   state: 'For questions about managing application state across renders, requests, or sessions.',
-  devops:
-    'For questions spanning development and operations: build, deploy, and run pipelines.',
+  devops: 'For questions spanning development and operations: build, deploy, and run pipelines.',
 };
 
-const POPULAR_TAGS_ORDER = [
-  'javascript',
-  'reactjs',
-  'typescript',
-  'css',
-  'python',
-  'sql',
-];
+const POPULAR_TAGS_ORDER = ['javascript', 'reactjs', 'typescript', 'css', 'python', 'sql'];
 
 export function tagDescription(tag: string): string {
   return (
@@ -286,7 +274,7 @@ export const DEMO_QUESTION_ROWS: SeedQuestion[] = [
   },
   {
     id: 'q4',
-    title: "What is the difference between `let` and `const` in JavaScript?",
+    title: 'What is the difference between `let` and `const` in JavaScript?',
     body: 'When should I reach for one over the other? I understand both are block-scoped, but I keep seeing teams default to const everywhere. Are there performance implications, or is it purely about intent?',
     authorId: 'u4',
     authorName: 'Marcus Webb',
@@ -342,7 +330,7 @@ export const DEMO_QUESTION_ROWS: SeedQuestion[] = [
   {
     id: 'q9',
     title: 'What does the `key` prop actually do in a React list?',
-    body: "Linting yells at me to add a key when I map over an array. Using the array index makes the warning go away. Is that fine, or is there a real bug waiting to happen? What is React doing with the key under the hood?",
+    body: 'Linting yells at me to add a key when I map over an array. Using the array index makes the warning go away. Is that fine, or is there a real bug waiting to happen? What is React doing with the key under the hood?',
     authorId: 'u5',
     authorName: 'Sofia Alvarez',
     tags: 'reactjs,performance',
@@ -375,7 +363,7 @@ export const DEMO_QUESTION_ROWS: SeedQuestion[] = [
   {
     id: 'q12',
     title: 'How should I narrow a TypeScript discriminated union in an error path?',
-    body: "I have a Result type that is either { ok: true; value: T } or { ok: false; error: E }. Inside the error branch TypeScript still thinks value might exist. How do I structure this so narrowing just works without casts?",
+    body: 'I have a Result type that is either { ok: true; value: T } or { ok: false; error: E }. Inside the error branch TypeScript still thinks value might exist. How do I structure this so narrowing just works without casts?',
     authorId: 'u4',
     authorName: 'Marcus Webb',
     tags: 'typescript,javascript',
@@ -581,7 +569,7 @@ export const DEMO_ANSWER_ROWS: SeedAnswer[] = [
     questionId: 'q10',
     authorId: 'u6',
     authorName: "Liam O'Connor",
-    body: "An async function ALWAYS returns a Promise — that is the whole point. The caller has to await it (or .then it). You cannot synchronously unwrap an async value; the data does not exist yet when the function returns. Make the caller async and await the result.",
+    body: 'An async function ALWAYS returns a Promise — that is the whole point. The caller has to await it (or .then it). You cannot synchronously unwrap an async value; the data does not exist yet when the function returns. Make the caller async and await the result.',
     score: 69,
     accepted: true,
     createdAt: '2026-06-12T20:10:00Z',
@@ -602,7 +590,7 @@ export const DEMO_ANSWER_ROWS: SeedAnswer[] = [
     questionId: 'q11',
     authorId: 'u4',
     authorName: 'Marcus Webb',
-    body: "In Postgres, DISTINCT ON is the cleanest tool: SELECT DISTINCT ON (user_id) * FROM events ORDER BY user_id, created_at DESC. It keeps the first row per user_id in that ordering — i.e. the most recent event each.",
+    body: 'In Postgres, DISTINCT ON is the cleanest tool: SELECT DISTINCT ON (user_id) * FROM events ORDER BY user_id, created_at DESC. It keeps the first row per user_id in that ordering — i.e. the most recent event each.',
     score: 156,
     accepted: true,
     createdAt: '2026-05-06T11:25:00Z',

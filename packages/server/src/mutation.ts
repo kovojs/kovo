@@ -1364,7 +1364,10 @@ export async function renderNoJsMutationResponse<
   // victim's budget) and occupy a replay slot. The inner `runMutation` CSRF check below
   // remains as defense-in-depth. Renders the failure through the same 422 page path as a
   // handler-returned CSRF failure so no-JS clients see a consistent response.
-  if (csrf === undefined || (csrf !== false && !validateCsrfToken(noJsRequest.rawInput, noJsRequest.request, csrf))) {
+  if (
+    csrf === undefined ||
+    (csrf !== false && !validateCsrfToken(noJsRequest.rawInput, noJsRequest.request, csrf))
+  ) {
     const failure: MutationFail = {
       error: { code: 'CSRF', payload: {} },
       ok: false,

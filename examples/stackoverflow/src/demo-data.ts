@@ -79,20 +79,7 @@ const DEMO_EXTRA_ANSWER_ROWS = [
 // A spread of upvotes across the seeded questions. Only the running total feeds
 // the UI (the "votes cast across the community" line), so the exact rows are
 // presentational — but they reference real question ids.
-const VOTE_TARGETS = [
-  'q3',
-  'q5',
-  'q5',
-  'q7',
-  'q11',
-  'q14',
-  'q14',
-  'q4',
-  'q6',
-  'q9',
-  'q10',
-  'q5',
-];
+const VOTE_TARGETS = ['q3', 'q5', 'q5', 'q7', 'q11', 'q14', 'q14', 'q4', 'q6', 'q9', 'q10', 'q5'];
 const DEMO_VOTES = VOTE_TARGETS.map((targetId, index) => ({
   targetType: 'question' as const,
   targetId,

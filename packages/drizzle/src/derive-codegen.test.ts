@@ -176,11 +176,7 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
       ops: [{ by: { kind: 'param', path: 'amount' }, op: 'inc', path: 'total' }],
       query: 'cart',
     };
-    const { generated, interpreted } = await runBoth(
-      program,
-      { total: '100.50' },
-      { amount: '5' },
-    );
+    const { generated, interpreted } = await runBoth(program, { total: '100.50' }, { amount: '5' });
 
     expect(generated).toEqual(interpreted);
     expect(generated).toEqual({ total: 105.5 });
@@ -218,13 +214,22 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
     // coercion (asNumber) must place the new "9" before "10".
     const { generated, interpreted } = await runBoth(
       program,
-      { items: [{ id: 'a', rank: '2' }, { id: 'b', rank: '10' }] },
+      {
+        items: [
+          { id: 'a', rank: '2' },
+          { id: 'b', rank: '10' },
+        ],
+      },
       { id: 'c', rank: '9' },
     );
 
     expect(generated).toEqual(interpreted);
     expect(generated).toEqual({
-      items: [{ id: 'a', rank: '2' }, { id: 'c', rank: '9' }, { id: 'b', rank: '10' }],
+      items: [
+        { id: 'a', rank: '2' },
+        { id: 'c', rank: '9' },
+        { id: 'b', rank: '10' },
+      ],
     });
   });
 });

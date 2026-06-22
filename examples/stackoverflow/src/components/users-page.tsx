@@ -124,7 +124,9 @@ function userCard(user: DemoUser, questionCount: number, isCurrent: boolean): st
     <div style={usersStyles.card}>
       <div style={usersStyles.top}>
         <a href={`/users/${user.id}`} aria-label={user.name}>
-          <span style={isCurrent ? [usersStyles.avatar, usersStyles.avatarYou] : usersStyles.avatar}>
+          <span
+            style={isCurrent ? [usersStyles.avatar, usersStyles.avatarYou] : usersStyles.avatar}
+          >
             {initials(user.name)}
           </span>
         </a>

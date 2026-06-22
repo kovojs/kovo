@@ -251,10 +251,14 @@ function validateStaticSpreadEntries(
     }
     if (/^on/i.test(synthetic.name)) {
       found.push(
-        outputContextDiagnostic(diagnostics, `${synthetic.name} is an event-handler sink (on* attribute)`, {
-          start: spread.start,
-          length: spread.end - spread.start,
-        }),
+        outputContextDiagnostic(
+          diagnostics,
+          `${synthetic.name} is an event-handler sink (on* attribute)`,
+          {
+            start: spread.start,
+            length: spread.end - spread.start,
+          },
+        ),
       );
       continue;
     }

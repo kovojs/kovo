@@ -549,9 +549,7 @@ interface NavItem {
   icon: 'home' | 'globe' | 'tag' | 'users';
 }
 
-const PRIMARY_NAV: NavItem[] = [
-  { label: 'Home', href: '/', icon: 'home' },
-];
+const PRIMARY_NAV: NavItem[] = [{ label: 'Home', href: '/', icon: 'home' }];
 const PUBLIC_NAV: NavItem[] = [
   { label: 'Questions', href: '/', section: 'questions', icon: 'globe' },
   { label: 'Tags', href: '/tags', section: 'tags', icon: 'tag' },
@@ -664,7 +662,11 @@ function userWidget(): string {
   const rep = compactCount(CURRENT_USER.reputation);
   return (
     <div style={chromeStyles.headerActions}>
-      <a href={`/users/${CURRENT_USER.id}`} style={chromeStyles.repBadge} aria-label="Your reputation">
+      <a
+        href={`/users/${CURRENT_USER.id}`}
+        style={chromeStyles.repBadge}
+        aria-label="Your reputation"
+      >
         <span style={chromeStyles.repValue}>{rep}</span>
         <span style={[chromeStyles.badgeDot, chromeStyles.badgeDotGold]}>
           ●{CURRENT_USER.badges.gold}

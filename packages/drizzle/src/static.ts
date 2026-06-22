@@ -11169,7 +11169,10 @@ function aggregateField(
       // `count()`/`count(*)`. Modeling it as COUNT(*) over-counts NULL-column INSERTs.
       // The deriver has no per-row null witness, so a column-argument count is opaque.
       if (expression.getArguments().length > 0) {
-        return { kind: 'opaque', reason: { code: 'opaque-projection', expr: expression.getText() } };
+        return {
+          kind: 'opaque',
+          reason: { code: 'opaque-projection', expr: expression.getText() },
+        };
       }
       // C3 (SPEC §10.5): the rowset carries the full filter chain; `pred` is a single
       // representative eq used by the fast-path. `deriveCount` re-checks the whole

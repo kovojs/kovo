@@ -202,9 +202,9 @@ describe('headless-ui autocomplete primitive', () => {
     expect(input['aria-activedescendant']).toBe('city-list-option-1');
 
     // The rendered option must carry the exact same id so the IDREF resolves.
-    expect(
-      autocompleteOptionAttributes({ ...state, itemValue: 'charlotte' }).id,
-    ).toBe('city-list-option-1');
+    expect(autocompleteOptionAttributes({ ...state, itemValue: 'charlotte' }).id).toBe(
+      'city-list-option-1',
+    );
   });
 
   it('resolves display text and filters enabled suggestions by input value', () => {

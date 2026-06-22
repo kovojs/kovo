@@ -91,9 +91,7 @@ const taggedStyles = style.create(
 export const TaggedQuestionsRegion = component({
   props: { tag: String },
   queries: { questionList },
-  render: (
-    { questionList, tag }: { questionList: QuestionListQueryResult; tag: string },
-  ) => {
+  render: ({ questionList, tag }: { questionList: QuestionListQueryResult; tag: string }) => {
     const matches = newestFirst(
       (questionList.items as QuestionListItem[]).filter((item) =>
         parseTags(item.tags).includes(tag),
@@ -116,8 +114,7 @@ export const TaggedQuestionsRegion = component({
           </a>
         </div>
         <p style={taggedStyles.count}>
-          {matches.length.toLocaleString('en-US')}{' '}
-          {matches.length === 1 ? 'question' : 'questions'}
+          {matches.length.toLocaleString('en-US')} {matches.length === 1 ? 'question' : 'questions'}
         </p>
         {matches.length > 0 ? (
           <ul style={cardStyles.list}>

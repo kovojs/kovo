@@ -347,7 +347,10 @@ export async function applyStreamingMutationResponseBodyToRuntime(
 function abortStreamError(signal: AbortSignal): unknown {
   if (signal.reason !== undefined) return signal.reason;
   try {
-    return new DOMException('Streaming mutation aborted; the partial response is not confirmed.', 'AbortError');
+    return new DOMException(
+      'Streaming mutation aborted; the partial response is not confirmed.',
+      'AbortError',
+    );
   } catch {
     return new Error('Streaming mutation aborted; the partial response is not confirmed.');
   }

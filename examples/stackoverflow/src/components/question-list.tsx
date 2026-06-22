@@ -176,9 +176,7 @@ export const QuestionListRegion = component({
           </a>
         </div>
         <div style={listStyles.subHead}>
-          <span style={listStyles.count}>
-            {questions.length.toLocaleString('en-US')} questions
-          </span>
+          <span style={listStyles.count}>{questions.length.toLocaleString('en-US')} questions</span>
           <div style={listStyles.tabs}>
             {FILTER_TABS.map((tab, index) => (
               <a

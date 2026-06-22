@@ -49,7 +49,10 @@ const soStylesheets = [
   }),
 ] as const;
 const demoSession = { id: 'demo-session', user: { id: 'demo-viewer', roles: ['member'] as const } };
-const soStaticQuestionPaths = Array.from({ length: 14 }, (_unused, index) => `/questions/q${index + 1}`);
+const soStaticQuestionPaths = Array.from(
+  { length: 14 },
+  (_unused, index) => `/questions/q${index + 1}`,
+);
 
 // One layout per nav section so the shell can highlight the active sidebar item
 // without threading the request URL through the render slots.

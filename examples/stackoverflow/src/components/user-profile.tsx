@@ -160,7 +160,13 @@ const profileStyles = style.create(
       marginBlockEnd: 6,
       paddingBlockEnd: 8,
     },
-    about: { color: so.textSecondary, fontSize: 14, lineHeight: 1.65, marginBlock: 12, maxWidth: 760 },
+    about: {
+      color: so.textSecondary,
+      fontSize: 14,
+      lineHeight: 1.65,
+      marginBlock: 12,
+      maxWidth: 760,
+    },
     tagRow: { display: 'flex', flexWrap: 'wrap', gap: 6, marginBlock: 12 },
     tag: {
       backgroundColor: so.tagBg,
@@ -190,9 +196,7 @@ function badgeDot(dotStyle: unknown, count: number, label: string): string {
 export const UserProfileRegion = component({
   props: { userId: String },
   queries: { questionList },
-  render: (
-    { questionList, userId }: { questionList: QuestionListQueryResult; userId: string },
-  ) => {
+  render: ({ questionList, userId }: { questionList: QuestionListQueryResult; userId: string }) => {
     const items = questionList.items as QuestionListItem[];
     const theirQuestions = newestFirst(items.filter((item) => item.authorId === userId));
     const profile = userById(userId);
@@ -208,7 +212,11 @@ export const UserProfileRegion = component({
           &larr; All users
         </a>
         <div style={profileStyles.header}>
-          <span style={isCurrent ? [profileStyles.avatar, profileStyles.avatarYou] : profileStyles.avatar}>
+          <span
+            style={
+              isCurrent ? [profileStyles.avatar, profileStyles.avatarYou] : profileStyles.avatar
+            }
+          >
             {initials(name)}
           </span>
           <div style={profileStyles.identity}>
@@ -218,7 +226,9 @@ export const UserProfileRegion = component({
             </h1>
             {profile ? <span style={profileStyles.sub}>{profile.title}</span> : ''}
             <span style={profileStyles.subDim}>
-              {profile ? `${profile.location} · ${memberFor(profile.joinedAt)}` : 'Community member'}
+              {profile
+                ? `${profile.location} · ${memberFor(profile.joinedAt)}`
+                : 'Community member'}
             </span>
           </div>
         </div>
@@ -260,12 +270,12 @@ export const UserProfileRegion = component({
         )}
 
         <div style={profileStyles.section}>
-          <h2 style={profileStyles.sectionTitle}>
-            Questions ({theirQuestions.length})
-          </h2>
+          <h2 style={profileStyles.sectionTitle}>Questions ({theirQuestions.length})</h2>
           {theirQuestions.length > 0 ? (
             <ul style={cardStyles.list}>
-              {theirQuestions.map((question) => renderQuestionRow(question, { interactive: false }))}
+              {theirQuestions.map((question) =>
+                renderQuestionRow(question, { interactive: false }),
+              )}
             </ul>
           ) : (
             <p style={profileStyles.empty}>{name} hasn&rsquo;t asked any questions yet.</p>

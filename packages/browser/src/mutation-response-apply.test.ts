@@ -435,7 +435,9 @@ describe('decoded mutation response apply', () => {
         // Abort BEFORE handing over the second chunk; the apply loop's post-read abort
         // check must cancel the reader and stop before applying `{count:3}`.
         controller.abort();
-        streamController.enqueue(encoder.encode('<kovo-query name="cart">{"count":3}</kovo-query>'));
+        streamController.enqueue(
+          encoder.encode('<kovo-query name="cart">{"count":3}</kovo-query>'),
+        );
       },
     });
 

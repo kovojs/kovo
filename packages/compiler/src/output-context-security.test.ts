@@ -506,7 +506,9 @@ export const ElemAttr = component({
         .filter((file) => file.kind === 'server' || file.kind === 'client')
         .map((file) => file.source)
         .join('\n');
-      for (const derive of generated.matchAll(/derive\((\[[^\]]*\]),\s*\(([^)]*)\)\s*=>\s*([^;]*?)\)\s*;/g)) {
+      for (const derive of generated.matchAll(
+        /derive\((\[[^\]]*\]),\s*\(([^)]*)\)\s*=>\s*([^;]*?)\)\s*;/g,
+      )) {
         const inputs = derive[1] ?? '';
         const params = (derive[2] ?? '').split(',').map((p) => (p.split(':')[0] ?? '').trim());
         const body = derive[3] ?? '';

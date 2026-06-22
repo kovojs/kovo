@@ -385,7 +385,9 @@ function renderRouteMeta(
     if (resolved.image) {
       // part-4 L-i18n-meta-1: og:image is a URL sink — scheme-check before escaping so a
       // metaFromQuery-derived javascript:/data:/off-origin URL cannot bypass the §4.8 allowlist.
-      tags.push(`<meta property="og:image" content="${escapeAttribute(safeUrlValue(resolved.image))}">`);
+      tags.push(
+        `<meta property="og:image" content="${escapeAttribute(safeUrlValue(resolved.image))}">`,
+      );
     }
   }
 

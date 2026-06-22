@@ -340,13 +340,17 @@ describe('query refetch', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);
     store.set('cart', { count: 0 });
-    rebaser.add('m1', {}, {
-      transforms: {
-        cart(draft: unknown) {
-          (draft as { count: number }).count += 1;
+    rebaser.add(
+      'm1',
+      {},
+      {
+        transforms: {
+          cart(draft: unknown) {
+            (draft as { count: number }).count += 1;
+          },
         },
       },
-    });
+    );
     expect(store.get('cart')).toEqual({ count: 1 });
 
     const fetch = vi.fn(async () => ({

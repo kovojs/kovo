@@ -542,10 +542,7 @@ function selectItemId(state: SelectState, value: string): string | undefined {
   return state.items?.find((item) => item.value === value)?.id;
 }
 
-function selectOptionId(
-  options: SelectItemAttributeOptions,
-  value: string,
-): string | undefined {
+function selectOptionId(options: SelectItemAttributeOptions, value: string): string | undefined {
   if (options.id !== undefined) return options.id;
   const itemId = selectItemId(options, value);
   if (itemId !== undefined) return itemId;
