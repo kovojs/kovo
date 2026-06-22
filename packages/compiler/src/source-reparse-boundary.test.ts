@@ -20,18 +20,24 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 
 /**
- * Known `ts.createSourceFile` reparse sites outside `scan/`, each a rule-9 debt FN7 Step 2 will
- * migrate into the parser. Keep sorted; do not add a new entry without a real justification.
+ * `ts.createSourceFile` sites outside `scan/` that are rule-9 PERMITTED: each operates on
+ * COMPILER-EMITTED output (a lowered module), not app source, which §5.2 rule 9 explicitly
+ * allows (generated-artifact verification/transform). App-source parsers all live under `scan/`.
+ * Keep sorted; do not add a new entry without a real generated-artifact justification.
  */
 const ALLOWED_REPARSE_FILES: ReadonlyMap<string, string> = new Map([
-  ['app-graph.ts', 'query-refresh expression re-parse for live-target query bindings'],
-  ['emit/dead-imports.ts', 'terminal dead-import pruning over the emitted lowered module'],
-  ['emit/live-target-renderers.ts', 'live-target renderer export synthesis over emitted source'],
-  ['emit/server-render.ts', 'server render-equivalence gate evaluates the emitted server module'],
-  ['mutation-inputs.ts', 'mutation input-field fact extraction from a mutation module'],
-  ['optimistic-inline.ts', 'inline/standalone optimistic-plan IR extraction'],
-  ['route-pages.ts', 'route-module grammar parse'],
-  ['style.ts', 'StyleX object-literal extraction (5 sites)'],
+  [
+    'emit/dead-imports.ts',
+    'generated-artifact: prunes dead imports over the EMITTED lowered module, not app source',
+  ],
+  [
+    'emit/live-target-renderers.ts',
+    'generated-artifact: renderer-export synthesis over the EMITTED lowered module, not app source',
+  ],
+  ['mutation-inputs.ts', 'FN7 pending: inline mutation input-field extraction (migrate to scan/)'],
+  ['optimistic-inline.ts', 'FN7 pending: relocate into scan/ (separate-module optimistic-plan scanner)'],
+  ['route-pages.ts', 'FN7 pending: relocate into scan/ (separate-module route-grammar scanner)'],
+  ['style.ts', 'FN7 pending: StyleX extraction component re-parses (collapse onto scan SourceFile)'],
 ]);
 
 function compilerSourceFiles(): string[] {
