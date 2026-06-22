@@ -17,6 +17,7 @@ committed as its own checkpoint. FN6/FN9/FN10/FN11 and two FN7 relocations were 
 isolated worktrees and integrated here.
 
 **Open / deferred (genuinely multi-session; the substrate above unblocks them):**
+
 - **FN7 adjacent follow-ups** (separate rule-9 facet): widen `isPostParseGuardedFile` to `app-graph.ts`/`style.ts`
   and move `app-graph.ts` under `analyze/` — both first need their decision-shaped `getText`/regex source reads
   cleaned (e.g. app-graph's clock-cadence regex). Not part of the createSourceFile migration (which is done).
@@ -237,7 +238,7 @@ behavior change never hides inside a "neutral" move.
   - Unlocks: CAP6.
 
 - [x] **FN7 · P1 · L/med — Route the ad-hoc reparses through the `scan/` boundary and widen the rule-9 guard.** ✅ done (createSourceFile migration complete)
-  - Done: a new `source-reparse-boundary.test.ts` widens rule-9 to the *structural* `ts.createSourceFile` reparse
+  - Done: a new `source-reparse-boundary.test.ts` widens rule-9 to the _structural_ `ts.createSourceFile` reparse
     form (which the conformance guard misses), pinning every site outside `scan/` to an allowlist. Then every
     app-source reparse was migrated: query-binding parsing **consolidated** into `scan/query-binding.ts` (app-graph +
     emit/server-render had duplicated helpers re-parsing the same `queries` entry value); `route-pages`,

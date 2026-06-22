@@ -1251,7 +1251,10 @@ function styleUpdateCoverage(
 }
 
 function parseExpression(source: string): ParsedExpression | null {
-  const sourceFile = parseSourceFile('style-expression.tsx', `const __kovoStyleExpression = ${source};`);
+  const sourceFile = parseSourceFile(
+    'style-expression.tsx',
+    `const __kovoStyleExpression = ${source};`,
+  );
   const statement = sourceFile.statements[0];
   if (!statement || !ts.isVariableStatement(statement)) return null;
   const declaration = statement.declarationList.declarations[0];

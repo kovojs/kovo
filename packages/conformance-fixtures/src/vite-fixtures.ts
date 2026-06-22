@@ -348,7 +348,7 @@ export async function viteRedGreenBuildFixtureFact(
         '',
         `const jsxRuntimeAlias = ${JSON.stringify(
           options.jsxRuntimeAlias ??
-            join(options.projectRoot, 'packages/server/dist/jsx-runtime.mjs'),
+            join(options.projectRoot, 'packages/server/src/jsx-runtime.ts'),
         )};`,
         '',
         'export default {',
