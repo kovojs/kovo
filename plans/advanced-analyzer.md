@@ -338,6 +338,9 @@ guard-owned, and natural-key applications.
 - [ ] **Phase 6: Property and integration verification.**
   - Expand commuting-diagram property tests over scoped composite keys, filtered rowsets, and
     aggregates.
+  - [x] Derived advanced-analyzer patch programs commute with lowered browser transforms over scoped
+        composite keys, filtered rowset exits, and aggregate recount/resum cases.
+    - Evidence: `pnpm exec vitest --run packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts` covers derived scoped `sessionId,id` row updates, tenant filtered-list exits, and scoped natural-key aggregate update/delete programs by comparing lowered codegen output to `applyPatchProgram`.
   - Add HTTP-level integration tests against PGlite for mutation response fragments and optimistic
     reconcile behavior.
   - Evidence when complete: property suite plus focused integration tests pass under the root gate.

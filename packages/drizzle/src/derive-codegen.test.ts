@@ -335,4 +335,209 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
       ],
     });
   });
+
+  it('advanced analyzer derived programs commute across scoped rows, membership exits, and aggregates', async () => {
+    const sessionQuestionRowset = {
+      filters: [
+        { column: 'sessionId', op: 'eq' as const, value: { kind: 'session' as const, path: 'id' } },
+      ],
+      key: 'sessionId,id',
+      orderBy: [{ column: 'id', direction: 'asc' as const }],
+      table: 'questions',
+    };
+    const questionListShape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['id', 'score'],
+          rowKey: 'sessionId,id',
+          rowset: sessionQuestionRowset,
+        },
+      },
+      query: 'questionList',
+      rowsByTable: { questions: { columns: ['id', 'score'], rowsPath: 'items' } },
+    };
+    const voteUpEffect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: {
+        score: {
+          kind: 'arith',
+          left: { kind: 'col', column: 'score' },
+          op: '+',
+          right: { kind: 'const', value: 1 },
+        },
+      },
+      table: 'questions',
+    };
+
+    const tenantTicketRowset = {
+      filters: [
+        { column: 'tenantId', op: 'eq' as const, value: { kind: 'tenant' as const, path: 'id' } },
+        { column: 'status', op: 'eq' as const, value: { kind: 'const' as const, value: 'open' } },
+      ],
+      key: 'tenantId,id',
+      orderBy: [],
+      table: 'tickets',
+    };
+    const openTicketsShape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['id', 'status'],
+          rowKey: 'tenantId,id',
+          rowset: tenantTicketRowset,
+        },
+      },
+      query: 'openTickets',
+      rowsByTable: { tickets: { columns: ['id', 'status'], rowsPath: 'items' } },
+    };
+    const closeTicketEffect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'tenantId', value: { kind: 'tenant', path: 'id' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'closed' } },
+      table: 'tickets',
+    };
+
+    const cartRowset = {
+      filters: [
+        {
+          column: 'cartId',
+          op: 'eq' as const,
+          value: { kind: 'session' as const, path: 'cartId' },
+        },
+      ],
+      key: 'cartId,productId',
+      orderBy: [],
+      table: 'cart_items',
+    };
+    const cartSummaryShape: AlgebraicQueryShape = {
+      fields: {
+        itemCount: {
+          kind: 'count',
+          rowset: cartRowset,
+          witness: { columns: ['productId'], rowsPath: 'items' },
+        },
+        items: {
+          kind: 'agg',
+          projection: ['productId', 'quantity'],
+          rowKey: 'cartId,productId',
+          rowset: cartRowset,
+        },
+        totalQuantity: {
+          arith: { column: 'quantity', kind: 'col' },
+          kind: 'sum',
+          rowset: cartRowset,
+          witness: { columns: ['quantity'], rowsPath: 'items' },
+        },
+      },
+      query: 'cartSummary',
+      rowsByTable: {
+        cart_items: { columns: ['productId', 'quantity'], rowsPath: 'items', rowset: cartRowset },
+      },
+    };
+    const updateQuantityEffect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'cartId', value: { kind: 'session', path: 'cartId' } },
+          { column: 'productId', value: { kind: 'param', path: 'productId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: { quantity: { kind: 'param', path: 'nextQuantity' } },
+      table: 'cart_items',
+    };
+    const removeLineEffect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'cartId', value: { kind: 'session', path: 'cartId' } },
+          { column: 'productId', value: { kind: 'param', path: 'productId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'delete',
+      table: 'cart_items',
+    };
+
+    const scenarios = [
+      {
+        before: {
+          items: [
+            { id: 'q1', score: '4' },
+            { id: 'q2', score: '10' },
+          ],
+        },
+        effect: voteUpEffect,
+        input: { targetId: 'q1' },
+        query: 'questionList',
+        shape: questionListShape,
+      },
+      {
+        before: {
+          items: [
+            { id: 't1', status: 'open' },
+            { id: 't2', status: 'open' },
+          ],
+        },
+        effect: closeTicketEffect,
+        input: { targetId: 't2' },
+        query: 'openTickets',
+        shape: openTicketsShape,
+      },
+      {
+        before: {
+          itemCount: 2,
+          items: [
+            { productId: 'p1', quantity: '2' },
+            { productId: 'p2', quantity: '5' },
+          ],
+          totalQuantity: '7',
+        },
+        effect: updateQuantityEffect,
+        input: { nextQuantity: '8', productId: 'p1' },
+        query: 'cartSummary',
+        shape: cartSummaryShape,
+      },
+      {
+        before: {
+          itemCount: 2,
+          items: [
+            { productId: 'p1', quantity: '2' },
+            { productId: 'p2', quantity: '5' },
+          ],
+          totalQuantity: '7',
+        },
+        effect: removeLineEffect,
+        input: { productId: 'p2' },
+        query: 'cartSummary',
+        shape: cartSummaryShape,
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const result = deriveOptimistic([scenario.effect], scenario.shape);
+      if (result.kind !== 'derived') {
+        throw new Error(`expected ${scenario.query} to derive, got ${result.kind}`);
+      }
+      const { generated, interpreted } = await runBoth(
+        result.program,
+        scenario.before,
+        scenario.input,
+      );
+      expect(generated).toEqual(interpreted);
+    }
+  });
 });
