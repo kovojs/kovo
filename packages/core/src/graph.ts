@@ -66,6 +66,7 @@ export interface KovoCheckInput {
   requestProviders?: readonly RequestProviderExplain[];
   renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
   scopeAudits?: readonly ScopeAuditFact[];
+  sqlSafety?: readonly SqlSafetyExplainFact[];
   touchGraph?: TouchGraph;
   updateCoverage?: readonly UpdateCoverageFact[];
   verificationCoverage?: readonly VerificationCoverageFact[];
@@ -154,6 +155,16 @@ export interface AttributeMergeExplain {
   diagnostics?: readonly DiagnosticCode[];
   element: string;
   rule: string;
+}
+
+/** @internal */
+export interface SqlSafetyExplainFact {
+  declarations?: readonly string[];
+  justificationSite?: string;
+  site: string;
+  target: string;
+  targetKind: 'mutation' | 'query';
+  text: 'parameterized' | 'static' | 'trusted' | 'unsafe';
 }
 
 /** @internal */
@@ -411,6 +422,7 @@ const arrayFields = [
   'requestProviders',
   'renderEquivalenceChecks',
   'scopeAudits',
+  'sqlSafety',
   'updateCoverage',
   'verificationCoverage',
   'verificationDiagnostics',

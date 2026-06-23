@@ -123,8 +123,9 @@ acceptance set (b)); these checkboxes implement it.
   - `sql.identifier(x, { allow })` covers dynamic _identifiers_ (sort columns, table aliases).
   - Add `sql.allow(x, [...])` for non-identifier _keyword_ choices that fail identifier grammar — sort directions (`asc`/`desc`), operators, clause fragments (`NULLS LAST`). Returns a branded static fragment when `x` is in the set, rejects otherwise. Keeps `trustedSql` reserved for genuinely raw SQL instead of being reached for a two-value direction choice.
   - Evidence: `packages/drizzle/src/runtime.ts` implements `sql.identifier` and `sql.allow`; `packages/drizzle/src/runtime-surface.test.ts` verifies allowlist pass/fail behavior.
-- [ ] Surface results through `kovo explain`.
+- [x] Surface results through `kovo explain`.
   - Explain output should list each raw SQL site, whether text is static/parameterized/trusted, its KV406/KV410 declarations, and the source span of any escape-hatch justification.
+  - Evidence: `packages/core/src/graph.ts` defines `sqlSafety` explain facts and `packages/cli/src/graph-output.ts` renders them on mutation/query explain output; `packages/cli/src/index.kovo-explain.test.ts` verifies SQL lines include text classification, KV declarations, and trusted justification spans.
 
 ## Phase 5: Runtime Enforcement
 
@@ -191,6 +192,7 @@ acceptance set (b)); these checkboxes implement it.
 ## Latest Verification
 
 - `pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/guards.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/runtime-surface.test.ts packages/core/src/diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts` passed.
+- `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/conformance-fixtures/src/kovo-explain-fixtures.test.ts` passed.
 - `pnpm run check:api-surface`, `pnpm run check:imports`, `pnpm run check:publish`, and `git diff --check` passed.
 - `vp check --no-lint packages/core/package.json packages/core/src/diagnostics.test.ts packages/core/src/diagnostics.ts packages/core/src/internal/sql-safety.ts packages/core/src/sql-safety.test.ts packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/runtime.ts packages/drizzle/src/static.ts packages/drizzle/src/sql-safety-static.test.ts packages/server/src/guards.test.ts packages/server/src/guards.ts packages/test/src/verifier.ts public-packages.json` passed format and type checks.
 - `vp check --fix --no-lint .github/workflows/ci.yml plans/sql-injection.md` passed formatting; `vp check --no-lint .github/workflows/ci.yml plans/sql-injection.md` reports the files are formatted but exits with the repo tool's `No files found to lint` startup error for YAML/Markdown-only input.

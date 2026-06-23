@@ -384,6 +384,66 @@ describe('kovo explain', () => {
     });
   });
 
+  it('surfaces SQL safety facts on mutation and query explain output', () => {
+    const input = {
+      mutations: [{ key: 'cart/add', writes: ['cart'] }],
+      queries: [{ domains: ['product'], query: 'product/list' }],
+      sqlSafety: [
+        {
+          declarations: ['KV406:tables=cart_items'],
+          justificationSite: 'cart.domain.ts:44:13',
+          site: 'cart.domain.ts:44',
+          target: 'cart/add',
+          targetKind: 'mutation',
+          text: 'trusted',
+        },
+        {
+          declarations: ['KV410:reads=products'],
+          site: 'products.query.ts:12',
+          target: 'product/list',
+          targetKind: 'query',
+          text: 'parameterized',
+        },
+        {
+          declarations: [],
+          site: 'cart.domain.ts:20',
+          target: 'cart/add',
+          targetKind: 'mutation',
+          text: 'static',
+        },
+      ],
+    } as const;
+
+    expect(kovoExplain(input, { kind: 'mutation', target: 'cart/add' })).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'MUTATION cart/add',
+        'guards: -',
+        'writes: cart',
+        'invalidates: -',
+        'manual-invalidates: -',
+        'updates: -',
+        'SQL cart.domain.ts:20 text=static declarations=- justification=-',
+        'SQL cart.domain.ts:44 text=trusted declarations=KV406:tables=cart_items justification=cart.domain.ts:44:13',
+        '',
+      ].join('\n'),
+    });
+    expect(kovoExplain(input, { kind: 'query', target: 'product/list' })).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'QUERY product/list',
+        'reads: product',
+        'consumers: -',
+        'invalidated-by: -',
+        'domain-writes: -',
+        'SQL products.query.ts:12 text=parameterized declarations=KV410:reads=products justification=-',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('audits unguarded queries and pages with stable explain output', () => {
     const result = kovoExplain(
       {
