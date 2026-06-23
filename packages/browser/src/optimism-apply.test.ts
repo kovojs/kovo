@@ -82,6 +82,47 @@ describe('optimistic query apply', () => {
     expect(pending.snapshot.size).toBe(0);
   });
 
+  it('retains untouched snapshot subtrees by reference under copy-on-write transforms', () => {
+    const store = createQueryStore();
+    const untouched = { rows: Array.from({ length: 32 }, (_value, id) => ({ id })) };
+    const firstRow = { details: { label: 'first' }, id: 'a', quantity: 1 };
+    const untouchedRow = {
+      details: { label: 'stable' },
+      id: 'stable',
+      meta: untouched,
+      quantity: 0,
+    };
+    const base = {
+      items: [firstRow, untouchedRow],
+      untouched,
+    };
+    store.set('cart', base);
+
+    const pending = applyOptimisticTransforms(
+      store,
+      { quantity: 2 },
+      {
+        transforms: {
+          cart(draft, input) {
+            const cart = draft as typeof base;
+            cart.items[0].quantity += input.quantity;
+          },
+        },
+      },
+    );
+
+    const predicted = store.get<typeof base>('cart')!;
+    expect(predicted).not.toBe(base);
+    expect(predicted.items).not.toBe(base.items);
+    expect(predicted.items[0]).not.toBe(firstRow);
+    expect(predicted.items[0].details).toBe(firstRow.details);
+    expect(predicted.items[1]).toBe(untouchedRow);
+    expect(predicted.untouched).toBe(untouched);
+
+    pending.restore();
+    expect(store.get('cart')).toBe(base);
+  });
+
   it('applies hand-written optimistic transforms to keyed query instances', () => {
     const store = createQueryStore();
     const p1Plan = vi.fn();

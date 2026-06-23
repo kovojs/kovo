@@ -1,4 +1,5 @@
 import type { AppliedMutationResponse } from './apply-mutation-response.js';
+import { definedProps } from './defined-props.js';
 import { reportRuntimeError } from './error-policy.js';
 import {
   applyFetchedEnhancedMutationResponseToRuntime,
@@ -48,6 +49,16 @@ export async function submitOptimisticEnhancedMutation<Input>(
   const queryNames = Object.keys(options.optimistic.transforms);
   const optimisticChange = optimisticChangeFromInput(options.input, options.change);
   const optimisticKeys = resolveOptimisticKeys(options.optimistic, optimisticChange);
+  const queueName = options.optimistic.queue;
+
+  if (options.queue) {
+    try {
+      options.queue.assertCanEnqueue(queueName);
+    } catch (error) {
+      reportRuntimeError(options.onError, error);
+      throw error;
+    }
+  }
 
   // SPEC.md §10.4 line 1121 (normative): a queued mutation applies its optimistic transform on
   // ENQUEUE (immediately, against the current optimistic value including earlier queued-but-unsent
@@ -60,15 +71,28 @@ export async function submitOptimisticEnhancedMutation<Input>(
   }
 
   const context: OptimisticSubmitContext = { idem, optimisticKeys, queryNames };
-  const sendAndReconcile = () => submitOptimisticEnhancedMutationDirect(options, context);
 
   if (options.queue) {
     // SPEC.md §10.4: mutations that declare a named queue send as a named FIFO (the prediction
     // already applied above; only the send/reconcile is serialized behind the head).
-    return options.queue.run(options.optimistic.queue, sendAndReconcile);
+    const queueState: OptimisticQueueState = { timedOut: false };
+    return options.queue.run(
+      queueName,
+      (signal) => submitOptimisticEnhancedMutationDirect(options, context, signal, queueState),
+      {
+        onTimeout(error) {
+          queueState.timedOut = true;
+          discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
+          if (options.pendingRoot) {
+            stampPendingQueries(options.pendingRoot, queryNames, false);
+          }
+          reportRuntimeError(options.onError, error);
+        },
+      },
+    );
   }
 
-  return sendAndReconcile();
+  return submitOptimisticEnhancedMutationDirect(options, context);
 }
 
 interface OptimisticSubmitContext {
@@ -77,14 +101,20 @@ interface OptimisticSubmitContext {
   queryNames: string[];
 }
 
+interface OptimisticQueueState {
+  timedOut: boolean;
+}
+
 async function submitOptimisticEnhancedMutationDirect<Input>(
   options: OptimisticEnhancedMutationSubmitOptions<Input>,
   context: OptimisticSubmitContext,
+  signal?: AbortSignal,
+  queueState?: OptimisticQueueState,
 ): Promise<EnhancedMutationAppliedResult> {
   const { idem, optimisticKeys, queryNames } = context;
 
   try {
-    const fetched = await fetchEnhancedMutation(options, idem);
+    const fetched = await fetchEnhancedMutation({ ...options, ...definedProps({ signal }) }, idem);
 
     if (isFailedMutationResponse(fetched.response)) {
       discardFailedOptimism(options.rebaser, idem, queryNames, optimisticKeys);
@@ -115,7 +145,9 @@ async function submitOptimisticEnhancedMutationDirect<Input>(
     if (options.pendingRoot) {
       stampPendingQueries(options.pendingRoot, queryNames, false);
     }
-    reportRuntimeError(options.onError, error);
+    if (!queueState?.timedOut) {
+      reportRuntimeError(options.onError, error);
+    }
     throw error;
   }
 }

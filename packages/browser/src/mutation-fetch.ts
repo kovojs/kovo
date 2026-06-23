@@ -20,6 +20,7 @@ export interface EnhancedMutationFetchOptions {
   keepalive: boolean;
   method: string;
   onUploadProgress?: (progress: UploadProgress) => void;
+  signal?: AbortSignal;
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -53,6 +54,7 @@ export interface FetchEnhancedMutationOptions {
   onError?: RuntimeErrorReporter;
   onUploadProgress?: (progress: UploadProgress) => void;
   root: TargetCollectorRoot;
+  signal?: AbortSignal;
   streaming?: boolean;
 }
 
@@ -73,22 +75,27 @@ export async function fetchEnhancedMutation(
 ): Promise<FetchedEnhancedMutation> {
   const targetSnapshot = readLiveTargetSnapshot(options.root);
   const submittedFormTarget = readSubmittedFormTarget(options.form);
+  const headers: Record<string, string> = {
+    Accept: options.streaming
+      ? 'text/vnd.kovo.fragment+html; stream=1'
+      : 'text/vnd.kovo.fragment+html',
+    'Kovo-Fragment': 'true',
+    'Kovo-Idem': idem,
+    'Kovo-Live-Targets': targetSnapshot.liveHeader,
+    'Kovo-Targets': targetSnapshot.header,
+  };
+  if (submittedFormTarget !== undefined) {
+    headers['Kovo-Form-Target'] = submittedFormTarget;
+  }
+  if (options.streaming) {
+    headers['Kovo-Stream'] = 'true';
+  }
   const response = await options.fetch(options.form.action, {
     body: options.formData,
-    headers: {
-      Accept: options.streaming
-        ? 'text/vnd.kovo.fragment+html; stream=1'
-        : 'text/vnd.kovo.fragment+html',
-      'Kovo-Fragment': 'true',
-      ...definedProps({ 'Kovo-Form-Target': submittedFormTarget }),
-      'Kovo-Idem': idem,
-      'Kovo-Live-Targets': targetSnapshot.liveHeader,
-      ...definedProps(options.streaming ? { 'Kovo-Stream': 'true' } : {}),
-      'Kovo-Targets': targetSnapshot.header,
-    },
+    headers,
     keepalive: !options.streaming,
     method: (options.form.method ?? 'post').toUpperCase(),
-    ...definedProps({ onUploadProgress: options.onUploadProgress }),
+    ...definedProps({ onUploadProgress: options.onUploadProgress, signal: options.signal }),
   });
   const reauth = response.headers?.get('Kovo-Reauth') ?? response.headers?.get('kovo-reauth');
   if (response.status === 401 && reauth) {

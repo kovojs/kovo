@@ -72,7 +72,10 @@ export function createQueryStore(): QueryStore {
 
       for (const name of names) {
         const storeKey = queryStoreKey(name, keys[name]);
-        snapshot.set(storeKey, structuredClone(values.get(storeKey)));
+        // SPEC.md §10.4 bounded snapshots: optimistic transforms use copy-on-write
+        // drafts, so rollback retains the pre-transform value by reference instead
+        // of deep-cloning untouched query data.
+        snapshot.set(storeKey, values.get(storeKey));
       }
 
       return snapshot;
