@@ -57,8 +57,8 @@ export function createPerSessionDispatcher({
   const sessions = new Map();
   /** @type {unknown[]} */
   const warmHandlers = [];
-  /** @type {Set<Promise<void>>} */
-  const pendingWarmups = new Set();
+  /** @type {{ promise: Promise<unknown>, claimed: boolean }[]} */
+  const pendingWarmups = [];
   const warmTarget = Math.max(0, Math.floor(Number(warmSessions) || 0));
 
   function evict(sid) {
@@ -99,25 +99,24 @@ export function createPerSessionDispatcher({
         session.handler = warmHandler;
         replenishWarmPool();
       } else {
-        const built = buildHandler();
-        if (built && typeof built.then === 'function') {
-          session.pending = Promise.resolve(built).then(
-            (handler) => {
-              session.handler = handler;
-              session.pending = null;
-              replenishWarmPool();
-              return handler;
-            },
-            (error) => {
-              // A failed build must not wedge the session id forever.
-              sessions.delete(sid);
-              replenishWarmPool();
-              throw error;
-            },
+        const pendingWarmup = pendingWarmups.find((warmup) => !warmup.claimed);
+        if (pendingWarmup) {
+          pendingWarmup.claimed = true;
+          session.pending = pendingWarmup.promise.then(
+            (handler) => settleSessionBuild(sid, session, handler),
+            (error) => failSessionBuild(sid, error),
           );
         } else {
-          session.handler = built;
-          replenishWarmPool();
+          const built = buildHandler();
+          if (built && typeof built.then === 'function') {
+            session.pending = Promise.resolve(built).then(
+              (handler) => settleSessionBuild(sid, session, handler),
+              (error) => failSessionBuild(sid, error),
+            );
+          } else {
+            session.handler = built;
+            replenishWarmPool();
+          }
         }
       }
     }
@@ -125,27 +124,48 @@ export function createPerSessionDispatcher({
     return session;
   }
 
+  function settleSessionBuild(sid, session, handler) {
+    session.handler = handler;
+    session.pending = null;
+    replenishWarmPool();
+    return handler;
+  }
+
+  function failSessionBuild(sid, error) {
+    // A failed build must not wedge the session id forever.
+    sessions.delete(sid);
+    replenishWarmPool();
+    throw error;
+  }
+
   function replenishWarmPool() {
     if (warmTarget <= 0) return;
-    while (warmHandlers.length + pendingWarmups.size < warmTarget) {
-      const warmup = Promise.resolve()
+    if (pendingWarmups.some((warmup) => !warmup.claimed)) return;
+    if (warmHandlers.length + pendingWarmups.length >= warmTarget) return;
+
+    /** @type {{ promise: Promise<unknown>, claimed: boolean }} */
+    const warmup = {
+      claimed: false,
+      promise: Promise.resolve()
         .then(() => buildHandler())
         .then((handler) => {
-          warmHandlers.push(handler);
+          if (!warmup.claimed) warmHandlers.push(handler);
+          return handler;
         })
         .finally(() => {
-          pendingWarmups.delete(warmup);
-          if (warmHandlers.length + pendingWarmups.size < warmTarget) replenishWarmPool();
-        });
-      pendingWarmups.add(warmup);
-    }
+          const index = pendingWarmups.indexOf(warmup);
+          if (index !== -1) pendingWarmups.splice(index, 1);
+          replenishWarmPool();
+        }),
+    };
+    pendingWarmups.push(warmup);
   }
 
   async function ready() {
     replenishWarmPool();
     while (warmHandlers.length < warmTarget) {
-      if (pendingWarmups.size === 0) replenishWarmPool();
-      await Promise.all(pendingWarmups);
+      if (pendingWarmups.length === 0) replenishWarmPool();
+      await Promise.all(pendingWarmups.map((warmup) => warmup.promise));
     }
   }
 

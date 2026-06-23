@@ -179,6 +179,44 @@ describe('createPerSessionDispatcher', () => {
     expect(builds).toBe(3);
     expect(dispatcher.warmSize).toBe(2);
   });
+
+  it('claims an in-flight warmup for the first visitor instead of starting a competing build', async () => {
+    let builds = 0;
+    let resolveBuild;
+    const seen = [];
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => {
+        const id = builds++;
+        return new Promise((resolve) => {
+          resolveBuild = () =>
+            resolve((_req, res) => {
+              seen.push(id);
+              res.writeHead(200);
+            });
+        });
+      },
+      warmSessions: 1,
+    });
+
+    const ready = dispatcher.ready();
+    await Promise.resolve();
+    expect(builds).toBe(1);
+
+    const dispatch = dispatcher.dispatch(fakeReq(), fakeRes());
+    await Promise.resolve();
+    expect(builds).toBe(1);
+
+    resolveBuild();
+    await dispatch;
+    expect(seen).toEqual([0]);
+
+    await Promise.resolve();
+    expect(builds).toBe(2);
+    resolveBuild();
+    await ready;
+    expect(builds).toBe(2);
+    expect(dispatcher.warmSize).toBe(1);
+  });
 });
 
 describe('parseCookies', () => {
