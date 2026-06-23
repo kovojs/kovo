@@ -150,6 +150,35 @@ describe('createPerSessionDispatcher', () => {
     await Promise.all([p1, p2]);
     expect(builds).toBe(1);
   });
+
+  it('prebuilds warm session handlers and replenishes after a new visitor consumes one', async () => {
+    let builds = 0;
+    const seen = [];
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => {
+        const id = builds++;
+        return (_req, res) => {
+          seen.push(id);
+          res.writeHead(200);
+        };
+      },
+      warmSessions: 2,
+    });
+
+    await dispatcher.ready();
+    expect(builds).toBe(2);
+    expect(dispatcher.warmSize).toBe(2);
+
+    const res = fakeRes();
+    await dispatcher.dispatch(fakeReq(), res);
+    expect(sidFromRes(res)).toBeTruthy();
+    expect(seen).toEqual([0]);
+    expect(dispatcher.size).toBe(1);
+
+    await dispatcher.ready();
+    expect(builds).toBe(3);
+    expect(dispatcher.warmSize).toBe(2);
+  });
 });
 
 describe('parseCookies', () => {

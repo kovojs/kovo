@@ -74,6 +74,12 @@ export interface DocumentAssemblyOptions {
   body: string;
   hints?: PageHintOptions;
   lang?: string;
+  /**
+   * Enhanced navigation may request a canonical document variant without the
+   * already-installed inline loader. Ordinary documents keep the SPEC §4.4
+   * bootstrap inline.
+   */
+  loader?: 'inline' | 'omit';
   queries?: readonly QueryScriptRenderOptions[];
   /**
    * bugs-1 F13 / SPEC §9.3: an opaque per-session fingerprint. When present, stamped as
@@ -199,7 +205,7 @@ export function renderDeferredDocument(
 function assembleDocumentParts(
   options: Pick<
     DocumentAssemblyOptions,
-    'body' | 'buildToken' | 'hints' | 'lang' | 'queries' | 'sessionFingerprint'
+    'body' | 'buildToken' | 'hints' | 'lang' | 'loader' | 'queries' | 'sessionFingerprint'
   >,
 ): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
   // F2 (bugs-part3 L2-early-hints-2): thread the rendered query values into the head
@@ -212,10 +218,10 @@ function assembleDocumentParts(
     Object.keys(queryValues).length > 0 ? { queries: queryValues } : {},
   );
   const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
-  const loader = inlineLoaderScript();
+  const loader = options.loader === 'omit' ? undefined : inlineLoaderScript();
   const csp = mergeCspInlineMetadata(
     hints.csp,
-    loader.csp,
+    ...(loader === undefined ? [] : [loader.csp]),
     ...queryScripts.map((query) => query.csp),
   );
 
@@ -239,7 +245,7 @@ function assembleDocumentParts(
     earlyHints: hints.earlyHints,
     parts: {
       body: options.body,
-      head: `${buildMeta}${sessionMeta}${hints.html}${loader.html}`,
+      head: `${buildMeta}${sessionMeta}${hints.html}${loader?.html ?? ''}`,
       lang: options.lang ?? langFromHints(options.hints) ?? 'en',
       queryScripts: queryScripts.map((query) => query.html),
     },
@@ -482,6 +488,26 @@ function mergeDocumentHeaders(
           : `${existingValue}, ${value}`;
   }
 
+  return merged;
+}
+
+export function mergeVaryHeader(headers: ResponseHeaders, token: string): ResponseHeaders {
+  const merged: ResponseHeaders = { ...headers };
+  const existingName = findHeaderRecordName(merged, 'Vary');
+  if (existingName === undefined) {
+    merged.Vary = token;
+    return merged;
+  }
+
+  const existing = merged[existingName];
+  const values = (Array.isArray(existing) ? existing.join(', ') : (existing ?? ''))
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!values.some((value) => value.toLowerCase() === token.toLowerCase())) {
+    values.push(token);
+  }
+  merged[existingName] = values.join(', ');
   return merged;
 }
 

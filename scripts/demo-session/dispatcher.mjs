@@ -18,7 +18,10 @@ import { randomUUID } from 'node:crypto';
 // (the example factory called with no args already mints a fresh PGlite — see
 // createCommerceAppShell / buildCrmInteractiveApp / buildSoInteractiveApp). It
 // may be sync or async; the first request for a session awaits the build and
-// concurrent requests for the same new session share one in-flight build.
+// concurrent requests for the same new session share one in-flight build. Hosted
+// demo deployments can also prebuild a small warm pool, shifting that fresh-DB
+// cost to instance startup/background replenishment instead of the visitor's
+// first request.
 
 const DEFAULT_COOKIE_NAME = 'kovo_demo_sid';
 const DEFAULT_IDLE_MS = 20 * 60_000;
@@ -30,6 +33,7 @@ const DEFAULT_MAX_SESSIONS = 40;
  *   cookieName?: string,
  *   idleMs?: number,
  *   maxSessions?: number,
+ *   warmSessions?: number,
  *   now?: () => number,
  *   genId?: () => string,
  *   onEvict?: (sid: string) => void,
@@ -40,6 +44,7 @@ export function createPerSessionDispatcher({
   cookieName = DEFAULT_COOKIE_NAME,
   idleMs = DEFAULT_IDLE_MS,
   maxSessions = DEFAULT_MAX_SESSIONS,
+  warmSessions = 0,
   now = () => Date.now(),
   genId = () => randomUUID(),
   onEvict,
@@ -50,6 +55,11 @@ export function createPerSessionDispatcher({
 
   /** @type {Map<string, { handler: unknown, pending: Promise<unknown> | null, lastSeen: number }>} */
   const sessions = new Map();
+  /** @type {unknown[]} */
+  const warmHandlers = [];
+  /** @type {Set<Promise<void>>} */
+  const pendingWarmups = new Set();
+  const warmTarget = Math.max(0, Math.floor(Number(warmSessions) || 0));
 
   function evict(sid) {
     if (sessions.delete(sid)) onEvict?.(sid);
@@ -84,26 +94,59 @@ export function createPerSessionDispatcher({
     if (!session) {
       session = { handler: null, pending: null, lastSeen: at };
       sessions.set(sid, session);
-      const built = buildHandler();
-      if (built && typeof built.then === 'function') {
-        session.pending = Promise.resolve(built).then(
-          (handler) => {
-            session.handler = handler;
-            session.pending = null;
-            return handler;
-          },
-          (error) => {
-            // A failed build must not wedge the session id forever.
-            sessions.delete(sid);
-            throw error;
-          },
-        );
+      const warmHandler = warmHandlers.shift();
+      if (warmHandler !== undefined) {
+        session.handler = warmHandler;
+        replenishWarmPool();
       } else {
-        session.handler = built;
+        const built = buildHandler();
+        if (built && typeof built.then === 'function') {
+          session.pending = Promise.resolve(built).then(
+            (handler) => {
+              session.handler = handler;
+              session.pending = null;
+              replenishWarmPool();
+              return handler;
+            },
+            (error) => {
+              // A failed build must not wedge the session id forever.
+              sessions.delete(sid);
+              replenishWarmPool();
+              throw error;
+            },
+          );
+        } else {
+          session.handler = built;
+          replenishWarmPool();
+        }
       }
     }
     touch(sid, session, at);
     return session;
+  }
+
+  function replenishWarmPool() {
+    if (warmTarget <= 0) return;
+    while (warmHandlers.length + pendingWarmups.size < warmTarget) {
+      const warmup = Promise.resolve()
+        .then(() => buildHandler())
+        .then((handler) => {
+          warmHandlers.push(handler);
+        })
+        .finally(() => {
+          pendingWarmups.delete(warmup);
+          if (warmHandlers.length + pendingWarmups.size < warmTarget) replenishWarmPool();
+        });
+      pendingWarmups.add(warmup);
+    }
+  }
+
+  async function ready() {
+    replenishWarmPool();
+    while (warmHandlers.length < warmTarget) {
+      if (pendingWarmups.size === 0) replenishWarmPool();
+      await Promise.all([...pendingWarmups]);
+    }
   }
 
   /**
@@ -132,7 +175,11 @@ export function createPerSessionDispatcher({
 
   return {
     dispatch,
+    ready,
     /** @internal test/inspection surface */
+    get warmSize() {
+      return warmHandlers.length;
+    },
     get size() {
       return sessions.size;
     },
