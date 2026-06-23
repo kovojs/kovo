@@ -1,6 +1,7 @@
 import { mutation, s, type MutationContext } from '@kovojs/server';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
+import type { SoDb } from './db.js';
 import { type SoRequest } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
@@ -14,7 +15,11 @@ export async function postQuestion(
   context: MutationContext<{ DUPLICATE_TITLE: typeof duplicateTitleError }>,
 ) {
   const db = request.db;
-  const [existing] = await db.select().from(questions).where(eq(questions.title, title)).limit(1);
+  const sessionId = request.session?.id;
+  if (!sessionId) {
+    throw new Error('stackoverflow mutations require request.session.id');
+  }
+  const existing = await findExistingQuestionTitle(db, sessionId, title);
   if (existing) {
     return context.fail('DUPLICATE_TITLE', { title });
   }
@@ -27,6 +32,7 @@ export async function postQuestion(
     createdAt: '',
     id,
     score: 0,
+    sessionId,
     tags: '',
     title,
   });
@@ -44,11 +50,17 @@ export async function postAnswer(
   request: SoRequest,
 ): Promise<{ id: string }> {
   const db = request.db;
-  await db.insert(answers).values({ id, questionId, body, authorId, score: 0, accepted: false });
+  const sessionId = request.session?.id;
+  if (!sessionId) {
+    throw new Error('stackoverflow mutations require request.session.id');
+  }
+  await db
+    .insert(answers)
+    .values({ id, sessionId, questionId, body, authorId, score: 0, accepted: false });
   await db
     .update(questions)
     .set({ answerCount: sql`${questions.answerCount} + ${1}` })
-    .where(eq(questions.id, questionId));
+    .where(and(eq(questions.sessionId, sessionId), eq(questions.id, questionId)));
   return { id };
 }
 
@@ -58,11 +70,15 @@ export async function voteUp(
   request: SoRequest,
 ): Promise<{ id: string }> {
   const db = request.db;
-  await db.insert(votes).values({ targetType: 'question', targetId, userId, value: 1 });
+  const sessionId = request.session?.id;
+  if (!sessionId) {
+    throw new Error('stackoverflow mutations require request.session.id');
+  }
+  await db.insert(votes).values({ sessionId, targetType: 'question', targetId, userId, value: 1 });
   await db
     .update(questions)
     .set({ score: sql`${questions.score} + ${1}` })
-    .where(eq(questions.id, targetId));
+    .where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));
   return { id };
 }
 
@@ -83,6 +99,19 @@ export const soCsrf = {
 };
 
 const duplicateTitleError = s.object({ title: s.string() });
+
+async function findExistingQuestionTitle(
+  db: SoDb,
+  sessionId: string,
+  title: string,
+): Promise<unknown> {
+  const [existing] = await db
+    .select({ id: questions.id })
+    .from(questions)
+    .where(and(eq(questions.sessionId, sessionId), eq(questions.title, title)))
+    .limit(1);
+  return existing;
+}
 
 export const postQuestionMutation = mutation('postQuestion', {
   input: s.object({

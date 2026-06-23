@@ -165,16 +165,19 @@ const shapeByQuery = new Map(shapes.map((shape) => [shape.query, shape]));
 // ── Invalidation: which queries each mutation invalidates (domain overlap) ─────
 const soQueryDomains = queryDomainsFromFacts(queryFacts);
 const invalidatedQueriesByMutation = {
-  postQuestion: [{ query: 'questionList' }, { query: 'questionDetail', status: 'await-fragment' }],
+  postQuestion: [
+    { query: 'questionList', status: 'await-fragment' },
+    { query: 'questionDetail', status: 'await-fragment' },
+  ],
   postAnswer: [
-    { query: 'questionList' },
-    { query: 'answerList' },
+    { query: 'questionList', status: 'await-fragment' },
+    { query: 'answerList', status: 'await-fragment' },
     { query: 'questionAnswers', status: 'await-fragment' },
     { query: 'questionDetail', status: 'await-fragment' },
   ],
   voteUp: [
-    { query: 'questionList' },
-    { query: 'questionScore' },
+    { query: 'questionList', status: 'await-fragment' },
+    { query: 'questionScore', status: 'await-fragment' },
     { query: 'questionDetail', status: 'await-fragment' },
   ],
 };
