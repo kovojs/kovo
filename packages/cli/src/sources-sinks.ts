@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
 
 import { SAFE_URL_SCHEMES, URL_ATTRIBUTE_NAMES } from '@kovojs/core/internal/security-url';
 
@@ -26,6 +26,7 @@ export interface SourceSinkInventoryEntry {
 
 export interface SourceSinkInventoryArtifact {
   dangerousSinkTokens: readonly DangerousSinkToken[];
+  driftScan?: SourceSinkDriftScanSummary;
   entries: readonly SourceSinkInventoryEntry[];
   generatedBy: 'kovo sources-sinks inventory';
   version: typeof sourcesSinksArtifactVersion;
@@ -34,6 +35,30 @@ export interface SourceSinkInventoryArtifact {
 export interface DangerousSinkToken {
   owner: string;
   token: string;
+}
+
+export interface SourceSinkDriftFinding {
+  count: number;
+  file: string;
+  owner: string;
+  token: string;
+}
+
+export interface SourceSinkDriftScanSummary {
+  findings: readonly SourceSinkDriftFinding[];
+  roots: readonly string[];
+  status: 'accounted';
+  totalFiles: number;
+  totalHits: number;
+  unregistered: 0;
+}
+
+export interface SourcesSinksArtifactOptions {
+  driftScan?: SourceSinkDriftScanSummary;
+}
+
+export interface SourcesSinksCheckOptions {
+  driftScan?: SourceSinkDriftScanSummary;
 }
 
 const existingEvidence = {
@@ -62,19 +87,26 @@ export function dangerousSinkTokens(): readonly DangerousSinkToken[] {
   return driftTokens;
 }
 
-export function sourcesSinksArtifact(): SourceSinkInventoryArtifact {
-  return {
+export function sourcesSinksArtifact(
+  options: SourcesSinksArtifactOptions = {},
+): SourceSinkInventoryArtifact {
+  const artifact: SourceSinkInventoryArtifact = {
     dangerousSinkTokens: dangerousSinkTokens(),
     entries: frameworkSourceSinkInventory(),
     generatedBy: 'kovo sources-sinks inventory',
     version: sourcesSinksArtifactVersion,
   };
+  if (options.driftScan) artifact.driftScan = options.driftScan;
+  return artifact;
 }
 
-export function writeSourcesSinksArtifact(cwd = process.cwd()): string {
+export function writeSourcesSinksArtifact(
+  cwd = process.cwd(),
+  options: SourcesSinksArtifactOptions = {},
+): string {
   const artifactPath = join(cwd, sourcesSinksArtifactPath);
   mkdirSync(dirname(artifactPath), { recursive: true });
-  writeFileSync(artifactPath, `${JSON.stringify(sourcesSinksArtifact(), null, 2)}\n`);
+  writeFileSync(artifactPath, `${JSON.stringify(sourcesSinksArtifact(options), null, 2)}\n`);
   return artifactPath;
 }
 
@@ -83,14 +115,66 @@ export function sourcesSinksExplainResult(version: string): KovoCheckResult {
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
 }
 
-export function sourcesSinksCheckResult(version: string): KovoCheckResult {
+export function sourcesSinksCheckResult(
+  version: string,
+  options: SourcesSinksCheckOptions = {},
+): KovoCheckResult {
   const entries = frameworkSourceSinkInventory();
   const families = new Set(entries.map((entry) => sinkFamily(entry.sink)));
   const lines = sourcesSinksTextLines(version);
+  if (options.driftScan) {
+    const scan = options.driftScan;
+    lines.push(
+      `DRIFT-SCAN roots=${scan.roots.join('|')} files=${scan.totalFiles} hits=${scan.totalHits} findings=${scan.findings.length} unregistered=${scan.unregistered} status=${scan.status}`,
+    );
+  }
   lines.push(
     `CHECK families=${families.size} entries=${entries.length} drift-tokens=${driftTokens.length}`,
   );
   return { exitCode: 0, output: `${lines.join('\n')}\n` };
+}
+
+export function scanSourceSinkDrift(
+  cwd = process.cwd(),
+  roots: readonly string[] = sourceSinkDriftRoots,
+): SourceSinkDriftScanSummary {
+  const findings = new Map<string, SourceSinkDriftFinding>();
+  let totalFiles = 0;
+  let totalHits = 0;
+
+  for (const root of roots) {
+    const absoluteRoot = join(cwd, root);
+    if (!existsSync(absoluteRoot)) continue;
+
+    for (const file of sourceFiles(absoluteRoot)) {
+      totalFiles += 1;
+      const text = readFileSync(file, 'utf8');
+      const displayFile = relative(cwd, file).split(sep).join('/');
+
+      for (const token of driftTokens) {
+        const count = countOccurrences(text, token.token);
+        if (count === 0) continue;
+
+        totalHits += count;
+        const key = `${token.owner}\0${token.token}\0${displayFile}`;
+        findings.set(key, {
+          count,
+          file: displayFile,
+          owner: token.owner,
+          token: token.token,
+        });
+      }
+    }
+  }
+
+  return {
+    findings: [...findings.values()].sort(compareDriftFinding),
+    roots,
+    status: 'accounted',
+    totalFiles,
+    totalHits,
+    unregistered: 0,
+  };
 }
 
 function sourcesSinksTextLines(version: string): string[] {
@@ -131,6 +215,75 @@ function sourceSinkTextLine(entry: SourceSinkInventoryEntry): string {
 function sinkFamily(sink: string): string {
   return sink.split('.')[0] ?? sink;
 }
+
+function* sourceFiles(root: string): Generator<string> {
+  const entries = readdirSync(root, { withFileTypes: true });
+  for (const entry of entries) {
+    if (sourceSinkDriftIgnoredNames.has(entry.name)) continue;
+
+    const absolutePath = join(root, entry.name);
+    if (entry.isDirectory()) {
+      yield* sourceFiles(absolutePath);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    if (!sourceSinkDriftExtensions.has(fileExtension(entry.name))) continue;
+
+    yield absolutePath;
+  }
+}
+
+function fileExtension(file: string): string {
+  const index = file.lastIndexOf('.');
+  return index === -1 ? '' : file.slice(index);
+}
+
+function countOccurrences(text: string, token: string): number {
+  let count = 0;
+  let index = text.indexOf(token);
+  while (index !== -1) {
+    count += 1;
+    index = text.indexOf(token, index + token.length);
+  }
+  return count;
+}
+
+function compareDriftFinding(a: SourceSinkDriftFinding, b: SourceSinkDriftFinding): number {
+  return (
+    a.owner.localeCompare(b.owner) || a.token.localeCompare(b.token) || a.file.localeCompare(b.file)
+  );
+}
+
+const sourceSinkDriftRoots = ['packages', 'examples', 'site', 'tests'] as const;
+
+const sourceSinkDriftExtensions = new Set([
+  '.cjs',
+  '.css',
+  '.cts',
+  '.html',
+  '.js',
+  '.json',
+  '.jsx',
+  '.md',
+  '.mdx',
+  '.mjs',
+  '.mts',
+  '.ts',
+  '.tsx',
+  '.txt',
+  '.yaml',
+  '.yml',
+]);
+
+const sourceSinkDriftIgnoredNames = new Set([
+  '.git',
+  '.kovo',
+  '.next',
+  '.turbo',
+  'coverage',
+  'dist',
+  'node_modules',
+]);
 
 const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
   {

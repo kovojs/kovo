@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { kovoCheck, kovoExplain, main } from './index.js';
 import {
   frameworkSourceSinkInventory,
+  scanSourceSinkDrift,
   sourcesSinksArtifactPath,
   sourcesSinksArtifactVersion,
 } from './sources-sinks.js';
@@ -202,6 +203,12 @@ describe('source/sink inventory', () => {
       ) as Record<string, unknown>;
       expect(artifact.version).toBe(sourcesSinksArtifactVersion);
       expect(artifact.generatedBy).toBe('kovo sources-sinks inventory');
+      expect(artifact.driftScan).toMatchObject({
+        status: 'accounted',
+        totalFiles: 0,
+        totalHits: 0,
+        unregistered: 0,
+      });
       const entries = artifact.entries as unknown[];
       expect(entries.length).toBe(frameworkSourceSinkInventory().length);
       expect(entries[0]).toMatchObject({
@@ -220,13 +227,60 @@ describe('source/sink inventory', () => {
         trust: expect.any(String),
       });
       expect(stdout).toHaveBeenCalledWith(
-        expect.stringContaining('kovo-check/v1\nSOURCES-SINKS\n'),
+        expect.stringContaining(
+          'DRIFT-SCAN roots=packages|examples|site|tests files=0 hits=0 findings=0 unregistered=0 status=accounted',
+        ),
       );
       expect(stderr).not.toHaveBeenCalled();
     } finally {
       process.chdir(previous);
       stdout.mockRestore();
       stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('scans registered dangerous sink tokens by owner', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sources-sinks-drift-'));
+    try {
+      mkdirSync(join(root, 'packages', 'app'), { recursive: true });
+      writeFileSync(
+        join(root, 'packages', 'app', 'route.tsx'),
+        [
+          'element.innerHTML = value;',
+          'element.innerHTML = other;',
+          'const headers = new Headers();',
+          'return respond.file(path);',
+        ].join('\n'),
+      );
+
+      expect(scanSourceSinkDrift(root)).toMatchObject({
+        findings: [
+          {
+            count: 1,
+            file: 'packages/app/route.tsx',
+            owner: 'file.storage.static-export',
+            token: 'respond.file',
+          },
+          {
+            count: 2,
+            file: 'packages/app/route.tsx',
+            owner: 'html.dom.output',
+            token: 'innerHTML',
+          },
+          {
+            count: 1,
+            file: 'packages/app/route.tsx',
+            owner: 'http.header.cookie',
+            token: 'Headers',
+          },
+        ],
+        status: 'accounted',
+        totalFiles: 1,
+        totalHits: 4,
+        unregistered: 0,
+      });
+    } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });

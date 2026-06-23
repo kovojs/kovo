@@ -5,7 +5,9 @@ coverage/
 .vitest/
 .vp/
 .kovo/cache/
+.kovo/sources-sinks.json
 **/.kovo/cache/
+**/.kovo/sources-sinks.json
 *.tsbuildinfo
 test-results/
 .playwright/

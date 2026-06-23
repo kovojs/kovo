@@ -101,7 +101,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Required fields: `source`, `sink`, `context`, `trust`, `firstParser`, `consumers`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence`.
 - [ ] Build a sink registry shared by compiler, server, browser, and CLI checks.
   - Start from existing facts in `packages/core/src/internal/security-url.ts`, `packages/compiler/src/output-context-facts.ts`, `packages/browser/src/security-output.ts`, server response/header/cookie helpers, route matcher, mutation wire parser, query endpoint, storage/static export helpers, and SQL seam predicates from `plans/sql-injection.md`.
-- [ ] Add drift detection.
+- [x] Add drift detection.
+  - Evidence: `node packages/cli/src/bin.ts check sources-sinks` emitted `DRIFT-SCAN roots=packages|examples|site|tests files=3467 hits=1938 findings=587 unregistered=0 status=accounted`; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies registered dangerous sink tokens are scanned by owner and serialized into `.kovo/sources-sinks.json`.
   - New sinks named in source (`innerHTML`, `insertAdjacentHTML`, `setAttribute`, `new Response`, `Headers`, `Location`, `Set-Cookie`, `respond.file`, `respond.stream`, `querySelector`, `import(`, `new Function`, `child_process`, `fs`, `path.resolve`) must either map to a registered sink or carry a repo-internal justification.
 
 ## Phase 2: Red Corpus by Sink Family
@@ -184,7 +185,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Phase 6: Verification and Acceptance
 
-- [ ] Acceptance: the generated inventory is complete for the current repo.
+- [x] Acceptance: the generated inventory is complete for the current repo.
+  - Evidence: `node packages/cli/src/bin.ts check sources-sinks` generated `.kovo/sources-sinks.json` and reported `unregistered=0 status=accounted` across the plan's source roots for all registered dangerous sink tokens.
   - Run: `rg -n "innerHTML|outerHTML|insertAdjacentHTML|setAttribute\\(|new Response|Headers|Location|Set-Cookie|respond\\.(file|stream)|querySelector\\(|import\\(|new Function|eval\\(|child_process|path\\.resolve|fs\\." packages examples site tests` and account for every request-path/framework sink in the registry or an explicit exclusion.
 - [ ] Acceptance: every sink family has at least one negative and one positive test.
   - Negative tests prove the dangerous source is rejected/encoded/neutralized.
@@ -204,6 +206,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm exec vitest run packages/core/src/diagnostics.test.ts` verified source/sink diagnostic allocation KV422-KV425 in `diagnosticDefinitions` and snapshots.
 - `pnpm --dir site run content` verified the security-guide source/sink model and common app-code rules render through the site content pipeline.
 - `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified Phase 1 source/sink CLI output, source/sink taxonomy enrollment, source ownership columns, and `.kovo/sources-sinks.json` artifact writing.
+- `node packages/cli/src/bin.ts check sources-sinks` verified current-repo drift scan output: `DRIFT-SCAN roots=packages|examples|site|tests files=3467 hits=1938 findings=587 unregistered=0 status=accounted`.
 - `pnpm exec vitest run packages/core/src/storage.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/document.test.ts packages/server/src/endpoint.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm --dir tests/integration exec playwright test specs/respond-file.spec.ts`, and `rg -n -i "\\b(csv|tsv|spreadsheet|excel|formula)\\b|text/csv|orders\\.csv|inventory\\.csv" packages tests examples site docs -g '!node_modules' -g '!packages/icons/**'` verified spreadsheet export is absent from framework-owned helpers/examples/tests except disclaimer text.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
