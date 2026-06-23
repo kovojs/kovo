@@ -19,7 +19,12 @@ function appSource(): string {
   return `
 import { createApp, createMemoryVersionedClientModuleRegistry, route } from '@kovojs/server';
 
-const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+const trustedHtml = (value) => ({
+  __kovoTrustedHtml: true,
+  value,
+  [Symbol.toPrimitive]: () => String(value),
+  toString: () => String(value),
+});
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
 clientModules.put({
@@ -30,10 +35,10 @@ clientModules.put({
 
 const home = route('/', {
   page: () =>
-    trustedHtml('<main><counter-island kovo-c="counter-island" kovo-state=\\'){"n":0}\\'>' +
+    trustedHtml('<main><counter-island kovo-c="counter-island" kovo-state="{&quot;n&quot;:0}">' +
     '<button on:click="/c/__v/counter-v1/counter.client.js#increment">bump</button> ' +
     '<output data-bind="state.n">0</output>' +
-    '</counter-island></main>',
+    '</counter-island></main>'),
 });
 
 export default createApp({ clientModules, routes: [home] });

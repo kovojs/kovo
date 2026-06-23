@@ -43,7 +43,7 @@ describe('kovo add', () => {
           readFileSync(new URL(`../../ui/src/${name}.tsx`, import.meta.url), 'utf8'),
         ),
       );
-      expect(entry.source).toContain("import { component } from '@kovojs/core';");
+      expect(entry.source).toMatch(/import\s+\{[^}]*\bcomponent\b[^}]*\}\s+from '@kovojs\/core';/);
       expect(entry.source).toContain('component({');
       expect(entry.source).not.toContain('@kovojs/ui');
       expect(entry.source).not.toContain('@kovojs/server/internal');

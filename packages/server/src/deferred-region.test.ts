@@ -54,7 +54,7 @@ describe('Defer JSX primitive', () => {
         Defer({
           fallback: ['Loading ', '<b>raw</b>', trustedHtml('<i>trusted</i>')],
           priority: 'visible',
-          render: () => trustedHtml('<strong>raw region</strong>'),
+          render: () => '<strong>raw region</strong>',
           target: 'rail&details',
         }),
       ),
@@ -70,6 +70,29 @@ describe('Defer JSX primitive', () => {
             html: '&lt;strong&gt;raw region&lt;/strong&gt;',
             priority: 'visible',
             target: 'rail&details',
+          },
+        ],
+        priority: 'visible',
+      },
+    ]);
+
+    const trustedCollector = createDeferredRegionChunkCollector();
+    await html(
+      runWithJsxRequestContext({}, { deferredRegions: trustedCollector }, () =>
+        Defer({
+          priority: 'visible',
+          render: () => trustedHtml('<strong>trusted region</strong>'),
+          target: 'trusted-region',
+        }),
+      ),
+    );
+    expect(await trustedCollector.chunks()).toEqual([
+      {
+        fragments: [
+          {
+            html: '<strong>trusted region</strong>',
+            priority: 'visible',
+            target: 'trusted-region',
           },
         ],
         priority: 'visible',

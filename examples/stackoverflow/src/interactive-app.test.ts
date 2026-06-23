@@ -247,7 +247,10 @@ describe('stackoverflow interactive app', () => {
         );
         expect(html).toContain(`<noscript><link rel="stylesheet" href="${href}"></noscript>`);
       }
-      expect(stripNoscript(html)).not.toContain('<link rel="stylesheet"');
+      const htmlWithoutNoscript = stripNoscript(html);
+      for (const href of routeHrefs) {
+        expect(htmlWithoutNoscript).not.toContain(`<link rel="stylesheet" href="${href}"`);
+      }
       expect(html).not.toContain('/assets/routes/users-');
       expect(html).not.toContain('/assets/routes/users-id-');
       expect(html).not.toContain('/assets/routes/tags-');

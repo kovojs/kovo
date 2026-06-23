@@ -1,12 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import {
-  createApp,
-  createRequestHandler,
-  layout,
-  route,
-  toNodeHandler,
-  type RouteDeclaration,
-} from '@kovojs/server';
+import { createApp, createRequestHandler, layout, route, toNodeHandler } from '@kovojs/server';
 
 import { buildSiteRouteData, type SiteRoutePage } from './app-data.js';
 import { clientHrefs, siteClientModules } from './client/modules.js';
@@ -15,7 +8,7 @@ import { LandingRoutePage } from './components/landing.js';
 import { siteDocumentTemplate } from './document-template.js';
 import { siteStylesheetsForRoute } from './route-kit.js';
 
-type SiteRoute = RouteDeclaration<string, undefined, undefined, unknown, unknown, unknown>;
+type SiteRoute = ReturnType<typeof route>;
 
 const siteRouteData = await buildSiteRouteData({ clientModules: siteClientModules });
 

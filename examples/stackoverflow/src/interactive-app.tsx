@@ -12,6 +12,7 @@ import {
   s,
   stylesheet,
   type RequestHandler,
+  type RoutePageResult,
   type StylesheetAsset,
 } from '@kovojs/server';
 import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
@@ -302,7 +303,10 @@ export async function buildSoInteractiveApp(
     params: s.object({ id: s.string() }),
     staticPaths: soStaticQuestionPaths,
     page({ params }: { params: { id: string } }) {
-      return withRail(<QuestionDetailRegion questionId={params.id} />, questionRail(params.id));
+      return withRail(
+        <QuestionDetailRegion questionId={params.id} />,
+        questionRail(params.id),
+      ) as RoutePageResult;
     },
     layout: QuestionsLayout,
     stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/questions/:id'),
@@ -347,7 +351,7 @@ export async function buildSoInteractiveApp(
           title: 'Questions · KovOverflow',
         },
         page() {
-          return withRail(<QuestionListRegion />, homeRail());
+          return withRail(<QuestionListRegion />, homeRail()) as RoutePageResult;
         },
         layout: QuestionsLayout,
         stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/'),

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentRenderResult } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import * as style from '@kovojs/style';
 
@@ -62,7 +62,7 @@ interface OrderHistoryItem {
   total: number;
 }
 
-export function renderOrderHistoryItems(result: OrderHistoryResult): string {
+export function renderOrderHistoryItems(result: OrderHistoryResult): ComponentRenderResult {
   return (
     <>
       {result.items.map((item: OrderHistoryItem) => (
@@ -81,6 +81,6 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): string {
   );
 }
 
-export function renderOrderHistory(result: OrderHistoryResult): string {
+export function renderOrderHistory(result: OrderHistoryResult): ComponentRenderResult {
   return <ol style={orderHistoryStyles.stack}>{renderOrderHistoryItems(result)}</ol>;
 }

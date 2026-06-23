@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@kovojs/better-auth": "workspace:*",
+    "@kovojs/browser": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/test": "workspace:*"
   },

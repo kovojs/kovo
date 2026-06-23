@@ -35,6 +35,7 @@ const manifestPath = path.join(repoRoot, 'public-packages.json');
 
 // Hand-authored source files in src/ the generator must never delete.
 const PRESERVED_TSX = new Set(['index.tsx']);
+const SHADOW_RESTRICTED_NAMES = new Set(['Infinity', 'NaN', 'undefined', 'eval', 'arguments']);
 
 function lucideIconNodes() {
   // Resolve from the icons package so pnpm's package-local devDependency
@@ -85,6 +86,9 @@ function renderChild(node) {
 
 function iconSource(name, nodes) {
   const symbol = toSymbol(name);
+  const lintSuppression = SHADOW_RESTRICTED_NAMES.has(symbol)
+    ? '// eslint-disable-next-line no-shadow-restricted-names -- Generated public Lucide icon export.\n'
+    : '';
   const children = nodes.map(renderChild).join('\n');
   const svg =
     children.length > 0
@@ -100,6 +104,7 @@ function iconSource(name, nodes) {
     `import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';\n` +
     `\n` +
     `/** ${toTitle(name)} icon (Lucide). https://lucide.dev/icons/${name} */\n` +
+    lintSuppression +
     `export function ${symbol}(props: IconProps = {}): IconRenderResult {\n` +
     `  return (\n` +
     `${svg}\n` +
