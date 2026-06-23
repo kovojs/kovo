@@ -33,12 +33,12 @@ exploits it," size the work accordingly, and produce the acceptance criterion.
   - For each hit record: literal text, builder/`sql\`\``-parameterized, or text assembled from request data (`input`/`req.search`/`req.params`/form). Only the last is a live finding.
   - Evidence: `rg -n "db\.(execute|query|exec|prepare)\(" examples site packages/create-kovo/templates` found a literal `db.exec(...)` snippet in `site/content/guides/testing.md` and a `db.execute(sql\`...\`)`snippet in`site/content/guides/data-layer.md`; neither interpolates request/form/query data.
   - Evidence: `rg -n "sql\.raw|sql\.identifier" examples site packages` found only literal `sql.raw("...")` test fixtures in `packages/drizzle/src/*.test.ts`; no shipped example/template/runtime surface assembled SQL text from request-derived data.
-- [ ] Build a realistic vulnerable-scenario corpus regardless of whether a live finding exists.
+- [x] Build a realistic vulnerable-scenario corpus regardless of whether a live finding exists.
   - If a live finding exists: lift it verbatim into the corpus as a failing exploit test (over-select/over-mutate via a payload).
   - If none exists: synthesize scenarios modeled on patterns a real Kovo developer would write, using the shipped example apps (CRM, StackOverflow) as the template for "plausible app code." Each scenario is a small fixture page/mutation that constructs SQL unsafely, plus the attacker payload that exploits it.
   - Seed scenarios (extend as needed): dynamic sort `ORDER BY ${req.search.sort} ${req.search.dir}`; filter value interpolation `WHERE status = '${req.search.status}'`; `LIKE '%${q}%'` wildcard/quote breakout; numeric-but-unparameterized `LIMIT ${req.search.limit}`; IN-list `IN (${ids.join(',')})`; dynamic table/tenant name `FROM ${req.params.table}`; admin report `sql.raw(userClause)`; and the dropped-`sql`-tag untagged-template mistake.
   - These scenarios are the plan's **acceptance criterion**: each must produce the new KV diagnostic statically (Phase 4) and be rejected by the runtime guard (Phase 5), while the safe rewrite (`sql\`\``/`sql.identifier`/`sql.allow`) passes. Plan is green when the whole corpus does.
-  - Partial evidence: `packages/drizzle/src/sql-safety-static.test.ts` covers the static half for dynamic sort, filter interpolation, LIKE wildcard/quote breakout, IN-list, dynamic table name, admin `sql.raw`, and dropped-tag scenarios; runtime per-scenario exploit fixtures are still open.
+  - Evidence: `packages/drizzle/src/sql-safety-static.test.ts` covers the static half for dynamic sort, filter interpolation, LIKE wildcard/quote breakout, IN-list, dynamic table name, admin `sql.raw`, and dropped-tag scenarios; `packages/server/src/guards.test.ts` covers the runtime rejection half for the same seeded vulnerable shapes before driver execution.
 - [x] Set scope/urgency from the classification (independent of the corpus).
   - Evidence: the intake commands above found no request/form/query-data interpolation into shipped SQL text, so this plan is relabeled **preventative hardening** rather than live-incident remediation.
   - Evidence: because no live finding exists, Phase 5's production _enforce_ flip stays gated behind the warn-then-enforce ramp (#7) while the `sql\`\`` tag, static analyzer, and exploit corpus remain in scope as the durable defense.
@@ -101,8 +101,9 @@ acceptance set (b)); these checkboxes implement it.
 - [ ] Forbid unbranded raw strings on Kovo-managed DB handles by default.
   - In dev/test this is an immediate teaching error pointing at `sql\`\``/`staticSql\`\``.
   - In production the managed handle fails closed (diagnostic-class server error, no DB execution) rather than executing an unbranded raw string. The production gate is a cheap shape/brand check, **not** a SQL parse (see Phase 5).
-- [ ] Preserve table/read verification.
+- [x] Preserve table/read verification.
   - The SQL safety gate runs before execution; KV406/KV410/KV411/KV413 runtime verification (test-time) still parses the accepted statement text for coverage and side-effect proof.
+  - Evidence: `pnpm exec vitest --run packages/server/src/guards.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/core/src/sql-safety.test.ts` passes; `packages/test/src/query-verifier.test.ts` still records structured SQL reads without replacing adapter arguments.
 
 ## Phase 4: Static Analyzer Integration
 
@@ -142,8 +143,9 @@ acceptance set (b)); these checkboxes implement it.
 - [x] Validate `sql.identifier` arguments at the sink.
   - Reject identifiers failing the grammar (charset/length) or outside a supplied `allow` set, at execution time. Sound regardless of provenance — the one raw-input case with a runtime-checkable guarantee.
   - Evidence: `packages/core/src/internal/sql-safety.ts` implements `validateSqlIdentifier`; `packages/drizzle/src/runtime-surface.test.ts` verifies grammar and allowlist rejection.
-- [ ] Preserve adapter compatibility intentionally.
+- [x] Preserve adapter compatibility intentionally.
   - If a blessed adapter emits a SQL object shape the safety wrapper does not understand, that is a conformance failure to model, not a silent pass-through.
+  - Evidence: `packages/server/src/guards.test.ts` verifies nested `pglite`, `sqlite`, `client`, and `$client` handles reject raw strings and accept branded/separated carriers; `packages/core/src/sql-safety.test.ts` locks the shared seam predicates.
 - [x] Add production fail-closed behavior via a warn-then-enforce ramp.
   - Ship diagnostic/telemetry-only first (log "would reject," execute anyway), then flip to enforce once the corpus and real traffic show no false positives (e.g. an adapter shape the guard didn't yet recognize). The enforce flip is deferred entirely if Intake found no live exploit (#3).
   - Once enforcing, a production mutation/query that reaches the guard with unsafe SQL fails with a diagnostic-class server error and no database execution. Keep the check to the cheap shape/brand test (no SQL parse) for hot-path latency.

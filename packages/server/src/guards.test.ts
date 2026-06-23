@@ -117,6 +117,61 @@ describe('server guard and session primitives', () => {
     expect(calls).toEqual([raw]);
   });
 
+  it('guards blessed nested adapter handles without silently passing unknown SQL shapes', async () => {
+    const calls: Array<[string, unknown]> = [];
+    const request = await resolveLifecycleRequest(
+      {},
+      {
+        db: () => ({
+          $client: {
+            prepare(statement: unknown) {
+              calls.push(['$client.prepare', statement]);
+              return { get: () => 'prepared-ok' };
+            },
+          },
+          client: {
+            execute(statement: unknown) {
+              calls.push(['client.execute', statement]);
+              return 'client-ok';
+            },
+          },
+          pglite: {
+            query(statement: unknown) {
+              calls.push(['pglite.query', statement]);
+              return 'pglite-ok';
+            },
+          },
+          sqlite: {
+            exec(statement: unknown) {
+              calls.push(['sqlite.exec', statement]);
+              return 'sqlite-ok';
+            },
+          },
+        }),
+      },
+    );
+
+    expect(() => request.db.pglite.query('select * from products')).toThrow(/KV422/);
+    expect(() => request.db.sqlite.exec('select * from products')).toThrow(/KV422/);
+    expect(() => request.db.client.execute('select * from products')).toThrow(/KV422/);
+    expect(() => request.db.$client.prepare('select * from products')).toThrow(/KV422/);
+    expect(calls).toEqual([]);
+
+    expect(request.db.pglite.query({ text: 'select * from products', values: [] })).toBe(
+      'pglite-ok',
+    );
+    expect(request.db.sqlite.exec(stampParameterizedSql({}))).toBe('sqlite-ok');
+    expect(
+      request.db.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] }),
+    ).toBe('client-ok');
+    expect(
+      request.db.$client
+        .prepare(stampStaticSql({ sql: 'select * from products where id = ?' }))
+        .get(),
+    ).toBe('prepared-ok');
+    expect(calls).toHaveLength(4);
+  });
+
   it('rejects attacker-shaped SQL text and still allows static prepared statement values', async () => {
     const payloads = [
       "p1' or '1'='1",
@@ -162,6 +217,68 @@ describe('server guard and session primitives', () => {
     expect(prepared.all('p1')).toEqual([{ id: 'p1' }]);
     expect(prepared.all(payloads[0]!)).toEqual([]);
     expect(calls).toHaveLength(1);
+  });
+
+  it('rejects realistic vulnerable SQL scenario strings before driver execution', async () => {
+    const calls: unknown[] = [];
+    const request = await resolveLifecycleRequest(
+      {},
+      {
+        db: () => ({
+          exec(statement: unknown) {
+            calls.push(statement);
+            return 'exec-ok';
+          },
+          execute(statement: unknown) {
+            calls.push(statement);
+            return 'execute-ok';
+          },
+          prepare(statement: unknown) {
+            calls.push(statement);
+            return { all: () => [] };
+          },
+          query(statement: unknown) {
+            calls.push(statement);
+            return [];
+          },
+        }),
+      },
+    );
+
+    const sort = 'created_at desc; drop table products; --';
+    const status = "open' or '1'='1";
+    const q = "%' union select id from users --";
+    const limit = '1; delete from products; --';
+    const ids = ['p1', "p2'); delete from products; --"];
+    const table = 'products join users on true';
+    const userClause = "where archived = false or '1'='1'";
+
+    expect(() => request.db.query(`select * from products order by ${sort}`)).toThrow(/KV422/);
+    expect(() => request.db.execute(`select * from products where status = '${status}'`)).toThrow(
+      /KV422/,
+    );
+    expect(() => request.db.query(`select * from products where name like '%${q}%'`)).toThrow(
+      /KV422/,
+    );
+    expect(() => request.db.query(`select * from products limit ${limit}`)).toThrow(/KV422/);
+    expect(() => request.db.query(`select * from products where id in (${ids.join(',')})`)).toThrow(
+      /KV422/,
+    );
+    expect(() => request.db.query(`select * from ${table}`)).toThrow(/KV422/);
+    expect(() => request.db.exec(`select * from products ${userClause}`)).toThrow(/KV422/);
+    expect(() => request.db.prepare(`select * from products where id = ${ids[0]}`)).toThrow(
+      /KV422/,
+    );
+    expect(calls).toEqual([]);
+
+    expect(request.db.query(stampParameterizedSql({}))).toEqual([]);
+    expect(
+      request.db.execute({ text: 'select * from products where status = $1', values: [status] }),
+    ).toBe('execute-ok');
+    expect(
+      request.db.exec(stampTrustedSql(stampRawSqlChunk({}), 'audited static report clause')),
+    ).toBe('exec-ok');
+    expect(calls).toHaveLength(3);
   });
 
   it('keeps the production SQL guard in warn mode until the enforce ramp flips', async () => {

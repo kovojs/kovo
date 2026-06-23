@@ -140,15 +140,13 @@ export function isDbAdapterLike(value: unknown): value is Record<PropertyKey, un
 export function isSqlHandleLike(value: unknown): value is object {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<PropertyKey, unknown>;
-  if (typeof record.prepare === 'function' && typeof record.exec === 'function') return true;
-  if (typeof record.execute === 'function') return true;
-  const handleMethodCount = [
+  return [
+    typeof record.prepare === 'function',
+    typeof record.execute === 'function',
     typeof record.transaction === 'function',
     typeof record.exec === 'function',
     typeof record.query === 'function',
-  ].filter(Boolean).length;
-
-  return handleMethodCount >= 2;
+  ].some(Boolean);
 }
 
 /** @internal */
