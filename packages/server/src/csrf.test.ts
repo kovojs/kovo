@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfField, csrfToken, validateCsrfToken } from './csrf.js';
+import { csrfField, csrfToken, renderMutationCsrfField, validateCsrfToken } from './csrf.js';
+import { runWithJsxRequestContext } from './jsx-context.js';
 import {
   mutation as defineMutation,
   renderMutationResponse,
@@ -34,6 +35,42 @@ describe('csrf helpers', () => {
     expect(validateCsrfToken({ 'csrf<input>': token }, request, csrf)).toBe(true);
     expect(validateCsrfToken({ 'csrf<input>': `${token}x` }, request, csrf)).toBe(false);
     expect(validateCsrfToken({ 'csrf<input>': token }, { sessionId: '' }, csrf)).toBe(false);
+  });
+
+  it('renders and validates anonymous CSRF tokens bound to the framework cookie', () => {
+    const anonymousCsrf = {
+      field: 'csrf',
+      secret: 'anonymous-secret',
+      sessionId() {
+        return undefined;
+      },
+    };
+    const setCookies: string[] = [];
+    const pageRequest = new Request('https://shop.example.test/login');
+
+    const html = runWithJsxRequestContext(
+      pageRequest,
+      { onCsrfSetCookie: (cookie) => setCookies.push(cookie) },
+      () => renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+    );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
+
+    expect(html).toContain('name="csrf"');
+    expect(setCookies).toHaveLength(1);
+    expect(setCookies[0]).toContain('kovo_csrf=');
+    expect(setCookies[0]).toContain('HttpOnly');
+    expect(setCookies[0]).toContain('SameSite=Lax');
+
+    const cookiePair = setCookies[0]!.split(';')[0]!;
+    const submitted = /value="([^"]+)"/.exec(html)?.[1];
+    expect(submitted).toBeDefined();
+    const postRequest = new Request('https://shop.example.test/_m/auth/sign-in', {
+      headers: { Cookie: cookiePair },
+      method: 'POST',
+    });
+
+    expect(validateCsrfToken({ csrf: submitted }, postRequest, anonymousCsrf)).toBe(true);
+    expect(validateCsrfToken({ csrf: `${submitted}x` }, postRequest, anonymousCsrf)).toBe(false);
   });
 });
 

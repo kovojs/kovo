@@ -864,8 +864,8 @@ describe('server mutation response replay', () => {
   // pending reservations bypass `maxEntries` and linger for the full TTL — an authenticated
   // attacker firing many concurrent slow mutations with client-chosen Kovo-Idem values
   // accumulates unbounded pending records. A separate `maxPending` cap REFUSES new pending
-  // reservations past the cap (reserve() returns undefined → the request runs unprotected)
-  // rather than EVICTING an existing pending slot (which would re-open A6/M4).
+  // reservations past the cap so mutation callers can fail closed rather than EVICTING an
+  // existing pending slot (which would re-open A6/M4).
   it('E4: enforces maxPending by refusing (not evicting) excess pending reservations', () => {
     const replayStore = createMemoryMutationReplayStore({ maxEntries: 100, maxPending: 2 });
 
@@ -889,6 +889,33 @@ describe('server mutation response replay', () => {
     reservationA!.commit({ body: 'committed', headers: {}, status: 200 });
     const reservationD = replayStore.reserve('scope', 'idem_d');
     expect(reservationD).toBeDefined();
+  });
+
+  it('fails closed instead of running enhanced mutations when maxPending refuses reservation', async () => {
+    const replayStore = createMemoryMutationReplayStore({ maxEntries: 100, maxPending: 1 });
+    const held = replayStore.reserve('other-scope', 'held-idem');
+    expect(held).toBeDefined();
+    let writes = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        writes += 1;
+        return input;
+      },
+    });
+
+    const response = await renderMutationResponse(addToCart, {
+      idem: 'new-idem',
+      rawInput: { productId: 'p1' },
+      replayStore,
+      request: { sessionId: 's1' },
+      targets: ['cart-form'],
+    });
+
+    expect(writes).toBe(0);
+    expect(response.status).toBe(429);
+    expect(response.headers['Retry-After']).toBe('1');
+    expect(response.body).toContain('data-error-code="RATE_LIMITED"');
   });
 
   // E4: maxPending defaults must NOT regress the A6 maxEntries-pressure scenario (3 pending

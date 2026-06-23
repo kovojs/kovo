@@ -15,6 +15,7 @@ export interface JsxMutationFailureContext {
 export interface JsxFrameworkContext {
   csrf?: CsrfValidationOptions<any>;
   mutationFailure?: JsxMutationFailureContext;
+  onCsrfSetCookie?: (rawSetCookie: string) => void;
   request: unknown;
 }
 

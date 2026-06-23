@@ -268,6 +268,45 @@ describe('server app mutation request boundary', () => {
     expect(body.code).toBe('VALIDATION');
   });
 
+  it('validates CSRF before surfacing malformed body diagnostics for protected mutations', async () => {
+    const onError = vi.fn();
+    let handlerCalls = 0;
+    const csrf = {
+      field: 'csrf',
+      secret: 'test-secret',
+      sessionId() {
+        return 's1';
+      },
+    };
+    const addToCart = mutation('cart/add', {
+      csrf,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+    const app = createApp({ mutations: [addToCart], onError });
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: '{ this is not valid json !!',
+      headers: {
+        'Content-Type': 'application/json',
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'cart-form',
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+    const body = await response.text();
+
+    expect(response.status, body).toBe(422);
+    expect(body).toContain('data-error-code="CSRF"');
+    expect(body).not.toContain('invalid-json');
+    expect(handlerCalls).toBe(0);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('H1: returns 422 for a text/plain Content-Type body without calling onError', async () => {
     const onError = vi.fn();
     const addToCart = mutation('cart/add', {

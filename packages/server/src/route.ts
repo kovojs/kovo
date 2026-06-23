@@ -355,6 +355,7 @@ export interface RouteJsxContextOptions<Request> {
     mutationKey: string;
     target?: string;
   };
+  onCsrfSetCookie?: (rawSetCookie: string) => void;
 }
 
 /**
@@ -950,6 +951,7 @@ function routeJsxContextOptions<Request>(
   return {
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.mutationFailure === undefined ? {} : { mutationFailure: options.mutationFailure }),
+    ...(options.onCsrfSetCookie === undefined ? {} : { onCsrfSetCookie: options.onCsrfSetCookie }),
   };
 }
 

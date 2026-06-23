@@ -57,8 +57,8 @@ export interface MutationReplayStoreOptions {
    * `maxEntries` and linger for the full `ttlMs` — an authenticated attacker firing many
    * concurrent slow mutations with client-chosen `Kovo-Idem` values could accumulate
    * unbounded pending records. When the number of pending reservations is at this cap,
-   * `reserve()` REFUSES a new reservation (returns `undefined`, so the request runs
-   * unprotected) rather than EVICTING an existing pending slot (which would re-open A6/M4).
+   * `reserve()` REFUSES a new reservation (callers fail closed) rather than EVICTING an
+   * existing pending slot (which would re-open A6/M4).
    * Defaults to `maxEntries` so the documented A6 maxEntries-pressure behavior is unchanged.
    */
   maxPending?: number;
@@ -128,9 +128,9 @@ export function createMemoryMutationReplayStore<
       if (responses.has(key)) return undefined;
 
       // E4 (SPEC §9.1:1073 atomic reservation; §9.5:914 pre-dispatch shed): when pending
-      // reservations are at `maxPending`, REFUSE a new one (return undefined → caller runs
-      // unprotected) rather than allocating without bound. Must REFUSE, never EVICT a
-      // pending slot — evicting one re-opens the part-2 A6/M4 double-execute hazard.
+      // reservations are at `maxPending`, REFUSE a new one so callers can fail closed rather
+      // than allocating without bound. Must REFUSE, never EVICT a pending slot — evicting one
+      // re-opens the part-2 A6/M4 double-execute hazard.
       if (pendingCount >= maxPending) return undefined;
 
       // A6 (SPEC §10.3:1063/1065): only evict committed/expired records, never
@@ -278,6 +278,7 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
   | { kind: 'disabled' }
   | { kind: 'replayed'; response: Response }
   | { kind: 'reserved'; reservation: MutationReplayReservation<Response> }
+  | { kind: 'unavailable' }
 > {
   if (!replay.idem || !replay.scope || !replay.replayStore) return { kind: 'disabled' };
 
@@ -310,8 +311,10 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
     if (!(error instanceof MutationReplayAbortedError)) throw error;
   }
 
-  // Still can't reserve; run unprotected rather than dropping.
-  return { kind: 'disabled' };
+  // Still can't reserve. A bounded replay store is shedding distinct pending work (for
+  // example maxPending saturation), so callers must fail closed instead of running the
+  // mutation without the atomic replay reservation SPEC §10.3 requires.
+  return { kind: 'unavailable' };
 }
 
 export class MutationReplayAbortedError extends Error {
