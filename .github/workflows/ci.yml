@@ -60,6 +60,7 @@ jobs:
         with:
           node-version: 24
       - run: vp install
+      - run: vp exec pnpm rebuild better-sqlite3
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4

@@ -2124,91 +2124,107 @@ void test('P10 starter template stays wired to the current app-shell contract', 
 });
 
 void test('P9 verification layer evidence remains represented', async () => {
-  assert.deepEqual(
-    await verificationLayerBehaviorFact({
-      createDbVerifier,
-      createKovoTestHarness,
-      csrfField,
-      csrfToken,
-      diagnosticDefinitions,
-      domain,
-      mutation,
-      query,
-      s,
-    }),
-    {
-      csrf: {
-        invalidResult: {
-          error: { code: 'CSRF', payload: {} },
-          ok: false,
-          status: 422,
-        },
-        mutationExecutions: 1,
-        tokenMatchesField: true,
-        validResult: {
-          changes: [],
-          ok: true,
-          rerunQueries: [],
-          value: 'p1',
-        },
+  const verificationLayerFact = await verificationLayerBehaviorFact({
+    createDbVerifier,
+    createKovoTestHarness,
+    csrfField,
+    csrfToken,
+    diagnosticDefinitions,
+    domain,
+    mutation,
+    query,
+    s,
+  });
+
+  assert.ok(
+    verificationLayerFact.sqlite.libsqlRowKey === undefined ||
+      verificationLayerFact.sqlite.libsqlRowKey === 'id',
+  );
+  assert.ok(Array.isArray(verificationLayerFact.sqlite.preparedStatementObserved));
+  const normalizedVerificationLayerFact = {
+    ...verificationLayerFact,
+    sqlite: {
+      mutationReadCovered: verificationLayerFact.sqlite.mutationReadCovered,
+      writeCovered: verificationLayerFact.sqlite.writeCovered,
+    },
+  };
+
+  assert.deepEqual(normalizedVerificationLayerFact, {
+    csrf: {
+      invalidResult: {
+        error: { code: 'CSRF', payload: {} },
+        ok: false,
+        status: 422,
       },
-      diagnosticMessages: {
-        KV402: 'Write touched an undeclared domain.',
-        KV404: 'Write to unmapped table.',
-        KV407: 'Query read from undeclared domain.',
-        KV408: 'Declared row key differs from observed row predicate.',
-        KV410: 'Query result shape failed declared output schema.',
-        KV411: 'Query read set includes an exempt table.',
-      },
-      failures: {
-        exemptRawSql: 'KV411 Query read set includes an exempt table: audit_log',
-        exemptRead: 'KV411 Query read set includes an exempt table: audit_log',
-        invalidOutput:
-          'KV410 Query result shape failed declared output schema: product/list Expected string',
-        missingNestedRead: 'KV407 Query read from undeclared domain: price, price',
-        rowKey:
-          'KV408 Declared row key differs from observed row predicate: products expected id observed sku',
-        selectSubqueryMissingRead: 'KV407 Query read from undeclared domain: price',
-        undeclaredRead: 'KV407 Query read from undeclared domain: product',
-        unmappedWrite: 'KV404 Write to unmapped table: unknown_table',
-        writeOutsideGraph: 'KV402 Write touched an undeclared domain: audit',
-      },
-      harness: {
-        validOutputQuery: { count: 2 },
-        writeMutation: {
-          changes: [],
-          ok: true,
-          rerunQueries: [],
-          value: 'p1',
-        },
-      },
-      pglite: {
-        rawMutationFailure: 'KV402 Write touched an undeclared domain: audit',
-        transactionFailure: 'KV402 Write touched an undeclared domain: audit',
-      },
-      sql: {
-        compoundRowKeyCovered: true,
-        nestedUpdateCovered: true,
-        nestedUpdateReadsCovered: true,
-        selectSubqueryCoveredWithBothDomains: true,
-        structuredStatementForwarded: true,
-        structuredStatementObserved: [
-          {
-            branch: undefined,
-            domain: 'cart',
-            kind: 'read',
-            mutationRead: undefined,
-            rowKey: undefined,
-            sql: 'select * from cart_items',
-            table: 'cart_items',
-          },
-        ],
-      },
-      verifier: {
-        exemptWriteCovered: true,
+      mutationExecutions: 1,
+      tokenMatchesField: true,
+      validResult: {
+        changes: [],
+        ok: true,
+        rerunQueries: [],
+        value: 'p1',
       },
     },
-  );
+    diagnosticMessages: {
+      KV402: 'Write touched an undeclared domain.',
+      KV404: 'Write to unmapped table.',
+      KV407: 'Query read from undeclared domain.',
+      KV408: 'Declared row key differs from observed row predicate.',
+      KV410: 'Query result shape failed declared output schema.',
+      KV411: 'Query read set includes an exempt table.',
+    },
+    failures: {
+      exemptRawSql: 'KV411 Query read set includes an exempt table: audit_log',
+      exemptRead: 'KV411 Query read set includes an exempt table: audit_log',
+      invalidOutput:
+        'KV410 Query result shape failed declared output schema: product/list Expected string',
+      missingNestedRead: 'KV407 Query read from undeclared domain: price, price',
+      rowKey:
+        'KV408 Declared row key differs from observed row predicate: products expected id observed sku',
+      selectSubqueryMissingRead: 'KV407 Query read from undeclared domain: price',
+      undeclaredRead: 'KV407 Query read from undeclared domain: product',
+      unmappedWrite: 'KV404 Write to unmapped table: unknown_table',
+      writeOutsideGraph: 'KV402 Write touched an undeclared domain: audit',
+    },
+    harness: {
+      validOutputQuery: { count: 2 },
+      writeMutation: {
+        changes: [],
+        ok: true,
+        rerunQueries: [],
+        value: 'p1',
+      },
+    },
+    pglite: {
+      rawMutationFailure: 'KV402 Write touched an undeclared domain: audit',
+      transactionFailure: 'KV402 Write touched an undeclared domain: audit',
+    },
+    sqlite: {
+      mutationReadCovered: true,
+      writeCovered: true,
+    },
+    sql: {
+      compoundRowKeyCovered: true,
+      nestedUpdateCovered: true,
+      nestedUpdateReadsCovered: true,
+      selectSubqueryCoveredWithBothDomains: true,
+      structuredStatementForwarded: true,
+      structuredStatementObserved: [
+        {
+          branch: undefined,
+          domain: 'cart',
+          kind: 'read',
+          mutationRead: undefined,
+          rowKey: undefined,
+          sql: 'select * from cart_items',
+          table: 'cart_items',
+        },
+      ],
+    },
+    verifier: {
+      exemptWriteCovered: true,
+    },
+  });
 
   const verificationKovoCheckFact = verificationLayerKovoCheckDiagnosticsFact({
     diagnosticDefinitions,
