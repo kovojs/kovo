@@ -119,26 +119,29 @@ export async function renderAppRouteDocumentResponse({
     request.headers.get('accept'),
   );
 
-  const documentResponse = renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
-    // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
-    // always non-empty so the carve-out is no longer needed (DEPLOY-3).
-    buildToken,
-    hints: mergeAppRouteHints(app, route),
-    ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
-    ...(app.document.template === undefined ? {} : { template: app.document.template }),
-    // bugs-1 F34: a guarded route renders session-dependent content; mark its
-    // document no-store so a Back/bfcache restore can't show it after logout.
-    // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
-    // response on an unguarded route (cross-principal shared-cache leak).
-    ...(noStore ? { noStore: true } : {}),
-    // SPEC §4.4 / plans/better-js-loader.md: enhanced navigation has already
-    // installed the inline loader, so its negotiated document variant omits the
-    // stable bootstrap bytes while retaining a complete parseable document.
-    ...(enhancedNavigationDocument ? { loader: 'omit' } : {}),
-    // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
-    // cross-principal BroadcastChannel discard (SPEC §9.3).
-    ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
-  });
+  const documentResponse = renderRouteDocumentResponse(
+    routeResponseToDocumentResponse(routeResponse),
+    {
+      // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
+      // always non-empty so the carve-out is no longer needed (DEPLOY-3).
+      buildToken,
+      hints: mergeAppRouteHints(app, route),
+      ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+      ...(app.document.template === undefined ? {} : { template: app.document.template }),
+      // bugs-1 F34: a guarded route renders session-dependent content; mark its
+      // document no-store so a Back/bfcache restore can't show it after logout.
+      // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
+      // response on an unguarded route (cross-principal shared-cache leak).
+      ...(noStore ? { noStore: true } : {}),
+      // SPEC §4.4 / plans/better-js-loader.md: enhanced navigation has already
+      // installed the inline loader, so its negotiated document variant omits the
+      // stable bootstrap bytes while retaining a complete parseable document.
+      ...(enhancedNavigationDocument ? { loader: 'omit' } : {}),
+      // bugs-1 F13: stamp an opaque per-session fingerprint for the client's
+      // cross-principal BroadcastChannel discard (SPEC §9.3).
+      ...(sessionFingerprint === undefined ? {} : { sessionFingerprint }),
+    },
+  );
 
   if (enhancedNavigationDocument && documentResponse.status === 200) {
     documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');

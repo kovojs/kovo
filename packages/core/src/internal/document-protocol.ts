@@ -9,8 +9,7 @@ export function acceptsEnhancedNavigationDocument(accept: string | null | undefi
   return (
     accept
       ?.split(',')
-      .some(
-        (entry) => entry.trim().split(';', 1)[0] === enhancedNavigationDocumentMimeType,
-      ) === true
+      .some((entry) => entry.trim().split(';', 1)[0] === enhancedNavigationDocumentMimeType) ===
+    true
   );
 }

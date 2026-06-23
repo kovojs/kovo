@@ -570,7 +570,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         },
         {
           "diagnostics": 1,
-          "html": "<div data-gallery-merge-builder="hoverCardContentAttributes" data-state="open" id="author-hoverCardContentAttributes" popover="author-hoverCardContentAttributes" class="primitive-hoverCardContentAttributes author-hoverCardContentAttributes">merged</div>",
+          "html": "<div data-gallery-merge-builder="hoverCardContentAttributes" data-state="open" id="author-hoverCardContentAttributes" class="primitive-hoverCardContentAttributes author-hoverCardContentAttributes">merged</div>",
           "name": "hoverCardContentAttributes",
         },
         {
@@ -774,8 +774,8 @@ describe('gallery G5 primitive merge fixtures', () => {
           "name": "selectRootAttributes",
         },
         {
-          "diagnostics": 6,
-          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="true" aria-haspopup="author-aria" type="author-selectTriggerAttributes" aria-activedescendant="author-aria-activedescendant" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
+          "diagnostics": 7,
+          "html": "<div data-gallery-merge-builder="selectTriggerAttributes" data-state="open" data-invalid="author-selectTriggerAttributes" data-required="author-selectTriggerAttributes" aria-expanded="true" aria-haspopup="author-aria" role="presentation" type="author-selectTriggerAttributes" aria-activedescendant="author-aria-activedescendant" id="author-selectTriggerAttributes" aria-labelledby="author-aria-labelledby" aria-invalid="false" class="primitive-selectTriggerAttributes author-selectTriggerAttributes">merged</div>",
           "name": "selectTriggerAttributes",
         },
         {

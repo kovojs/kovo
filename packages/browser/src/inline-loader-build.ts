@@ -10,9 +10,7 @@ import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
 const modularLoaderSourcePath = fileURLToPath(new URL('./loader.ts', import.meta.url));
-const fragmentTargetsSourcePath = fileURLToPath(
-  new URL('./fragment-targets.ts', import.meta.url),
-);
+const fragmentTargetsSourcePath = fileURLToPath(new URL('./fragment-targets.ts', import.meta.url));
 const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );

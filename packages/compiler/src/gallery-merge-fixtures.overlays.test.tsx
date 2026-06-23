@@ -362,7 +362,7 @@ describe('gallery G5 primitive merge fixtures', () => {
         <aside {...content.attrs}>Profile</aside>
       </section>,
     ).toBe(
-      '<section data-gallery-merge="hover-card"><a data-state="open" kovo-hover-card="author-profile-card" class="hover-card-trigger underline" aria-controls="author-profile-card" aria-expanded="false">Ada</a><aside data-state="closed" id="author-profile-card" popover="auto" class="hover-card-content w-64">Profile</aside></section>',
+      '<section data-gallery-merge="hover-card"><a data-state="open" kovo-hover-card="author-profile-card" class="hover-card-trigger underline" aria-controls="author-profile-card" aria-expanded="false">Ada</a><aside data-state="closed" id="author-profile-card" class="hover-card-content w-64" popover="auto">Profile</aside></section>',
     );
   });
 

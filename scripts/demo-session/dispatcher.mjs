@@ -145,7 +145,7 @@ export function createPerSessionDispatcher({
     replenishWarmPool();
     while (warmHandlers.length < warmTarget) {
       if (pendingWarmups.size === 0) replenishWarmPool();
-      await Promise.all([...pendingWarmups]);
+      await Promise.all(pendingWarmups);
     }
   }
 

@@ -64,7 +64,9 @@ for (const example of EXAMPLES.filter((entry) => entry.embed === 'service')) {
 }
 
 if (failures.length > 0) {
-  process.stderr.write(`example-health/v1\n${failures.join('\n')}\nFAIL total=${failures.length}\n`);
+  process.stderr.write(
+    `example-health/v1\n${failures.join('\n')}\nFAIL total=${failures.length}\n`,
+  );
   process.exitCode = 1;
 } else {
   process.stdout.write('example-health/v1\nOK\n');

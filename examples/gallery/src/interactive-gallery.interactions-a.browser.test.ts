@@ -222,9 +222,7 @@ describe('compiled interactive gallery demos in the browser', () => {
         '{"highlightedValue":"standard","open":true,"value":"standard"}',
       );
       expect(trigger.getAttribute('aria-expanded')).toBe('true');
-      expect(trigger.getAttribute('aria-activedescendant')).toBe(
-        'gallery-select-option-standard',
-      );
+      expect(trigger.getAttribute('aria-activedescendant')).toBe('gallery-select-option-standard');
       expect(listbox.hidden).toBe(false);
       expect(standard.getAttribute('data-highlighted')).toBe('');
     });
@@ -301,9 +299,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(keyboardInput.value).toBe('express');
       expect(keyboardTrigger.textContent).toContain('Express');
       expect(
-        required(
-          keyboardRoot.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
-        ).textContent,
+        required(keyboardRoot.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'))
+          .textContent,
       ).toBe('Express');
     });
 

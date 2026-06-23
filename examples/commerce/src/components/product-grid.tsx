@@ -148,16 +148,9 @@ function renderProductGridError(): string {
   );
 }
 
-export function renderProductGridItems(
-  result: ProductGridResult,
-  signedIn = true,
-): string {
+export function renderProductGridItems(result: ProductGridResult, signedIn = true): string {
   const cards = result.items.map((item) => renderProductCard(item, signedIn));
-  return (
-    <>
-      {cards}
-    </>
-  );
+  return <>{cards}</>;
 }
 
 export interface ProductItem {

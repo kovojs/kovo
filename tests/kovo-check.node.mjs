@@ -3864,7 +3864,9 @@ void test('root acceptance and CI cover the omitted release gates plus gallery b
     .filter(Boolean);
   assert.ok(workflowCommands.includes('vp exec pnpm run check'));
   assert.ok(workflowCommands.includes('vp exec pnpm run check:api-surface'));
-  assert.ok(workflowCommands.includes('vp exec pnpm --filter @kovojs/example-gallery run test:browser'));
+  assert.ok(
+    workflowCommands.includes('vp exec pnpm --filter @kovojs/example-gallery run test:browser'),
+  );
   assert.ok(workflowCommands.includes('vp exec pnpm run check:publish'));
 });
 

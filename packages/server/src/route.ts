@@ -903,19 +903,25 @@ export async function renderRoutePageResponse<
   }
   // SPEC §6.4: page redirect() → 303 + sanitized Location header.
   if ('redirect' in result) {
-    return attachLifecycleRequest({
-      body: '',
-      headers: { Location: sanitizeNext(result.redirect.location) },
-      status: 303,
-    }, lifecycleRequest);
+    return attachLifecycleRequest(
+      {
+        body: '',
+        headers: { Location: sanitizeNext(result.redirect.location) },
+        status: 303,
+      },
+      lifecycleRequest,
+    );
   }
 
   try {
-    return attachLifecycleRequest({
-      body: await render(result.value),
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-      status: 200,
-    }, lifecycleRequest);
+    return attachLifecycleRequest(
+      {
+        body: await render(result.value),
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 200,
+      },
+      lifecycleRequest,
+    );
   } catch (error) {
     reportServerError(options.onError, error, {
       operation: 'route-render',

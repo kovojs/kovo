@@ -49,9 +49,7 @@ export const GalleryTabsDemo = component({
           state.value = result.value ?? state.value;
           if (result.activeValue === undefined) return;
           const root = Object(event)['target']?.closest?.('[data-gallery-interactive="tabs"]');
-          const next = Object(root)?.querySelector?.(
-            `#gallery-tabs-${result.activeValue}-trigger`,
-          );
+          const next = Object(root)?.querySelector?.(`#gallery-tabs-${result.activeValue}-trigger`);
           Object(next)['focus']?.call(next);
         }}
       >

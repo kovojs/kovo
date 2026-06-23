@@ -59,7 +59,9 @@ export const GalleryDialogDemo = component({
               const result = _dialogCloseClick(Object(event), { open: state.open });
               if (!result?.changed) return;
               state.open = result.open;
-              const root = Object(event)['target']?.closest?.('[data-gallery-interactive="dialog"]');
+              const root = Object(event)['target']?.closest?.(
+                '[data-gallery-interactive="dialog"]',
+              );
               const trigger = Object(root)?.querySelector?.('button[command="show-modal"]');
               Object(trigger)['focus']?.call(trigger);
             }}
@@ -77,7 +79,9 @@ export const GalleryDialogDemo = component({
               const result = _dialogCloseClick(Object(event), { open: state.open });
               if (!result?.changed) return;
               state.open = result.open;
-              const root = Object(event)['target']?.closest?.('[data-gallery-interactive="dialog"]');
+              const root = Object(event)['target']?.closest?.(
+                '[data-gallery-interactive="dialog"]',
+              );
               const trigger = Object(root)?.querySelector?.('button[command="show-modal"]');
               Object(trigger)['focus']?.call(trigger);
             }}
