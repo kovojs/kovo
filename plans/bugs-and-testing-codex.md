@@ -3,10 +3,10 @@
 **Date:** 2026-06-23
 **Scope:** Critical/high severity bugs and testing gaps found by a parallel audit of compiler,
 server/runtime, UI components, public examples, and CI/test coverage.
-**Current state:** Refreshed after `main` moved to `e9255f58` and implemented in
-`agent/bugs-testing-codex`. The repo-side fixes below are checked only where this session has direct
-command evidence. Live deployed example availability remains an external follow-up exposed by the
-new opt-in health gate.
+**Current state:** Refreshed after `main` moved to `e9255f58`, then merged current local `main` at
+`6ee23306` into `agent/bugs-testing-codex`. The repo-side fixes below are checked only where this
+session has direct command evidence. Live deployed example availability remains an external
+follow-up exposed by the new opt-in health gate.
 
 ## Summary
 
@@ -100,11 +100,10 @@ The only remaining open checkbox is the deployed-service health follow-up surfac
     against Commerce, CRM, and Stack Overflow roots plus one core route per app, using the same
     manifest URLs and environment overrides as the docs iframe configuration.
 
-- [ ] **Restore deployed Commerce and Stack Overflow service health exposed by the live gate.**
-  - **Current evidence:** Repeated `pnpm run test:examples-live` runs on 2026-06-23 passed CRM
-    `/` and `/contacts`, but observed Commerce `/` as HTTP 503 or timeout, Commerce `/cart` as
-    timeout, Stack Overflow `/` as HTTP 503 on a later run, and Stack Overflow `/questions/q1` as
-    timeout on that same later run.
+- [ ] **Restore deployed Commerce and CRM service health exposed by the live gate.**
+  - **Current evidence:** Post-merge `pnpm run test:examples-live` on 2026-06-23 passed Stack
+    Overflow `/` and `/questions/q1`, but observed Commerce `/` as HTTP 503, Commerce `/cart` as
+    timeout, CRM `/` as HTTP 503, and CRM `/contacts` as timeout.
   - **Next step:** Redeploy or inspect the Cloud Run services, then rerun `pnpm run
     test:examples-live` and mark this complete only when all six probes pass.
 
@@ -129,10 +128,14 @@ The only remaining open checkbox is the deployed-service health follow-up surfac
 
 ## Latest Verification
 
-- `pnpm run check:api-surface` passed after the server request-limit and mutation response type
-  surface changes.
+- `pnpm run check:api-surface` passed after the server request-limit, mutation response type, and
+  merged document-protocol boundary changes.
 - `pnpm run check:build` passed after the current branch changes.
+- `pnpm --filter @kovojs/browser run check:inline-loader` and `pnpm exec vitest run
+  packages/browser/src/inline-loader-build.test.ts packages/browser/src/mutation-submit.test.ts
+  packages/browser/src/inline-loader-enhanced-submit.test.ts --reporter=dot` passed after merging
+  current local `main` and regenerating the inline loader artifact.
 - `pnpm --filter @kovojs/example-gallery run test:browser -- --reporter=dot` passed on rerun after
   gallery primitive fixes.
 - `pnpm run test:examples-live` is intentionally failing until the deployed Commerce and Stack
-  Overflow services are restored.
+  CRM services are restored.
