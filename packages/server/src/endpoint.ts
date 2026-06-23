@@ -1,8 +1,27 @@
+import type { WebhookVerifier } from '@kovojs/core';
+
 /** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
 export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
 
 /** Whether an endpoint matches an exact path or a path prefix. */
 export type EndpointMount = 'exact' | 'prefix';
+
+/** Raw response body posture declared for endpoint audit output (SPEC §9.1). */
+export type EndpointResponseBody = 'bytes' | 'html' | 'json' | 'redirect' | 'stream' | 'text';
+
+/** Raw endpoint cache posture declared for endpoint audit output (SPEC §9.1). */
+export type EndpointCachePosture = 'custom' | 'no-store' | 'private' | 'public' | 'revalidated';
+
+/**
+ * Audit metadata for the raw `Response` an endpoint returns. `appOwnedSafety`
+ * means application code owns body encoding and response-header safety for this
+ * raw HTTP escape hatch (SPEC §9.1).
+ */
+export interface EndpointResponsePosture {
+  appOwnedSafety: boolean;
+  body: EndpointResponseBody;
+  cache: EndpointCachePosture;
+}
 
 /** Records an explicit, justified opt-out of default-on CSRF for an endpoint (SPEC §6.6). */
 export interface EndpointCsrfExemption {
@@ -12,9 +31,9 @@ export interface EndpointCsrfExemption {
 
 /** How an endpoint authenticates: a named verifier, a named custom scheme, or a justified `none`. */
 export type EndpointAuthDeclaration =
-  | { kind: 'custom'; name: string }
+  | { kind: 'custom'; name: string; verify?: WebhookVerifier }
   | { kind: 'none'; justification: string }
-  | { kind: 'verifier'; name: string };
+  | { kind: 'verifier'; name: string; verify?: WebhookVerifier };
 
 /** A raw HTTP endpoint descriptor: path, method, mount mode, and auth/CSRF declarations. */
 export interface Endpoint<
@@ -24,9 +43,12 @@ export interface Endpoint<
 > {
   auth?: EndpointAuthDeclaration;
   csrf?: EndpointCsrfExemption;
-  method?: Method;
+  method: Method;
   mount: Mount;
+  mountJustification?: string;
   path: Path;
+  reason: string;
+  response: EndpointResponsePosture;
 }
 
 /** A `Request` guaranteed to carry no session, as endpoint handlers receive. */
@@ -35,12 +57,22 @@ export type EndpointRequest = Request & { readonly session?: never };
 /** An endpoint handler: maps a session-free `Request` to a `Response`. */
 export type EndpointHandler = (request: EndpointRequest) => Promise<Response> | Response;
 
-interface EndpointDefinitionBase<Method extends EndpointMethod, Mount extends EndpointMount> {
+interface EndpointDefinitionBase<Method extends EndpointMethod> {
   auth?: EndpointAuthDeclaration;
   handler: EndpointHandler;
-  method?: Method;
-  mount?: Mount;
+  method: Method;
+  response: EndpointResponsePosture;
 }
+
+/** Endpoint-level audit reason; `purpose` is accepted as an app-facing synonym. */
+export type EndpointReason =
+  | { purpose: string; reason?: never }
+  | { purpose?: never; reason: string };
+
+/** Prefix endpoint mounts must justify the wider routed surface (SPEC §9.1). */
+export type EndpointMountDefinition<Mount extends EndpointMount> = Mount extends 'prefix'
+  ? { mount: Mount; mountJustification: string }
+  : { mount?: Mount; mountJustification?: never };
 
 interface EndpointCsrfDefault {
   csrf?: true;
@@ -56,7 +88,10 @@ interface EndpointCsrfExempt {
 export type EndpointDefinition<
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = 'exact',
-> = EndpointDefinitionBase<Method, Mount> & (EndpointCsrfDefault | EndpointCsrfExempt);
+> = EndpointDefinitionBase<Method> &
+  EndpointReason &
+  EndpointMountDefinition<Mount> &
+  (EndpointCsrfDefault | EndpointCsrfExempt);
 
 /** An endpoint with its path attached, as returned by `endpoint()`. */
 export interface EndpointDeclaration<
@@ -71,19 +106,23 @@ export interface EndpointDeclaration<
  * Declare a raw HTTP endpoint: a `handler` taking a `Request` and returning a
  * `Response`, mounted at an exact path or a path `prefix`. Endpoints are the
  * escape hatch for machine traffic (webhooks, APIs) that bypasses the page/query
- * pipeline. CSRF is default-on — opt out with `csrf: false` plus a justification
- * (SPEC §6.6).
+ * pipeline, so every declaration carries audit metadata: explicit `method`,
+ * endpoint-level `reason`/`purpose`, raw response posture, and a prefix mount
+ * justification when `mount: 'prefix'` is used. CSRF is default-on — opt out
+ * with `csrf: false` plus a justification (SPEC §6.6 and §9.1).
  *
  * @param path - The path the endpoint mounts at.
- * @param definition - The `handler`, plus optional `method`, `mount`, `auth`, and CSRF opt-out.
+ * @param definition - The `handler`, method, audit metadata, optional `mount`, `auth`, and CSRF opt-out.
  * @returns An `EndpointDeclaration`.
  * @example
  * import { endpoint } from '@kovojs/server';
  *
  * export const health = endpoint('/healthz', {
  *   method: 'GET',
+ *   reason: 'read-only health probe',
  *   csrf: false,
  *   csrfJustification: 'read-only health probe',
+ *   response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
  *   handler: () => new Response('ok'),
  * });
  */
@@ -95,7 +134,8 @@ export function endpoint<
   path: Path,
   definition: EndpointDefinition<Method, Mount>,
 ): EndpointDeclaration<Path, Method, Mount> {
-  const mount = definition.mount ?? ('exact' as Mount);
+  const mount = (definition.mount ?? 'exact') as Mount;
+  const reason = 'reason' in definition ? definition.reason : definition.purpose;
 
   return {
     ...(definition.auth === undefined ? {} : { auth: definition.auth }),
@@ -103,9 +143,14 @@ export function endpoint<
       ? { csrf: { exempt: true, justification: definition.csrfJustification } }
       : {}),
     handler: definition.handler,
-    ...(definition.method === undefined ? {} : { method: definition.method }),
+    method: definition.method,
     mount,
+    ...(definition.mountJustification === undefined
+      ? {}
+      : { mountJustification: definition.mountJustification }),
     path,
+    reason,
+    response: definition.response,
   };
 }
 
@@ -126,6 +171,38 @@ export async function runEndpoint(
 }
 
 /**
+ * Enforce an endpoint's executable auth verifier before dispatch. Name-only
+ * auth declarations remain audit metadata; declarations carrying `verify` are
+ * checked fail-closed over cloned raw bytes so the handler still receives the
+ * original body (SPEC §9.1).
+ *
+ * @param definition - The endpoint whose auth declaration should run.
+ * @param request - The incoming request.
+ * @returns A 401 `Response` when auth fails, otherwise `undefined`.
+ * @internal
+ */
+export async function runEndpointAuth(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  request: Request,
+): Promise<Response | undefined> {
+  const verifier = definition.auth?.kind === 'none' ? undefined : definition.auth?.verify;
+  if (verifier === undefined) return undefined;
+
+  let verified = false;
+  try {
+    const authRequest = endpointRequestWithoutSession(request.clone());
+    verified = await verifier.verify({
+      headers: authRequest.headers,
+      payload: new Uint8Array(await authRequest.arrayBuffer()),
+    });
+  } catch {
+    verified = false;
+  }
+
+  return verified ? undefined : endpointAuthFailureResponse();
+}
+
+/**
  * Test whether an endpoint matches a method and pathname, honoring exact vs
  * `prefix` mounting.
  *
@@ -138,7 +215,7 @@ export function endpointMatches(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   input: { method?: string; pathname: string },
 ): boolean {
-  if (definition.method !== undefined && input.method !== undefined) {
+  if (input.method !== undefined) {
     if (definition.method.toUpperCase() !== input.method.toUpperCase()) return false;
   }
 
@@ -168,4 +245,11 @@ export function endpointRequestWithoutSession(request: Request): EndpointRequest
       return property in target;
     },
   }) as EndpointRequest;
+}
+
+function endpointAuthFailureResponse(): Response {
+  return new Response('Unauthorized', {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    status: 401,
+  });
 }

@@ -110,10 +110,10 @@ write/read rules in §10.1–§10.2. See [testing](/guides/testing/).
 | KV410 | error    | Opaque projection without schema       | A `sql<T>` / raw projection has no declared output schema (§10.2)                    | Declare an `s.*` output schema; the shape is runtime-verified        |
 | KV411 | error    | Query reads an `exempt` table          | A query's read set includes an `exempt` table — exemption is write-side only (§10.1) | Map the table instead; `exempt` is for tables nothing queries        |
 
-## Advanced app-flow diagnostics (KV414–KV420)
+## Advanced app-flow diagnostics (KV414–KV425)
 
 These newer diagnostics cover the app-authoring surfaces that cross security, transport, deployment,
-and fragment refresh. Source: SPEC §11.3 with tighter references below.
+fragment refresh, and source/sink inventory. Source: SPEC §11.3 with tighter references below.
 
 | Code  | Severity | Meaning                               | Cause                                                                                                              | Fix / note                                                                           |
 | ----- | -------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -124,18 +124,23 @@ and fragment refresh. Source: SPEC §11.3 with tighter references below.
 | KV418 | error    | Unsound `csrf: false` mutation        | A CSRF-exempt mutation reads `req.session` or runs a cookie/session-derived guard                                  | Keep CSRF on, or move non-browser writes to `endpoint()` / `webhook()`               |
 | KV419 | error    | Unsafe moderate prerender             | `prefetch: 'moderate'` is set on guarded/session-dependent/not-proven-side-effect-free route without justification | Use `conservative`, prove safety, or add a named justification                       |
 | KV420 | error    | Stateful island inside refresh target | A local-state island renders inside another component's server-refreshable fragment target                         | Lift state to a query, make the child isomorphic, disable server refresh, or move it |
+| KV421 | error    | Duplicate mutation key                | Two mutation declarations share one registry key, so invalidation and dispatch can disagree                        | Rename one mutation; mutation keys must be unique                                    |
+| KV422 | error    | Raw endpoint audit metadata missing   | A raw `endpoint()` lacks required method, reason, mount, response, cache, or output-safety posture                 | Add the metadata so `--endpoints` / source-sink audits can explain the escape hatch  |
+| KV423 | error    | Unregistered app-authored sink        | App code reaches a dangerous output sink outside a safe Kovo helper or explicit trust API                          | Use the safe helper/trust API or move raw protocol code behind an audited endpoint   |
+| KV424 | error    | Source/sink registry drift            | Drift detection found a framework sink token missing from the shared registry                                      | Register the sink with evidence or add a narrow repo-internal exclusion              |
+| KV425 | error    | Trust escape hatch lacks provenance   | A trust override has no source span, owner, or justification visible to `kovo explain --trust`                     | Add auditable provenance or remove the escape hatch                                  |
 
 ## Where each grouping comes from
 
-- **KV201–KV242, KV301–KV330, KV402–KV420** are all defined in the **SPEC §11.3 diagnostic-code
+- **KV201–KV242, KV301–KV330, KV402–KV425** are all defined in the **SPEC §11.3 diagnostic-code
   registry** (the single severity source). The section headings above group them by the SPEC area each
   cites (compiler/lowering §4–§6, islands/coverage §4.8–§4.9 and §10.6, data access §10.3, touch-graph
   verification §10.1–§11.2, advanced flows §8–§14).
 - The **KV402–KV411 family** is additionally described in [testing](/guides/testing/) (the
   `observed ⊆ static ∪ declared` verifier) and the runtime cross-check in SPEC §11.2.
-- **KV414–KV420** are additionally described in [security](/guides/security/),
+- **KV414–KV425** are additionally described in [security](/guides/security/),
   [endpoints & webhooks](/guides/endpoints-webhooks/), [deployment](/guides/deployment/), and
-  [interactive islands](/guides/islands/).
+  [interactive islands](/guides/islands/); KV422-KV425 are the source/sink audit allocation.
 - **KV310** and **KV311** also appear in [reading kovo check & kovo explain](/guides/kovo-explain/) as
   the coverage gates `kovo check` enforces.
 - **KV330** appears in [mutations](/guides/mutations/) and [the data-layer guide](/guides/data-layer/).

@@ -1,15 +1,23 @@
+import { createHmac } from 'node:crypto';
+import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
 import type { KovoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { csrfToken } from './csrf.js';
-import { endpoint } from './endpoint.js';
+import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
+
+const rawTextResponse = {
+  appOwnedSafety: true,
+  body: 'text',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
 
 describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 client-module dispatch through the app registry', async () => {
@@ -63,6 +71,9 @@ describe('server app matched dispatch boundary', () => {
       handler(request) {
         return new Response(`session:${'session' in request}`);
       },
+      method: 'GET',
+      reason: 'status endpoint session isolation test',
+      response: rawTextResponse,
     });
     const app = createApp({
       endpoints: [status],
@@ -88,6 +99,8 @@ describe('server app matched dispatch boundary', () => {
           return new Response('updated');
         },
         method,
+        reason: 'account email update endpoint',
+        response: rawTextResponse,
       });
       const app = createApp({
         csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
@@ -115,6 +128,8 @@ describe('server app matched dispatch boundary', () => {
         return new Response('updated');
       },
       method: 'POST',
+      reason: 'account email update endpoint',
+      response: rawTextResponse,
     });
     const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
     const app = createApp({ csrf, endpoints: [updateEmail] });
@@ -133,6 +148,56 @@ describe('server app matched dispatch boundary', () => {
     expect(handlerCalls).toBe(1);
   });
 
+  it('enforces executable endpoint auth before CSRF or handler dispatch', async () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: (request) => request.payload,
+      secret: 'endpoint-secret',
+    });
+    let handlerCalls = 0;
+    const signedEndpoint = endpoint('/machine/signed', {
+      auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
+      handler() {
+        handlerCalls += 1;
+        return new Response('signed');
+      },
+      method: 'POST',
+      reason: 'signed machine endpoint',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      csrf: { secret: 'csrf-secret', sessionId: () => 's1' },
+      endpoints: [signedEndpoint],
+    });
+    const body = 'payload';
+    const badSignature = createHmac('sha256', 'endpoint-secret').update('other').digest('hex');
+    const badRequest = new Request('https://shop.example.test/machine/signed', {
+      body,
+      headers: { 'x-signature': badSignature },
+      method: 'POST',
+    });
+
+    const badResponse = await dispatchMatchedAppRequest(matchedAppRequest(app, badRequest));
+
+    expect(badResponse.status).toBe(401);
+    await expect(badResponse.text()).resolves.toBe('Unauthorized');
+    expect(handlerCalls).toBe(0);
+
+    const goodSignature = createHmac('sha256', 'endpoint-secret').update(body).digest('hex');
+    const goodRequest = new Request('https://shop.example.test/machine/signed', {
+      body,
+      headers: { 'x-signature': goodSignature },
+      method: 'POST',
+    });
+
+    const goodResponse = await dispatchMatchedAppRequest(matchedAppRequest(app, goodRequest));
+
+    expect(goodResponse.status).toBe(422);
+    await expect(goodResponse.text()).resolves.toBe('CSRF');
+    expect(handlerCalls).toBe(0);
+  });
+
   it('preserves raw body dispatch for explicitly CSRF-exempt endpoints', async () => {
     let handlerCalls = 0;
     const signedWebhook = endpoint('/webhooks/signed', {
@@ -143,6 +208,8 @@ describe('server app matched dispatch boundary', () => {
         return new Response(await request.text(), { status: 202 });
       },
       method: 'POST',
+      reason: 'signed webhook raw body dispatch',
+      response: rawTextResponse,
     });
     const app = createApp({
       csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },

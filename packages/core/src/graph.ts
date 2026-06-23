@@ -68,6 +68,8 @@ export interface KovoCheckInput {
   scopeAudits?: readonly ScopeAuditFact[];
   sqlSafety?: readonly SqlSafetyExplainFact[];
   touchGraph?: TouchGraph;
+  trustEscapes?: readonly TrustEscapeExplain[];
+  unregisteredSinks?: readonly UnregisteredSinkFact[];
   updateCoverage?: readonly UpdateCoverageFact[];
   verificationCoverage?: readonly VerificationCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
@@ -267,13 +269,21 @@ export interface PageExplain {
 /** @internal */
 export interface EndpointExplain {
   auth?: string;
+  body?: string;
+  bodySize?: string;
+  cache?: string;
   csrf?: 'checked' | 'exempt';
   csrfJustification?: string;
+  dynamicExports?: readonly string[];
+  files?: readonly string[];
   guards?: readonly string[];
+  headers?: readonly string[];
   method?: string;
   mount?: 'exact' | 'prefix';
   name?: string;
   path: string;
+  rateLimit?: string;
+  surface?: 'dynamic-export' | 'endpoint' | 'route-file' | 'route-stream' | 'webhook';
   writes?: readonly string[];
 }
 
@@ -305,6 +315,31 @@ export interface ScopeAuditFact {
   name: string;
   scope: 'args' | 'session' | 'unscoped' | 'unknown';
   site: string;
+}
+
+/** @internal */
+export interface TrustEscapeExplain {
+  justification?: string;
+  kind:
+    | 'customVerifier'
+    | 'rawEndpoint'
+    | 'staticExportPathOverride'
+    | 'trustedHtml'
+    | 'trustedSql'
+    | 'trustedUrl'
+    | 'webhookVerifyNone';
+  owner?: string;
+  safePath?: string;
+  site: string;
+  source?: string;
+}
+
+/** @internal */
+export interface UnregisteredSinkFact {
+  safePath: string;
+  sink: string;
+  site: string;
+  source?: string;
 }
 
 /** @internal */
@@ -423,6 +458,8 @@ const arrayFields = [
   'renderEquivalenceChecks',
   'scopeAudits',
   'sqlSafety',
+  'trustEscapes',
+  'unregisteredSinks',
   'updateCoverage',
   'verificationCoverage',
   'verificationDiagnostics',

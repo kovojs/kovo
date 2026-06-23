@@ -1,6 +1,31 @@
+import { createHmac } from 'node:crypto';
+import { customVerifier, hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
-import { endpoint, endpointMatches, runEndpoint, type EndpointRequest } from './endpoint.js';
+import {
+  endpoint,
+  endpointMatches,
+  runEndpoint,
+  runEndpointAuth,
+  type EndpointResponsePosture,
+  type EndpointRequest,
+} from './endpoint.js';
+
+const rawJsonResponse = {
+  appOwnedSafety: true,
+  body: 'json',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
+
+const rawTextResponse = {
+  appOwnedSafety: true,
+  body: 'text',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
+
+function signEndpointBody(body: string): string {
+  return createHmac('sha256', 'endpoint_secret').update(body).digest('hex');
+}
 
 describe('server endpoints', () => {
   it('declares raw endpoints with named CSRF exemptions and auth metadata', () => {
@@ -11,11 +36,15 @@ describe('server endpoints', () => {
       handler: () => new Response('ok'),
       method: 'POST',
       mount: 'exact',
+      reason: 'oauth provider callback',
+      response: rawTextResponse,
     });
 
     expect(callback.path).toBe('/auth/callback');
     expect(callback.method).toBe('POST');
     expect(callback.mount).toBe('exact');
+    expect(callback.reason).toBe('oauth provider callback');
+    expect(callback.response).toEqual(rawTextResponse);
     expect(callback.auth).toEqual({ justification: 'oauth provider callback', kind: 'none' });
     expect(callback.csrf).toEqual({
       exempt: true,
@@ -27,6 +56,25 @@ describe('server endpoints', () => {
       endpoint('/bad/csrf', {
         csrf: false,
         handler: () => new Response('bad'),
+        method: 'POST',
+        reason: 'bad csrf exemption',
+        response: rawTextResponse,
+      });
+    };
+    const assertMissingAuditMetadataRejected = () => {
+      // @ts-expect-error SPEC §9.1 requires explicit method/reason/response posture on raw endpoints.
+      endpoint('/bad/metadata', {
+        handler: () => new Response('bad'),
+      });
+    };
+    const assertPrefixMountNeedsJustification = () => {
+      // @ts-expect-error SPEC §9.1 prefix endpoint mounts require a named mount justification.
+      endpoint('/bad/prefix', {
+        handler: () => new Response('bad'),
+        method: 'GET',
+        mount: 'prefix',
+        reason: 'bad prefix mount',
+        response: rawTextResponse,
       });
     };
     const assertNoAmbientSession = (request: EndpointRequest) => {
@@ -36,6 +84,8 @@ describe('server endpoints', () => {
     };
 
     expect(assertCsrfNeedsJustification).toBeTypeOf('function');
+    expect(assertMissingAuditMetadataRejected).toBeTypeOf('function');
+    expect(assertPrefixMountNeedsJustification).toBeTypeOf('function');
     expect(assertNoAmbientSession).toBeTypeOf('function');
   });
 
@@ -53,6 +103,8 @@ describe('server endpoints', () => {
         });
       },
       method: 'POST',
+      reason: 'signed inventory webhook',
+      response: rawJsonResponse,
     });
     const response = await runEndpoint(
       inventoryWebhook,
@@ -67,6 +119,122 @@ describe('server endpoints', () => {
     expect(response.headers.get('content-type')).toBe('application/json');
     await expect(response.text()).resolves.toBe('{"sku":"p1"}');
     expect(seen).toEqual(['sig_123']);
+  });
+
+  it('enforces executable HMAC endpoint auth before dispatch without consuming the body', async () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      name: 'inventory',
+      payload: (request) => request.payload,
+      scheme: 'inventory:v1:hmac-sha256',
+      secret: 'endpoint_secret',
+    });
+    let handlerCalls = 0;
+    const inventoryWebhook = endpoint('/webhooks/inventory', {
+      auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
+      csrf: false,
+      csrfJustification: 'signed inventory webhook',
+      async handler(request) {
+        handlerCalls += 1;
+        return new Response(await request.text(), { status: 202 });
+      },
+      method: 'POST',
+      reason: 'signed inventory webhook',
+      response: rawJsonResponse,
+    });
+
+    const badRequest = new Request('https://example.test/webhooks/inventory', {
+      body: '{"sku":"p1"}',
+      headers: { 'x-signature': signEndpointBody('{}') },
+      method: 'POST',
+    });
+    const badAuth = await runEndpointAuth(inventoryWebhook, badRequest);
+
+    expect(badAuth?.status).toBe(401);
+    expect(badAuth === undefined ? '' : await badAuth.text()).toBe('Unauthorized');
+    expect(handlerCalls).toBe(0);
+
+    const body = '{"sku":"p2"}';
+    const goodRequest = new Request('https://example.test/webhooks/inventory', {
+      body,
+      headers: { 'x-signature': signEndpointBody(body) },
+      method: 'POST',
+    });
+
+    await expect(runEndpointAuth(inventoryWebhook, goodRequest)).resolves.toBeUndefined();
+    const response = await runEndpoint(inventoryWebhook, goodRequest);
+
+    expect(response.status).toBe(202);
+    await expect(response.text()).resolves.toBe(body);
+    expect(handlerCalls).toBe(1);
+  });
+
+  it('enforces custom endpoint verifiers and fails closed on verifier exceptions', async () => {
+    const customEndpoint = endpoint('/machine/custom', {
+      auth: {
+        kind: 'custom',
+        name: 'static-token',
+        verify: customVerifier(
+          'static-token',
+          (request) =>
+            request.headers instanceof Headers && request.headers.get('x-token') === 'accepted',
+        ),
+      },
+      csrf: false,
+      csrfJustification: 'custom machine verifier',
+      handler: () => new Response('ok'),
+      method: 'POST',
+      purpose: 'custom machine verifier endpoint',
+      response: rawTextResponse,
+    });
+
+    await expect(
+      runEndpointAuth(
+        customEndpoint,
+        new Request('https://example.test/machine/custom', {
+          body: 'payload',
+          headers: { 'x-token': 'accepted' },
+          method: 'POST',
+        }),
+      ),
+    ).resolves.toBeUndefined();
+
+    const rejected = await runEndpointAuth(
+      customEndpoint,
+      new Request('https://example.test/machine/custom', {
+        body: 'payload',
+        headers: { 'x-token': 'bad' },
+        method: 'POST',
+      }),
+    );
+    expect(rejected?.status).toBe(401);
+
+    const throwingEndpoint = endpoint('/machine/throwing', {
+      auth: {
+        kind: 'custom',
+        name: 'throwing',
+        verify: customVerifier('throwing', () => {
+          throw new Error('malformed signature');
+        }),
+      },
+      csrf: false,
+      csrfJustification: 'custom machine verifier',
+      handler: () => new Response('unreachable'),
+      method: 'POST',
+      reason: 'throwing verifier fail-closed test',
+      response: rawTextResponse,
+    });
+    const thrown = await runEndpointAuth(
+      throwingEndpoint,
+      new Request('https://example.test/machine/throwing', {
+        body: 'payload',
+        method: 'POST',
+      }),
+    );
+
+    expect(thrown?.status).toBe(401);
+    expect(thrown === undefined ? '' : await thrown.text()).toBe('Unauthorized');
   });
 
   it('does not pass ambient session properties to endpoint handlers', async () => {
@@ -87,6 +255,8 @@ describe('server endpoints', () => {
         return new Response(`sessionless:${await rawRequest.text()}`);
       },
       method: 'POST',
+      reason: 'external machine caller',
+      response: rawTextResponse,
     });
 
     await expect((await runEndpoint(machineEndpoint, request)).text()).resolves.toBe(
@@ -95,9 +265,11 @@ describe('server endpoints', () => {
   });
 
   it('matches exact and prefix endpoint mounts without routing side effects', () => {
-    const exact = endpoint('/exports/orders.csv', {
+    const exact = endpoint('/downloads/orders.bin', {
       handler: () => new Response('orders'),
       method: 'GET',
+      reason: 'orders binary download',
+      response: { appOwnedSafety: true, body: 'bytes', cache: 'private' },
     });
     const mounted = endpoint('/auth', {
       csrf: false,
@@ -105,10 +277,13 @@ describe('server endpoints', () => {
       handler: () => new Response('auth'),
       method: 'GET',
       mount: 'prefix',
+      mountJustification: 'auth adapter owns callback subpaths',
+      reason: 'auth adapter callback mount',
+      response: rawTextResponse,
     });
 
-    expect(endpointMatches(exact, { method: 'GET', pathname: '/exports/orders.csv' })).toBe(true);
-    expect(endpointMatches(exact, { method: 'GET', pathname: '/exports/orders.csv/extra' })).toBe(
+    expect(endpointMatches(exact, { method: 'GET', pathname: '/downloads/orders.bin' })).toBe(true);
+    expect(endpointMatches(exact, { method: 'GET', pathname: '/downloads/orders.bin/extra' })).toBe(
       false,
     );
     expect(endpointMatches(mounted, { method: 'GET', pathname: '/auth/callback/github' })).toBe(

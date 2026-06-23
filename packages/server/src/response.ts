@@ -179,11 +179,11 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
  * @example
  * import { respond, route } from '@kovojs/server';
  *
- * export const exportRoute = route('/export.csv', {
+ * export const exportRoute = route('/download/report.txt', {
  *   page: () =>
- *     respond.file('id,name\n1,Kettle\n', {
- *       contentType: 'text/csv',
- *       filename: 'products.csv',
+ *     respond.file('plain report\n', {
+ *       contentType: 'text/plain; charset=utf-8',
+ *       filename: 'report.txt',
  *     }),
  * });
  */

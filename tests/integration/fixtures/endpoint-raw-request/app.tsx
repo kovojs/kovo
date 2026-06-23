@@ -1,5 +1,6 @@
 // SPEC.md §9.1 and §9.5: raw endpoint handlers receive the original Request
 // before body parsing, without ambient session, and dispatch before page routes.
+import { hmacSignature } from '@kovojs/core';
 import { createApp, endpoint, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
@@ -15,7 +16,18 @@ function readSessionCookie(request: Request): RawSession | null {
 }
 
 const exactEndpoint = endpoint('/machine/exact', {
-  auth: { kind: 'verifier', name: 'signature-header' },
+  auth: {
+    kind: 'verifier',
+    name: 'endpoint-raw:v1:hmac-sha256',
+    verify: hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      name: 'endpoint-raw',
+      payload: (request) => request.payload,
+      scheme: 'endpoint-raw:v1:hmac-sha256',
+      secret: 'whsec_endpoint_raw',
+    }),
+  },
   csrf: false,
   csrfJustification: 'signed machine payload',
   async handler(request) {
@@ -26,6 +38,8 @@ const exactEndpoint = endpoint('/machine/exact', {
     });
   },
   method: 'POST',
+  reason: 'signed raw machine request fixture',
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
 });
 
 const prefixEndpoint = endpoint('/machine/prefix', {
@@ -39,6 +53,9 @@ const prefixEndpoint = endpoint('/machine/prefix', {
   },
   method: 'POST',
   mount: 'prefix',
+  mountJustification: 'machine prefix endpoint fixture',
+  reason: 'machine prefix endpoint fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
 });
 
 const exactRoute = route('/machine/exact', {

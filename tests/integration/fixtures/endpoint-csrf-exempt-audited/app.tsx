@@ -17,6 +17,8 @@ const webhookEndpoint = endpoint('/webhooks/signed-callback', {
     );
   },
   method: 'POST',
+  reason: 'signed callback raw body fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
 });
 
 const homeRoute = route('/', {

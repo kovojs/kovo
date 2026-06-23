@@ -14,8 +14,10 @@ rather than adding a second mechanism.
 
 Kovo has three different streaming surfaces:
 
-- `respond.stream()` and raw `endpoint()` responses are app-owned protocols for downloads, exports,
-  webhooks, or custom integrations. They do not run the enhanced mutation apply path.
+- `respond.stream()` and raw `endpoint()` responses are app-owned protocols for downloads, webhooks,
+  or custom integrations. CSV/TSV/spreadsheet exports stay in that app-owned bucket; Kovo does not
+  present them as a safe-by-default framework lane. They do not run the enhanced mutation apply
+  path.
 - `<kovo-defer>` is first-render streaming. It replaces a fallback inside the document response.
 - Streaming mutations are post-submit streams. They keep the normal mutation lifecycle and stream
   Kovo wire chunks back through the enhanced form response.

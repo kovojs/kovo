@@ -9,9 +9,14 @@ export type {
   EndpointDeclaration,
   EndpointDefinition,
   EndpointHandler,
+  EndpointMountDefinition,
   EndpointMethod,
   EndpointMount,
+  EndpointReason,
   EndpointRequest,
+  EndpointCachePosture,
+  EndpointResponseBody,
+  EndpointResponsePosture,
 } from '../endpoint.js';
 export { guards, session } from '../guards.js';
 export type {

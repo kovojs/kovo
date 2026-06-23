@@ -18,7 +18,7 @@
  */
 
 /** @internal Usage line emitted for `kovo check` (see `writeCheckUsageError`). */
-export const CHECK_USAGE = 'usage: kovo check [optimistic|coverage] [graph.json]';
+export const CHECK_USAGE = 'usage: kovo check [optimistic|coverage|sources-sinks] [graph.json]';
 
 /** @internal Usage line emitted for `kovo audit` (see `parseAuditArgs`). */
 export const AUDIT_USAGE = 'usage: kovo audit [--fail-on-findings] [graph.json]';
@@ -26,7 +26,9 @@ export const AUDIT_USAGE = 'usage: kovo audit [--fail-on-findings] [graph.json]'
 /** @internal Usage forms emitted for `kovo explain` (see `explainUsage`). */
 export const EXPLAIN_USAGE = [
   'usage: kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json]',
+  '       kovo explain --sources-sinks',
   '       kovo explain --endpoints [graph.json]',
+  '       kovo explain --trust [graph.json]',
   '       kovo explain --unguarded [--fail-on-findings] [graph.json]',
   '       kovo explain --unscoped [--fail-on-findings] [graph.json]',
 ] as const;
@@ -37,7 +39,7 @@ export const EXPLAIN_USAGE = [
  * literal here so the drift guard can compare against `explainUsage()`.
  */
 export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
+  'kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json] | kovo explain --sources-sinks | kovo explain --endpoints [graph.json] | kovo explain --trust [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
 
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
@@ -113,8 +115,12 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
         flag: 'coverage',
         description: 'Restrict to the update-coverage slice (KV311) instead of the full check.',
       },
+      {
+        flag: 'sources-sinks',
+        description: 'Emit the Phase 1 source/sink inventory and write .kovo/sources-sinks.json.',
+      },
     ],
-    examples: ['kovo check', 'kovo check coverage graph.json'],
+    examples: ['kovo check', 'kovo check coverage graph.json', 'kovo check sources-sinks'],
   },
   {
     name: 'explain',
@@ -123,7 +129,19 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
     usage: EXPLAIN_USAGE,
     flags: [
       { flag: '--optimistic', description: 'Include optimistic-update detail for the subject.' },
-      { flag: '--endpoints', description: 'List the machine-ingress endpoints audit.' },
+      {
+        flag: '--sources-sinks',
+        description: 'Print the Phase 1 source/sink inventory and write its JSON artifact.',
+      },
+      {
+        flag: '--endpoints',
+        description:
+          'List the machine-ingress audit for endpoints, webhooks, file/stream routes, and dynamic surfaces.',
+      },
+      {
+        flag: '--trust',
+        description: 'List explicit trust escape hatches and their provenance.',
+      },
       { flag: '--unguarded', description: 'Audit handlers reachable without a guard.' },
       { flag: '--unscoped', description: 'Audit storage access that is not tenant-scoped.' },
       {
@@ -133,7 +151,9 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
     ],
     examples: [
       'kovo explain component Cart graph.json',
+      'kovo explain --sources-sinks',
       'kovo explain --endpoints',
+      'kovo explain --trust',
       'kovo explain --unguarded --fail-on-findings',
     ],
   },

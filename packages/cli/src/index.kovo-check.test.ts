@@ -554,6 +554,47 @@ describe('kovo check', () => {
     `);
   });
 
+  it('fails KV424 for graph-reported app-authored dangerous sinks', () => {
+    const result = kovoCheck({
+      unregisteredSinks: [
+        {
+          safePath: 'trustedHtml(...) with provenance or a component text binding',
+          sink: 'innerHTML',
+          site: 'app/promo.tsx:12',
+          source: 'cms.body',
+        },
+      ],
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain(
+      'ERROR KV424 app/promo.tsx:12 sink=innerHTML source=cms.body safe=trustedHtml(...) with provenance or a component text binding',
+    );
+    expect(result.output).toContain(
+      'App-authored dangerous sink is not registered or behind a safe Kovo surface.',
+    );
+    expect(result.output).toContain('Fixes: route the value through the corresponding Kovo helper');
+  });
+
+  it('fails generic KV424 static diagnostics from compiler source spans', () => {
+    expect(
+      kovoCheck({
+        diagnostics: [
+          {
+            code: 'KV424',
+            site: 'app/export.ts',
+            start: { column: 5, line: 8 },
+          },
+        ],
+      }),
+    ).toMatchObject({
+      exitCode: 1,
+      output: expect.stringContaining(
+        'ERROR KV424 app/export.ts:8:5 App-authored dangerous sink is not registered or behind a safe Kovo surface.',
+      ),
+    });
+  });
+
   it('reports KV320 when event payload facts overlap query data facts', () => {
     expect(
       kovoCheck({
@@ -1191,7 +1232,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unsupported check family "optimstic". expected optimistic or coverage.\n',
+      'kovo: unsupported check family "optimstic". expected optimistic, coverage, or sources-sinks.\n',
     );
   });
 
@@ -1208,7 +1249,9 @@ describe('kovo check', () => {
       stderrWrite.mockRestore();
     }
 
-    expect(output).toBe('kovo: usage: kovo check [optimistic|coverage] [graph.json]\n');
+    expect(output).toBe(
+      'kovo: usage: kovo check [optimistic|coverage|sources-sinks] [graph.json]\n',
+    );
   });
 
   it('rejects unknown flags before treating them as graph paths', () => {

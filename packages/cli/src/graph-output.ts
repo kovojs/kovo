@@ -9,6 +9,7 @@ import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 
 import { AUDIT_USAGE, CHECK_USAGE, EXPLAIN_USAGE_LINE } from './commands-manifest.js';
 import { type CliCommandResult, type KovoCheckResult } from './shared.js';
+import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -23,7 +24,8 @@ interface UnguardedAccessFact {
   name: string;
 }
 
-export type KovoCheckFamily = 'all' | 'coverage' | 'optimistic';
+/** Check family selector accepted by {@link kovoCheck} and `kovo check`. */
+export type KovoCheckFamily = 'all' | 'coverage' | 'optimistic' | 'sources-sinks';
 
 export const outputVersion = 'kovo-check/v1';
 export const explainOutputVersion = 'kovo-explain/v1';
@@ -103,11 +105,6 @@ export function inputErrorMessage(error: InputReadError): string {
   return messages[error.kind];
 }
 
-function writeUsageError(message: string): 1 {
-  process.stderr.write(`${message}\n`);
-  return 1;
-}
-
 function graphInputValidationReadError(
   error: CoreGraph.GraphInputValidationError,
   path: string,
@@ -147,16 +144,27 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoEndpointExplainOptions
+  | KovoSourcesSinksExplainOptions
   | KovoTargetExplainOptions
+  | { trust: true }
   | KovoUnguardedExplainOptions
   | KovoUnscopedExplainOptions;
 
 /**
  * `kovo explain --endpoints` options: emit the stable machine-ingress audit table
- * of every declared endpoint, webhook, and file/stream route (SPEC.md §11.4).
+ * of every declared endpoint, webhook, file/stream route, and dynamic ingress
+ * surface (SPEC.md §11.4; plans/sources-sinks.md Phase 3).
  */
 export interface KovoEndpointExplainOptions {
   endpoints: true;
+}
+
+/**
+ * `kovo explain --sources-sinks` options: emit the stable Phase 1 repository
+ * source/sink inventory (SPEC.md §5.3; plans/sources-sinks.md Phase 1).
+ */
+export interface KovoSourcesSinksExplainOptions {
+  sourcesSinks: true;
 }
 
 /**
@@ -261,6 +269,20 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     }
 
     lines.push(`SUMMARY total=${endpoints.length}`);
+    return ok(lines);
+  }
+
+  if ('sourcesSinks' in options) return sourcesSinksExplainResult(explainOutputVersion);
+
+  if ('trust' in options) {
+    const escapes = [...(graph.trustEscapes ?? [])].sort(compareTrustEscape);
+    lines.push('TRUST');
+
+    for (const escape of escapes) {
+      lines.push(trustEscapeLine(escape));
+    }
+
+    lines.push(`SUMMARY total=${escapes.length}`);
     return ok(lines);
   }
 
@@ -549,8 +571,10 @@ export function kovoAudit(
  */
 export function kovoCheck(
   input: KovoCheckInput,
-  options: { family?: 'all' | 'coverage' | 'optimistic' } = {},
+  options: { family?: KovoCheckFamily } = {},
 ): KovoCheckResult {
+  if (options.family === 'sources-sinks') return sourcesSinksCheckResult(outputVersion);
+
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0) return invalidGraphInputResult(outputVersion, validationErrors);
 
@@ -584,6 +608,10 @@ export function kovoCheck(
         verificationDiagnosticLine(diagnostic),
         diagnosticSeverity(diagnostic) === 'error',
       );
+    }
+
+    for (const sink of graph.unregisteredSinks ?? []) {
+      pushFinding(unregisteredSinkLine(sink), true);
     }
 
     for (const coverage of graph.verificationCoverage ?? []) {
@@ -732,7 +760,9 @@ function diagnosticSeverity(
 }
 
 export function checkFamilyArg(value: string | undefined): KovoCheckFamily {
-  return value === 'optimistic' || value === 'coverage' ? value : 'all';
+  return value === 'optimistic' || value === 'coverage' || value === 'sources-sinks'
+    ? value
+    : 'all';
 }
 
 type CheckArgParseResult =
@@ -752,7 +782,7 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
 export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
   const message =
     error.kind === 'unsupported-family'
-      ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic or coverage.\n`
+      ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic, coverage, or sources-sinks.\n`
       : `kovo: ${CHECK_USAGE}\n`;
   process.stderr.write(message);
   return 1;
@@ -786,14 +816,34 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--fail-on-findings',
     '--layouts',
     '--optimistic',
+    '--sources-sinks',
+    '--trust',
     '--unguarded',
     '--unscoped',
   ]);
   if (!parsed.ok) return parsed;
 
   const { flags, positional } = parsed;
-  const modeFlags = ['--endpoints', '--unguarded', '--unscoped'].filter((flag) => flags.has(flag));
+  const modeFlags = [
+    '--endpoints',
+    '--sources-sinks',
+    '--trust',
+    '--unguarded',
+    '--unscoped',
+  ].filter((flag) => flags.has(flag));
   if (modeFlags.length > 1) return explainUsage();
+
+  if (flags.has('--sources-sinks')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 0
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: undefined, ok: true, options: { sourcesSinks: true } };
+  }
 
   if (flags.has('--endpoints')) {
     if (
@@ -805,6 +855,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { endpoints: true } };
+  }
+
+  if (flags.has('--trust')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { trust: true } };
   }
 
   if (flags.has('--unguarded') || flags.has('--unscoped')) {
@@ -936,6 +998,14 @@ function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): strin
   const definition = diagnosticDefinitions[diagnostic.code];
   const severity = diagnostic.severity ?? definition.severity;
   return `${severity.toUpperCase()} ${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message ?? definition.message}`;
+}
+
+function unregisteredSinkLine(sink: CoreGraph.UnregisteredSinkFact): string {
+  const source = sink.source ? ` source=${sink.source}` : '';
+  return [
+    `ERROR KV424 ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
+    diagnosticDefinitionText('KV424', { includeHelp: true }),
+  ].join(' ');
 }
 
 function diagnosticSite(diagnostic: CoreGraph.StaticDiagnosticFact): string {
@@ -1167,12 +1237,32 @@ function unguardedLine(access: UnguardedAccessFact): string {
 function endpointExplainLine(endpoint: CoreGraph.EndpointExplain): string {
   return [
     `ENDPOINT ${endpointName(endpoint)}`,
+    `surface=${endpoint.surface ?? 'endpoint'}`,
     `method=${endpoint.method ?? 'ANY'}`,
     `path=${endpoint.path}`,
     `mount=${endpoint.mount ?? 'exact'}`,
     `auth=${endpointAuth(endpoint)}`,
     `csrf=${endpointCsrf(endpoint)}`,
+    `cache=${endpoint.cache ?? '-'}`,
+    `body=${endpoint.body ?? '-'}`,
+    `bodySize=${endpoint.bodySize ?? '-'}`,
+    `rateLimit=${endpoint.rateLimit ?? '-'}`,
+    `headers=${list(endpoint.headers)}`,
+    `files=${list(endpoint.files)}`,
+    `dynamic=${list(endpoint.dynamicExports)}`,
     `writes=${list(endpoint.writes)}`,
+  ].join(' ');
+}
+
+function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
+  return [
+    'TRUST',
+    `kind=${escape.kind}`,
+    `site=${escape.site}`,
+    `source=${escape.source ?? '-'}`,
+    `owner=${escape.owner ?? '-'}`,
+    `safePath=${escape.safePath ?? '-'}`,
+    `justification=${stableValue(escape.justification)}`,
   ].join(' ');
 }
 
@@ -1226,6 +1316,17 @@ function compareEndpointExplain(
   right: CoreGraph.EndpointExplain,
 ): number {
   return endpointName(left).localeCompare(endpointName(right));
+}
+
+function compareTrustEscape(
+  left: CoreGraph.TrustEscapeExplain,
+  right: CoreGraph.TrustEscapeExplain,
+): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.site.localeCompare(right.site) ||
+    (left.source ?? '').localeCompare(right.source ?? '')
+  );
 }
 
 function endpointAuth(endpoint: CoreGraph.EndpointExplain): string {

@@ -6,6 +6,8 @@ const deferredHome = endpoint('/', {
   csrf: false,
   csrfJustification: 'read-only deferred stream fixture',
   method: 'GET',
+  reason: 'read-only deferred initial stream fixture',
+  response: { appOwnedSafety: false, body: 'stream', cache: 'no-store' },
   handler: () => {
     const response = renderDeferredDocument({
       body: `<main>

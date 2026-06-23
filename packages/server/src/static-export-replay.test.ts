@@ -24,11 +24,11 @@ describe('server static export app replay boundary', () => {
           page: () =>
             trustedHtml(`<main><button on:click="${href}#Cart$open">Open</button></main>`),
         }),
-        route('/exports/orders.csv', {
+        route('/downloads/orders.pdf', {
           page: () =>
-            respond.file('id,total\nord_1,42\n', {
-              contentType: 'text/csv; charset=utf-8',
-              filename: 'orders.csv',
+            respond.file('%PDF-1.7\n', {
+              contentType: 'application/pdf',
+              filename: 'orders.pdf',
             }),
         }),
       ],
@@ -68,11 +68,11 @@ describe('server static export app replay boundary', () => {
       diagnostics: [
         {
           code: 'KV229',
-          concretePath: '/exports/orders.csv',
+          concretePath: '/downloads/orders.pdf',
           message: expect.stringContaining(
-            "successful HTML route documents; '/exports/orders.csv' returned status 200 with Content-Type 'text/csv; charset=utf-8'",
+            "successful HTML route documents; '/downloads/orders.pdf' returned status 200 with Content-Type 'application/pdf'",
           ),
-          routePath: '/exports/orders.csv',
+          routePath: '/downloads/orders.pdf',
         },
       ],
     });
@@ -116,15 +116,15 @@ describe('server static export app replay boundary', () => {
         route('/products/:id', {
           page(context) {
             const params = context.params as { id: string };
-            if (params.id === 'csv') {
-              return respond.file('id,total\nord_1,42\n', {
-                contentType: 'text/csv; charset=utf-8',
-                filename: 'orders.csv',
+            if (params.id === 'download') {
+              return respond.file('%PDF-1.7\n', {
+                contentType: 'application/pdf',
+                filename: 'orders.pdf',
               });
             }
             return renderedHtml(`<main data-product="${params.id}">Product ${params.id}</main>`);
           },
-          staticPaths: ['/products/p1', '/products/csv'],
+          staticPaths: ['/products/p1', '/products/download'],
         }),
       ],
     });
@@ -135,11 +135,11 @@ describe('server static export app replay boundary', () => {
     expect(result.diagnostics).toEqual([
       {
         code: 'KV229',
-        concretePath: '/products/csv',
+        concretePath: '/products/download',
         message: expect.stringContaining(
-          "can only write successful HTML route documents; '/products/csv' returned status 200",
+          "can only write successful HTML route documents; '/products/download' returned status 200",
         ),
-        routePath: '/products/csv',
+        routePath: '/products/download',
       },
     ]);
   });

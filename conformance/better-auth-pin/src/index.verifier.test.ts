@@ -330,9 +330,10 @@ describe('Better Auth pinned conformance', () => {
 
   it('mounts the real Better Auth handler as an audit-visible prefix endpoint', async () => {
     const { auth } = createRealAuth();
-    const authEndpoint = mount('/api/auth', auth);
+    const authEndpoint = mount('/api/auth', auth, { method: 'GET' });
 
     expect(authEndpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
+    expect(authEndpoint.method).toBe('GET');
     expect(authEndpoint.csrf).toEqual({
       exempt: true,
       justification: 'better-auth browser redirect protocol handler',
@@ -342,7 +343,7 @@ describe('Better Auth pinned conformance', () => {
     ).toBe(true);
     expect(
       endpointMatches(authEndpoint, { method: 'POST', pathname: '/api/auth/sign-in/email' }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       endpointMatches(authEndpoint, { method: 'GET', pathname: '/api/authish/get-session' }),
     ).toBe(false);

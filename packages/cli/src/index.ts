@@ -26,6 +26,7 @@ import {
   kovoAudit,
   kovoCheck,
   kovoExplain,
+  outputVersion,
   parseAuditArgs,
   parseCheckArgs,
   parseExplainArgs,
@@ -33,6 +34,11 @@ import {
   writeCheckUsageError,
 } from './graph-output.js';
 import { stableValue, writeCommandResult, writeUsageError } from './shared.js';
+import {
+  scanSourceSinkDrift,
+  sourcesSinksCheckResult,
+  writeSourcesSinksArtifact,
+} from './sources-sinks.js';
 
 export {
   compileComponentV1,
@@ -55,10 +61,12 @@ export type {
 export type {
   ExplainKind,
   KovoAuditOptions,
+  KovoCheckFamily,
   KovoCheckInput,
   KovoEndpointExplainOptions,
   KovoExplainInput,
   KovoExplainOptions,
+  KovoSourcesSinksExplainOptions,
   KovoTargetExplainOptions,
   KovoUnguardedExplainOptions,
   KovoUnscopedExplainOptions,
@@ -81,6 +89,15 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     const parsed = parseCheckArgs(args.slice(1));
     if (!parsed.ok) return writeCheckUsageError(parsed);
     const { family, inputPath } = parsed;
+    if (family === 'sources-sinks') {
+      if (inputPath) {
+        const input = runGraphCommand(inputPath, () => ({ exitCode: 0, output: '' }));
+        if (input.exitCode !== 0) return writeCommandResult(input);
+      }
+      const driftScan = scanSourceSinkDrift();
+      writeSourcesSinksArtifact(process.cwd(), { driftScan });
+      return writeCommandResult(sourcesSinksCheckResult(outputVersion, { driftScan }));
+    }
     return writeCommandResult(runGraphCommand(inputPath, (input) => kovoCheck(input, { family })));
   }
 
@@ -103,6 +120,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args[0] === 'explain') {
     const parsed = parseExplainArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message);
+    if ('sourcesSinks' in parsed.options) writeSourcesSinksArtifact();
     return writeCommandResult(
       runGraphCommand(parsed.inputPath, (input) => kovoExplain(input, parsed.options)),
     );

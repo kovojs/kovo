@@ -55,6 +55,8 @@ const app = createApp({
     endpoint('/next', {
       handler: () => htmlResponse(renderDocument({ route: '/next', title: 'Next' })),
       method: 'GET',
+      reason: 'P10 navigation target fixture',
+      response: { appOwnedSafety: true, body: 'html', cache: 'no-store' },
     }),
     endpoint('/nav', {
       csrf: false,
@@ -65,6 +67,9 @@ const app = createApp({
       },
       method: 'GET',
       mount: 'prefix',
+      mountJustification: 'P10 navigation proof owns nested routes',
+      reason: 'P10 navigation proof prefix fixture',
+      response: { appOwnedSafety: true, body: 'html', cache: 'no-store' },
     }),
     endpoint('/', {
       handler: () => {
@@ -80,6 +85,8 @@ const app = createApp({
         );
       },
       method: 'GET',
+      reason: 'P10 navigation home fixture',
+      response: { appOwnedSafety: true, body: 'html', cache: 'no-store' },
     }),
   ],
 });

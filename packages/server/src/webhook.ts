@@ -217,6 +217,8 @@ export function webhook<
     mount: 'exact' satisfies EndpointMount,
     name,
     path: definition.path,
+    reason: `webhook:${name}`,
+    response: { appOwnedSafety: false, body: 'text', cache: 'no-store' },
     webhook: true,
     webhookDefinition: definition,
   } satisfies WebhookDeclaration<Name, Path, InputSchema, Value, Tx>;

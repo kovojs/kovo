@@ -1,6 +1,6 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
 import { validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
-import { runEndpoint } from './endpoint.js';
+import { runEndpoint, runEndpointAuth } from './endpoint.js';
 import {
   renderQueryRegistryEndpointResponse,
   type QueryEndpointRegistry,
@@ -79,6 +79,8 @@ export async function dispatchMatchedAppRequest({
   if (match.kind === 'endpoint') {
     const endpointRequest =
       app.db === undefined ? request : await resolveLifecycleRequest(request, { db: app.db });
+    const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
+    if (authFailure) return authFailure;
     const csrfFailure = await validateEndpointCsrf(match.endpoint, endpointRequest, app.csrf);
     if (csrfFailure) return csrfFailure;
     return runEndpoint(match.endpoint, endpointRequest);

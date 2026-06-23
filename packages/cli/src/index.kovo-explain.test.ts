@@ -517,19 +517,32 @@ describe('kovo explain', () => {
         endpoints: [
           {
             auth: 'verifier:stripe-signature',
+            body: 'raw',
+            bodySize: '1mb',
+            cache: 'no-store',
             csrf: 'exempt',
             csrfJustification: 'signed stripe webhook',
+            headers: ['Stripe-Signature'],
             method: 'POST',
             name: 'stripe/webhook',
             path: '/webhooks/stripe',
+            rateLimit: 'webhook:stripe',
+            surface: 'webhook',
             writes: ['order'],
           },
           {
             auth: 'custom:api-key',
+            body: 'bytes',
+            bodySize: 'stream',
+            cache: 'private,no-store',
             csrf: 'checked',
+            files: ['inventory.bin'],
+            headers: ['Content-Disposition', 'Content-Type'],
             method: 'GET',
-            name: 'inventory/export',
-            path: '/exports/inventory.csv',
+            name: 'inventory/download',
+            path: '/downloads/inventory.bin',
+            rateLimit: 'download:user',
+            surface: 'route-file',
           },
         ],
       },
@@ -540,8 +553,8 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       ENDPOINTS
-      ENDPOINT inventory/export method=GET path=/exports/inventory.csv mount=exact auth=custom:api-key csrf=checked writes=-
-      ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook writes=order
+      ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
+      ENDPOINT stripe/webhook surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
       SUMMARY total=2
       "
     `);
@@ -563,11 +576,15 @@ describe('kovo explain', () => {
           endpoints: [
             {
               auth: 'verifier:stripe-signature',
+              body: 'raw',
+              cache: 'no-store',
               csrf: 'exempt',
               csrfJustification: 'signed stripe webhook',
+              headers: ['Stripe-Signature'],
               method: 'POST',
               name: 'stripe/webhook',
               path: '/webhooks/stripe',
+              surface: 'webhook',
               writes: ['order'],
             },
           ],
@@ -584,7 +601,95 @@ describe('kovo explain', () => {
       [
         'kovo-explain/v1',
         'ENDPOINTS',
-        'ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook writes=order',
+        'ENDPOINT stripe/webhook surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=- rateLimit=- headers=Stripe-Signature files=- dynamic=- writes=order',
+        'SUMMARY total=1',
+        '',
+      ].join('\n'),
+    );
+  });
+
+  it('prints trust escape hatches with stable explain output', () => {
+    const result = kovoExplain(
+      {
+        trustEscapes: [
+          {
+            justification: 'cms sanitizer owns rich text',
+            kind: 'trustedHtml',
+            owner: 'html.dom.output',
+            safePath: 'trustedHtml',
+            site: 'app/promo.tsx:12',
+            source: 'cms.promo.body',
+          },
+          {
+            justification: 'provider retries unsigned local dev',
+            kind: 'webhookVerifyNone',
+            owner: 'ingress.endpoint.webhook',
+            safePath: 'webhook({verify:none})',
+            site: 'app/webhook.ts:8',
+            source: 'stripe',
+          },
+          {
+            justification: 'tenant export root mounted by deploy',
+            kind: 'staticExportPathOverride',
+            owner: 'file.storage.static-export',
+            safePath: 'static export path override',
+            site: 'app/export.ts:4',
+            source: 'EXPORT_ROOT',
+          },
+        ],
+      },
+      { trust: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      TRUST
+      TRUST kind=staticExportPathOverride site=app/export.ts:4 source=EXPORT_ROOT owner=file.storage.static-export safePath=static export path override justification="tenant export root mounted by deploy"
+      TRUST kind=trustedHtml site=app/promo.tsx:12 source=cms.promo.body owner=html.dom.output safePath=trustedHtml justification="cms sanitizer owns rich text"
+      TRUST kind=webhookVerifyNone site=app/webhook.ts:8 source=stripe owner=ingress.endpoint.webhook safePath=webhook({verify:none}) justification="provider retries unsigned local dev"
+      SUMMARY total=3
+      "
+    `);
+  });
+
+  it('accepts kovo explain --trust as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-trust-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          trustEscapes: [
+            {
+              justification: 'reviewed external redirect',
+              kind: 'trustedUrl',
+              owner: 'url.navigation.selector',
+              safePath: 'trustedUrl',
+              site: 'app/link.tsx:3',
+              source: 'partner.redirect',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--trust', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toBe(
+      [
+        'kovo-explain/v1',
+        'TRUST',
+        'TRUST kind=trustedUrl site=app/link.tsx:3 source=partner.redirect owner=url.navigation.selector safePath=trustedUrl justification="reviewed external redirect"',
         'SUMMARY total=1',
         '',
       ].join('\n'),
