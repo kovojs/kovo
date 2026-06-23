@@ -39,7 +39,6 @@ const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))
   Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
-
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
  * and it is shared with the other compiler phases that must read app source (StyleX extraction and

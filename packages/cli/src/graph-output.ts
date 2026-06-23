@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
-import {
-  diagnosticDefinitionText,
-  diagnosticDefinitions,
-} from '@kovojs/core/internal/diagnostics';
+import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type { DerivationProof } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';

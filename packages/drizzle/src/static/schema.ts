@@ -163,7 +163,10 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   );
 }
 
-/** @internal */ export function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] {
+/** @internal */ export function drizzleDatabaseTypeNames(
+  type: MorphType,
+  seen: Set<string>,
+): string[] {
   const key =
     type.getAliasSymbol()?.getFullyQualifiedName() ??
     type.getSymbol()?.getFullyQualifiedName() ??
@@ -186,7 +189,10 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return [...names];
 }
 
-/** @internal */ export function drizzleDatabaseTypeDeclarations(type: MorphType, seen: Set<string>): Node[] {
+/** @internal */ export function drizzleDatabaseTypeDeclarations(
+  type: MorphType,
+  seen: Set<string>,
+): Node[] {
   const key =
     type.getAliasSymbol()?.getFullyQualifiedName() ??
     type.getSymbol()?.getFullyQualifiedName() ??
@@ -324,11 +330,16 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   }
 }
 
-/** @internal */ export function unmodeledRelationExpression(kind: UnmodeledRelationFact['kind'], name: string): string {
+/** @internal */ export function unmodeledRelationExpression(
+  kind: UnmodeledRelationFact['kind'],
+  name: string,
+): string {
   return `${UNMODELED_RELATION_EXPRESSION_PREFIX}:${kind}:${name}`;
 }
 
-/** @internal */ export function unmodeledRelationFromExpression(expression: string): UnmodeledRelationFact | undefined {
+/** @internal */ export function unmodeledRelationFromExpression(
+  expression: string,
+): UnmodeledRelationFact | undefined {
   const [prefix, kind, ...nameParts] = expression.split(':');
   const name = nameParts.join(':');
   if (
@@ -403,7 +414,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return targetsBySyntheticName;
 }
 
-/** @internal */ export function projectUnresolvedConditionalTableExpressions(extraction: ProjectExtraction): Set<string> {
+/** @internal */ export function projectUnresolvedConditionalTableExpressions(
+  extraction: ProjectExtraction,
+): Set<string> {
   const unresolved = new Set<string>();
 
   for (const sourceFile of extraction.sourceFiles) {
@@ -598,7 +611,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return projectTableNameForNode(tableExpression, tableNamesBySymbol, namespaceTableNames);
 }
 
-/** @internal */ export function foreignKeyCallbackReturnExpression(callback: Node | undefined): Node | undefined {
+/** @internal */ export function foreignKeyCallbackReturnExpression(
+  callback: Node | undefined,
+): Node | undefined {
   if (!callback) return undefined;
 
   const expression = unwrappedStaticExpressionNode(callback);
@@ -667,7 +682,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return actions;
 }
 
-/** @internal */ export function projectColumnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
+/** @internal */ export function projectColumnBuilderShape(
+  initializer: Node | undefined,
+): QueryShape | undefined {
   const builder = projectColumnBuilderName(initializer);
   if (!builder) return undefined;
 
@@ -676,7 +693,10 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
-/** @internal */ export function propertyNameText(name: Node, resolveStaticComputed = false): string | undefined {
+/** @internal */ export function propertyNameText(
+  name: Node,
+  resolveStaticComputed = false,
+): string | undefined {
   if (Node.isIdentifier(name) || Node.isStringLiteral(name) || Node.isNumericLiteral(name)) {
     return name.getText().replace(/^["']|["']$/g, '');
   }
@@ -760,7 +780,10 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   });
 }
 
-/** @internal */ export function objectPropertyInitializer(object: Node, name: string): Node | undefined {
+/** @internal */ export function objectPropertyInitializer(
+  object: Node,
+  name: string,
+): Node | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
 
   for (const property of object.getProperties()) {
@@ -789,12 +812,16 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   });
 }
 
-/** @internal */ export function queryOutputShape(body: ObjectLiteralExpression): QueryShape | undefined {
+/** @internal */ export function queryOutputShape(
+  body: ObjectLiteralExpression,
+): QueryShape | undefined {
   const output = objectPropertyInitializer(body, 'output');
   return output ? queryShapeFromSchemaExpression(output) : undefined;
 }
 
-/** @internal */ export function queryShapeFromSchemaExpression(expression: Node): QueryShape | undefined {
+/** @internal */ export function queryShapeFromSchemaExpression(
+  expression: Node,
+): QueryShape | undefined {
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isCallExpression(node)) return undefined;
 
@@ -844,7 +871,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return undefined;
 }
 
-/** @internal */ export function columnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
+/** @internal */ export function columnBuilderShape(
+  initializer: Node | undefined,
+): QueryShape | undefined {
   // SPEC §10-§11: column nullability is a parsed call-chain fact, not string contents.
   const builder = columnBuilderName(initializer);
   if (!builder) return undefined;
@@ -854,7 +883,10 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
-/** @internal */ export function columnBuilderBaseShape(builder: string, mode?: string): QueryShape | undefined {
+/** @internal */ export function columnBuilderBaseShape(
+  builder: string,
+  mode?: string,
+): QueryShape | undefined {
   if (builder === 'integer' && mode === 'boolean') return 'boolean';
   if (builder === 'text' && mode === 'json') return 'object';
   if (BOOLEAN_COLUMN_BUILDERS.has(builder)) return 'boolean';
@@ -871,14 +903,18 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return undefined;
 }
 
-/** @internal */ export function columnBuilderMode(initializer: Node | undefined): string | undefined {
+/** @internal */ export function columnBuilderMode(
+  initializer: Node | undefined,
+): string | undefined {
   if (!initializer) return undefined;
   return columnBuilderModeFromExpression(
     unwrappedTsExpression(initializer.compilerNode as ts.Expression),
   );
 }
 
-/** @internal */ export function columnBuilderModeFromExpression(expression: ts.Expression): string | undefined {
+/** @internal */ export function columnBuilderModeFromExpression(
+  expression: ts.Expression,
+): string | undefined {
   const rootCall = columnBuilderRootCallExpression(expression);
   if (!rootCall) return undefined;
 
@@ -890,7 +926,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return undefined;
 }
 
-/** @internal */ export function columnBuilderRootCallExpression(expression: ts.Expression): ts.CallExpression | undefined {
+/** @internal */ export function columnBuilderRootCallExpression(
+  expression: ts.Expression,
+): ts.CallExpression | undefined {
   const target = unwrappedTsExpression(expression);
   if (!ts.isCallExpression(target)) return undefined;
 
@@ -903,7 +941,10 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return target;
 }
 
-/** @internal */ export function staticStringPropertyValue(expression: ts.Expression, name: string): string | undefined {
+/** @internal */ export function staticStringPropertyValue(
+  expression: ts.Expression,
+  name: string,
+): string | undefined {
   const target = unwrappedTsExpression(expression);
   if (!ts.isObjectLiteralExpression(target)) return undefined;
 
@@ -924,14 +965,18 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return undefined;
 }
 
-/** @internal */ export function columnBuilderName(initializer: Node | undefined): string | undefined {
+/** @internal */ export function columnBuilderName(
+  initializer: Node | undefined,
+): string | undefined {
   if (!initializer) return undefined;
   return columnBuilderNameFromExpression(
     unwrappedTsExpression(initializer.compilerNode as ts.Expression),
   );
 }
 
-/** @internal */ export function projectColumnBuilderName(initializer: Node | undefined): string | undefined {
+/** @internal */ export function projectColumnBuilderName(
+  initializer: Node | undefined,
+): string | undefined {
   if (!initializer) return undefined;
 
   const expression = unwrappedStaticExpressionNode(initializer);
@@ -949,7 +994,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return isDrizzleCoreNamespaceMember(callee) ? callee.getName() : undefined;
 }
 
-/** @internal */ export function columnBuilderNameFromExpression(expression: ts.Expression): string | undefined {
+/** @internal */ export function columnBuilderNameFromExpression(
+  expression: ts.Expression,
+): string | undefined {
   const target = unwrappedTsExpression(expression);
   if (!ts.isCallExpression(target)) return undefined;
 
@@ -1059,7 +1106,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   }
 }
 
-/** @internal */ export function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined {
+/** @internal */ export function resolvedSymbolKey(
+  symbol: MorphSymbol | undefined,
+): string | undefined {
   const target = symbol?.getAliasedSymbol() ?? symbol;
   const declaration = target?.getDeclarations()[0];
   if (!declaration) return undefined;
@@ -1118,7 +1167,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   );
 }
 
-/** @internal */ export function projectDrizzleCoreIdentifierExportName(identifier: Node): string | undefined {
+/** @internal */ export function projectDrizzleCoreIdentifierExportName(
+  identifier: Node,
+): string | undefined {
   if (!Node.isIdentifier(identifier)) return undefined;
 
   const symbol = identifier.getSymbol();
@@ -1135,7 +1186,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return undefined;
 }
 
-/** @internal */ export function drizzleCoreExportNameFromDeclarations(declarations: readonly Node[]): string | undefined {
+/** @internal */ export function drizzleCoreExportNameFromDeclarations(
+  declarations: readonly Node[],
+): string | undefined {
   for (const declaration of declarations) {
     const name = drizzleCoreImportSpecifierExportName(declaration);
     if (name) return name;
@@ -1156,7 +1209,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return undefined;
 }
 
-/** @internal */ export function drizzleCoreImportSpecifierExportName(declaration: Node): string | undefined {
+/** @internal */ export function drizzleCoreImportSpecifierExportName(
+  declaration: Node,
+): string | undefined {
   if (!Node.isImportSpecifier(declaration)) return undefined;
   const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
   if (!isDrizzleCoreModuleSpecifier(importDeclaration?.getModuleSpecifierValue())) return undefined;
@@ -1164,7 +1219,9 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return declaration.getNameNode().getText();
 }
 
-/** @internal */ export function drizzleCoreExportSpecifierExportName(declaration: Node): string | undefined {
+/** @internal */ export function drizzleCoreExportSpecifierExportName(
+  declaration: Node,
+): string | undefined {
   if (!Node.isExportSpecifier(declaration)) return undefined;
   const exportDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ExportDeclaration);
   if (!isDrizzleCoreModuleSpecifier(exportDeclaration?.getModuleSpecifierValue())) return undefined;
@@ -1172,12 +1229,16 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   return declaration.getNameNode().getText();
 }
 
-/** @internal */ export function drizzleCoreModuleSpecifierForDeclaration(declaration: Node): string | undefined {
+/** @internal */ export function drizzleCoreModuleSpecifierForDeclaration(
+  declaration: Node,
+): string | undefined {
   const filePath = declaration.getSourceFile().getFilePath();
   return [...DRIZZLE_CORE_MODULE_SPECIFIERS].find((specifier) => filePath.includes(specifier));
 }
 
-/** @internal */ export function isDrizzleCoreModuleSpecifier(specifier: string | undefined): boolean {
+/** @internal */ export function isDrizzleCoreModuleSpecifier(
+  specifier: string | undefined,
+): boolean {
   return specifier !== undefined && DRIZZLE_CORE_MODULE_SPECIFIERS.has(specifier);
 }
 
@@ -1193,4 +1254,3 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   if (!name || !Node.isStringLiteral(name)) return undefined;
   return name.getLiteralText();
 }
-

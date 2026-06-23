@@ -12,7 +12,13 @@ import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@k
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 
 import { BUILD_USAGE, EXPORT_USAGE } from '../commands-manifest.js';
-import { buildOutputVersion, type CliCommandResult, type KovoCheckResult, stableText, stableValue } from '../shared.js';
+import {
+  buildOutputVersion,
+  type CliCommandResult,
+  type KovoCheckResult,
+  stableText,
+  stableValue,
+} from '../shared.js';
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 

@@ -1,4 +1,11 @@
-import type { CookieOptions, Domain, Guard, GuardDenial, MutationDefinition, MutationFail } from '@kovojs/server';
+import type {
+  CookieOptions,
+  Domain,
+  Guard,
+  GuardDenial,
+  MutationDefinition,
+  MutationFail,
+} from '@kovojs/server';
 
 import type { BetterAuthRoleSession } from '../guards.js';
 import type { BetterAuthCredentialMutationOptions } from '../internal.js';

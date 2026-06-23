@@ -328,9 +328,7 @@ describe('stackoverflow interactive app', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get('content-type')).toBe(
-      'text/vnd.kovo.fragment+html; charset=utf-8',
-    );
+    expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
     const html = await response.text();
     const questionList = readKovoQuery<{
       items: readonly { id: string; score: number; sessionId?: string }[];

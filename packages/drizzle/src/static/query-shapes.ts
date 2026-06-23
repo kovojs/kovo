@@ -209,7 +209,9 @@ import {
   appendUntypedQueryReceiverBinding(name, names, symbolKeys);
 }
 
-/** @internal */ export function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
+/** @internal */ export function queryCallbackParameterNodes(
+  callback: Node,
+): ParameterDeclaration[] {
   if (
     Node.isArrowFunction(callback) ||
     Node.isFunctionDeclaration(callback) ||
@@ -823,7 +825,10 @@ import {
   return propertyNameText(node.getNameNode(), true) === 'load';
 }
 
-/** @internal */ export function queryCallbackPropertyMayHideLoad(node: Node, mode: 'project' | 'source'): boolean {
+/** @internal */ export function queryCallbackPropertyMayHideLoad(
+  node: Node,
+  mode: 'project' | 'source',
+): boolean {
   if (
     !Node.isGetAccessorDeclaration(node) &&
     !Node.isMethodDeclaration(node) &&
@@ -941,7 +946,9 @@ import {
   };
 }
 
-/** @internal */ export function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
+/** @internal */ export function referencedQueryCallbackFunction(
+  identifier: Node,
+): Node | undefined {
   return callbackFunctionFromReference(identifier, new Set());
 }
 
@@ -1189,7 +1196,9 @@ import {
   return undefined;
 }
 
-/** @internal */ export function staticAccessSegments(node: Node): { path: string[]; root: Node } | undefined {
+/** @internal */ export function staticAccessSegments(
+  node: Node,
+): { path: string[]; root: Node } | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isIdentifier(expression) || Node.isThisExpression(expression)) {
     return { path: [], root: expression };
@@ -1205,7 +1214,9 @@ import {
   return { path: [...owner.path, member], root: owner.root };
 }
 
-/** @internal */ export function staticLiteralContainerInitializer(declaration: Node): Node | undefined {
+/** @internal */ export function staticLiteralContainerInitializer(
+  declaration: Node,
+): Node | undefined {
   if (
     Node.isVariableDeclaration(declaration) ||
     Node.isPropertyAssignment(declaration) ||
@@ -1226,7 +1237,10 @@ import {
   return undefined;
 }
 
-/** @internal */ export function staticObjectFactoryReturnExpression(node: Node, seen: Set<string>): Node | undefined {
+/** @internal */ export function staticObjectFactoryReturnExpression(
+  node: Node,
+  seen: Set<string>,
+): Node | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isCallExpression(expression)) return undefined;
   if (expression.getArguments().length > 0) return undefined;
@@ -1261,7 +1275,9 @@ import {
   return callback.getParameters().length === 0;
 }
 
-/** @internal */ export function functionLikeStaticReturnExpression(callback: Node): Node | undefined {
+/** @internal */ export function functionLikeStaticReturnExpression(
+  callback: Node,
+): Node | undefined {
   if (Node.isArrowFunction(callback)) {
     if (callback.getParameters().length > 0) return undefined;
     const body = callback.getBody();
@@ -1330,7 +1346,10 @@ import {
   return aliasedSymbol(symbol);
 }
 
-/** @internal */ export function callbackFunctionFromProperty(declaration: Node, seen: Set<string>): Node | undefined {
+/** @internal */ export function callbackFunctionFromProperty(
+  declaration: Node,
+  seen: Set<string>,
+): Node | undefined {
   if (!Node.isPropertyAssignment(declaration)) return undefined;
 
   const initializer = declaration.getInitializer();
@@ -1341,7 +1360,10 @@ import {
   return callbackFunctionFromReference(expression, seen);
 }
 
-/** @internal */ export function callbackFunctionFromReference(identifier: Node, seen: Set<string>): Node | undefined {
+/** @internal */ export function callbackFunctionFromReference(
+  identifier: Node,
+  seen: Set<string>,
+): Node | undefined {
   const boundTarget = boundCallbackTarget(identifier);
   if (boundTarget) {
     const target = unwrappedStaticExpressionNode(boundTarget);
@@ -1385,7 +1407,9 @@ import {
   return callee.getExpression();
 }
 
-/** @internal */ export function symbolForStaticMemberReference(node: Node): MorphSymbol | undefined {
+/** @internal */ export function symbolForStaticMemberReference(
+  node: Node,
+): MorphSymbol | undefined {
   // SPEC §10.2/§11.1: static callback containers are resolved from ts-morph member facts before
   // local object compatibility walking, so namespace imports and re-export barrels remain exact.
   const member = staticAccessName(node);
@@ -1395,7 +1419,9 @@ import {
   return receiver.getType().getProperty(member);
 }
 
-/** @internal */ export function aliasedSymbol(symbol: MorphSymbol | undefined): MorphSymbol | undefined {
+/** @internal */ export function aliasedSymbol(
+  symbol: MorphSymbol | undefined,
+): MorphSymbol | undefined {
   return symbol?.getAliasedSymbol() ?? symbol;
 }
 
@@ -1688,7 +1714,9 @@ import {
   return columnStart > 0 ? columnPath.slice(0, columnStart) : '';
 }
 
-/** @internal */ export function scalarProjectionTable(expression: ts.Expression): string | undefined {
+/** @internal */ export function scalarProjectionTable(
+  expression: ts.Expression,
+): string | undefined {
   const table = tableExpressionBase(expression);
   return table || undefined;
 }
@@ -1702,7 +1730,9 @@ import {
   return callee === 'sql' || callee === 'raw' || callee?.startsWith('sql.') === true;
 }
 
-/** @internal */ export function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
+/** @internal */ export function typedSqlProjectionShape(
+  expression: ts.Expression,
+): QueryShape | null {
   const node = unwrappedTsExpression(expression);
   const typeArguments = ts.isTaggedTemplateExpression(node)
     ? node.typeArguments
@@ -1747,7 +1777,9 @@ import {
   );
 }
 
-/** @internal */ export function staticTsExpressionPath(expression: ts.Expression): string | undefined {
+/** @internal */ export function staticTsExpressionPath(
+  expression: ts.Expression,
+): string | undefined {
   const node = unwrappedTsExpression(expression);
   if (ts.isIdentifier(node)) return node.text;
   if (ts.isPropertyAccessExpression(node)) {
@@ -1762,7 +1794,9 @@ import {
   return undefined;
 }
 
-/** @internal */ export function staticTsElementAccessName(expression: ts.Expression | undefined): string | undefined {
+/** @internal */ export function staticTsElementAccessName(
+  expression: ts.Expression | undefined,
+): string | undefined {
   if (!expression) return undefined;
 
   const node = unwrappedTsExpression(expression);

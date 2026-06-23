@@ -83,7 +83,9 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(projectSetupSource).toContain(
       'createSourceFile(projectSourceFileName(file.fileName), file.source',
     );
-    expect(projectSetupSource).toContain('function projectSourceFileName(fileName: string): string');
+    expect(projectSetupSource).toContain(
+      'function projectSourceFileName(fileName: string): string',
+    );
     expect(compatibilityBarrelSource).not.toContain('ts-morph');
     expect(compatibilityBarrelSource).not.toContain('./static.js');
     expect(compatibilityBarrelSource).not.toContain('./graph.js');

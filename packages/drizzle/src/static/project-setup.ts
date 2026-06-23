@@ -1,12 +1,5 @@
 import { isAbsolute, join } from 'node:path';
-import {
-  Node,
-  Project,
-  SyntaxKind,
-  ts,
-  type CompilerOptions,
-  type SourceFile,
-} from 'ts-morph';
+import { Node, Project, SyntaxKind, ts, type CompilerOptions, type SourceFile } from 'ts-morph';
 import { extractedFunctionKey, functionReceiverParametersByKey } from './domain-writes.js';
 import {
   extractLocalFunctionCallsFromBody,
@@ -60,7 +53,9 @@ import {
   unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>;
 }
 
-/** @internal */ export function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtraction {
+/** @internal */ export function createProjectExtraction(
+  options: TouchGraphProjectOptions,
+): ProjectExtraction {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -109,7 +104,9 @@ import {
   return isAbsolute(fileName) ? fileName : join(DRIZZLE_STATIC_PROJECT_ROOT, fileName);
 }
 
-/** @internal */ export function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {
+/** @internal */ export function projectContextFiles(
+  extraction: ProjectExtraction,
+): SourceFileInput[] {
   return extraction.files.map((file, index) => {
     const sourceFile = extraction.sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);

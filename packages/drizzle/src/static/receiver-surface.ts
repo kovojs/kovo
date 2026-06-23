@@ -229,7 +229,9 @@ import {
   reference: Node;
 }
 
-/** @internal */ export function externalHelperCallSurface(call: CallExpression): ExternalHelperCallSurface | undefined {
+/** @internal */ export function externalHelperCallSurface(
+  call: CallExpression,
+): ExternalHelperCallSurface | undefined {
   const expression = call.getExpression();
   if (Node.isIdentifier(expression)) {
     return { name: expression.getText(), reference: expression };
@@ -316,7 +318,9 @@ import {
   return undefined;
 }
 
-/** @internal */ export function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
+/** @internal */ export function localFunctionKeyForDeclaration(
+  declaration: Node,
+): string | undefined {
   if (Node.isFunctionDeclaration(declaration)) {
     const name = declaration.getName();
     const nameNode = declaration.getNameNode();
@@ -1137,7 +1141,10 @@ import {
   );
 }
 
-/** @internal */ export function removeReceiverCarrierPropertyPath(properties: Set<string>, propertyName: string): void {
+/** @internal */ export function removeReceiverCarrierPropertyPath(
+  properties: Set<string>,
+  propertyName: string,
+): void {
   properties.delete(propertyName);
 
   const prefix = `${propertyName}.`;
@@ -1612,13 +1619,18 @@ import {
   return true;
 }
 
-/** @internal */ export function isReceiverCarrierIdentifier(node: Node, carrierSymbolKeys: ReadonlySet<string>): boolean {
+/** @internal */ export function isReceiverCarrierIdentifier(
+  node: Node,
+  carrierSymbolKeys: ReadonlySet<string>,
+): boolean {
   if (!Node.isIdentifier(node) || carrierSymbolKeys.size === 0) return false;
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   return symbolKey ? carrierSymbolKeys.has(symbolKey) : false;
 }
 
-/** @internal */ export function isProjectDrizzleReceiverContainerExpression(node: Node | undefined): boolean {
+/** @internal */ export function isProjectDrizzleReceiverContainerExpression(
+  node: Node | undefined,
+): boolean {
   if (!node) return false;
   if (isFunctionLikeNode(node)) return false;
   if (isProjectDrizzleReceiverMemberExpression(node)) return false;
@@ -1787,7 +1799,9 @@ import {
   return aliasedSymbol(node.getSymbol());
 }
 
-/** @internal */ export function receiverParameterDeclaration(declaration: Node): ParameterDeclaration | null {
+/** @internal */ export function receiverParameterDeclaration(
+  declaration: Node,
+): ParameterDeclaration | null {
   if (Node.isParameterDeclaration(declaration)) return declaration;
   if (Node.isIdentifier(declaration)) {
     const parent = declaration.getParent();

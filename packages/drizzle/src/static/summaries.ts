@@ -1,6 +1,11 @@
 import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { KovoDomainTableAnnotation, KovoFanAnnotation } from '../drizzle-surface.js';
-import type { ReadSummaryInput, TouchGraphDiagnostic, UnresolvedSummaryInput, WriteSummaryInput } from '../graph.js';
+import type {
+  ReadSummaryInput,
+  TouchGraphDiagnostic,
+  UnresolvedSummaryInput,
+  WriteSummaryInput,
+} from '../graph.js';
 import {
   Node,
   SyntaxKind,
@@ -271,7 +276,9 @@ import {
     .flatMap(extract);
 }
 
-/** @internal */ export function queryReceiverMode(receiverReferences: QueryReceiverReferences): 'project' | 'source' {
+/** @internal */ export function queryReceiverMode(
+  receiverReferences: QueryReceiverReferences,
+): 'project' | 'source' {
   return receiverReferences.projectContainers ? 'project' : 'source';
 }
 
@@ -300,7 +307,9 @@ import {
  * calls are unwound; any other CallExpression receiver is returned as-is so it
  * fails closed (not a project receiver identifier ⇒ KV406 surface).
  */
-/** @internal */ export function writeCallChainReceiver(receiver: Node | undefined): Node | undefined {
+/** @internal */ export function writeCallChainReceiver(
+  receiver: Node | undefined,
+): Node | undefined {
   let current = receiver;
 
   while (current && Node.isCallExpression(current)) {
@@ -383,7 +392,9 @@ import {
   return current;
 }
 
-/** @internal */ export function unwrappedFunctionExpression(node: Node): ArrowFunction | FunctionExpression | undefined {
+/** @internal */ export function unwrappedFunctionExpression(
+  node: Node,
+): ArrowFunction | FunctionExpression | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
     ? expression
@@ -638,7 +649,9 @@ import {
   };
 }
 
-/** @internal */ export function queryInputKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'inputKey'> {
+/** @internal */ export function queryInputKeyOperand(
+  expression: Node,
+): Pick<QueryInstanceKeyOperand, 'inputKey'> {
   const node = staticAccessExpression(expression);
   if (!Node.isIdentifier(node) || node.getText() !== 'input') return {};
 
@@ -962,7 +975,9 @@ import {
   }
 }
 
-/** @internal */ export function isTouchingForeignKeyAction(action: string | undefined): action is string {
+/** @internal */ export function isTouchingForeignKeyAction(
+  action: string | undefined,
+): action is string {
   return action === 'cascade' || action === 'set null' || action === 'set default';
 }
 
@@ -1075,7 +1090,10 @@ import {
   return summaries;
 }
 
-/** @internal */ export function mergeSummary(target: FunctionTouchSummary, source: FunctionTouchSummary): boolean {
+/** @internal */ export function mergeSummary(
+  target: FunctionTouchSummary,
+  source: FunctionTouchSummary,
+): boolean {
   let changed = false;
 
   changed =
@@ -1091,7 +1109,11 @@ import {
   return changed;
 }
 
-/** @internal */ export function pushUnique<T>(target: T[], source: readonly T[], keyFor: (item: T) => string): boolean {
+/** @internal */ export function pushUnique<T>(
+  target: T[],
+  source: readonly T[],
+  keyFor: (item: T) => string,
+): boolean {
   const keys = new Set(target.map(keyFor));
   let changed = false;
 
@@ -1196,7 +1218,10 @@ import {
   return callExpressionContinuesToChain(call, chain) ? 'update-from' : 'update-predicate';
 }
 
-/** @internal */ export function callExpressionContinuesToChain(call: CallExpression, chain: Node): boolean {
+/** @internal */ export function callExpressionContinuesToChain(
+  call: CallExpression,
+  chain: Node,
+): boolean {
   let current: Node = call;
 
   while (current !== chain) {
@@ -1424,7 +1449,9 @@ import {
     : { expr: expression.getText(), kind: 'opaque' };
 }
 
-/** @internal */ export function pnfExactConjuncts(pnf: PredicatePnf): EqPredicateConjunct[] | null {
+/** @internal */ export function pnfExactConjuncts(
+  pnf: PredicatePnf,
+): EqPredicateConjunct[] | null {
   if (pnf.kind === 'eq') return [{ left: pnf.left, right: pnf.right }];
   if (pnf.kind === 'and') {
     const conjuncts: EqPredicateConjunct[] = [];
@@ -1480,7 +1507,9 @@ import {
   };
 }
 
-/** @internal */ export function dedupePredicateFacts(facts: readonly ExtractedPredicateFact[]): ExtractedPredicateFact[] {
+/** @internal */ export function dedupePredicateFacts(
+  facts: readonly ExtractedPredicateFact[],
+): ExtractedPredicateFact[] {
   const seen = new Set<string>();
   const deduped: ExtractedPredicateFact[] = [];
 
@@ -1518,4 +1547,3 @@ import {
 
   return `arg:${node.getName()}`;
 }
-

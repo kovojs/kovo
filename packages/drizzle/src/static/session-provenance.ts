@@ -415,10 +415,7 @@ function isFalsyIdentifierCheck(expression: Node, aliasName: string): boolean {
   return Node.isIdentifier(operand) && operand.getText() === aliasName;
 }
 
-function isFalsyDirectPrivateScopeCheck(
-  expression: Node,
-  target: PrivateScopeProvenance,
-): boolean {
+function isFalsyDirectPrivateScopeCheck(expression: Node, target: PrivateScopeProvenance): boolean {
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isPrefixUnaryExpression(node)) return false;
   if (node.getOperatorToken() !== SyntaxKind.ExclamationToken) return false;
@@ -480,10 +477,7 @@ function statementContainsAliasIdentifier(statement: Node, aliasName: string): b
     .some((identifier) => identifier.getText() === aliasName);
 }
 
-function statementContainsPrivateScope(
-  statement: Node,
-  target: PrivateScopeProvenance,
-): boolean {
+function statementContainsPrivateScope(statement: Node, target: PrivateScopeProvenance): boolean {
   return statement.getDescendants().some((node) => {
     const direct = directPrivateScopeForExpression(node);
     return direct !== undefined && privateScopeMatches(direct, target);

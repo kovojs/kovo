@@ -13,23 +13,23 @@ changes follow `rules/api-surface.md`.
 
 Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || continue; case "$file" in *.png|*.jpg|*.jpeg|*.gif|*.webp|*.woff2|*.svg|*.snap) continue ;; esac; wc -l "$file"; done | awk '$1 > 2000 { print $1, $2 }' | sort -nr`
 
-| LoC | File | Classification | Refactoring stance |
-| ---: | --- | --- | --- |
-| 12,244 | `packages/drizzle/src/static.ts` | production source | P0 split target |
-| 8,719 | `packages/icons/package.json` | generated package manifest | do not hand-split; reduce/regenerate only if generator changes |
-| 5,137 | `packages/cli/src/index.ts` | production source | P1 split target |
-| 4,604 | `pnpm-lock.yaml` | lockfile | no module refactor |
-| 4,193 | `benchmarks/results/results.json` | benchmark artifact | archive/prune policy, not code split |
-| 3,938 | `tests/kovo-check.node.mjs` | test/verification runner | P2 split target |
-| 3,216 | `api-surface-baseline.json` | generated baseline | no hand edit except API gate refresh |
-| 2,949 | `conformance/drizzle-pin/src/index.receiver-handoffs.test.ts` | conformance test | P2 test split target |
-| 2,876 | `packages/better-auth/src/internal.ts` | production/internal source | P1 split target |
-| 2,823 | `examples/gallery/src/demo-fixtures.tsx` | example fixture source | P2 split target |
-| 2,374 | `packages/server/src/mutation.ts` | production source | P0 split target |
-| 2,308 | `packages/compiler/src/lower/structural-jsx.ts` | compiler source | P0 split target |
-| 2,184 | `packages/compiler/src/scan/parse.ts` | compiler source | P1 split target |
-| 2,149 | `public-packages.json` | generated/package inventory | no hand edit except source-of-truth refresh |
-| 2,040 | `packages/compiler/src/diagnostic-coverage-matrix.test.ts` | compiler test | P2 split target |
+|    LoC | File                                                          | Classification              | Refactoring stance                                             |
+| -----: | ------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------- |
+| 12,244 | `packages/drizzle/src/static.ts`                              | production source           | P0 split target                                                |
+|  8,719 | `packages/icons/package.json`                                 | generated package manifest  | do not hand-split; reduce/regenerate only if generator changes |
+|  5,137 | `packages/cli/src/index.ts`                                   | production source           | P1 split target                                                |
+|  4,604 | `pnpm-lock.yaml`                                              | lockfile                    | no module refactor                                             |
+|  4,193 | `benchmarks/results/results.json`                             | benchmark artifact          | archive/prune policy, not code split                           |
+|  3,938 | `tests/kovo-check.node.mjs`                                   | test/verification runner    | P2 split target                                                |
+|  3,216 | `api-surface-baseline.json`                                   | generated baseline          | no hand edit except API gate refresh                           |
+|  2,949 | `conformance/drizzle-pin/src/index.receiver-handoffs.test.ts` | conformance test            | P2 test split target                                           |
+|  2,876 | `packages/better-auth/src/internal.ts`                        | production/internal source  | P1 split target                                                |
+|  2,823 | `examples/gallery/src/demo-fixtures.tsx`                      | example fixture source      | P2 split target                                                |
+|  2,374 | `packages/server/src/mutation.ts`                             | production source           | P0 split target                                                |
+|  2,308 | `packages/compiler/src/lower/structural-jsx.ts`               | compiler source             | P0 split target                                                |
+|  2,184 | `packages/compiler/src/scan/parse.ts`                         | compiler source             | P1 split target                                                |
+|  2,149 | `public-packages.json`                                        | generated/package inventory | no hand edit except source-of-truth refresh                    |
+|  2,040 | `packages/compiler/src/diagnostic-coverage-matrix.test.ts`    | compiler test               | P2 split target                                                |
 
 Current command output after completed splits:
 `git ls-files | while IFS= read -r file; do [ -f "$file" ] || continue; case "$file" in *.png|*.jpg|*.jpeg|*.gif|*.webp|*.woff2|*.svg|*.snap) continue ;; esac; wc -l "$file"; done | awk '$1 > 2000 { print $1, $2 }' | sort -nr`
@@ -45,28 +45,28 @@ Current command output after completed splits:
 ## Refactoring Rules
 
 - [x] Keep every extraction behavior-neutral unless the specific item says otherwise. The first
-  checkpoint for each source split should be a pure move with unchanged exported names and unchanged
-  call sites except imports.
+      checkpoint for each source split should be a pure move with unchanged exported names and unchanged
+      call sites except imports.
   - Evidence: completed source split checkboxes below preserve compatibility barrels/subpaths and are
     verified by focused tests plus API/import gates.
 - [x] Prefer concern modules that match existing package boundaries instead of generic `utils.ts`
-  buckets.
+      buckets.
   - Evidence: split targets use package-specific concern modules such as `static/summaries.ts`,
     `mutation/targets.ts`, `commands/build-export.ts`, and `internal/credential.ts`.
 - [x] Preserve public and declared internal subpath exports. Any renamed export or removed symbol needs
-  an explicit API-surface decision and `pnpm run check:api-surface`.
+      an explicit API-surface decision and `pnpm run check:api-surface`.
   - Evidence: `pnpm run check:api-surface` passes at baseline 1338/1840 after the completed splits.
 - [x] For compiler source moves, prove byte/fact neutrality with focused compiler tests, not fixpoint
-  alone; `SPEC.md` §5.2 says emitted/generated artifacts are inspection targets, not hand-authored
-  source.
+      alone; `SPEC.md` §5.2 says emitted/generated artifacts are inspection targets, not hand-authored
+      source.
   - Evidence: compiler structural and scan parent checkboxes below cite focused compiler suites that
     passed after the split modules landed.
 - [x] For server mutation and data-plane moves, include focused unit tests plus the relevant
-  conformance or `kovo-check` path before committing.
+      conformance or `kovo-check` path before committing.
   - Evidence: server mutation, Drizzle, CLI, and conformance-related parent checkboxes below cite
     focused unit tests plus `pnpm run test:conformance` or `pnpm run check:kovo`.
 - [x] Leave generated JSON, manifests, and lockfiles out of manual refactoring. If their size is a
-  problem, change the generator, prune stale content, or document the refresh command.
+      problem, change the generator, prune stale content, or document the refresh command.
   - Evidence: post-split oversized inventory contains only `packages/icons/package.json`,
     `pnpm-lock.yaml`, `benchmarks/results/results.json`, `api-surface-baseline.json`, and
     `public-packages.json`; generated/artifact ownership is documented below.
@@ -75,45 +75,45 @@ Current command output after completed splits:
 
 - [x] **Split `packages/drizzle/src/static.ts` into static-analysis concern modules.**
   - [x] Extract SPEC §10.5 symbolic-effect and algebraic query-shape extraction to
-    `packages/drizzle/src/static/derivation.ts`, with `static.ts` preserving the existing
-    `./internal/static` export surface.
-    Evidence: `packages/drizzle/src/static/derivation.ts` is 1,375 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 10,976 LoC; `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts` passed 3 files / 74 tests; `git diff --check` passed.
+        `packages/drizzle/src/static/derivation.ts`, with `static.ts` preserving the existing
+        `./internal/static` export surface.
+        Evidence: `packages/drizzle/src/static/derivation.ts` is 1,375 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 10,976 LoC; `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts` passed 3 files / 74 tests; `git diff --check` passed.
   - [x] Extract session/private-scope provenance helpers to
-    `packages/drizzle/src/static/session-provenance.ts`.
-    Evidence: `packages/drizzle/src/static/session-provenance.ts` is 398 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 10,609 LoC; `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts` passed 3 files / 83 tests.
+        `packages/drizzle/src/static/session-provenance.ts`.
+        Evidence: `packages/drizzle/src/static/session-provenance.ts` is 398 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 10,609 LoC; `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts` passed 3 files / 83 tests.
   - [x] Extract source-module table/import resolution to `packages/drizzle/src/static/tables.ts`.
-    Evidence: `packages/drizzle/src/static/tables.ts` is 774 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 9,883 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts` passed 4 files / 111 tests; `git diff --check` passed.
+        Evidence: `packages/drizzle/src/static/tables.ts` is 774 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 9,883 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts` passed 4 files / 111 tests; `git diff --check` passed.
   - [x] Extract domain action and write-callback resolution to
-    `packages/drizzle/src/static/domain-writes.ts`.
-    Evidence: `packages/drizzle/src/static/domain-writes.ts` is 745 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 9,180 LoC; `pnpm exec vitest --run packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.write-callbacks-aliases.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts` passed 4 files / 70 tests; `git diff --check` passed.
+        `packages/drizzle/src/static/domain-writes.ts`.
+        Evidence: `packages/drizzle/src/static/domain-writes.ts` is 745 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 9,180 LoC; `pnpm exec vitest --run packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.write-callbacks-aliases.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts` passed 4 files / 70 tests; `git diff --check` passed.
   - [x] Extract receiver alias, carrier, helper-handoff, and unclassified receiver-surface analysis
-    to `packages/drizzle/src/static/receiver-surface.ts`.
-    Evidence: `packages/drizzle/src/static/receiver-surface.ts` is 1,854 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 7,476 LoC; `pnpm exec vitest --run packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.query-loader-config.test.ts` passed 5 files / 94 tests; `git diff --check` passed.
+        to `packages/drizzle/src/static/receiver-surface.ts`.
+        Evidence: `packages/drizzle/src/static/receiver-surface.ts` is 1,854 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 7,476 LoC; `pnpm exec vitest --run packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.query-loader-config.test.ts` passed 5 files / 94 tests; `git diff --check` passed.
   - [x] Extract query-loader config, projection shape, static callback resolution, and KV406/KV410
-    query diagnostics to `packages/drizzle/src/static/query-shapes.ts`.
-    Evidence: `packages/drizzle/src/static/query-shapes.ts` is 1,809 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 5,840 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 5 files / 111 tests; `git diff --check` passed.
+        query diagnostics to `packages/drizzle/src/static/query-shapes.ts`.
+        Evidence: `packages/drizzle/src/static/query-shapes.ts` is 1,809 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 5,840 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 5 files / 111 tests; `git diff --check` passed.
   - [x] Extract Drizzle schema/table-name, column-shape, relation, and annotation parsing helpers
-    to `packages/drizzle/src/static/schema.ts`.
-    Evidence: `packages/drizzle/src/static/schema.ts` is 1,196 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 4,793 LoC; `pnpm exec vitest --run packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/derive.test.ts` passed 4 files / 126 tests; `git diff --check` passed.
+        to `packages/drizzle/src/static/schema.ts`.
+        Evidence: `packages/drizzle/src/static/schema.ts` is 1,196 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 4,793 LoC; `pnpm exec vitest --run packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/derive.test.ts` passed 4 files / 126 tests; `git diff --check` passed.
   - [x] Extract ts-morph project setup and project function extraction assembly to
-    `packages/drizzle/src/static/project-setup.ts`.
-    Evidence: `packages/drizzle/src/static/project-setup.ts` is 468 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 4,386 LoC; `pnpm exec vitest --run packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 4 files / 72 tests; `git diff --check` passed.
+        `packages/drizzle/src/static/project-setup.ts`.
+        Evidence: `packages/drizzle/src/static/project-setup.ts` is 468 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 4,386 LoC; `pnpm exec vitest --run packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 4 files / 72 tests; `git diff --check` passed.
   - [x] Extract project-mode receiver proof, project read/write surface extraction, and
-    project receiver alias helpers to `packages/drizzle/src/static/project-receivers.ts`.
-    Evidence: `packages/drizzle/src/static/project-receivers.ts` is 1,274 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 3,286 LoC; `pnpm exec vitest --run packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 5 files / 96 tests; `git diff --check` passed.
+        project receiver alias helpers to `packages/drizzle/src/static/project-receivers.ts`.
+        Evidence: `packages/drizzle/src/static/project-receivers.ts` is 1,274 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 3,286 LoC; `pnpm exec vitest --run packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 5 files / 96 tests; `git diff --check` passed.
   - [x] Extract query read diagnostics, query instance-key/scope facts, touch summaries, and
-    predicate/read-source helpers to `packages/drizzle/src/static/summaries.ts`.
-    Evidence: `packages/drizzle/src/static/summaries.ts` is 1,521 LoC and
-    `packages/drizzle/src/static.ts` is reduced to 1,979 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/derive.test.ts` passed 8 files / 186 tests; `git diff --check` passed.
+        predicate/read-source helpers to `packages/drizzle/src/static/summaries.ts`.
+        Evidence: `packages/drizzle/src/static/summaries.ts` is 1,521 LoC and
+        `packages/drizzle/src/static.ts` is reduced to 1,979 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/derive.test.ts` passed 8 files / 186 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
@@ -128,17 +128,17 @@ Current command output after completed splits:
     `pnpm run check:api-surface`, `pnpm run check:imports`.
     Evidence: `wc -l packages/drizzle/src/static.ts packages/drizzle/src/static/*.ts` reports
     `static.ts` at 1,979 LoC and every extracted static module below 2,000 LoC; `pnpm exec vitest
-    --run packages/drizzle/src` passed 18 files / 309 tests; `pnpm run check:imports` passed;
+--run packages/drizzle/src` passed 18 files / 309 tests; `pnpm run check:imports` passed;
     `pnpm run check:api-surface` passed at baseline 1338/1840; `pnpm run test:conformance`
     passed all five conformance packages; `git diff --check` passed.
 
 - [x] **Split `packages/server/src/mutation.ts` around the mutation response pipeline.**
   - [x] Extract public definition/form/type surface to `packages/server/src/mutation/definition.ts`.
-    Evidence: `pnpm exec vitest --run packages/server/src/mutation-delta.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation.test.ts packages/server/src/replay.test.ts packages/server/src/query-endpoint.test.ts` passed 8 files / 119 tests after extraction; `pnpm run check:api-surface` unchanged at baseline 1338/1871; `pnpm run check:imports` passed.
+        Evidence: `pnpm exec vitest --run packages/server/src/mutation-delta.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation.test.ts packages/server/src/replay.test.ts packages/server/src/query-endpoint.test.ts` passed 8 files / 119 tests after extraction; `pnpm run check:api-surface` unchanged at baseline 1338/1871; `pnpm run check:imports` passed.
   - [x] Extract streaming chunk helpers and renderer to `packages/server/src/mutation/streaming.ts`.
-    Evidence: same focused server mutation command above passed after extraction.
+        Evidence: same focused server mutation command above passed after extraction.
   - [x] Extract query rerun, fragment rendering, and live-target selection to `packages/server/src/mutation/targets.ts`.
-    Evidence: same focused server mutation command above passed after extraction; `packages/server/src/mutation.ts` is now 1,225 LoC.
+        Evidence: same focused server mutation command above passed after extraction; `packages/server/src/mutation.ts` is now 1,225 LoC.
   - Target shape:
     - `mutation/definition.ts`: `write`, `mutation`, mutation form attributes, and type helpers.
     - `mutation/run.ts`: input parsing, guard execution, replay reservation, result normalization.
@@ -151,17 +151,17 @@ Current command output after completed splits:
     plus `pnpm run check:api-surface` if exports move.
     Evidence: `wc -l` reports `packages/server/src/mutation.ts` at 1,225 LoC and split mutation
     modules below 2,000 LoC; `pnpm exec vitest --run packages/server/src/mutation-delta.test.ts
-    packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts
-    packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts
-    packages/server/src/mutation.test.ts packages/server/src/replay.test.ts
-    packages/server/src/query-endpoint.test.ts` passed 8 files / 119 tests.
+packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts
+packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts
+packages/server/src/mutation.test.ts packages/server/src/replay.test.ts
+packages/server/src/query-endpoint.test.ts` passed 8 files / 119 tests.
 
 - [x] **Split `packages/compiler/src/lower/structural-jsx.ts` by declared lowering phases.**
   - [x] Extract primitive static spread, primitive composition, and navigation/href lowering phases
-    to `packages/compiler/src/lower/primitive-spreads.ts`,
-    `packages/compiler/src/lower/primitive-composition.ts`, and
-    `packages/compiler/src/lower/navigation-lowering.ts`.
-    Evidence: `packages/compiler/src/lower/structural-jsx.ts` is now 1,959 LoC; `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/gallery-merge-fixtures.disclosure.test.tsx packages/compiler/src/gallery-merge-fixtures.forms.test.tsx packages/compiler/src/gallery-merge-fixtures.idref-oracle.test.tsx packages/compiler/src/gallery-merge-fixtures.menus.test.tsx packages/compiler/src/gallery-merge-fixtures.overlays.test.tsx packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 8 files / 90 tests; `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check` passed.
+        to `packages/compiler/src/lower/primitive-spreads.ts`,
+        `packages/compiler/src/lower/primitive-composition.ts`, and
+        `packages/compiler/src/lower/navigation-lowering.ts`.
+        Evidence: `packages/compiler/src/lower/structural-jsx.ts` is now 1,959 LoC; `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/gallery-merge-fixtures.disclosure.test.tsx packages/compiler/src/gallery-merge-fixtures.forms.test.tsx packages/compiler/src/gallery-merge-fixtures.idref-oracle.test.tsx packages/compiler/src/gallery-merge-fixtures.menus.test.tsx packages/compiler/src/gallery-merge-fixtures.overlays.test.tsx packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 8 files / 90 tests; `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check` passed.
   - Use `structuralJsxPhaseOrder` as the module boundary guide: primitive spreads/composition,
     navigation/static hrefs, platform substitutions, view-transition stamps, inline attribute derives,
     primitive reactive attributes, inline text bindings, static text escaping, and helper import
@@ -172,32 +172,32 @@ Current command output after completed splits:
     plus `pnpm run check:api-surface`.
     Evidence: `wc -l` reports `packages/compiler/src/lower/structural-jsx.ts` at 1,959 LoC and
     extracted lowering modules below 2,000 LoC; `pnpm exec vitest --run
-    packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts
-    packages/compiler/src/gallery-merge-fixtures.disclosure.test.tsx
-    packages/compiler/src/gallery-merge-fixtures.forms.test.tsx
-    packages/compiler/src/gallery-merge-fixtures.idref-oracle.test.tsx
-    packages/compiler/src/gallery-merge-fixtures.menus.test.tsx
-    packages/compiler/src/gallery-merge-fixtures.overlays.test.tsx
-    packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 8 files / 90 tests.
+packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts
+packages/compiler/src/gallery-merge-fixtures.disclosure.test.tsx
+packages/compiler/src/gallery-merge-fixtures.forms.test.tsx
+packages/compiler/src/gallery-merge-fixtures.idref-oracle.test.tsx
+packages/compiler/src/gallery-merge-fixtures.menus.test.tsx
+packages/compiler/src/gallery-merge-fixtures.overlays.test.tsx
+packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 8 files / 90 tests.
 
 ## P1 Source Splits
 
 - [x] **Split `packages/cli/src/index.ts` into command-facing modules.**
   - [x] Extract graph/check/audit/explain output and input parsing to
-    `packages/cli/src/graph-output.ts`, preserving the internal compatibility exports from
-    `packages/cli/src/index.ts`.
-    Evidence: `packages/cli/src/index.ts` is now 151 LoC and
-    `packages/cli/src/graph-output.ts` is 1,736 LoC; `pnpm exec vitest --run packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-audit.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.compile-mcp.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-export.test.ts` passed 8 files / 132 tests; `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check` passed.
+        `packages/cli/src/graph-output.ts`, preserving the internal compatibility exports from
+        `packages/cli/src/index.ts`.
+        Evidence: `packages/cli/src/index.ts` is now 151 LoC and
+        `packages/cli/src/graph-output.ts` is 1,736 LoC; `pnpm exec vitest --run packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-audit.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.compile-mcp.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-export.test.ts` passed 8 files / 132 tests; `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check` passed.
   - [x] Extract add/compile, build/export, MCP, and shared result helpers to command modules
-    under `packages/cli/src/commands/` plus `packages/cli/src/shared.ts`.
-    Evidence: `wc -l packages/cli/src/index.ts packages/cli/src/graph-output.ts packages/cli/src/commands/*.ts packages/cli/src/shared.ts` reports all split CLI modules under 2,000 LoC; the non-build CLI vitest command above passed after extraction.
+        under `packages/cli/src/commands/` plus `packages/cli/src/shared.ts`.
+        Evidence: `wc -l packages/cli/src/index.ts packages/cli/src/graph-output.ts packages/cli/src/commands/*.ts packages/cli/src/shared.ts` reports all split CLI modules under 2,000 LoC; the non-build CLI vitest command above passed after extraction.
   - [x] Reconcile the existing build-command tests with the current KV417 deploy-skew retention
-    preset policy before marking the full CLI split verified.
-    Evidence: tests that intentionally exercise `/c/__v/` client modules now use a config-loaded
-    retention-capable test preset, while preset-selection tests use a dynamic app without client
-    modules; `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts
-    packages/cli/src/index.kovo-build-browser.test.ts` passed 2 files / 16 tests with 1 Docker test
-    skipped.
+        preset policy before marking the full CLI split verified.
+        Evidence: tests that intentionally exercise `/c/__v/` client modules now use a config-loaded
+        retention-capable test preset, while preset-selection tests use a dynamic app without client
+        modules; `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts
+packages/cli/src/index.kovo-build-browser.test.ts` passed 2 files / 16 tests with 1 Docker test
+        skipped.
   - Target shape:
     - `dispatch.ts`: `main`, `mainAsync`, usage/error routing.
     - `commands/check.ts`, `commands/audit.ts`, `commands/explain.ts`: graph command execution and
@@ -210,19 +210,19 @@ Current command output after completed splits:
     `pnpm run check:kovo`, `pnpm run check:api-surface`.
     Evidence: `wc -l` reports `packages/cli/src/index.ts`, `graph-output.ts`,
     `commands/*.ts`, and `shared.ts` below 2,000 LoC; `pnpm exec vitest --run
-    packages/cli/src/index.*.test.ts packages/cli/src/commands-manifest.test.ts` passed 10 files /
+packages/cli/src/index.*.test.ts packages/cli/src/commands-manifest.test.ts` passed 10 files /
     148 tests with 1 Docker test skipped; `pnpm run check:kovo` passed 52 tests; `pnpm run
-    check:api-surface` and `pnpm run check:imports` passed.
+check:api-surface` and `pnpm run check:imports` passed.
 
 - [x] **Split `packages/better-auth/src/internal.ts` into adapter concern modules.**
   - [x] Extract structural Better Auth contracts and schema/input bridge declarations to
-    `packages/better-auth/src/internal/contracts.ts`, with compatibility re-exports from
-    `internal.ts` and public root re-exports for app-facing companion types.
-    Evidence: `wc -l packages/better-auth/src/internal.ts packages/better-auth/src/internal/contracts.ts` reports `internal.ts` at 1,995 LoC and `contracts.ts` at 545 LoC; `pnpm run check:api-surface` passed with 30 recursive-publicness baseline entries fixed.
+        `packages/better-auth/src/internal/contracts.ts`, with compatibility re-exports from
+        `internal.ts` and public root re-exports for app-facing companion types.
+        Evidence: `wc -l packages/better-auth/src/internal.ts packages/better-auth/src/internal/contracts.ts` reports `internal.ts` at 1,995 LoC and `contracts.ts` at 545 LoC; `pnpm run check:api-surface` passed with 30 recursive-publicness baseline entries fixed.
   - [x] Extract credential cookie forwarding, credential success classification, active-organization
-    guards, and plugin metadata constants to `packages/better-auth/src/internal/credential.ts`
-    and `packages/better-auth/src/internal/plugin-metadata.ts`.
-    Evidence: `pnpm exec vitest --run packages/better-auth/src` passed 5 files / 76 tests; `pnpm run check:imports` and `git diff --check` passed.
+        guards, and plugin metadata constants to `packages/better-auth/src/internal/credential.ts`
+        and `packages/better-auth/src/internal/plugin-metadata.ts`.
+        Evidence: `pnpm exec vitest --run packages/better-auth/src` passed 5 files / 76 tests; `pnpm run check:imports` and `git diff --check` passed.
   - Target shape:
     - `internal/session-api.ts`: structural Better Auth API/request/response/session contracts.
     - `internal/schema-bridge.ts`: schema validation, table metadata, source annotation, generated
@@ -240,8 +240,8 @@ Current command output after completed splits:
 
 - [x] **Split `packages/compiler/src/scan/parse.ts` after parser-fact seams are stable.**
   - [x] Extract exported scanner model interfaces to `packages/compiler/src/scan/model.ts` and
-    re-export them from `parse.ts`.
-    Evidence: `pnpm exec vitest --run packages/compiler/src/scan packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts` passed 6 files / 82 tests after deletion of the original declarations; `pnpm run check:imports` passed; `packages/compiler/src/scan/parse.ts` is now 1,946 LoC.
+        re-export them from `parse.ts`.
+        Evidence: `pnpm exec vitest --run packages/compiler/src/scan packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts` passed 6 files / 82 tests after deletion of the original declarations; `pnpm run check:imports` passed; `packages/compiler/src/scan/parse.ts` is now 1,946 LoC.
   - Target shape:
     - `scan/model.ts`: exported model interfaces and shared span types.
     - `scan/source-file.ts`: `parseSourceFile` and TypeScript module setup.
@@ -253,7 +253,7 @@ Current command output after completed splits:
     plus fact-level snapshots if model field construction changes.
     Evidence: `wc -l` reports `packages/compiler/src/scan/parse.ts` at 1,946 LoC and extracted scan
     modules below 2,000 LoC; `pnpm exec vitest --run packages/compiler/src/scan
-    packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts`
+packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts`
     passed 6 files / 82 tests.
 
 ## P2 Test And Fixture Splits
@@ -288,7 +288,7 @@ Current command output after completed splits:
     and browser gallery tests if rendered markup changes.
 
 - [x] **Split `packages/compiler/src/diagnostic-coverage-matrix.test.ts` into matrix data and
-  scenario groups.**
+      scenario groups.**
   - Evidence: matrix data moved to `packages/compiler/src/diagnostic-coverage-matrix.data.ts`;
     `packages/compiler/src/diagnostic-coverage-matrix.test.ts` is now 994 LoC; `pnpm exec vitest --run packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 1 file / 4 tests; `git diff --check` passed.
   - Candidate modules: matrix definitions, expected-code coverage meta-test, JSX diagnostics,
@@ -296,13 +296,13 @@ Current command output after completed splits:
   - Verification: `pnpm run test -- packages/compiler/src/diagnostic-coverage-matrix.test.ts`.
 
 - [x] **Split `packages/drizzle/src/index.columns-keys-predicates.test.ts` after main-side
-  analyzer fixtures pushed it over 2,000 LoC during merge.**
+      analyzer fixtures pushed it over 2,000 LoC during merge.**
   - Evidence: moved session/private-scope helper provenance cases to
     `packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts`; `wc -l` reports
     `index.columns-keys-predicates.test.ts` at 1,522 LoC and
     `index.columns-keys-predicates-provenance.test.ts` at 724 LoC; `pnpm exec vitest --run
-    packages/drizzle/src/index.columns-keys-predicates.test.ts
-    packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts` passed 2 files / 49 tests.
+packages/drizzle/src/index.columns-keys-predicates.test.ts
+packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts` passed 2 files / 49 tests.
 
 ## Generated Or Artifact Size Policy
 
@@ -325,21 +325,21 @@ Current command output after completed splits:
 ## Sequencing
 
 - [x] Start with `packages/server/src/mutation.ts` or `packages/compiler/src/lower/structural-jsx.ts`
-  for a bounded P0 proof-of-pattern. These are large but have strong local tests and clearer seams than
-  Drizzle static extraction.
+      for a bounded P0 proof-of-pattern. These are large but have strong local tests and clearer seams than
+      Drizzle static extraction.
   - Evidence: server mutation and structural JSX split items above are both under 2,000 LoC and have
     focused test/API/import evidence recorded under their checkboxes.
 - [x] Tackle `packages/drizzle/src/static.ts` in multiple worktree-backed slices after the proof-of-pattern
-  lands; avoid one giant move commit.
+      lands; avoid one giant move commit.
   - Evidence: Drizzle static extraction landed as multiple scoped commits ending with
     `refactor(drizzle): split query summary analysis`; the completed Drizzle P0 checkbox above records
     the current line-count, package test, conformance, import-boundary, API-surface, and diff-check
     verification.
 - [x] Run independent P1/P2 test-file splits in parallel worktrees only after the relevant source split is
-  not actively changing the same ownership area.
+      not actively changing the same ownership area.
   - Evidence: conformance receiver handoffs, `tests/kovo-check.node.mjs`, gallery fixtures, and the
     diagnostic coverage matrix are split and verified in the P2 section above.
 - [x] After each split, update this plan with the exact verification command that proved the checkbox before
-  marking it complete.
+      marking it complete.
   - Evidence: every completed checkbox above includes the focused command, line-count check, or
     authoritative artifact inspected for that exact item.

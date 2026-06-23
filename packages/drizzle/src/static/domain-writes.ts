@@ -110,7 +110,9 @@ import {
   unresolved: boolean;
 }
 
-/** @internal */ export function domainWriteObject(argument: Node | undefined): DomainWriteObjectResolution {
+/** @internal */ export function domainWriteObject(
+  argument: Node | undefined,
+): DomainWriteObjectResolution {
   if (!argument) return { unresolved: true };
   return domainWriteObjectFromNode(argument, new Set()) ?? { unresolved: true };
 }
@@ -347,7 +349,10 @@ import {
   return [...properties.values()];
 }
 
-/** @internal */ export function domainWritePropertiesFromSpread(property: Node, seen: Set<string>): DomainWriteProperty[] {
+/** @internal */ export function domainWritePropertiesFromSpread(
+  property: Node,
+  seen: Set<string>,
+): DomainWriteProperty[] {
   if (!Node.isSpreadAssignment(property)) return [];
 
   const expression = unwrappedStaticExpressionNode(property.getExpression());
@@ -584,7 +589,9 @@ import {
   });
 }
 
-/** @internal */ export function rawTablesFromWriteInitializer(initializer: Node | undefined): string[] {
+/** @internal */ export function rawTablesFromWriteInitializer(
+  initializer: Node | undefined,
+): string[] {
   if (!initializer) return [];
   const writeCall = unwrappedStaticExpressionNode(initializer);
   if (!Node.isCallExpression(writeCall)) return [];
@@ -731,13 +738,19 @@ import {
   return referencedWriteCallbackFunction(expression) ?? null;
 }
 
-/** @internal */ export function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
+/** @internal */ export function referencedWriteCallbackFunction(
+  identifier: Node,
+): Node | undefined {
   // SPEC §10-§11: mutation touch facts must come from an executable local callback body; cross
   // module project references are followed through ts-morph aliases instead of by-name fallback.
   return callbackFunctionFromReference(identifier, new Set());
 }
 
-/** @internal */ export function extractedFunctionKey(name: string, callback: Node, keyNode: Node = callback): string {
+/** @internal */ export function extractedFunctionKey(
+  name: string,
+  callback: Node,
+  keyNode: Node = callback,
+): string {
   return (
     resolvedSymbolKey(keyNode.getSymbol()) ??
     `${callback.getSourceFile().getFilePath()}:${callback.getStart()}:${name}`

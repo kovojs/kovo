@@ -1,9 +1,6 @@
 import type { JsonValue } from '@kovojs/core';
 import { buildQueryDelta, queryDeltaIsSmaller } from '@kovojs/core/internal/query-delta';
-import {
-  changeRecordTouchesQueryInstance,
-  type ChangeRecord,
-} from '../change-record.js';
+import { changeRecordTouchesQueryInstance, type ChangeRecord } from '../change-record.js';
 import {
   readQueryInstanceKey,
   readQueryVersion,

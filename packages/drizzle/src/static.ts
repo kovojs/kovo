@@ -109,9 +109,19 @@ export {
   'bigserial',
   'smallserial',
 ]);
-/** @internal */ export const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set(['$count', 'execute']);
-/** @internal */ export const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
-/** @internal */ export const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set(['drizzle-orm/pg-core', 'drizzle-orm/sqlite-core']);
+/** @internal */ export const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set([
+  '$count',
+  'execute',
+]);
+/** @internal */ export const DRIZZLE_SELECT_QUERY_METHODS = new Set([
+  'select',
+  'selectDistinct',
+  'selectDistinctOn',
+]);
+/** @internal */ export const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set([
+  'drizzle-orm/pg-core',
+  'drizzle-orm/sqlite-core',
+]);
 /** @internal */ export const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set([
   'pgMaterializedView',
   'pgView',
@@ -349,7 +359,9 @@ function ownerDomainsFromTables(
 }
 
 /** @internal */
-/** @internal */ export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGraphDiagnostic[] {
+/** @internal */ export function diagnosticsForQueryFacts(
+  facts: readonly QueryFact[],
+): TouchGraphDiagnostic[] {
   return facts.flatMap((fact) => [...(fact.diagnostics ?? [])]);
 }
 
@@ -437,7 +449,9 @@ function extractTouchGraphFromPreparedFiles(
 }
 
 /** @internal */
-/** @internal */ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
+/** @internal */ export function extractTouchGraphFromProject(
+  options: TouchGraphProjectOptions,
+): TouchGraph {
   const extraction = createProjectExtraction(options);
   try {
     const sourceContext = projectSourceModuleContext(extraction);
@@ -455,7 +469,9 @@ function extractTouchGraphFromPreparedFiles(
 }
 
 /** @internal */
-/** @internal */ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
+/** @internal */ export function extractQueryFactsFromProject(
+  options: TouchGraphProjectOptions,
+): QueryFact[] {
   const extraction = createProjectExtraction(options);
   try {
     const sourceContext = projectSourceModuleContext(extraction);
@@ -1069,7 +1085,9 @@ function extractQueryDefinitionsFromSourceFile(
   return definitions;
 }
 
-/** @internal */ export function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
+/** @internal */ export function tableAnnotation(
+  initializer: Node,
+): ExtractedTableAnnotation | null {
   if (!Node.isCallExpression(initializer)) return null;
   const annotationCall = initializer.getArguments().find(isKovoAnnotationCall);
   if (!annotationCall) {
@@ -1160,7 +1178,10 @@ function defaultDomainForTableName(tableName: string): string {
   return 'unmapped' in annotation && annotation.unmapped === true;
 }
 
-/** @internal */ export function stringPropertyFromObject(object: Node, name: string): string | undefined {
+/** @internal */ export function stringPropertyFromObject(
+  object: Node,
+  name: string,
+): string | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
 
   for (const property of object.getProperties()) {
@@ -1174,7 +1195,10 @@ function defaultDomainForTableName(tableName: string): string {
   return undefined;
 }
 
-/** @internal */ export function stringArrayPropertyFromObject(object: Node, name: string): string[] {
+/** @internal */ export function stringArrayPropertyFromObject(
+  object: Node,
+  name: string,
+): string[] {
   if (!Node.isObjectLiteralExpression(object)) return [];
 
   for (const property of object.getProperties()) {
@@ -1860,7 +1884,12 @@ export {
   projectExportedTableNamesByName,
 } from './static/project-receivers.js';
 /** @internal */
-export { createProjectExtraction, projectContextFiles, projectSourceFileName, type ProjectExtraction } from './static/project-setup.js';
+export {
+  createProjectExtraction,
+  projectContextFiles,
+  projectSourceFileName,
+  type ProjectExtraction,
+} from './static/project-setup.js';
 /** @internal */
 export {
   emptySessionProvenanceContext,
@@ -1944,7 +1973,6 @@ export {
 /** @internal */ export function lineForIndex(source: string, index: number): number {
   return source.slice(0, index).split('\n').length;
 }
-
 
 /** @internal */ export function unsummarizedHelperReason(call: CallExpression): string {
   const callee = unwrappedStaticExpressionNode(call.getExpression());

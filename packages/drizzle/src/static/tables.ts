@@ -1,4 +1,12 @@
-import { Project, SyntaxKind, Node, ts, type ArrowFunction, type FunctionExpression, type SourceFile } from 'ts-morph';
+import {
+  Project,
+  SyntaxKind,
+  Node,
+  ts,
+  type ArrowFunction,
+  type FunctionExpression,
+  type SourceFile,
+} from 'ts-morph';
 
 import {
   UNRESOLVED_READ_SOURCE_EXPRESSION,
@@ -81,7 +89,10 @@ function variableDeclarationIsExported(
   );
 }
 
-/** @internal */ export function withParsedSourceFile<T>(file: SourceFileInput, visit: (sourceFile: SourceFile) => T): T {
+/** @internal */ export function withParsedSourceFile<T>(
+  file: SourceFileInput,
+  visit: (sourceFile: SourceFile) => T,
+): T {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -123,7 +134,9 @@ interface ExportStarAlias {
   moduleSpecifier: string;
 }
 
-/** @internal */ export function projectSourceModuleContext(extraction: ProjectExtraction): SourceModuleContext {
+/** @internal */ export function projectSourceModuleContext(
+  extraction: ProjectExtraction,
+): SourceModuleContext {
   // SPEC §10-§11: project-mode table facts come from resolved ts-morph symbols, not rewritten
   // source text that is reparsed through source-mode table extraction.
   const tablesBySyntheticName = projectTablesBySyntheticName(extraction);

@@ -1,7 +1,4 @@
-import type {
-  CompileComponentOptions,
-  CompileResult,
-} from '@kovojs/compiler';
+import type { CompileComponentOptions, CompileResult } from '@kovojs/compiler';
 import {
   CompileCache,
   compileCacheKey,
@@ -629,4 +626,3 @@ function mcpRequestId(value: unknown): string | number | null {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-

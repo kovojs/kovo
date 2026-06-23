@@ -31,10 +31,7 @@ import {
   symbolForIdentifierReference,
   type ExternalDbArgumentCall,
 } from './receiver-surface.js';
-import {
-  projectUnmodeledRelationNameForNode,
-  propertyNameText,
-} from './schema.js';
+import { projectUnmodeledRelationNameForNode, propertyNameText } from './schema.js';
 import {
   TOUCH_BODY_ITERATION_CALLBACK_METHODS,
   objectAssignmentPropertyName,
@@ -238,7 +235,9 @@ import {
   return { names, symbolKeys };
 }
 
-/** @internal */ export function projectReceiverParameterRequirements(callback: Node): ReceiverParameterRequirement[] {
+/** @internal */ export function projectReceiverParameterRequirements(
+  callback: Node,
+): ReceiverParameterRequirement[] {
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
@@ -600,11 +599,16 @@ import {
   return sourceType.getProperty(propertyName)?.getTypeAtLocation(location);
 }
 
-/** @internal */ export function projectArrayElementType(sourceType: MorphType, index: number): MorphType | undefined {
+/** @internal */ export function projectArrayElementType(
+  sourceType: MorphType,
+  index: number,
+): MorphType | undefined {
   return sourceType.getTupleElements()[index] ?? sourceType.getArrayElementType();
 }
 
-/** @internal */ export function objectBindingElementPropertyName(element: BindingElement): string | undefined {
+/** @internal */ export function objectBindingElementPropertyName(
+  element: BindingElement,
+): string | undefined {
   return propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
 }
 
@@ -872,7 +876,10 @@ import {
   return uniqueExternalDbArgumentCalls(calls);
 }
 
-/** @internal */ export function opaqueTouchClosureAncestor(node: Node, body: Node): Node | undefined {
+/** @internal */ export function opaqueTouchClosureAncestor(
+  node: Node,
+  body: Node,
+): Node | undefined {
   for (const ancestor of node.getAncestors()) {
     if (ancestor === body) return undefined;
     if (!isFunctionLikeNode(ancestor)) continue;
@@ -958,7 +965,9 @@ import {
   return calls;
 }
 
-/** @internal */ export function extractProjectDrizzleReceiverContainerCalls(body: Node): ExternalDbArgumentCall[] {
+/** @internal */ export function extractProjectDrizzleReceiverContainerCalls(
+  body: Node,
+): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
   const bodyStart = bodySourceStart(body);
 
@@ -973,7 +982,9 @@ import {
   return calls;
 }
 
-/** @internal */ export function isProjectDrizzleReceiverContainerCallReceiver(node: Node): boolean {
+/** @internal */ export function isProjectDrizzleReceiverContainerCallReceiver(
+  node: Node,
+): boolean {
   // SPEC §11.1: project-mode containers that merely contain a Drizzle receiver are opaque
   // surfaces. Exact facts require a proven receiver member such as `context.db`.
   if (isProjectDrizzleReceiverMemberExpression(node)) return false;
@@ -1019,7 +1030,9 @@ import {
   };
 }
 
-/** @internal */ export function selectReadCall(call: CallExpression): { receiver: Node; table: Node } | undefined {
+/** @internal */ export function selectReadCall(
+  call: CallExpression,
+): { receiver: Node; table: Node } | undefined {
   // SPEC §10-§11: standalone Drizzle select reads are touch-graph facts; unresolved table
   // expressions become KV406 instead of silently disappearing.
   if (!isReadSourceCall(call)) return undefined;
@@ -1033,7 +1046,9 @@ import {
   return { receiver, table };
 }
 
-/** @internal */ export function queryBuilderRootCallName(call: CallExpression): string | undefined {
+/** @internal */ export function queryBuilderRootCallName(
+  call: CallExpression,
+): string | undefined {
   let current: CallExpression | undefined = call;
   let name: string | undefined;
 
@@ -1152,7 +1167,9 @@ import {
   return receivers.names.has(node.getText());
 }
 
-/** @internal */ export function isProjectDrizzleReceiverMemberExpression(node: Node | undefined): boolean {
+/** @internal */ export function isProjectDrizzleReceiverMemberExpression(
+  node: Node | undefined,
+): boolean {
   if (!node || (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node))) {
     return false;
   }
@@ -1221,7 +1238,10 @@ import {
   return tableNamesBySymbol.get(symbolKey);
 }
 
-/** @internal */ export type ProjectNamespaceTableNames = ReadonlyMap<string, ReadonlyMap<string, string>>;
+/** @internal */ export type ProjectNamespaceTableNames = ReadonlyMap<
+  string,
+  ReadonlyMap<string, string>
+>;
 
 /** @internal */ export function projectNamespaceTableNamesByLocal(
   sourceFile: SourceFile,
