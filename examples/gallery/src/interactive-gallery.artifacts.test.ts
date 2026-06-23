@@ -159,7 +159,7 @@ describe('compiled interactive gallery demos', () => {
       expect(
         renderedRefs.map((ref) => ref.version),
         `${demo} version stamps`,
-      ).toEqual(renderedRefs.map(() => expect.stringMatching(/^[0-9a-f]{8}$/)));
+      ).toEqual(renderedRefs.map(() => expect.stringMatching(/^[0-9a-f][0-9a-f-]*$/)));
       expect(renderedRefs.map((ref) => ref.exportName).sort(compareStrings)).toEqual(clientExports);
 
       for (const ref of renderedRefs) {

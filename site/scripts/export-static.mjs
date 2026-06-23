@@ -166,7 +166,7 @@ export async function exportSiteStaticApp({
     appType: 'custom',
     logLevel: 'error',
     root: siteRoot,
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
   });
   let exportOutput;
   let auxModule;

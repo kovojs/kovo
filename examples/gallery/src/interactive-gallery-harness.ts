@@ -138,7 +138,9 @@ export function extractCompiledClientRefs(
   return [...html.matchAll(/on:([a-z]+)="([^"]+)"/g)].map((match) => {
     const eventName = match[1] ?? '';
     const ref = match[2] ?? '';
-    const parsed = ref.match(/^\/c\/__v\/([0-9a-f]{8})\/([^?#"]+\.client\.js)#([A-Za-z0-9_$]+)$/);
+    const parsed = ref.match(
+      /^\/c\/__v\/([0-9a-f][0-9a-f-]*)\/([^?#"]+\.client\.js)#([A-Za-z0-9_$]+)$/,
+    );
     if (parsed === null) throw new Error(`Unexpected generated client ref: ${ref}`);
 
     return {

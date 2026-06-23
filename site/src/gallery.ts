@@ -86,7 +86,7 @@ async function loadGalleryData(): Promise<GalleryData> {
     appType: 'custom',
     logLevel: 'error',
     root: repoRoot,
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
   });
 
   try {
@@ -175,16 +175,39 @@ function registerGalleryInteractiveClientModules(
   clientModules: GalleryDeps['clientModules'],
   support: SupportRegistration,
   demos: readonly InteractiveDemo[],
+  expectedHrefs: readonly string[],
 ): void {
-  for (const demo of demos) {
-    const { pathName, source: rawClientSource } = galleryInteractiveClientModule(demo.name);
+  for (const [index, demo] of demos.entries()) {
+    const compiled = galleryInteractiveClientModule(demo.name);
+    const expected = clientModuleRegistrationFromHref(expectedHrefs[index]);
+    const pathName = expected?.pathName ?? compiled.pathName;
+    const rawClientSource = compiled.source;
     const source = rewriteGalleryClientImports(rawClientSource, support);
     clientModules.put({
       path: pathName,
       source,
-      version: galleryInteractiveClientModuleVersion(rawClientSource),
+      version: expected?.version ?? galleryInteractiveClientModuleVersion(rawClientSource),
     });
   }
+}
+
+function clientModuleRegistrationFromHref(
+  href: string | undefined,
+): { pathName: string; version: string } | null {
+  if (!href) return null;
+  const prefix = '/c/__v/';
+  if (!href.startsWith(prefix)) {
+    throw new Error(`site app shell: unexpected gallery client href: ${href}`);
+  }
+  const versionEnd = href.indexOf('/', prefix.length);
+  if (versionEnd === -1) {
+    throw new Error(`site app shell: malformed gallery client href: ${href}`);
+  }
+  const pathEnd = href.search(/[?#]/);
+  return {
+    pathName: `/c/${href.slice(versionEnd + 1, pathEnd === -1 ? href.length : pathEnd)}`,
+    version: decodeURIComponent(href.slice(prefix.length, versionEnd)),
+  };
 }
 
 function galleryInteractiveClientModule(demoName: string): { pathName: string; source: string } {
@@ -196,10 +219,7 @@ function galleryInteractiveClientModule(demoName: string): { pathName: string; s
   if (existsSync(generatedClientPath)) {
     return {
       pathName: `/c/examples/gallery/src/generated/interactive/${demoName}.client.js`,
-      source: compileGalleryInteractiveClientModule(
-        demoName,
-        `examples/gallery/src/generated/interactive/${demoName}.tsx`,
-      ),
+      source: readFileSync(generatedClientPath, 'utf8'),
     };
   }
 
@@ -299,7 +319,7 @@ export async function buildGalleryRoutePages({
   // (else KV229). Support modules (runtime shim + primitives) first, then the
   // per-demo compiled handlers.
   const support = registerGalleryInteractiveSupportClientModules(clientModules);
-  registerGalleryInteractiveClientModules(clientModules, support, interactiveDemos);
+  registerGalleryInteractiveClientModules(clientModules, support, interactiveDemos, clientHrefs);
 
   // Map gallery component → its compiled interactive demo. Demo names are the
   // component plus a `-demo` suffix; client-module hrefs are index-aligned with

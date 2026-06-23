@@ -2730,7 +2730,7 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
     configFile: false,
     logLevel: 'error',
     root,
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
     ssr: { noExternal: true },
   });
   try {
@@ -2749,7 +2749,7 @@ async function loadBuildAppModule(appModulePath: string, root: string): Promise<
     configFile: false,
     logLevel: 'error',
     root,
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
   });
   try {
     return await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
@@ -3167,7 +3167,7 @@ async function loadExportAppModule(options: KovoExportOptions): Promise<unknown>
     appType: 'custom',
     logLevel: 'error',
     root: resolve(options.root ?? process.cwd()),
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
   });
   try {
     return await server.ssrLoadModule(options.appModulePath);

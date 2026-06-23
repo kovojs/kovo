@@ -20,7 +20,7 @@ export async function exportGalleryInteractiveStatic({
     appType: 'custom',
     logLevel: 'error',
     root: galleryRoot,
-    server: { middlewareMode: true },
+    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
   });
 
   try {

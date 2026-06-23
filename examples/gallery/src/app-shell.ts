@@ -93,9 +93,8 @@ export const galleryInteractiveNodeHandler = galleryInteractiveAppShell.nodeHand
 export default galleryInteractiveAppShell.app;
 
 function registerGalleryInteractiveClientModule(demoName: string): string {
-  const { modulePath, source: rawClientSource } = galleryInteractiveClientModule(demoName);
+  const { modulePath, source: rawClientSource, version } = galleryInteractiveClientModule(demoName);
   const generatedClientSource = rewriteGalleryClientImports(rawClientSource);
-  const version = galleryClientModuleVersion(rawClientSource);
   const href = galleryInteractiveClientModules.put({
     path: modulePath,
     source: generatedClientSource,
@@ -109,28 +108,35 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
   return href;
 }
 
-function galleryInteractiveClientModule(demoName: string): { modulePath: string; source: string } {
+function galleryInteractiveClientModule(demoName: string): {
+  modulePath: string;
+  source: string;
+  version: string;
+} {
   const generatedClientUrl = new URL(
     `./generated/interactive/${demoName}.client.js`,
     import.meta.url,
   );
   if (existsSync(generatedClientUrl)) {
+    const generatedServerSource = readFileSync(
+      new URL(`./generated/interactive/${demoName}.tsx`, import.meta.url),
+      'utf8',
+    );
+    const { modulePath, version } = parseGalleryCompiledClientRef(demoName, generatedServerSource);
     return {
-      modulePath: `/c/examples/gallery/src/generated/interactive/${demoName}.client.js`,
-      source: compileGalleryInteractiveClientModule(
-        demoName,
-        `examples/gallery/src/generated/interactive/${demoName}.tsx`,
-      ),
+      modulePath,
+      source: readFileSync(generatedClientUrl, 'utf8'),
+      version,
     };
   }
 
-  return {
-    modulePath: `/c/src/interactive/${demoName}.client.js`,
-    source: compileGalleryInteractiveClientModule(demoName, `src/interactive/${demoName}.tsx`),
-  };
+  return compileGalleryInteractiveClientModule(demoName, `src/interactive/${demoName}.tsx`);
 }
 
-function compileGalleryInteractiveClientModule(demoName: string, fileName: string): string {
+function compileGalleryInteractiveClientModule(
+  demoName: string,
+  fileName: string,
+): { modulePath: string; source: string; version: string } {
   const source = readFileSync(new URL(`./interactive/${demoName}.tsx`, import.meta.url), 'utf8');
   const result = compileComponentModule({ fileName, source });
   const clientSource = result.files.find((file) => file.kind === 'client')?.source;
@@ -138,7 +144,13 @@ function compileGalleryInteractiveClientModule(demoName: string, fileName: strin
     throw new Error(`Gallery interactive demo ${demoName} produced no client module.`);
   }
 
-  return clientSource;
+  const serverSource = result.files.find((file) => file.kind === 'server')?.source;
+  if (serverSource === undefined) {
+    throw new Error(`Gallery interactive demo ${demoName} produced no server module.`);
+  }
+
+  const { modulePath, version } = parseGalleryCompiledClientRef(demoName, serverSource);
+  return { modulePath, source: clientSource, version };
 }
 
 function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
@@ -204,14 +216,26 @@ function rewriteGalleryClientImports(source: string): string {
     );
 }
 
-function galleryClientModuleVersion(source: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < source.length; index++) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+function parseGalleryCompiledClientRef(
+  demoName: string,
+  source: string,
+): { modulePath: string; version: string } {
+  const pattern = new RegExp(
+    String.raw`/c/__v/([^/"#?]+)/([^"'#?]*${escapeRegExp(demoName)}\.client\.js)#`,
+  );
+  const match = pattern.exec(source);
+  if (match === null) {
+    throw new Error(`Gallery interactive demo ${demoName} produced no client handler ref.`);
   }
 
-  return hash.toString(16).padStart(8, '0');
+  return {
+    modulePath: `/c/${match[2] ?? ''}`,
+    version: decodeURIComponent(match[1] ?? ''),
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 }
 
 function routeValueToHtml(value: unknown): string {
