@@ -223,10 +223,14 @@ guard-owned, and natural-key applications.
     public-key-only row update, and verifies unsummarized `hiddenSessionId` degrades to `KV409` plus
     `unsummarized-helper:hiddenSessionId` without dropping invalidation coverage.
 
-- [ ] **Runtime cross-check fixture.**
+- [x] **Runtime cross-check fixture.**
   - Instrumented PGlite observes scoped writes and reads.
   - Expected: `observed ⊆ static` still holds; no production behavior relies solely on runtime
     observation for an unexercised branch.
+  - Evidence: `pnpm exec vitest --run packages/test/src/advanced-analyzer-runtime.test.ts`
+    extracts a tenant-scoped `tickets` read/write graph, verifies observed PGlite reads and writes
+    against those static facts, and reports `KV405` for a declared static branch that runtime did not
+    exercise.
 
 - [ ] **Negative proof fixtures.**
   - Unguarded nullable session/request access must be conditional/opaque and cannot prove row identity.
