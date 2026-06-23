@@ -14,42 +14,71 @@
   src: url('/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
 }
 
+/* Source Serif 4 — the display face for The Proof: serif headlines with the
+   authority of print, paired with Inter body and JetBrains Mono machine voice. */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('/fonts/source-serif-4-latin-wght-normal.woff2') format('woff2-variations');
+}
+
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: italic;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url('/fonts/source-serif-4-latin-wght-italic.woff2') format('woff2-variations');
+}
+
 /* ── Site tokens ───────────────────────────────────────────────────
-   The terminal-ledger system from the landing page, as themeable
-   tokens: dark is the landing palette verbatim; light is its paper
-   counterpart. Code terminals stay black in both themes. */
+   "The Proof" (see DESIGN.md): an editorial-technical system. An off-white
+   neutral ground carries a single deep-indigo accent used like an errata mark;
+   a serif display face pairs with Inter body and JetBrains Mono machine voice.
+   Dark is the inked counterpart. Code terminals stay near-black in both themes
+   and read as evidence. `--teal` is kept as a back-compat alias for `--accent`
+   so existing call sites resolve to indigo until they migrate to `--accent`. */
 :root {
   --font-sans:
     'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue',
     sans-serif;
+  --font-serif: 'Source Serif 4', 'Iowan Old Style', Charter, Georgia, 'Times New Roman', serif;
+  --font-display: var(--font-serif);
   --font-mono:
     'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
-  --bg: #fafaf7;
-  --panel: #f1f1ec;
-  --edge: #e0e0d8;
-  --edge-soft: #eaeae4;
-  --ink: #1c1c1c;
-  --dim: #5d5d57;
-  --faint: #97978f;
-  --teal: #0f766e;
-  --green: #15803d;
-  --red: #b91c1c;
+  --bg: #fafafa;
+  --panel: #f0f0f0;
+  --card: #ffffff;
+  --edge: #dcdcdc;
+  --edge-soft: #e8e8e8;
+  --ink: #191919;
+  --dim: #525252;
+  --faint: #838383;
+  --accent: #2f4d8a;
+  --accent-soft: #5f78b8;
+  --teal: var(--accent);
+  --green: #1c7d44;
+  --red: #c0392b;
   --sky: #0369a1;
   --amber: #b45309;
   --purple: #7e22ce;
 }
 
 .dark {
-  --bg: #060606;
-  --panel: #0c0c0c;
-  --edge: #1f1f1f;
-  --edge-soft: #161616;
-  --ink: #f2f2f2;
-  --dim: #9a9a9a;
-  --faint: #5a5a5a;
-  --teal: #2dd4bf;
-  --green: #4ade80;
-  --red: #ff6b6b;
+  --bg: #121319;
+  --panel: #1b1d25;
+  --card: #181a21;
+  --edge: #2c3038;
+  --edge-soft: #23262e;
+  --ink: #e9eaee;
+  --dim: #a3a8b2;
+  --faint: #697080;
+  --accent: #8aa6f2;
+  --accent-soft: #6b86d6;
+  --teal: var(--accent);
+  --green: #54c98a;
+  --red: #ff6b61;
   --sky: #7cc5ff;
   --amber: #fbbf24;
   --purple: #c792ea;
@@ -85,6 +114,339 @@ html.dark {
 @keyframes landing-blink {
   50% {
     opacity: 0;
+  }
+}
+
+/* ── Landing hero: the stale-UI proof as a zero-JS CSS auto-loop ──────
+   One 15s timeline, every element synchronized by keyframe percentage.
+   Beats: idle 0-12 · add+click 12-26 · stale 26-48 · caught 48-72 ·
+   consistent 72-95 · reset 95-100. Base (un-animated) styles render the
+   consistent state, so prefers-reduced-motion freezes to "every view agrees".
+   This mirrors DESIGN.md's signature component. */
+@keyframes hero-cursor {
+  0%,
+  11% {
+    opacity: 0;
+    transform: translate(6.5rem, 4.4rem);
+  }
+  15% {
+    opacity: 1;
+  }
+  22%,
+  31% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  35%,
+  100% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+}
+@keyframes hero-ring {
+  0%,
+  17% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  21% {
+    opacity: 0.7;
+    transform: scale(0.55);
+  }
+  29%,
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+@keyframes hero-ring2 {
+  0%,
+  19% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  23% {
+    opacity: 0.6;
+    transform: scale(0.55);
+  }
+  31%,
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+@keyframes hero-press {
+  0%,
+  18% {
+    transform: none;
+  }
+  22% {
+    transform: scale(0.92);
+  }
+  26%,
+  100% {
+    transform: none;
+  }
+}
+@keyframes hero-lbl1 {
+  0%,
+  26% {
+    opacity: 1;
+  }
+  27%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-lbl2 {
+  0%,
+  26% {
+    opacity: 0;
+  }
+  27%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes hero-badge2 {
+  0%,
+  72% {
+    opacity: 1;
+  }
+  73%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-badge3 {
+  0%,
+  72% {
+    opacity: 0;
+  }
+  73%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes hero-cart2 {
+  0%,
+  25% {
+    opacity: 1;
+  }
+  26%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-cart3 {
+  0%,
+  25% {
+    opacity: 0;
+  }
+  26%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes hero-tick {
+  0%,
+  25% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.4);
+  }
+  37%,
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes hero-pill {
+  0%,
+  25% {
+    background: var(--card);
+    border-color: var(--edge);
+    color: var(--ink);
+  }
+  26%,
+  72% {
+    background: var(--stale-bg);
+    border-color: var(--red);
+    color: var(--red);
+  }
+  73%,
+  95% {
+    background: var(--synced-bg);
+    border-color: var(--green);
+    color: var(--green);
+  }
+  96%,
+  100% {
+    background: var(--card);
+    border-color: var(--edge);
+    color: var(--ink);
+  }
+}
+@keyframes hero-unit {
+  0%,
+  25% {
+    border-color: var(--edge);
+  }
+  26%,
+  47% {
+    border-color: var(--red);
+  }
+  48%,
+  72% {
+    border-color: var(--accent);
+  }
+  73%,
+  95% {
+    border-color: var(--green);
+  }
+  96%,
+  100% {
+    border-color: var(--edge);
+  }
+}
+@keyframes hero-acta {
+  0%,
+  47% {
+    opacity: 1;
+  }
+  50%,
+  95% {
+    opacity: 0.38;
+  }
+  96%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes hero-actb {
+  0%,
+  47% {
+    opacity: 0.5;
+  }
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes hero-v0 {
+  0%,
+  11% {
+    opacity: 1;
+  }
+  13%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-v1 {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  14%,
+  24% {
+    opacity: 1;
+  }
+  26%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-v2 {
+  0%,
+  25% {
+    opacity: 0;
+  }
+  27%,
+  46% {
+    opacity: 1;
+  }
+  48%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-v3 {
+  0%,
+  47% {
+    opacity: 0;
+  }
+  50%,
+  70% {
+    opacity: 1;
+  }
+  72%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-v4 {
+  0%,
+  71% {
+    opacity: 0;
+  }
+  74%,
+  95% {
+    opacity: 1;
+  }
+  97%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes hero-vtint {
+  0%,
+  11% {
+    background: var(--synced-bg);
+  }
+  14%,
+  24% {
+    background: var(--card);
+  }
+  27%,
+  46% {
+    background: var(--stale-bg);
+  }
+  50%,
+  70% {
+    background: color-mix(in srgb, var(--accent) 7%, var(--card));
+  }
+  74%,
+  100% {
+    background: var(--synced-bg);
+  }
+}
+@keyframes hero-vmark {
+  0%,
+  11% {
+    background: var(--green);
+  }
+  14%,
+  24% {
+    background: var(--faint);
+  }
+  27%,
+  46% {
+    background: var(--red);
+  }
+  50%,
+  70% {
+    background: var(--accent);
+  }
+  74%,
+  100% {
+    background: var(--green);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-anim='hero'] * {
+    animation: none !important;
   }
 }
 
@@ -174,25 +536,31 @@ canvas {
 }
 
 [data-prose] h1 {
-  font-size: 2.2rem;
-  font-weight: 750;
-  letter-spacing: -0.025em;
-  line-height: 1.15;
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
   margin-bottom: 1.25rem;
+  text-wrap: balance;
 }
 
 [data-prose] h2 {
-  font-size: 1.4rem;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  font-family: var(--font-display);
+  font-size: 1.62rem;
+  font-weight: 600;
+  letter-spacing: -0.018em;
   margin-bottom: 0.85rem;
   margin-top: 3rem;
   scroll-margin-top: 5.5rem;
+  text-wrap: balance;
 }
 
 [data-prose] h3 {
-  font-size: 1.12rem;
-  font-weight: 650;
+  font-family: var(--font-display);
+  font-size: 1.24rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   margin-bottom: 0.5rem;
   margin-top: 2.25rem;
   scroll-margin-top: 5.5rem;

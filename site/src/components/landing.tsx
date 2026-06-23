@@ -3,19 +3,17 @@ import * as style from '@kovojs/style';
 
 import { SiteFooter, SiteHeader, type ClientHrefs } from './chrome.js';
 
-// Landing page (SPEC §7 L0): the "break it" pipeline is radio buttons + :has(),
-// zero JavaScript. The page is authored as TSX route composition so the route
-// compiler can derive enhanced-navigation page boundaries.
+// Landing page (SPEC §7 L0): authored as TSX route composition so the route
+// compiler can derive enhanced-navigation page boundaries. Interactions are
+// zero-JS by construction — the hero's stale-UI demo is a CSS keyframe loop and
+// the auto-invalidation section's mobile tabs are radio + :has() — so the page
+// is interactive at first paint with no JavaScript required on load.
 //
 // The header and footer are the shared site chrome (SiteHeader/SiteFooter from
-// chrome.tsx), so the landing matches the docs site and respects the theme
-// toggle. All colors flow from the global design tokens (--bg/--ink/--teal/…
-// in styles.css), so the page reads correctly in both light and dark themes;
-// code terminals stay black in both, matching the docs' .code-window idiom.
-
-const BRAND = 'Kovo';
-const BRAND_CAPS = BRAND.toUpperCase();
-const BRAND_CLI = BRAND.toLowerCase();
+// chrome.tsx). The visual system is "The Proof" (see DESIGN.md): all colors flow
+// from the global design tokens (--bg/--ink/--accent/… in styles.css), so the
+// page reads correctly in both light and dark themes; code and terminal frames
+// stay near-black in both as evidence.
 
 const landingStyles = style.create(
   {
@@ -34,81 +32,6 @@ const landingStyles = style.create(
       margin: '0 auto',
       maxWidth: '80rem',
       padding: '0 1.5rem',
-    },
-    hero: {
-      alignItems: 'start',
-      display: 'grid',
-      gap: '4rem',
-      gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.08fr)',
-      padding: '4rem 0 3.6rem',
-      '@media (max-width: 64rem)': {
-        gap: '2.5rem',
-        gridTemplateColumns: '1fr',
-      },
-    },
-    stencil: {
-      fontFamily: 'var(--font-mono)',
-      fontSize: 'clamp(3.6rem, 8vw, 6.2rem)',
-      fontWeight: 800,
-      letterSpacing: '-0.04em',
-      lineHeight: 0.92,
-    },
-    cursor: {
-      animation: 'landing-blink 1.1s steps(1) 3',
-      color: 'var(--teal)',
-    },
-    tagline: {
-      borderTopColor: 'var(--edge)',
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      color: 'var(--ink)',
-      fontSize: 'clamp(1.7rem, 3.4vw, 2.15rem)',
-      fontWeight: 420,
-      letterSpacing: '-0.02em',
-      lineHeight: 1.28,
-      marginTop: '1.4rem',
-      maxWidth: '32rem',
-      paddingTop: '1.3rem',
-    },
-    taglineEm: {
-      color: 'var(--teal)',
-      fontStyle: 'normal',
-      fontWeight: 550,
-    },
-    taglineDim: {
-      color: 'var(--dim)',
-      whiteSpace: 'nowrap',
-    },
-    sub: {
-      color: 'var(--dim)',
-      fontSize: '1.02rem',
-      lineHeight: 1.7,
-      marginTop: '1.1rem',
-      maxWidth: '29rem',
-    },
-    strong: {
-      color: 'var(--ink)',
-      fontWeight: 650,
-    },
-    noJs: {
-      borderColor: 'color-mix(in srgb, var(--green) 35%, transparent)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--green)',
-      display: 'inline-block',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.72rem',
-      letterSpacing: '0.14em',
-      marginTop: '1.2rem',
-      padding: '0.35rem 0.7rem',
-      textTransform: 'uppercase',
-    },
-    try: {
-      alignItems: 'center',
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: '1rem',
-      marginTop: '1.8rem',
     },
     cmd: {
       alignItems: 'center',
@@ -154,469 +77,345 @@ const landingStyles = style.create(
       paddingBottom: '0.15rem',
       textTransform: 'uppercase',
     },
-    term: {
-      background: '#000',
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.8rem',
-      lineHeight: 1.8,
-    },
-    termHead: {
-      borderBottomColor: 'var(--edge)',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      color: 'var(--faint)',
-      display: 'flex',
-      fontSize: '0.66rem',
-      justifyContent: 'space-between',
-      letterSpacing: '0.14em',
-      padding: '0.55rem 1.1rem',
-      textTransform: 'uppercase',
-    },
-    termPre: {
-      color: '#e4e4e4',
-      margin: 0,
-      padding: '1.1rem 1.3rem 1.2rem',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-    },
-    textDim: { color: 'var(--faint)' },
-    textDel: { color: 'var(--red)' },
-    textAdd: { color: 'var(--green)' },
-    textErr: { color: 'var(--red)', fontWeight: 700 },
-    textOk: { color: 'var(--green)' },
-    textFix: { color: 'var(--teal)' },
-    textLoc: { color: '#d8d8d8' },
-    badge: {
-      borderRadius: 2,
-      fontSize: '0.62rem',
-      fontWeight: 700,
-      letterSpacing: '0.1em',
-      padding: '0.06rem 0.42rem',
-      verticalAlign: '0.08em',
-    },
-    badgeQuery: {
-      borderColor: 'color-mix(in srgb, var(--sky) 40%, transparent)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--sky)',
-    },
-    badgeBind: {
-      borderColor: 'color-mix(in srgb, var(--teal) 40%, transparent)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--teal)',
-    },
-    badgeForm: {
-      borderColor: 'color-mix(in srgb, var(--amber) 40%, transparent)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--amber)',
-    },
-    badgeRoute: {
-      borderColor: 'color-mix(in srgb, var(--purple) 40%, transparent)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--purple)',
-    },
-    cascadeSum: {
-      borderTopColor: 'var(--edge-soft)',
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      color: 'var(--dim)',
-      display: 'flex',
-      fontSize: '0.74rem',
-      justifyContent: 'space-between',
-      letterSpacing: '0.04em',
-      marginTop: '0.9rem',
-      paddingTop: '0.8rem',
-    },
-    squiggle: {
-      textDecoration: 'underline wavy var(--red) 2px',
-      textUnderlineOffset: 5,
-    },
-    breakit: {
-      borderTopColor: 'var(--edge)',
-      borderTopStyle: 'solid',
-      borderTopWidth: 1,
-      padding: '3.6rem 0 3.2rem',
-      ':has(#brk-col:checked) [data-choice="col"]': {
-        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
-        boxShadow: 'inset 0 -2px 0 var(--red)',
-        color: 'var(--ink)',
-      },
-      ':has(#brk-query:checked) [data-choice="query"]': {
-        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
-        boxShadow: 'inset 0 -2px 0 var(--red)',
-        color: 'var(--ink)',
-      },
-      ':has(#brk-bind:checked) [data-choice="bind"]': {
-        background: 'color-mix(in srgb, var(--red) 12%, transparent)',
-        boxShadow: 'inset 0 -2px 0 var(--red)',
-        color: 'var(--ink)',
-      },
-      ':has(#brk-col:checked) [data-link="col"] [data-wire], :has(#brk-query:checked) [data-link="query"] [data-wire], :has(#brk-bind:checked) [data-link="bind"] [data-wire]':
-        {
-          background: 'repeating-linear-gradient(90deg, var(--red) 0 6px, transparent 6px 12px)',
-        },
-      ':has(#brk-col:checked) [data-link="col"] [data-wire]::before, :has(#brk-col:checked) [data-link="col"] [data-wire]::after, :has(#brk-query:checked) [data-link="query"] [data-wire]::before, :has(#brk-query:checked) [data-link="query"] [data-wire]::after, :has(#brk-bind:checked) [data-link="bind"] [data-wire]::before, :has(#brk-bind:checked) [data-link="bind"] [data-wire]::after':
-        {
-          background: 'var(--red)',
-        },
-      ':has(#brk-col:checked) [data-link="col"] [data-check="ok"], :has(#brk-query:checked) [data-link="query"] [data-check="ok"], :has(#brk-bind:checked) [data-link="bind"] [data-check="ok"]':
-        {
-          display: 'none',
-        },
-      ':has(#brk-col:checked) [data-link="col"] [data-check="bad"], :has(#brk-query:checked) [data-link="query"] [data-check="bad"], :has(#brk-bind:checked) [data-link="bind"] [data-check="bad"]':
-        {
-          display: 'block',
-        },
-      ':has(#brk-col:checked) [data-node="database"], :has(#brk-query:checked) [data-node="query"], :has(#brk-bind:checked) [data-node="ui"]':
-        {
-          borderColor: 'color-mix(in srgb, var(--red) 55%, transparent)',
-        },
-      ':has(#brk-col:checked) [data-case="col"], :has(#brk-query:checked) [data-case="query"], :has(#brk-bind:checked) [data-case="bind"]':
-        {
-          display: 'block',
-        },
-    },
-    sectionLabel: {
-      color: 'var(--faint)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.7rem',
-      letterSpacing: '0.24em',
-      marginBottom: '0.7rem',
-      textTransform: 'uppercase',
-    },
-    pipeTitle: {
-      color: 'var(--ink)',
-      fontSize: '2.05rem',
-      fontWeight: 530,
-      letterSpacing: '-0.022em',
-    },
-    pipeSub: {
-      color: 'var(--dim)',
-      fontSize: '1rem',
-      lineHeight: 1.6,
-      marginTop: '0.6rem',
-      maxWidth: '40rem',
-    },
-    radio: {
-      opacity: 0,
-      pointerEvents: 'none',
-      position: 'absolute',
-    },
-    choices: {
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'inline-flex',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.74rem',
-      letterSpacing: '0.06em',
-      margin: '1.8rem 0 2rem',
-    },
-    choiceLabel: {
-      borderRightColor: 'var(--edge)',
-      borderRightStyle: 'solid',
-      borderRightWidth: 1,
-      color: 'var(--dim)',
-      cursor: 'pointer',
-      padding: '0.6rem 1.1rem',
-      ':hover': {
-        color: 'var(--ink)',
-      },
-    },
-    choiceLabelLast: {
-      borderRightWidth: 0,
-    },
-    choiceNumber: {
-      color: 'var(--faint)',
-      fontWeight: 500,
-      marginRight: '0.5rem',
-    },
-    pipe: {
-      alignItems: 'stretch',
-      display: 'grid',
-      gridTemplateColumns: '1fr 3.4rem 1fr 3.4rem 1fr 3.4rem 1fr',
-      '@media (max-width: 64rem)': {
-        gap: '0.6rem',
-        gridTemplateColumns: '1fr',
-      },
-    },
-    node: {
-      background: 'var(--panel)',
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      padding: '1rem 1.1rem',
-      position: 'relative',
-      transition: 'border-color 0.2s',
-    },
-    nodeLabel: {
-      color: 'var(--dim)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.64rem',
-      letterSpacing: '0.2em',
-      marginBottom: '0.6rem',
-      textTransform: 'uppercase',
-    },
-    nodePre: {
-      color: 'var(--dim)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.68rem',
-      lineHeight: 1.7,
-      margin: 0,
-      whiteSpace: 'pre-wrap',
-    },
-    textHl: { color: 'var(--amber)' },
-    textSt: { color: 'var(--green)' },
-    textFn: { color: 'var(--sky)' },
-    pipeLink: {
-      alignItems: 'center',
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '0.4rem',
-      justifyContent: 'center',
-      padding: '0 0.3rem',
-      '@media (max-width: 64rem)': {
-        display: 'none',
-      },
-    },
-    wire: {
-      background:
-        'linear-gradient(90deg, color-mix(in srgb, var(--teal) 55%, transparent), color-mix(in srgb, var(--teal) 25%, transparent))',
-      borderRadius: 2,
-      height: 2,
-      position: 'relative',
-      width: '100%',
-      '::before': {
-        background: 'var(--teal)',
-        borderRadius: 9999,
-        content: "''",
-        height: 7,
-        left: -3,
-        position: 'absolute',
-        top: -2.5,
-        width: 7,
-      },
-      '::after': {
-        background: 'var(--teal)',
-        borderRadius: 9999,
-        content: "''",
-        height: 7,
-        position: 'absolute',
-        right: -3,
-        top: -2.5,
-        width: 7,
-      },
-    },
-    check: {
-      color: 'var(--green)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.58rem',
-      letterSpacing: '0.12em',
-      textTransform: 'uppercase',
-      whiteSpace: 'nowrap',
-    },
-    checkBad: {
-      color: 'var(--red)',
-      display: 'none',
-    },
-    caught: {
-      marginTop: '1.6rem',
-    },
-    caughtTerm: {
-      fontSize: '0.78rem',
-    },
-    casePanel: {
-      display: 'none',
-    },
-    breakitFoot: {
-      color: 'var(--faint)',
-      display: 'flex',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.7rem',
-      justifyContent: 'space-between',
-      letterSpacing: '0.06em',
-      marginTop: '1.1rem',
-    },
-    breakitFootStrong: {
-      color: 'var(--teal)',
-      fontWeight: 600,
-    },
-    split: {
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      display: 'grid',
-      gridTemplateColumns: '1.06fr 1fr',
-      margin: '0 0 2.6rem',
-      '@media (max-width: 64rem)': {
-        gridTemplateColumns: '1fr',
-      },
-    },
-    half: {
-      padding: '1.8rem 2rem 2rem',
-    },
-    rightHalf: {
-      borderLeftColor: 'var(--edge)',
-      borderLeftStyle: 'solid',
-      borderLeftWidth: 1,
-      '@media (max-width: 64rem)': {
-        borderLeftWidth: 0,
-        borderTopColor: 'var(--edge)',
-        borderTopStyle: 'solid',
-        borderTopWidth: 1,
-      },
-    },
-    halfLabel: {
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.66rem',
-      letterSpacing: '0.24em',
-      marginBottom: '0.8rem',
-      textTransform: 'uppercase',
-    },
-    agentLabel: { color: 'var(--teal)' },
-    userLabel: { color: 'var(--sky)' },
-    halfTitle: {
-      fontSize: '1.4rem',
-      fontWeight: 750,
-      letterSpacing: '-0.018em',
-      marginBottom: '0.55rem',
-    },
-    lead: {
-      color: 'var(--dim)',
-      fontSize: '0.94rem',
-      lineHeight: 1.65,
-      marginBottom: '1.2rem',
-    },
-    leadCode: {
-      color: 'var(--ink)',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.85em',
-    },
-    timelines: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '1.3rem',
-    },
-    timeline: {
-      background: 'var(--panel)',
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      padding: '1rem 1.2rem 1.1rem',
-    },
-    who: {
-      color: 'var(--dim)',
-      display: 'flex',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.64rem',
-      justifyContent: 'space-between',
-      letterSpacing: '0.2em',
-      marginBottom: '0.9rem',
-      textTransform: 'uppercase',
-    },
-    bad: { color: 'var(--red)' },
-    good: { color: 'var(--green)' },
-    track: {
-      background: 'var(--panel)',
-      borderRadius: 9999,
-      height: '0.55rem',
-      overflow: 'hidden',
-      position: 'relative',
-    },
-    segment: {
-      bottom: 0,
-      position: 'absolute',
-      top: 0,
-    },
-    // Page-load timelines as token-driven data-viz: neutral = idle, an amber
-    // hatch = the JS-loading gap (wasted time), teal = interactive.
-    spaS1: { background: 'var(--faint)', left: 0, width: '18%' },
-    spaS2: {
-      background:
-        'repeating-linear-gradient(135deg, color-mix(in srgb, var(--amber) 55%, var(--panel)) 0 6px, color-mix(in srgb, var(--amber) 20%, var(--panel)) 6px 12px)',
-      left: '18%',
-      width: '54%',
-    },
-    spaS3: {
-      background: 'color-mix(in srgb, var(--teal) 45%, var(--panel))',
-      left: '72%',
-      width: '28%',
-    },
-    mpaS1: { background: 'var(--faint)', left: 0, width: '10%' },
-    mpaS3: {
-      background:
-        'linear-gradient(90deg, var(--teal), color-mix(in srgb, var(--teal) 45%, var(--panel)))',
-      left: '10%',
-      width: '90%',
-    },
-    marks: {
-      color: 'var(--faint)',
-      display: 'flex',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.6rem',
-      gap: '0.6rem',
-      justifyContent: 'space-between',
-      letterSpacing: '0.04em',
-      marginTop: '0.55rem',
-    },
-    warn: { color: 'var(--amber)' },
-    usersNote: {
-      color: 'var(--dim)',
-      fontSize: '0.84rem',
-      lineHeight: 1.6,
-      marginTop: '1rem',
-    },
-    ledgerStrip: {
-      alignItems: 'center',
-      borderColor: 'var(--edge)',
-      borderStyle: 'solid',
-      borderWidth: 1,
-      color: 'var(--dim)',
-      display: 'flex',
-      flexWrap: 'wrap',
-      fontFamily: 'var(--font-mono)',
-      fontSize: '0.72rem',
-      gap: '1.6rem',
-      letterSpacing: '0.05em',
-      marginBottom: '3.4rem',
-      padding: '0.85rem 1.3rem',
-    },
-    ledgerSep: { color: 'var(--edge)' },
-    ledgerMore: {
-      borderBottomColor: 'var(--teal)',
-      borderBottomStyle: 'solid',
-      borderBottomWidth: 1,
-      color: 'var(--ink)',
-      fontSize: '0.66rem',
-      letterSpacing: '0.14em',
-      marginLeft: 'auto',
-      paddingBottom: '0.1rem',
-      textTransform: 'uppercase',
-    },
   },
   { namespace: 'site-landing', source: 'site/src/components/landing.tsx' },
 );
 
+// The Proof hero (DESIGN.md signature component): the stale-UI story as a
+// zero-JS CSS auto-loop. Base styles render the consistent end-state, and the
+// @keyframes in styles.css (hero-*) animate the 15s loop; prefers-reduced-motion
+// freezes to that consistent state via [data-anim="hero"].
+const heroStyles = style.create(
+  {
+    hero: {
+      alignItems: 'center',
+      display: 'grid',
+      gap: '3.6rem',
+      gridTemplateColumns: 'minmax(0, 1.02fr) minmax(0, 1.08fr)',
+      padding: '4rem 0 3.6rem',
+      '@media (max-width: 64rem)': {
+        gap: '2.4rem',
+        gridTemplateColumns: '1fr',
+        padding: '2.8rem 0 2.6rem',
+      },
+    },
+    h1: {
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-display)',
+      fontSize: 'clamp(2.7rem, 5.4vw, 4.4rem)',
+      fontWeight: 600,
+      letterSpacing: '-0.025em',
+      lineHeight: 1.02,
+      margin: 0,
+      textWrap: 'balance',
+    },
+    alt: { color: 'var(--accent)', fontStyle: 'italic', fontWeight: 500 },
+    lede: {
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-display)',
+      fontSize: 'clamp(1.2rem, 2vw, 1.55rem)',
+      fontWeight: 380,
+      lineHeight: 1.34,
+      margin: '1.5rem 0 0',
+      maxWidth: '33rem',
+    },
+    sub: {
+      color: 'var(--dim)',
+      fontSize: '1rem',
+      lineHeight: 1.62,
+      margin: '1.1rem 0 0',
+      maxWidth: '32rem',
+    },
+    strong: { color: 'var(--ink)', fontWeight: 600 },
+    cta: {
+      alignItems: 'center',
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '1.1rem',
+      marginTop: '1.9rem',
+    },
+    unit: {
+      background: 'var(--card)',
+      borderColor: 'var(--green)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      overflow: 'hidden',
+      animation: 'hero-unit 15s linear infinite',
+    },
+    acts: {
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.6rem',
+      letterSpacing: '0.05em',
+      textTransform: 'uppercase',
+    },
+    actA: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '0.45rem',
+      opacity: 0.38,
+      padding: '0.6rem 0.85rem',
+      animation: 'hero-acta 15s linear infinite',
+    },
+    actB: {
+      background: 'color-mix(in srgb, var(--accent) 6%, var(--card))',
+      display: 'flex',
+      flex: 1,
+      flexDirection: 'column',
+      gap: '0.45rem',
+      padding: '0.6rem 0.85rem',
+      animation: 'hero-actb 15s linear infinite',
+    },
+    actLabA: { color: 'var(--ink)', fontSize: '0.76rem', fontWeight: 700, letterSpacing: '0.03em' },
+    actLabB: {
+      alignItems: 'center',
+      color: 'var(--accent)',
+      display: 'flex',
+      fontSize: '0.76rem',
+      fontWeight: 700,
+      gap: '0.45rem',
+      letterSpacing: '0.03em',
+    },
+    diamond: { background: 'var(--accent)', height: 8, transform: 'rotate(45deg)', width: 8 },
+    beats: { display: 'flex', flexWrap: 'wrap', gap: '0.8rem', marginTop: '0.1rem' },
+    beat: {
+      alignItems: 'center',
+      color: 'var(--faint)',
+      display: 'flex',
+      fontSize: '0.62rem',
+      fontWeight: 500,
+      gap: '0.35rem',
+    },
+    seam: {
+      alignItems: 'center',
+      borderLeftColor: 'var(--accent)',
+      borderLeftStyle: 'dashed',
+      borderLeftWidth: 1,
+      borderRightColor: 'var(--accent)',
+      borderRightStyle: 'dashed',
+      borderRightWidth: 1,
+      color: 'var(--accent)',
+      display: 'flex',
+      fontSize: '0.52rem',
+      lineHeight: 1.2,
+      padding: '0 0.7rem',
+      textAlign: 'center',
+      whiteSpace: 'nowrap',
+    },
+    shopbar: {
+      alignItems: 'center',
+      background: 'var(--panel)',
+      borderBottomColor: 'var(--edge-soft)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'flex',
+      justifyContent: 'space-between',
+      padding: '0.7rem 1rem',
+    },
+    brand: { fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 600 },
+    pill: {
+      alignItems: 'center',
+      background: 'var(--synced-bg)',
+      borderColor: 'var(--green)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: 'var(--green)',
+      display: 'inline-flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.8rem',
+      gap: '0.45rem',
+      padding: '0.28rem 0.62rem',
+      animation: 'hero-pill 15s linear infinite',
+    },
+    badgeWrap: { display: 'inline-block', fontWeight: 700, position: 'relative' },
+    badge2: { animation: 'hero-badge2 15s linear infinite', opacity: 0 },
+    badge3: {
+      animation: 'hero-badge3 15s linear infinite',
+      left: 0,
+      opacity: 1,
+      position: 'absolute',
+      top: 0,
+    },
+    shopbody: {
+      display: 'grid',
+      gridTemplateColumns: '1.15fr 1fr',
+      '@media (max-width: 30rem)': { gridTemplateColumns: '1fr' },
+    },
+    prod: { padding: '1.1rem', position: 'relative' },
+    prodNm: { fontFamily: 'var(--font-display)', fontSize: '1.05rem', fontWeight: 600 },
+    prodPr: {
+      color: 'var(--dim)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.82rem',
+      margin: '0.2rem 0 0.9rem',
+    },
+    addBtn: {
+      background: 'var(--ink)',
+      border: 'none',
+      color: 'var(--bg)',
+      cursor: 'pointer',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.7rem',
+      letterSpacing: '0.06em',
+      padding: '0.55rem 0.9rem',
+      position: 'relative',
+      textTransform: 'uppercase',
+      animation: 'hero-press 15s ease infinite',
+    },
+    lblWrap: { display: 'inline-block', position: 'relative' },
+    lbl1: { animation: 'hero-lbl1 15s linear infinite', opacity: 0 },
+    lbl2: {
+      animation: 'hero-lbl2 15s linear infinite',
+      left: 0,
+      opacity: 1,
+      position: 'absolute',
+      top: 0,
+      whiteSpace: 'nowrap',
+    },
+    ring: {
+      borderColor: 'var(--accent)',
+      borderRadius: 9999,
+      borderStyle: 'solid',
+      borderWidth: 2,
+      height: 54,
+      left: '2.4rem',
+      marginLeft: -27,
+      marginTop: -27,
+      opacity: 0,
+      pointerEvents: 'none',
+      position: 'absolute',
+      top: '5.5rem',
+      width: 54,
+      animation: 'hero-ring 15s linear infinite',
+    },
+    ring2: { borderColor: 'var(--accent-soft)', animation: 'hero-ring2 15s linear infinite' },
+    cursor: {
+      height: 34,
+      left: '1.9rem',
+      opacity: 0,
+      pointerEvents: 'none',
+      position: 'absolute',
+      top: '5rem',
+      transform: 'translate(0, 0)',
+      width: 34,
+      zIndex: 4,
+      animation: 'hero-cursor 15s cubic-bezier(0.33, 1, 0.68, 1) infinite',
+    },
+    cursorPath: { fill: 'var(--ink)', stroke: 'var(--card)' },
+    mini: {
+      borderLeftColor: 'var(--edge-soft)',
+      borderLeftStyle: 'solid',
+      borderLeftWidth: 1,
+      padding: '1.1rem',
+      '@media (max-width: 30rem)': {
+        borderLeftWidth: 0,
+        borderTopColor: 'var(--edge-soft)',
+        borderTopStyle: 'solid',
+        borderTopWidth: 1,
+      },
+    },
+    miniH: {
+      color: 'var(--faint)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.6rem',
+      letterSpacing: '0.16em',
+      margin: '0 0 0.7rem',
+      textTransform: 'uppercase',
+    },
+    mline: {
+      color: 'var(--dim)',
+      display: 'flex',
+      fontSize: '0.85rem',
+      justifyContent: 'space-between',
+      marginBottom: '0.4rem',
+    },
+    mlineB: { color: 'var(--ink)' },
+    mtot: {
+      borderTopColor: 'var(--edge-soft)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.85rem',
+      justifyContent: 'space-between',
+      marginTop: '0.55rem',
+      paddingTop: '0.55rem',
+    },
+    swap: { display: 'inline-block', position: 'relative' },
+    tick: { animation: 'hero-tick 15s ease infinite' },
+    num2: { animation: 'hero-cart2 15s linear infinite', opacity: 0 },
+    num3: {
+      animation: 'hero-cart3 15s linear infinite',
+      left: 0,
+      opacity: 1,
+      position: 'absolute',
+      top: 0,
+    },
+    verdict: {
+      alignItems: 'flex-start',
+      background: 'var(--synced-bg)',
+      borderTopColor: 'var(--edge)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.76rem',
+      gap: '0.7rem',
+      lineHeight: 1.5,
+      minHeight: '4.7rem',
+      padding: '0.85rem 0.95rem',
+      animation: 'hero-vtint 15s linear infinite',
+    },
+    vMark: {
+      background: 'var(--green)',
+      color: '#fff',
+      flexGrow: 0,
+      flexShrink: 0,
+      fontWeight: 700,
+      height: '1.35rem',
+      marginTop: '0.05rem',
+      position: 'relative',
+      width: '1.35rem',
+      animation: 'hero-vmark 15s linear infinite',
+    },
+    vGlyph: {
+      alignItems: 'center',
+      bottom: 0,
+      display: 'flex',
+      justifyContent: 'center',
+      left: 0,
+      position: 'absolute',
+      right: 0,
+      top: 0,
+    },
+    vBody: { color: 'var(--ink)', flex: 1, minHeight: '3rem', position: 'relative' },
+    vLine: { left: 0, position: 'absolute', right: 0, top: 0 },
+    vFix: { color: 'var(--accent)', display: 'block', marginTop: '0.3rem' },
+    vg0: { animation: 'hero-v0 15s linear infinite', opacity: 0 },
+    vg1: { animation: 'hero-v1 15s linear infinite', opacity: 0 },
+    vg2: { animation: 'hero-v2 15s linear infinite', opacity: 0 },
+    vg3: { animation: 'hero-v3 15s linear infinite', opacity: 0 },
+    vg4: { animation: 'hero-v4 15s linear infinite', opacity: 1 },
+  },
+  { namespace: 'site-hero', source: 'site/src/components/landing.tsx' },
+);
+
 export interface LandingPageProps {
   clients: ClientHrefs;
-  loaderGzipBytes: number;
 }
 
-export function LandingRoutePage({ clients, loaderGzipBytes }: LandingPageProps): string {
+export function LandingRoutePage({ clients }: LandingPageProps): string {
   return (
     <div style={landingStyles.root}>
       {SiteHeader.definition.render({ activePath: '/', clients })}
       <div style={landingStyles.wrap}>
         <Hero clients={clients} />
-        <BreakIt />
-        <Split />
-        <LedgerStrip loaderGzipBytes={loaderGzipBytes} />
+        <AutoInvalidate />
+        <InstantLoad />
+        <Credibility />
       </div>
       {SiteFooter.definition.render()}
     </div>
@@ -625,28 +424,25 @@ export function LandingRoutePage({ clients, loaderGzipBytes }: LandingPageProps)
 
 function Hero({ clients }: { clients: ClientHrefs }): string {
   return (
-    <section style={landingStyles.hero}>
+    <section style={heroStyles.hero}>
       <div>
-        <h1 style={landingStyles.stencil}>
-          {BRAND_CAPS}
-          <span style={landingStyles.cursor}>&#9646;</span>
+        <h1 style={heroStyles.h1}>
+          Builds like <em style={heroStyles.alt}>React</em>.<br />
+          Runs like <em style={heroStyles.alt}>HTML</em>.
         </h1>
-        <p style={landingStyles.tagline}>
-          Builds like <em style={landingStyles.taglineEm}>React</em>. Runs like{' '}
-          <em style={landingStyles.taglineEm}>HTML</em>.
+        <p style={heroStyles.lede}>
+          React's developer experience, with HTML's oldest guarantee: a page that's never out of
+          sync with itself -- proven at build time.
         </p>
-        <p style={landingStyles.sub}>
-          {BRAND} is the web framework that{' '}
-          <b style={landingStyles.strong}>hands your agent the fix</b> -- database to DOM. AI coding
-          agents get a precise error and know exactly what to change, and your users get pages that
-          are real HTML, <b style={landingStyles.strong}>interactive at first paint</b>.
+        <p style={heroStyles.sub}>
+          Pages are real HTML, interactive at first paint. Every view of your data stays in sync
+          from the database to the DOM, so a stale UI is a{' '}
+          <b style={heroStyles.strong}>compile error</b> your agent fixes before it ships.
         </p>
-        <span style={landingStyles.noJs}>&#10003; No JS required on load</span>
-        <div style={landingStyles.try}>
+        <div style={heroStyles.cta}>
           <div style={landingStyles.cmd}>
             <span>
-              <span style={landingStyles.dollar}>$</span>{' '}
-              <code>pnpm create {BRAND_CLI} my-app</code>
+              <span style={landingStyles.dollar}>$</span> <code>npx create-kovo</code>
             </span>
             <button
               type="button"
@@ -661,351 +457,680 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
           </a>
         </div>
       </div>
-      <div style={landingStyles.term}>
-        <div style={landingStyles.termHead}>
-          <span>one rename, every layer caught</span>
-          <span>{BRAND_CLI} check</span>
-        </div>
-        <pre style={landingStyles.termPre}>
-          <span style={landingStyles.textDim}>$ git diff db/schema.ts</span>
-          {'\n'}
-          <span style={landingStyles.textDel}>- price: integer('price'),</span>
-          {'\n'}
-          <span style={landingStyles.textAdd}>+ priceCents: integer('price_cents'),</span>
-          {'\n\n'}
-          <span style={landingStyles.textDim}>$ {BRAND_CLI} check</span>
-          {'\n\n'}
-          <span style={landingStyles.textErr}>&#10007;</span>{' '}
-          <span style={landingStyles.textLoc}>server/queries/product.ts:14</span>{' '}
-          <span style={[landingStyles.badge, landingStyles.badgeQuery]}>QUERY</span>
-          {'\n  '}projection reads dropped column <b>price</b>
-          {'\n  '}
-          <span style={landingStyles.textFix}>
-            -&gt; select priceCents, or alias: price: products.priceCents
-          </span>
-          {'\n\n'}
-          <span style={landingStyles.textErr}>&#10007;</span>{' '}
-          <span style={landingStyles.textLoc}>src/product-card.tsx:13</span>{' '}
-          <span style={[landingStyles.badge, landingStyles.badgeBind]}>BINDING</span>
-          {'\n  '}data-bind <b>"product.price"</b> has no source in the query
-          {'\n  '}
-          <span style={landingStyles.textFix}>
-            -&gt; bind product.priceCents -- format in a derive
-          </span>
-          {'\n\n'}
-          <span style={landingStyles.textErr}>&#10007;</span>{' '}
-          <span style={landingStyles.textLoc}>src/cart/checkout.tsx:31</span>{' '}
-          <span style={[landingStyles.badge, landingStyles.badgeForm]}>FORM</span>
-          {'\n  '}field <b>price</b> is not in the cart/add mutation schema
-          {'\n\n'}
-          <span style={landingStyles.textErr}>&#10007;</span>{' '}
-          <span style={landingStyles.textLoc}>src/routes/sale.ts:8</span>{' '}
-          <span style={[landingStyles.badge, landingStyles.badgeRoute]}>ROUTE</span>
-          {'\n  '}redirect builds <b>/sale?max=price</b> against a dropped param
-          {'\n\n'}
-          <div style={landingStyles.cascadeSum}>
-            <span>
-              <b style={landingStyles.strong}>4 errors</b> &middot; 4 files &middot; each with its
-              fix
-            </span>
-            <span style={landingStyles.textOk}>0 guesses</span>
-          </div>
-        </pre>
+      <div data-anim="hero" style={heroStyles.unit}>
+        <HeroActs />
+        <HeroShop />
+        <HeroVerdict />
       </div>
     </section>
   );
 }
 
-function BreakIt(): string {
+function HeroActs(): string {
   return (
-    <section style={landingStyles.breakit}>
-      <p style={landingStyles.sectionLabel}>How it works</p>
-      <h2 style={landingStyles.pipeTitle}>Build-time checks from backend to frontend</h2>
-      <p style={landingStyles.pipeSub}>
-        Every layer below is checked against the next at build time. Don't take our word for it --
-        break something:
-      </p>
-
-      <input type="radio" name="brk" id="brk-col" checked style={landingStyles.radio} />
-      <input type="radio" name="brk" id="brk-query" style={landingStyles.radio} />
-      <input type="radio" name="brk" id="brk-bind" style={landingStyles.radio} />
-
-      <div style={landingStyles.choices}>
-        <label for="brk-col" data-choice="col" style={landingStyles.choiceLabel}>
-          <b style={landingStyles.choiceNumber}>01</b> rename the column
-        </label>
-        <label for="brk-query" data-choice="query" style={landingStyles.choiceLabel}>
-          <b style={landingStyles.choiceNumber}>02</b> reshape the query
-        </label>
-        <label
-          for="brk-bind"
-          data-choice="bind"
-          style={[landingStyles.choiceLabel, landingStyles.choiceLabelLast]}
-        >
-          <b style={landingStyles.choiceNumber}>03</b> typo the binding
-        </label>
-      </div>
-
-      <div style={landingStyles.pipe}>
-        <div style={landingStyles.node} data-node="database">
-          <p style={landingStyles.nodeLabel}>Database</p>
-          <pre style={landingStyles.nodePre}>
-            products = <span style={landingStyles.textFn}>table</span>({'{'}
-            {'\n  '}details: <span style={landingStyles.textHl}>nullable</span>(json),
-            {'\n  '}price: <span style={landingStyles.textFn}>integer</span>()
-            {'\n'}
-            {'}'})
-          </pre>
-        </div>
-        <div style={landingStyles.pipeLink} data-link="col">
-          <span style={landingStyles.check} data-check="ok">
-            &#10003; typed
-          </span>
-          <span style={[landingStyles.check, landingStyles.checkBad]} data-check="bad">
-            &#10007; KV402
-          </span>
-          <span style={landingStyles.wire} data-wire></span>
-        </div>
-        <div style={landingStyles.node} data-node="query">
-          <p style={landingStyles.nodeLabel}>Server query</p>
-          <pre style={landingStyles.nodePre}>
-            <span style={landingStyles.textFn}>query</span>(
-            <span style={landingStyles.textSt}>'product'</span>, {'{'}
-            {'\n  '}reads: [product],
-            {'\n  '}load: ... <span style={landingStyles.textHl}>-&gt; shape</span>
-            {'\n'}
-            {'}'})
-          </pre>
-        </div>
-        <div style={landingStyles.pipeLink} data-link="query">
-          <span style={landingStyles.check} data-check="ok">
-            &#10003; typed
-          </span>
-          <span style={[landingStyles.check, landingStyles.checkBad]} data-check="bad">
-            &#10007; KV223
-          </span>
-          <span style={landingStyles.wire} data-wire></span>
-        </div>
-        <div style={landingStyles.node}>
-          <p style={landingStyles.nodeLabel}>Client data</p>
-          <pre style={landingStyles.nodePre}>
-            &lt;script kovo-query=<span style={landingStyles.textSt}>"product"</span>&gt;
-            {'\n'}
-            {'{"price": '}
-            <span style={landingStyles.textHl}>1299</span>
-            {'}'}
-          </pre>
-        </div>
-        <div style={landingStyles.pipeLink} data-link="bind">
-          <span style={landingStyles.check} data-check="ok">
-            &#10003; typed
-          </span>
-          <span style={[landingStyles.check, landingStyles.checkBad]} data-check="bad">
-            &#10007; KV227
-          </span>
-          <span style={landingStyles.wire} data-wire></span>
-        </div>
-        <div style={landingStyles.node} data-node="ui">
-          <p style={landingStyles.nodeLabel}>Rendered UI</p>
-          <pre style={landingStyles.nodePre}>
-            &lt;h2 data-bind=
-            {'\n  '}
-            <span style={landingStyles.textSt}>"product.price"</span>&gt;
-          </pre>
+    <div style={heroStyles.acts}>
+      <div style={heroStyles.actA}>
+        <span style={heroStyles.actLabA}>Every other framework</span>
+        <div style={heroStyles.beats}>
+          <span style={heroStyles.beat}>idle</span>
+          <span style={heroStyles.beat}>add to cart</span>
+          <span style={heroStyles.beat}>stale, shipped &#10007;</span>
         </div>
       </div>
-
-      <div style={landingStyles.caught}>
-        <CaughtCase
-          kind="col"
-          head={`${BRAND_CLI} check -- caught at the database -> query junction`}
-          code="KV402"
-          title="query 'product' reads a column that no longer exists"
-          location="server/queries/product.ts:14 -- select(products."
-          field="price"
-          fix="-> the column is now priceCents -- select it, or alias: price: products.priceCents"
-          note="every query is compiled against the live schema, so a rename can't reach production"
-        />
-        <CaughtCase
-          kind="query"
-          head={`${BRAND_CLI} check -- caught at the query -> client junction`}
-          code="KV223"
-          title="the page depends on data the query no longer ships"
-          location='src/product-card.tsx:13 -- data-bind="product.'
-          field="price"
-          fix="-> the projection now ships priceCents -- update the binding, or restore the field"
-          note="bindings are typed against the query's emitted shape, not against hope"
-        />
-        <CaughtCase
-          kind="bind"
-          head={`${BRAND_CLI} check -- caught at the client -> UI junction`}
-          code="KV227"
-          title="binding path 'product.pricee' does not exist"
-          location='src/product-card.tsx:13 -- data-bind="product.'
-          field="pricee"
-          fix="-> did you mean product.price?"
-          note="the DOM is part of the type system: a typo in an attribute is a build error"
-        />
+      <div style={heroStyles.seam}>
+        kovo
+        <br />
+        check
       </div>
-      <p style={landingStyles.breakitFoot}>
-        <span>
-          this demo is plain HTML and CSS -- radio buttons and :has().{' '}
-          <b style={landingStyles.breakitFootStrong}>that's the point.</b>
+      <div style={heroStyles.actB}>
+        <span style={heroStyles.actLabB}>
+          <span style={heroStyles.diamond}></span>What Kovo adds
         </span>
-        <span>L0 on the interaction ladder</span>
-      </p>
-    </section>
-  );
-}
-
-function CaughtCase({
-  code,
-  field,
-  fix,
-  head,
-  kind,
-  location,
-  note,
-  title,
-}: {
-  code: string;
-  field: string;
-  fix: string;
-  head: string;
-  kind: 'col' | 'query' | 'bind';
-  location: string;
-  note: string;
-  title: string;
-}): string {
-  return (
-    <div
-      style={[landingStyles.term, landingStyles.caughtTerm, landingStyles.casePanel]}
-      data-case={kind}
-    >
-      <div style={landingStyles.termHead}>
-        <span>{head}</span>
+        <div style={heroStyles.beats}>
+          <span style={heroStyles.beat}>caught</span>
+          <span style={heroStyles.beat}>consistent &#10003;</span>
+        </div>
       </div>
-      <pre style={landingStyles.termPre}>
-        <span style={landingStyles.textErr}>&#10007; {code}</span> -- <b>{title}</b>
-        {'\n\n  '}
-        {location}
-        <span style={landingStyles.squiggle}>{field}</span>
-        {field === 'price' ? ')' : '"'}
-        {'\n  '}
-        <span style={landingStyles.textFix}>{fix}</span>
-        {'\n  '}
-        <span style={landingStyles.textDim}>{note}</span>
-      </pre>
     </div>
   );
 }
 
-function Split(): string {
+function NumberSwap({ two, three }: { two: string; three: string }): string {
   return (
-    <section style={landingStyles.split}>
-      <div style={landingStyles.half}>
-        <p style={[landingStyles.halfLabel, landingStyles.agentLabel]}>For agents</p>
-        <h3 style={landingStyles.halfTitle}>Errors worth reading</h3>
-        <p style={landingStyles.lead}>
-          Every diagnostic teaches: the line, the reason, the fixes -- so the loop is{' '}
-          <b style={landingStyles.strong}>edit -&gt; check -&gt; fixed</b>, not edit -&gt; deploy
-          -&gt; bug report. The behavior graph is queryable too:{' '}
-          <code style={landingStyles.leadCode}>{BRAND_CLI} explain mutation cart/add</code> answers
-          "what refreshes?" with diffable output for CI.
-        </p>
-        <div style={landingStyles.term}>
-          <div style={landingStyles.termHead}>$ {BRAND_CLI} check</div>
-          <pre style={landingStyles.termPre}>
-            <span style={landingStyles.textDim}>13 &#9474;</span> render: () =&gt; &lt;h2&gt;{'{'}
-            product.
-            <span style={landingStyles.squiggle}>details.name</span>
-            {'}'}&lt;/h2&gt;
-            {'\n\n'}
-            <span style={landingStyles.textErr}>&#10007; KV227</span> --{' '}
-            <b>product.details can be null here</b>
-            {'\n  '}
-            <span style={landingStyles.textFix}>fix 1</span> {'{'}product.details
-            <span style={landingStyles.textOk}>?.</span>name{'}'}
-            {'\n  '}
-            <span style={landingStyles.textFix}>fix 2</span> make the projection non-null in the
-            query
-            {'\n\n'}
-            <span style={landingStyles.textOk}>&#10003; caught in 0.4s -- before anything ran</span>
-          </pre>
+    <span style={heroStyles.swap}>
+      <span style={heroStyles.num2}>{two}</span>
+      <span style={heroStyles.num3}>{three}</span>
+    </span>
+  );
+}
+
+function HeroShop(): string {
+  return (
+    <div>
+      <div style={heroStyles.shopbar}>
+        <span style={heroStyles.brand}>Northwind</span>
+        <span style={heroStyles.pill}>
+          cart{' '}
+          <b style={heroStyles.badgeWrap}>
+            <span style={heroStyles.badge2}>2</span>
+            <span style={heroStyles.badge3}>3</span>
+          </b>
+        </span>
+      </div>
+      <div style={heroStyles.shopbody}>
+        <div style={heroStyles.prod}>
+          <div style={heroStyles.prodNm}>Aeron Chair</div>
+          <div style={heroStyles.prodPr}>$48.00</div>
+          <button type="button" style={heroStyles.addBtn}>
+            <span style={heroStyles.lblWrap}>
+              <span style={heroStyles.lbl1}>add to cart</span>
+              <span style={heroStyles.lbl2}>&#10003; added</span>
+            </span>
+          </button>
+          <span style={heroStyles.ring}></span>
+          <span style={[heroStyles.ring, heroStyles.ring2]}></span>
+          <span style={heroStyles.cursor}>
+            <svg viewBox="0 0 32 32" width="34" height="34">
+              <path
+                d="M7 3.5l19 10.5-8.1 1.7-3.5 8.3z"
+                style={heroStyles.cursorPath}
+                stroke-width="1.7"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </span>
+        </div>
+        <div style={heroStyles.mini}>
+          <p style={heroStyles.miniH}>Your cart</p>
+          <div style={heroStyles.mline}>
+            <span>Items</span>
+            <b style={[heroStyles.mlineB, heroStyles.tick]}>
+              <NumberSwap two="2" three="3" />
+            </b>
+          </div>
+          <div style={heroStyles.mline}>
+            <span>Aeron Chair</span>
+            <span>
+              &times;
+              <NumberSwap two="2" three="3" />
+            </span>
+          </div>
+          <div style={heroStyles.mtot}>
+            <span>Subtotal</span>
+            <b style={heroStyles.mlineB}>
+              <NumberSwap two="$96" three="$144" />
+            </b>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
 
-      <div style={[landingStyles.half, landingStyles.rightHalf]}>
-        <p style={[landingStyles.halfLabel, landingStyles.userLabel]}>For users</p>
-        <h3 style={landingStyles.halfTitle}>No uncanny valley</h3>
-        <p style={landingStyles.lead}>
-          No hydration means no window where the page{' '}
-          <b style={landingStyles.strong}>looks ready but isn't</b>. A button works the moment it
-          paints.
-        </p>
-        <div style={landingStyles.timelines}>
-          <div style={landingStyles.timeline}>
-            <p style={landingStyles.who}>
-              <span>Typical SPA</span>
-              <span style={landingStyles.bad}>interactive at 3.2s</span>
-            </p>
-            <div style={landingStyles.track}>
-              <span style={[landingStyles.segment, landingStyles.spaS1]}></span>
-              <span style={[landingStyles.segment, landingStyles.spaS2]}></span>
-              <span style={[landingStyles.segment, landingStyles.spaS3]}></span>
-            </div>
-            <p style={landingStyles.marks}>
-              <span>0ms paint</span>
-              <span style={landingStyles.warn}>&#9888; looks ready, ignores clicks</span>
-              <span>3.2s</span>
-            </p>
+function HeroVerdict(): string {
+  return (
+    <div style={heroStyles.verdict}>
+      <span style={heroStyles.vMark}>
+        <span style={[heroStyles.vGlyph, heroStyles.vg0]}>&#10003;</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg1]}>+</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg2]}>&#10007;</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg3]}>!</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg4]}>&#10003;</span>
+      </span>
+      <span style={heroStyles.vBody}>
+        <span style={[heroStyles.vLine, heroStyles.vg0]}>Two views of one cart, in agreement.</span>
+        <span style={[heroStyles.vLine, heroStyles.vg1]}>
+          Added 1 to the cart, refreshing the views...
+        </span>
+        <span style={[heroStyles.vLine, heroStyles.vg2]}>
+          Header shows 2, cart shows 3 -- the stale UI most frameworks ship.
+        </span>
+        <span style={[heroStyles.vLine, heroStyles.vg3]}>
+          KV251 -- cart/add updates items, but the header reads cart.count and isn't in its touch
+          set.
+          <span style={heroStyles.vFix}>-&gt; add cart.count to the cart/add touch set</span>
+        </span>
+        <span style={[heroStyles.vLine, heroStyles.vg4]}>
+          kovo check passed -- the header, cart, and subtotal are one fact.
+        </span>
+      </span>
+    </div>
+  );
+}
+
+// ── Landing content sections (The Proof, DESIGN.md) ──────────────────────────
+const pageStyles = style.create(
+  {
+    section: {
+      borderTopColor: 'var(--edge)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      padding: '4.2rem 0',
+    },
+    eyebrow: {
+      color: 'var(--accent)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.7rem',
+      letterSpacing: '0.18em',
+      margin: '0 0 0.9rem',
+      textTransform: 'uppercase',
+    },
+    title: {
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-display)',
+      fontSize: 'clamp(1.9rem, 3.4vw, 2.55rem)',
+      fontWeight: 600,
+      letterSpacing: '-0.02em',
+      lineHeight: 1.08,
+      margin: 0,
+      maxWidth: '22ch',
+      textWrap: 'balance',
+    },
+    lead: {
+      color: 'var(--dim)',
+      fontFamily: 'var(--font-serif)',
+      fontSize: 'clamp(1.1rem, 1.7vw, 1.3rem)',
+      fontWeight: 380,
+      lineHeight: 1.45,
+      margin: '1rem 0 0',
+      maxWidth: '46rem',
+    },
+    leadCode: { color: 'var(--ink)', fontFamily: 'var(--font-mono)', fontSize: '0.85em' },
+    aiUnit: {
+      background: 'var(--card)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'grid',
+      margin: '2.4rem 0 0',
+      position: 'relative',
+      // The two-column layout is set ONLY in a min-width media (no base value),
+      // so narrow viewports default to a single column. Overriding a base
+      // grid-template-columns from a media query is order-fragile in the atomic
+      // compiler, so we avoid the conflict entirely. On mobile the tab bar shows
+      // and :has() reveals only the selected column (radio + :has(), zero JS).
+      '@media (min-width: 52.01rem)': { gridTemplateColumns: '1fr 1fr' },
+      ':has(#ai-other:checked) [data-aicol="kovo"]': {
+        '@media (max-width: 52rem)': { display: 'none' },
+      },
+      ':has(#ai-kovo:checked) [data-aicol="other"]': {
+        '@media (max-width: 52rem)': { display: 'none' },
+      },
+      ':has(#ai-other:checked) [data-aitab="other"]': {
+        '@media (max-width: 52rem)': { background: 'var(--card)', color: 'var(--ink)' },
+      },
+      ':has(#ai-kovo:checked) [data-aitab="kovo"]': {
+        '@media (max-width: 52rem)': { background: 'var(--card)', color: 'var(--ink)' },
+      },
+    },
+    radioTab: { height: 0, opacity: 0, pointerEvents: 'none', position: 'absolute', width: 0 },
+    aiTabs: {
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      '@media (max-width: 52rem)': { display: 'flex' },
+      '@media (min-width: 52.01rem)': { display: 'none' },
+    },
+    aiTab: {
+      alignItems: 'center',
+      background: 'var(--panel)',
+      color: 'var(--dim)',
+      cursor: 'pointer',
+      display: 'flex',
+      flex: 1,
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.74rem',
+      fontWeight: 700,
+      gap: '0.45rem',
+      justifyContent: 'center',
+      letterSpacing: '0.03em',
+      padding: '0.7rem 1rem',
+      textTransform: 'uppercase',
+    },
+    aiTabDiv: { borderLeftColor: 'var(--edge)', borderLeftStyle: 'solid', borderLeftWidth: 1 },
+    aiHead: {
+      alignItems: 'center',
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.72rem',
+      fontWeight: 700,
+      justifyContent: 'space-between',
+      letterSpacing: '0.04em',
+      padding: '0.7rem 1rem',
+      textTransform: 'uppercase',
+    },
+    aiHeadBad: {
+      background: 'color-mix(in srgb, var(--red) 9%, var(--card))',
+      color: 'var(--red)',
+    },
+    aiHeadGood: {
+      background: 'color-mix(in srgb, var(--accent) 9%, var(--card))',
+      color: 'var(--accent)',
+    },
+    aiHeadLabel: { alignItems: 'center', display: 'flex', gap: '0.5rem' },
+    aiHeadFile: { color: 'var(--faint)', fontWeight: 400, letterSpacing: '0.1em' },
+    markBad: { color: 'var(--red)' },
+    markAccent: { color: 'var(--accent)' },
+    aiCol: { display: 'flex', flexDirection: 'column' },
+    aiColRight: {
+      '@media (min-width: 52.01rem)': {
+        borderLeftColor: 'var(--edge)',
+        borderLeftStyle: 'solid',
+        borderLeftWidth: 1,
+      },
+    },
+    grow: { flexGrow: 1 },
+    aiVerdict: {
+      background: 'var(--panel)',
+      borderTopColor: 'var(--edge)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      color: 'var(--dim)',
+      fontSize: '0.9rem',
+      lineHeight: 1.5,
+      padding: '0.9rem 1.1rem',
+    },
+    code: {
+      color: 'var(--dim)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.77rem',
+      lineHeight: 1.85,
+      margin: 0,
+      padding: '1rem 1.1rem',
+      whiteSpace: 'pre-wrap',
+    },
+    cKw: { color: 'var(--purple)' },
+    cFn: { color: 'var(--sky)' },
+    cStr: { color: 'var(--green)' },
+    cBind: { color: 'var(--accent)' },
+    cDim: { color: 'var(--faint)' },
+    mono: { color: 'var(--ink)', fontFamily: 'var(--font-mono)', fontSize: '0.85em' },
+    bad: { color: 'var(--red)', fontWeight: 600 },
+    good: { color: 'var(--green)', fontWeight: 600 },
+    rhead: {
+      color: 'var(--dim)',
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.72rem',
+      justifyContent: 'space-between',
+      letterSpacing: '0.03em',
+      marginBottom: '0.5rem',
+      textTransform: 'uppercase',
+    },
+    instGrid: {
+      alignItems: 'center',
+      display: 'grid',
+      gap: '3rem',
+      gridTemplateColumns: '1fr 1.05fr',
+      '@media (max-width: 60rem)': { gap: '2rem', gridTemplateColumns: '1fr' },
+    },
+    bars: { display: 'flex', flexDirection: 'column', gap: '1.15rem' },
+    barNote: {
+      color: 'var(--faint)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.62rem',
+      letterSpacing: '0.02em',
+      marginTop: '0.4rem',
+    },
+    track: {
+      background: 'var(--panel)',
+      borderRadius: 9999,
+      height: '0.5rem',
+      overflow: 'hidden',
+      position: 'relative',
+    },
+    seg: { bottom: 0, position: 'absolute', top: 0 },
+    sIdle: { background: 'var(--faint)' },
+    sHatch: {
+      background:
+        'repeating-linear-gradient(135deg, color-mix(in srgb, var(--amber) 55%, var(--panel)) 0 6px, color-mix(in srgb, var(--amber) 20%, var(--panel)) 6px 12px)',
+    },
+    sLive: { background: 'color-mix(in srgb, var(--accent) 35%, var(--panel))' },
+    sKovo: { background: 'linear-gradient(90deg, var(--accent), var(--accent-soft))' },
+    spa1: { left: 0, width: '16%' },
+    spa2: { left: '16%', width: '56%' },
+    spa3: { left: '72%', width: '28%' },
+    ssr1: { left: 0, width: '10%' },
+    ssr2: { left: '10%', width: '40%' },
+    ssr3: { left: '50%', width: '50%' },
+    kovo1: { left: 0, width: '6%' },
+    kovo2: { left: '6%', width: '94%' },
+    warn: { color: 'var(--amber)' },
+    statRow: { display: 'flex', flexWrap: 'wrap', gap: '2.4rem', margin: '2.4rem 0 0' },
+    statNum: {
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-display)',
+      fontSize: '1.7rem',
+      fontWeight: 600,
+      letterSpacing: '-0.01em',
+    },
+    statLabel: {
+      color: 'var(--dim)',
+      fontSize: '0.84rem',
+      lineHeight: 1.4,
+      marginTop: '0.2rem',
+      maxWidth: '15rem',
+    },
+
+    credLink: {
+      borderBottomColor: 'var(--accent)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: 'var(--ink)',
+      fontWeight: 500,
+      textDecoration: 'none',
+    },
+    faq: {
+      borderTopColor: 'var(--edge)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      margin: '2.4rem 0 0',
+      maxWidth: '54rem',
+    },
+    faqItem: {
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      '[open] [data-q-plus]': { display: 'none' },
+      '[open] [data-q-minus]': { display: 'inline' },
+    },
+    faqQ: {
+      alignItems: 'center',
+      color: 'var(--ink)',
+      cursor: 'pointer',
+      display: 'flex',
+      fontFamily: 'var(--font-display)',
+      fontSize: '1.15rem',
+      fontWeight: 600,
+      gap: '1rem',
+      justifyContent: 'space-between',
+      listStyle: 'none',
+      padding: '1.05rem 0',
+    },
+    faqMark: { color: 'var(--accent)', fontFamily: 'var(--font-mono)', fontSize: '1.1rem' },
+    qMinus: { display: 'none' },
+    faqA: {
+      color: 'var(--dim)',
+      fontSize: '0.98rem',
+      lineHeight: 1.62,
+      margin: '0 0 1.2rem',
+      maxWidth: '52rem',
+    },
+    starCta: {
+      alignItems: 'center',
+      background: 'var(--card)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: '1.4rem',
+      justifyContent: 'space-between',
+      margin: '2.8rem 0 0',
+      padding: '1.8rem 2rem',
+    },
+    starCtaH: {
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-display)',
+      fontSize: '1.5rem',
+      fontWeight: 600,
+      letterSpacing: '-0.015em',
+      margin: 0,
+    },
+    starCtaSub: {
+      color: 'var(--dim)',
+      fontSize: '0.95rem',
+      lineHeight: 1.5,
+      margin: '0.4rem 0 0',
+      maxWidth: '34rem',
+    },
+    starBtn: {
+      alignItems: 'center',
+      background: 'var(--ink)',
+      color: 'var(--bg)',
+      display: 'inline-flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.78rem',
+      gap: '0.5rem',
+      letterSpacing: '0.07em',
+      padding: '0.85rem 1.3rem',
+      textDecoration: 'none',
+      textTransform: 'uppercase',
+      whiteSpace: 'nowrap',
+    },
+    ghMark: { height: 15, width: 15 },
+  },
+  { namespace: 'site-page', source: 'site/src/components/landing.tsx' },
+);
+
+function AutoInvalidate(): string {
+  return (
+    <section style={pageStyles.section}>
+      <p style={pageStyles.eyebrow}>How freshness works</p>
+      <h2 style={pageStyles.title}>
+        Add something to your UI. It&apos;ll automatically get fresh data.
+      </h2>
+      <p style={pageStyles.lead}>
+        Other frameworks make you remember which caches to clear after every write. Kovo infers it
+        from what each view reads: declare the data, and the compiler keeps every view that uses it
+        fresh. No cache tags, no <span style={pageStyles.leadCode}>invalidateQueries</span>, no{' '}
+        <span style={pageStyles.leadCode}>useEffect</span>.
+      </p>
+      <div style={pageStyles.aiUnit}>
+        <input type="radio" name="ai-tab" id="ai-other" checked style={pageStyles.radioTab} />
+        <input type="radio" name="ai-tab" id="ai-kovo" style={pageStyles.radioTab} />
+        <div style={pageStyles.aiTabs}>
+          <label for="ai-other" data-aitab="other" style={pageStyles.aiTab}>
+            <span style={pageStyles.markBad}>&#10007;</span> Other frameworks
+          </label>
+          <label for="ai-kovo" data-aitab="kovo" style={[pageStyles.aiTab, pageStyles.aiTabDiv]}>
+            <span style={pageStyles.markAccent}>&#10003;</span> In Kovo
+          </label>
+        </div>
+        <div style={pageStyles.aiCol} data-aicol="other">
+          <div style={[pageStyles.aiHead, pageStyles.aiHeadBad]}>
+            <span style={pageStyles.aiHeadLabel}>&#10007; Other frameworks</span>
+            <span style={pageStyles.aiHeadFile}>cart.ts</span>
           </div>
-          <div style={landingStyles.timeline}>
-            <p style={landingStyles.who}>
-              <span>{BRAND}</span>
-              <span style={landingStyles.good}>interactive at first paint</span>
-            </p>
-            <div style={landingStyles.track}>
-              <span style={[landingStyles.segment, landingStyles.mpaS1]}></span>
-              <span style={[landingStyles.segment, landingStyles.mpaS3]}></span>
-            </div>
-            <p style={landingStyles.marks}>
-              <span>0ms paint</span>
-              <span style={landingStyles.textOk}>
-                &#10003; every click works -- tiny loader, handlers on demand
-              </span>
-            </p>
+          <pre style={[pageStyles.code, pageStyles.grow]}>
+            <span style={pageStyles.cKw}>async function</span> addToCart(item) {'{'}
+            {'\n  '}
+            <span style={pageStyles.cKw}>await</span> db.cart.add(item)
+            {'\n\n  '}
+            <span style={pageStyles.cDim}>// remember every view that reads cart:</span>
+            {'\n  '}
+            <span style={pageStyles.cFn}>invalidate</span>(
+            <span style={pageStyles.cStr}>&apos;cart&apos;</span>){'\n  '}
+            <span style={pageStyles.cFn}>invalidate</span>(
+            <span style={pageStyles.cStr}>&apos;cart-badge&apos;</span>){'\n  '}
+            <span style={pageStyles.cFn}>invalidate</span>(
+            <span style={pageStyles.cStr}>&apos;free-shipping&apos;</span>){'\n  '}
+            <span style={pageStyles.bad}>// miss one and it silently goes stale.</span>
+            {'\n'}
+            {'}'}
+          </pre>
+          <div style={pageStyles.aiVerdict}>
+            Forget one <span style={pageStyles.mono}>invalidate(...)</span> and you ship the{' '}
+            <span style={pageStyles.bad}>stale bug</span> -- the badge that disagrees with the cart.
           </div>
         </div>
-        <p style={landingStyles.usersNote}>
-          With JavaScript off, every page still renders and every form still posts.{' '}
-          <b style={landingStyles.strong}>This site runs on {BRAND} -- try it.</b>
-        </p>
+        <div style={[pageStyles.aiCol, pageStyles.aiColRight]} data-aicol="kovo">
+          <div style={[pageStyles.aiHead, pageStyles.aiHeadGood]}>
+            <span style={pageStyles.aiHeadLabel}>&#10003; In Kovo</span>
+            <span style={pageStyles.aiHeadFile}>cart.ts</span>
+          </div>
+          <pre style={[pageStyles.code, pageStyles.grow]}>
+            <span style={pageStyles.cDim}>// a view reads what it needs:</span>
+            {'\n'}
+            <span style={pageStyles.cKw}>const</span> total ={' '}
+            <span style={pageStyles.cBind}>cart.total</span>
+            {'\n\n'}
+            <span style={pageStyles.cDim}>// the mutation only writes:</span>
+            {'\n'}
+            <span style={pageStyles.cFn}>mutation</span>(
+            <span style={pageStyles.cStr}>&apos;cart/add&apos;</span>, (item) =&gt;
+            {'\n  '}db.cart.add(item))
+            {'\n\n'}
+            <span style={pageStyles.good}>// every view that reads cart refreshes.</span>
+            {'\n'}
+            <span style={pageStyles.cDim}>// nothing to invalidate. checked at build.</span>
+          </pre>
+          <div style={pageStyles.aiVerdict}>
+            The read set <span style={pageStyles.good}>is</span> the invalidation set. Add a view
+            and it is already wired -- diffable in CI.
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-function LedgerStrip({ loaderGzipBytes }: { loaderGzipBytes: number }): string {
+function InstantLoad(): string {
   return (
-    <p style={landingStyles.ledgerStrip}>
-      <span>
-        <span style={landingStyles.textOk}>&#9679;</span> all build gates green
-      </span>
-      <span style={landingStyles.ledgerSep}>&#9474;</span>
-      <span>
-        loader <b style={landingStyles.strong}>{loaderGzipBytes.toLocaleString('en-US')} B</b> gzip
-        -- measured this build
-      </span>
-      <span style={landingStyles.ledgerSep}>&#9474;</span>
-      <span>TTI = first paint</span>
-      <span style={landingStyles.ledgerSep}>&#9474;</span>
-      <span>JS-off: every page</span>
-      <span style={landingStyles.ledgerSep}>&#9474;</span>
-      <span>fixpoint compile</span>
-      <a style={[landingStyles.link, landingStyles.ledgerMore]} href="/guides/testing/">
-        see how it's verified -&gt;
-      </a>
-    </p>
+    <section style={pageStyles.section}>
+      <div style={pageStyles.instGrid}>
+        <div>
+          <p style={pageStyles.eyebrow}>Instant load</p>
+          <h2 style={pageStyles.title}>Interactive at first paint. No uncanny valley.</h2>
+          <p style={pageStyles.lead}>
+            No hydration means no window where the page looks ready but ignores your clicks. The
+            JavaScript you do use loads on first interaction, not on load. Turn JavaScript off and
+            every page still renders, every form still posts.
+          </p>
+          <div style={pageStyles.statRow}>
+            <div>
+              <div style={pageStyles.statNum}>0&nbsp;ms</div>
+              <p style={pageStyles.statLabel}>Time-to-interactive equals first paint.</p>
+            </div>
+            <div>
+              <div style={pageStyles.statNum}>JS&nbsp;off</div>
+              <p style={pageStyles.statLabel}>Every page renders, every form posts.</p>
+            </div>
+          </div>
+        </div>
+        <div style={pageStyles.bars}>
+          <div>
+            <p style={pageStyles.rhead}>
+              <span>Typical SPA</span>
+              <span style={pageStyles.bad}>3.2s</span>
+            </p>
+            <div style={pageStyles.track}>
+              <span style={[pageStyles.seg, pageStyles.sIdle, pageStyles.spa1]}></span>
+              <span style={[pageStyles.seg, pageStyles.sHatch, pageStyles.spa2]}></span>
+              <span style={[pageStyles.seg, pageStyles.sLive, pageStyles.spa3]}></span>
+            </div>
+            <p style={pageStyles.barNote}>
+              <span style={pageStyles.warn}>&#9888; looks ready, ignores clicks until 3.2s</span>
+            </p>
+          </div>
+          <div>
+            <p style={pageStyles.rhead}>
+              <span>SSR + hydration</span>
+              <span style={pageStyles.bad}>1.6s</span>
+            </p>
+            <div style={pageStyles.track}>
+              <span style={[pageStyles.seg, pageStyles.sIdle, pageStyles.ssr1]}></span>
+              <span style={[pageStyles.seg, pageStyles.sHatch, pageStyles.ssr2]}></span>
+              <span style={[pageStyles.seg, pageStyles.sLive, pageStyles.ssr3]}></span>
+            </div>
+            <p style={pageStyles.barNote}>
+              <span style={pageStyles.warn}>&#9888; frozen until the bundle hydrates</span>
+            </p>
+          </div>
+          <div>
+            <p style={pageStyles.rhead}>
+              <span>Kovo</span>
+              <span style={pageStyles.good}>first paint</span>
+            </p>
+            <div style={pageStyles.track}>
+              <span style={[pageStyles.seg, pageStyles.sIdle, pageStyles.kovo1]}></span>
+              <span style={[pageStyles.seg, pageStyles.sKovo, pageStyles.kovo2]}></span>
+            </div>
+            <p style={pageStyles.barNote}>
+              <span style={pageStyles.good}>
+                &#10003; every click works at 0ms, handlers load on demand
+              </span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Faq({ q, children }: { q: string; children: unknown }): string {
+  return (
+    <details style={pageStyles.faqItem}>
+      <summary style={pageStyles.faqQ}>
+        {q}
+        <span style={pageStyles.faqMark}>
+          <span data-q-plus>+</span>
+          <span data-q-minus style={pageStyles.qMinus}>
+            &#8722;
+          </span>
+        </span>
+      </summary>
+      <p style={pageStyles.faqA}>{children}</p>
+    </details>
+  );
+}
+
+function Credibility(): string {
+  return (
+    <section style={pageStyles.section}>
+      <p style={pageStyles.eyebrow}>Who builds this</p>
+      <h2 style={pageStyles.title}>Made by people who build AI tools for a living.</h2>
+      <p style={pageStyles.lead}>
+        Kovo comes from the team behind{' '}
+        <a style={pageStyles.credLink} href="https://github.com/dyad-sh/dyad" rel="external">
+          Dyad
+        </a>
+        , the open-source, local AI app builder with 20k+ stars on GitHub. We built Kovo because we
+        wanted a target our own agents could generate and verify without guessing.
+      </p>
+
+      <div style={pageStyles.faq}>
+        <Faq q="Why yet another web framework?">
+          Because the stale-UI bug class and the hydration gap are still unsolved at the framework
+          level. Kovo turns &ldquo;this view drifted out of sync&rdquo; into a compile error and
+          makes first paint interactive. If your stack already proves those two things, you do not
+          need Kovo.
+        </Faq>
+        <Faq q="Can AI agents actually write Kovo code?">
+          That is the whole design goal. Generated apps fail{' '}
+          <span style={pageStyles.mono}>tsc</span> when wiring is wrong, and{' '}
+          <span style={pageStyles.mono}>kovo check</span> returns the exact line, the reason, and
+          candidate fixes. The agent loops on edit, check, fixed -- not edit, deploy, bug report.
+          Skills, an MCP server, and LLM-readable docs ship with it.
+        </Faq>
+        <Faq q="Do I have to throw away React?">
+          You keep the model you know: composable components, props, TypeScript. You give up the
+          client router, hydration, and the runtime store. Kovo compiles your components to real
+          HTML and wires interactivity on demand.
+        </Faq>
+        <Faq q="Is it production-ready?">
+          Not yet. Kovo is pre-v1 and under active implementation; nothing is published to npm. The
+          spec, the conformance suite, and this site are open -- follow along and kick the tires.
+        </Faq>
+      </div>
+
+      <div style={pageStyles.starCta}>
+        <div>
+          <p style={pageStyles.starCtaH}>If this resonates, star it.</p>
+          <p style={pageStyles.starCtaSub}>
+            Stars tell us the problem is worth solving and help other builders find Kovo early.
+          </p>
+        </div>
+        <a style={pageStyles.starBtn} href="https://github.com/kovojs/kovo" rel="external">
+          <svg viewBox="0 0 16 16" style={pageStyles.ghMark} fill="currentColor" aria-hidden="true">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
+          </svg>
+          Star kovojs/kovo
+        </a>
+      </div>
+    </section>
   );
 }

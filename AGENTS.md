@@ -59,3 +59,13 @@
   task-list checkbox: `- [ ]` for open items and `- [x]` only when the exact item is fully
   verified. Keep evidence nested under the checkbox it proves, and avoid free-form open-item
   bullets that cannot be mechanically scanned.
+
+## Design Context
+
+- The marketing/docs site under `site/` is a **brand-register** surface (the design is the product).
+  Its strategic design brief lives in [`site/PRODUCT.md`](site/PRODUCT.md): register, target audience
+  (senior engineers / framework evaluators, plus AI-agent builders), brand personality
+  (sharp, candid, technical), anti-references, the five design principles, and the WCAG 2.2 AA
+  accessibility target. Consult it before changing the site's visual design or marketing copy.
+- The site's visual system is captured in `site/DESIGN.md` (tokens, typography, components). Treat
+  `PRODUCT.md` as the strategic "who/what/why" and `DESIGN.md` as the visual "how it looks".
