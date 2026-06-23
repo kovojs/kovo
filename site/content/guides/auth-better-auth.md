@@ -12,13 +12,13 @@ Kovo request context, and exposes sign-in/sign-out as ordinary CSRF-protected Ko
 
 ## Files in the starter
 
-| File | Role |
-| ---- | ---- |
-| `src/schema.ts` | App tables plus Better Auth's user/session/account/verification tables. |
-| `src/db.ts` | The Drizzle database passed to both app queries and Better Auth. |
-| `src/auth.ts` | Better Auth instance, Kovo session provider, CSRF options, auth mutations, demo seed. |
-| `src/components/auth-forms.tsx` | Sign-in and sign-out forms bound to the auth mutations. |
-| `src/app.tsx` | `sessionProvider`, guarded home route, `/login`, and mutation registration. |
+| File                            | Role                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| `src/schema.ts`                 | App tables plus Better Auth's user/session/account/verification tables.               |
+| `src/db.ts`                     | The Drizzle database passed to both app queries and Better Auth.                      |
+| `src/auth.ts`                   | Better Auth instance, Kovo session provider, CSRF options, auth mutations, demo seed. |
+| `src/components/auth-forms.tsx` | Sign-in and sign-out forms bound to the auth mutations.                               |
+| `src/app.tsx`                   | `sessionProvider`, guarded home route, `/login`, and mutation registration.           |
 
 ## Session provider
 

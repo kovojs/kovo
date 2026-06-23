@@ -21,7 +21,10 @@ Declare live where the query is defined:
 ```ts
 export const orderStatus = query('orderStatus', {
   args: s.object({ id: s.string() }),
-  guard: guards.all(guards.authed(), guards.owns((args) => args.id, ownsOrder)),
+  guard: guards.all(
+    guards.authed(),
+    guards.owns((args) => args.id, ownsOrder),
+  ),
   live: true,
   load(input, { request }) {
     return request.db.orders.status(input.id);

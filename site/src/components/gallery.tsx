@@ -251,9 +251,7 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
               {source.interactiveDemo ? (
                 <li>
                   Interactive demo:{' '}
-                  <code style={galleryStyles.inlineCode}>
-                    {escapeHtml(source.interactiveDemo)}
-                  </code>
+                  <code style={galleryStyles.inlineCode}>{escapeHtml(source.interactiveDemo)}</code>
                 </li>
               ) : null}
             </ul>

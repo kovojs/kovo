@@ -47,10 +47,12 @@ export const stripeWebhook = webhook('stripe', {
     payload: 'raw-body',
     tolerance: '5m',
   }),
-  input: s.object({
-    id: s.string(),
-    type: s.string(),
-  }).passthrough(),
+  input: s
+    .object({
+      id: s.string(),
+      type: s.string(),
+    })
+    .passthrough(),
   idempotency: (event) => event.id,
   async handler(event, { db }) {
     await db.orders.applyStripeEvent(event);

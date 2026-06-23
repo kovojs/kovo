@@ -28,7 +28,13 @@ export default defineConfig({
   ],
   lint: {
     // Starter templates are copied verbatim; lint governs authored workspace code.
-    ignorePatterns: ['packages/create-kovo/templates/**'],
+    ignorePatterns: [
+      'packages/create-kovo/templates/**',
+      // These benchmark entrants are intentionally isolated from the root workspace
+      // so React/Next/TanStack deps do not leak into monorepo checks.
+      'benchmarks/nextjs/**',
+      'benchmarks/tanstack/**',
+    ],
     options: {
       typeAware: true,
       typeCheck: true,

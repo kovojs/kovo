@@ -240,12 +240,12 @@ builders, and runtime SQL parser/observation surface.
 SQLite has dynamic storage classes, so the scaffold uses explicit Drizzle modes where Kovo needs
 stable shape facts:
 
-| App shape | SQLite scaffold mapping                                  |
-| --------- | -------------------------------------------------------- |
-| Boolean   | `integer('field', { mode: 'boolean' })`                  |
-| JSON      | `text('field', { mode: 'json' })` when app code adds JSON |
+| App shape | SQLite scaffold mapping                                     |
+| --------- | ----------------------------------------------------------- |
+| Boolean   | `integer('field', { mode: 'boolean' })`                     |
+| JSON      | `text('field', { mode: 'json' })` when app code adds JSON   |
 | Timestamp | ISO text columns, not Postgres `timestamp()`/`defaultNow()` |
-| DDL now   | `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`                  |
+| DDL now   | `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`                     |
 
 Better Auth follows the same mapping in generated SQLite schema source, and its Drizzle adapter is
 configured with `provider: 'sqlite'`. The blessed scaffolded drivers are PGlite for Postgres and

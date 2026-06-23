@@ -130,17 +130,17 @@ schemas.
 These are the diagnostic codes the verification layer produces. The pattern is that 4xx codes police
 the boundary between declared dataflow and actual dataflow, from both sides:
 
-| Code  | Severity   | What it catches                                                                                |
-| ----- | ---------- | ---------------------------------------------------------------------------------------------- |
-| KV402 | error      | Write touched an undeclared domain — the silent-stale-UI bug                                   |
-| KV403 | warn       | Declared domain never observed written — stale claim or untested branch                        |
-| KV404 | error      | Write to an unmapped table — map it or mark `exempt` (write-side only)                         |
-| KV405 | error      | Conditional writes on branches never executed under instrumentation                            |
-| KV406 | error      | Statically un-analyzable write site — manual `touches` required, plus `tables:` for raw SQL     |
-| KV407 | error      | Query read from an undeclared domain — missed invalidations                                    |
-| KV408 | error      | Declared row key ≠ observed row predicate                                                      |
-| KV409 | notice     | Non-eq predicate — degraded to table-level invalidation                                        |
-| KV410 | error      | Opaque projection (`sql<T>`, raw SQL) without a declared output schema, shape runtime-verified |
+| Code  | Severity | What it catches                                                                                |
+| ----- | -------- | ---------------------------------------------------------------------------------------------- |
+| KV402 | error    | Write touched an undeclared domain — the silent-stale-UI bug                                   |
+| KV403 | warn     | Declared domain never observed written — stale claim or untested branch                        |
+| KV404 | error    | Write to an unmapped table — map it or mark `exempt` (write-side only)                         |
+| KV405 | error    | Conditional writes on branches never executed under instrumentation                            |
+| KV406 | error    | Statically un-analyzable write site — manual `touches` required, plus `tables:` for raw SQL    |
+| KV407 | error    | Query read from an undeclared domain — missed invalidations                                    |
+| KV408 | error    | Declared row key ≠ observed row predicate                                                      |
+| KV409 | notice   | Non-eq predicate — degraded to table-level invalidation                                        |
+| KV410 | error    | Opaque projection (`sql<T>`, raw SQL) without a declared output schema, shape runtime-verified |
 
 Worth knowing alongside these: KV411 fires when a query reads an `exempt` table — caught statically,
 and by the verifier when raw SQL smuggles the read.

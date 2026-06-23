@@ -13,15 +13,15 @@ under `examples/commerce`.
 
 ## What to read first
 
-| File | Why it matters |
-| ---- | -------------- |
-| `examples/commerce/src/app.tsx` | `createApp()`, routes, auth wiring, document/layout facts. |
-| `examples/commerce/src/domain.ts` | Domain names used as invalidation currency. |
-| `examples/commerce/src/schema.ts` | Product, cart, order, and auth tables. |
-| `examples/commerce/src/db.ts` | Drizzle/PGlite setup and seeded demo data. |
-| `examples/commerce/src/queries.ts` | Product grid, cart count, and order-history reads. |
-| `examples/commerce/src/components/*.tsx` | TSX regions that render those reads and forms. |
-| `examples/commerce/scripts/emit-graph.mjs` | Graph emission used by docs/devtool workflows. |
+| File                                       | Why it matters                                             |
+| ------------------------------------------ | ---------------------------------------------------------- |
+| `examples/commerce/src/app.tsx`            | `createApp()`, routes, auth wiring, document/layout facts. |
+| `examples/commerce/src/domain.ts`          | Domain names used as invalidation currency.                |
+| `examples/commerce/src/schema.ts`          | Product, cart, order, and auth tables.                     |
+| `examples/commerce/src/db.ts`              | Drizzle/PGlite setup and seeded demo data.                 |
+| `examples/commerce/src/queries.ts`         | Product grid, cart count, and order-history reads.         |
+| `examples/commerce/src/components/*.tsx`   | TSX regions that render those reads and forms.             |
+| `examples/commerce/scripts/emit-graph.mjs` | Graph emission used by docs/devtool workflows.             |
 
 The generated files under `src/generated/**` are artifacts. Inspect them when you need to verify a
 lowered component, client handler, optimistic transform, or graph edge, but keep authored code in

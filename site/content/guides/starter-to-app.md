@@ -14,15 +14,15 @@ and production build. Extend that slice in place instead of replacing it with an
 
 Pick one product concept and add it through the same modules the contact book uses.
 
-| Step | File | What changes |
-| ---- | ---- | ------------ |
-| 1 | `src/schema.ts` | Add the table and Kovo domain/key metadata. |
-| 2 | `src/db.ts` | Seed local rows or connect the real storage path. |
-| 3 | `src/queries.ts` | Add one typed read for the first screen. |
-| 4 | `src/mutations.ts` | Add one guarded write with validation and CSRF. |
-| 5 | `src/components/*.tsx` | Render the query and form from TSX. |
-| 6 | `src/app.tsx` | Register the query, mutation, route, and stylesheet. |
-| 7 | `src/app.test.ts` | Prove the route and mutation path. |
+| Step | File                   | What changes                                         |
+| ---- | ---------------------- | ---------------------------------------------------- |
+| 1    | `src/schema.ts`        | Add the table and Kovo domain/key metadata.          |
+| 2    | `src/db.ts`            | Seed local rows or connect the real storage path.    |
+| 3    | `src/queries.ts`       | Add one typed read for the first screen.             |
+| 4    | `src/mutations.ts`     | Add one guarded write with validation and CSRF.      |
+| 5    | `src/components/*.tsx` | Render the query and form from TSX.                  |
+| 6    | `src/app.tsx`          | Register the query, mutation, route, and stylesheet. |
+| 7    | `src/app.test.ts`      | Prove the route and mutation path.                   |
 
 That order keeps the compiler's facts easy to inspect: schema first, reads and writes next,
 rendering last.

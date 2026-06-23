@@ -66,13 +66,13 @@ The generated `.env` is for local development only. Set `BETTER_AUTH_SECRET` or
 This is the authoritative command table; the [Quickstart](/docs/quickstart/) links here rather than
 repeating it.
 
-| Command | What it does |
-| ------- | ------------ |
-| `vp dev` | Dev server with the Kovo compile step. |
-| `vp check` | Typecheck + lint - this is where Kovo static errors surface. |
-| `vp test` | Vitest suites. |
-| `npm run build:prod` | Production build through `kovo build ./src/app.tsx`. |
-| `npm start` | Run the emitted Node server from `dist/server/server.mjs`. |
+| Command              | What it does                                                 |
+| -------------------- | ------------------------------------------------------------ |
+| `vp dev`             | Dev server with the Kovo compile step.                       |
+| `vp check`           | Typecheck + lint - this is where Kovo static errors surface. |
+| `vp test`            | Vitest suites.                                               |
+| `npm run build:prod` | Production build through `kovo build ./src/app.tsx`.         |
+| `npm start`          | Run the emitted Node server from `dist/server/server.mjs`.   |
 
 ### Two CLIs, two jobs
 
@@ -88,13 +88,13 @@ compiler, so mistakes show up before production.
 
 Newcomers trip on import paths before anything else. The split is small and stable:
 
-| Primitive | Package | What it is |
-| --------- | ------- | ---------- |
-| `route`, `query`, `mutation`, `s`, `domain`, `guards`, `session` | `@kovojs/server` | server-side facts: routes, typed reads/writes, schemas, domains, guards, sessions |
-| `component`, `form` | `@kovojs/core` | the component model and form helpers used in TSX |
-| Better Auth adapters and guards | `@kovojs/better-auth` | session adaptation and auth mutations backed by Better Auth |
-| Drizzle extraction helpers | `@kovojs/drizzle` | query/write metadata the compiler can audit |
-| Styled UI components | `@kovojs/ui/*` | public component subpaths, also available through `kovo add` copy-in |
+| Primitive                                                        | Package               | What it is                                                                        |
+| ---------------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------- |
+| `route`, `query`, `mutation`, `s`, `domain`, `guards`, `session` | `@kovojs/server`      | server-side facts: routes, typed reads/writes, schemas, domains, guards, sessions |
+| `component`, `form`                                              | `@kovojs/core`        | the component model and form helpers used in TSX                                  |
+| Better Auth adapters and guards                                  | `@kovojs/better-auth` | session adaptation and auth mutations backed by Better Auth                       |
+| Drizzle extraction helpers                                       | `@kovojs/drizzle`     | query/write metadata the compiler can audit                                       |
+| Styled UI components                                             | `@kovojs/ui/*`        | public component subpaths, also available through `kovo add` copy-in              |
 
 The [mental model](/docs/mental-model/) and [Queries chapter](/tutorial/03-queries/) repeat this
 inline where the primitives first appear.
