@@ -12,16 +12,16 @@ compiler-derived and hand-written optimistic updates. The live page is [Examples
 
 ## What to read first
 
-| File | Why it matters |
-| ---- | -------------- |
-| `examples/crm/src/interactive-app.tsx` | `createApp()`, shared `layout()`, routes, and app registration. |
-| `examples/crm/src/components/chrome.tsx` | Shared app frame and navigation. |
-| `examples/crm/src/components/pipeline.tsx` | Dashboard region and pipeline forms. |
-| `examples/crm/src/components/contacts.tsx` | Contact list and creation flow. |
-| `examples/crm/src/components/deal-detail.tsx` | Parameterized route/detail rendering. |
-| `examples/crm/src/queries.ts` | Aggregate and detail reads over Drizzle. |
-| `examples/crm/src/mutations.ts` | Create/move/close deal writes and optimistic behavior. |
-| `examples/crm/src/graph.test.ts` | Assertions over the emitted app graph. |
+| File                                          | Why it matters                                                  |
+| --------------------------------------------- | --------------------------------------------------------------- |
+| `examples/crm/src/interactive-app.tsx`        | `createApp()`, shared `layout()`, routes, and app registration. |
+| `examples/crm/src/components/chrome.tsx`      | Shared app frame and navigation.                                |
+| `examples/crm/src/components/pipeline.tsx`    | Dashboard region and pipeline forms.                            |
+| `examples/crm/src/components/contacts.tsx`    | Contact list and creation flow.                                 |
+| `examples/crm/src/components/deal-detail.tsx` | Parameterized route/detail rendering.                           |
+| `examples/crm/src/queries.ts`                 | Aggregate and detail reads over Drizzle.                        |
+| `examples/crm/src/mutations.ts`               | Create/move/close deal writes and optimistic behavior.          |
+| `examples/crm/src/graph.test.ts`              | Assertions over the emitted app graph.                          |
 
 ## Route and layout shape
 
@@ -61,3 +61,5 @@ pnpm --filter @kovojs/example-crm test -- src/graph.test.ts
 
 The graph test is the key read: it turns the dashboard's "what refreshes what" rules into CI
 evidence.
+
+For the reusable architecture recipe, see [Dashboard/CRM app pattern](/guides/app-pattern-dashboard-crm/).

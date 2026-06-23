@@ -37,7 +37,7 @@ commands that prove the claim.
   - Done evidence: `site/content/guides/live-queries.md`, `site/content/guides/deployment.md`,
     `site/content/guides/queries.md`, and `site/content/guides/security.md` document SSE live
     queries, instance-key routing, degradation, and per-push guard rechecks; `pnpm --filter
-    @kovojs/site build`, `pnpm --filter @kovojs/site check:links`, and `rg "no SSE|live bus|v2.*live|live.*v2" site/content/guides site/content/docs site/content/tutorial`
+@kovojs/site build`, `pnpm --filter @kovojs/site check:links`, and `rg "no SSE|live bus|v2.*live|live.*v2" site/content/guides site/content/docs site/content/tutorial`
     verified the site and stale live-query language.
 
 - [x] **Fix fragment-target and island-state preservation docs.**
@@ -66,7 +66,7 @@ commands that prove the claim.
     anonymous CSRF, KV418, replay reservation, and per-submit `Kovo-Idem`; `rg "guard failures take the typed-error|warn/error|KV406 \\| warn" site/content/guides site/content/docs site/content/tutorial`
     found no stale requested statements.
 
-- [ ] **Refresh starter and project-structure docs to match the real `create-kovo` scaffold.**
+- [x] **Refresh starter and project-structure docs to match the real `create-kovo` scaffold.**
   - Evidence: Quickstart and Installation describe a small one-page starter
     (`site/content/docs/quickstart.md:25`, `site/content/docs/installation.md:34`), while
     `packages/create-kovo/src/index.ts:36` scaffolds auth, DB, schema, queries, mutations,
@@ -74,17 +74,21 @@ commands that prove the claim.
     routes, DB, mutations, and queries in `packages/create-kovo/templates/src/app.tsx:84`.
   - Deliverable: update Quickstart, Installation, Project Structure, and add a "from starter to app"
     tutorial path that explains how to safely extend the scaffold.
-  - Done evidence: docs changes, scaffold command snippets checked against template scripts, and
-    `pnpm --filter create-kovo test` or an equivalent focused scaffold check.
+  - Done evidence: `site/content/docs/quickstart.md`, `site/content/docs/installation.md`,
+    `site/content/docs/project-structure.md`, and `site/content/guides/starter-to-app.md` describe
+    the current auth/DB/query/mutation/component/test scaffold and dialect variants; `pnpm --filter
+create-kovo run build:dist` and `pnpm --filter @kovojs/site run check:links` passed.
 
-- [ ] **Resolve `@kovojs/ui` public-status drift in stability docs.**
+- [x] **Resolve `@kovojs/ui` public-status drift in stability docs.**
   - Evidence: `STABILITY.md:21` says `@kovojs/ui` has dual distribution as a public library and
     copy-in starter. `public-packages.json:2058` marks it `visibility: public`, `kind: library`.
     The site stability table still places it in the "Internal / special" column at
     `site/content/docs/stability.md:32`.
   - Deliverable: make the site stability page match root policy and clarify direct import vs
     `kovo add` semantics.
-  - Done evidence: updated stability page and link check.
+  - Done evidence: `site/content/docs/stability.md` now lists `@kovojs/ui` in the public column
+    with direct subpath imports and `kovo add` copy-in semantics; `pnpm --filter @kovojs/site run
+check:links` passed.
 
 - [x] **Promote or explicitly route important root `docs/` material into the public site corpus.**
   - Evidence: `site/src/content.ts:129` loads only `site/content/*`, `site/gen/api`, and
@@ -100,25 +104,33 @@ commands that prove the claim.
 
 ## P1 - Advanced App Authoring Guides
 
-- [ ] **Add generated/public API coverage for `@kovojs/headless-ui`.**
+- [x] **Add generated/public API coverage for `@kovojs/headless-ui`.**
   - Evidence: `public-packages.json:1942` marks `@kovojs/headless-ui` public with 34 primitive
     subpaths, but `site/gen/api/` has no `headless-ui.md`. Sub-agent inventory found about 880
     exports, zero documented by generated API, and 730 example imports.
   - Deliverable: generate an API reference grouped by primitive plus a package overview explaining
     SPEC section 4.6 attribute-builder composition, merge rules, `data-*` state vocabulary,
     controlled-only behavior, and direct-use vs styled-wrapper use.
-  - Done evidence: `site/gen/api/headless-ui.md`, sidebar JSON, JSDoc/source changes as needed, API
-    example checks, and `pnpm run check:api-surface`.
+  - Done evidence: `public-packages.json` and `site/scripts/api-ref.mjs` generate
+    `site/gen/api/headless-ui.md` plus sidebar JSON for 34 primitive subpaths / 880 exports;
+    `site/content/guides/components.md` explains direct headless use and styled-wrapper use;
+    `pnpm --filter @kovojs/site exec vitest --run scripts/api-ref.test.mjs` and `pnpm run
+check:api-surface` passed.
 
-- [ ] **Add generated/public API coverage for `@kovojs/ui`.**
+- [x] **Add generated/public API coverage for `@kovojs/ui`.**
   - Evidence: `public-packages.json:2058` marks `@kovojs/ui` public with many component subpaths, but
     `site/gen/api/` has no `ui.md`. Sub-agent inventory found about 460 exports and only two
     documented symbols.
   - Deliverable: document each component subpath's component factory, props, state/render-input
     props, variants, sizes, and `style`/`styles` override contract; link to copy-in docs.
-  - Done evidence: `site/gen/api/ui.md`, sidebar JSON, public JSDoc coverage, and API-surface gate.
+  - Done evidence: `public-packages.json` and `site/scripts/api-ref.mjs` generate
+    `site/gen/api/ui.md` plus sidebar JSON for 45 component subpaths / 460 exports;
+    `site/content/guides/components.md` and component detail pages link import-vs-copy usage,
+    source, and behavior contracts; `pnpm --filter @kovojs/site exec vitest --run
+scripts/api-ref.test.mjs` and `pnpm run check:api-surface` passed with the existing public-export
+    attention baseline unchanged.
 
-- [ ] **Turn example apps into copyable walkthroughs, not only live demos plus source tabs.**
+- [x] **Turn example apps into copyable walkthroughs, not only live demos plus source tabs.**
   - Evidence: `/examples/` pages are manifest-built live app/source splits
     (`site/src/examples.ts:62`, `site/src/examples.ts:90`). Commerce source tabs omit core files such
     as `app.tsx`, `domain.ts`, `schema.ts`, `db.ts`, and auth forms even though
@@ -126,10 +138,13 @@ commands that prove the claim.
   - Deliverable: add walkthrough pages for Commerce, CRM, and StackOverflow covering app wiring,
     DB/schema, route layout, query-backed regions, mutations, optimistic coverage, verification, and
     deploy/run commands.
-  - Done evidence: new routes/pages, source links to authoritative example files, site smoke, and
-    link check.
+  - Done evidence: `site/content/guides/example-commerce.md`,
+    `site/content/guides/example-crm.md`, and `site/content/guides/example-stackoverflow.md` add
+    copyable walkthroughs with source file inventories, app/query/mutation/optimism sections, and
+    run/verify commands; `pnpm --filter @kovojs/site run build` emitted the routes and
+    `pnpm --filter @kovojs/site run check:links` passed.
 
-- [ ] **Update optimistic docs for current derived/mixed/await-fragment practice.**
+- [x] **Update optimistic docs for current derived/mixed/await-fragment practice.**
   - Evidence: StackOverflow documents fully compiler-derived optimism in
     `examples/stackoverflow/README.md:4`; CRM demonstrates mixed manual and await-fragment behavior
     in `examples/crm/src/mutations.ts:134` and `examples/crm/src/mutations.ts:197`. The site guide
@@ -137,17 +152,21 @@ commands that prove the claim.
   - Deliverable: revise `/guides/optimistic/` or add a derived-optimism guide showing the current
     spectrum: derived transforms, hand-written transforms, `await-fragment`, punts, and graph/test
     verification.
-  - Done evidence: updated guide plus focused search for stale "derived later/v2" claims.
+  - Done evidence: `site/content/guides/optimistic.md`, `site/content/tutorial/05-optimistic.md`,
+    and `site/content/guides/example-commerce.md` now describe derived, hand-written, and
+    `await-fragment` statuses as current practice; `rg "v2|derived later|Future-derived|future v2|v2.*deriv|deriv.*v2" site/content/guides/optimistic.md site/content/tutorial/05-optimistic.md site/content/docs/why-kovo.md site/content/guides/example-commerce.md`
+    found no stale claims.
 
-- [ ] **Add a Better Auth integration walkthrough.**
+- [x] **Add a Better Auth integration walkthrough.**
   - Evidence: the scaffold has real Better Auth over the same Drizzle DB, session adaptation,
     sign-in/out mutations, anonymous CSRF binding, and seeded demo user in
     `packages/create-kovo/templates/src/auth.ts:23`, `:54`, and `:90`. The reference auth/security
     example is only llms-facing (`site/scripts/examples.mjs:88`).
   - Deliverable: add `/guides/auth-better-auth/` and/or a human reference-auth example page with
     copyable schema, `sessionProvider`, login/logout forms, CSRF setup, guards, and audit commands.
-  - Done evidence: new page(s), template/source references, link check, and any focused auth doc
-    snippet validation available.
+  - Done evidence: `site/content/guides/auth-better-auth.md` documents scaffold files,
+    `sessionProvider`, Better Auth sign-in/out mutations, anonymous/session CSRF, guards, and audit
+    commands; `pnpm --filter @kovojs/site run check:links` passed.
 
 - [x] **Add a layouts guide.**
   - Evidence: `SPEC.md:247` and `SPEC.md:263` define first-class `layout()` declarations with nesting,
@@ -204,29 +223,38 @@ commands that prove the claim.
     `Cache-Control: private, no-store`, `Vary: Cookie`, guard reruns, and skew recovery, with
     deployment/live-query cross-links verified by the link check.
 
-- [ ] **Promote dataflow devtool and MCP docs to the site.**
+- [x] **Promote dataflow devtool and MCP docs to the site.**
   - Evidence: `packages/devtool/README.md:12` explains mounting and MCP, while the site only has a
     generic `kovo mcp` paragraph in `site/content/guides/cli.md:190`. `examples/devtool/README.md:3`
     says it wires emitted graphs from Commerce/CRM/StackOverflow into a reusable devtool.
   - Deliverable: add `/guides/dataflow-devtool/` covering graph generation, mounting at `/__kovo`,
     multi-app bundles, MCP `kovo_explain`, and same-artifact conformance.
-  - Done evidence: new site guide, example links, and link check.
+  - Done evidence: `site/content/guides/dataflow-devtool.md` documents graph generation, `/__kovo`
+    mounting, direct bundles, MCP `kovo_explain`, and conformance; `pnpm --filter @kovojs/site run
+check:links` passed.
 
-- [ ] **Teach component usage recipes on component detail pages.**
+- [x] **Teach component usage recipes on component detail pages.**
   - Evidence: component pages render `demoHtml` but not copyable usage docs
     (`site/src/components/gallery.tsx:141`). Interactive source exists for dialog, combobox, select,
     command, toast, tabs, and form controls under `examples/gallery/src/interactive/`.
   - Deliverable: add "Usage", "Source", and "Behavior contract" sections to component pages, starting
     with advanced primitives and form controls.
-  - Done evidence: updated gallery route data/rendering, search entries, and browser/site smoke.
+  - Done evidence: `site/src/gallery.ts`, `site/src/components/gallery.tsx`, and
+    `site/src/gallery-llms.ts` add usage/source/behavior sections to component detail pages;
+    `pnpm --filter @kovojs/site test`, `pnpm --filter @kovojs/site run build`, and exact search
+    probe for `/components/accordion/` passed.
 
-- [ ] **Add advanced app-pattern guides for CRM/dashboard and forum/Q&A shapes.**
+- [x] **Add advanced app-pattern guides for CRM/dashboard and forum/Q&A shapes.**
   - Evidence: CRM demonstrates layouts, parameterized routes, aggregate queries, and dashboard regions;
     StackOverflow demonstrates nested routes, live-target renderers, session-isolated data, and region
     refreshes. Existing guides cover isolated mechanics but not end-to-end advanced app architecture.
   - Deliverable: add `/guides/app-patterns/dashboard-crm/` and `/guides/app-patterns/forum-qa/` with
     route layout, query composition, aggregate reads, mutation forms, optimism, and graph assertions.
-  - Done evidence: new pages linked from examples/guides and site smoke.
+  - Done evidence: `site/content/guides/app-pattern-dashboard-crm.md` and
+    `site/content/guides/app-pattern-forum-qa.md` document route layout, query composition, mutation
+    forms, optimism, and graph assertions; CRM/StackOverflow walkthroughs link them; `pnpm --filter
+@kovojs/site run build` emitted both pages and `pnpm --filter @kovojs/site run check:links`
+    passed.
 
 ## P2 - Site Architecture And Discoverability
 
@@ -263,29 +291,39 @@ commands that prove the claim.
     blessed drivers, SQLite type mapping, and Better Auth SQLite adapter posture, mirrored from
     `docs/data-layer-dialects.md`; site link check passed.
 
-- [ ] **Clarify the `@kovojs/browser/client` advanced boundary.**
+- [x] **Clarify the `@kovojs/browser/client` advanced boundary.**
   - Evidence: `@kovojs/browser/client` is public and generated in `site/gen/api/browser.md`, but the
     page includes intended manual-bootstrap APIs beside low-level support types (`Morph*`,
     `CompiledQuery*`, `QueryBinding*`). App authors need a boundary explanation.
   - Deliverable: add a focused manual browser bootstrap/reference section naming intended APIs such as
     `createBrowserKovoRoot`, `installKovoLoader`, `defaultEnhancedFetch`, and `createQueryStore`, and
     classifying lower-level types.
-  - Done evidence: updated Browser guide/API copy and link check.
+  - Done evidence: `site/content/guides/package-imports.md` and `site/content/guides/streaming.md`
+    describe the manual bootstrap boundary for `createBrowserKovoRoot`, `installKovoLoader`,
+    `defaultEnhancedFetch`, and `createQueryStore`; `pnpm --filter @kovojs/site run check:links`
+    passed.
 
-- [ ] **Add an icon catalog or documented exclusion for `@kovojs/icons`.**
+- [x] **Add an icon catalog or documented exclusion for `@kovojs/icons`.**
   - Evidence: `public-packages.json:33` marks `@kovojs/icons` public with 1,738 public icon subpaths,
     but there is no `site/gen/api/icons.md` or searchable icon catalog.
   - Deliverable: generate an icon catalog/API index with names, import paths, component shape, and
     search support, or record why icons are intentionally excluded from API reference generation.
-  - Done evidence: generated catalog/API page or documented exclusion plus checks.
+  - Done evidence: `public-packages.json` documents the bounded `@kovojs/icons` API reference
+    exclusion: the generated `/api/icons/` page covers the shared `IconProps` root while individual
+    glyphs remain tree-shakeable subpaths; `pnpm --filter @kovojs/site run build` emitted
+    `/api/icons/` and link checks passed.
 
-- [ ] **Document `create-kovo` CLI behavior and dialect flags.**
+- [x] **Document `create-kovo` CLI behavior and dialect flags.**
   - Evidence: `public-packages.json:2047` marks `create-kovo` public, and
     `packages/create-kovo/src/index.ts:155` exposes `create-kovo <target-directory> [--name]
 [--dialect postgres|sqlite]`, but generated API refs omit this public CLI.
   - Deliverable: add CLI/reference docs for scaffold options, template contents, generated `.env`,
     Postgres default, SQLite opt-in, and non-empty directory behavior.
-  - Done evidence: CLI docs changes and focused `create-kovo` tests or help-output capture.
+  - Done evidence: `site/scripts/create-kovo-ref.mjs`, `packages/create-kovo/src/index.ts`,
+    `site/content/guides/cli.md`, and `site/content/guides/package-imports.md` document usage,
+    dialect flags, generated files, `.env`, and non-empty directory behavior; `pnpm --filter
+create-kovo run build:dist` and `pnpm --filter @kovojs/site exec vitest --run
+scripts/create-kovo-ref.test.mjs` passed.
 
 - [x] **Refresh diagnostics guide from generated diagnostics or add advanced-flow coverage.**
   - Evidence: the hand-authored diagnostics guide stops the touch-graph section at KV411
@@ -295,7 +333,7 @@ commands that prove the claim.
     "Advanced app flow diagnostics" section linked from Security, Routing, Mutations, and Deployment.
   - Done evidence: `site/content/guides/diagnostics.md` adds KV414-KV420 advanced-flow coverage and
     corrects KV405/KV406 severity; `site/content/guides/testing.md` summary table matches; `pnpm
-    --filter @kovojs/site build` emitted `diagnostics-ref/v1 codes=57` and link check passed.
+--filter @kovojs/site build` emitted `diagnostics-ref/v1 codes=57` and link check passed.
 
 - [x] **Wire or retire the site route artifact stale check.**
   - Evidence: `site/scripts/emit-routes.mjs:46` supports `--check`, but `site/package.json:15` exposes
@@ -308,28 +346,21 @@ commands that prove the claim.
 
 ## Latest Verification
 
-- 2026-06-23 app-authoring guide slice:
-  - `pnpm install --frozen-lockfile`
-  - `pnpm --filter @kovojs/site build` (emitted `site-export/v1 html=102 ... diagnostics=0`; Vite
-    logged a port-24678 websocket warning but exited 0)
-  - `pnpm --filter @kovojs/site check:links` (`pages=103 internal=13139 external=837 OK`)
-  - `git diff --check`
-  - Focused stale-language scans over `site/content/guides`, `site/content/docs`, and
-    `site/content/tutorial` for requested live-query, deploy-retention, KV420, auth failure,
-    SQLite, and diagnostics drift phrases.
-
-- 2026-06-23 audit-only verification:
-  - `jq`/`rg`/`nl`/`wc` sweeps over `public-packages.json`, `site/content`, `site/gen/api`,
-    examples, root `docs/`, and `SPEC.md`.
-  - Generated API sidebar metadata reports existing pages are fully documented:
-    `better-auth 13/13`, `browser 92/92`, `cli 20/20`, `core 68/68`, `drizzle 8/8`,
-    `server 194/194`, `style 34/34`, `test 47/47`.
-  - Four read-only sub-agent audits completed: public API coverage, app-authoring flows,
-    examples/advanced patterns, and docs-site structure.
-  - No documentation implementation checks were run because this session created the plan only.
-- 2026-06-23 site-pipeline slice:
-  - `pnpm exec vp check --fix site/src/aux.ts site/src/content.ts site/scripts/examples.mjs site/scripts/check-links.mjs site/scripts/emit-routes.mjs site/content/evidence/*.md`.
-  - `pnpm --filter @kovojs/site run content`.
-  - `pnpm --filter @kovojs/site run emit-routes`.
-  - `pnpm --filter @kovojs/site run build`.
-  - `pnpm --filter @kovojs/site run check:links`.
+- 2026-06-23 integrated comprehensive-docs implementation:
+  - `pnpm exec vp check --fix ...` on changed docs, scripts, and plan files.
+  - `pnpm --filter create-kovo run build:dist`.
+  - `pnpm --filter @kovojs/site exec vitest --run scripts/api-ref.test.mjs scripts/create-kovo-ref.test.mjs src/gallery-llms.test.ts`.
+  - `pnpm --filter @kovojs/site run content` (`api-ref/v1 packages=11 exports=1815 documented=580`;
+    `diagnostics-ref/v1 codes=57`).
+  - `pnpm run check:api-surface` (`public-exports-needing-attention=1338`, unchanged baseline).
+  - `pnpm --filter @kovojs/site test` (15 files / 69 tests).
+  - `pnpm --filter @kovojs/site run emit-routes` (`site-routes/v1 pages=122`).
+  - `pnpm --filter @kovojs/site run build` (`site-export/v1 html=122 client-modules=85
+diagnostics=0`; Vite logged a port-24678 websocket warning but exited 0).
+  - `pnpm --filter @kovojs/site run check:links` (`pages=123 internal=26904 external=2402 OK`).
+  - Exact probes found `/components/accordion/`, `/examples/commerce/`,
+    `/guides/dataflow-devtool/`, `/evidence/data-layer-dialects/`,
+    `/guides/app-pattern-dashboard-crm/`, `/guides/app-pattern-forum-qa/`,
+    `/guides/auth-better-auth/`, `/api/create-kovo/`, `/api/headless-ui/`, `/api/ui/`, and
+    `/api/icons/` in the generated search/page outputs.
+  - `git diff --check`.

@@ -142,13 +142,22 @@ generated states — the commuting diagram `patch(shape(s), input) ≡ shape(app
 That's `propertyTest`, and it lives in the
 [testing guide](/guides/testing/#property-test-optimistic-transforms) along with the harness it runs in.
 
-## Hand-written now, derived later
+## Derived, mixed, and punted coverage
 
-In v1 you hand-write transforms against the same transform IR that v2's compiler derivation will
-emit. For writes whose dataflow is closed over the mutation input, schema constants, and data the
-query already ships, v2 generates the transform. Because the IR is shared, you can adopt derivation
-pair by pair: delete a hand-written transform and derivation takes over. Cases it can't derive punt
-loudly, with the exact expression and reason named in `kovo explain --optimistic`.
+Kovo supports a spectrum rather than a single optimistic style:
+
+- **Derived** transforms are compiler-emitted from writes whose dataflow is closed over mutation
+  input, schema constants, and data the query already ships. The StackOverflow example uses this
+  shape for votes and answers.
+- **Hand-written** transforms are still the right answer when the product rule is the important part
+  of the UI. The CRM example uses this for dashboard summaries whose visible update is clearer as
+  domain code.
+- **`'await-fragment'`** is an explicit punt to server truth. Use it when totals, rankings,
+  inventory, or authorization-sensitive output should not be guessed.
+
+`kovo explain mutation <name> --optimistic` prints one row per invalidated query with the status
+`derived`, `hand-written`, or `await-fragment`. When derivation cannot prove a transform, the output
+names the expression and the reason for the punt so the choice can be reviewed in code.
 
 ## When not to predict
 
@@ -171,7 +180,7 @@ Declare the deferral and move on. The check is satisfied either way.
 <summary>Spec & diagnostics</summary>
 
 Optimism keyed to queries, the runtime protocol, rebase, and navigation reconciliation: SPEC §10.4.
-The punt philosophy and v2 derivation: SPEC §10.5. The coverage check at both altitudes: SPEC §10.6;
+Derived transforms and explicit punts: SPEC §10.5. The coverage check at both altitudes: SPEC §10.6;
 the emitted invalidation sets it reads: SPEC §6.1. A missing optimistic transform is **KV310**;
 anything other than `hand-written`/`await-fragment` is the same code. Every query-dependent DOM
 position needing a declared update status is **KV311** (SPEC §4.9). Fragment-status positions:

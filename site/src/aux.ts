@@ -39,19 +39,7 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
   const sections = [...content.sections, ...syntheticSections];
 
   // Search index.
-  const syntheticSearch = syntheticSections.flatMap((section) =>
-    section.pages.map((page) => ({
-      section: section.title,
-      text: `${page.description ?? ''} ${page.markdown ?? page.source ?? ''}`.slice(0, 6000),
-      title: page.title,
-      url: page.url,
-    })),
-  );
-  await writeFile(
-    path.join(outDir, 'search-index.json'),
-    JSON.stringify([...content.search, ...syntheticSearch]),
-    'utf8',
-  );
+  await writeFile(path.join(outDir, 'search-index.json'), JSON.stringify(content.search), 'utf8');
 
   // Raw markdown mirrors (the agent surface llms.txt links to).
   for (const section of sections) {

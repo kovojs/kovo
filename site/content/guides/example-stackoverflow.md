@@ -12,16 +12,16 @@ of Kovo optimism. The live page is [Examples > Stack Overflow](/examples/stackov
 
 ## What to read first
 
-| File | Why it matters |
-| ---- | -------------- |
-| `examples/stackoverflow/src/interactive-app.tsx` | App declaration, layout, routes, and registered facts. |
-| `examples/stackoverflow/src/components/chrome.tsx` | Shared app frame. |
-| `examples/stackoverflow/src/components/question-list.tsx` | Ranked list region. |
-| `examples/stackoverflow/src/components/question-detail.tsx` | Detail route, answers, and vote forms. |
-| `examples/stackoverflow/src/components/tags-page.tsx` | Tag navigation pattern. |
-| `examples/stackoverflow/src/queries.ts` | Reads for list, detail, tags, users, and session-shaped data. |
-| `examples/stackoverflow/src/mutations.ts` | Vote, answer, and question writes. |
-| `examples/stackoverflow/src/kovo-graph.test.ts` | Graph assertions for query/mutation coverage. |
+| File                                                        | Why it matters                                                |
+| ----------------------------------------------------------- | ------------------------------------------------------------- |
+| `examples/stackoverflow/src/interactive-app.tsx`            | App declaration, layout, routes, and registered facts.        |
+| `examples/stackoverflow/src/components/chrome.tsx`          | Shared app frame.                                             |
+| `examples/stackoverflow/src/components/question-list.tsx`   | Ranked list region.                                           |
+| `examples/stackoverflow/src/components/question-detail.tsx` | Detail route, answers, and vote forms.                        |
+| `examples/stackoverflow/src/components/tags-page.tsx`       | Tag navigation pattern.                                       |
+| `examples/stackoverflow/src/queries.ts`                     | Reads for list, detail, tags, users, and session-shaped data. |
+| `examples/stackoverflow/src/mutations.ts`                   | Vote, answer, and question writes.                            |
+| `examples/stackoverflow/src/kovo-graph.test.ts`             | Graph assertions for query/mutation coverage.                 |
 
 ## Nested routes and regions
 
@@ -60,3 +60,5 @@ pnpm --filter @kovojs/example-stackoverflow test -- src/kovo-graph.test.ts
 
 Use this example when you need a forum/Q&A architecture: list and detail routes, session-aware
 queries, mutation forms, derived optimism, and graph assertions that prove the refresh model.
+
+For the reusable architecture recipe, see [Forum/Q&A app pattern](/guides/app-pattern-forum-qa/).
