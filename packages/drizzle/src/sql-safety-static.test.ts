@@ -81,9 +81,11 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     const diagnostics = diagnosticsFor(`
       import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
       export async function loadProducts(input: { id: string, sort: string, dir: string }, db: any) {
+        await db.select().from(products).where(eq(products.id, input.id));
         await db.execute(sql\`select * from products where id = \${input.id}\`);
         await db.query(staticSql\`select * from products\`);
         await db.exec({ text: "select * from products where id = $1", values: [input.id] });
+        await db.prepare(staticSql\`select * from products where id = $1\`);
         await db.execute(sql.identifier(input.sort, { allow: ["name", "created_at"] }));
         await db.execute(sql.allow(input.dir, ["asc", "desc"]));
         await db.execute(trustedSql(sql.raw("where archived = false"), { justification: "static report clause" }));
@@ -91,6 +93,23 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     `);
 
     expect(diagnostics).toEqual([]);
+  });
+
+  it('keeps trustedSql auditable by flagging dynamic executable raw chunks', () => {
+    expect(
+      diagnosticsFor(`
+        import { sql, trustedSql } from '@kovojs/drizzle';
+        export async function report(input: { clause: string }, db: any) {
+          await db.execute(trustedSql(sql.raw(input.clause), { justification: "reviewed dynamic report clause" }));
+          await db.execute(trustedSql(sql\`where status = \${input.clause}\`, { justification: "parameterized report clause" }));
+        }
+      `),
+    ).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('sql.raw(...) receives request-derived text'),
+      },
+    ]);
   });
 
   it('flags raw string literals on managed handles so staticSql is the visible literal path', () => {
@@ -106,5 +125,23 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
         message: expect.stringContaining('unbranded literal'),
       },
     ]);
+  });
+
+  it('bans native drizzle-orm raw helpers so Kovo-owned helpers carry audit metadata', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql as drizzleSql } from 'drizzle-orm';
+      import * as drizzle from 'drizzle-orm';
+      export async function loadProducts(db: any) {
+        await db.execute(drizzleSql.raw("select * from products"));
+        await db.execute(drizzle.sql.identifier("products"));
+      }
+    `);
+
+    expect(diagnostics.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('Direct drizzle-orm sql.raw(...) is not accepted'),
+        expect.stringContaining('Direct drizzle-orm sql.identifier(...) is not accepted'),
+      ]),
+    );
   });
 });

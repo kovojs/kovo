@@ -65,12 +65,15 @@ exploits it," size the work accordingly, and produce the acceptance criterion.
   - Cases: string concatenation in `db.execute("... " + input.id)`, template strings passed directly to `query`/`execute`, computed SQL text variables derived from mutation input, `prepare("... " + req.search.q)`, and helper functions that return raw strings.
   - Expected result: new SQL-injection diagnostic unless the value is a parameterized SQL object or a branded raw-SQL escape hatch.
   - Evidence: `pnpm exec vitest --run packages/drizzle/src/sql-safety-static.test.ts` passes; `packages/drizzle/src/sql-safety-static.test.ts` asserts `KV422` for concatenation, untagged templates, computed SQL text, `prepare(...)`, helper-returned strings, `sql.raw(input)`, and `sql.identifier(input)` without an allowlist.
-- [ ] Add positive tests for safe parameter paths.
+- [x] Add positive tests for safe parameter paths.
   - Cases: Drizzle query builder predicates (`eq(table.id, input.id)`), Drizzle `sql\`where id = ${input.id}\``, driver objects with separate `text/sql`and`params/args` fields, and prepared statements whose SQL text is static while execute-time values are separate parameters.
-- [ ] Add runtime harness tests with attacker payloads.
+  - Evidence: `packages/drizzle/src/sql-safety-static.test.ts` covers Drizzle builder predicates, Kovo `sql\`\``placeholders, separated`{ text, values }`carriers, and static prepared statements;`packages/server/src/guards.test.ts` verifies branded and separated-parameter carriers execute through the managed guard.
+- [x] Add runtime harness tests with attacker payloads.
   - Payloads should include quotes, comments, semicolons, stacked statements, wildcard expansions, and boolean tautologies. Tests should assert rows are not over-selected or over-mutated when values travel through safe parameter paths.
-- [ ] Add escape-hatch tests.
+  - Evidence: `packages/server/src/guards.test.ts` runs quote/comment/semicolon/wildcard/tautology payloads through unsafe raw queries and a static prepared statement; unsafe text is rejected before driver execution and the prepared path returns only the matching row.
+- [x] Add escape-hatch tests.
   - A raw SQL value with explicit `reads:`/`tables:` but dynamic executable text should fail the new SQL-safety diagnostic; a raw SQL value with static text and dynamic bound params should pass while still satisfying KV406/KV410.
+  - Evidence: `packages/drizzle/src/sql-safety-static.test.ts` rejects `trustedSql(sql.raw(input...))` while accepting `trustedSql(sql\`...\${input...}\`, ...)`; `packages/drizzle/src/runtime-surface.test.ts` verifies trusted static raw SQL is accepted by the runtime validator.
 
 ## Phase 3: Safe SQL Value Model
 
@@ -107,9 +110,10 @@ acceptance set (b)); these checkboxes implement it.
   - Provenance is the **static-only** half of the boundary: runtime cannot reconstruct it once a string is assembled, and runtime taint is unsound in JS (see Settled Design Decisions). The analyzer is therefore the primary defense for text construction, not a backstop.
   - Track literal-only strings, Drizzle `sql\`\``tagged templates with expression placeholders, unsafe untagged template expressions, concatenation, string`.replace()`/`.join()`/`.format()` patterns, and values flowing through local helpers.
   - Evidence: `packages/drizzle/src/static.ts` exports `analyzeSqlSafetyFromProject` with local `literal`/`safe`/`tainted`/`unknown` provenance; `packages/drizzle/src/sql-safety-static.test.ts` proves unsafe and safe paths.
-- [ ] Ban direct use of Drizzle's `sql.raw`/`sql.identifier` in app code; require Kovo's.
+- [x] Ban direct use of Drizzle's `sql.raw`/`sql.identifier` in app code; require Kovo's.
   - Rationale: Kovo's owned versions emit detectable markers (raw) and validate at the sink (identifier); Drizzle's native ones produce unmarked chunks the runtime guard is blind to. Banning the direct import is the precondition that makes the Phase 5 raw-audit invariant enforceable.
   - `sql.raw(<non-literal>)` and `sql.identifier(<non-literal>)` are conservative diagnostics (the new KV code) — flag any non-literal argument; the sanctioned exits are `trustedSql(...)` (raw) and `sql.identifier(x, { allow })` (identifier).
+  - Evidence: `packages/drizzle/src/static.ts` detects native `drizzle-orm` `sql.raw`/`sql.identifier` calls from named and namespace imports; `packages/drizzle/src/sql-safety-static.test.ts` asserts `KV422` for both direct native raw helpers.
 - [ ] Extend raw query receiver facts.
   - `db.execute(...)`, `db.query(...)`, `db.exec(...)`, and `prepare(...)` should emit SQL-safety facts alongside existing KV406/KV410 read/write facts.
 - [x] Handle dynamic identifiers and keywords without string assembly.
@@ -169,13 +173,14 @@ acceptance set (b)); these checkboxes implement it.
 
 ## Open Design Questions
 
-- [ ] Confirm the v1 static-analyzer precision level (proposal below; empirical — finalize after Intake shows real false-positive noise).
+- [x] Confirm the v1 static-analyzer precision level (proposal below; empirical — finalize after Intake shows real false-positive noise).
   - **Proposed v1: conservative local dataflow over a 3-value lattice** (`Literal` / `Tainted` / `Unknown`), intra-procedural only.
   - Propagate tags through assignments and operators; branch/join takes the least-safe (`Tainted ⊔ anything = Tainted`, `Unknown ⊔ Literal = Unknown`). A value tagged `Tainted` or `Unknown` at a SQL sink is flagged (the new KV code).
   - **Sources** seed `Tainted` (`input`/`req.search`/`req.params`/form/headers — Phase 1 list). String literals and literal-only concatenation are `Literal`. Anything local analysis can't see — function-call results, array/collection contents, heap — is `Unknown`, i.e. **flagged** (sound: unknown is never silently passed, so no false negatives).
   - **Untagged templates at SQL sinks are always flagged**, even with a literal interpolation — steer to `sql\`\``.
   - **No interprocedural taint in v1.** Optional precision dial: inline _trivial_ same-file single-expression arrows and re-run the local pass; default to flag if inlining doesn't fully resolve. v1 may skip even this.
   - Every flag clears with a one-line escape (`staticSql\`\``/`trustedSql`/`sql.identifier`/`sql.allow`), so the conservative bias costs ergonomics, not safety.
+  - Evidence: `packages/drizzle/src/static.ts` implements the conservative local lattice and `packages/drizzle/src/sql-safety-static.test.ts` locks the safe/unsafe boundary for raw strings, helpers, templates, native Drizzle raw helpers, and Kovo escape hatches.
 
 ## Latest Verification
 

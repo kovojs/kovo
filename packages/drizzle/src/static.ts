@@ -390,6 +390,7 @@ function sqlSafetyDiagnosticsForSourceFile(
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
   const scopes = new Map<Node, Map<string, SqlTextSafety>>();
+  const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
 
   for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
     const name = declaration.getNameNode();
@@ -404,7 +405,12 @@ function sqlSafetyDiagnosticsForSourceFile(
   }
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const rawHelperDiagnostic = sqlRawHelperDiagnostic(file, call, scopes);
+    const rawHelperDiagnostic = sqlRawHelperDiagnostic(
+      file,
+      call,
+      scopes,
+      nativeDrizzleSqlReceivers,
+    );
     if (rawHelperDiagnostic) diagnostics.push(rawHelperDiagnostic);
 
     const sinkName = sqlSinkName(call);
@@ -428,15 +434,25 @@ function sqlRawHelperDiagnostic(
   file: SourceFileInput,
   call: CallExpression,
   scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+  nativeDrizzleSqlReceivers: ReadonlySet<string>,
 ): TouchGraphDiagnostic | null {
   const expression = call.getExpression();
   if (!Node.isPropertyAccessExpression(expression)) return null;
   const receiver = expression.getExpression();
-  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'sql') return null;
 
   const method = expression.getName();
   if (method !== 'raw' && method !== 'identifier') return null;
   const [first, second] = call.getArguments();
+  if (nativeDrizzleSqlReceivers.has(receiver.getText())) {
+    return {
+      code: 'KV422',
+      message: `${diagnosticDefinitions.KV422.message} Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
+      severity: diagnosticDefinitions.KV422.severity,
+      site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+    };
+  }
+
+  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'sql') return null;
   if (method === 'identifier' && sqlIdentifierHasAllow(second)) return null;
 
   const safety = sqlTextSafety(first, scopes);
@@ -448,6 +464,19 @@ function sqlRawHelperDiagnostic(
     severity: diagnosticDefinitions.KV422.severity,
     site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
   };
+}
+
+function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
+  const receivers = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== 'drizzle-orm') continue;
+    for (const named of declaration.getNamedImports()) {
+      if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) receivers.add(`${namespace.getText()}.sql`);
+  }
+  return receivers;
 }
 
 function sqlSinkName(call: CallExpression): string | null {

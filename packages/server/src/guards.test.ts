@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   stampParameterizedSql,
   stampRawSqlChunk,
+  stampStaticSql,
   stampTrustedSql,
 } from '@kovojs/core/internal/sql-safety';
 import {
@@ -114,6 +115,53 @@ describe('server guard and session primitives', () => {
     expect(calls).toEqual([]);
     expect(request.db.client.execute(stampTrustedSql(raw, 'audited migration clause'))).toBe('ok');
     expect(calls).toEqual([raw]);
+  });
+
+  it('rejects attacker-shaped SQL text and still allows static prepared statement values', async () => {
+    const payloads = [
+      "p1' or '1'='1",
+      "p1'; drop table products; --",
+      "p1' union select * from users --",
+      '%',
+    ];
+    const calls: unknown[] = [];
+    const request = await resolveLifecycleRequest(
+      {},
+      {
+        db: () => ({
+          exec(statement: unknown) {
+            calls.push(statement);
+            return [];
+          },
+          prepare(statement: unknown) {
+            calls.push(statement);
+            return {
+              all(value: string) {
+                return value === 'p1' ? [{ id: 'p1' }] : [];
+              },
+            };
+          },
+          query(statement: unknown) {
+            calls.push(statement);
+            return [{ id: 'p1' }, { id: 'p2' }];
+          },
+        }),
+      },
+    );
+
+    for (const payload of payloads) {
+      expect(() => request.db.query(`select * from products where id = '${payload}'`)).toThrow(
+        /KV422/,
+      );
+    }
+    expect(calls).toEqual([]);
+
+    const prepared = request.db.prepare(
+      stampStaticSql({ sql: 'select * from products where id = $1' }),
+    );
+    expect(prepared.all('p1')).toEqual([{ id: 'p1' }]);
+    expect(prepared.all(payloads[0]!)).toEqual([]);
+    expect(calls).toHaveLength(1);
   });
 
   it('keeps the production SQL guard in warn mode until the enforce ramp flips', async () => {
