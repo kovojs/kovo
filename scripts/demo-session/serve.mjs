@@ -82,7 +82,9 @@ export async function createDemoServeServer({
       buildHandler,
       idleMs: positiveEnvInt('KOVO_DEMO_IDLE_MS', 20 * 60_000),
       maxSessions: positiveEnvInt('KOVO_DEMO_MAX_SESSIONS', 40),
+      warmSessions: nonNegativeEnvInt('KOVO_DEMO_WARM_SESSIONS', 0),
     });
+    await dispatcher.ready();
 
     const server = createNodeServer((req, res) => {
       void tryServeBuiltAsset(req, res, distDir).then((served) => {
@@ -174,6 +176,13 @@ function positiveEnvInt(name, fallback) {
   if (raw === undefined) return fallback;
   const value = Number(raw);
   return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function nonNegativeEnvInt(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined) return fallback;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 0 ? value : fallback;
 }
 
 function parseCliOptions(args) {

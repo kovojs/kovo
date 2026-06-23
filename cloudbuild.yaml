@@ -28,10 +28,12 @@ substitutions:
   _TAG: latest
   _MEMORY: 2Gi
   _CPU: '1'
-  _CONCURRENCY: '40'
+  _CONCURRENCY: '10'
   _MIN_INSTANCES: '1' # session state lives in instance memory; 0 = scale-to-zero, resets on cold start
-  _MAX_INSTANCES: '1' # pin to one instance so a returning visitor always hits the instance holding their session
+  _MAX_INSTANCES: '10'
+  _SESSION_AFFINITY: 'true' # best-effort routing back to the instance holding the visitor demo DB
   _MAX_SESSIONS: '40'
+  _WARM_SESSIONS: '10'
   _IDLE_MS: '1200000' # 20 min idle TTL per session
   _COMMERCE_WEBHOOK_SECRET_NAME: 'commerce-webhook-secret'
 
@@ -67,8 +69,12 @@ steps:
         IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
         for EX in commerce crm stackoverflow; do
           echo "Deploying kovo-$$EX ..."
-          ENV_VARS="EXAMPLE=$$EX,KOVO_DEMO_MAX_SESSIONS=${_MAX_SESSIONS},KOVO_DEMO_IDLE_MS=${_IDLE_MS}"
+          ENV_VARS="EXAMPLE=$$EX,KOVO_DEMO_MAX_SESSIONS=${_MAX_SESSIONS},KOVO_DEMO_WARM_SESSIONS=${_WARM_SESSIONS},KOVO_DEMO_IDLE_MS=${_IDLE_MS}"
           SECRET_FLAGS=()
+          AFFINITY_FLAGS=(--session-affinity)
+          if [[ "${_SESSION_AFFINITY}" != "true" ]]; then
+            AFFINITY_FLAGS=(--no-session-affinity)
+          fi
           if [[ "$$EX" == "commerce" ]]; then
             SECRET_FLAGS=(--set-secrets "COMMERCE_WEBHOOK_SECRET=${_COMMERCE_WEBHOOK_SECRET_NAME}:latest")
           fi
@@ -85,5 +91,6 @@ steps:
             --concurrency ${_CONCURRENCY} \
             --min-instances ${_MIN_INSTANCES} \
             --max-instances ${_MAX_INSTANCES} \
+            "$${AFFINITY_FLAGS[@]}" \
             --quiet
         done

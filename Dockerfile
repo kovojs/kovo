@@ -53,6 +53,7 @@ ENV NODE_ENV=production
 ENV EXAMPLE=commerce
 # Memory guardrails for the per-session PGlite instances (override per service).
 ENV KOVO_DEMO_MAX_SESSIONS=40
+ENV KOVO_DEMO_WARM_SESSIONS=10
 ENV KOVO_DEMO_IDLE_MS=1200000
 
 EXPOSE 8080
