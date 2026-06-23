@@ -1,0 +1,4193 @@
+{
+  "generatedAt": "2026-06-23T06:08:13.864Z",
+  "iterations": 10,
+  "apps": [
+    {
+      "app": "kovo",
+      "framework": "Kovo",
+      "origin": "http://127.0.0.1:4310",
+      "versions": {
+        "kovo": "workspace:*"
+      },
+      "conditions": {
+        "desktop": {
+          "coldLoad": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 7.699999988079071,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 8.399999976158142,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.800000011920929,
+                "fcpMs": 16,
+                "lcpMs": 16,
+                "loadMs": 6.5,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.300000011920929,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 6,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.700000047683716,
+                "fcpMs": 24,
+                "lcpMs": 24,
+                "loadMs": 6.400000035762787,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.600000023841858,
+                "fcpMs": 32,
+                "lcpMs": 32,
+                "loadMs": 6.300000011920929,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.300000011920929,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 6,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 6,
+                "fcpMs": 32,
+                "lcpMs": 32,
+                "loadMs": 6.800000011920929,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 4.900000035762787,
+                "fcpMs": 24,
+                "lcpMs": 24,
+                "loadMs": 5.600000023841858,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.599999964237213,
+                "fcpMs": 24,
+                "lcpMs": 24,
+                "loadMs": 6.199999988079071,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.799999952316284,
+                "fcpMs": 20,
+                "lcpMs": 20,
+                "loadMs": 6.5,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 5.600000023841858,
+                "min": 4.900000035762787,
+                "p75": 5.800000011920929
+              },
+              "fcpMs": {
+                "median": 24,
+                "min": 16,
+                "p75": 32
+              },
+              "lcpMs": {
+                "median": 24,
+                "min": 16,
+                "p75": 32
+              },
+              "loadMs": {
+                "median": 6.300000011920929,
+                "min": 5.600000023841858,
+                "p75": 6.5
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.css": {
+                "median": 121698,
+                "min": 121698,
+                "p75": 121698
+              },
+              "bytes.html": {
+                "median": 41291,
+                "min": 41291,
+                "p75": 41291
+              },
+              "bytes.img": {
+                "median": 2282,
+                "min": 2282,
+                "p75": 2282
+              },
+              "bytes.js": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 165271,
+                "min": 165271,
+                "p75": 165271
+              },
+              "requests": {
+                "median": 9,
+                "min": 9,
+                "p75": 9
+              }
+            }
+          },
+          "navigation": {
+            "iterations": [
+              {
+                "navToDetailMs": 59.59999996423721,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 35,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 49.89999997615814,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 39.69999998807907,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 44.60000002384186,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 56.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 54.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 41.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 66,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 49.10000002384186,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              }
+            ],
+            "summary": {
+              "navToDetailMs": {
+                "median": 49.10000002384186,
+                "min": 35,
+                "p75": 56.5
+              },
+              "bytes.css": {
+                "median": 121698,
+                "min": 121698,
+                "p75": 121698
+              },
+              "bytes.html": {
+                "median": 41291,
+                "min": 41291,
+                "p75": 41291
+              },
+              "bytes.img": {
+                "median": 2282,
+                "min": 2282,
+                "p75": 2282
+              },
+              "bytes.js": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 165271,
+                "min": 165271,
+                "p75": 165271
+              },
+              "requests": {
+                "median": 9,
+                "min": 9,
+                "p75": 9
+              }
+            }
+          },
+          "ttiProbe": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 6,
+                "fcpMs": 16,
+                "lcpMs": 16,
+                "loadMs": 6.600000023841858,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 13.300000011920929,
+                "ttiProxyMs": 14.399999976158142,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 6.199999988079071,
+                "fcpMs": 24,
+                "lcpMs": 24,
+                "loadMs": 6.899999976158142,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 14.199999988079071,
+                "ttiProxyMs": 15.399999976158142,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.900000035762787,
+                "fcpMs": null,
+                "lcpMs": null,
+                "loadMs": 6.699999988079071,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 13.300000011920929,
+                "ttiProxyMs": 14.199999988079071,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.199999988079071,
+                "fcpMs": null,
+                "lcpMs": null,
+                "loadMs": 6,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 12.699999988079071,
+                "ttiProxyMs": 13.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.199999988079071,
+                "fcpMs": null,
+                "lcpMs": null,
+                "loadMs": 6,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 12.699999988079071,
+                "ttiProxyMs": 13.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.800000011920929,
+                "fcpMs": null,
+                "lcpMs": null,
+                "loadMs": 6.600000023841858,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 11.600000023841858,
+                "ttiProxyMs": 12.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.5,
+                "fcpMs": null,
+                "lcpMs": null,
+                "loadMs": 6.100000023841858,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 11.400000035762787,
+                "ttiProxyMs": 12.100000023841858,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.199999988079071,
+                "fcpMs": null,
+                "lcpMs": null,
+                "loadMs": 6,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 10.900000035762787,
+                "ttiProxyMs": 11.600000023841858,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.199999988079071,
+                "fcpMs": null,
+                "lcpMs": null,
+                "loadMs": 5.799999952316284,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 10.699999988079071,
+                "ttiProxyMs": 11.399999976158142,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 5.5,
+                "fcpMs": 16,
+                "lcpMs": 16,
+                "loadMs": 6.300000011920929,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 12.899999976158142,
+                "ttiProxyMs": 13.699999988079071,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 2282,
+                  "js": 0,
+                  "other": 0,
+                  "total": 165271
+                },
+                "requests": 9
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 5.5,
+                "min": 5.199999988079071,
+                "p75": 5.900000035762787
+              },
+              "fcpMs": {
+                "median": 16,
+                "min": 16,
+                "p75": 24
+              },
+              "lcpMs": {
+                "median": 16,
+                "min": 16,
+                "p75": 24
+              },
+              "loadMs": {
+                "median": 6.100000023841858,
+                "min": 5.799999952316284,
+                "p75": 6.600000023841858
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "checkoutConfirmed": {
+                "median": 1,
+                "min": 1,
+                "p75": 1
+              },
+              "firstSuccessfulClickMs": {
+                "median": 12.699999988079071,
+                "min": 10.699999988079071,
+                "p75": 13.300000011920929
+              },
+              "ttiProxyMs": {
+                "median": 13.5,
+                "min": 11.399999976158142,
+                "p75": 14.199999988079071
+              },
+              "bytes.css": {
+                "median": 121698,
+                "min": 121698,
+                "p75": 121698
+              },
+              "bytes.html": {
+                "median": 41291,
+                "min": 41291,
+                "p75": 41291
+              },
+              "bytes.img": {
+                "median": 2282,
+                "min": 2282,
+                "p75": 2282
+              },
+              "bytes.js": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 165271,
+                "min": 165271,
+                "p75": 165271
+              },
+              "requests": {
+                "median": 9,
+                "min": 9,
+                "p75": 9
+              }
+            }
+          }
+        },
+        "mobile": {
+          "coldLoad": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 981.0999999642372,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 981.0999999642372,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 979.5,
+                "fcpMs": 980,
+                "lcpMs": 980,
+                "loadMs": 979.6000000238419,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 976.3000000119209,
+                "fcpMs": 980,
+                "lcpMs": 980,
+                "loadMs": 977.1000000238419,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 980.1000000238419,
+                "fcpMs": 980,
+                "lcpMs": 980,
+                "loadMs": 980.1000000238419,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 980.6999999880791,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 980.6999999880791,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 990.8999999761581,
+                "fcpMs": 992,
+                "lcpMs": 992,
+                "loadMs": 990.8999999761581,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 978,
+                  "js": 0,
+                  "other": 0,
+                  "total": 163967
+                },
+                "requests": 5
+              },
+              {
+                "domContentLoadedMs": 981.8000000119209,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 981.8000000119209,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 652,
+                  "js": 0,
+                  "other": 0,
+                  "total": 163641
+                },
+                "requests": 4
+              },
+              {
+                "domContentLoadedMs": 979.3000000119209,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 979.3000000119209,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 326,
+                  "js": 0,
+                  "other": 0,
+                  "total": 163315
+                },
+                "requests": 3
+              },
+              {
+                "domContentLoadedMs": 975.3000000119209,
+                "fcpMs": 976,
+                "lcpMs": 976,
+                "loadMs": 975.8000000119209,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 326,
+                  "js": 0,
+                  "other": 0,
+                  "total": 163315
+                },
+                "requests": 3
+              },
+              {
+                "domContentLoadedMs": 974.1000000238419,
+                "fcpMs": 976,
+                "lcpMs": 976,
+                "loadMs": 974.1999999880791,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 979.5,
+                "min": 974.1000000238419,
+                "p75": 981.0999999642372
+              },
+              "fcpMs": {
+                "median": 980,
+                "min": 976,
+                "p75": 984
+              },
+              "lcpMs": {
+                "median": 980,
+                "min": 976,
+                "p75": 984
+              },
+              "loadMs": {
+                "median": 979.6000000238419,
+                "min": 974.1999999880791,
+                "p75": 981.0999999642372
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.css": {
+                "median": 121698,
+                "min": 121698,
+                "p75": 121698
+              },
+              "bytes.html": {
+                "median": 41291,
+                "min": 41291,
+                "p75": 41291
+              },
+              "bytes.img": {
+                "median": 0,
+                "min": 0,
+                "p75": 326
+              },
+              "bytes.js": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 162989,
+                "min": 162989,
+                "p75": 163315
+              },
+              "requests": {
+                "median": 2,
+                "min": 2,
+                "p75": 3
+              }
+            }
+          },
+          "navigation": {
+            "iterations": [
+              {
+                "navToDetailMs": 99.19999998807907,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 111.79999995231628,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 119,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 110,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 108.70000004768372,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 98.59999996423721,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 131.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 92.5,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 92.20000004768372,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "navToDetailMs": 102.39999997615814,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              }
+            ],
+            "summary": {
+              "navToDetailMs": {
+                "median": 102.39999997615814,
+                "min": 92.20000004768372,
+                "p75": 111.79999995231628
+              },
+              "bytes.css": {
+                "median": 121698,
+                "min": 121698,
+                "p75": 121698
+              },
+              "bytes.html": {
+                "median": 41291,
+                "min": 41291,
+                "p75": 41291
+              },
+              "bytes.img": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.js": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 162989,
+                "min": 162989,
+                "p75": 162989
+              },
+              "requests": {
+                "median": 2,
+                "min": 2,
+                "p75": 2
+              }
+            }
+          },
+          "ttiProbe": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 977.1000000238419,
+                "fcpMs": 980,
+                "lcpMs": 980,
+                "loadMs": 977.1000000238419,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 982.1999999880791,
+                "ttiProxyMs": 985.9000000357628,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 981.1999999880791,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 981.1999999880791,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 986.3000000119209,
+                "ttiProxyMs": 991.1999999880791,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 979.8999999761581,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 979.8999999761581,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 997.1999999880791,
+                "ttiProxyMs": 1001.8000000119209,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 980.3000000119209,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 980.3000000119209,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 985,
+                "ttiProxyMs": 991.8000000119209,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 988,
+                "fcpMs": 988,
+                "lcpMs": 988,
+                "loadMs": 988,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 996,
+                "ttiProxyMs": 1002.3000000119209,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 979,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 979.0999999642372,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 983.5,
+                "ttiProxyMs": 986.7999999523163,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 982.6000000238419,
+                "fcpMs": 984,
+                "lcpMs": 984,
+                "loadMs": 982.6999999880791,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 989.6999999880791,
+                "ttiProxyMs": 994.3000000119209,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 975.5,
+                "fcpMs": 980,
+                "lcpMs": 980,
+                "loadMs": 976.4000000357628,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 980.7000000476837,
+                "ttiProxyMs": 985.2000000476837,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 975.0999999642372,
+                "fcpMs": 976,
+                "lcpMs": 976,
+                "loadMs": 975.0999999642372,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 980.3999999761581,
+                "ttiProxyMs": 983.5999999642372,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              },
+              {
+                "domContentLoadedMs": 976.3000000119209,
+                "fcpMs": 980,
+                "lcpMs": 980,
+                "loadMs": 976.3000000119209,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 980.8000000119209,
+                "ttiProxyMs": 985.1999999880791,
+                "bytes": {
+                  "css": 121698,
+                  "html": 41291,
+                  "img": 0,
+                  "js": 0,
+                  "other": 0,
+                  "total": 162989
+                },
+                "requests": 2
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 979,
+                "min": 975.0999999642372,
+                "p75": 981.1999999880791
+              },
+              "fcpMs": {
+                "median": 984,
+                "min": 976,
+                "p75": 984
+              },
+              "lcpMs": {
+                "median": 984,
+                "min": 976,
+                "p75": 984
+              },
+              "loadMs": {
+                "median": 979.0999999642372,
+                "min": 975.0999999642372,
+                "p75": 981.1999999880791
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "checkoutConfirmed": {
+                "median": 1,
+                "min": 1,
+                "p75": 1
+              },
+              "firstSuccessfulClickMs": {
+                "median": 983.5,
+                "min": 980.3999999761581,
+                "p75": 989.6999999880791
+              },
+              "ttiProxyMs": {
+                "median": 986.7999999523163,
+                "min": 983.5999999642372,
+                "p75": 994.3000000119209
+              },
+              "bytes.css": {
+                "median": 121698,
+                "min": 121698,
+                "p75": 121698
+              },
+              "bytes.html": {
+                "median": 41291,
+                "min": 41291,
+                "p75": 41291
+              },
+              "bytes.img": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.js": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 162989,
+                "min": 162989,
+                "p75": 162989
+              },
+              "requests": {
+                "median": 2,
+                "min": 2,
+                "p75": 2
+              }
+            }
+          }
+        }
+      },
+      "lighthouse": [
+        {
+          "formFactor": "desktop",
+          "metrics": {
+            "bytes": 188832,
+            "fcpMs": 1534.3110000000001,
+            "lcpMs": 1909.3109999999997,
+            "performanceScore": 0.85,
+            "speedIndexMs": 1534.3110000000001,
+            "tbtMs": 0,
+            "ttiMs": 1931.811
+          },
+          "path": "/"
+        },
+        {
+          "formFactor": "desktop",
+          "metrics": {
+            "bytes": 147646,
+            "fcpMs": 1508.8908999999999,
+            "lcpMs": 1658.8909,
+            "performanceScore": 0.88,
+            "speedIndexMs": 1508.8908999999999,
+            "tbtMs": 0,
+            "ttiMs": 1658.8909000000003
+          },
+          "path": "/product/linen-field-jacket"
+        },
+        {
+          "formFactor": "mobile",
+          "metrics": {
+            "bytes": 165271,
+            "fcpMs": 1504.9351000000001,
+            "lcpMs": 1729.9351000000001,
+            "performanceScore": 0.99,
+            "speedIndexMs": 1504.9351000000001,
+            "tbtMs": 0,
+            "ttiMs": 1752.4351000000001
+          },
+          "path": "/"
+        },
+        {
+          "formFactor": "mobile",
+          "metrics": {
+            "bytes": 147646,
+            "fcpMs": 1509.6242,
+            "lcpMs": 1659.6242,
+            "performanceScore": 0.99,
+            "speedIndexMs": 1509.6242,
+            "tbtMs": 0,
+            "ttiMs": 1659.6242
+          },
+          "path": "/product/linen-field-jacket"
+        }
+      ]
+    },
+    {
+      "app": "nextjs",
+      "framework": "Next.js App Router",
+      "origin": "http://127.0.0.1:4311",
+      "versions": {
+        "next": "16.2.9",
+        "react": "19.2.7",
+        "react-dom": "19.2.7"
+      },
+      "conditions": {
+        "desktop": {
+          "coldLoad": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 20,
+                "fcpMs": 32,
+                "lcpMs": 32,
+                "loadMs": 71.5,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 5.900000035762787,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 41.80000001192093,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 5.5,
+                "fcpMs": 24,
+                "lcpMs": 24,
+                "loadMs": 39.19999998807907,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 5.400000035762787,
+                "fcpMs": 32,
+                "lcpMs": 32,
+                "loadMs": 43.69999998807907,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 6.100000023841858,
+                "fcpMs": 48,
+                "lcpMs": 48,
+                "loadMs": 41.60000002384186,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 5.5,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 39.69999998807907,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 5.199999988079071,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 39.69999998807907,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 5.199999988079071,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 40.69999998807907,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 5.800000011920929,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 45.200000047683716,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "domContentLoadedMs": 6.199999988079071,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 43.39999997615814,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 5.5,
+                "min": 5.199999988079071,
+                "p75": 6.100000023841858
+              },
+              "fcpMs": {
+                "median": 32,
+                "min": 24,
+                "p75": 44
+              },
+              "lcpMs": {
+                "median": 32,
+                "min": 24,
+                "p75": 44
+              },
+              "loadMs": {
+                "median": 41.60000002384186,
+                "min": 39.19999998807907,
+                "p75": 43.69999998807907
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.css": {
+                "median": 1537,
+                "min": 1537,
+                "p75": 1537
+              },
+              "bytes.html": {
+                "median": 6527,
+                "min": 6527,
+                "p75": 6527
+              },
+              "bytes.img": {
+                "median": 2792,
+                "min": 2792,
+                "p75": 2792
+              },
+              "bytes.js": {
+                "median": 152515,
+                "min": 152515,
+                "p75": 152515
+              },
+              "bytes.other": {
+                "median": 39673,
+                "min": 39673,
+                "p75": 39673
+              },
+              "bytes.total": {
+                "median": 203044,
+                "min": 203044,
+                "p75": 203044
+              },
+              "requests": {
+                "median": 61,
+                "min": 61,
+                "p75": 61
+              }
+            }
+          },
+          "navigation": {
+            "iterations": [
+              {
+                "navToDetailMs": 57.80000001192093,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 26088,
+                  "total": 189459
+                },
+                "requests": 49
+              },
+              {
+                "navToDetailMs": 47.19999998807907,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 26088,
+                  "total": 189459
+                },
+                "requests": 49
+              },
+              {
+                "navToDetailMs": 42.19999998807907,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 22783,
+                  "total": 186154
+                },
+                "requests": 45
+              },
+              {
+                "navToDetailMs": 57,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 33275,
+                  "total": 196646
+                },
+                "requests": 57
+              },
+              {
+                "navToDetailMs": 49.10000002384186,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 22783,
+                  "total": 186154
+                },
+                "requests": 45
+              },
+              {
+                "navToDetailMs": 50.5,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 7629,
+                  "total": 171000
+                },
+                "requests": 28
+              },
+              {
+                "navToDetailMs": 46.60000002384186,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 26088,
+                  "total": 189459
+                },
+                "requests": 49
+              },
+              {
+                "navToDetailMs": 51.89999997615814,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 39673,
+                  "total": 203044
+                },
+                "requests": 61
+              },
+              {
+                "navToDetailMs": 46.40000003576279,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 20850,
+                  "total": 184221
+                },
+                "requests": 43
+              },
+              {
+                "navToDetailMs": 53.80000001192093,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 29805,
+                  "total": 193176
+                },
+                "requests": 53
+              }
+            ],
+            "summary": {
+              "navToDetailMs": {
+                "median": 49.10000002384186,
+                "min": 42.19999998807907,
+                "p75": 53.80000001192093
+              },
+              "bytes.css": {
+                "median": 1537,
+                "min": 1537,
+                "p75": 1537
+              },
+              "bytes.html": {
+                "median": 6527,
+                "min": 6527,
+                "p75": 6527
+              },
+              "bytes.img": {
+                "median": 2792,
+                "min": 2792,
+                "p75": 2792
+              },
+              "bytes.js": {
+                "median": 152515,
+                "min": 152515,
+                "p75": 152515
+              },
+              "bytes.other": {
+                "median": 26088,
+                "min": 7629,
+                "p75": 29805
+              },
+              "bytes.total": {
+                "median": 189459,
+                "min": 171000,
+                "p75": 193176
+              },
+              "requests": {
+                "median": 49,
+                "min": 28,
+                "p75": 53
+              }
+            }
+          },
+          "ttiProbe": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 5.399999976158142,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 41.5,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 7.199999988079071,
+                "ttiProxyMs": 58.80000001192093,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 19321,
+                  "total": 182692
+                },
+                "requests": 41
+              },
+              {
+                "domContentLoadedMs": 6.100000023841858,
+                "fcpMs": 32,
+                "lcpMs": 32,
+                "loadMs": 48.90000003576279,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 8.900000035762787,
+                "ttiProxyMs": 62.700000047683716,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 12310,
+                  "total": 175681
+                },
+                "requests": 33
+              },
+              {
+                "domContentLoadedMs": 6.700000047683716,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 44.30000001192093,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 33.10000002384186,
+                "ttiProxyMs": 55.5,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 19321,
+                  "total": 182692
+                },
+                "requests": 41
+              },
+              {
+                "domContentLoadedMs": 5.900000035762787,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 46.10000002384186,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 7.600000023841858,
+                "ttiProxyMs": 59.69999998807907,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 19321,
+                  "total": 182692
+                },
+                "requests": 41
+              },
+              {
+                "domContentLoadedMs": 17.400000035762787,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 44.80000001192093,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 23.100000023841858,
+                "ttiProxyMs": 62.90000003576279,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 23469,
+                  "total": 186840
+                },
+                "requests": 46
+              },
+              {
+                "domContentLoadedMs": 5.800000011920929,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 41.89999997615814,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 31,
+                "ttiProxyMs": 53.80000001192093,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 17548,
+                  "total": 180919
+                },
+                "requests": 39
+              },
+              {
+                "domContentLoadedMs": 5.300000011920929,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 40.60000002384186,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 7,
+                "ttiProxyMs": 61.40000003576279,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 22783,
+                  "total": 186154
+                },
+                "requests": 45
+              },
+              {
+                "domContentLoadedMs": 9.199999988079071,
+                "fcpMs": 52,
+                "lcpMs": 52,
+                "loadMs": 52.39999997615814,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 14.399999976158142,
+                "ttiProxyMs": 63.09999996423721,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 24559,
+                  "total": 187930
+                },
+                "requests": 47
+              },
+              {
+                "domContentLoadedMs": 5.400000035762787,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 46,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 8.300000011920929,
+                "ttiProxyMs": 59.19999998807907,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 16705,
+                  "total": 180076
+                },
+                "requests": 38
+              },
+              {
+                "domContentLoadedMs": 5.300000011920929,
+                "fcpMs": 36,
+                "lcpMs": 36,
+                "loadMs": 42.19999998807907,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 7.699999988079071,
+                "ttiProxyMs": 56.30000001192093,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 2792,
+                  "js": 152515,
+                  "other": 25402,
+                  "total": 188773
+                },
+                "requests": 48
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 5.800000011920929,
+                "min": 5.300000011920929,
+                "p75": 6.700000047683716
+              },
+              "fcpMs": {
+                "median": 32,
+                "min": 28,
+                "p75": 44
+              },
+              "lcpMs": {
+                "median": 32,
+                "min": 28,
+                "p75": 44
+              },
+              "loadMs": {
+                "median": 44.30000001192093,
+                "min": 40.60000002384186,
+                "p75": 46.10000002384186
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "checkoutConfirmed": {
+                "median": 1,
+                "min": 1,
+                "p75": 1
+              },
+              "firstSuccessfulClickMs": {
+                "median": 8.300000011920929,
+                "min": 7,
+                "p75": 23.100000023841858
+              },
+              "ttiProxyMs": {
+                "median": 59.19999998807907,
+                "min": 53.80000001192093,
+                "p75": 62.700000047683716
+              },
+              "bytes.css": {
+                "median": 1537,
+                "min": 1537,
+                "p75": 1537
+              },
+              "bytes.html": {
+                "median": 6527,
+                "min": 6527,
+                "p75": 6527
+              },
+              "bytes.img": {
+                "median": 2792,
+                "min": 2792,
+                "p75": 2792
+              },
+              "bytes.js": {
+                "median": 152515,
+                "min": 152515,
+                "p75": 152515
+              },
+              "bytes.other": {
+                "median": 19321,
+                "min": 12310,
+                "p75": 23469
+              },
+              "bytes.total": {
+                "median": 182692,
+                "min": 175681,
+                "p75": 186840
+              },
+              "requests": {
+                "median": 41,
+                "min": 33,
+                "p75": 46
+              }
+            }
+          }
+        },
+        "mobile": {
+          "coldLoad": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 405.5999999642372,
+                "fcpMs": 408,
+                "lcpMs": 408,
+                "loadMs": 1196.8999999761581,
+                "tbtMs": 9,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 408,
+                "fcpMs": 412,
+                "lcpMs": 412,
+                "loadMs": 1198.8999999761581,
+                "tbtMs": 11,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 413.2000000476837,
+                "fcpMs": 416,
+                "lcpMs": 416,
+                "loadMs": 1198,
+                "tbtMs": 11,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 401.2000000476837,
+                "fcpMs": 404,
+                "lcpMs": 404,
+                "loadMs": 1190.9000000357628,
+                "tbtMs": 11,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 411.69999998807907,
+                "fcpMs": 428,
+                "lcpMs": 428,
+                "loadMs": 1197.8999999761581,
+                "tbtMs": 12,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 399.60000002384186,
+                "fcpMs": 416,
+                "lcpMs": 416,
+                "loadMs": 1190.5,
+                "tbtMs": 11,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 409.69999998807907,
+                "fcpMs": 428,
+                "lcpMs": 428,
+                "loadMs": 1199.699999988079,
+                "tbtMs": 12,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 411.19999998807907,
+                "fcpMs": 424,
+                "lcpMs": 424,
+                "loadMs": 1198.8999999761581,
+                "tbtMs": 12,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 424.60000002384186,
+                "fcpMs": 428,
+                "lcpMs": 428,
+                "loadMs": 1205.7000000476837,
+                "tbtMs": 10,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 401.69999998807907,
+                "fcpMs": 408,
+                "lcpMs": 408,
+                "loadMs": 1193.300000011921,
+                "tbtMs": 12,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 408,
+                "min": 399.60000002384186,
+                "p75": 411.69999998807907
+              },
+              "fcpMs": {
+                "median": 416,
+                "min": 404,
+                "p75": 428
+              },
+              "lcpMs": {
+                "median": 416,
+                "min": 404,
+                "p75": 428
+              },
+              "loadMs": {
+                "median": 1197.8999999761581,
+                "min": 1190.5,
+                "p75": 1198.8999999761581
+              },
+              "tbtMs": {
+                "median": 11,
+                "min": 9,
+                "p75": 12
+              },
+              "bytes.css": {
+                "median": 1537,
+                "min": 1537,
+                "p75": 1537
+              },
+              "bytes.html": {
+                "median": 6527,
+                "min": 6527,
+                "p75": 6527
+              },
+              "bytes.img": {
+                "median": 1396,
+                "min": 1396,
+                "p75": 1396
+              },
+              "bytes.js": {
+                "median": 152515,
+                "min": 152515,
+                "p75": 152515
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 161975,
+                "min": 161975,
+                "p75": 161975
+              },
+              "requests": {
+                "median": 13,
+                "min": 13,
+                "p75": 13
+              }
+            }
+          },
+          "navigation": {
+            "iterations": [
+              {
+                "navToDetailMs": 117.90000003576279,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 114.19999998807907,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 118.59999996423721,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 107.90000003576279,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 111.30000001192093,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 100.60000002384186,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 122.39999997615814,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 99.30000001192093,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 114.90000003576279,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 116.90000003576279,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              }
+            ],
+            "summary": {
+              "navToDetailMs": {
+                "median": 114.19999998807907,
+                "min": 99.30000001192093,
+                "p75": 117.90000003576279
+              },
+              "bytes.css": {
+                "median": 1537,
+                "min": 1537,
+                "p75": 1537
+              },
+              "bytes.html": {
+                "median": 6527,
+                "min": 6527,
+                "p75": 6527
+              },
+              "bytes.img": {
+                "median": 1396,
+                "min": 1396,
+                "p75": 1396
+              },
+              "bytes.js": {
+                "median": 152515,
+                "min": 152515,
+                "p75": 152515
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 161975,
+                "min": 161975,
+                "p75": 161975
+              },
+              "requests": {
+                "median": 13,
+                "min": 13,
+                "p75": 13
+              }
+            }
+          },
+          "ttiProbe": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 406.30000001192093,
+                "fcpMs": 412,
+                "lcpMs": 412,
+                "loadMs": 1194.7000000476837,
+                "tbtMs": 9,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 410.30000001192093,
+                "ttiProxyMs": 1241.300000011921,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 411.5999999642372,
+                "fcpMs": 416,
+                "lcpMs": 416,
+                "loadMs": 1198.699999988079,
+                "tbtMs": 11,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 417,
+                "ttiProxyMs": 1241,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 410.89999997615814,
+                "fcpMs": 416,
+                "lcpMs": 416,
+                "loadMs": 1196.699999988079,
+                "tbtMs": 10,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 415.39999997615814,
+                "ttiProxyMs": 1243.800000011921,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 410.80000001192093,
+                "fcpMs": 432,
+                "lcpMs": 432,
+                "loadMs": 1199.800000011921,
+                "tbtMs": 13,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 415.5,
+                "ttiProxyMs": 1249.6000000238419,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 408.5,
+                "fcpMs": 412,
+                "lcpMs": 412,
+                "loadMs": 1197,
+                "tbtMs": 11,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 413.19999998807907,
+                "ttiProxyMs": 1245.199999988079,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 410.39999997615814,
+                "fcpMs": 416,
+                "lcpMs": 416,
+                "loadMs": 1198.0999999642372,
+                "tbtMs": 11,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 415.69999998807907,
+                "ttiProxyMs": 1245.5,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 406.69999998807907,
+                "fcpMs": 412,
+                "lcpMs": 412,
+                "loadMs": 1197.3999999761581,
+                "tbtMs": 10,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 411.19999998807907,
+                "ttiProxyMs": 1243.8999999761581,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 405.19999998807907,
+                "fcpMs": 412,
+                "lcpMs": 412,
+                "loadMs": 1191.300000011921,
+                "tbtMs": 11,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 409.69999998807907,
+                "ttiProxyMs": 1237.5,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 410.0999999642372,
+                "fcpMs": 412,
+                "lcpMs": 412,
+                "loadMs": 1198.199999988079,
+                "tbtMs": 10,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 414.5,
+                "ttiProxyMs": 1240.699999988079,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 407.39999997615814,
+                "fcpMs": 412,
+                "lcpMs": 412,
+                "loadMs": 1195.5999999642372,
+                "tbtMs": 8,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 412,
+                "ttiProxyMs": 1240.2999999523163,
+                "bytes": {
+                  "css": 1537,
+                  "html": 6527,
+                  "img": 1396,
+                  "js": 152515,
+                  "other": 0,
+                  "total": 161975
+                },
+                "requests": 13
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 408.5,
+                "min": 405.19999998807907,
+                "p75": 410.80000001192093
+              },
+              "fcpMs": {
+                "median": 412,
+                "min": 412,
+                "p75": 416
+              },
+              "lcpMs": {
+                "median": 412,
+                "min": 412,
+                "p75": 416
+              },
+              "loadMs": {
+                "median": 1197,
+                "min": 1191.300000011921,
+                "p75": 1198.199999988079
+              },
+              "tbtMs": {
+                "median": 10,
+                "min": 8,
+                "p75": 11
+              },
+              "checkoutConfirmed": {
+                "median": 1,
+                "min": 1,
+                "p75": 1
+              },
+              "firstSuccessfulClickMs": {
+                "median": 413.19999998807907,
+                "min": 409.69999998807907,
+                "p75": 415.5
+              },
+              "ttiProxyMs": {
+                "median": 1241.300000011921,
+                "min": 1237.5,
+                "p75": 1245.199999988079
+              },
+              "bytes.css": {
+                "median": 1537,
+                "min": 1537,
+                "p75": 1537
+              },
+              "bytes.html": {
+                "median": 6527,
+                "min": 6527,
+                "p75": 6527
+              },
+              "bytes.img": {
+                "median": 1396,
+                "min": 1396,
+                "p75": 1396
+              },
+              "bytes.js": {
+                "median": 152515,
+                "min": 152515,
+                "p75": 152515
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 161975,
+                "min": 161975,
+                "p75": 161975
+              },
+              "requests": {
+                "median": 13,
+                "min": 13,
+                "p75": 13
+              }
+            }
+          }
+        }
+      },
+      "lighthouse": [
+        {
+          "formFactor": "desktop",
+          "metrics": {
+            "bytes": 205803,
+            "fcpMs": 753.0181,
+            "lcpMs": 2171.0181000000002,
+            "performanceScore": 0.89,
+            "speedIndexMs": 753.0181,
+            "tbtMs": 9,
+            "ttiMs": 2268.5181000000002
+          },
+          "path": "/"
+        },
+        {
+          "formFactor": "desktop",
+          "metrics": {
+            "bytes": 163968,
+            "fcpMs": 756.7668000000001,
+            "lcpMs": 2084.7668000000003,
+            "performanceScore": 0.9,
+            "speedIndexMs": 756.7668000000001,
+            "tbtMs": 1.5,
+            "ttiMs": 2092.2668000000003
+          },
+          "path": "/product/linen-field-jacket"
+        },
+        {
+          "formFactor": "mobile",
+          "metrics": {
+            "bytes": 176660,
+            "fcpMs": 753.9594,
+            "lcpMs": 2480.9390999999996,
+            "performanceScore": 0.98,
+            "speedIndexMs": 753.9594,
+            "tbtMs": 3,
+            "ttiMs": 2488.4390999999996
+          },
+          "path": "/"
+        },
+        {
+          "formFactor": "mobile",
+          "metrics": {
+            "bytes": 163968,
+            "fcpMs": 754.0512000000001,
+            "lcpMs": 2083.0512,
+            "performanceScore": 0.99,
+            "speedIndexMs": 754.0512000000001,
+            "tbtMs": 2,
+            "ttiMs": 2090.5512
+          },
+          "path": "/product/linen-field-jacket"
+        }
+      ]
+    },
+    {
+      "app": "tanstack",
+      "framework": "TanStack Start",
+      "origin": "http://127.0.0.1:4312",
+      "versions": {
+        "@tanstack/react-start": "1.168.26",
+        "@tanstack/react-router": "1.168.26",
+        "react": "19.2.7",
+        "react-dom": "19.2.7"
+      },
+      "conditions": {
+        "desktop": {
+          "coldLoad": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 17.700000047683716,
+                "fcpMs": 52,
+                "lcpMs": 52,
+                "loadMs": 32.80000001192093,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 9.199999988079071,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 33.89999997615814,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.899999976158142,
+                "fcpMs": 40,
+                "lcpMs": 40,
+                "loadMs": 34.10000002384186,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.800000011920929,
+                "fcpMs": 36,
+                "lcpMs": 36,
+                "loadMs": 32.90000003576279,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.699999988079071,
+                "fcpMs": 40,
+                "lcpMs": 40,
+                "loadMs": 34.40000003576279,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.599999964237213,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 33,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.699999988079071,
+                "fcpMs": 40,
+                "lcpMs": 40,
+                "loadMs": 33.39999997615814,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.5,
+                "fcpMs": 36,
+                "lcpMs": 36,
+                "loadMs": 32.5,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.699999988079071,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 32,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.600000023841858,
+                "fcpMs": 36,
+                "lcpMs": 36,
+                "loadMs": 32.69999998807907,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 8.699999988079071,
+                "min": 8.5,
+                "p75": 8.899999976158142
+              },
+              "fcpMs": {
+                "median": 40,
+                "min": 28,
+                "p75": 44
+              },
+              "lcpMs": {
+                "median": 40,
+                "min": 28,
+                "p75": 44
+              },
+              "loadMs": {
+                "median": 32.90000003576279,
+                "min": 32,
+                "p75": 33.89999997615814
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.css": {
+                "median": 3270,
+                "min": 3270,
+                "p75": 3270
+              },
+              "bytes.html": {
+                "median": 15063,
+                "min": 15063,
+                "p75": 15063
+              },
+              "bytes.img": {
+                "median": 2096,
+                "min": 2096,
+                "p75": 2096
+              },
+              "bytes.js": {
+                "median": 331500,
+                "min": 331500,
+                "p75": 331500
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 351929,
+                "min": 351929,
+                "p75": 351929
+              },
+              "requests": {
+                "median": 13,
+                "min": 13,
+                "p75": 13
+              }
+            }
+          },
+          "navigation": {
+            "iterations": [
+              {
+                "navToDetailMs": 46.89999997615814,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 45.39999997615814,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 50,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 54.10000002384186,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 49.09999996423721,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 51.30000001192093,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 332548,
+                  "other": 0,
+                  "total": 352977
+                },
+                "requests": 14
+              },
+              {
+                "navToDetailMs": 50.09999996423721,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 43.90000003576279,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 51.89999997615814,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "navToDetailMs": 54.40000003576279,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              }
+            ],
+            "summary": {
+              "navToDetailMs": {
+                "median": 50,
+                "min": 43.90000003576279,
+                "p75": 51.89999997615814
+              },
+              "bytes.css": {
+                "median": 3270,
+                "min": 3270,
+                "p75": 3270
+              },
+              "bytes.html": {
+                "median": 15063,
+                "min": 15063,
+                "p75": 15063
+              },
+              "bytes.img": {
+                "median": 2096,
+                "min": 2096,
+                "p75": 2096
+              },
+              "bytes.js": {
+                "median": 331500,
+                "min": 331500,
+                "p75": 331500
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 351929,
+                "min": 351929,
+                "p75": 351929
+              },
+              "requests": {
+                "median": 13,
+                "min": 13,
+                "p75": 13
+              }
+            }
+          },
+          "ttiProbe": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 11.199999988079071,
+                "fcpMs": 40,
+                "lcpMs": 40,
+                "loadMs": 34.90000003576279,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 12.600000023841858,
+                "ttiProxyMs": 70.90000003576279,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 9.199999988079071,
+                "fcpMs": 40,
+                "lcpMs": 40,
+                "loadMs": 34.19999998807907,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 11,
+                "ttiProxyMs": 73.29999995231628,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 18.19999998807907,
+                "fcpMs": 32,
+                "lcpMs": 32,
+                "loadMs": 31.299999952316284,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 31.5,
+                "ttiProxyMs": 64.69999998807907,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.599999964237213,
+                "fcpMs": 44,
+                "lcpMs": 44,
+                "loadMs": 31.299999952316284,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 9.799999952316284,
+                "ttiProxyMs": 71.09999996423721,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 9.600000023841858,
+                "fcpMs": 40,
+                "lcpMs": 40,
+                "loadMs": 37.19999998807907,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 11.199999988079071,
+                "ttiProxyMs": 72.90000003576279,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.600000023841858,
+                "fcpMs": 36,
+                "lcpMs": 36,
+                "loadMs": 32.80000001192093,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 10.100000023841858,
+                "ttiProxyMs": 72.60000002384186,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.699999988079071,
+                "fcpMs": 36,
+                "lcpMs": 36,
+                "loadMs": 32.69999998807907,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 10,
+                "ttiProxyMs": 70.89999997615814,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.900000035762787,
+                "fcpMs": 40,
+                "lcpMs": 40,
+                "loadMs": 33.10000002384186,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 11.200000047683716,
+                "ttiProxyMs": 66.90000003576279,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.899999976158142,
+                "fcpMs": 36,
+                "lcpMs": 36,
+                "loadMs": 33,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 10.699999988079071,
+                "ttiProxyMs": 72.69999998807907,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              },
+              {
+                "domContentLoadedMs": 8.699999988079071,
+                "fcpMs": 28,
+                "lcpMs": 28,
+                "loadMs": 33,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 10.199999988079071,
+                "ttiProxyMs": 68.30000001192093,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 2096,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 351929
+                },
+                "requests": 13
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 8.899999976158142,
+                "min": 8.599999964237213,
+                "p75": 9.600000023841858
+              },
+              "fcpMs": {
+                "median": 36,
+                "min": 28,
+                "p75": 40
+              },
+              "lcpMs": {
+                "median": 36,
+                "min": 28,
+                "p75": 40
+              },
+              "loadMs": {
+                "median": 33,
+                "min": 31.299999952316284,
+                "p75": 34.19999998807907
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "checkoutConfirmed": {
+                "median": 1,
+                "min": 1,
+                "p75": 1
+              },
+              "firstSuccessfulClickMs": {
+                "median": 10.699999988079071,
+                "min": 9.799999952316284,
+                "p75": 11.200000047683716
+              },
+              "ttiProxyMs": {
+                "median": 70.90000003576279,
+                "min": 64.69999998807907,
+                "p75": 72.69999998807907
+              },
+              "bytes.css": {
+                "median": 3270,
+                "min": 3270,
+                "p75": 3270
+              },
+              "bytes.html": {
+                "median": 15063,
+                "min": 15063,
+                "p75": 15063
+              },
+              "bytes.img": {
+                "median": 2096,
+                "min": 2096,
+                "p75": 2096
+              },
+              "bytes.js": {
+                "median": 331500,
+                "min": 331500,
+                "p75": 331500
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 351929,
+                "min": 351929,
+                "p75": 351929
+              },
+              "requests": {
+                "median": 13,
+                "min": 13,
+                "p75": 13
+              }
+            }
+          }
+        },
+        "mobile": {
+          "coldLoad": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 414.5,
+                "fcpMs": 416,
+                "lcpMs": 416,
+                "loadMs": 2017,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 430.30000001192093,
+                "fcpMs": 436,
+                "lcpMs": 436,
+                "loadMs": 2023.800000011921,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 424.19999998807907,
+                "fcpMs": 428,
+                "lcpMs": 428,
+                "loadMs": 2016.1000000238419,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 430,
+                "fcpMs": 436,
+                "lcpMs": 436,
+                "loadMs": 2022.699999988079,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 430.0999999642372,
+                "fcpMs": 432,
+                "lcpMs": 432,
+                "loadMs": 2024,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 428.5,
+                "fcpMs": 444,
+                "lcpMs": 444,
+                "loadMs": 2022.199999988079,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 409.9000000357628,
+                "fcpMs": 428,
+                "lcpMs": 428,
+                "loadMs": 2012.9000000357628,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 418.39999997615814,
+                "fcpMs": 424,
+                "lcpMs": 424,
+                "loadMs": 2012.3999999761581,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 435.7999999523163,
+                "fcpMs": 440,
+                "lcpMs": 440,
+                "loadMs": 2022.2999999523163,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 432.80000001192093,
+                "fcpMs": 436,
+                "lcpMs": 436,
+                "loadMs": 2023.6000000238419,
+                "tbtMs": 0,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 428.5,
+                "min": 409.9000000357628,
+                "p75": 430.30000001192093
+              },
+              "fcpMs": {
+                "median": 432,
+                "min": 416,
+                "p75": 436
+              },
+              "lcpMs": {
+                "median": 432,
+                "min": 416,
+                "p75": 436
+              },
+              "loadMs": {
+                "median": 2022.199999988079,
+                "min": 2012.3999999761581,
+                "p75": 2023.6000000238419
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.css": {
+                "median": 3270,
+                "min": 3270,
+                "p75": 3270
+              },
+              "bytes.html": {
+                "median": 15063,
+                "min": 15063,
+                "p75": 15063
+              },
+              "bytes.img": {
+                "median": 1048,
+                "min": 1048,
+                "p75": 1048
+              },
+              "bytes.js": {
+                "median": 331500,
+                "min": 331500,
+                "p75": 331500
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 350881,
+                "min": 350881,
+                "p75": 350881
+              },
+              "requests": {
+                "median": 9,
+                "min": 9,
+                "p75": 9
+              }
+            }
+          },
+          "navigation": {
+            "iterations": [
+              {
+                "navToDetailMs": 132.10000002384186,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 134.60000002384186,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 113.19999998807907,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 98.5,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 109.80000001192093,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 101.10000002384186,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 111.39999997615814,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 105.89999997615814,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 126.29999995231628,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "navToDetailMs": 114.19999998807907,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              }
+            ],
+            "summary": {
+              "navToDetailMs": {
+                "median": 111.39999997615814,
+                "min": 98.5,
+                "p75": 126.29999995231628
+              },
+              "bytes.css": {
+                "median": 3270,
+                "min": 3270,
+                "p75": 3270
+              },
+              "bytes.html": {
+                "median": 15063,
+                "min": 15063,
+                "p75": 15063
+              },
+              "bytes.img": {
+                "median": 1048,
+                "min": 1048,
+                "p75": 1048
+              },
+              "bytes.js": {
+                "median": 331500,
+                "min": 331500,
+                "p75": 331500
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 350881,
+                "min": 350881,
+                "p75": 350881
+              },
+              "requests": {
+                "median": 9,
+                "min": 9,
+                "p75": 9
+              }
+            }
+          },
+          "ttiProbe": {
+            "iterations": [
+              {
+                "domContentLoadedMs": 430.4000000357628,
+                "fcpMs": 432,
+                "lcpMs": 432,
+                "loadMs": 2025,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 433.9000000357628,
+                "ttiProxyMs": 2073.100000023842,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 430.80000001192093,
+                "fcpMs": 436,
+                "lcpMs": 436,
+                "loadMs": 2017.300000011921,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 434,
+                "ttiProxyMs": 2065.400000035763,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 435.60000002384186,
+                "fcpMs": 440,
+                "lcpMs": 440,
+                "loadMs": 2031.199999988079,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 439.4000000357628,
+                "ttiProxyMs": 2079.100000023842,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 429.80000001192093,
+                "fcpMs": 452,
+                "lcpMs": 452,
+                "loadMs": 2022.800000011921,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 433.5,
+                "ttiProxyMs": 2069.100000023842,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 428.9000000357628,
+                "fcpMs": 448,
+                "lcpMs": 448,
+                "loadMs": 2022.1000000238419,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 432.60000002384186,
+                "ttiProxyMs": 2067.400000035763,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 432.69999998807907,
+                "fcpMs": 436,
+                "lcpMs": 436,
+                "loadMs": 2022.8999999761581,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 437.30000001192093,
+                "ttiProxyMs": 2066.599999964237,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 417.89999997615814,
+                "fcpMs": 424,
+                "lcpMs": 424,
+                "loadMs": 2012.199999988079,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 420.89999997615814,
+                "ttiProxyMs": 2054.800000011921,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 419.10000002384186,
+                "fcpMs": 424,
+                "lcpMs": 424,
+                "loadMs": 2016.199999988079,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 421.5,
+                "ttiProxyMs": 2066.699999988079,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 421.7999999523163,
+                "fcpMs": 428,
+                "lcpMs": 428,
+                "loadMs": 2025.699999988079,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 425.69999998807907,
+                "ttiProxyMs": 2074.5,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              },
+              {
+                "domContentLoadedMs": 426.0999999642372,
+                "fcpMs": 428,
+                "lcpMs": 428,
+                "loadMs": 2017.800000011921,
+                "tbtMs": 0,
+                "checkoutConfirmed": 1,
+                "firstSuccessfulClickMs": 429.0999999642372,
+                "ttiProxyMs": 2064.199999988079,
+                "bytes": {
+                  "css": 3270,
+                  "html": 15063,
+                  "img": 1048,
+                  "js": 331500,
+                  "other": 0,
+                  "total": 350881
+                },
+                "requests": 9
+              }
+            ],
+            "summary": {
+              "domContentLoadedMs": {
+                "median": 428.9000000357628,
+                "min": 417.89999997615814,
+                "p75": 430.80000001192093
+              },
+              "fcpMs": {
+                "median": 432,
+                "min": 424,
+                "p75": 440
+              },
+              "lcpMs": {
+                "median": 432,
+                "min": 424,
+                "p75": 440
+              },
+              "loadMs": {
+                "median": 2022.1000000238419,
+                "min": 2012.199999988079,
+                "p75": 2025
+              },
+              "tbtMs": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "checkoutConfirmed": {
+                "median": 1,
+                "min": 1,
+                "p75": 1
+              },
+              "firstSuccessfulClickMs": {
+                "median": 432.60000002384186,
+                "min": 420.89999997615814,
+                "p75": 434
+              },
+              "ttiProxyMs": {
+                "median": 2066.699999988079,
+                "min": 2054.800000011921,
+                "p75": 2073.100000023842
+              },
+              "bytes.css": {
+                "median": 3270,
+                "min": 3270,
+                "p75": 3270
+              },
+              "bytes.html": {
+                "median": 15063,
+                "min": 15063,
+                "p75": 15063
+              },
+              "bytes.img": {
+                "median": 1048,
+                "min": 1048,
+                "p75": 1048
+              },
+              "bytes.js": {
+                "median": 331500,
+                "min": 331500,
+                "p75": 331500
+              },
+              "bytes.other": {
+                "median": 0,
+                "min": 0,
+                "p75": 0
+              },
+              "bytes.total": {
+                "median": 350881,
+                "min": 350881,
+                "p75": 350881
+              },
+              "requests": {
+                "median": 9,
+                "min": 9,
+                "p75": 9
+              }
+            }
+          }
+        }
+      },
+      "lighthouse": [
+        {
+          "formFactor": "desktop",
+          "metrics": {
+            "bytes": 353474,
+            "fcpMs": 2855.9148,
+            "lcpMs": 3005.9148,
+            "performanceScore": 0.67,
+            "speedIndexMs": 2855.9148,
+            "tbtMs": 0,
+            "ttiMs": 3020.9148000000005
+          },
+          "path": "/"
+        },
+        {
+          "formFactor": "desktop",
+          "metrics": {
+            "bytes": 338391,
+            "fcpMs": 2703.5079,
+            "lcpMs": 2703.5079,
+            "performanceScore": 0.7,
+            "speedIndexMs": 2703.5079,
+            "tbtMs": 0,
+            "ttiMs": 2703.5079000000005
+          },
+          "path": "/product/linen-field-jacket"
+        },
+        {
+          "formFactor": "mobile",
+          "metrics": {
+            "bytes": 351929,
+            "fcpMs": 2860.8833,
+            "lcpMs": 3010.8833,
+            "performanceScore": 0.89,
+            "speedIndexMs": 2860.8833,
+            "tbtMs": 0,
+            "ttiMs": 3025.8833000000004
+          },
+          "path": "/"
+        },
+        {
+          "formFactor": "mobile",
+          "metrics": {
+            "bytes": 338391,
+            "fcpMs": 2702.9413999999997,
+            "lcpMs": 2702.9413999999997,
+            "performanceScore": 0.92,
+            "speedIndexMs": 2702.9413999999997,
+            "tbtMs": 0,
+            "ttiMs": 2702.9413999999997
+          },
+          "path": "/product/linen-field-jacket"
+        }
+      ]
+    }
+  ]
+}

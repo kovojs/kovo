@@ -1,0 +1,194 @@
+[
+  {
+    "id": "p01",
+    "slug": "linen-field-jacket",
+    "name": "Linen Field Jacket",
+    "price": 148,
+    "blurb": "A light utility layer with corozo buttons, roomy patch pockets, and a washed linen finish.",
+    "img": "/images/product-01.webp"
+  },
+  {
+    "id": "p02",
+    "slug": "canvas-weekender",
+    "name": "Canvas Weekender",
+    "price": 186,
+    "blurb": "A structured overnight bag with bridle leather handles and a wide-mouth zip opening.",
+    "img": "/images/product-02.webp"
+  },
+  {
+    "id": "p03",
+    "slug": "wool-trail-overshirt",
+    "name": "Wool Trail Overshirt",
+    "price": 132,
+    "blurb": "Soft merino blend overshirt cut for layering through cool morning commutes.",
+    "img": "/images/product-03.webp"
+  },
+  {
+    "id": "p04",
+    "slug": "alpine-ceramic-mug",
+    "name": "Alpine Ceramic Mug",
+    "price": 32,
+    "blurb": "Hand-glazed stoneware with a comfortable thumb rest and a satin exterior.",
+    "img": "/images/product-04.webp"
+  },
+  {
+    "id": "p05",
+    "slug": "waxed-cotton-cap",
+    "name": "Waxed Cotton Cap",
+    "price": 44,
+    "blurb": "Six-panel cap in water-shedding cotton with a low crown and brass adjuster.",
+    "img": "/images/product-05.webp"
+  },
+  {
+    "id": "p06",
+    "slug": "ribbed-camp-socks",
+    "name": "Ribbed Camp Socks",
+    "price": 24,
+    "blurb": "Dense cotton socks with reinforced heels and a cushioned ribbed footbed.",
+    "img": "/images/product-06.webp"
+  },
+  {
+    "id": "p07",
+    "slug": "market-tote",
+    "name": "Market Tote",
+    "price": 58,
+    "blurb": "A durable canvas tote with an interior pocket and vegetable-tanned leather straps.",
+    "img": "/images/product-07.webp"
+  },
+  {
+    "id": "p08",
+    "slug": "walnut-desk-tray",
+    "name": "Walnut Desk Tray",
+    "price": 74,
+    "blurb": "Solid walnut catch-all sized for keys, pens, and the daily pocket carry.",
+    "img": "/images/product-08.webp"
+  },
+  {
+    "id": "p09",
+    "slug": "selvedge-denim",
+    "name": "Selvedge Denim",
+    "price": 168,
+    "blurb": "Straight-leg denim with a comfortable rise, chain-stitched hems, and redline selvedge.",
+    "img": "/images/product-01.webp"
+  },
+  {
+    "id": "p10",
+    "slug": "brass-key-hook",
+    "name": "Brass Key Hook",
+    "price": 38,
+    "blurb": "Wall-mounted brass hook with a hand-brushed finish and hidden fasteners.",
+    "img": "/images/product-02.webp"
+  },
+  {
+    "id": "p11",
+    "slug": "paper-notebook-set",
+    "name": "Paper Notebook Set",
+    "price": 28,
+    "blurb": "Three lay-flat notebooks with dot-grid pages and recycled heavyweight covers.",
+    "img": "/images/product-03.webp"
+  },
+  {
+    "id": "p12",
+    "slug": "merino-watch-cap",
+    "name": "Merino Watch Cap",
+    "price": 48,
+    "blurb": "Rib-knit merino cap with a double cuff and a soft, itch-free hand.",
+    "img": "/images/product-04.webp"
+  },
+  {
+    "id": "p13",
+    "slug": "campfire-blanket",
+    "name": "Campfire Blanket",
+    "price": 118,
+    "blurb": "Dense recycled wool blanket sized for the sofa, porch, or weekend cabin.",
+    "img": "/images/product-05.webp"
+  },
+  {
+    "id": "p14",
+    "slug": "stainless-bottle",
+    "name": "Stainless Bottle",
+    "price": 42,
+    "blurb": "Double-wall bottle with a leakproof cap and a powder-coated exterior.",
+    "img": "/images/product-06.webp"
+  },
+  {
+    "id": "p15",
+    "slug": "cotton-rugby-shirt",
+    "name": "Cotton Rugby Shirt",
+    "price": 96,
+    "blurb": "Heavy jersey rugby shirt with a twill collar and reinforced placket.",
+    "img": "/images/product-07.webp"
+  },
+  {
+    "id": "p16",
+    "slug": "leather-card-case",
+    "name": "Leather Card Case",
+    "price": 68,
+    "blurb": "Compact card case in full-grain leather with four slots and a center pocket.",
+    "img": "/images/product-08.webp"
+  },
+  {
+    "id": "p17",
+    "slug": "hemp-apron",
+    "name": "Hemp Apron",
+    "price": 84,
+    "blurb": "Cross-back shop apron with oversized waist pockets and bar-tacked stress points.",
+    "img": "/images/product-01.webp"
+  },
+  {
+    "id": "p18",
+    "slug": "cedar-shoe-blocks",
+    "name": "Cedar Shoe Blocks",
+    "price": 54,
+    "blurb": "Aromatic cedar shoe blocks with brass knobs and adjustable split toes.",
+    "img": "/images/product-02.webp"
+  },
+  {
+    "id": "p19",
+    "slug": "canvas-chore-coat",
+    "name": "Canvas Chore Coat",
+    "price": 154,
+    "blurb": "Midweight cotton canvas chore coat with triple-needle seams and roomy pockets.",
+    "img": "/images/product-03.webp"
+  },
+  {
+    "id": "p20",
+    "slug": "enamel-pin-set",
+    "name": "Enamel Pin Set",
+    "price": 18,
+    "blurb": "Three hard-enamel pins inspired by trail markers, workshop tools, and city maps.",
+    "img": "/images/product-04.webp"
+  },
+  {
+    "id": "p21",
+    "slug": "recycled-fleece",
+    "name": "Recycled Fleece",
+    "price": 112,
+    "blurb": "Deep-pile recycled fleece pullover with nylon trim and a generous kangaroo pocket.",
+    "img": "/images/product-05.webp"
+  },
+  {
+    "id": "p22",
+    "slug": "beech-coffee-scoop",
+    "name": "Beech Coffee Scoop",
+    "price": 22,
+    "blurb": "Turned beech scoop with a long handle and a natural oil finish.",
+    "img": "/images/product-06.webp"
+  },
+  {
+    "id": "p23",
+    "slug": "ripstop-packable-shell",
+    "name": "Ripstop Packable Shell",
+    "price": 128,
+    "blurb": "Wind shell that packs into its own pocket and handles surprise weather.",
+    "img": "/images/product-07.webp"
+  },
+  {
+    "id": "p24",
+    "slug": "maple-cutting-board",
+    "name": "Maple Cutting Board",
+    "price": 92,
+    "blurb": "End-grain maple board with juice grooves and rubber feet for steady prep.",
+    "img": "/images/product-08.webp"
+  }
+]

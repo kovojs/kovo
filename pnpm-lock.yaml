@@ -36,6 +36,40 @@ importers:
         specifier: 4.1.8
         version: 4.1.8(@types/node@25.9.2)(@vitest/browser-playwright@4.1.8)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
 
+  benchmarks/kovo:
+    dependencies:
+      '@kovojs/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
+      '@kovojs/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kovojs/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kovojs/style':
+        specifier: workspace:*
+        version: link:../../packages/style
+      '@kovojs/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@kovojs/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@kovojs/headless-ui':
+        specifier: workspace:*
+        version: link:../../packages/headless-ui
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vite:
+        specifier: 8.0.16
+        version: 8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)
+      vite-plus:
+        specifier: ^0.1.24
+        version: 0.1.24(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0)(typescript@6.0.3)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))
+
   conformance/app-shell-spike:
     devDependencies:
       '@types/node':
