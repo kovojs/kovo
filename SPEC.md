@@ -640,6 +640,7 @@ ERROR KV234 package component prefix conflict.
 | Query args            | query `args` schema (§10.2)         | components bind args from their own props; coercion declared once; instance keys typed end-to-end (store, wire, optimism)                                                                                                             |
 | Update coverage       | render-output classification (§4.9) | every query/state-dependent DOM position has a status — `plan` / `isomorphic` / `fragment` / `renderOnce`; none is KV311                                                                                                              |
 | Opaque projections    | declared output schema (§10.2)      | `sql<T>`/raw projections carry `s.*` output schemas + a `reads:` table set (KV410); `reads:` checked against exemption, folded into the read set; result shape runtime-verified (§11.2)                                               |
+| SQL statement safety  | managed DB-handle contract (§10.2/§10.3) | executable SQL text reaches framework-managed DB handles only as typed builders, parameterized SQL values, or audited `trustedSql(...)`; scalar request data binds as parameters, while identifiers/keywords come from schema facts or typed allowlists (KV422) |
 | Output safety         | binding sink + value brand (§4.8)   | every binding/derive into an unsafe output context (raw HTML, URL-scheme attr, `on*`, `style`, `srcdoc`, script/JSON) is `trustedHtml`/`trustedUrl`-branded or it is KV236                                                            |
 
 ### 6.3 Example: end-to-end mutation typing
@@ -1068,6 +1069,35 @@ into manual fragment routing. The compiler may derive optimistic transforms, del
 plans for only the fields and query shapes it can prove; unproved presentation fields still travel
 through the same declared query and refresh via full server fragments.
 
+#### SQL statement safety on managed DB handles
+
+Framework-managed DB handles — `req.db`, query loaders, mutation domains, endpoint/webhook request
+handles, and blessed-adapter wrappers — treat executable SQL text as a typed surface, not an
+arbitrary string channel. The ordinary accepted forms are: Drizzle query builders and native SQL
+objects that keep text separate from bound parameters, Kovo `sql\`\``/`staticSql\`\`` values, and
+the single audited `trustedSql(...)` escape hatch. KV406/KV410 remain the freshness/read-write proof
+diagnostics; **KV422** is distinct and answers how executable SQL text was constructed before it
+reached a managed handle.
+
+Scalar/runtime values MUST bind as parameters, never by interpolating bytes into SQL text.
+Identifiers, operators, sort directions, and clause fragments are not scalar values; they MUST come
+from static schema facts or typed allowlists such as `sql.identifier(..., { allow })` /
+`sql.allow(...)`, never directly from request strings.
+
+For the static analyzer and explain/audit surfaces, the source set is the request-derived boundary:
+`input`, `req.search`, `req.params`, form bodies, headers, and cookies. The sink set is every
+framework-managed SQL construction/execution boundary: `db.execute(...)`, `db.query(...)`,
+`db.exec(...)`, `db.prepare(...)`, `sql.raw(x)`, `sql.identifier(x)`, and untagged template/string
+assembly routed into SQL execution. A request-derived or otherwise unproven value that can become
+executable SQL text at one of those sinks is **KV422**.
+
+Non-goals are explicit. Kovo does not sanitize arbitrary SQL strings into safety; it requires
+parameterization, a typed allowlist, or an explicit `trustedSql(...)` brand. It does not prove
+safety for driver handles captured before the framework wraps them. **Second-order injection is out
+of scope**: a value read back from the database and later re-used in another query is governed by
+the same `sql\`\``/`trustedSql(...)` discipline at the second query site, not by request-taint
+tracking across storage.
+
 ### 10.3 Mutations & writes
 
 ```ts
@@ -1355,6 +1385,7 @@ Dev server and the test harness wrap `db`; every executed statement is parsed by
 | KV417 | error    | Configured supported deploy-skew window (§6.6/§14) is below the required 24-hour prior-version retention floor, or the serving layer cannot retain prior immutable modules and per-token `/_q` reads for the window (§14).                                                                                                                                                                                                                                        |
 | KV418 | error    | `csrf: false` mutation references ambient browser authority (reads `req.session` or runs a session/cookie-derived guard) — the CSRF exemption is unsound; route non-browser writes to `endpoint()`/`webhook()` (§6.6, §9.1)                                                                                                                                                                                                                                       |
 | KV419 | error    | `prefetch: 'moderate'` set on a guarded, session-dependent, or not-proven-side-effect-free route without a named justification (§8)                                                                                                                                                                                                                                                                                                                               |
+| KV422 | error    | Request-derived or otherwise unproven data reaches executable SQL text on a framework-managed DB handle; bind scalar values as parameters and choose identifiers/keywords from typed allowlists or schema facts (§10.2/§10.3)                                                                                                                                                                                                                                 |
 
 The shared `diagnosticDefinitions` registry is the source of each diagnostic's severity; surfaces
 must not override severity or invent local blocking policies. A diagnostic with `error` severity

@@ -1,7 +1,7 @@
 # SQL Injection Framework Plan
 
 **Date:** 2026-06-23
-**Primary objective:** make SQL injection structurally difficult for Kovo apps by default, and impossible across framework-managed query/mutation DB handles unless an app enters a named, audited raw-SQL escape hatch.
+**Primary objective:** preventative hardening: make SQL injection structurally difficult for Kovo apps by default, and impossible across framework-managed query/mutation DB handles unless an app enters a named, audited raw-SQL escape hatch.
 
 ## Review Conclusion
 
@@ -27,31 +27,36 @@ This cannot protect code that deliberately bypasses Kovo and hands an unwrapped 
 Evidence-first step before any implementation: distinguish "the seam exists" from "an example
 exploits it," size the work accordingly, and produce the acceptance criterion.
 
-- [ ] Classify every raw-SQL site in shipped code.
+- [x] Classify every raw-SQL site in shipped code.
   - `rg -n "db\.(execute|query|exec|prepare)\(" examples site packages/create-kovo/templates`
   - `rg -n "sql\.raw|sql\.identifier" examples site packages`
   - For each hit record: literal text, builder/`sql\`\``-parameterized, or text assembled from request data (`input`/`req.search`/`req.params`/form). Only the last is a live finding.
+  - Evidence: `rg -n "db\.(execute|query|exec|prepare)\(" examples site packages/create-kovo/templates` found a literal `db.exec(...)` snippet in `site/content/guides/testing.md` and a `db.execute(sql\`...\`)` snippet in `site/content/guides/data-layer.md`; neither interpolates request/form/query data.
+  - Evidence: `rg -n "sql\.raw|sql\.identifier" examples site packages` found only literal `sql.raw("...")` test fixtures in `packages/drizzle/src/*.test.ts`; no shipped example/template/runtime surface assembled SQL text from request-derived data.
 - [ ] Build a realistic vulnerable-scenario corpus regardless of whether a live finding exists.
   - If a live finding exists: lift it verbatim into the corpus as a failing exploit test (over-select/over-mutate via a payload).
   - If none exists: synthesize scenarios modeled on patterns a real Kovo developer would write, using the shipped example apps (CRM, StackOverflow) as the template for "plausible app code." Each scenario is a small fixture page/mutation that constructs SQL unsafely, plus the attacker payload that exploits it.
   - Seed scenarios (extend as needed): dynamic sort `ORDER BY ${req.search.sort} ${req.search.dir}`; filter value interpolation `WHERE status = '${req.search.status}'`; `LIKE '%${q}%'` wildcard/quote breakout; numeric-but-unparameterized `LIMIT ${req.search.limit}`; IN-list `IN (${ids.join(',')})`; dynamic table/tenant name `FROM ${req.params.table}`; admin report `sql.raw(userClause)`; and the dropped-`sql`-tag untagged-template mistake.
   - These scenarios are the plan's **acceptance criterion**: each must produce the new KV diagnostic statically (Phase 4) and be rejected by the runtime guard (Phase 5), while the safe rewrite (`sql\`\``/`sql.identifier`/`sql.allow`) passes. Plan is green when the whole corpus does.
-- [ ] Set scope/urgency from the classification (independent of the corpus).
-  - If a live finding exists: full plan, Phase 5 enforce flip is in scope.
-  - If none exists: relabel the plan **preventative hardening** and gate Phase 5's production _enforce_ flip behind the warn-then-enforce ramp (#7) — but still build the `sql\`\`` tag, static analyzer, and the scenario corpus above, since they are the durable defense whether or not an example currently exploits the seam.
+- [x] Set scope/urgency from the classification (independent of the corpus).
+  - Evidence: the intake commands above found no request/form/query-data interpolation into shipped SQL text, so this plan is relabeled **preventative hardening** rather than live-incident remediation.
+  - Evidence: because no live finding exists, Phase 5's production _enforce_ flip stays gated behind the warn-then-enforce ramp (#7) while the `sql\`\`` tag, static analyzer, and exploit corpus remain in scope as the durable defense.
 
 ## Phase 1: Threat Model and Normative Contract
 
-- [ ] Add a SQL safety subsection to `SPEC.md` near §10.2/§10.3 and link it from §6.2 typed surfaces.
+- [x] Add a SQL safety subsection to `SPEC.md` near §10.2/§10.3 and link it from §6.2 typed surfaces.
   - Required contract: framework-managed DB handles accept only typed query builders, known parameterized SQL objects (Kovo `sql\`\``/`staticSql\`\``), or the single audited `trustedSql(...)` escape hatch with explicit declarations.
   - Required distinction: scalar values bind as parameters; identifiers/operators/order directions come from static schema/allowlist facts, never from user strings.
   - Required diagnostic: add a KV code (placeholder `KV4xx` — assign the next free code, verified against `diagnosticDefinitions` in `@kovojs/core/internal/diagnostics`, before Phase 2 test names land) for SQL text injection risk, distinct from KV406/KV410 freshness diagnostics. KV406/KV410 answer "what tables did this touch/read?"; the new code answers "how was executable SQL text constructed?"
   - Required source/sink lists (for the static analyzer, Phase 4): **sources** = `input`, `req.search`, `req.params`, form bodies, headers/cookies; **sinks** = `db.execute`/`query`/`exec`/`prepare`, `sql.raw(x)`, `sql.identifier(x)`, and untagged-template-into-SQL.
-- [ ] Update `rules/data-layer-policy.md` to make parameterization part of the blessed adapter floor.
+  - Evidence: `packages/core/src/diagnostics.ts` currently reserves diagnostics through `KV421`, so this plan assigns **KV422** as the next free SQL-text-construction diagnostic; `SPEC.md` now defines it distinctly from KV406/KV410 and links the contract from §6.2 typed surfaces.
+- [x] Update `rules/data-layer-policy.md` to make parameterization part of the blessed adapter floor.
   - Postgres and SQLite conformance must prove the same SQL safety behavior; other dialects remain outside the blessed floor until they expose equivalent parameter metadata.
-- [ ] Document explicit non-goals.
+  - Evidence: `rules/data-layer-policy.md` now makes parameterized SQL part of the managed-handle floor and requires equivalent SQL-safety metadata/conformance for Postgres and SQLite before a dialect is blessed.
+- [x] Document explicit non-goals.
   - Kovo will not sanitize arbitrary SQL strings into safety; it blocks or brands them. It will not prove security for driver handles captured before wrapping, as already called out for verification in `packages/test/src/verifier.ts`.
   - **Second-order injection is out of scope:** a value read _from the DB_ and later concatenated into a query is not a tracked taint source. Static provenance covers request-derived input only; second-order flows rely on the same `sql\`\``/`trustedSql` discipline at the second query.
+  - Evidence: `SPEC.md`'s new managed-handle SQL safety subsection records the non-goals explicitly: no arbitrary-string sanitization, no proof for pre-wrapped driver handles, and second-order injection left out of the tracked source set.
 
 ## Phase 2: Red Security Corpus
 
@@ -129,8 +134,9 @@ acceptance set (b)); these checkboxes implement it.
 
 - [ ] Update starter templates and examples.
   - Replace raw driver string calls with Drizzle builders, tagged SQL placeholders, or explicit static prepared statements with separate params.
-- [ ] Add a copyable docs rule.
+- [x] Add a copyable docs rule.
   - Docs should say: never interpolate request/form/query data into SQL text; use Drizzle builders or `sql\`\`` placeholders; use typed allowlists for identifiers.
+  - Evidence: `site/content/guides/data-layer.md` now states the copyable SQL-safety rule at the raw-SQL escape hatch, and `site/content/guides/security.md` adds the same rule to the practical security checklist.
 - [ ] Add CI gates.
   - Include focused SQL-injection corpus tests, blessed dialect conformance, `git diff --check`, and any existing data-layer acceptance command in the latest verification section when implementation starts.
 - [ ] Keep this ledger compact.
@@ -161,3 +167,4 @@ acceptance set (b)); these checkboxes implement it.
 - `sed -n '1,220p' rules/data-layer-policy.md` inspected the adapter policy.
 - `sed -n '1020,1110p' SPEC.md` and `sed -n '1230,1305p' SPEC.md` inspected §10.2/§10.3/§11.1/§11.2 source-of-truth text.
 - `sed -n '1,260p' packages/test/src/verifier.ts`, `sed -n '1,220p' packages/test/src/sql-observer.ts`, and `sed -n '1,220p' packages/drizzle/src/static.ts` inspected current static/runtime SQL seams.
+- `rg -n "db\.(execute|query|exec|prepare)\(" examples site packages/create-kovo/templates` and `rg -n "sql\.raw|sql\.identifier" examples site packages` classified current shipped raw-SQL sites; follow-up `sed -n` reads on the matched docs/test files confirmed there is no live request-derived SQL-text interpolation in shipped code.
