@@ -46,13 +46,18 @@ blessed adapter shipped Postgres-only).
 
 The central seam. `packages/drizzle/src/drizzle-surface.ts` is the single allowlist file.
 
-- [ ] **Widen database-type and table-factory allowlists.**
+- [x] **Widen database-type and table-factory allowlists.**
       `drizzle-surface.ts:1` `DRIZZLE_TABLE_FACTORY_NAMES` (`{'pgTable'}`) → add `sqliteTable`.
       `drizzle-surface.ts:3-8` `DRIZZLE_DATABASE_TYPE_NAMES` → add the SQLite database type names above.
       `isDrizzleDatabaseTypeName`/`isDrizzleTableFactoryName` (`drizzle-surface.ts:99-105`) read these.
-- [ ] **Decide whether the `kovo()` annotation surface (`KovoColumnRef`, `KovoTableAnnotation`, view
+      - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.serialization.test.ts` verifies all
+        blessed SQLite database type names resolve as Drizzle receivers; `drizzle-surface.ts` now lists
+        `sqliteTable`.
+- [x] **Decide whether the `kovo()` annotation surface (`KovoColumnRef`, `KovoTableAnnotation`, view
       annotation) is fully dialect-agnostic** (it appears to be — `drizzle-surface.ts:19-122` references
       no pg type), and record that the annotation is shared verbatim across dialects.
+      - Evidence: `packages/drizzle/src/drizzle-surface.ts` annotation types remain unchanged and still
+        reference no dialect-specific Drizzle type.
 
 ### Stage B — Static analyzer dialect-awareness (`packages/drizzle/src/static.ts`)
 
@@ -60,26 +65,37 @@ Several checks hardcode `drizzle-orm/pg-core` and pg column-builder/relation-fac
 recognize the SQLite equivalents (`drizzle-orm/sqlite-core`) so extraction, column typing, and view
 detection work for SQLite tables.
 
-- [ ] **Module-specifier checks accept `drizzle-orm/sqlite-core`.** `static.ts:3285, 3294, 3326, 3340,
+- [x] **Module-specifier checks accept `drizzle-orm/sqlite-core`.** `static.ts:3285, 3294, 3326, 3340,
       3348` (and the namespace-import / import-specifier / export-specifier resolvers around
       `isDrizzlePgCoreNamespaceMember` and `projectPgCoreIdentifierExportName`) currently equal-check
       `'drizzle-orm/pg-core'`. Replace with a dialect-core matcher (`pg-core` | `sqlite-core`).
-- [ ] **Column-builder classification is dialect-aware.** `static.ts:97-99` + `3091-3093` classify
+      - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts
+        packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.serialization.test.ts`
+        verifies imported `sqlite-core` table, column, view, and database symbols.
+- [x] **Column-builder classification is dialect-aware.** `static.ts:97-99` + `3091-3093` classify
       `boolean`→bool, `json`/`jsonb`→object, number builders. SQLite has **no** `boolean`/`json`/
       `timestamp`/`serial` builders — booleans are `integer(col,{mode:'boolean'})`, JSON is
       `text(col,{mode:'json'})`, numbers are `integer`/`real`. Add mode-aware classification for the
       SQLite `text`/`integer` builders so query-shape inference (KV302/KV410) stays correct.
-- [ ] **Unmodeled-relation (view) factories.** `static.ts:112` `DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES`
+      - Evidence: `packages/drizzle/src/index.columns-keys-predicates.test.ts` verifies
+        `integer(...,{ mode: "boolean" })` as `boolean` and `text(...,{ mode: "json" })` as object.
+- [x] **Unmodeled-relation (view) factories.** `static.ts:112` `DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES`
       (`pgMaterializedView`, `pgView`) — SQLite has `sqliteView` and **no** materialized view. Add
       `sqliteView` (view kind only); ensure `static.ts:2624-2629` view/materialized-view discrimination
       handles the SQLite case.
-- [ ] **Receiver-proof type identity.** Confirm `isDrizzleDatabaseType` /
+      - Evidence: `packages/drizzle/src/index.query-shapes.test.ts` verifies `sqliteView` contributes a
+        normal view read set without materialized-view diagnostics.
+- [x] **Receiver-proof type identity.** Confirm `isDrizzleDatabaseType` /
       `drizzleDatabaseTypeNames` (`static.ts:2472-2504`) resolve `BaseSQLiteDatabase` base types the
       same way they resolve `PgDatabase` (base-type walk + `drizzle-orm` declaration origin). Flip the
       `static.ts:2461-2463` "deferred to late hardening" comment to reflect SQLite support.
-- [ ] **Audit remaining `pg`-named identifiers in `static.ts`** for any other hardcoded factory/type
+      - Evidence: `packages/drizzle/src/index.serialization.test.ts` verifies `BaseSQLiteDatabase`,
+        `LibSQLDatabase`, `BetterSQLite3Database`, `SQLJsDatabase`, and `BunSQLiteDatabase`.
+- [x] **Audit remaining `pg`-named identifiers in `static.ts`** for any other hardcoded factory/type
       assumption (e.g. `IGNORED_LOCAL_CALL_NAMES`, parameterized-key `eq(...)` extraction — dialect-
       independent, but verify).
+      - Evidence: `rg -n "projectPgCore|isDrizzlePgCore|pgCore|drizzle-orm/pg-core"
+        packages/drizzle/src/static.ts` shows only the dialect-core allowlist entry remains.
 
 ### Stage C — Conformance fixtures (`packages/conformance-fixtures`, `packages/drizzle` tests)
 
@@ -90,8 +106,14 @@ conformance corpus for SQLite so dialect drift is caught.
       `packages/conformance-fixtures/src/*` (`touch-graph-fixtures.test.ts`, `source-fixtures.ts`,
       `verification-fixtures.ts`) — at minimum: a `sqliteTable` domain with `kovo()`, a write+query pair,
       a boolean-mode and json-mode column, and a `sqliteView`.
-- [ ] **Add `@kovojs/drizzle` unit coverage** for SQLite database-type receiver proof and SQLite
+      - Partial evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/source-fixtures.test.ts
+        packages/conformance-fixtures/src/touch-graph-fixtures.test.ts` verifies SQLite source and
+        touch/read fixture coverage; `verification-fixtures.ts` remains open for the runtime slice.
+- [x] **Add `@kovojs/drizzle` unit coverage** for SQLite database-type receiver proof and SQLite
       column-builder classification (new cases beside the existing pg cases in the drizzle package tests).
+      - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts
+        packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.serialization.test.ts`
+        passed with SQLite receiver, mode, and view cases.
 
 ### Stage D — Runtime verification cross-check (`packages/test`)
 
@@ -158,7 +180,7 @@ handle are Postgres-specific.
 4. Stage D harness + Stage E scaffold/auth.
 5. Stage F policy/roadmap reconciliation.
 
-## Latest verification
+## Latest Verification
 
-_None yet — plan only. Each completed checkbox must cite the verifying test/command or authoritative
-file per `CLAUDE.md` progress discipline before being checked._
+- `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.serialization.test.ts`
+- `pnpm exec vitest --run packages/conformance-fixtures/src/source-fixtures.test.ts packages/conformance-fixtures/src/touch-graph-fixtures.test.ts`

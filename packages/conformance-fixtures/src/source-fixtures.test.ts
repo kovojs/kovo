@@ -248,6 +248,7 @@ describe('@kovojs/test source fixture seam', () => {
       'nonKeyPredicate',
       'opaqueProjection',
       'selectShape',
+      'sqlitePortability',
     ]);
     expect(fixtures.selectShape).toMatchObject([
       {
@@ -260,6 +261,14 @@ describe('@kovojs/test source fixture seam', () => {
       'order.schema.ts',
       'cart.queries.ts',
     ]);
+    expect(fixtures.sqlitePortability.map((fixture) => fixture.fileName)).toEqual([
+      'sqlite.schema.ts',
+      'sqlite.domain.ts',
+    ]);
+    expect(fixtures.sqlitePortability[0]?.source).toContain('sqliteTable("products"');
+    expect(fixtures.sqlitePortability[0]?.source).toContain('sqliteView("product_search"');
+    expect(fixtures.sqlitePortability[0]?.source).toContain('{ mode: "boolean" }');
+    expect(fixtures.sqlitePortability[0]?.source).toContain('{ mode: "json" }');
   });
 
   it('projects query, diagnostic, and touch graph facts for source-derived gates', () => {

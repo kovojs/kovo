@@ -115,6 +115,7 @@ export interface DrizzleQueryBehaviorSourceFixtures {
   nonKeyPredicate: ProjectSourceFixture[];
   opaqueProjection: ProjectSourceFixture[];
   selectShape: ProjectSourceFixture[];
+  sqlitePortability: ProjectSourceFixture[];
 }
 
 export interface CssScopeRuleFact {
@@ -285,6 +286,58 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
           },
         });
       `,
+      },
+    ],
+    sqlitePortability: [
+      {
+        fileName: 'sqlite.schema.ts',
+        source: `
+          import { kovo } from "@kovojs/drizzle";
+          import { integer, sqliteTable, sqliteView, text } from "drizzle-orm/sqlite-core";
+
+          export const products = sqliteTable("products", {
+            active: integer("active", { mode: "boolean" }).notNull(),
+            id: text("id").primaryKey(),
+            metadata: text("metadata", { mode: "json" }),
+            stock: integer("stock").notNull(),
+          }, kovo({ domain: "product", key: "id" }));
+
+          export const productSearch = sqliteView("product_search").as((qb) =>
+            qb.select({ name: products.id }).from(products),
+          );
+        `,
+      },
+      {
+        fileName: 'sqlite.domain.ts',
+        source: `
+          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import { eq, sql } from "drizzle-orm";
+          import { products, productSearch } from "./sqlite.schema";
+
+          export async function reserveProduct(db: BaseSQLiteDatabase, productId: string) {
+            await db.update(products)
+              .set({ stock: sql\`\${products.stock} - 1\` })
+              .where(eq(products.id, productId));
+          }
+
+          export const productQuery = query("product/sqlite", {
+            load(input, db: BaseSQLiteDatabase) {
+              return db.select({
+                active: products.active,
+                id: products.id,
+                metadata: products.metadata,
+                stock: products.stock,
+              }).from(products).where(eq(products.id, input.id));
+            },
+          });
+
+          export const searchQuery = query("search/sqlite", {
+            output: s.object({ id: s.string() }),
+            load(_input, db: BaseSQLiteDatabase) {
+              return db.select({ id: sql<string>\`id\` }).from(productSearch);
+            },
+          });
+        `,
       },
     ],
   };

@@ -1,10 +1,15 @@
-export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable']);
+export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable', 'sqliteTable']);
 
 export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
+  'BaseSQLiteDatabase',
+  'BetterSQLite3Database',
+  'BunSQLiteDatabase',
+  'LibSQLDatabase',
   'NodePgDatabase',
   'PgDatabase',
   'PgliteDatabase',
   'PostgresJsDatabase',
+  'SQLJsDatabase',
 ]);
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';

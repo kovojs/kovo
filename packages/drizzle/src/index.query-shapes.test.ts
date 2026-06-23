@@ -5,7 +5,7 @@ import {
   extractAlgebraicShapesFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
 } from '@kovojs/drizzle/internal/static';
-import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
+import { pgDatabaseTypes, sqliteDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
 const extractQueryFactsFromProject = (
   options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
@@ -451,6 +451,47 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         message:
           'Query reads an unmodeled relation. materialized-view product_stats has no derived or declared domain.',
         severity: 'error',
+      },
+    ]);
+  });
+
+  it('derives SQLite view read sets as ordinary views', () => {
+    const facts = extractQueryFactsFromProjectBase({
+      files: [
+        sqliteDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        ]),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import { sqliteTable, sqliteView, text } from "drizzle-orm/sqlite-core";
+
+          export const products = sqliteTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "product", key: "id" }));
+          export const productSearch = sqliteView("product_search").as((qb) => qb.select({ name: products.name }).from(products));
+
+          export const searchQuery = query("search/sqlite", {
+            output: s.object({ name: s.string() }),
+            load(_input, db: BaseSQLiteDatabase) {
+              return db.select({ name: sql<string>\`name\` }).from(productSearch);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'search/sqlite',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:11',
       },
     ]);
   });

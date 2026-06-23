@@ -100,13 +100,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
-  it('keeps deferred SQLite/MySQL database receiver types out of v1 project proof', () => {
+  it('accepts SQLite database receiver types while keeping MySQL out of project proof', () => {
     const files = [
       {
         fileName: 'deferred-engine-types.d.ts',
         source: [
           'declare module "drizzle-orm/sqlite-core" {',
           '  export class BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {}',
+          '  export class LibSQLDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {}',
+          '  export class BetterSQLite3Database<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {}',
+          '  export class SQLJsDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {}',
+          '  export class BunSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {}',
           '}',
           'declare module "drizzle-orm/mysql-core" {',
           '  export class MySqlDatabase<TQueryResult = unknown, TPreparedQuery = unknown, TFullSchema = unknown, TSchema = unknown> {}',
@@ -117,13 +121,25 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         fileName: 'product.domain.ts',
         source: [
           'import type { MySqlDatabase } from "drizzle-orm/mysql-core";',
-          'import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";',
+          'import { sqliteTable, text, type BaseSQLiteDatabase, type BetterSQLite3Database, type BunSQLiteDatabase, type LibSQLDatabase, type SQLJsDatabase } from "drizzle-orm/sqlite-core";',
           '',
-          'export const products = pgTable("products", {',
+          'export const products = sqliteTable("products", {',
           '  id: text("id").primaryKey(),',
           '}, kovo({ domain: "product", key: "id" }));',
           '',
           'export async function writeSqlite(db: BaseSQLiteDatabase, productId: string) {',
+          '  await db.update(products).set({ id: productId });',
+          '}',
+          'export async function writeLibsql(db: LibSQLDatabase, productId: string) {',
+          '  await db.update(products).set({ id: productId });',
+          '}',
+          'export async function writeBetterSqlite(db: BetterSQLite3Database, productId: string) {',
+          '  await db.update(products).set({ id: productId });',
+          '}',
+          'export async function writeSqlJs(db: SQLJsDatabase, productId: string) {',
+          '  await db.update(products).set({ id: productId });',
+          '}',
+          'export async function writeBunSqlite(db: BunSQLiteDatabase, productId: string) {',
           '  await db.update(products).set({ id: productId });',
           '}',
           '',
@@ -136,7 +152,41 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       },
     ];
 
-    expect(extractTouchGraphFromProject({ files })).toEqual({});
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      writeBetterSqlite: {
+        reads: [],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:15', via: 'products' },
+        ],
+        unresolved: [],
+      },
+      writeBunSqlite: {
+        reads: [],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:21', via: 'products' },
+        ],
+        unresolved: [],
+      },
+      writeLibsql: {
+        reads: [],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:12', via: 'products' },
+        ],
+        unresolved: [],
+      },
+      writeSqlJs: {
+        reads: [],
+        touches: [
+          { domain: 'product', keys: null, site: 'product.domain.ts:18', via: 'products' },
+        ],
+        unresolved: [],
+      },
+      writeSqlite: {
+        reads: [],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:9', via: 'products' }],
+        unresolved: [],
+      },
+    });
     expect(extractQueryFactsFromProject({ files })).toEqual([]);
   });
 
