@@ -34,6 +34,13 @@ export interface UnresolvedWriteSite {
 /** @internal */
 export interface TouchGraphEntry {
   reads?: readonly ReadSite[];
+  /**
+   * Raw-SQL write table allowlist declared for opaque writes (SPEC.md §10.3/§11.2).
+   * When present, the runtime verifier rejects observed raw writes to any other table
+   * before ordinary domain coverage, so opaque writes fail closed instead of silently
+   * relying on broad domain touches.
+   */
+  tables?: readonly string[];
   touches: readonly TouchSite[];
   unresolved: readonly UnresolvedWriteSite[];
 }

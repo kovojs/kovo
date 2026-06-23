@@ -1269,6 +1269,41 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('honors explicit reads and output for opaque raw query receiver calls', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<unknown[]>;']),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const products = pgTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product/raw", {
+            output: s.object({ id: s.string(), stock: s.number().int() }),
+            reads: [products],
+            load(_input, db: PgDatabase) {
+              return db.execute(sql\`select id, stock from products\`);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/raw',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:4',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('keeps computed query receiver calls visible as KV406 query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

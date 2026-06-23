@@ -43,6 +43,43 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('extracts raw SQL write table allowlists from object-form write declarations', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes(['execute(query: unknown): Promise<void>;']),
+        {
+          fileName: 'cart.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));',
+            '',
+            'export const cart = domain({',
+            '  merge: write({ tables: ["cart_items"], touches: ["cart"], run: async (db: PgDatabase<any, any, any>) => {',
+            '    await db.execute(sql`insert into cart_items (product_id) values (${("p1")})`);',
+            '  } }),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'cart.merge': {
+        reads: [],
+        tables: ['cart_items'],
+        touches: [],
+        unresolved: [
+          {
+            code: 'KV406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'cart.domain.ts:7',
+          },
+        ],
+      },
+    });
+  });
+
   it('does not accept app-local PgDatabase classes as Drizzle receivers', () => {
     const graph = extractTouchGraphFromProject({
       files: [
