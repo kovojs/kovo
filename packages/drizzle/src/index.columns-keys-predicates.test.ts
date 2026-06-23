@@ -1366,6 +1366,108 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
   });
 
+  it('accepts direct nullable session access after a dominating guard', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            '  if (!request.session?.id) throw new Error("auth required");',
+            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: 'arg:targetId',
+        site: 'question.domain.ts:8',
+        via: 'questions',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
+  it('degrades unguarded direct nullable session access', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'question.domain.ts:7',
+        via: 'questions',
+      },
+    ]);
+  });
+
+  it('degrades direct nullable session access used before its guard', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            '  const observed = request.session?.id;',
+            '  if (!request.session?.id) throw new Error("auth required");',
+            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, request.session.id), eq(questions.id, targetId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'question.domain.ts:9',
+        via: 'questions',
+      },
+    ]);
+  });
+
   it('uses declared analyzer summaries for same-package session helper provenance', () => {
     const files = [
       pgDatabaseTypes([

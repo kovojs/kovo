@@ -242,6 +242,10 @@ guard-owned, and natural-key applications.
       covers `throw`/`return`/`fail(...)` guard exits, unguarded/use-before-guard aliases,
       reassignment and compound mutation, alias escape, async-helper opacity, declared helper
       summaries, unsummarized-helper degradation, and private-key erasure from touch keys.
+  - [x] Direct nullable private-scope member access requires a dominating guard before proof use.
+    - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts`
+      covers `request.session.id` proving only after `if (!request.session?.id) throw`, while
+      unguarded direct access and direct access used before its guard degrade to `non-eq`.
   - Evidence when complete: extractor facts show `session:id` or equivalent structured provenance
     instead of opaque values.
 
