@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { endpoint } from './endpoint.js';
+import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { normalizePathname } from './match.js';
 import { route } from './route.js';
 import { matchShellDispatch, shellDispatchTable } from './shell.js';
+
+const rawTextResponse = {
+  appOwnedSafety: true,
+  body: 'text',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
 
 describe('server app shell dispatch table', () => {
   it('keeps the planned reserved dispatch order printable', () => {
@@ -23,6 +29,9 @@ describe('server app shell dispatch table', () => {
       handler: () => new Response('endpoint'),
       method: 'POST',
       mount: 'prefix',
+      mountJustification: 'reserved namespace dispatch ordering fixture',
+      reason: 'reserved namespace dispatch ordering fixture',
+      response: rawTextResponse,
     });
     const reservedRoute = route('/_m/:key', {});
 
@@ -44,6 +53,8 @@ describe('server app shell dispatch table', () => {
     const exactEndpoint = endpoint('/auth/callback', {
       handler: () => new Response('exact'),
       method: 'GET',
+      reason: 'exact callback endpoint ordering fixture',
+      response: rawTextResponse,
     });
     const prefixEndpoint = endpoint('/auth', {
       csrf: false,
@@ -51,6 +62,9 @@ describe('server app shell dispatch table', () => {
       handler: () => new Response('prefix'),
       method: 'GET',
       mount: 'prefix',
+      mountJustification: 'auth adapter owns callback subpaths',
+      reason: 'auth adapter callback prefix',
+      response: rawTextResponse,
     });
 
     expect(
@@ -69,6 +83,8 @@ describe('server app shell dispatch table', () => {
     const routeEndpoint = endpoint('/products/p1', {
       handler: () => new Response('endpoint'),
       method: 'POST',
+      reason: 'endpoint before route method fixture',
+      response: rawTextResponse,
     });
     const product = route('/products/:id', {});
 

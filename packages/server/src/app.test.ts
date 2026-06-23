@@ -5,7 +5,7 @@ import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/do
 import { createApp, createRequestHandler } from './app.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { domain } from './domain.js';
-import { endpoint } from './endpoint.js';
+import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { registerGeneratedMutationTouchRegistry } from './generated-mutation-registry.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { guards } from './guards.js';
@@ -16,10 +16,21 @@ import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { stylesheet } from './hints.js';
 
+const rawTextResponse = {
+  appOwnedSafety: true,
+  body: 'text',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
+
 describe('server createApp request shell', () => {
   it('stores the closed app registries and options without adding middleware', () => {
     const productRoute = route('/products/:id', {});
-    const statusEndpoint = endpoint('/status', { handler: () => new Response('ok') });
+    const statusEndpoint = endpoint('/status', {
+      handler: () => new Response('ok'),
+      method: 'GET',
+      reason: 'status endpoint registry test',
+      response: rawTextResponse,
+    });
     const productQuery = query('product', {
       load: () => ({ id: 'p1' }),
       reads: [],
@@ -216,7 +227,14 @@ describe('server createApp request shell', () => {
 
   it('rejects malformed declaration entries before request dispatch', () => {
     const app = createApp({
-      endpoints: [endpoint('/status', { handler: () => new Response('ok') })],
+      endpoints: [
+        endpoint('/status', {
+          handler: () => new Response('ok'),
+          method: 'GET',
+          reason: 'status endpoint registry test',
+          response: rawTextResponse,
+        }),
+      ],
       mutations: [
         mutation('cart/add', {
           handler: () => ({ ok: true }),
@@ -412,6 +430,8 @@ describe('server createApp request shell', () => {
         throw endpointError;
       },
       method: 'GET',
+      reason: 'failing status endpoint',
+      response: rawTextResponse,
     });
     const handler = createRequestHandler(
       createApp({
@@ -459,6 +479,8 @@ describe('server createApp request shell', () => {
             csrfJustification: 'test machine endpoint',
             handler: endpointHandler,
             method: 'POST',
+            reason: 'oversized upload endpoint gate',
+            response: rawTextResponse,
           }),
         ],
         requestLimits: {
@@ -561,6 +583,8 @@ describe('server createApp request shell', () => {
         return new Response('endpoint');
       },
       method: 'GET',
+      reason: 'endpoint-before-route dispatch test',
+      response: rawTextResponse,
     });
     const handler = createRequestHandler(
       createApp({
@@ -584,6 +608,8 @@ describe('server createApp request shell', () => {
         throw thrown;
       },
       method: 'GET',
+      reason: 'failing endpoint error reporting',
+      response: rawTextResponse,
     });
     const handler = createRequestHandler(createApp({ endpoints: [statusEndpoint], onError }));
     const request = new Request('https://example.test/status?check=true');
@@ -674,6 +700,8 @@ describe('server createApp request shell', () => {
               return new Response(`endpoint:${endpointRequest.db.count}`);
             },
             method: 'POST',
+            reason: 'provider webhook db wiring test',
+            response: rawTextResponse,
           }),
         ],
         liveTargetRenderers: [

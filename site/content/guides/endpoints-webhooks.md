@@ -18,11 +18,13 @@ raw response code, not a Kovo safe-by-default helper lane.
 An endpoint is registry-visible and receives the raw `Request` before body parsing:
 
 ```ts
-export const oauthCallback = endpoint('oauth/callback', {
+export const oauthCallback = endpoint('/auth/callback', {
   method: 'GET',
-  path: '/auth/callback',
-  auth: 'none:oauth-provider-state',
+  reason: 'OAuth provider callback',
+  auth: { kind: 'none', justification: 'OAuth state parameter validates callback' },
   csrf: false,
+  csrfJustification: 'OAuth provider callback is not a browser form submission',
+  response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
   async handler(request) {
     const url = new URL(request.url);
     const code = url.searchParams.get('code');

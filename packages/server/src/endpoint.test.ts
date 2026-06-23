@@ -7,8 +7,21 @@ import {
   endpointMatches,
   runEndpoint,
   runEndpointAuth,
+  type EndpointResponsePosture,
   type EndpointRequest,
 } from './endpoint.js';
+
+const rawJsonResponse = {
+  appOwnedSafety: true,
+  body: 'json',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
+
+const rawTextResponse = {
+  appOwnedSafety: true,
+  body: 'text',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
 
 function signEndpointBody(body: string): string {
   return createHmac('sha256', 'endpoint_secret').update(body).digest('hex');
@@ -23,11 +36,15 @@ describe('server endpoints', () => {
       handler: () => new Response('ok'),
       method: 'POST',
       mount: 'exact',
+      reason: 'oauth provider callback',
+      response: rawTextResponse,
     });
 
     expect(callback.path).toBe('/auth/callback');
     expect(callback.method).toBe('POST');
     expect(callback.mount).toBe('exact');
+    expect(callback.reason).toBe('oauth provider callback');
+    expect(callback.response).toEqual(rawTextResponse);
     expect(callback.auth).toEqual({ justification: 'oauth provider callback', kind: 'none' });
     expect(callback.csrf).toEqual({
       exempt: true,
@@ -39,6 +56,25 @@ describe('server endpoints', () => {
       endpoint('/bad/csrf', {
         csrf: false,
         handler: () => new Response('bad'),
+        method: 'POST',
+        reason: 'bad csrf exemption',
+        response: rawTextResponse,
+      });
+    };
+    const assertMissingAuditMetadataRejected = () => {
+      // @ts-expect-error SPEC §9.1 requires explicit method/reason/response posture on raw endpoints.
+      endpoint('/bad/metadata', {
+        handler: () => new Response('bad'),
+      });
+    };
+    const assertPrefixMountNeedsJustification = () => {
+      // @ts-expect-error SPEC §9.1 prefix endpoint mounts require a named mount justification.
+      endpoint('/bad/prefix', {
+        handler: () => new Response('bad'),
+        method: 'GET',
+        mount: 'prefix',
+        reason: 'bad prefix mount',
+        response: rawTextResponse,
       });
     };
     const assertNoAmbientSession = (request: EndpointRequest) => {
@@ -48,6 +84,8 @@ describe('server endpoints', () => {
     };
 
     expect(assertCsrfNeedsJustification).toBeTypeOf('function');
+    expect(assertMissingAuditMetadataRejected).toBeTypeOf('function');
+    expect(assertPrefixMountNeedsJustification).toBeTypeOf('function');
     expect(assertNoAmbientSession).toBeTypeOf('function');
   });
 
@@ -65,6 +103,8 @@ describe('server endpoints', () => {
         });
       },
       method: 'POST',
+      reason: 'signed inventory webhook',
+      response: rawJsonResponse,
     });
     const response = await runEndpoint(
       inventoryWebhook,
@@ -100,6 +140,8 @@ describe('server endpoints', () => {
         return new Response(await request.text(), { status: 202 });
       },
       method: 'POST',
+      reason: 'signed inventory webhook',
+      response: rawJsonResponse,
     });
 
     const badRequest = new Request('https://example.test/webhooks/inventory', {
@@ -143,6 +185,8 @@ describe('server endpoints', () => {
       csrfJustification: 'custom machine verifier',
       handler: () => new Response('ok'),
       method: 'POST',
+      purpose: 'custom machine verifier endpoint',
+      response: rawTextResponse,
     });
 
     await expect(
@@ -178,6 +222,8 @@ describe('server endpoints', () => {
       csrfJustification: 'custom machine verifier',
       handler: () => new Response('unreachable'),
       method: 'POST',
+      reason: 'throwing verifier fail-closed test',
+      response: rawTextResponse,
     });
     const thrown = await runEndpointAuth(
       throwingEndpoint,
@@ -209,6 +255,8 @@ describe('server endpoints', () => {
         return new Response(`sessionless:${await rawRequest.text()}`);
       },
       method: 'POST',
+      reason: 'external machine caller',
+      response: rawTextResponse,
     });
 
     await expect((await runEndpoint(machineEndpoint, request)).text()).resolves.toBe(
@@ -220,6 +268,8 @@ describe('server endpoints', () => {
     const exact = endpoint('/exports/orders.csv', {
       handler: () => new Response('orders'),
       method: 'GET',
+      reason: 'orders byte export',
+      response: { appOwnedSafety: true, body: 'bytes', cache: 'private' },
     });
     const mounted = endpoint('/auth', {
       csrf: false,
@@ -227,6 +277,9 @@ describe('server endpoints', () => {
       handler: () => new Response('auth'),
       method: 'GET',
       mount: 'prefix',
+      mountJustification: 'auth adapter owns callback subpaths',
+      reason: 'auth adapter callback mount',
+      response: rawTextResponse,
     });
 
     expect(endpointMatches(exact, { method: 'GET', pathname: '/exports/orders.csv' })).toBe(true);

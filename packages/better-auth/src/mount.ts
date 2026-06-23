@@ -12,7 +12,7 @@ import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js'
 export interface BetterAuthMountOptions<Method extends EndpointMethod = EndpointMethod> {
   auth?: EndpointAuthDeclaration;
   csrfJustification?: string;
-  method?: Method;
+  method: Method;
 }
 
 /**
@@ -38,7 +38,7 @@ export function mount<
 >(
   path: Path,
   auth: BetterAuthMountLike | BetterAuthMountHandler,
-  options: BetterAuthMountOptions<Method> = {},
+  options: BetterAuthMountOptions<Method>,
 ): EndpointDeclaration<Path, Method, 'prefix'> {
   const handler = typeof auth === 'function' ? auth : auth.handler;
 
@@ -49,7 +49,10 @@ export function mount<
     handler(request) {
       return handler(request);
     },
-    ...(options.method === undefined ? {} : { method: options.method }),
+    method: options.method,
     mount: 'prefix',
+    mountJustification: 'better-auth owns provider callback subpaths under this mount',
+    reason: 'better-auth provider redirect and callback mount',
+    response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
   });
 }

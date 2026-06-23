@@ -154,16 +154,26 @@ function isEndpointDeclarations(value: unknown): value is KovoApp['endpoints'] {
         isRecord(endpoint) &&
         typeof endpoint.path === 'string' &&
         typeof endpoint.handler === 'function' &&
-        (endpoint.method === undefined || typeof endpoint.method === 'string') &&
-        (endpoint.mount === undefined ||
-          endpoint.mount === 'exact' ||
-          endpoint.mount === 'prefix') &&
+        typeof endpoint.method === 'string' &&
+        typeof endpoint.reason === 'string' &&
+        (endpoint.mount === 'exact' || endpoint.mount === 'prefix') &&
+        (endpoint.mount !== 'prefix' || typeof endpoint.mountJustification === 'string') &&
+        isEndpointResponsePosture(endpoint.response) &&
         (endpoint.auth === undefined || isRecord(endpoint.auth)) &&
         (endpoint.csrf === undefined ||
           (isRecord(endpoint.csrf) &&
             endpoint.csrf.exempt === true &&
             typeof endpoint.csrf.justification === 'string')),
     )
+  );
+}
+
+function isEndpointResponsePosture(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.appOwnedSafety === 'boolean' &&
+    typeof value.body === 'string' &&
+    typeof value.cache === 'string'
   );
 }
 

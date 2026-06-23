@@ -38,6 +38,8 @@ const exactEndpoint = endpoint('/machine/exact', {
     });
   },
   method: 'POST',
+  reason: 'signed raw machine request fixture',
+  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
 });
 
 const prefixEndpoint = endpoint('/machine/prefix', {
@@ -51,6 +53,9 @@ const prefixEndpoint = endpoint('/machine/prefix', {
   },
   method: 'POST',
   mount: 'prefix',
+  mountJustification: 'machine prefix endpoint fixture',
+  reason: 'machine prefix endpoint fixture',
+  response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
 });
 
 const exactRoute = route('/machine/exact', {

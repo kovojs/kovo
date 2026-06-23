@@ -6,12 +6,18 @@ import { createApp } from './app.js';
 import type { KovoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { csrfToken } from './csrf.js';
-import { endpoint } from './endpoint.js';
+import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
+
+const rawTextResponse = {
+  appOwnedSafety: true,
+  body: 'text',
+  cache: 'no-store',
+} satisfies EndpointResponsePosture;
 
 describe('server app matched dispatch boundary', () => {
   it('owns SPEC §9.5 client-module dispatch through the app registry', async () => {
@@ -65,6 +71,9 @@ describe('server app matched dispatch boundary', () => {
       handler(request) {
         return new Response(`session:${'session' in request}`);
       },
+      method: 'GET',
+      reason: 'status endpoint session isolation test',
+      response: rawTextResponse,
     });
     const app = createApp({
       endpoints: [status],
@@ -90,6 +99,8 @@ describe('server app matched dispatch boundary', () => {
           return new Response('updated');
         },
         method,
+        reason: 'account email update endpoint',
+        response: rawTextResponse,
       });
       const app = createApp({
         csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
@@ -117,6 +128,8 @@ describe('server app matched dispatch boundary', () => {
         return new Response('updated');
       },
       method: 'POST',
+      reason: 'account email update endpoint',
+      response: rawTextResponse,
     });
     const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
     const app = createApp({ csrf, endpoints: [updateEmail] });
@@ -150,6 +163,8 @@ describe('server app matched dispatch boundary', () => {
         return new Response('signed');
       },
       method: 'POST',
+      reason: 'signed machine endpoint',
+      response: rawTextResponse,
     });
     const app = createApp({
       csrf: { secret: 'csrf-secret', sessionId: () => 's1' },
@@ -193,6 +208,8 @@ describe('server app matched dispatch boundary', () => {
         return new Response(await request.text(), { status: 202 });
       },
       method: 'POST',
+      reason: 'signed webhook raw body dispatch',
+      response: rawTextResponse,
     });
     const app = createApp({
       csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },

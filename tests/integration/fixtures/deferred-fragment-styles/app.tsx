@@ -30,6 +30,8 @@ const deferredWire = endpoint('/deferred-wire', {
   csrf: false,
   csrfJustification: 'read-only fixture stream',
   method: 'GET',
+  reason: 'read-only deferred fragment style stream fixture',
+  response: { appOwnedSafety: false, body: 'html', cache: 'no-store' },
   handler: () => {
     const response = renderDeferredDocument({
       body: '<section kovo-fragment-target="deferred-review">Loading reviews</section>',

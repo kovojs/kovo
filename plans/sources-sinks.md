@@ -132,12 +132,14 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - [x] Allocate source/sink diagnostic codes after checking `diagnosticDefinitions`.
   - Evidence: `pnpm exec vitest run packages/core/src/diagnostics.test.ts`, `pnpm run check:api-surface`, and `git diff --check` verify KV422-KV425 are allocated in `diagnosticDefinitions`, the inline registry snapshot, SPEC §11.3, and the diagnostics guide without widening the public API baseline.
   - Do not reuse KV236/KV415/KV418/KV414 for unrelated classes; keep each code's question narrow.
-- [ ] Make raw `endpoint()` declarations always auditable.
+- [x] Make raw `endpoint()` declarations always auditable.
   - Require an endpoint-level `reason`/`purpose` string for every `endpoint()` because it is the raw HTTP escape hatch. The audit row should print that reason even when auth and CSRF are otherwise safe.
   - Require explicit `method`; no implicit `ANY` for app-authored endpoints. Prefix mounts require an additional `mountJustification` because they enlarge the routed surface.
   - Auth posture is covered structurally by the single-source-of-truth item above (mandatory executable verifier, or explicit `none: <justification>`, fail-closed default) — not restated here. The audit row prints the scheme derived from `auth.verify`, or `unauthenticated` for `none`.
   - Keep the existing `csrf: false` named justification, and keep KV418 for any CSRF-exempt endpoint that depends on ambient session/cookie authority.
   - Require declared output posture for raw responses: `body: 'html' | 'json' | 'text' | 'bytes' | 'stream' | 'redirect'`, cache posture, and whether app code owns all encoding/header safety. This is metadata for audit and drift checks; it does not make raw endpoints part of the safe component/mutation protocol.
+  - Evidence: `packages/server/src/endpoint.ts` requires explicit `method`, endpoint `reason`/`purpose`, prefix `mountJustification`, and `response` posture metadata; `packages/server/src/endpoint.test.ts` proves missing metadata and missing prefix justification are type errors and that declarations retain the metadata structurally.
+  - Evidence: `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts packages/server/src/shell.test.ts packages/better-auth/src/index.session.test.ts` verified endpoint declaration metadata, dispatch behavior, Better Auth mount metadata, and no implicit any-method matching.
 - [ ] Add a general "unregistered sink" diagnostic for app source.
   - Any app-authored direct dangerous sink not behind a Kovo helper or explicit trust API should fail with a teaching message pointing to the safe surface.
 - [ ] Extend `kovo explain --endpoints`.
@@ -179,6 +181,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Latest Verification
 
+- `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts packages/server/src/shell.test.ts packages/better-auth/src/index.session.test.ts` verified explicit endpoint audit metadata, structural retention, no implicit any-method dispatch, prefix mount justification, and Better Auth mount metadata.
 - `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts` verified executable endpoint HMAC/custom auth, fail-closed verifier throws, body preservation, and auth-before-CSRF dispatch ordering.
 - `pnpm exec vitest run packages/server/src/webhook.test.ts` verified webhook raw-byte verification and name-only endpoint auth metadata still self-enforce without dispatcher double verification.
 - `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts` verified full request-handler bad signature → 401 and good signature → 200 with the handler still reading the raw body.

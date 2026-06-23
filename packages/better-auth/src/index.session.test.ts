@@ -120,11 +120,20 @@ describe('betterAuthSession', () => {
 describe('browser redirect protocol mount', () => {
   it('declares a prefix endpoint for Better Auth-owned redirect protocols', async () => {
     const auth = new FakeMountedAuth();
-    const authEndpoint = mount('/auth', auth);
+    const authEndpoint = mount('/auth', auth, { method: 'GET' });
 
     expect(authEndpoint.path).toBe('/auth');
     expect(authEndpoint.mount).toBe('prefix');
-    expect(authEndpoint.method).toBeUndefined();
+    expect(authEndpoint.method).toBe('GET');
+    expect(authEndpoint.mountJustification).toBe(
+      'better-auth owns provider callback subpaths under this mount',
+    );
+    expect(authEndpoint.reason).toBe('better-auth provider redirect and callback mount');
+    expect(authEndpoint.response).toEqual({
+      appOwnedSafety: true,
+      body: 'redirect',
+      cache: 'no-store',
+    });
     expect(authEndpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
     expect(authEndpoint.csrf).toEqual({
       exempt: true,
@@ -134,7 +143,7 @@ describe('browser redirect protocol mount', () => {
       endpointMatches(authEndpoint, { method: 'GET', pathname: '/auth/callback/github' }),
     ).toBe(true);
     expect(endpointMatches(authEndpoint, { method: 'POST', pathname: '/auth/saml/acs' })).toBe(
-      true,
+      false,
     );
     expect(endpointMatches(authEndpoint, { method: 'GET', pathname: '/authish/callback' })).toBe(
       false,
