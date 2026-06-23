@@ -57,6 +57,15 @@ export const GallerySelectDemo = component({
         <SelectHiddenInput {...selectState} id="gallery-select-control" value={state.value} />
         <SelectTrigger
           {...selectState}
+          aria-activedescendant={
+            state.open
+              ? state.highlightedValue === 'express'
+                ? 'gallery-select-option-express'
+                : state.highlightedValue === 'drone'
+                  ? 'gallery-select-option-drone'
+                  : 'gallery-select-option-standard'
+              : undefined
+          }
           aria-expanded={String(state.open)}
           data-state={state.open ? 'open' : 'closed'}
           id="gallery-select-trigger"
@@ -223,7 +232,9 @@ export const GallerySelectDemo = component({
             Drone
           </SelectItem>
         </SelectContent>
-        <SelectValue {...selectState} data-demo-state="select-value" />
+        <SelectValue {...selectState} data-demo-state="select-value">
+          {state.value === 'express' ? 'Express' : 'Standard'}
+        </SelectValue>
       </Select>
     );
   },

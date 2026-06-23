@@ -288,10 +288,12 @@ export const DialogContent = component({
         {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
+        aria-modal={attrs['aria-modal']}
         closedby={attrs.closedby}
         data-state={attrs['data-state']}
         id={attrs.id}
         open={attrs.open}
+        role={attrs.role}
       >
         {props.children}
       </dialog>

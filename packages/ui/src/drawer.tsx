@@ -322,10 +322,12 @@ export const Drawer = component({
           {...passThroughProps(props)}
           aria-describedby={contentAttrs['aria-describedby']}
           aria-labelledby={contentAttrs['aria-labelledby']}
+          aria-modal={contentAttrs['aria-modal']}
           closedby={contentAttrs.closedby}
           data-state={contentAttrs['data-state']}
           id={contentAttrs.id}
           open={contentAttrs.open}
+          role={contentAttrs.role}
         >
           <div {...handleStyleAttrs} aria-hidden="true" />
           <header {...headerStyleAttrs}>
@@ -432,10 +434,12 @@ export const DrawerContent = component({
         {...passThroughProps(props)}
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
+        aria-modal={attrs['aria-modal']}
         closedby={attrs.closedby}
         data-state={attrs['data-state']}
         id={attrs.id}
         open={attrs.open}
+        role={attrs.role}
       >
         {props.children}
       </dialog>

@@ -94,6 +94,7 @@ describe('headless-ui select primitive', () => {
       'data-required': '',
       'data-state': 'open',
       id: 'color',
+      role: 'combobox',
       type: 'button',
     });
 
@@ -104,6 +105,7 @@ describe('headless-ui select primitive', () => {
       'data-placeholder': '',
       'data-state': 'closed',
       disabled: true,
+      role: 'combobox',
       type: 'button',
     });
 
@@ -198,6 +200,7 @@ describe('headless-ui select primitive', () => {
       'data-placeholder': '',
       'data-state': 'closed',
       id: 'color',
+      role: 'combobox',
       type: 'button',
     });
 

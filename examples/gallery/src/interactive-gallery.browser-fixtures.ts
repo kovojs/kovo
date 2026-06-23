@@ -2,7 +2,7 @@ import axe from 'axe-core';
 import { installKovoLoader, type KovoLoader } from '@kovojs/browser/client';
 import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/checkbox';
 import { expect, vi } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
 import * as accordionClient from './interactive/accordion-demo.client.js';
@@ -341,6 +341,8 @@ export async function expectInteractiveSideDialog(options: {
   expect(trigger.getAttribute('aria-controls')).toBe(options.contentId);
   expect(trigger.getAttribute('commandfor')).toBe(options.contentId);
   expect(dialog.getAttribute('data-side')).toBe(options.side);
+  expect(dialog.getAttribute('role')).toBe('dialog');
+  expect(dialog.getAttribute('aria-modal')).toBe('true');
   expect(dialog.getAttribute('closedby')).toBe('any');
   expect(dialog.open).toBe(false);
   expect(output.textContent).toBe('closed');
@@ -353,9 +355,18 @@ export async function expectInteractiveSideDialog(options: {
     expect(dialog.open).toBe(true);
   });
 
-  // SPEC §12.1: the open sheet/drawer side-dialog top-layer state (dialog.open, side anchored) must
-  // stay axe-clean. Covers both sheet and drawer via this shared helper, asserted while open before
-  // close. axe.run(root) descends into the promoted <dialog> (DOM child of root).
+  await vi.waitFor(() => {
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  await userEvent.tab();
+  expect(document.activeElement).not.toBe(trigger);
+
+  // SPEC §12.1: the open sheet/drawer side-dialog top-layer state (dialog.open,
+  // role=dialog, aria-modal, side anchored, focus starts inside and the
+  // background trigger is not reachable by Tab) must stay axe-clean.
+  // Covers both sheet and drawer via this shared helper, asserted while open
+  // before close. axe.run(root) descends into the promoted <dialog> (DOM child of root).
   await expectNoAxeViolations(root);
 
   close.click();
@@ -363,6 +374,7 @@ export async function expectInteractiveSideDialog(options: {
   await vi.waitFor(() => {
     expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
     expect(dialog.open).toBe(false);
+    expect(document.activeElement).toBe(trigger);
   });
 }
 

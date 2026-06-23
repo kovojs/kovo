@@ -165,6 +165,7 @@ export function selectTriggerAttributes(
     ...selectDataAttributes(options),
     'aria-expanded': String(options.open === true),
     'aria-haspopup': 'listbox',
+    role: 'combobox',
     type: 'button',
     ...(activeDescendant === undefined ? {} : { 'aria-activedescendant': activeDescendant }),
     ...(options.listboxId === undefined ? {} : { 'aria-controls': options.listboxId }),

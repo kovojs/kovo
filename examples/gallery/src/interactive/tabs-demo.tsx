@@ -47,6 +47,12 @@ export const GalleryTabsDemo = component({
           if (!result) return;
           state.activeValue = result.activeValue ?? state.activeValue;
           state.value = result.value ?? state.value;
+          if (result.activeValue === undefined) return;
+          const root = Object(event)['target']?.closest?.('[data-gallery-interactive="tabs"]');
+          const next = Object(root)?.querySelector?.(
+            `#gallery-tabs-${result.activeValue}-trigger`,
+          );
+          Object(next)['focus']?.call(next);
         }}
       >
         <TabsList {...rootState} label="Gallery sections">

@@ -450,8 +450,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(rendered).toContain('command="show-modal" commandfor="account-sheet"');
     expect(rendered).toContain('<dialog class=');
     expect(rendered).toContain('aria-describedby="account-sheet-description"');
+    expect(rendered).toContain('aria-modal="true"');
     expect(rendered).toContain('closedby="any"');
-    expect(rendered).toContain('id="account-sheet" open>');
+    expect(rendered).toContain('id="account-sheet" open role="dialog"');
     expect(rendered).toContain('data-style-src="sheet.tsx#content; sheet.tsx#left"');
     expect(rendered).toContain('command="request-close" commandfor="account-sheet"');
 
@@ -487,8 +488,9 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(drawer).toContain('command="show-modal" commandfor="account-drawer"');
     expect(drawer).toContain('<dialog class=');
     expect(drawer).toContain('aria-describedby="account-drawer-description"');
+    expect(drawer).toContain('aria-modal="true"');
     expect(drawer).toContain('closedby="any"');
-    expect(drawer).toContain('id="account-drawer" open>');
+    expect(drawer).toContain('id="account-drawer" open role="dialog"');
     expect(drawer).toContain('data-style-src="drawer.tsx#content; drawer.tsx#bottom"');
     expect(drawer).toContain('data-style-src="drawer.tsx#handle" aria-hidden="true"');
     expect(drawer).toContain('command="request-close" commandfor="account-drawer"');

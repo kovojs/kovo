@@ -46,6 +46,7 @@ export interface SelectProps extends SelectStateProps {
 }
 
 export interface SelectTriggerProps extends SelectStateProps {
+  'aria-activedescendant'?: string;
   children?: string;
   descriptionId?: string;
   errorId?: string;
@@ -77,6 +78,7 @@ export interface SelectItemProps extends SelectStateProps {
 }
 
 export interface SelectValueProps extends SelectStateProps {
+  children?: string;
   id?: string;
   styles?: SelectStyleOverrides;
 }
@@ -274,6 +276,7 @@ export const SelectTrigger = component({
       <button
         {...styleAttrs}
         {...passThroughProps(props)}
+        aria-activedescendant={props['aria-activedescendant'] ?? attrs['aria-activedescendant']}
         aria-describedby={attrs['aria-describedby']}
         aria-controls={attrs['aria-controls']}
         aria-expanded={attrs['aria-expanded']}
@@ -287,6 +290,7 @@ export const SelectTrigger = component({
         data-state={attrs['data-state']}
         disabled={attrs.disabled}
         id={attrs.id}
+        role={attrs.role}
         type={attrs.type}
       >
         {props.children}
@@ -422,7 +426,7 @@ export const SelectValue = component({
         data-placeholder={attrs['data-placeholder']}
         id={attrs.id}
       >
-        {escapeHtml(selectValueText(props))}
+        {props.children ?? escapeHtml(selectValueText(props))}
       </span>
     );
   },
