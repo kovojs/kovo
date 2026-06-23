@@ -471,7 +471,7 @@ describe('inline loader enhanced navigation fallback', () => {
       const preventDefault = vi.fn();
       const anchor = {
         hasAttribute: () => false,
-        href: 'http://app.test/download.csv',
+        href: 'http://app.test/download.pdf',
         target: '',
       };
       const target = {
@@ -492,9 +492,9 @@ describe('inline loader enhanced navigation fallback', () => {
           querySelectorAll: () => [],
         };
         globalRecord.fetch = vi.fn(async () => ({
-          headers: { get: () => 'text/csv' },
-          text: async () => 'id,total\n1,42\n',
-          url: 'http://app.test/download.csv',
+          headers: { get: () => 'application/pdf' },
+          text: async () => '%PDF-1.7\n',
+          url: 'http://app.test/download.pdf',
         }));
         globalRecord.history = {};
         globalRecord.location = {
@@ -517,7 +517,7 @@ describe('inline loader enhanced navigation fallback', () => {
 
         expect(preventDefault).toHaveBeenCalledTimes(1);
         await vi.waitFor(() => {
-          expect(assign).toHaveBeenCalledWith('http://app.test/download.csv');
+          expect(assign).toHaveBeenCalledWith('http://app.test/download.pdf');
         });
       } finally {
         Object.assign(globalRecord, {

@@ -5,12 +5,12 @@ import { renderRoutePageResponse, route } from './route.js';
 
 describe('route responses', () => {
   it('renders route file and stream outcomes without passing through the HTML renderer', async () => {
-    const csvRoute = route('/exports/orders.csv', {
+    const fileRoute = route('/downloads/orders.pdf', {
       page() {
-        return respond.file('id,total\nord_1,42\n', {
-          contentType: 'text/csv; charset=utf-8',
-          etag: '"orders-v1"',
-          filename: 'orders.csv',
+        return respond.file('%PDF-1.7\n', {
+          contentType: 'application/pdf',
+          etag: '"orders-pdf-v1"',
+          filename: 'orders.pdf',
         });
       },
     });
@@ -25,25 +25,25 @@ describe('route responses', () => {
     });
 
     await expect(
-      renderRoutePageResponse(csvRoute, {}, { headers: { 'If-None-Match': '"stale"' } }, () => {
+      renderRoutePageResponse(fileRoute, {}, { headers: { 'If-None-Match': '"stale"' } }, () => {
         throw new Error('file outcomes do not render as HTML');
       }),
     ).resolves.toEqual({
-      body: 'id,total\nord_1,42\n',
+      body: '%PDF-1.7\n',
       headers: {
-        'Content-Disposition': 'attachment; filename="orders.csv"',
-        'Content-Type': 'text/csv; charset=utf-8',
-        ETag: '"orders-v1"',
+        'Content-Disposition': 'attachment; filename="orders.pdf"',
+        'Content-Type': 'application/pdf',
+        ETag: '"orders-pdf-v1"',
         // SECURITY_FINDINGS.md M1: file/stream outcomes default to nosniff.
         'X-Content-Type-Options': 'nosniff',
       },
       status: 200,
     });
     await expect(
-      renderRoutePageResponse(csvRoute, {}, { headers: { 'If-None-Match': '"orders-v1"' } }),
+      renderRoutePageResponse(fileRoute, {}, { headers: { 'If-None-Match': '"orders-pdf-v1"' } }),
     ).resolves.toEqual({
       body: '',
-      headers: { ETag: '"orders-v1"' },
+      headers: { ETag: '"orders-pdf-v1"' },
       status: 304,
     });
 

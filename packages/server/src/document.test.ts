@@ -231,12 +231,12 @@ describe('server app shell document assembly', () => {
       }).body,
     ).toContain('<!doctype html>');
 
-    const csv = {
-      body: 'id,total\n1,42\n',
-      headers: { 'Content-Type': 'text/csv' },
+    const binary = {
+      body: '%PDF-1.7\n',
+      headers: { 'Content-Type': 'application/pdf' },
       status: 200 as const,
     };
-    expect(renderRouteDocumentResponse(csv)).toBe(csv);
+    expect(renderRouteDocumentResponse(binary)).toBe(binary);
   });
 
   // CSP-3 (bugs-part3): HTML document responses carry baseline security headers and

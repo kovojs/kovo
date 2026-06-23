@@ -265,10 +265,10 @@ describe('server endpoints', () => {
   });
 
   it('matches exact and prefix endpoint mounts without routing side effects', () => {
-    const exact = endpoint('/exports/orders.csv', {
+    const exact = endpoint('/downloads/orders.bin', {
       handler: () => new Response('orders'),
       method: 'GET',
-      reason: 'orders byte export',
+      reason: 'orders binary download',
       response: { appOwnedSafety: true, body: 'bytes', cache: 'private' },
     });
     const mounted = endpoint('/auth', {
@@ -282,8 +282,8 @@ describe('server endpoints', () => {
       response: rawTextResponse,
     });
 
-    expect(endpointMatches(exact, { method: 'GET', pathname: '/exports/orders.csv' })).toBe(true);
-    expect(endpointMatches(exact, { method: 'GET', pathname: '/exports/orders.csv/extra' })).toBe(
+    expect(endpointMatches(exact, { method: 'GET', pathname: '/downloads/orders.bin' })).toBe(true);
+    expect(endpointMatches(exact, { method: 'GET', pathname: '/downloads/orders.bin/extra' })).toBe(
       false,
     );
     expect(endpointMatches(mounted, { method: 'GET', pathname: '/auth/callback/github' })).toBe(

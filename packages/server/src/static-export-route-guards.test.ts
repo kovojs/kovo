@@ -368,11 +368,11 @@ describe('server static export', () => {
         route('/', {
           page: () => '<main>Home</main>',
         }),
-        route('/exports/orders.csv', {
+        route('/downloads/orders.pdf', {
           page: () =>
-            respond.file('id,total\nord_1,42\n', {
-              contentType: 'text/csv; charset=utf-8',
-              filename: 'orders.csv',
+            respond.file('%PDF-1.7\n', {
+              contentType: 'application/pdf',
+              filename: 'orders.pdf',
             }),
         }),
       ],
@@ -383,9 +383,9 @@ describe('server static export', () => {
       diagnostics: [
         {
           code: 'KV229',
-          routePath: '/exports/orders.csv',
+          routePath: '/downloads/orders.pdf',
           message: expect.stringContaining(
-            "can only write successful HTML route documents; '/exports/orders.csv' returned status 200 with Content-Type 'text/csv; charset=utf-8'",
+            "can only write successful HTML route documents; '/downloads/orders.pdf' returned status 200 with Content-Type 'application/pdf'",
           ),
         },
       ],
@@ -396,7 +396,7 @@ describe('server static export', () => {
       diagnostics: [
         {
           code: 'KV229',
-          routePath: '/exports/orders.csv',
+          routePath: '/downloads/orders.pdf',
           message: expect.stringContaining('Content-Type'),
         },
       ],

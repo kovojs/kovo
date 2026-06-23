@@ -22,9 +22,11 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Explicit Non-Goals
 
-- [ ] Remove CSV/TSV/spreadsheet export as a framework-owned capability.
+- [x] Remove CSV/TSV/spreadsheet export as a framework-owned capability.
+  - Evidence: `rg -n -i "\\b(csv|tsv|spreadsheet|excel|formula)\\b|text/csv|orders\\.csv|inventory\\.csv" packages tests examples site docs -g '!node_modules' -g '!packages/icons/**'` now finds only disclaimer text in `site/content/guides/{security,endpoints-webhooks,streaming}.md`; framework tests and API examples use neutral binary/PDF/text fixtures instead of spreadsheet-like exports.
   - Kovo v1 should not ship first-party CSV/TSV/spreadsheet helpers, diagnostics, corpus fixtures, examples, templates, guide recipes, or public API surface that makes spreadsheet export look supported by the framework. Spreadsheet formula execution is a separate application format hazard, not a Kovo core web-framework sink to bless.
-- [ ] Keep only generic raw response escape hatches for app-owned exports.
+- [x] Keep only generic raw response escape hatches for app-owned exports.
+  - Evidence: `pnpm exec vitest run packages/core/src/storage.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/document.test.ts packages/server/src/endpoint.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/cli/src/index.kovo-explain.test.ts` and `pnpm --dir tests/integration exec playwright test specs/respond-file.spec.ts` verify the remaining file/download/static-export coverage uses generic raw file/stream responses without CSV/TSV/spreadsheet helpers.
   - If an app needs spreadsheet export, it must be ordinary app-owned code behind `endpoint()` or `respond.file()`/`respond.stream()` with explicit app security review. The source/sink plan must not add a Kovo spreadsheet-safe helper or formula-hardening lane.
 - [x] Remove copyable CSV/TSV export patterns from examples, templates, tutorials, and docs.
   - Evidence: `rg -n -i "csv|tsv|spreadsheet|excel|formula|text/csv|orders\\.csv|inventory\\.csv|exports?/.*csv" docs examples site -g '!node_modules'` now surfaces only the two intentional disclaimer lines in `site/content/guides/endpoints-webhooks.md` and `site/content/guides/streaming.md`; the prior tutorial/reference-app promotion was removed from `site/content/tutorial/08-wrap-up.md`.
@@ -191,6 +193,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm exec vitest run packages/core/src/diagnostics.test.ts` verified source/sink diagnostic allocation KV422-KV425 in `diagnosticDefinitions` and snapshots.
 - `pnpm --dir site run content` verified the security-guide source/sink model and common app-code rules render through the site content pipeline.
 - `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified Phase 1 source/sink CLI output and `.kovo/sources-sinks.json` artifact writing.
+- `pnpm exec vitest run packages/core/src/storage.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/document.test.ts packages/server/src/endpoint.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm --dir tests/integration exec playwright test specs/respond-file.spec.ts`, and `rg -n -i "\\b(csv|tsv|spreadsheet|excel|formula)\\b|text/csv|orders\\.csv|inventory\\.csv" packages tests examples site docs -g '!node_modules' -g '!packages/icons/**'` verified spreadsheet export is absent from framework-owned helpers/examples/tests except disclaimer text.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
 - `sed -n '1,260p' plans/fix-security.md` inspected prior non-SQL security remediation lanes.

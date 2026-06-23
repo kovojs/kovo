@@ -13,13 +13,13 @@ function readSessionCookie(request: Request): FileSession | null {
   return raw.includes('respond_file_session=1') ? { user: { id: 'u1', roles: [] } } : null;
 }
 
-const exportRoute = route('/exports/orders.csv', {
+const exportRoute = route('/downloads/orders.pdf', {
   guard: guards.authed<FileRequest>(),
   page: () =>
-    respond.file('id,total\nord_1,42\n', {
-      contentType: 'text/csv; charset=utf-8',
-      etag: '"orders-v1"',
-      filename: 'orders.csv',
+    respond.file('%PDF-1.7\n', {
+      contentType: 'application/pdf',
+      etag: '"orders-pdf-v1"',
+      filename: 'orders.pdf',
       headers: { 'Cache-Control': 'private, max-age=0' },
     }),
 });

@@ -468,8 +468,8 @@ describe('kovo explain', () => {
             auth: 'custom:api-key',
             csrf: 'checked',
             method: 'GET',
-            name: 'inventory/export',
-            path: '/exports/inventory.csv',
+            name: 'inventory/download',
+            path: '/downloads/inventory.bin',
           },
         ],
       },
@@ -480,7 +480,7 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       ENDPOINTS
-      ENDPOINT inventory/export method=GET path=/exports/inventory.csv mount=exact auth=custom:api-key csrf=checked writes=-
+      ENDPOINT inventory/download method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked writes=-
       ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook writes=order
       SUMMARY total=2
       "

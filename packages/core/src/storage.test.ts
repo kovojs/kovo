@@ -260,21 +260,21 @@ describe('storage adapters', () => {
       prefix: '/tenant-a/',
     });
 
-    const put = await storage.put('docs/report.csv', 'id,total\n1,42\n', {
-      contentType: 'text/csv',
-      metadata: { report: 'orders' },
+    const put = await storage.put('docs/report.bin', 'binary report', {
+      contentType: 'application/octet-stream',
+      metadata: { report: 'binary' },
     });
-    const get = await storage.get('docs/report.csv');
+    const get = await storage.get('docs/report.bin');
 
     expect(client.calls).toEqual([
-      'put bucket-a/tenant-a/docs/report.csv',
-      'get bucket-a/tenant-a/docs/report.csv',
+      'put bucket-a/tenant-a/docs/report.bin',
+      'get bucket-a/tenant-a/docs/report.bin',
     ]);
-    expect(put.etag).toBe('"mock-14"');
-    expect(get?.etag).toBe('"mock-14"');
-    expect(get?.contentType).toBe('text/csv');
-    expect(get?.metadata).toEqual({ report: 'orders' });
-    expect(bytesToText(get?.body)).toBe('id,total\n1,42\n');
+    expect(put.etag).toBe('"mock-13"');
+    expect(get?.etag).toBe('"mock-13"');
+    expect(get?.contentType).toBe('application/octet-stream');
+    expect(get?.metadata).toEqual({ report: 'binary' });
+    expect(bytesToText(get?.body)).toBe('binary report');
   });
 
   // SPEC §12/§13 cross-backend parity. Bug L2-storage-3 (plans/bug-and-testing-part3.md): when an
@@ -286,17 +286,17 @@ describe('storage adapters', () => {
     const client = new ContentLengthBlindS3Client();
     const storage = createS3CompatibleStorage({ bucket: 'bucket-a', client });
 
-    await storage.put('docs/report.csv', 'id,total\n1,42\n');
+    await storage.put('docs/report.bin', 'binary report');
 
-    const stat = await storage.stat('docs/report.csv');
-    const stream = await storage.stream('docs/report.csv');
+    const stat = await storage.stat('docs/report.bin');
+    const stream = await storage.stream('docs/report.bin');
 
     expect(stat?.size).toBeUndefined();
     expect(stream?.size).toBeUndefined();
 
     // get() materializes the body, so the true size IS known there and must be reported.
-    const get = await storage.get('docs/report.csv');
-    expect(get?.size).toBe(textEncoder.encode('id,total\n1,42\n').byteLength);
+    const get = await storage.get('docs/report.bin');
+    expect(get?.size).toBe(textEncoder.encode('binary report').byteLength);
   });
 });
 
