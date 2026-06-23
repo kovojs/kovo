@@ -315,9 +315,9 @@ function clientModuleRetentionDiagnostics(
 
   return [
     {
-      code: 'client-module-retention',
-      message: `The ${presetName} preset emits immutable /c/* client modules. Keep old versioned /c/ artifacts published until documents that reference them expire; never purge or rewrite them during deploys.`,
-      severity: 'warning',
+      code: 'KV417',
+      message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure a serving layer that retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
+      severity: 'error',
     },
   ];
 }

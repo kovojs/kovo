@@ -108,30 +108,10 @@ describe('versioned client modules', () => {
     });
   });
 
-  it('can bound retained client module versions per path', () => {
-    const registry = createMemoryVersionedClientModuleRegistry({ maxVersionsPerPath: 1 });
-    const oldHref = registry.put({
-      path: '/c/cart.client.js',
-      source: 'export const version = "old";',
-      version: 'old',
-    });
-    const newHref = registry.put({
-      path: '/c/cart.client.js',
-      source: 'export const version = "new";',
-      version: 'new',
-    });
-
-    expect(registry.resolve(oldHref)).toEqual({
-      body: 'Not Found',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      status: 404,
-    });
-    expect(registry.resolve('/c/cart.client.js')).toEqual({
-      body: 'Not Found',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      status: 404,
-    });
-    expect(registry.resolve(newHref)).toMatchObject({ body: 'export const version = "new";' });
+  it('AUD-007: rejects count-based retention that can evict below the 24-hour floor', () => {
+    expect(() => createMemoryVersionedClientModuleRegistry({ maxVersionsPerPath: 1 })).toThrow(
+      /KV417: .*SPEC §14.*24 hours/,
+    );
   });
 
   it('enumerates normalized client modules deterministically without exposing registry state', () => {
