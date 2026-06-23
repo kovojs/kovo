@@ -7,7 +7,6 @@
 import {
   htmlJsonScriptFacts,
   kovoResponseBodyFact,
-  type HtmlJsonScriptFact,
 } from '@kovojs/test/internal/html-wire';
 
 /**
@@ -57,6 +56,14 @@ export interface HtmlElementFact {
 export interface HtmlElementSelector {
   attrs?: Record<string, string | true>;
   tag?: string;
+}
+
+/** One decoded JSON script found in a server-rendered document (SPEC.md §9.1, §12). */
+export interface HtmlJsonScriptFact {
+  attrs: Record<string, string>;
+  html: string;
+  json: unknown;
+  rawJson: string;
 }
 
 /**
