@@ -197,7 +197,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Positive tests prove the blessed helper path still works without forcing apps into raw escape hatches.
 - [ ] Acceptance: existing security lanes remain green.
   - Include the focused suites from `plans/fix-security.md`, SQL corpus from `plans/sql-injection.md` once implemented, endpoint/webhook conformance, query cache tests, static export containment tests, browser fragment/morph tests, and `git diff --check`.
-- [ ] Keep this ledger compact.
+- [x] Keep this ledger compact.
+  - Evidence: `wc -l plans/sources-sinks.md` reports 227 lines after the latest implementation evidence updates.
   - As implementation lands, replace checklist prose with the narrowest evidence: one test command or authoritative file/artifact per completed item, plus a short latest verification section.
 
 ## Latest Verification
