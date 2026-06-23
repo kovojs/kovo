@@ -109,11 +109,87 @@ describe('page hints', () => {
         theme: { css: ':root{--brand:teal}' },
       }),
     ).toEqual({
-      criticalCss: ':root{--brand:teal}\n.cart{display:grid}\n.badge{color:teal}',
+      criticalCss: '.cart{display:grid}\n.badge{color:teal}',
       href: '/assets/styles.css',
     });
     expect(stylesheet({ theme: ':root{--only-theme:1}' })).toEqual({
       criticalCss: ':root{--only-theme:1}',
+      href: '/assets/styles.css',
+    });
+  });
+
+  it('prunes critical theme CSS to variables reachable from critical rules', () => {
+    expect(
+      stylesheet('./styles.css', {
+        criticalCss: [
+          '.shell{color:var(--used);border-color:var(--missing, currentColor)}',
+          '.nested{background:var(--nested)}',
+        ],
+        theme: {
+          css: [
+            ':root {',
+            '  --used: var(--base);',
+            '  --base: #fff;',
+            '  --nested: color-mix(in srgb, var(--base) 80%, black);',
+            '  --unused: red;',
+            '}',
+            ':root[data-theme="dark"] {',
+            '  --used: var(--base);',
+            '  --base: #111;',
+            '  --nested: color-mix(in srgb, var(--base) 70%, white);',
+            '  --unused: orange;',
+            '}',
+          ].join('\n'),
+        },
+      }).criticalCss,
+    ).toBe(
+      [
+        ':root {',
+        '  --used: var(--base);',
+        '  --base: #fff;',
+        '  --nested: color-mix(in srgb, var(--base) 80%, black);',
+        '}',
+        '',
+        ':root[data-theme="dark"] {',
+        '  --used: var(--base);',
+        '  --base: #111;',
+        '  --nested: color-mix(in srgb, var(--base) 70%, white);',
+        '}',
+        '.shell{color:var(--used);border-color:var(--missing, currentColor)}',
+        '.nested{background:var(--nested)}',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps full critical theme CSS when pruning is disabled or unsafe', () => {
+    const themeCss = ':root{--used:teal;--unused:red}';
+    expect(
+      stylesheet('./styles.css', {
+        criticalCss: '.shell{color:var(--used)}',
+        criticalCssTheme: 'all',
+        theme: themeCss,
+      }).criticalCss,
+    ).toBe(`${themeCss}\n.shell{color:var(--used)}`);
+    expect(
+      stylesheet('./styles.css', {
+        criticalCss: '.shell{color:var(--used)}',
+        theme: '@media (min-width: 40rem) { :root { --used: teal; --unused: red; } }',
+      }).criticalCss,
+    ).toBe(
+      '@media (min-width: 40rem) { :root { --used: teal; --unused: red; } }\n.shell{color:var(--used)}',
+    );
+  });
+
+  it('keeps authored CSP hashes tied to unmodified critical theme CSS', () => {
+    expect(
+      stylesheet('./styles.css', {
+        criticalCss: '.shell{color:var(--used)}',
+        cspHash: 'sha256-test',
+        theme: ':root{--used:teal;--unused:red}',
+      }),
+    ).toEqual({
+      criticalCss: ':root{--used:teal;--unused:red}\n.shell{color:var(--used)}',
+      cspHash: 'sha256-test',
       href: '/assets/styles.css',
     });
   });

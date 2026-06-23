@@ -126,6 +126,26 @@ describe('stackoverflow interactive app', () => {
     expect(css).not.toContain('.grid {');
   });
 
+  it('keeps route critical CSS to used theme variables and app reset rules', async () => {
+    const { handler } = await buildSoInteractiveApp();
+    const response = await handler(new Request('http://example.test/questions/q3'));
+    const html = await response.text();
+    const criticalCss = [
+      ...html.matchAll(/<style[^>]*data-kovo-critical-href="[^"]*"[^>]*>([\s\S]*?)<\/style>/g),
+    ]
+      .map((match) => match[1] ?? '')
+      .join('\n');
+
+    expect(response.status).toBe(200);
+    expect(Buffer.byteLength(criticalCss, 'utf8')).toBeLessThan(2_000);
+    expect(criticalCss).toContain('--kovo-theme-sys-color-surface:');
+    expect(criticalCss).toContain('--kovo-theme-sys-color-on-surface:');
+    expect(criticalCss).toContain('font-family:');
+    expect(criticalCss).not.toContain('--kovo-theme-ref-palette-primary-40:');
+    expect(criticalCss).not.toContain('--kovo-theme-sys-color-primary:');
+    expect(criticalCss).not.toContain('--kovo-theme-sys-shape-corner-medium:');
+  });
+
   it('serves every authored route as no-JS full HTML documents', async () => {
     const { handler } = await buildSoInteractiveApp();
     const routes = [

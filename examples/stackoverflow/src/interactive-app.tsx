@@ -44,8 +44,10 @@ import { soTheme } from './theme.js';
 // server (scripts/serve.mjs), the inline loader morphs the re-rendered region.
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
+const soCriticalCss = stackOverflowCriticalCss();
 const soStylesheets = [
   stylesheet('./styles.css', {
+    ...(soCriticalCss === undefined ? {} : { criticalCss: soCriticalCss }),
     href: stackOverflowStylesheetHref(),
     theme: soTheme,
   }),
@@ -149,6 +151,17 @@ function stackOverflowStylesheetHref(): string {
       : '/assets/styles.css';
   } catch {
     return '/assets/styles.css';
+  }
+}
+
+function stackOverflowCriticalCss(): string | undefined {
+  const sourcePath = resolve(soRoot, 'src/styles.css');
+  if (!existsSync(sourcePath)) return undefined;
+
+  try {
+    return readFileSync(sourcePath, 'utf8');
+  } catch {
+    return undefined;
   }
 }
 

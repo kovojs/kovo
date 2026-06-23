@@ -87,7 +87,7 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     passed, covering post-paint runtime import, early enhanced link/form replay, native link
     pass-through, import-failure submit fallback, and existing enhanced navigation behavior.
 
-- [ ] **4. Reduce route critical CSS and theme-variable payload.**
+- [x] **4. Reduce route critical CSS and theme-variable payload.**
   - Current issue: the inline critical style block is about 11 KB, dominated by theme variables that
     the Stack Overflow example mostly does not need for the first viewport.
   - Direction: inline only route-visible variables/rules or avoid app-wide theme inlining on this
@@ -102,6 +102,11 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
   - Verification target: tests prove used variables remain in critical CSS, unused theme variables
     are omitted for analyzable component CSS, nested `var()` references are retained, and fallback
     behavior stays conservative for unanalyzable CSS.
+  - Evidence: `pnpm exec vitest --run packages/server/src/hints.test.ts examples/stackoverflow/src/interactive-app.test.ts`
+    passed, covering used/nested CSS variable retention, unused theme variable pruning,
+    full-theme opt-out, unsafe CSS fallback, authored CSP-hash no-rewrite behavior, and the Stack
+    Overflow `/questions/q3` critical CSS budget staying under 2 KB while retaining only the used
+    theme variables.
 
 - [ ] **5. Route-split Stack Overflow CSS.**
   - Current issue: `/questions/q3` receives CSS namespaces for unrelated pages such as users,
@@ -161,10 +166,12 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
       and `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-bootstrap.browser.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts`
       passed.
 - [x] 2026-06-23 inline runtime affected-suite: `pnpm --filter @kovojs/browser run check:inline-loader && pnpm exec vitest --run packages/server/src/static-export-client-module-refs.test.ts packages/server/src/static-export-endpoints.test.ts packages/server/src/static-export-manifest.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-result.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-build-wiring.test.ts packages/server/src/vite-dev.test.ts packages/server/src/node.test.ts packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-build.test.ts`
-  passed.
+      passed.
 - [x] 2026-06-23 lint/type without formatting: `vp check --no-fmt` passed with existing warnings
-  for `packages/icons/src/infinity.tsx` and generated `packages/browser/src/inline-loader.ts`
-  length.
+      for `packages/icons/src/infinity.tsx` and generated `packages/browser/src/inline-loader.ts`
+      length.
+- [x] 2026-06-23 critical theme pruning slice: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/build.test.ts packages/server/src/vite-dev.test.ts packages/cli/src/index.kovo-build.test.ts examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/kovo-graph.test.ts site/src/route-kit.test.ts`
+      passed.
 - [x] 2026-06-23 diff hygiene: `git diff --check` passed.
 
 ## Repeatable Perf Harness
