@@ -114,26 +114,36 @@ handle are Postgres-specific.
 
 ### Stage E — Scaffold, examples, auth bridge, docs
 
-- [ ] **SQLite scaffold variant.** `packages/create-kovo/templates/src/db.ts` + `schema.ts` are
+- [x] **SQLite scaffold variant.** `packages/create-kovo/templates/src/db.ts` + `schema.ts` are
       Postgres-only (`PGlite`, `drizzle-orm/pglite`, `pgTable`, `pg-core`, `defaultNow()`, `boolean`,
       `timestamp`). Provide a SQLite template set (better-sqlite3, `sqliteTable`, `sqlite-core`,
       `integer({mode:'boolean'})`, text timestamps) and a `create-kovo` flag/prompt selecting the
       dialect. Keep Postgres default.
-- [ ] **Better Auth bridge.** `packages/better-auth` emits `pgTable` schema (e.g.
+      Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts` proves Postgres remains
+      default, `--dialect sqlite` emits the SQLite scaffold, and both generated default and SQLite apps
+      typecheck.
+- [x] **Better Auth bridge.** `packages/better-auth` emits `pgTable` schema (e.g.
       `index.schema-materialize.test.ts`, `index.schema-bridge.test.ts`) and the template passes
       `drizzleAdapter(appDb,{provider:'pg'})` (`templates/src/auth.ts:80`). Add SQLite emission
       (`sqliteTable`, `provider:'sqlite'`) for the SQLite scaffold.
+      Evidence: `pnpm --filter @kovojs/better-auth exec vitest run src/index.schema-materialize.test.ts`
+      proves generated SQLite Better Auth schema uses `sqliteTable`, boolean integer mode, and text
+      timestamps; `pnpm exec vitest run packages/create-kovo/src/index.test.ts` proves the SQLite
+      scaffold passes `provider:'sqlite'`.
 - [ ] **Example (optional).** Decide whether to add a SQLite example or convert one; default is to keep
       `examples/commerce` on Postgres and add a small SQLite example only if it pays for itself.
-- [ ] **Docs.** Document the supported dialects, the blessed driver list, which analyses are universal
+- [x] **Docs.** Document the supported dialects, the blessed driver list, which analyses are universal
       vs. dialect-specific, and the SQLite type-mapping caveats (boolean/json/timestamp).
+      Evidence: `docs/data-layer-dialects.md`.
 
 ### Stage F — Policy & roadmap reconciliation
 
-- [ ] **`rules/data-layer-policy.md`** — record SQLite as a blessed dialect and the widened pinned
+- [x] **`rules/data-layer-policy.md`** — record SQLite as a blessed dialect and the widened pinned
       Drizzle surface (factories, db types, column-builder modes).
-- [ ] **`plans/data-layer-roadmap.md`** — cross-link this plan; note the v1 blessed adapter is now
+      Evidence: `rules/data-layer-policy.md`.
+- [x] **`plans/data-layer-roadmap.md`** — cross-link this plan; note the v1 blessed adapter is now
       multi-dialect.
+      Evidence: `plans/data-layer-roadmap.md`.
 - [ ] **`rules/api-surface.md` / `rules/accessibility-conformance.md`** as applicable if any public
       export shape changes (Stage A widens runtime exports only if new symbols are exported — confirm).
 
@@ -160,5 +170,8 @@ handle are Postgres-specific.
 
 ## Latest verification
 
-_None yet — plan only. Each completed checkbox must cite the verifying test/command or authoritative
-file per `CLAUDE.md` progress discipline before being checked._
+- `pnpm exec vitest run packages/create-kovo/src/index.test.ts` — scaffold metadata, default Postgres
+  emission, SQLite emission, and generated Postgres/SQLite app typechecks.
+- `pnpm --filter @kovojs/better-auth exec vitest run src/index.schema-materialize.test.ts` — Better
+  Auth generated schema materialization, including SQLite table factory and type mapping.
+- `git diff --check` — whitespace check for the current Stage E/F slice.

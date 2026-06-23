@@ -494,8 +494,12 @@ export interface BetterAuthGeneratedSchemaTable {
 /** @internal Options for `generateBetterAuthSchemaSource`. */
 export interface BetterAuthSchemaSourceGenerationOptions {
   annotationCallee?: string;
+  dialect?: BetterAuthSchemaSourceDialect;
   schemaBridge?: BetterAuthSchemaBridgeExtensions;
 }
+
+/** @internal Drizzle dialects supported by generated Better Auth schema.ts output. */
+export type BetterAuthSchemaSourceDialect = 'postgres' | 'sqlite';
 
 /** @internal Result of generating an app schema.ts from Better Auth table metadata. */
 export interface BetterAuthSchemaSourceGenerationResult {
@@ -922,11 +926,15 @@ export function generateBetterAuthSchemaSource(
     options.schemaBridge === undefined ? {} : { schemaBridge: options.schemaBridge },
   );
   const annotationCallee = options.annotationCallee ?? 'kovo';
+  const dialect = options.dialect ?? 'postgres';
+  const tableFactory = dialect === 'sqlite' ? 'sqliteTable' : 'pgTable';
+  const drizzleCoreModule =
+    dialect === 'sqlite' ? 'drizzle-orm/sqlite-core' : 'drizzle-orm/pg-core';
   const collidingPhysicalTables = betterAuthCollidingPhysicalTableNames(tables, schemaBridge);
   const generatedTables: BetterAuthGeneratedSchemaTable[] = [];
   const skippedTables: BetterAuthGeneratedSchemaTableDegradation[] = [];
   const declarations: string[] = [];
-  const requiredBuilders = new Set<string>(['pgTable']);
+  const requiredBuilders = new Set<string>([tableFactory]);
   const exportNames = new Set<string>();
 
   for (const table of orderedBetterAuthMetadataTables(tables, schemaBridge)) {
@@ -986,7 +994,7 @@ export function generateBetterAuthSchemaSource(
       continue;
     }
 
-    const columns = betterAuthGeneratedSchemaColumns(table, metadata);
+    const columns = betterAuthGeneratedSchemaColumns(table, metadata, dialect);
     if ('degradation' in columns) {
       skippedTables.push(columns.degradation);
       continue;
@@ -998,7 +1006,7 @@ export function generateBetterAuthSchemaSource(
     generatedTables.push({ exportName, physicalTable, table });
     declarations.push(
       [
-        `export const ${exportName} = pgTable(${quoteTsString(physicalTable)}, {`,
+        `export const ${exportName} = ${tableFactory}(${quoteTsString(physicalTable)}, {`,
         ...columns.lines.map((line) => `  ${line}`),
         `}, ${betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge)});`,
       ].join('\n'),
@@ -1007,7 +1015,7 @@ export function generateBetterAuthSchemaSource(
 
   const drizzleImport = `import { ${[...requiredBuilders]
     .sort()
-    .join(', ')} } from 'drizzle-orm/pg-core';`;
+    .join(', ')} } from '${drizzleCoreModule}';`;
   const requiredImports = [betterAuthSchemaImportStatement(annotationCallee), drizzleImport];
   const source =
     declarations.length === 0
@@ -1846,6 +1854,7 @@ interface BetterAuthGeneratedSchemaColumns {
 function betterAuthGeneratedSchemaColumns(
   table: string,
   metadata: unknown,
+  dialect: BetterAuthSchemaSourceDialect,
 ): BetterAuthGeneratedSchemaColumns | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
   const fields = betterAuthTableFields(metadata);
   const physicalTable = betterAuthPhysicalTableName(table, metadata);
@@ -1865,7 +1874,7 @@ function betterAuthGeneratedSchemaColumns(
     };
   }
 
-  const idColumn = betterAuthGeneratedSchemaIdColumn(table, physicalTable, fields.id);
+  const idColumn = betterAuthGeneratedSchemaIdColumn(table, physicalTable, fields.id, dialect);
 
   if ('degradation' in idColumn) return idColumn;
 
@@ -1875,7 +1884,13 @@ function betterAuthGeneratedSchemaColumns(
   for (const [field, fieldMetadata] of Object.entries(fields)) {
     if (field === 'id') continue;
 
-    const column = betterAuthGeneratedSchemaColumn(table, physicalTable, field, fieldMetadata);
+    const column = betterAuthGeneratedSchemaColumn(
+      table,
+      physicalTable,
+      field,
+      fieldMetadata,
+      dialect,
+    );
 
     if ('degradation' in column) return column;
 
@@ -1890,6 +1905,7 @@ function betterAuthGeneratedSchemaIdColumn(
   table: string,
   physicalTable: string,
   metadata: unknown,
+  dialect: BetterAuthSchemaSourceDialect,
 ):
   | {
       builder: BetterAuthGeneratedSchemaFieldBuilder;
@@ -1904,7 +1920,7 @@ function betterAuthGeneratedSchemaIdColumn(
   }
 
   const type = betterAuthFieldType(metadata);
-  const builder = betterAuthGeneratedSchemaFieldBuilder(type);
+  const builder = betterAuthGeneratedSchemaFieldBuilder(type, dialect);
   const fieldNames = betterAuthTableFieldNames({ fields: { id: metadata } });
 
   if (builder === null) {
@@ -1929,7 +1945,12 @@ function betterAuthGeneratedSchemaIdColumn(
 
   return {
     builder,
-    expression: `${builder}(${quoteTsString(columnName)}).primaryKey()`,
+    expression: `${betterAuthGeneratedSchemaColumnExpression(
+      builder,
+      columnName,
+      type,
+      dialect,
+    )}.primaryKey()`,
   };
 }
 
@@ -1938,6 +1959,7 @@ function betterAuthGeneratedSchemaColumn(
   physicalTable: string,
   field: string,
   metadata: unknown,
+  dialect: BetterAuthSchemaSourceDialect,
 ):
   | {
       builder: BetterAuthGeneratedSchemaFieldBuilder;
@@ -1945,7 +1967,7 @@ function betterAuthGeneratedSchemaColumn(
     }
   | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
   const type = betterAuthFieldType(metadata);
-  const builder = betterAuthGeneratedSchemaFieldBuilder(type);
+  const builder = betterAuthGeneratedSchemaFieldBuilder(type, dialect);
   const fieldNames = betterAuthTableFieldNames({ fields: { [field]: metadata } });
 
   if (builder === null) {
@@ -1972,7 +1994,12 @@ function betterAuthGeneratedSchemaColumn(
 
   return {
     builder,
-    expression: `${builder}(${quoteTsString(columnName)})${notNull}`,
+    expression: `${betterAuthGeneratedSchemaColumnExpression(
+      builder,
+      columnName,
+      type,
+      dialect,
+    )}${notNull}`,
   };
 }
 
@@ -1996,13 +2023,27 @@ function betterAuthFieldType(metadata: unknown): string | null {
 
 function betterAuthGeneratedSchemaFieldBuilder(
   type: string | null,
+  dialect: BetterAuthSchemaSourceDialect,
 ): BetterAuthGeneratedSchemaFieldBuilder | null {
-  if (type === 'boolean') return 'boolean';
-  if (type === 'date') return 'timestamp';
+  if (type === 'boolean') return dialect === 'sqlite' ? 'integer' : 'boolean';
+  if (type === 'date') return dialect === 'sqlite' ? 'text' : 'timestamp';
   if (type === 'number') return 'integer';
   if (type === 'string') return 'text';
 
   return null;
+}
+
+function betterAuthGeneratedSchemaColumnExpression(
+  builder: BetterAuthGeneratedSchemaFieldBuilder,
+  columnName: string,
+  fieldType: string | null,
+  dialect: BetterAuthSchemaSourceDialect,
+): string {
+  if (dialect === 'sqlite' && fieldType === 'boolean') {
+    return `integer(${quoteTsString(columnName)}, { mode: 'boolean' })`;
+  }
+
+  return `${builder}(${quoteTsString(columnName)})`;
 }
 
 function betterAuthFieldName(field: string, metadata: unknown): string {

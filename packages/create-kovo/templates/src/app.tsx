@@ -25,9 +25,9 @@ import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
 
-// The whole app in one file: a contact book over a real PGlite/Drizzle database,
-// gated by real Better Auth. `kovo({ app: '/src/app.tsx' })` (vite.config.ts) and
-// `kovo build ./src/app.tsx` both load this default export (SPEC.md §9.5).
+// The whole app in one file: a contact book over a real Drizzle database, gated
+// by real Better Auth. `kovo({ app: '/src/app.tsx' })` (vite.config.ts) and `kovo
+// build ./src/app.tsx` both load this default export (SPEC.md §9.5).
 
 // Seed the demo account so a fresh `vp dev` can sign in with
 // demo@example.com / password123.

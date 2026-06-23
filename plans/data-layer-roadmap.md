@@ -11,7 +11,13 @@ This ledger tracks staged data-layer work.
       Evidence: `rules/data-layer-policy.md`.
 - [x] **v1 blessed adapter.** `@kovojs/drizzle`: touches inferred from ASTs,
       schema-as-registry, query shapes/keys derived, and optimism hand-written
-      against the transform IR. Evidence: `rules/data-layer-policy.md`.
+      against the transform IR. Postgres remains the default dialect; SQLite is
+      the second blessed dialect under `plans/sqlite-support.md`, with remaining
+      hardening tracked below.
+      Evidence: `rules/data-layer-policy.md`.
+- [ ] **SQLite blessed dialect hardening.** Complete `plans/sqlite-support.md`
+      across static analysis, conformance fixtures, runtime verification,
+      scaffold/auth bridge, docs, and policy.
 - [x] **v1.5 verification layer.** Runtime instrumentation as CI cross-check
       for KV402-KV409; unified typed change record `{ domain, keys, input }`
       feeding optimism now and the v2 live bus later. Mechanism: pglite harness.

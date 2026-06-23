@@ -1,0 +1,35 @@
+{
+  "name": "{{name}}",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:prod": "kovo build ./src/app.tsx",
+    "check": "vp check",
+    "dev": "vp dev",
+    "serve": "npm run build:prod && node dist/server/server.mjs",
+    "start": "node dist/server/server.mjs",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@kovojs/better-auth": "workspace:*",
+    "@kovojs/browser": "workspace:*",
+    "@kovojs/core": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
+    "@kovojs/server": "workspace:*",
+    "@kovojs/style": "workspace:*",
+    "@kovojs/ui": "workspace:*",
+    "better-auth": "1.6.17",
+    "better-sqlite3": "^12.0.0",
+    "drizzle-orm": "0.45.2"
+  },
+  "devDependencies": {
+    "@kovojs/cli": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.0.0",
+    "@typescript/native-preview": "^7.0.0-dev.20260610.1",
+    "typescript": "^6.0.0",
+    "vite": "^8.0.16",
+    "vite-plus": "^0.1.24",
+    "vitest": "^4.1.8"
+  }
+}
