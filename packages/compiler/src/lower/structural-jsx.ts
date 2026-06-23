@@ -16,7 +16,6 @@ import {
   jsxIrAttributeValue,
   jsxIrReplacements,
   markJsxIrChanged,
-  primitiveJsxIrAttribute,
   removeJsxIrAttribute,
   setJsxIrAttribute,
   type JsxIrAttribute,
@@ -33,7 +32,6 @@ import type {
   SourceSpan,
 } from '../scan/parse.js';
 import type { StaticLiteralValue } from '../scan/object.js';
-import { literalStringValue } from '../scan/object.js';
 import { runtimeOutputHelpers, stylePropertyExpression } from '../security/output-context.js';
 import {
   bindPropStampAttributeName,
@@ -45,20 +43,10 @@ import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } fr
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 import {
-  authorJsxAttributes,
-  mergePrimitiveAndAuthorAttributes,
-  primitiveIdRewrite,
-  primitiveObjectEntryAttributes,
-  rewritePrimitiveIdrefAttributes,
-  type MergeableAttribute,
-  type MergeableAttributeValue,
-} from './attribute-merge.js';
-import {
   platformAttributeList,
   platformElementSubstitution,
   type PlatformSubstitution,
 } from './platform.js';
-import { staticHrefAttributeValue } from './navigation.js';
 import {
   primitiveReactiveAttrs,
   type PrimitiveReactiveAttr,
@@ -68,8 +56,11 @@ import {
   isKovoUiModuleSpecifier,
   primitiveReactiveComponents,
 } from './primitive-reactive-registry.js';
+import { lowerHrefAttributes, lowerNavigationLinks } from './navigation-lowering.js';
+import { lowerPrimitiveComposition } from './primitive-composition.js';
+import { lowerPrimitiveSpreads } from './primitive-spreads.js';
 
-type StructuralJsxLoweringOptions = Pick<
+export type StructuralJsxLoweringOptions = Pick<
   CompileComponentOptions,
   'fileName' | 'queryShapeFacts' | 'queryShapes' | 'registryFacts' | 'source'
 > & {
@@ -236,149 +227,6 @@ export function lowerStructuralJsx(
   };
 }
 
-function lowerPrimitiveSpreads(elements: readonly JsxIrElement[]): void {
-  for (const element of elements) {
-    for (const spread of element.attributes) {
-      const source = spread.source;
-      if (!source || !('objectEntries' in source) || !source.objectEntries) continue;
-      const attrs = spreadObjectAttributes(source.objectEntries);
-      if (attrs === null) continue;
-      element.attributes = element.attributes.filter((attribute) => attribute !== spread);
-      element.attributes.push(...attrs.map(({ source: _source, ...attribute }) => attribute));
-      markJsxIrChanged(element);
-    }
-  }
-}
-
-function lowerPrimitiveComposition(
-  elements: readonly JsxIrElement[],
-  options: { fileName: string; source: string },
-): CompilerDiagnostic[] {
-  const diagnostics: CompilerDiagnostic[] = [];
-  const candidates = primitiveCompositionCandidates(elements);
-  const rewrites = primitiveIdRewrites(candidates);
-
-  for (const candidate of candidates) {
-    const merge = mergePrimitiveAndAuthorAttributes(
-      rewritePrimitiveIdrefAttributes(candidate.primitiveAttributes, rewrites),
-      candidate.authorAttributes,
-      options,
-    );
-    diagnostics.push(...withMergeWriterNames(merge.diagnostics));
-    unwrapPrimitiveWrapper(candidate.wrapper, candidate.child, merge.attributes, options);
-  }
-
-  return diagnostics;
-}
-
-interface PrimitiveCompositionCandidate {
-  authorAttributes: readonly MergeableAttribute[];
-  child: JsxIrElement;
-  primitiveAttributes: readonly MergeableAttribute[];
-  wrapper: JsxIrElement;
-}
-
-function primitiveCompositionCandidates(
-  elements: readonly JsxIrElement[],
-): PrimitiveCompositionCandidate[] {
-  const candidates: PrimitiveCompositionCandidate[] = [];
-
-  for (const wrapper of elements) {
-    if (!isComponentTag(wrapper.tag)) continue;
-    const attrsAttribute = wrapper.element.attributes.find(
-      (attribute) => attribute.name === 'attrs',
-    );
-    const attrs = attrsAttribute?.expressionObjectEntries;
-    if (!attrs) continue;
-
-    const primitiveAttributes = primitiveObjectEntryAttributes(attrs);
-    if (primitiveAttributes === null) continue;
-
-    const child = wrapper.element.attributes.some((attribute) => attribute.name === 'asChild')
-      ? singleImmediateElementChild(wrapper)
-      : singleAttrsFunctionElementChild(wrapper);
-    if (!child || childHasUnsupportedSpreads(child)) continue;
-
-    candidates.push({
-      authorAttributes: authorJsxAttributes(child.element.attributes),
-      child,
-      primitiveAttributes,
-      wrapper,
-    });
-  }
-
-  return candidates;
-}
-
-function primitiveIdRewrites(
-  candidates: readonly PrimitiveCompositionCandidate[],
-): ReadonlyMap<string, string> {
-  return new Map(
-    candidates.flatMap((candidate) => {
-      const rewrite = primitiveIdRewrite(candidate.primitiveAttributes, candidate.authorAttributes);
-      return rewrite ? [rewrite] : [];
-    }),
-  );
-}
-
-function unwrapPrimitiveWrapper(
-  wrapper: JsxIrElement,
-  child: JsxIrElement,
-  attributes: readonly MergeableAttribute[],
-  options: { fileName: string; source: string },
-): void {
-  wrapper.tag = child.tag;
-  wrapper.closingName = child.tag;
-  wrapper.selfClosing = child.selfClosing;
-  wrapper.attributes = attributes.map((attribute) => mergeableToIrAttribute(attribute, options));
-  wrapper.children = child.children;
-  wrapper.generatedAttributes = [];
-  wrapper.ownership = 'generated';
-  wrapper.provenance = {
-    ...(wrapper.provenance.anchor ? { anchor: wrapper.provenance.anchor } : {}),
-    description: 'primitive wrapper lowered to child element',
-    ownership: 'generated',
-    writer: 'primitive composition',
-  };
-  markJsxIrChanged(wrapper);
-}
-
-function lowerNavigationLinks(
-  elements: readonly JsxIrElement[],
-  options: StructuralJsxLoweringOptions,
-): void {
-  for (const link of elements) {
-    if (link.tag !== 'Link') continue;
-    const toAttribute = attributeByName(link, 'to');
-    if (!toAttribute?.source || !('name' in toAttribute.source)) continue;
-    const target =
-      jsxIrAttributeValue(toAttribute) ??
-      staticStringValue(toAttribute.source.expressionStaticValue);
-    if (!target && toAttribute.source.expression === undefined) continue;
-    const params = navigationObjectValue(link, 'params') ?? {};
-    const search = navigationObjectValue(link, 'search') ?? {};
-
-    link.tag = 'a';
-    link.closingName = 'a';
-    removeJsxIrAttribute(link, 'params');
-    removeJsxIrAttribute(link, 'search');
-    replaceJsxIrAttribute(
-      link,
-      'to',
-      generatedJsxIrAttribute(
-        'href',
-        target
-          ? { kind: 'string', value: buildStaticHref(target, params, search) }
-          : { kind: 'expression', source: toAttribute.source.expression ?? '' },
-        'Link navigation lowering',
-        options,
-      ),
-    );
-    sortHrefFirstForStaticLink(link, Boolean(target));
-    markJsxIrChanged(link);
-  }
-}
-
 function lowerPlatformBehaviors(
   model: ComponentModuleModel,
   elements: readonly JsxIrElement[],
@@ -411,29 +259,6 @@ function lowerPlatformBehaviors(
       markJsxIrChanged(element);
     }
     substitutions.push(match.substitution);
-  }
-}
-
-function lowerHrefAttributes(
-  model: ComponentModuleModel,
-  elements: readonly JsxIrElement[],
-  options: StructuralJsxLoweringOptions,
-): void {
-  for (const element of elements) {
-    const attribute = attributeByName(element, 'href');
-    if (!attribute?.source || !('name' in attribute.source)) continue;
-    const target = staticHrefAttributeValue(model, attribute.source);
-    if (target === null) continue;
-
-    setJsxIrAttribute(
-      element,
-      generatedJsxIrAttribute(
-        'href',
-        { kind: 'string', value: target },
-        'href navigation lowering',
-        options,
-      ),
-    );
   }
 }
 
@@ -1480,37 +1305,6 @@ function escapeStaticTextInterpolations(
   return applied;
 }
 
-function singleImmediateElementChild(wrapper: JsxIrElement): JsxIrElement | null {
-  const children = wrapper.children.filter(
-    (child): child is JsxIrElement => child.kind === 'element',
-  );
-  if (wrapper.element.childNonWhitespaceCount !== 1 || children.length !== 1) return null;
-  return children[0] ?? null;
-}
-
-function singleAttrsFunctionElementChild(wrapper: JsxIrElement): JsxIrElement | null {
-  const child = wrapper.children
-    .filter((item): item is JsxIrElement => item.kind === 'element')
-    .find((item) =>
-      item.element.spreadAttributes.some(
-        (spread) => spread.expressionBareIdentifierName === 'attrs',
-      ),
-    );
-  if (child) return child;
-
-  const nested =
-    wrapper.element.childExpressionContainers.length === 1
-      ? wrapper.children.flatMap((item) => (item.kind === 'element' ? [item] : []))
-      : [];
-  return nested[0] ?? null;
-}
-
-function childHasUnsupportedSpreads(element: JsxIrElement): boolean {
-  return element.element.spreadAttributes.some(
-    (spread) => spread.expressionBareIdentifierName !== 'attrs',
-  );
-}
-
 function mergeStyle(
   element: JsxIrElement,
   style: string,
@@ -1914,75 +1708,6 @@ function sourceAttributeToIr(
   );
 }
 
-function mergeableToIrAttribute(
-  attribute: MergeableAttribute,
-  options: { fileName: string; source: string },
-): JsxIrAttribute {
-  const value = mergeableValueToIr(attribute.value);
-  const base =
-    attribute.origin === 'primitive'
-      ? primitiveJsxIrAttribute(attribute.name, value, 'primitive attrs', options)
-      : generatedJsxIrAttribute(attribute.name, value, 'author merged attrs', options);
-  if (attribute.attribute) {
-    base.anchor = {
-      end: attribute.attribute.end,
-      fileName: options.fileName,
-      start: attribute.attribute.start,
-    };
-    base.source = attribute.attribute;
-  }
-  return base;
-}
-
-function mergeableValueToIr(value: MergeableAttributeValue): JsxIrAttributeValue {
-  if (value.kind === 'boolean') return value;
-  if (value.kind === 'expression') return value;
-  if (value.kind === 'number') return value;
-  return value;
-}
-
-function spreadObjectAttributes(
-  entries: readonly { key: string; value?: string }[],
-): JsxIrAttribute[] | null {
-  const attributes: JsxIrAttribute[] = [];
-  for (const entry of entries) {
-    const value = spreadObjectAttributeValue(entry.value);
-    if (value === null) return null;
-    if (!value) continue;
-    attributes.push({
-      name: entry.key,
-      ownership: 'generated',
-      provenance: {
-        description: 'static spread attribute',
-        ownership: 'generated',
-        writer: 'static spread lowering',
-      },
-      value,
-    });
-  }
-  return attributes;
-}
-
-function spreadObjectAttributeValue(
-  value: string | undefined,
-): JsxIrAttributeValue | null | undefined {
-  if (value === undefined) return null;
-  const trimmed = value.trim();
-  if (trimmed === 'false' || trimmed === 'null' || trimmed === 'undefined') return undefined;
-  const stringValue = literalStringValue(trimmed);
-  if (stringValue !== null) return { kind: 'string', value: stringValue };
-  if (trimmed === 'true') return { kind: 'boolean', value: true };
-  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return { kind: 'number', value: Number(trimmed) };
-  return { kind: 'expression', source: trimmed };
-}
-
-function withMergeWriterNames(diagnostics: readonly CompilerDiagnostic[]): CompilerDiagnostic[] {
-  return diagnostics.map((diagnostic) => ({
-    ...diagnostic,
-    message: `${diagnostic.message} (writers: primitive attrs, author JSX)`,
-  }));
-}
-
 function structuralWriterConflictDiagnostic(
   options: { fileName: string; source: string },
   attribute: JsxIrAttribute,
@@ -2097,76 +1822,6 @@ function inlineAttributeDeriveSkippedBySpan(
       attribute.expressionStart >= span.start &&
       attribute.expressionEnd <= span.end,
   );
-}
-
-function navigationObjectValue(
-  element: JsxIrElement,
-  name: string,
-): Record<string, string | number | boolean | null> | null | undefined {
-  const attribute = attributeByName(element, name)?.source;
-  if (!attribute || !('expressionStaticValue' in attribute)) return undefined;
-  return staticNavigationObjectValue(attribute.expressionStaticValue);
-}
-
-function staticNavigationObjectValue(
-  value: StaticLiteralValue | undefined,
-): Record<string, string | number | boolean | null> | null | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value !== 'object' || value === null) return null;
-  return Object.values(value).every((entry) => typeof entry !== 'object' || entry === null)
-    ? (value as Record<string, string | number | boolean | null>)
-    : null;
-}
-
-function buildStaticHref(
-  path: string,
-  params: Record<string, string | number | boolean | null>,
-  searchValues: Record<string, string | number | boolean | null>,
-): string {
-  const pathname = substituteStaticRouteParams(path, params);
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchValues)) {
-    if (value === null || value === undefined) continue;
-    search.set(key, String(value));
-  }
-  const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
-}
-
-// H1 (bugs-part4 L6-1): keep this structural-JSX scanner's `:param` grammar
-// identical to lower/navigation.ts, core's `buildHref`/`PathParamNames`, and the
-// runtime matcher (server match.ts `parseRouteSegment`). A `:param` name is the
-// whole segment after `:` up to the next `/`, `?`, or `#`; a narrower `\w`-only
-// name dropped hyphen/dot params (`:user-id` → `/users/-id`).
-function substituteStaticRouteParams(
-  path: string,
-  params: Record<string, string | number | boolean | null>,
-): string {
-  let output = '';
-  let index = 0;
-  while (index < path.length) {
-    const char = path[index];
-    const next = path[index + 1];
-    if (char !== ':' || next === undefined || isRouteParamNameTerminator(next)) {
-      output += char;
-      index += 1;
-      continue;
-    }
-    let end = index + 2;
-    while (end < path.length && !isRouteParamNameTerminator(path[end] ?? '')) end += 1;
-    const key = path.slice(index + 1, end);
-    output += encodeURIComponent(String(params[key] ?? ''));
-    index = end;
-  }
-  return output;
-}
-
-function sortHrefFirstForStaticLink(element: JsxIrElement, staticHref: boolean): void {
-  if (!staticHref) return;
-  const href = attributeByName(element, 'href');
-  if (!href) return;
-  element.attributes = [href, ...element.attributes.filter((attribute) => attribute !== href)];
-  markJsxIrChanged(element);
 }
 
 function isJsxAttributeExpression(
@@ -2285,10 +1940,6 @@ function isComponentTag(tag: string): boolean {
 
 function staticStringValue(value: StaticLiteralValue | undefined): string | null {
   return typeof value === 'string' ? value : null;
-}
-
-function isRouteParamNameTerminator(char: string): boolean {
-  return char === '/' || char === '?' || char === '#';
 }
 
 function sanitizeIdentifier(value: string): string {

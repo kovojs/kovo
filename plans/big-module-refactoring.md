@@ -83,6 +83,11 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
     plus `pnpm run check:api-surface` if exports move.
 
 - [ ] **Split `packages/compiler/src/lower/structural-jsx.ts` by declared lowering phases.**
+  - [x] Extract primitive static spread, primitive composition, and navigation/href lowering phases
+    to `packages/compiler/src/lower/primitive-spreads.ts`,
+    `packages/compiler/src/lower/primitive-composition.ts`, and
+    `packages/compiler/src/lower/navigation-lowering.ts`.
+    Evidence: `packages/compiler/src/lower/structural-jsx.ts` is now 1,959 LoC; `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/gallery-merge-fixtures.disclosure.test.tsx packages/compiler/src/gallery-merge-fixtures.forms.test.tsx packages/compiler/src/gallery-merge-fixtures.idref-oracle.test.tsx packages/compiler/src/gallery-merge-fixtures.menus.test.tsx packages/compiler/src/gallery-merge-fixtures.overlays.test.tsx packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 8 files / 90 tests; `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check` passed.
   - Use `structuralJsxPhaseOrder` as the module boundary guide: primitive spreads/composition,
     navigation/static hrefs, platform substitutions, view-transition stamps, inline attribute derives,
     primitive reactive attributes, inline text bindings, static text escaping, and helper import
