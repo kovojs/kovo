@@ -148,7 +148,11 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
 
 ## P2 Test And Fixture Splits
 
-- [ ] **Split `conformance/drizzle-pin/src/index.receiver-handoffs.test.ts` by handoff class.**
+- [x] **Split `conformance/drizzle-pin/src/index.receiver-handoffs.test.ts` by handoff class.**
+  - Evidence: split into `index.receiver-handoffs.test.ts` (1,493 LoC),
+    `index.receiver-callback-containers.test.ts` (813 LoC), and
+    `index.receiver-domain-actions.test.ts` (665 LoC); `pnpm run test:conformance` passed
+    Drizzle pin 11 files / 188 tests and the remaining conformance packages.
   - Candidate files: domain receiver handoffs, query-loader receiver handoffs, write-callback handoffs,
     destructured/aliased receiver handoffs.
   - Verification: `pnpm run test:conformance`.
