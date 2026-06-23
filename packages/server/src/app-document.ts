@@ -1,3 +1,5 @@
+import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
+
 import { reportServerError } from './diagnostics.js';
 import {
   mergeVaryHeader,
@@ -20,8 +22,6 @@ import {
 import type { KovoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
-
-const enhancedNavigationDocumentAccept = 'text/vnd.kovo.document+html';
 
 export interface AppRouteDocumentOptions {
   app: KovoApp;
@@ -113,7 +113,9 @@ export async function renderAppRouteDocumentResponse({
   // also gets a refresh cookie. Force `no-store` whenever any per-principal cookie was emitted,
   // independent of `route.guard`. (We do NOT change the cookie forwarding itself.)
   const noStore = route.guard !== undefined || refreshSetCookies.length > 0;
-  const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(request);
+  const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
+    request.headers.get('accept'),
+  );
 
   const documentResponse = renderRouteDocumentResponse(routeResponseToDocumentResponse(routeResponse), {
     // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
@@ -141,13 +143,6 @@ export async function renderAppRouteDocumentResponse({
   }
 
   return withRefreshCookies(documentResponse);
-}
-
-function acceptsEnhancedNavigationDocument(request: Request): boolean {
-  return request.headers
-    .get('accept')
-    ?.split(',')
-    .some((entry) => entry.trim().split(';', 1)[0] === enhancedNavigationDocumentAccept) === true;
 }
 
 /**

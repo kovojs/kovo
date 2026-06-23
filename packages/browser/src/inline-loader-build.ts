@@ -4,6 +4,8 @@ import { gzipSync } from 'node:zlib';
 
 import ts from 'typescript';
 
+import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
@@ -434,7 +436,7 @@ function installInlineKovoLoader(im) {
     try {
       const requestedUrl = new URL(href, location.href);
       const response = await fetch(href, {
-        headers: { Accept: 'text/vnd.kovo.document+html, text/html' },
+        headers: { Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)} },
       });
       if (navId !== ni) return;
       const finalUrl = new URL(response.url || href, location.href);

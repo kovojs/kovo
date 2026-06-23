@@ -57,6 +57,14 @@ refetch, and morph application.
     extracts that helper into the inline bootstrap and aliases it to the compact
     inline name. Verified by `pnpm --filter @kovojs/browser run check:inline-loader`
     and `pnpm exec vitest run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader-fragment-target.test.ts packages/browser/src/mutation-response-dom.test.ts packages/browser/src/fragment-targets.test.ts`.
+- [x] **Enhanced-navigation document negotiation now has one internal protocol source.**
+  - Evidence: [packages/core/src/internal/document-protocol.ts](/Users/mini/kovo/packages/core/src/internal/document-protocol.ts:1)
+    owns the enhanced-navigation document media type, generated `Accept` header,
+    and accept parser; [packages/browser/src/inline-loader-build.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.ts:7)
+    embeds that generated header into the inline loader, and
+    [packages/server/src/app-document.ts](/Users/mini/kovo/packages/server/src/app-document.ts:1)
+    uses the same parser. Verified by `pnpm --filter @kovojs/browser run check:inline-loader`
+    and `pnpm exec vitest run packages/core/src/document-protocol.test.ts packages/browser/src/inline-loader-build.test.ts packages/server/src/app.test.ts`.
 
 ## Problems
 
@@ -121,7 +129,7 @@ refetch, and morph application.
 | Stream text apply | `stream-text.ts` | Compact inline stream text buffer | Duplicated, candidate after response-apply extraction broadens |
 | Execution triggers | `loader-lifecycle.ts` | Compact inline `tr`/`to` | Duplicated, candidate for extraction |
 | Enhanced navigation | Inline-only today | Compact inline `an`/`inav` | Needs Phase 4 modular source helper |
-| Navigation document negotiation | `app-document.ts` / `document-core.ts` | Inline `Accept: text/vnd.kovo.document+html, text/html` | Implemented first no-loader variant |
+| Navigation document negotiation | `core/internal/document-protocol.ts` plus `app-document.ts` / `document-core.ts` | Generated from `enhancedNavigationDocumentAcceptHeader` | Shared internal protocol, first no-loader variant implemented |
 | bfcache/popstate scroll restore | Inline-only today | Compact inline `sc`/`popstate` | Needs Phase 4 modular source helper |
 | CSP for loader bytes | `document-core.ts` | N/A | Normal documents include loader hash; enhanced no-loader variant omits loader bytes and varies by `Accept` |
 | Error handling | `error-policy.ts` | Mostly native fallback / silent best-effort | Duplicated; richer inline errors would cost bytes and need explicit budget review |
@@ -142,11 +150,15 @@ refetch, and morph application.
     read/write, fragment target lookup, target/dependency header collection,
     native indeterminate checkbox initialization, and execution trigger once
     marking.
-  - Evidence: delegated event list and fragment-target CSS escaping converged first; the inline generator now
+  - Evidence: delegated event list, fragment-target CSS escaping, and
+    enhanced-navigation negotiation constants converged first; the inline generator now
     reads [packages/browser/src/loader.ts](/Users/mini/kovo/packages/browser/src/loader.ts:73)
     plus [packages/browser/src/fragment-targets.ts](/Users/mini/kovo/packages/browser/src/fragment-targets.ts:32),
-    and [packages/browser/src/inline-loader-build.test.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.test.ts:62)
-    pins parity. Remaining evidence needed: converge additional helpers from the
+    while browser and server negotiation share
+    [packages/core/src/internal/document-protocol.ts](/Users/mini/kovo/packages/core/src/internal/document-protocol.ts:1).
+    [packages/browser/src/inline-loader-build.test.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.test.ts:62)
+    and [packages/core/src/document-protocol.test.ts](/Users/mini/kovo/packages/core/src/document-protocol.test.ts:1)
+    pin parity. Remaining evidence needed: converge additional helpers from the
     candidate list and prove each with inline artifact parity tests.
 - [ ] **Phase 4: split enhanced navigation into a modular source helper with an inline build target.**
   - Move navigation eligibility, fetch options, build-token validation,
@@ -180,11 +192,11 @@ refetch, and morph application.
     it changes CSP and deployment semantics and must still satisfy SPEC.md
     section 4.4's always-loaded budget.
   - Evidence: the negotiated no-loader document variant is implemented and
-    verified by focused server, inline-loader, and browser navigation tests named
-    above. Remaining evidence needed: demo/network measurement against Stack
-    Overflow, a stricter CSP assertion for the no-loader variant, and a recorded
-    decision on whether to keep the first load inline or move to a cacheable
-    external loader asset.
+    verified by focused server, inline-loader, protocol, and browser navigation
+    tests named above. Remaining evidence needed: demo/network measurement
+    against Stack Overflow, a stricter CSP assertion for the no-loader variant,
+    and a recorded decision on whether to keep the first load inline or move to
+    a cacheable external loader asset.
 - [ ] **Phase 7: keep the modular runtime as the authoritative behavior.**
   - After helper convergence, add a CI gate that fails when an inline-owned
     behavior changes without either updating the modular source-of-truth helper

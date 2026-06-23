@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+
 import { createApp, createRequestHandler } from './app.js';
 import { versionedClientModuleHref } from './client-modules.js';
 import { domain } from './domain.js';
@@ -266,7 +268,7 @@ describe('server createApp request shell', () => {
     const full = await handler(new Request('https://example.test/products/p1'));
     const enhanced = await handler(
       new Request('https://example.test/products/p1', {
-        headers: { Accept: 'text/vnd.kovo.document+html, text/html' },
+        headers: { Accept: enhancedNavigationDocumentAcceptHeader },
       }),
     );
 

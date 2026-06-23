@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
+import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+
 import {
   assertInlineKovoLoaderModuleArtifactParity,
   buildInlineKovoLoaderModuleSource,
@@ -76,6 +78,13 @@ describe('inline loader build source', () => {
     );
     expect(inlineKovoLoaderInstallerReadableSource).toContain('const sq = escapeCssString;');
     expect(escapeCssString('target"bad\\id')).toBe('target\\"bad\\\\id');
+  });
+
+  it('generates the enhanced-navigation request header from the core protocol', () => {
+    // SPEC.md §4.4: enhanced navigation must negotiate the no-loader document variant.
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      `headers: { Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)} }`,
+    );
   });
 
   it('checks the shipped source literal against the executable installer artifact', () => {
