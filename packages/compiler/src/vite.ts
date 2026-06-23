@@ -568,7 +568,8 @@ function recordViteCompileResult(
   for (const file of result.files) {
     if (file.kind === 'client') {
       clientModules.set(
-        viteClientModuleUrl(fileName, viteClientModuleVersion(file.source)),
+        result.hmrImpact?.clientHref ??
+          viteClientModuleUrl(fileName, viteClientModuleVersion(file.source)),
         file.source,
       );
     }

@@ -17,11 +17,22 @@ export interface CompileComponentOptions {
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   packagePrefixDiscoveryRoot?: string;
   previousRegistryFacts?: RegistryFacts;
+  productionRenderPlanGate?: ProductionRenderPlanGateOptions;
   queryShapeFacts?: readonly QueryShapeFact[];
   queryShapes?: Record<string, QueryShape>;
   registryFacts?: RegistryFacts;
   source: string;
   sourceProvenance?: 'app' | 'compiler-emitted';
+}
+
+/**
+ * @internal Build-facing KV416 inputs for SPEC §5.2.2. A production caller supplies the previous
+ * projected query-shape token input; the compiler computes the current input from this compile's
+ * query-shape facts and fails the compile if a shape change does not move the render-plan token.
+ */
+export interface ProductionRenderPlanGateOptions {
+  previous: Record<string, string>;
+  tokenFn?: (input: Record<string, string>) => string;
 }
 
 /**

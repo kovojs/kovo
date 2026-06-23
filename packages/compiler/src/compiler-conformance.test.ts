@@ -1672,7 +1672,7 @@ function diagnosticSnapshotFacts(diagnostics: readonly CompilerDiagnostic[]): Ar
 }
 
 function normalizeDiagnosticHelp(text: string): string {
-  return text.replaceAll(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/<version>/');
+  return text.replaceAll(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\//g, '/c/__v/<version>/');
 }
 
 function fileByKind(result: CompileResult, kind: EmittedFile['kind']): EmittedFile {

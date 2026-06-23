@@ -21,7 +21,7 @@ describe('vite-fixtures', () => {
     const plugin: VitePluginLike = {
       configureServer(server) {
         server.middlewares.use((request, response, next) => {
-          if (request.url === '/c/__v/1234abcd/card.client.js?cache=1') {
+          if (request.url === '/c/__v/3853abab13e04603-1234abcd/card.client.js?cache=1') {
             response.statusCode = 200;
             response.setHeader('Content-Type', 'text/javascript');
             response.end('export const Card$click = (event, ctx) => ctx.params.id;');
@@ -33,7 +33,7 @@ describe('vite-fixtures', () => {
       name: 'kovo',
       transform() {
         return {
-          code: `export function renderSource() { return '<button on:click="/c/__v/1234abcd/card.client.js#Card$click" data-p-id="{product.id}">Add</button>'; }`,
+          code: `export function renderSource() { return '<button on:click="/c/__v/3853abab13e04603-1234abcd/card.client.js#Card$click" data-p-id="{product.id}">Add</button>'; }`,
           map: null,
         };
       },
@@ -61,7 +61,7 @@ describe('vite-fixtures', () => {
     expect(handlerFact.handlerSummary).toEqual({
       handlerName: 'Card$click',
       modulePath: '/c/card.client.js',
-      versionShape: 'lower-hex-8',
+      versionShape: 'render-plan-hex-16-plus-hash-hex-8',
     });
 
     expect(
@@ -140,7 +140,10 @@ describe('vite-fixtures', () => {
     const plugin: VitePluginLike = {
       configureServer(server) {
         server.middlewares.use((request, response, next) => {
-          if (request.url === '/c/__v/1234abcd/routes/products/product-card.client.js?cache=1') {
+          if (
+            request.url ===
+            '/c/__v/3853abab13e04603-1234abcd/routes/products/product-card.client.js?cache=1'
+          ) {
             response.statusCode = 200;
             response.setHeader('Content-Type', 'text/javascript');
             response.end(
@@ -154,7 +157,7 @@ describe('vite-fixtures', () => {
       name: 'kovo',
       transform() {
         return {
-          code: `export function renderSource() { return '<button on:click="/c/__v/1234abcd/routes/products/product-card.client.js#ProductCard$button_click" data-p-id="{product.id}">Add</button>'; }`,
+          code: `export function renderSource() { return '<button on:click="/c/__v/3853abab13e04603-1234abcd/routes/products/product-card.client.js#ProductCard$button_click" data-p-id="{product.id}">Add</button>'; }`,
           map: null,
         };
       },
@@ -177,7 +180,7 @@ describe('vite-fixtures', () => {
       handlerSummary: {
         handlerName: 'ProductCard$button_click',
         modulePath: '/c/routes/products/product-card.client.js',
-        versionShape: 'lower-hex-8',
+        versionShape: 'render-plan-hex-16-plus-hash-hex-8',
       },
       mapIsNull: true,
       middleware: {
@@ -196,7 +199,7 @@ describe('vite-fixtures', () => {
       renderedButtonAttrs: {
         'data-p-id': '{product.id}',
         'on:click':
-          '/c/__v/1234abcd/routes/products/product-card.client.js#ProductCard$button_click',
+          '/c/__v/3853abab13e04603-1234abcd/routes/products/product-card.client.js#ProductCard$button_click',
       },
     });
   });
