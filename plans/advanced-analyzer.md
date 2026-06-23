@@ -276,6 +276,11 @@ guard-owned, and natural-key applications.
   - Update `deriveOptimistic` and codegen to consume match proof objects.
   - Re-enable derived optimism for scoped row updates where query shape already ships the affected
     data.
+  - [x] Extracted session-scoped composite update facts derive a public-key-only row-list transform.
+    - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+      extracts a session-scoped `questionList` rowset and `voteUp` update from source, derives an
+      `update-row` patch matched only by public `id`, and verifies generated optimistic source omits
+      private `sessionId` material.
   - Evidence when complete: Stack Overflow `voteUp` can derive `questionList`/`questionScore` when
     query shape permits it, or punts only for a specific non-shape limitation.
 
