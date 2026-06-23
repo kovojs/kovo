@@ -5,6 +5,9 @@ import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
 import { formLikeToRecord } from './schema.js';
 
+/**
+ * Anonymous CSRF binding cookie settings for sessionless mutation forms (SPEC §6.6).
+ */
 export interface CsrfAnonymousCookieOptions {
   maxAge?: number;
   name?: string;
@@ -13,8 +16,9 @@ export interface CsrfAnonymousCookieOptions {
   secure?: boolean;
 }
 
-/** CSRF config: a `secret` and a `sessionId` extractor that binds the token to a session. */
+/** CSRF config: a `secret`, a session extractor, and optional anonymous form binding. */
 export interface CsrfOptions<Request> {
+  /** Configure or disable the anonymous CSRF cookie used when `sessionId` returns undefined. */
   anonymousCookie?: CsrfAnonymousCookieOptions | false;
   secret: string;
   sessionId: (request: Request) => string | undefined;

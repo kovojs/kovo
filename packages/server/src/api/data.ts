@@ -1,5 +1,5 @@
 export { csrfField, csrfToken } from '../csrf.js';
-export type { CsrfOptions, CsrfValidationOptions } from '../csrf.js';
+export type { CsrfAnonymousCookieOptions, CsrfOptions, CsrfValidationOptions } from '../csrf.js';
 export { domain, tag } from '../domain.js';
 export type { Domain, Tag } from '../domain.js';
 export { errorBoundary, mutation, stream, write } from '../mutation.js';

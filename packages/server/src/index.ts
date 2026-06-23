@@ -81,6 +81,7 @@ export {
 } from './api/data.js';
 export type {
   ChangeRecord,
+  CsrfAnonymousCookieOptions,
   CsrfOptions,
   CsrfValidationOptions,
   Domain,
