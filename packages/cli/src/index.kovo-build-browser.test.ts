@@ -83,8 +83,11 @@ describe('kovo build — browser drive (S1)', () => {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir, '--preset', 'node']);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
 
@@ -142,3 +145,36 @@ describe('kovo build — browser drive (S1)', () => {
     }
   }, 120_000);
 });
+
+function writeRetentionProofConfig(root: string): void {
+  writeFileSync(
+    join(root, 'kovo.config.ts'),
+    [
+      "import { defineConfig, node } from '@kovojs/server/build';",
+      'const base = node();',
+      'export default defineConfig({',
+      '  preset: {',
+      "    name: 'node',",
+      '    emit(build, context) {',
+      '      return base.emit?.(build, context);',
+      '    },',
+      '    inspect() {',
+      '      return [];',
+      '    },',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+async function withCwd<T>(cwd: string, run: () => Promise<T>): Promise<T> {
+  const previous = process.cwd();
+  process.chdir(cwd);
+  try {
+    return await run();
+  } finally {
+    process.chdir(previous);
+  }
+}

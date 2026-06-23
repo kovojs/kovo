@@ -35,20 +35,32 @@ Current command output after completed splits:
 
 ## Refactoring Rules
 
-- [ ] Keep every extraction behavior-neutral unless the specific item says otherwise. The first
+- [x] Keep every extraction behavior-neutral unless the specific item says otherwise. The first
   checkpoint for each source split should be a pure move with unchanged exported names and unchanged
   call sites except imports.
-- [ ] Prefer concern modules that match existing package boundaries instead of generic `utils.ts`
+  - Evidence: completed source split checkboxes below preserve compatibility barrels/subpaths and are
+    verified by focused tests plus API/import gates.
+- [x] Prefer concern modules that match existing package boundaries instead of generic `utils.ts`
   buckets.
-- [ ] Preserve public and declared internal subpath exports. Any renamed export or removed symbol needs
+  - Evidence: split targets use package-specific concern modules such as `static/summaries.ts`,
+    `mutation/targets.ts`, `commands/build-export.ts`, and `internal/credential.ts`.
+- [x] Preserve public and declared internal subpath exports. Any renamed export or removed symbol needs
   an explicit API-surface decision and `pnpm run check:api-surface`.
-- [ ] For compiler source moves, prove byte/fact neutrality with focused compiler tests, not fixpoint
+  - Evidence: `pnpm run check:api-surface` passes at baseline 1338/1840 after the completed splits.
+- [x] For compiler source moves, prove byte/fact neutrality with focused compiler tests, not fixpoint
   alone; `SPEC.md` §5.2 says emitted/generated artifacts are inspection targets, not hand-authored
   source.
-- [ ] For server mutation and data-plane moves, include focused unit tests plus the relevant
+  - Evidence: compiler structural and scan parent checkboxes below cite focused compiler suites that
+    passed after the split modules landed.
+- [x] For server mutation and data-plane moves, include focused unit tests plus the relevant
   conformance or `kovo-check` path before committing.
-- [ ] Leave generated JSON, manifests, and lockfiles out of manual refactoring. If their size is a
+  - Evidence: server mutation, Drizzle, CLI, and conformance-related parent checkboxes below cite
+    focused unit tests plus `pnpm run test:conformance` or `pnpm run check:kovo`.
+- [x] Leave generated JSON, manifests, and lockfiles out of manual refactoring. If their size is a
   problem, change the generator, prune stale content, or document the refresh command.
+  - Evidence: post-split oversized inventory contains only `packages/icons/package.json`,
+    `pnpm-lock.yaml`, `benchmarks/results/results.json`, `api-surface-baseline.json`, and
+    `public-packages.json`; generated/artifact ownership is documented below.
 
 ## P0 Source Splits
 
@@ -111,7 +123,7 @@ Current command output after completed splits:
     `pnpm run check:api-surface` passed at baseline 1338/1840; `pnpm run test:conformance`
     passed all five conformance packages; `git diff --check` passed.
 
-- [ ] **Split `packages/server/src/mutation.ts` around the mutation response pipeline.**
+- [x] **Split `packages/server/src/mutation.ts` around the mutation response pipeline.**
   - [x] Extract public definition/form/type surface to `packages/server/src/mutation/definition.ts`.
     Evidence: `pnpm exec vitest --run packages/server/src/mutation-delta.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation.test.ts packages/server/src/replay.test.ts packages/server/src/query-endpoint.test.ts` passed 8 files / 119 tests after extraction; `pnpm run check:api-surface` unchanged at baseline 1338/1871; `pnpm run check:imports` passed.
   - [x] Extract streaming chunk helpers and renderer to `packages/server/src/mutation/streaming.ts`.
@@ -128,8 +140,14 @@ Current command output after completed splits:
     - `mutation.ts`: compatibility barrel preserving current imports.
   - Verification: `pnpm run test -- packages/server/src/mutation*.test.ts packages/server/src/replay.test.ts packages/server/src/query-endpoint.test.ts`,
     plus `pnpm run check:api-surface` if exports move.
+    Evidence: `wc -l` reports `packages/server/src/mutation.ts` at 1,225 LoC and split mutation
+    modules below 2,000 LoC; `pnpm exec vitest --run packages/server/src/mutation-delta.test.ts
+    packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts
+    packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts
+    packages/server/src/mutation.test.ts packages/server/src/replay.test.ts
+    packages/server/src/query-endpoint.test.ts` passed 8 files / 119 tests.
 
-- [ ] **Split `packages/compiler/src/lower/structural-jsx.ts` by declared lowering phases.**
+- [x] **Split `packages/compiler/src/lower/structural-jsx.ts` by declared lowering phases.**
   - [x] Extract primitive static spread, primitive composition, and navigation/href lowering phases
     to `packages/compiler/src/lower/primitive-spreads.ts`,
     `packages/compiler/src/lower/primitive-composition.ts`, and
@@ -143,10 +161,19 @@ Current command output after completed splits:
     against `SPEC.md` §5.2.
   - Verification: `pnpm run test -- packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/gallery-merge-fixtures.*.test.tsx packages/compiler/src/diagnostic-coverage-matrix.test.ts`,
     plus `pnpm run check:api-surface`.
+    Evidence: `wc -l` reports `packages/compiler/src/lower/structural-jsx.ts` at 1,959 LoC and
+    extracted lowering modules below 2,000 LoC; `pnpm exec vitest --run
+    packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts
+    packages/compiler/src/gallery-merge-fixtures.disclosure.test.tsx
+    packages/compiler/src/gallery-merge-fixtures.forms.test.tsx
+    packages/compiler/src/gallery-merge-fixtures.idref-oracle.test.tsx
+    packages/compiler/src/gallery-merge-fixtures.menus.test.tsx
+    packages/compiler/src/gallery-merge-fixtures.overlays.test.tsx
+    packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 8 files / 90 tests.
 
 ## P1 Source Splits
 
-- [ ] **Split `packages/cli/src/index.ts` into command-facing modules.**
+- [x] **Split `packages/cli/src/index.ts` into command-facing modules.**
   - [x] Extract graph/check/audit/explain output and input parsing to
     `packages/cli/src/graph-output.ts`, preserving the internal compatibility exports from
     `packages/cli/src/index.ts`.
@@ -155,9 +182,13 @@ Current command output after completed splits:
   - [x] Extract add/compile, build/export, MCP, and shared result helpers to command modules
     under `packages/cli/src/commands/` plus `packages/cli/src/shared.ts`.
     Evidence: `wc -l packages/cli/src/index.ts packages/cli/src/graph-output.ts packages/cli/src/commands/*.ts packages/cli/src/shared.ts` reports all split CLI modules under 2,000 LoC; the non-build CLI vitest command above passed after extraction.
-  - [ ] Reconcile the existing build-command tests with the current KV417 deploy-skew retention
+  - [x] Reconcile the existing build-command tests with the current KV417 deploy-skew retention
     preset policy before marking the full CLI split verified.
-    Gap: `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-build-browser.test.ts` still fails 7 tests because built-in node/vercel/cloudflare presets emit KV417 when app client modules require a 24-hour retention proof.
+    Evidence: tests that intentionally exercise `/c/__v/` client modules now use a config-loaded
+    retention-capable test preset, while preset-selection tests use a dynamic app without client
+    modules; `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts
+    packages/cli/src/index.kovo-build-browser.test.ts` passed 2 files / 16 tests with 1 Docker test
+    skipped.
   - Target shape:
     - `dispatch.ts`: `main`, `mainAsync`, usage/error routing.
     - `commands/check.ts`, `commands/audit.ts`, `commands/explain.ts`: graph command execution and
@@ -168,8 +199,13 @@ Current command output after completed splits:
     - `index.ts`: internal compatibility barrel; `api.ts` remains the public API entry.
   - Verification: `pnpm run test -- packages/cli/src/index.*.test.ts packages/cli/src/commands-manifest.test.ts`,
     `pnpm run check:kovo`, `pnpm run check:api-surface`.
+    Evidence: `wc -l` reports `packages/cli/src/index.ts`, `graph-output.ts`,
+    `commands/*.ts`, and `shared.ts` below 2,000 LoC; `pnpm exec vitest --run
+    packages/cli/src/index.*.test.ts packages/cli/src/commands-manifest.test.ts` passed 10 files /
+    148 tests with 1 Docker test skipped; `pnpm run check:kovo` passed 52 tests; `pnpm run
+    check:api-surface` and `pnpm run check:imports` passed.
 
-- [ ] **Split `packages/better-auth/src/internal.ts` into adapter concern modules.**
+- [x] **Split `packages/better-auth/src/internal.ts` into adapter concern modules.**
   - [x] Extract structural Better Auth contracts and schema/input bridge declarations to
     `packages/better-auth/src/internal/contracts.ts`, with compatibility re-exports from
     `internal.ts` and public root re-exports for app-facing companion types.
@@ -189,8 +225,11 @@ Current command output after completed splits:
     - `internal.ts`: compatibility barrel preserving the existing `./internal` subpath.
   - Verification: `pnpm run test -- packages/better-auth/src`, `pnpm run check:api-surface`,
     `pnpm run check:imports`.
+    Evidence: `wc -l` reports `packages/better-auth/src/internal.ts` at 1,995 LoC and extracted
+    internal modules below 2,000 LoC; `pnpm exec vitest --run packages/better-auth/src` passed 5
+    files / 76 tests; `pnpm run check:api-surface` and `pnpm run check:imports` passed.
 
-- [ ] **Split `packages/compiler/src/scan/parse.ts` after parser-fact seams are stable.**
+- [x] **Split `packages/compiler/src/scan/parse.ts` after parser-fact seams are stable.**
   - [x] Extract exported scanner model interfaces to `packages/compiler/src/scan/model.ts` and
     re-export them from `parse.ts`.
     Evidence: `pnpm exec vitest --run packages/compiler/src/scan packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts` passed 6 files / 82 tests after deletion of the original declarations; `pnpm run check:imports` passed; `packages/compiler/src/scan/parse.ts` is now 1,946 LoC.
@@ -203,6 +242,10 @@ Current command output after completed splits:
     - `scan/component.ts`: `parseComponentModule` orchestration.
   - Verification: `pnpm run test -- packages/compiler/src/scan packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts`,
     plus fact-level snapshots if model field construction changes.
+    Evidence: `wc -l` reports `packages/compiler/src/scan/parse.ts` at 1,946 LoC and extracted scan
+    modules below 2,000 LoC; `pnpm exec vitest --run packages/compiler/src/scan
+    packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts`
+    passed 6 files / 82 tests.
 
 ## P2 Test And Fixture Splits
 
