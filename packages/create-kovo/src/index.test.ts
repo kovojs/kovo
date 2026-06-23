@@ -38,6 +38,13 @@ const TEMPLATE_FILES = [
 ];
 const GENERATED_FILES = ['.env', '.env.example', '.gitignore'];
 const ALL_FILES = [...TEMPLATE_FILES, ...GENERATED_FILES];
+const SQLITE_TEMPLATE_FILES = [
+  'package.sqlite.json',
+  'README.sqlite.md',
+  'src/schema.sqlite.ts',
+  'src/db.sqlite.ts',
+  'src/auth.sqlite.ts',
+];
 
 describe('create-kovo starter (metadata)', () => {
   it('scaffolds the real template file set with no unrendered placeholders', () => {
@@ -46,6 +53,9 @@ describe('create-kovo starter (metadata)', () => {
     try {
       const templateUrl = new URL('../templates/', import.meta.url);
       for (const file of TEMPLATE_FILES) {
+        expect(existsSync(new URL(file, templateUrl))).toBe(true);
+      }
+      for (const file of SQLITE_TEMPLATE_FILES) {
         expect(existsSync(new URL(file, templateUrl))).toBe(true);
       }
 
@@ -90,6 +100,7 @@ describe('create-kovo starter (metadata)', () => {
         'better-auth': expect.any(String),
         'drizzle-orm': expect.any(String),
       });
+      expect(packageJson.dependencies).not.toHaveProperty('better-sqlite3');
       expect(packageJson.devDependencies).toMatchObject({ '@kovojs/cli': 'workspace:*' });
       expect(packageJson.devDependencies).not.toHaveProperty('@kovojs/compiler');
       expect(packageJson.scripts).toMatchObject({
@@ -107,6 +118,33 @@ describe('create-kovo starter (metadata)', () => {
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
+  });
+
+  it('keeps Postgres as the default scaffold dialect', () => {
+    const project = createKovoProject({ name: 'Default Dialect' });
+    const files = new Map(project.files.map((file) => [file.path, file.source]));
+
+    expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
+    expect(files.get('package.json')).not.toContain('"better-sqlite3"');
+    expect(files.get('src/db.ts')).toContain("import { PGlite } from '@electric-sql/pglite'");
+    expect(files.get('src/schema.ts')).toContain("import { boolean, pgTable, text, timestamp }");
+    expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
+  });
+
+  it('emits the SQLite scaffold variant when requested', () => {
+    const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
+    const files = new Map(project.files.map((file) => [file.path, file.source]));
+
+    expect(files.get('package.json')).toContain('"better-sqlite3"');
+    expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
+    expect(files.get('src/db.ts')).toContain("import Database from 'better-sqlite3'");
+    expect(files.get('src/db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
+    expect(files.get('src/db.ts')).toContain('"emailVerified" integer NOT NULL DEFAULT 0');
+    expect(files.get('src/schema.ts')).toContain("import { integer, sqliteTable, text }");
+    expect(files.get('src/schema.ts')).toContain("integer('emailVerified', { mode: 'boolean' })");
+    expect(files.get('src/schema.ts')).not.toContain('timestamp(');
+    expect(files.get('src/auth.ts')).toContain("provider: 'sqlite'");
+    expect(files.get('README.md')).toContain('opt-in SQLite dialect');
   });
 
   it('uses the public Kovo Vite plugin instead of a hand-rolled dev loader', () => {
@@ -179,6 +217,52 @@ describe('create-kovo starter (build integration)', () => {
 
     try {
       writeKovoProject(root, { name: 'Tsc Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync(
+        resolveBin('tsc'),
+        [
+          '--ignoreConfig',
+          '--noEmit',
+          '--jsx',
+          'react-jsx',
+          '--jsxImportSource',
+          '@kovojs/server',
+          '--module',
+          'NodeNext',
+          '--moduleResolution',
+          'NodeNext',
+          '--target',
+          'ES2024',
+          '--strict',
+          '--skipLibCheck',
+          '--exactOptionalPropertyTypes',
+          '--noUncheckedIndexedAccess',
+          '--types',
+          'node',
+          'src/schema.ts',
+          'src/db.ts',
+          'src/auth.ts',
+          'src/queries.ts',
+          'src/mutations.ts',
+          'src/components/contacts.tsx',
+          'src/components/auth-forms.tsx',
+          'src/app.tsx',
+        ],
+        { cwd: root, stdio: 'pipe' },
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('typechecks the generated SQLite app variant', () => {
+    const tempParent = join(process.cwd(), 'node_modules/.tmp');
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-sqlite-tsc-'));
+
+    try {
+      writeKovoProject(root, { dialect: 'sqlite', name: 'Sqlite Tsc Proof' });
       linkStarterBuildDependencies(root);
 
       execFileSync(
@@ -325,6 +409,23 @@ describe('create-kovo starter (CLI)', () => {
     }
   });
 
+  it('accepts a SQLite dialect flag', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-sqlite-'));
+    const root = join(parent, 'Hello SQLite');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main([root, '--dialect', 'sqlite'])).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(
+        `create-kovo: wrote ${ALL_FILES.length} files to ${root}\n`,
+      );
+      expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain("provider: 'sqlite'");
+    } finally {
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
   it('writes CLI failure output to stderr while returning a non-zero exit code', () => {
     const root = mkdtempSync(join(tmpdir(), 'create-kovo-cli-error-'));
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -368,6 +469,10 @@ function linkStarterBuildDependencies(root: string): void {
   symlinkSync(join(resolveDependencyRoot('kovo'), 'src/bin.ts'), join(nodeModulesBin, 'kovo'));
   symlinkSync(join(resolveDependencyRoot('vite-plus'), 'bin/vp'), join(nodeModulesBin, 'vp'));
   symlinkSync(resolveDependencyRoot('@types/node'), join(nodeModules, '@types/node'));
+  symlinkSync(
+    resolveDependencyRoot('@types/better-sqlite3'),
+    join(nodeModules, '@types/better-sqlite3'),
+  );
 
   for (const pkg of [
     '@kovojs/better-auth',
@@ -385,7 +490,15 @@ function linkStarterBuildDependencies(root: string): void {
     resolveDependencyRoot('@electric-sql/pglite'),
     join(nodeModules, '@electric-sql/pglite'),
   );
-  for (const pkg of ['better-auth', 'drizzle-orm', 'kovo', 'vite', 'vitest', 'vite-plus']) {
+  for (const pkg of [
+    'better-auth',
+    'better-sqlite3',
+    'drizzle-orm',
+    'kovo',
+    'vite',
+    'vitest',
+    'vite-plus',
+  ]) {
     symlinkSync(resolveDependencyRoot(pkg), join(nodeModules, pkg));
   }
 }

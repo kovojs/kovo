@@ -25,6 +25,8 @@
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*",
     "@kovojs/style": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.0.0",
     "vite": "8.0.16",
     "vite-plus": "0.1.24",
     "vitest": "4.1.8"

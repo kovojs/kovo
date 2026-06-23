@@ -851,6 +851,69 @@ describe('schema.ts materialization', () => {
     );
   });
 
+  it('generates SQLite Better Auth schema declarations from metadata', () => {
+    const result = generateBetterAuthSchemaSource(
+      {
+        account: authTable(['userId']),
+        session: {
+          fields: {
+            expiresAt: { required: true, type: 'date' },
+            token: { required: true, type: 'string' },
+            userId: { fieldName: 'user_id', required: true, type: 'string' },
+          },
+        },
+        user: {
+          fields: {
+            email: { required: true, type: 'string' },
+            emailVerified: { required: true, type: 'boolean' },
+            name: { required: true, type: 'string' },
+          },
+        },
+        verification: {
+          fields: {
+            expiresAt: { required: true, type: 'date' },
+            identifier: { required: true, type: 'string' },
+            value: { required: true, type: 'string' },
+          },
+        },
+      },
+      { dialect: 'sqlite' },
+    );
+
+    // SPEC.md §10.1 / §11.2: the Better Auth bridge emits the same domain
+    // annotations for SQLite while using SQLite's blessed type mappings.
+    expect(result.validation.ok).toBe(true);
+    expect(result.skippedTables).toEqual([]);
+    expect(result.requiredImports).toEqual([
+      "import { kovo } from '@kovojs/drizzle';",
+      "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';",
+    ]);
+    expect(result.source).toContain(
+      "export const user = sqliteTable('user', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  email: text('email').notNull(),\n" +
+        "  emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull(),\n" +
+        "  name: text('name').notNull(),\n" +
+        "}, kovo({ domain: 'user', key: 'id' }));",
+    );
+    expect(result.source).toContain(
+      "export const session = sqliteTable('session', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  expiresAt: text('expiresAt').notNull(),\n" +
+        "  token: text('token').notNull(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
+    );
+    expect(result.source).toContain(
+      "export const verification = sqliteTable('verification', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  expiresAt: text('expiresAt').notNull(),\n" +
+        "  identifier: text('identifier').notNull(),\n" +
+        "  value: text('value').notNull(),\n" +
+        '}, kovo({ exempt: true }));',
+    );
+  });
+
   it('generates explicit Better Auth id field aliases and types', () => {
     const result = generateBetterAuthSchemaSource({
       account: authTable(['userId']),

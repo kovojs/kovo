@@ -34,6 +34,12 @@ export interface VerificationLayerBehaviorFact {
     rawMutationFailure: string;
     transactionFailure: string;
   };
+  sqlite: {
+    libsqlRowKey: string | undefined;
+    mutationReadCovered: boolean;
+    preparedStatementObserved: unknown;
+    writeCovered: boolean;
+  };
   sql: {
     compoundRowKeyCovered: boolean;
     nestedUpdateCovered: boolean;
@@ -379,6 +385,71 @@ export async function verificationLayerBehaviorFact(
       return input.productId;
     },
   });
+
+  const sqliteVerifier = createDbVerifier(
+    {
+      'product.upsert': {
+        reads: [
+          {
+            domain: 'price',
+            keys: null,
+            site: 'product.ts:2',
+            source: 'sqlite-on-conflict',
+            via: 'prices',
+          },
+        ],
+        touches: [
+          { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+        ],
+        unresolved: [],
+      },
+    },
+    {
+      domainByTable: { prices: 'price', products: 'product' },
+      sqlDialect: 'sqlite',
+    },
+  );
+  const preparedRuns: unknown[][] = [];
+  const sqliteDb = sqliteVerifier.wrap({
+    sqlite: {
+      exec() {
+        return undefined;
+      },
+      prepare(statement: string) {
+        return {
+          run(...params: unknown[]) {
+            preparedRuns.push([statement, ...params]);
+            return { changes: 1 };
+          },
+        };
+      },
+    },
+  });
+  sqliteDb.sqlite
+    .prepare(
+      [
+        'insert into products (id, price) values (?, ?)',
+        'on conflict (id) do update set price = (',
+        'select amount from prices where prices.product_id = products.id',
+        ') returning id',
+      ].join(' '),
+    )
+    .run('p1', 10);
+  const sqliteWriteCovered = doesNotThrow(() => sqliteVerifier.assertCovered('product.upsert'));
+  const sqliteMutationReadCovered = doesNotThrow(() => sqliteVerifier.assertReadsCovered(['price']));
+
+  const libsqlVerifier = createDbVerifier(
+    {},
+    { domainByTable: { products: 'product' }, sqlDialect: 'sqlite' },
+  );
+  const libsqlDb = libsqlVerifier.wrap({
+    client: {
+      execute() {
+        return { rows: [] };
+      },
+    },
+  });
+  libsqlDb.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] });
   const transactionMutation = mutation('cart/add-transaction', {
     csrf: false,
     input: s.object({ productId: s.string() }),
@@ -418,6 +489,12 @@ export async function verificationLayerBehaviorFact(
           },
         ),
       ),
+    },
+    sqlite: {
+      libsqlRowKey: libsqlVerifier.observed[0]?.rowKey,
+      mutationReadCovered: sqliteMutationReadCovered,
+      preparedStatementObserved: sqliteVerifier.observed,
+      writeCovered: sqliteWriteCovered,
     },
     sql: {
       compoundRowKeyCovered,

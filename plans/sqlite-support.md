@@ -102,13 +102,14 @@ detection work for SQLite tables.
 Per `rules/data-layer-policy.md`: "the suite must fail loudly on API drift." Mirror the Postgres
 conformance corpus for SQLite so dialect drift is caught.
 
-- [ ] **Add SQLite touch-graph / source / verification fixtures** alongside the pg fixtures in
+- [x] **Add SQLite touch-graph / source / verification fixtures** alongside the pg fixtures in
       `packages/conformance-fixtures/src/*` (`touch-graph-fixtures.test.ts`, `source-fixtures.ts`,
       `verification-fixtures.ts`) — at minimum: a `sqliteTable` domain with `kovo()`, a write+query pair,
       a boolean-mode and json-mode column, and a `sqliteView`.
-      - Partial evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/source-fixtures.test.ts
-        packages/conformance-fixtures/src/touch-graph-fixtures.test.ts` verifies SQLite source and
-        touch/read fixture coverage; `verification-fixtures.ts` remains open for the runtime slice.
+      - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/source-fixtures.test.ts
+        packages/conformance-fixtures/src/touch-graph-fixtures.test.ts
+        packages/conformance-fixtures/src/verification-fixtures.test.ts` verifies SQLite source,
+        touch/read, mode, view, prepared-statement, and libsql-style verifier coverage.
 - [x] **Add `@kovojs/drizzle` unit coverage** for SQLite database-type receiver proof and SQLite
       column-builder classification (new cases beside the existing pg cases in the drizzle package tests).
       - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts
@@ -120,57 +121,76 @@ conformance corpus for SQLite so dialect drift is caught.
 `SPEC.md` §11.2: observed SQL is parsed and checked against the static set. Today the parser and db
 handle are Postgres-specific.
 
-- [ ] **SQL parser dialect seam.** `packages/test/src/verifier-sql.ts` hardcodes `pgsql-ast-parser`
+- [x] **SQL parser dialect seam.** `packages/test/src/verifier-sql.ts` hardcodes `pgsql-ast-parser`
       (`parseSqlOperations`, `verifier-sql.ts:26`). Investigate whether Drizzle-emitted SQLite SQL
       parses cleanly under `pgsql-ast-parser`; if not, introduce a dialect-aware parser seam (separate
       SQLite parser or a normalization shim). Record the decision + which SQLite syntaxes (e.g.
       `INSERT … ON CONFLICT`, `RETURNING`, `?`-placeholders) are covered.
-- [ ] **DB-handle recognition.** `packages/test/src/verifier.ts:117, 238` sniff a `pglite` property to
+      - Evidence: `packages/test/src/verifier-sql.test.ts` verifies dialect-selected SQLite placeholder
+        normalization through `INSERT ... ON CONFLICT`, subquery reads, and `RETURNING`.
+- [x] **DB-handle recognition.** `packages/test/src/verifier.ts:117, 238` sniff a `pglite` property to
       find the SQL handle. Add SQLite-driver handle recognition (better-sqlite3 / libsql) so the wrapper
       can observe executed statements.
-- [ ] **SQLite test harness.** Add a `createSqliteTestDb()` beside `packages/test/src/pglite.ts`, and
+      - Evidence: `packages/test/src/verifier.test.ts` verifies better-sqlite3-style prepared statement
+        observation and libsql-style `execute` observation.
+- [x] **SQLite test harness.** Add a `createSqliteTestDb()` beside `packages/test/src/pglite.ts`, and
       let the harness (`packages/test/src/harness.ts`) accept a SQLite db. Update `verifier-observation`
       strategy if the observation hook differs.
-- [ ] **SPEC §11.2 note.** Update line 1254 to state the parser is dialect-selected (pg vs. sqlite),
+      - Evidence: `packages/test/src/sqlite-harness.test.ts` verifies `createSqliteTestDb()` in the
+        Kovo test harness with `sqlDialect: "sqlite"`.
+- [x] **SPEC §11.2 note.** Update line 1254 to state the parser is dialect-selected (pg vs. sqlite),
       keeping the `observed ⊆ static ∪ KV406` invariant dialect-independent.
+      - Evidence: `SPEC.md` §11.2 now describes dialect-selected parsing while preserving the invariant.
 
 ### Stage E — Scaffold, examples, auth bridge, docs
 
-- [ ] **SQLite scaffold variant.** `packages/create-kovo/templates/src/db.ts` + `schema.ts` are
+- [x] **SQLite scaffold variant.** `packages/create-kovo/templates/src/db.ts` + `schema.ts` are
       Postgres-only (`PGlite`, `drizzle-orm/pglite`, `pgTable`, `pg-core`, `defaultNow()`, `boolean`,
       `timestamp`). Provide a SQLite template set (better-sqlite3, `sqliteTable`, `sqlite-core`,
       `integer({mode:'boolean'})`, text timestamps) and a `create-kovo` flag/prompt selecting the
       dialect. Keep Postgres default.
-- [ ] **Better Auth bridge.** `packages/better-auth` emits `pgTable` schema (e.g.
+      Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts` proves Postgres remains
+      default, `--dialect sqlite` emits the SQLite scaffold, and both generated default and SQLite apps
+      typecheck.
+- [x] **Better Auth bridge.** `packages/better-auth` emits `pgTable` schema (e.g.
       `index.schema-materialize.test.ts`, `index.schema-bridge.test.ts`) and the template passes
       `drizzleAdapter(appDb,{provider:'pg'})` (`templates/src/auth.ts:80`). Add SQLite emission
       (`sqliteTable`, `provider:'sqlite'`) for the SQLite scaffold.
-- [ ] **Example (optional).** Decide whether to add a SQLite example or convert one; default is to keep
+      Evidence: `pnpm --filter @kovojs/better-auth exec vitest run src/index.schema-materialize.test.ts`
+      proves generated SQLite Better Auth schema uses `sqliteTable`, boolean integer mode, and text
+      timestamps; `pnpm exec vitest run packages/create-kovo/src/index.test.ts` proves the SQLite
+      scaffold passes `provider:'sqlite'`.
+- [x] **Example (optional).** Decide whether to add a SQLite example or convert one; default is to keep
       `examples/commerce` on Postgres and add a small SQLite example only if it pays for itself.
-- [ ] **Docs.** Document the supported dialects, the blessed driver list, which analyses are universal
+      Evidence: Kept `examples/commerce` on Postgres; `packages/create-kovo/src/index.test.ts` covers
+      the generated SQLite app instead of adding a second committed example.
+- [x] **Docs.** Document the supported dialects, the blessed driver list, which analyses are universal
       vs. dialect-specific, and the SQLite type-mapping caveats (boolean/json/timestamp).
+      Evidence: `docs/data-layer-dialects.md`.
 
 ### Stage F — Policy & roadmap reconciliation
 
-- [ ] **`rules/data-layer-policy.md`** — record SQLite as a blessed dialect and the widened pinned
+- [x] **`rules/data-layer-policy.md`** — record SQLite as a blessed dialect and the widened pinned
       Drizzle surface (factories, db types, column-builder modes).
-- [ ] **`plans/data-layer-roadmap.md`** — cross-link this plan; note the v1 blessed adapter is now
+      Evidence: `rules/data-layer-policy.md`.
+- [x] **`plans/data-layer-roadmap.md`** — cross-link this plan; note the v1 blessed adapter is now
       multi-dialect.
-- [ ] **`rules/api-surface.md` / `rules/accessibility-conformance.md`** as applicable if any public
+      Evidence: `plans/data-layer-roadmap.md`.
+- [x] **`rules/api-surface.md` / `rules/accessibility-conformance.md`** as applicable if any public
       export shape changes (Stage A widens runtime exports only if new symbols are exported — confirm).
+      Evidence: `public-packages.json` classifies `@kovojs/test/sqlite`; `pnpm run check:api-surface`
+      and `pnpm run check:publish` passed in the runtime slice.
 
 ## Open risks / unknowns
 
-- **`pgsql-ast-parser` vs. SQLite SQL (Stage D).** Biggest unknown. If the Postgres parser rejects
-  Drizzle's SQLite output, the runtime cross-check (KV405/KV406/KV407/KV410 enforcement) needs a real
-  second parser, expanding scope. Spike this first.
+- **SQLite SQL parser seam.** Implemented as dialect-selected SQLite placeholder normalization before
+  the existing structural parser. Covered syntax includes `?`/`?NNN` placeholders, `INSERT ... ON
+  CONFLICT`, mutation subquery reads, and `RETURNING`.
 - **Column-type mapping fidelity.** SQLite's dynamic typing + mode-based booleans/JSON means query-shape
   inference (KV302/KV410 runtime shape verification, §11.2) must map modes correctly or shapes will
   mismatch at runtime. Covered by Stage B + Stage C fixtures.
-- **`RETURNING` / write-key extraction.** Parameterized-key extraction (`SPEC.md` §11.1 step 4) and
-  `RETURNING (subquery)` read accounting (`verifier-sql.ts:95-134`) assume Postgres semantics; SQLite
-  supports `RETURNING` (≥3.35) but verify Drizzle emits it and the parser handles it.
-- **Public API surface.** If Stage A/E add exported symbols, run `rules/api-surface.md` gate.
+- **SQLite trigger/cascade side effects.** Explicit SQLite SQL/prepared statements are observed; the
+  better-sqlite3 synchronous handle does not participate in the async row-count side-effect backstop.
 
 ## Suggested sequencing
 
@@ -184,3 +204,13 @@ handle are Postgres-specific.
 
 - `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.serialization.test.ts`
 - `pnpm exec vitest --run packages/conformance-fixtures/src/source-fixtures.test.ts packages/conformance-fixtures/src/touch-graph-fixtures.test.ts`
+- `pnpm exec vitest --run packages/conformance-fixtures/src/verification-fixtures.test.ts`
+- `pnpm vitest --run packages/test/src`
+- `pnpm --filter @kovojs/test run build:dist`
+- `pnpm exec vitest run packages/create-kovo/src/index.test.ts` — scaffold metadata, default Postgres
+  emission, SQLite emission, and generated Postgres/SQLite app typechecks.
+- `pnpm --filter @kovojs/better-auth exec vitest run src/index.schema-materialize.test.ts` — Better
+  Auth generated schema materialization, including SQLite table factory and type mapping.
+- `pnpm run check:api-surface`
+- `pnpm run check:publish`
+- `git diff --check` — whitespace check for the current Stage E/F slice.

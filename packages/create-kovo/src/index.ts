@@ -5,8 +5,11 @@ import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export interface CreateKovoOptions {
+  dialect?: CreateKovoDialect;
   name: string;
 }
+
+export type CreateKovoDialect = 'postgres' | 'sqlite';
 
 export interface GeneratedFile {
   path: string;
@@ -25,15 +28,20 @@ export interface WriteKovoProjectResult {
 }
 
 const templateRoot = new URL('../templates/', import.meta.url);
-const templateFiles = [
-  'package.json',
+interface TemplateFile {
+  path: string;
+  sqlitePath?: string;
+}
+
+const templateFiles: readonly TemplateFile[] = [
+  { path: 'package.json', sqlitePath: 'package.sqlite.json' },
   'kovo.config.ts',
   'vite.config.ts',
   '.github/workflows/ci.yml',
-  'README.md',
-  'src/schema.ts',
-  'src/db.ts',
-  'src/auth.ts',
+  { path: 'README.md', sqlitePath: 'README.sqlite.md' },
+  { path: 'src/schema.ts', sqlitePath: 'src/schema.sqlite.ts' },
+  { path: 'src/db.ts', sqlitePath: 'src/db.sqlite.ts' },
+  { path: 'src/auth.ts', sqlitePath: 'src/auth.sqlite.ts' },
   'src/queries.ts',
   'src/mutations.ts',
   'src/components/contacts.tsx',
@@ -42,7 +50,7 @@ const templateFiles = [
   'src/app.test.ts',
   'src/theme.ts',
   'src/styles.css',
-] as const;
+].map((file) => (typeof file === 'string' ? { path: file } : file));
 
 // SECURITY (SECURITY_FINDINGS.md M5): every scaffolded app must start with its own
 // strong, secret CSRF HMAC key — never a known constant from the template. We generate
@@ -82,14 +90,15 @@ const gitignoreEntries = ['node_modules', 'dist', '.env', '.env.*', '!.env.examp
 
 export function createKovoProject(options: CreateKovoOptions): CreateKovoProject {
   const packageName = normalizePackageName(options.name);
+  const dialect = options.dialect ?? 'postgres';
   const values = { name: packageName };
   const csrfSecret = generateCsrfSecret();
 
   return {
     files: [
-      ...templateFiles.map((path) => ({
-        path,
-        source: renderTemplate(readTemplate(path), values),
+      ...templateFiles.map((file) => ({
+        path: file.path,
+        source: renderTemplate(readTemplate(templatePathForDialect(file, dialect)), values),
       })),
       // Generated (non-template) project files: a per-project random CSRF secret and the
       // ignore rules that keep the real secret out of version control.
@@ -107,7 +116,10 @@ export function writeKovoProject(
 ): WriteKovoProjectResult {
   const root = resolve(targetDirectory);
   const name = options.name ?? basename(root);
-  const project = createKovoProject({ name });
+  const project = createKovoProject({
+    ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
+    name,
+  });
 
   assertWritableTarget(root);
 
@@ -139,14 +151,19 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   const [targetDirectory, ...rest] = args;
 
   if (!targetDirectory || targetDirectory === '--help' || targetDirectory === '-h') {
-    process.stdout.write('usage: create-kovo <target-directory> [--name <package-name>]\n');
+    process.stdout.write(
+      'usage: create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlite]\n',
+    );
     return targetDirectory ? 0 : 1;
   }
 
-  const name = readNameOption(rest);
-
   try {
-    const result = writeKovoProject(targetDirectory, name ? { name } : {});
+    const name = readNameOption(rest);
+    const dialect = readDialectOption(rest);
+    const result = writeKovoProject(targetDirectory, {
+      ...(dialect === undefined ? {} : { dialect }),
+      ...(name === undefined ? {} : { name }),
+    });
     process.stdout.write(`create-kovo: wrote ${result.files.length} files to ${result.root}\n`);
     return 0;
   } catch (error) {
@@ -159,6 +176,10 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
 function readTemplate(path: string): string {
   return readFileSync(new URL(path, templateRoot), 'utf8');
+}
+
+function templatePathForDialect(file: TemplateFile, dialect: CreateKovoDialect): string {
+  return dialect === 'sqlite' && file.sqlitePath ? file.sqlitePath : file.path;
 }
 
 function renderTemplate(source: string, values: Record<string, string>): string {
@@ -218,6 +239,43 @@ function readNameOption(args: readonly string[]): string | undefined {
   }
 
   return name;
+}
+
+function readDialectOption(args: readonly string[]): CreateKovoDialect | undefined {
+  let dialect: CreateKovoDialect | undefined;
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+
+    if (arg === '--sqlite') {
+      dialect = 'sqlite';
+      continue;
+    }
+
+    if (arg === '--postgres') {
+      dialect = 'postgres';
+      continue;
+    }
+
+    if (arg === '--dialect') {
+      dialect = parseDialectOption(args[index + 1]);
+      index += 1;
+      continue;
+    }
+
+    if (arg.startsWith('--dialect=')) {
+      dialect = parseDialectOption(arg.slice('--dialect='.length));
+    }
+  }
+
+  return dialect;
+}
+
+function parseDialectOption(value: string | undefined): CreateKovoDialect {
+  if (value === 'postgres' || value === 'sqlite') return value;
+
+  throw new Error(`Unsupported create-kovo dialect: ${value ?? '<missing>'}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
