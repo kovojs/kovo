@@ -185,8 +185,7 @@ export const GalleryAutocompleteDemo = component({
               data-highlighted={state.highlightedValue === 'design' ? '' : null}
               data-state={state.value === 'design' ? 'checked' : 'unchecked'}
               hidden={
-                state.inputValue !== '' &&
-                !'design'.includes(state.inputValue.toLocaleLowerCase())
+                state.inputValue !== '' && !'design'.includes(state.inputValue.toLocaleLowerCase())
               }
               id="gallery-autocomplete-list-option-0"
               itemLabel="Design"

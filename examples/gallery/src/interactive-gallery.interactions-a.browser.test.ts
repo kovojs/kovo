@@ -108,7 +108,10 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(dialog.open).toBe(false);
     expect(dialog.getAttribute('role')).toBe('alertdialog');
     expect(dialog.getAttribute('aria-modal')).toBe('true');
-    expect(dialog.getAttribute('closedby')).toBeNull();
+    // Backdrop light-dismiss is now enabled (closedby="any"); it fires `cancel`,
+    // which the demo's onCancel syncs (same path as Escape). The explicit
+    // X / Cancel / Action choices remain.
+    expect(dialog.getAttribute('closedby')).toBe('any');
     expect(dialog.getAttribute('aria-labelledby')).toBe('gallery-interactive-alert-dialog-title');
     expect(dialog.getAttribute('aria-describedby')).toBe(
       'gallery-interactive-alert-dialog-description',

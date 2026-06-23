@@ -195,6 +195,14 @@ export const alertDialogStyles = style.create({
     padding: 24,
     position: 'fixed',
     top: '50%',
+    // Reset the UA dialog:modal centering (inset:0 + margin:auto). Without this the
+    // author left/top:50% only override the inline/block-START insets; the UA
+    // right/bottom:0 + margin:auto survive, over-constrain the box, and auto-center
+    // it in the bottom-right quadrant (off-center on large viewports). With right/
+    // bottom:auto + margin:0 the translate(-50%,-50%) centers it in the viewport.
+    right: 'auto',
+    bottom: 'auto',
+    margin: 0,
     transform: 'translate(-50%, -50%) scale(1)',
     transitionBehavior: 'allow-discrete',
     transitionDuration: '160ms',
@@ -341,8 +349,10 @@ export const AlertDialogContent = component({
     // Top-right "X" affordance. It closes through the native invoker exactly like
     // AlertDialogCancel (command='request-close'/commandfor=contentId); reusing the
     // cancel attributes keeps that wiring in one place. An accessible name is
-    // required (rules/accessibility-conformance.md). This does NOT enable backdrop
-    // light-dismiss — alert dialogs still require an explicit choice.
+    // required (rules/accessibility-conformance.md). Backdrop light-dismiss is
+    // enabled via `closedby="any"` on the dialog below — it fires a `cancel` event
+    // the call site already syncs (same path as Escape); the explicit X / Cancel /
+    // Action affordances remain the primary choices.
     const closeAttrs = alertDialogCancelAttributes({
       ...alertDialogState(props),
       ...(props.contentId === undefined ? {} : { contentId: props.contentId }),
@@ -356,6 +366,7 @@ export const AlertDialogContent = component({
         aria-describedby={attrs['aria-describedby']}
         aria-labelledby={attrs['aria-labelledby']}
         aria-modal={attrs['aria-modal']}
+        closedby="any"
         data-state={attrs['data-state']}
         id={attrs.id}
         open={attrs.open}
