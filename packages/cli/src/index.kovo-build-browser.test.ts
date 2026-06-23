@@ -129,7 +129,9 @@ describe('kovo build — browser drive (S1)', () => {
       writeClientEntry(root);
       writeRetentionCapableNodePresetConfig(root);
 
-      const exitCode = await withCwd(root, () => mainAsync(['build', './app.mjs', '--out', './dist']));
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
 

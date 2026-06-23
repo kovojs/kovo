@@ -433,7 +433,9 @@ describe('kovo build', () => {
       writeClientEntry(root);
       writeRetentionCapableNodePresetConfig(root);
 
-      const exitCode = await withCwd(root, () => mainAsync(['build', './app.mjs', '--out', './dist']));
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.mjs', '--out', './dist']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -775,9 +777,9 @@ describe('kovo build', () => {
         "import handler from './server/handler.mjs';",
       );
       const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
-      expect(readFileSync(join(outDir, 'cloudflare/client', stylesheetPath.slice(1)), 'utf8')).toContain(
-        'color:#639',
-      );
+      expect(
+        readFileSync(join(outDir, 'cloudflare/client', stylesheetPath.slice(1)), 'utf8'),
+      ).toContain('color:#639');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -1152,10 +1154,7 @@ function writeClientEntry(root: string): void {
   writeFileSync(join(root, 'src/style.css'), 'main { color: rebeccapurple; }\n', 'utf8');
 }
 
-function writeRetentionCapableNodePresetConfig(
-  root: string,
-  nodeOptionsSource = '{}',
-): void {
+function writeRetentionCapableNodePresetConfig(root: string, nodeOptionsSource = '{}'): void {
   writeFileSync(
     join(root, 'kovo.config.ts'),
     [
