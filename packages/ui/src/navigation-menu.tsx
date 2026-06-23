@@ -124,6 +124,18 @@ export const navigationMenuStyles = style.create({
       opacity: 1,
       transform: 'translateY(0)',
     },
+    // shadcn-style hover feedback for link rows inside the content panel. The
+    // demo composes plain <a> rows (inline styles can't express :hover), so the
+    // panel owns the hover affordance via this descendant rule. Keyed off the
+    // always-present [data-state] so the engine treats it as a nested selector
+    // (a leading-space/bare-element key is parsed as a property and dropped).
+    '[data-state] a': {
+      transitionProperty: 'background-color',
+      transitionDuration: '120ms',
+    },
+    '[data-state] a:hover': {
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+    },
   },
   indicator: {
     backgroundColor: uiTheme.color.foreground,

@@ -93,8 +93,21 @@ export const GalleryToolbarDemo = component({
             </ToolbarButton>
           </ToolbarItem>
         </Toolbar>
-        <output data-demo-state="toolbar-active">{state.activeValue}</output>
-        <output data-demo-state="toolbar-pressed">{state.pressedValue || 'none'}</output>
+        {/* sr-only state probes: kept in the DOM for the gallery tests that read
+            data-demo-state, but removed from layout so they no longer paint stray
+            "bold"/"none" text under the toolbar. */}
+        <output
+          data-demo-state="toolbar-active"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.activeValue}
+        </output>
+        <output
+          data-demo-state="toolbar-pressed"
+          style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0"
+        >
+          {state.pressedValue || 'none'}
+        </output>
       </div>
     );
   },

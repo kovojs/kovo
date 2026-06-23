@@ -40,7 +40,7 @@ export const GalleryOtpFieldDemo = component({
         <label
           id="gallery-interactive-otp-label"
           for="gallery-interactive-otp-hidden"
-          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:var(--ink,#171717)"
         >
           Verification code
         </label>
@@ -356,7 +356,10 @@ export const GalleryOtpFieldDemo = component({
             }}
           />
         </OtpFieldGroup>
-        <p id="gallery-interactive-otp-description" style="font-size:0.875rem;color:#6b7280">
+        <p
+          id="gallery-interactive-otp-description"
+          style="font-size:0.875rem;color:var(--dim,#6b7280)"
+        >
           Enter the four digit code.
         </p>
         {/* Debug-state probe: kept in the DOM for gallery/a11y gates (textContent

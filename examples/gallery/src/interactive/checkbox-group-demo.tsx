@@ -155,7 +155,7 @@ export const GalleryCheckboxGroupDemo = component({
           </CheckboxGroupLabel>
         </CheckboxGroupItem>
         <output
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="font-size:0.75rem;color:var(--dim,#6b7280);margin-top:0.25rem;display:block"
           data-demo-state="checkbox-group-value"
         >
           {state.value || 'none'}

@@ -54,7 +54,7 @@ export const GalleryToastDemo = component({
         {/* better-components-ux: the trigger lives in the normal demo flow; the
             fixed ToastViewport is a sibling that holds only Toast instances. */}
         <button
-          style="display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)"
+          style="display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;border-radius:0.375rem;border:1px solid var(--edge,#d4d4d4);background:var(--panel,#fff);padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:var(--ink,#0a0a0a);box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)"
           data-toast-show=""
           type="button"
           onClick={() => {

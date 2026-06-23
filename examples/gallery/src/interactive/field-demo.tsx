@@ -97,7 +97,7 @@ export const GalleryFieldDemo = component({
           </UiFieldError>
           <output
             data-demo-state="field-email"
-            style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+            style="font-size:0.75rem;color:var(--dim,#6b7280);margin-top:0.25rem;display:block"
           >
             {state.email}
           </output>
@@ -154,7 +154,7 @@ export const GalleryFieldDemo = component({
           </FieldDescription>
           <output
             data-demo-state="field-plan"
-            style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+            style="font-size:0.75rem;color:var(--dim,#6b7280);margin-top:0.25rem;display:block"
           >
             {state.plan}
           </output>
@@ -171,7 +171,7 @@ export const GalleryFieldDemo = component({
         >
           <FieldsetLegend id="gallery-interactive-fieldset-legend" required={true}>
             Shipping options
-            <label style="margin-left:0.5rem;display:inline-flex;align-items:center;gap:0.25rem;font-size:0.875rem;font-weight:400;color:#404040">
+            <label style="margin-left:0.5rem;display:inline-flex;align-items:center;gap:0.25rem;font-size:0.875rem;font-weight:400;color:var(--dim,#404040)">
               <input
                 name="gallery-shipping-disabled"
                 type="checkbox"
@@ -188,7 +188,7 @@ export const GalleryFieldDemo = component({
           <FieldDescription id="gallery-interactive-fieldset-description">
             Grouped controls inherit native fieldset disabled behavior.
           </FieldDescription>
-          <label style="display:grid;gap:0.5rem;font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
+          <label style="display:grid;gap:0.5rem;font-size:0.875rem;font-weight:500;line-height:1;color:var(--ink,#171717)">
             <FieldControl
               form="gallery-interactive-field-form"
               name="gallery-seat"

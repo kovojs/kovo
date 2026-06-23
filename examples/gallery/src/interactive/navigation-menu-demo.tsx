@@ -238,7 +238,33 @@ export const GalleryNavigationMenuDemo = component({
           labelledBy="gallery-navigation-products-trigger"
           value="products"
         >
-          Platform primitives and gallery fixtures
+          {/* shadcn-style content panel: link rows with a bold title over a muted
+              description, instead of a single bare line. Kept to two rows so the
+              open panel fits within the demo frame (which clips overflow). */}
+          <ul style="display:grid;gap:0.125rem;width:22rem;margin:0;padding:0;list-style:none">
+            <li>
+              <a
+                href="/docs"
+                style="display:grid;gap:0.0625rem;border-radius:0.375rem;padding:0.4375rem 0.625rem;text-decoration:none"
+              >
+                <span style="font-weight:500;color:var(--ink,#171717)">Primitives</span>
+                <span style="font-size:0.8125rem;line-height:1.3;color:var(--dim,#6b7280)">
+                  Headless behaviors for any skin.
+                </span>
+              </a>
+            </li>
+            <li>
+              <a
+                href="/components"
+                style="display:grid;gap:0.0625rem;border-radius:0.375rem;padding:0.4375rem 0.625rem;text-decoration:none"
+              >
+                <span style="font-weight:500;color:var(--ink,#171717)">Styled components</span>
+                <span style="font-size:0.8125rem;line-height:1.3;color:var(--dim,#6b7280)">
+                  shadcn-shaped UI on the primitives.
+                </span>
+              </a>
+            </li>
+          </ul>
         </NavigationMenuContent>
         <NavigationMenuViewport
           {...rootState}

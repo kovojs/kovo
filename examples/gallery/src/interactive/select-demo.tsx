@@ -50,7 +50,7 @@ export const GallerySelectDemo = component({
         <label
           id="gallery-select-label"
           for="gallery-select-trigger"
-          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:var(--ink,#171717)"
         >
           Shipping speed
         </label>

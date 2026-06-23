@@ -60,7 +60,7 @@ export const GalleryComboboxDemo = component({
         <label
           id="gallery-combobox-label"
           for="gallery-combobox-input"
-          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:var(--ink,#171717)"
         >
           City
         </label>
