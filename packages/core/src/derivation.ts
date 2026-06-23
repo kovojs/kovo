@@ -140,6 +140,8 @@ export interface Rowset {
 export interface RowWitness {
   columns: readonly string[];
   rowsPath: string;
+  /** Optional rowset membership facts for the shipped rows. Omitted legacy witnesses mean unfiltered. */
+  rowset?: Rowset;
 }
 
 /**

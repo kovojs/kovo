@@ -11845,6 +11845,7 @@ function algebraicShapeForLoader(
       if (classified.rowWitness) {
         rowsByTable[classified.rowWitness.table] = {
           columns: classified.rowWitness.columns,
+          ...(classified.rowWitness.rowset ? { rowset: classified.rowWitness.rowset } : {}),
           rowsPath: classified.rowWitness.rowsPath,
         };
       }
@@ -11857,6 +11858,7 @@ function algebraicShapeForLoader(
       if (classified.rowWitness) {
         rowsByTable[classified.rowWitness.table] = {
           columns: classified.rowWitness.columns,
+          ...(classified.rowWitness.rowset ? { rowset: classified.rowWitness.rowset } : {}),
           rowsPath: classified.rowWitness.rowsPath,
         };
       }
@@ -11977,7 +11979,7 @@ function classifyField(
   };
   return {
     field,
-    rowWitness: { columns: columns.columns, rowsPath: path, table },
+    rowWitness: { columns: columns.columns, rowsPath: path, rowset, table },
   };
 }
 

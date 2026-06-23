@@ -713,6 +713,71 @@ describe('deriveOptimistic — C6: SUM resum must not proceed when witness omits
   });
 });
 
+describe('deriveOptimistic — filtered aggregate witnesses', () => {
+  it('recomputes filtered COUNT and SUM from a shipped row witness with the same rowset', () => {
+    const rowset = {
+      filters: [
+        {
+          column: 'cartId',
+          op: 'eq' as const,
+          value: { kind: 'session' as const, path: 'cartId' },
+        },
+      ],
+      key: 'cartId,productId',
+      orderBy: [],
+      table: 'cart_items',
+    };
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['productId', 'quantity'],
+          rowKey: 'cartId,productId',
+          rowset,
+        },
+        itemCount: { kind: 'count', pred: rowset.filters[0], rowset },
+        totalQuantity: {
+          arith: { kind: 'col', column: 'quantity' },
+          kind: 'sum',
+          rowset,
+        },
+      },
+      query: 'cartSummary',
+      rowsByTable: {
+        cart_items: { columns: ['productId', 'quantity'], rowsPath: 'items', rowset },
+      },
+    };
+    const effect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'cartId', value: { kind: 'session', path: 'cartId' } },
+          { column: 'productId', value: { kind: 'param', path: 'productId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'delete',
+      table: 'cart_items',
+    };
+
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'derived',
+      program: {
+        ops: [
+          {
+            guard: 'find-or-noop',
+            match: [{ column: 'productId', value: { kind: 'param', path: 'productId' } }],
+            op: 'remove-row',
+            path: 'items',
+          },
+          { from: 'items', op: 'recount', path: 'itemCount' },
+          { column: 'quantity', from: 'items', op: 'resum', path: 'totalQuantity' },
+        ],
+        query: 'cartSummary',
+      },
+    });
+  });
+});
+
 // ── Part-4 Lane C correctness guards (filtered aggregate soundness) ───────────
 // SPEC.md §10.5 "soundly optimistic": a filtered aggregate ranges over only its
 // rowset members; adding/counting a provable non-member is worse than no prediction.
