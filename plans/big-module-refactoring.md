@@ -50,6 +50,10 @@ Current command output after completed splits:
     `./internal/static` export surface.
     Evidence: `packages/drizzle/src/static/derivation.ts` is 1,375 LoC and
     `packages/drizzle/src/static.ts` is reduced to 10,976 LoC; `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts` passed 3 files / 74 tests; `git diff --check` passed.
+  - [x] Extract session/private-scope provenance helpers to
+    `packages/drizzle/src/static/session-provenance.ts`.
+    Evidence: `packages/drizzle/src/static/session-provenance.ts` is 398 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 10,609 LoC; `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts` passed 3 files / 83 tests.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
