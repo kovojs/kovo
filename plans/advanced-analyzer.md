@@ -214,10 +214,14 @@ guard-owned, and natural-key applications.
     `reopenTask` punts with `membership-entry`, and checks the generated fallback plan uses
     `openTasks: 'await-fragment'`.
 
-- [ ] **Helper-summary fixture.**
+- [x] **Helper-summary fixture.**
   - Session/tenant id flows through a same-package helper before the Drizzle predicate.
   - Expected: summary-recognized helper is precise; unsummarized helper gives a named punt or KV409
     without silently dropping invalidation.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+    extracts `invoiceList` and `markPaid` through a declared `kovoAnalyzerSummary`, derives a
+    public-key-only row update, and verifies unsummarized `hiddenSessionId` degrades to `KV409` plus
+    `unsummarized-helper:hiddenSessionId` without dropping invalidation coverage.
 
 - [ ] **Runtime cross-check fixture.**
   - Instrumented PGlite observes scoped writes and reads.
