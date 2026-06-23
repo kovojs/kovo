@@ -5,6 +5,7 @@ import {
   computeRenderPlanFingerprint,
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import {
@@ -59,11 +60,17 @@ import type {
   ClockUpdatePlanFact,
   CompileDependencyFootprint,
   QueryUpdatePlanFact,
+  QueryShape,
   StateDeriveFact,
   StateDeriveReferenceFact,
   RegistryFacts,
 } from './types.js';
-import { compileArtifactFileNames, createEmptyCompileResult, emittedFileKind } from './types.js';
+import {
+  compileArtifactFileNames,
+  createEmptyCompileResult,
+  emittedFileKind,
+  queryShapesFromFacts,
+} from './types.js';
 
 const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))
@@ -150,7 +157,12 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     componentName,
     clockUpdatePlans,
   );
-  const clientHref = clientModuleUrl(options.fileName, clientModuleVersion(clientSource));
+  const renderPlanFingerprintInput = renderPlanFingerprintInputForOptions(compileOptions);
+  const renderPlanFingerprint = computeCompilerRenderPlanFingerprint(renderPlanFingerprintInput);
+  const clientHref = clientModuleUrl(
+    options.fileName,
+    `${renderPlanFingerprint}-${clientModuleVersion(clientSource)}`,
+  );
   const versionedHandlers = handlers.map((handler) =>
     versionHandlerLowering(handler, options.fileName, clientHref),
   );
@@ -242,6 +254,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     ...serverRender.diagnostics,
     ...packagePrefixDiagnostics,
     ...validationDiagnostics,
+    ...productionRenderPlanGateDiagnostics(compileOptions, renderPlanFingerprintInput),
   ];
   const renderEquivalenceChecks = [
     semanticRenderEquivalenceCheck(
@@ -668,12 +681,52 @@ export function assertRenderPlanTokenMonotonicity(
     JSON.stringify(sortedRecord(before)) !== JSON.stringify(sortedRecord(after));
 
   if (shapesChanged && beforeToken === afterToken) {
-    throw new Error(
-      `KV416: render-plan token failed to move on a projected-query-shape change. ` +
-        `Token before and after: "${beforeToken}". ` +
-        `SPEC §5.2.2: a corpus edit that changes a projected query shape or the ` +
-        `update-plan grammar must change the §5.2.1 render-plan version token.`,
+    throw new CompilerDiagnosticError(
+      kv416Diagnostic(
+        'render-plan token failed to move on a projected-query-shape change',
+        `Token before and after: "${beforeToken}".`,
+      ),
     );
+  }
+}
+
+/**
+ * Build-facing SPEC §5.2.2 production gate. Production callers pass the compile result plus the
+ * previous/current render-plan token inputs; this assertion combines the existing semantic
+ * render-equivalence checks with KV416 token monotonicity so the build fails before output is
+ * published.
+ */
+export function assertProductionRenderPlanGate(options: {
+  after: CompilerRenderPlanFingerprintInput;
+  before: CompilerRenderPlanFingerprintInput;
+  result: CompileResult;
+  tokenFn?: (input: CompilerRenderPlanFingerprintInput) => string;
+}): void {
+  try {
+    assertRenderEquivalence(options.result);
+    assertRenderPlanTokenMonotonicity({
+      before: options.before,
+      after: options.after,
+      ...(options.tokenFn ? { tokenFn: options.tokenFn } : {}),
+    });
+  } catch (error) {
+    if (error instanceof CompilerDiagnosticError) throw error;
+    throw new CompilerDiagnosticError(
+      kv416Diagnostic(
+        'production render-equivalence or delta gate failed',
+        error instanceof Error ? error.message : String(error),
+      ),
+    );
+  }
+}
+
+export class CompilerDiagnosticError extends Error {
+  readonly diagnostic: ReturnType<typeof kv416Diagnostic>;
+
+  constructor(diagnostic: ReturnType<typeof kv416Diagnostic>) {
+    super(`${diagnostic.code}: ${diagnostic.message}`);
+    this.name = 'CompilerDiagnosticError';
+    this.diagnostic = diagnostic;
   }
 }
 
@@ -681,6 +734,69 @@ function sortedRecord(record: Record<string, string>): [string, string][] {
   return Object.keys(record)
     .sort()
     .map((k) => [k, record[k] as string]);
+}
+
+function productionRenderPlanGateDiagnostics(
+  options: CompileComponentOptions,
+  after: CompilerRenderPlanFingerprintInput,
+) {
+  const gate = options.productionRenderPlanGate;
+  if (!gate) return [];
+
+  try {
+    assertRenderPlanTokenMonotonicity({
+      before: gate.previous,
+      after,
+      ...(gate.tokenFn ? { tokenFn: gate.tokenFn } : {}),
+    });
+    return [];
+  } catch (error) {
+    if (error instanceof CompilerDiagnosticError) return [error.diagnostic];
+    return [
+      kv416Diagnostic(
+        'production render-plan token gate failed',
+        error instanceof Error ? error.message : String(error),
+        options.fileName,
+      ),
+    ];
+  }
+}
+
+function kv416Diagnostic(reason: string, detail: string, fileName = '<production-build>') {
+  const definition = diagnosticDefinitions.KV416;
+  return {
+    code: 'KV416' as const,
+    fileName,
+    help: definition.help,
+    message: `${definition.message} ${reason}. ${detail}`,
+    severity: definition.severity,
+  };
+}
+
+function renderPlanFingerprintInputForOptions(
+  options: CompileComponentOptions,
+): CompilerRenderPlanFingerprintInput {
+  const shapes =
+    options.queryShapes ??
+    (options.queryShapeFacts ? queryShapesFromFacts(options.queryShapeFacts) : undefined);
+  if (!shapes) return {};
+
+  const input: CompilerRenderPlanFingerprintInput = {};
+  for (const [name, shape] of Object.entries(shapes)) {
+    input[name] = stableQueryShapeSignature(shape);
+  }
+  return input;
+}
+
+function stableQueryShapeSignature(shape: QueryShape): string {
+  if (Array.isArray(shape)) return `[${shape.map(stableQueryShapeSignature).join(',')}]`;
+  if (typeof shape === 'string') return shape;
+  if ('kind' in shape) return `${shape.kind}<${stableQueryShapeSignature(shape.shape)}>`;
+
+  return `{${Object.keys(shape)
+    .sort()
+    .map((key) => `${key}:${stableQueryShapeSignature(shape[key] ?? 'object')}`)
+    .join(',')}}`;
 }
 
 /**

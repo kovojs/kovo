@@ -194,7 +194,7 @@ export function renderSource() {
 
     const transformed = await plugin.transform?.(cartBadgeSource, 'components/cart/cart-badge.tsx');
     const clientRef = transformed?.code.match(
-      /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
+      /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
     expect(clientRef).toBeDefined();
     const res = {
@@ -294,7 +294,7 @@ export function renderSource() {
         join(root, 'src/components/cart/cart-badge.tsx'),
       );
       const clientRef = transformed?.code.match(
-        /\/c\/__v\/[0-9a-f]{8}\/src\/components\/cart\/cart-badge\.client\.js/,
+        /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/src\/components\/cart\/cart-badge\.client\.js/,
       )?.[0];
       expect(clientRef).toBeDefined();
       expect(transformed?.code).not.toContain(root);
@@ -383,11 +383,11 @@ export const CartBadge = component({
 
     const first = await plugin.transform?.(source('removeItem'), 'components/cart/cart-badge.tsx');
     const oldClientRef = first?.code.match(
-      /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
+      /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
     const second = await plugin.transform?.(source('clearCart'), 'components/cart/cart-badge.tsx');
     const newClientRef = second?.code.match(
-      /\/c\/__v\/[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
+      /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
     )?.[0];
     const oldResponse = createMiddlewareResponse();
     const newResponse = createMiddlewareResponse();

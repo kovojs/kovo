@@ -24,7 +24,7 @@ function diagnosticTextSnapshot(diagnostics: readonly CompilerDiagnostic[]): Arr
 }
 
 function normalizeDiagnosticHelp(help: string): string {
-  return help.replaceAll(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/<version>/');
+  return help.replaceAll(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\//g, '/c/__v/<version>/');
 }
 
 describe('compiler conformance compatibility diagnostics', () => {

@@ -486,27 +486,29 @@ export function renderSource() {
   it('summarizes generated handler hrefs as reusable artifact facts', () => {
     expect(
       generatedHandlerReferenceFact(
-        '/c/__v/0a1b2c3d/routes/products/product-card.client.js#ProductCard$button_click',
+        '/c/__v/3853abab13e04603-0a1b2c3d/routes/products/product-card.client.js#ProductCard$button_click',
       ),
     ).toEqual({
       handlerName: 'ProductCard$button_click',
       modulePath: '/c/routes/products/product-card.client.js',
-      requestPath: '/c/__v/0a1b2c3d/routes/products/product-card.client.js?cache=1',
-      staleVersionRequestPath: '/c/__v/00000000/routes/products/product-card.client.js',
-      version: '0a1b2c3d',
-      versionShape: 'lower-hex-8',
+      requestPath:
+        '/c/__v/3853abab13e04603-0a1b2c3d/routes/products/product-card.client.js?cache=1',
+      staleVersionRequestPath:
+        '/c/__v/0000000000000000-00000000/routes/products/product-card.client.js',
+      version: '3853abab13e04603-0a1b2c3d',
+      versionShape: 'render-plan-hex-16-plus-hash-hex-8',
     });
   });
 
   it('summarizes generated handler hrefs for compact behavior assertions', () => {
     expect(
       generatedHandlerReferenceSummaryFact(
-        '/c/__v/0a1b2c3d/routes/products/product-card.client.js#ProductCard$button_click',
+        '/c/__v/3853abab13e04603-0a1b2c3d/routes/products/product-card.client.js#ProductCard$button_click',
       ),
     ).toEqual({
       handlerName: 'ProductCard$button_click',
       modulePath: '/c/routes/products/product-card.client.js',
-      versionShape: 'lower-hex-8',
+      versionShape: 'render-plan-hex-16-plus-hash-hex-8',
     });
   });
 
