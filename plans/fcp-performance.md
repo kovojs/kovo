@@ -5,12 +5,12 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
 
 ## Current Measurements
 
-- [ ] Re-run a fresh local/deployed measurement before implementing changes.
-  - Current baseline from 2026-06-22: Lighthouse mobile reported FCP/LCP about 1.6s, TBT 0ms.
-  - Current baseline from `curl -H 'Accept-Encoding: br,gzip'`: HTML and CSS are served without
-    `Content-Encoding`; raw HTML was about 75.5 KB and raw CSS about 39.3 KB.
-  - Current baseline from local compression estimate: HTML would be about 14 KB Brotli; CSS would
-    be about 7.3 KB Brotli.
+- [x] Re-run a fresh deployed measurement before continuing implementation.
+  - Evidence: `pnpm perf:fcp -- --url https://kovo-stackoverflow-34444524520.us-central1.run.app/questions/q3 --output test-results/fcp-harness/stackoverflow-q3-smoke`
+    passed against the hosted route. It recorded uncompressed HTML at 75,518 bytes, uncompressed CSS
+    at 39,291 bytes, inline critical CSS at 11,041 bytes, inline loader/script bytes at 22,978,
+    one render-blocking stylesheet, mobile FCP at 252 ms, desktop FCP at 212 ms, and no browser
+    console/page errors.
 
 ## Ranked Work
 
@@ -147,42 +147,54 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
   passed.
 - [x] 2026-06-22 inline loader artifact slice: `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts`
   and `pnpm --filter @kovojs/browser run check:inline-loader` passed.
+- [x] 2026-06-22 FCP harness slice: `pnpm exec vitest --run scripts/fcp-harness.test.mjs`
+  and `pnpm perf:fcp -- --url https://kovo-stackoverflow-34444524520.us-central1.run.app/questions/q3 --output test-results/fcp-harness/stackoverflow-q3-smoke`
+  passed.
 - [x] 2026-06-22 diff hygiene: `git diff --check` passed.
 
 ## Repeatable Perf Harness
 
-- [ ] **HTTP byte/header probe.**
+- [x] **HTTP byte/header probe.**
   - Command shape:
-    `curl -sS -H 'Accept-Encoding: br,gzip' -D /tmp/kovo-so.headers -o /tmp/kovo-so.html -w 'status=%{http_code}\nttfb=%{time_starttransfer}\ntotal=%{time_total}\nsize=%{size_download}\ntype=%{content_type}\n' "$URL"`
+    `pnpm perf:fcp -- --url "$URL" --no-browser`
   - Capture for: the route document and each critical CSS/JS asset discovered from the document.
   - Pass criteria after compression work: text responses advertise `Content-Encoding: br` when
     Brotli is accepted, include `Vary: Accept-Encoding`, keep correct `Content-Type`, and transfer
     materially fewer bytes than the raw response.
+  - Evidence: `pnpm exec vitest --run scripts/fcp-harness.test.mjs` covers parser inventory, and
+    `pnpm perf:fcp -- --no-browser --url https://kovo-stackoverflow-34444524520.us-central1.run.app/questions/q3`
+    captured route/CSS status, headers, encoded bytes, decoded bytes, TTFB, content type, and
+    compression headers.
 
-- [ ] **HTML asset inventory.**
-  - Command shape: parse the fetched HTML and report inline style/script byte counts,
-    stylesheet links/preloads, modulepreloads, `noscript` fallbacks, body byte count, and failed or
-    duplicate asset identities.
+- [x] **HTML asset inventory.**
+  - Command shape: `pnpm perf:fcp -- --url "$URL"` parses the fetched HTML and reports inline
+    style/script byte counts, stylesheet links/preloads, modulepreloads, `noscript` fallbacks, body
+    byte count, and duplicate asset identities.
   - Pass criteria: inline critical CSS/runtime bytes trend down; full stylesheet is not emitted as
     a render-blocking link when critical CSS is present; deferred/preloaded/applied stylesheet
     identities dedupe by `href`.
+  - Evidence: `pnpm exec vitest --run scripts/fcp-harness.test.mjs` covers deferred stylesheet,
+    `noscript`, modulepreload, inline byte, render-blocking, and duplicate asset classification.
 
 - [ ] **Lighthouse mobile performance run.**
   - Command shape:
-    `npx --yes lighthouse "$URL" --output=json --output-path=/tmp/kovo-so-lh.json --only-categories=performance --chrome-flags='--headless=new --no-sandbox' --quiet`
+    `pnpm perf:fcp -- --url "$URL" --lighthouse`
   - Record: FCP, LCP, Speed Index, TBT, render-blocking requests, unused JavaScript, document
     latency, network requests, and main-thread parse/evaluate time.
   - Pass criteria: FCP does not regress; render-blocking stylesheet finding is removed after item 2;
     unused first-load JS drops after item 3; document-latency compression warning is removed after
     item 1.
 
-- [ ] **Playwright timing/behavior smoke.**
-  - Command shape: a small Playwright script against desktop and mobile viewports that records
-    `performance.getEntriesByType('resource')`, checks first viewport text visibility, takes a
-    screenshot, and validates no console/page errors.
+- [x] **Playwright timing/behavior smoke.**
+  - Command shape: `pnpm perf:fcp -- --url "$URL" --output test-results/fcp-harness/<name>`
+    records `performance.getEntriesByType('resource')`, checks first viewport text visibility,
+    takes mobile/desktop screenshots, and validates console/page errors.
   - Pass criteria: question title/body are visible before deferred regions complete; deferred
     stylesheet/runtime loads occur after the first paint scheduling point; no visible overlap or
     layout break is introduced on mobile/desktop.
+  - Evidence: `pnpm perf:fcp -- --url https://kovo-stackoverflow-34444524520.us-central1.run.app/questions/q3 --output test-results/fcp-harness/stackoverflow-q3-smoke`
+    captured mobile/desktop FCP/resource timing, first-viewport visibility, screenshots, and zero
+    console/page errors.
 
 - [ ] **Interaction deferral smoke.**
   - Command shape: Playwright tests that click an enhanced link and submit an enhanced form before
