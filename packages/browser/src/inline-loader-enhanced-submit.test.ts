@@ -536,6 +536,157 @@ describe('inline loader enhanced submit source', () => {
   );
 
   it.each(inlineSourceInstallCases)(
+    'applies coalesced streaming fragments before their text chunks through %s',
+    async (_name, installSource) => {
+      // SPEC.md §9.1: streaming assistant shells are ordinary append fragments,
+      // and <kovo-text> targets a runtime-declared data-stream-text source. A
+      // browser stream read may coalesce both wire elements into one chunk, so
+      // the inline loader must apply the fragment before the following text.
+      const globalRecord = globalThis as unknown as Record<string, unknown>;
+      const originals = {
+        CustomEvent: globalRecord.CustomEvent,
+        FormData: globalRecord.FormData,
+        TextDecoder: globalRecord.TextDecoder,
+        TextEncoder: globalRecord.TextEncoder,
+        addEventListener: globalRecord.addEventListener,
+        document: globalRecord.document,
+        dispatchEvent: globalRecord.dispatchEvent,
+        fetch: globalRecord.fetch,
+        importModule: globalRecord.__kovoInlineImport,
+      };
+      const listeners = new Map<string, (event: unknown) => void>();
+      const formData = { kind: 'coalesced-stream-form-data' };
+      const streamTargetAttrs = new Map<string, string>([
+        ['data-stream-renderer', '/client.ts#renderMarkdownStream'],
+      ]);
+      const streamTarget = {
+        textContent: '',
+        getAttribute(name: string) {
+          return streamTargetAttrs.get(name) ?? null;
+        },
+        setAttribute(name: string, value: string) {
+          streamTargetAttrs.set(name, value);
+        },
+      };
+      let streamTargetInserted = false;
+      const messagesTarget = {
+        insertAdjacentHTML(_position: string, html: string) {
+          if (html.includes('data-stream-text="assistant:a1"')) streamTargetInserted = true;
+        },
+        querySelectorAll() {
+          return [];
+        },
+      };
+      const form = {
+        action: '/_m/chat/send',
+        getAttribute(name: string) {
+          if (name === 'data-mutation-stream') return 'true';
+          if (name === 'kovo-fragment-target') return 'composer';
+          return null;
+        },
+        method: 'post',
+      };
+      const importModule = vi.fn(async () => ({
+        renderMarkdownStream(target: typeof streamTarget, source: string) {
+          target.setAttribute(
+            'data-rendered-markdown',
+            source.includes('|') && source.includes('```') ? 'table code' : 'plain',
+          );
+        },
+      }));
+      const encoder = new TextEncoder();
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              [
+                '<kovo-fragment target="messages" mode="append"><article><p data-stream-text="assistant:a1" data-stream-renderer="/client.ts#renderMarkdownStream"></p></article></kovo-fragment>',
+                '<kovo-text target="assistant:a1">| table</kovo-text>',
+                '<kovo-text target="assistant:a1" mode="checkpoint">| table\n```ts\nok\n```</kovo-text>',
+                '<kovo-done reason="error"></kovo-done>',
+                '\n',
+              ].join(''),
+            ),
+          );
+          controller.close();
+        },
+      });
+      const inlineFetch = vi.fn(async () => ({ body }));
+
+      try {
+        globalRecord.CustomEvent = class CustomEvent {
+          type: string;
+
+          constructor(type: string) {
+            this.type = type;
+          }
+        };
+        globalRecord.FormData = function FormData() {
+          return formData;
+        };
+        globalRecord.addEventListener = (type: string, listener: (event: unknown) => void) => {
+          listeners.set(type, listener);
+        };
+        globalRecord.dispatchEvent = vi.fn();
+        globalRecord.document = {
+          getElementById() {
+            return null;
+          },
+          querySelector(selector: string) {
+            if (selector === '[kovo-fragment-target="messages"]') return messagesTarget;
+            if (selector === '[data-stream-text="assistant:a1"]' && streamTargetInserted) {
+              return streamTarget;
+            }
+            return null;
+          },
+          querySelectorAll() {
+            return [];
+          },
+        };
+        globalRecord.fetch = inlineFetch;
+
+        installSource(importModule, globalRecord);
+        listeners.get('submit')?.({
+          preventDefault: vi.fn(),
+          target: {
+            closest(selector: string) {
+              return selector === 'form[enhance],form[data-enhance],form[data-mutation]'
+                ? form
+                : null;
+            },
+          },
+          type: 'submit',
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(streamTargetInserted).toBe(true);
+        expect(streamTarget.textContent).toBe('| table\n```ts\nok\n```');
+        expect(streamTargetAttrs.get('data-stream-state')).toBe('error');
+        expect(streamTargetAttrs.get('data-rendered-markdown')).toBe('table code');
+        expect(importModule).toHaveBeenCalledWith('/client.ts');
+      } finally {
+        Object.assign(globalRecord, {
+          CustomEvent: originals.CustomEvent,
+          FormData: originals.FormData,
+          TextDecoder: originals.TextDecoder,
+          TextEncoder: originals.TextEncoder,
+          addEventListener: originals.addEventListener,
+          document: originals.document,
+          dispatchEvent: originals.dispatchEvent,
+          fetch: originals.fetch,
+        });
+        if (originals.importModule === undefined) {
+          delete globalRecord.__kovoInlineImport;
+        } else {
+          globalRecord.__kovoInlineImport = originals.importModule;
+        }
+      }
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
     'refetches inline delta chunks instead of dispatching them through %s',
     async (_name, installSource) => {
       const globalRecord = globalThis as unknown as Record<string, unknown>;
