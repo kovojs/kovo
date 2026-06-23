@@ -340,6 +340,12 @@ describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
     const packageRootValues = packageRootApi as Record<string, unknown>;
+    const renderingSubpathOnlyValues = new Set([
+      'ComponentXmlError',
+      'parseComponentXml',
+      'renderRegistry',
+      'renderTree',
+    ]);
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
@@ -353,7 +359,7 @@ describe('server app-shell public API barrels', () => {
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeSourceApi.toNodeHandler,
-    });
+    }).filter((key) => !renderingSubpathOnlyValues.has(key));
 
     expect(Object.keys(publicValues).sort()).toEqual(rootValues);
     expect(Object.keys(packageRootValues).sort()).toEqual(rootValues);
@@ -414,6 +420,10 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('renderRoutePageResponse');
     expect(publicValues).not.toHaveProperty('readHeader');
     expect(publicValues).not.toHaveProperty('renderComponent');
+    for (const key of renderingSubpathOnlyValues) {
+      expect(publicValues).not.toHaveProperty(key);
+      expect(packageRootValues).not.toHaveProperty(key);
+    }
     expect(dataApi).not.toHaveProperty('renderMutationEndpointResponse');
     expect(dataApi).not.toHaveProperty('renderMutationResponse');
     expect(dataApi).not.toHaveProperty('renderNoJsMutationResponse');
