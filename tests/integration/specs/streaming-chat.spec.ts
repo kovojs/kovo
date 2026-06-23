@@ -1,11 +1,46 @@
+import type { APIRequestContext } from '@playwright/test';
+
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'streaming-chat' });
 
+async function postStreamingWire(
+  request: APIRequestContext,
+  body: string,
+) {
+  const response = await request.post('/_m/chat/send', {
+    form: { body, turns: '1' },
+    headers: {
+      Accept: 'text/vnd.kovo.fragment+html; stream=1',
+      'Kovo-Form-Target': 'composer',
+      'Kovo-Fragment': 'true',
+      'Kovo-Idem': crypto.randomUUID(),
+      'Kovo-Live-Targets': 'messages#messages:{}; composer#composer:{}',
+      'Kovo-Stream': 'true',
+      'Kovo-Targets': 'messages=chat; composer=chat',
+    },
+  });
+  return { response, wire: await response.text() };
+}
+
 test('streams chat text through Kovo chunks and reconciles with server truth', async ({
   kovoApp,
   page,
+  request,
 }) => {
+  const { response: wireResponse, wire } = await postStreamingWire(request, 'show table');
+
+  expect(wireResponse.headers()['content-type']).toBe(
+    'text/vnd.kovo.fragment+html; charset=utf-8',
+  );
+  expect(wireResponse.headers()['kovo-changes']).toBe('[{"domain":"chat"}]');
+  expect(wire).toContain('<kovo-fragment target="messages" mode="append">');
+  expect(wire).toContain('<kovo-text target="assistant:2">');
+  expect(wire).toContain('<kovo-text target="assistant:2" mode="checkpoint">');
+  expect((wire.match(/<kovo-text\b/g) ?? []).length).toBeLessThan(5);
+  expect(wire).toContain('<kovo-done></kovo-done>');
+  await kovoApp.db.exec('delete from messages');
+
   await page.goto('/');
   await expect(page.locator('[kovo-fragment-target="messages"] article')).toHaveCount(0);
 
@@ -19,15 +54,8 @@ test('streams chat text through Kovo chunks and reconciles with server truth', a
     /table.*code.*image/,
   );
   const response = await responsePromise;
-  const wire = await response.text();
-
   expect(response.headers()['content-type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
   expect(response.headers()['kovo-changes']).toBe('[{"domain":"chat"}]');
-  expect(wire).toContain('<kovo-fragment target="messages" mode="append">');
-  expect(wire).toContain('<kovo-text target="assistant:2">');
-  expect(wire).toContain('<kovo-text target="assistant:2" mode="checkpoint">');
-  expect((wire.match(/<kovo-text\b/g) ?? []).length).toBeLessThan(5);
-  expect(wire).toContain('<kovo-done></kovo-done>');
 
   await expect(page.locator('[kovo-fragment-target="messages"] article')).toHaveCount(2);
   await expect(page.locator('[data-role="user"]')).toHaveText('show table');
@@ -77,7 +105,9 @@ test('keeps no-JS and typed failure paths on the ordinary mutation vocabulary', 
 });
 
 test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS)', async ({
+  kovoApp,
   page,
+  request,
 }) => {
   // The LLM-output path is the highest-risk modern injection vector and had no
   // escaping assertion (testing-audit §4; plans/bugs-1.md F8/F10). Kovo owns the
@@ -88,13 +118,7 @@ test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS)
     void dialog.dismiss().catch(() => {});
   });
 
-  await page.goto('/');
-  await page.getByRole('textbox', { name: 'Message' }).fill('xss-probe');
-  const responsePromise = page.waitForResponse(
-    (response) => response.url().endsWith('/_m/chat/send') && response.status() === 200,
-  );
-  await page.getByRole('button', { name: 'Send' }).click();
-  const wire = await (await responsePromise).text();
+  const { wire } = await postStreamingWire(request, 'xss-probe');
 
   // The model payload is HTML-escaped in the <kovo-text> chunk, so </kovo-text>
   // cannot break out and <img>/<script> cannot inject.
@@ -103,6 +127,15 @@ test('escapes model-streamed HTML/JS in the <kovo-text> wire (no LLM-output XSS)
   );
   expect(wire).not.toContain('<img src=x onerror=alert(1)>');
   expect(wire).not.toContain('</kovo-text><script>alert(2)');
+  await kovoApp.db.exec('delete from messages');
+
+  await page.goto('/');
+  await page.getByRole('textbox', { name: 'Message' }).fill('xss-probe');
+  const responsePromise = page.waitForResponse(
+    (response) => response.url().endsWith('/_m/chat/send') && response.status() === 200,
+  );
+  await page.getByRole('button', { name: 'Send' }).click();
+  await responsePromise;
 
   // Reconcile to server truth: nothing executed, no element injected.
   await expect(page.locator('[data-role="assistant"]')).toContainText('Final answer for xss-probe');
