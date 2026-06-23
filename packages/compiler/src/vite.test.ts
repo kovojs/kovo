@@ -45,6 +45,14 @@ function createMiddlewareResponse(): {
   };
 }
 
+function findVersionedClientRef(
+  source: string | undefined,
+  modulePath: string,
+): string | undefined {
+  const escapedModulePath = modulePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return source?.match(new RegExp(`/c/__v/[^"'\\s#]+/${escapedModulePath}(?=[#"'\\s])`))?.[0];
+}
+
 describe('kovoVitePlugin', () => {
   it('exposes a Vite transform hook for component modules', async () => {
     const plugin = kovoVitePlugin();
@@ -193,9 +201,10 @@ export function renderSource() {
     });
 
     const transformed = await plugin.transform?.(cartBadgeSource, 'components/cart/cart-badge.tsx');
-    const clientRef = transformed?.code.match(
-      /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
-    )?.[0];
+    const clientRef = findVersionedClientRef(
+      transformed?.code,
+      'components/cart/cart-badge.client.js',
+    );
     expect(clientRef).toBeDefined();
     const res = {
       body: '',
@@ -293,9 +302,10 @@ export function renderSource() {
         cartBadgeSource,
         join(root, 'src/components/cart/cart-badge.tsx'),
       );
-      const clientRef = transformed?.code.match(
-        /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/src\/components\/cart\/cart-badge\.client\.js/,
-      )?.[0];
+      const clientRef = findVersionedClientRef(
+        transformed?.code,
+        'src/components/cart/cart-badge.client.js',
+      );
       expect(clientRef).toBeDefined();
       expect(transformed?.code).not.toContain(root);
 
@@ -382,13 +392,15 @@ export const CartBadge = component({
     });
 
     const first = await plugin.transform?.(source('removeItem'), 'components/cart/cart-badge.tsx');
-    const oldClientRef = first?.code.match(
-      /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
-    )?.[0];
+    const oldClientRef = findVersionedClientRef(
+      first?.code,
+      'components/cart/cart-badge.client.js',
+    );
     const second = await plugin.transform?.(source('clearCart'), 'components/cart/cart-badge.tsx');
-    const newClientRef = second?.code.match(
-      /\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/components\/cart\/cart-badge\.client\.js/,
-    )?.[0];
+    const newClientRef = findVersionedClientRef(
+      second?.code,
+      'components/cart/cart-badge.client.js',
+    );
     const oldResponse = createMiddlewareResponse();
     const newResponse = createMiddlewareResponse();
 

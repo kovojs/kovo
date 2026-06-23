@@ -90,15 +90,22 @@ try {
   const context = await browser.newContext();
   const page = await context.newPage();
   const scriptRequests = [];
+  const eagerIslandRequests = [];
   page.on('request', (request) => {
     const url = new URL(request.url());
     if (url.pathname.startsWith('/c/') || url.pathname === '/search-index.json') {
       scriptRequests.push(url.pathname);
+      // SPEC §4.4 allows the framework-owned runtime bootstrap to load
+      // independently from authored handler modules. This smoke gate proves
+      // authored island/search bytes stay lazy until first interaction.
+      if (!url.pathname.endsWith('/kovo-runtime.client.js')) {
+        eagerIslandRequests.push(url.pathname);
+      }
     }
   });
 
   await page.goto(`${origin}/docs/mental-model/`, { waitUntil: 'networkidle' });
-  check(scriptRequests.length === 0, 'JS: zero island bytes before first interaction');
+  check(eagerIslandRequests.length === 0, 'JS: zero island bytes before first interaction');
 
   await page.click('button[on\\:click$="search.js#open"]');
   await page.waitForFunction(() => document.getElementById('site-search')?.open === true);

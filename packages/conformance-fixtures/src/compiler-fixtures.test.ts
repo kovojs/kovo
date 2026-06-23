@@ -594,6 +594,7 @@ describe('@kovojs/test compiler fixture facts', () => {
           },
         ],
         exitCode: 1,
+        optimisticProofs: [],
         status: 'issues',
         version: 'kovo-check/v1',
       },
