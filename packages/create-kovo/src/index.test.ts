@@ -127,7 +127,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
     expect(files.get('src/db.ts')).toContain("import { PGlite } from '@electric-sql/pglite'");
-    expect(files.get('src/schema.ts')).toContain("import { boolean, pgTable, text, timestamp }");
+    expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
   });
 
@@ -140,7 +140,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).toContain("import Database from 'better-sqlite3'");
     expect(files.get('src/db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
     expect(files.get('src/db.ts')).toContain('"emailVerified" integer NOT NULL DEFAULT 0');
-    expect(files.get('src/schema.ts')).toContain("import { integer, sqliteTable, text }");
+    expect(files.get('src/schema.ts')).toContain('import { integer, sqliteTable, text }');
     expect(files.get('src/schema.ts')).toContain("integer('emailVerified', { mode: 'boolean' })");
     expect(files.get('src/schema.ts')).not.toContain('timestamp(');
     expect(files.get('src/auth.ts')).toContain("provider: 'sqlite'");

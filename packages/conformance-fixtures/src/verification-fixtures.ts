@@ -436,7 +436,9 @@ export async function verificationLayerBehaviorFact(
     )
     .run('p1', 10);
   const sqliteWriteCovered = doesNotThrow(() => sqliteVerifier.assertCovered('product.upsert'));
-  const sqliteMutationReadCovered = doesNotThrow(() => sqliteVerifier.assertReadsCovered(['price']));
+  const sqliteMutationReadCovered = doesNotThrow(() =>
+    sqliteVerifier.assertReadsCovered(['price']),
+  );
 
   const libsqlVerifier = createDbVerifier(
     {},

@@ -155,30 +155,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(extractTouchGraphFromProject({ files })).toEqual({
       writeBetterSqlite: {
         reads: [],
-        touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:15', via: 'products' },
-        ],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:15', via: 'products' }],
         unresolved: [],
       },
       writeBunSqlite: {
         reads: [],
-        touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:21', via: 'products' },
-        ],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:21', via: 'products' }],
         unresolved: [],
       },
       writeLibsql: {
         reads: [],
-        touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:12', via: 'products' },
-        ],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:12', via: 'products' }],
         unresolved: [],
       },
       writeSqlJs: {
         reads: [],
-        touches: [
-          { domain: 'product', keys: null, site: 'product.domain.ts:18', via: 'products' },
-        ],
+        touches: [{ domain: 'product', keys: null, site: 'product.domain.ts:18', via: 'products' }],
         unresolved: [],
       },
       writeSqlite: {
