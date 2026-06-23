@@ -2,6 +2,7 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { handleAppRequest } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
+import { normalizeAppRequestLimits } from './app-load-shed.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
@@ -22,12 +23,18 @@ export type {
   AppMutationResponseResolver,
   AppMutationResponses,
   AppQueryDeclaration,
+  AppRateLimitOptions,
+  AppRequestLimitOptions,
+  AppRequestRateLimitOptions,
   AppRouteDeclaration,
   AppRouteRenderContext,
   CreateAppOptions,
   ErrorShellRenderer,
   KovoApp,
   RequestHandler,
+  ResolvedAppRateLimitOptions,
+  ResolvedAppRequestLimitOptions,
+  ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
 import type { LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryDefinition } from './query.js';
@@ -97,6 +104,7 @@ export function createApp<
     liveTargetRenderers,
     mutations,
     queries,
+    requestLimits: normalizeAppRequestLimits(options.requestLimits),
     routes,
     stylesheets: options.stylesheets ?? [],
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),

@@ -40,6 +40,12 @@ describe('server createApp request shell', () => {
     expect(app.stylesheets).toEqual([appStylesheet]);
     expect(app.diagnostics).toEqual([]);
     expect(app.sessionProvider).toBe(sessionProvider);
+    expect(app.requestLimits.maxBodyBytes).toBeGreaterThan(0);
+    expect(app.requestLimits.perIp).toMatchObject({ max: expect.any(Number), windowMs: 60_000 });
+    expect(app.requestLimits.mutations.perIp).toMatchObject({
+      max: expect.any(Number),
+      windowMs: 60_000,
+    });
     expect('use' in app).toBe(false);
   });
 
@@ -394,6 +400,113 @@ describe('server createApp request shell', () => {
       status: 500,
       url: '/status',
     });
+  });
+
+  // SPEC §9.5: the request shell owns the pre-dispatch body-size gate because
+  // there is no user middleware chain. It must reject before endpoint raw-body
+  // handlers can read or parse the request.
+  it('rejects oversized requests with 413 before endpoint dispatch', async () => {
+    const endpointHandler = vi.fn(() => new Response('ok'));
+    const handler = createRequestHandler(
+      createApp({
+        endpoints: [
+          endpoint('/upload', {
+            csrf: { exempt: true, justification: 'test machine endpoint' },
+            handler: endpointHandler,
+            method: 'POST',
+          }),
+        ],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: 4,
+          perIp: false,
+          queries: { global: false, perIp: false },
+          mutations: { global: false, perIp: false },
+        },
+      }),
+    );
+
+    const response = await handler(
+      new Request('https://example.test/upload', {
+        body: '12345',
+        headers: { 'Content-Length': '5' },
+        method: 'POST',
+      }),
+    );
+
+    expect(response.status).toBe(413);
+    await expect(response.text()).resolves.toBe('Payload Too Large');
+    expect(endpointHandler).not.toHaveBeenCalled();
+  });
+
+  // SPEC §9.5 / §10.3: coarse per-IP mutation limiting runs before replay, parse,
+  // and guards, so the second request cannot execute the mutation handler.
+  it('rate-limits mutation requests before parsing or running the handler', async () => {
+    const mutationHandler = vi.fn(() => ({ ok: true }));
+    const addToCart = mutation('cart/add-rate-limited', {
+      csrf: false,
+      input: s.object({ quantity: s.number().default(1) }),
+      handler: mutationHandler,
+    });
+    const handler = createRequestHandler(
+      createApp({
+        mutations: [addToCart],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: false,
+          perIp: false,
+          queries: { global: false, perIp: false },
+          mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+        },
+      }),
+    );
+    const request = () =>
+      new Request('https://example.test/_m/cart/add-rate-limited', {
+        body: new URLSearchParams({ quantity: '2' }),
+        headers: { 'X-Forwarded-For': '203.0.113.9' },
+        method: 'POST',
+      });
+
+    expect((await handler(request())).status).toBe(303);
+
+    const limited = await handler(request());
+
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toBe('60');
+    await expect(limited.text()).resolves.toBe('Too Many Requests');
+    expect(mutationHandler).toHaveBeenCalledTimes(1);
+  });
+
+  // SPEC §9.5 / §9.4: typed reads also pass through the shell's anonymous-flood
+  // limiter before args parsing or query loading.
+  it('rate-limits query requests before loading the query', async () => {
+    const queryLoad = vi.fn(() => ({ count: 1 }));
+    const cartQuery = query('cart-rate-limited', {
+      load: queryLoad,
+      reads: [],
+    });
+    const handler = createRequestHandler(
+      createApp({
+        queries: [cartQuery],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: false,
+          perIp: false,
+          mutations: { global: false, perIp: false },
+          queries: { global: { max: 1, windowMs: 60_000 }, perIp: false },
+        },
+      }),
+    );
+
+    expect((await handler(new Request('https://example.test/_q/cart-rate-limited'))).status).toBe(
+      200,
+    );
+
+    const limited = await handler(new Request('https://example.test/_q/cart-rate-limited'));
+
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toBe('60');
+    expect(queryLoad).toHaveBeenCalledTimes(1);
   });
 
   it('dispatches endpoints before routes and strips ambient session from endpoint requests', async () => {

@@ -23,6 +23,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isOptionalFunction(value.db) &&
     isOptionalFunction(value.onError) &&
     isOptionalFunction(value.renderRoute) &&
+    isAppRequestLimits(value.requestLimits) &&
     isOptionalFunction(value.sessionProvider) &&
     isStylesheets(value.stylesheets) &&
     isOptionalCsrfOptions(value.csrf)
@@ -51,6 +52,33 @@ function isAppDiagnostics(value: unknown): value is KovoApp['diagnostics'] {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isAppRequestLimits(value: unknown): value is KovoApp['requestLimits'] {
+  return (
+    isRecord(value) &&
+    isResolvedRateLimit(value.global) &&
+    isResolvedRateLimit(value.perIp) &&
+    (typeof value.maxBodyBytes === 'number' || value.maxBodyBytes === false) &&
+    isOptionalFunction(value.clientIp) &&
+    isResolvedRateLimitScope(value.mutations) &&
+    isResolvedRateLimitScope(value.queries)
+  );
+}
+
+function isResolvedRateLimitScope(value: unknown): boolean {
+  return isRecord(value) && isResolvedRateLimit(value.global) && isResolvedRateLimit(value.perIp);
+}
+
+function isResolvedRateLimit(value: unknown): boolean {
+  return (
+    value === false ||
+    (isRecord(value) &&
+      typeof value.max === 'number' &&
+      Number.isSafeInteger(value.max) &&
+      typeof value.windowMs === 'number' &&
+      Number.isSafeInteger(value.windowMs))
+  );
 }
 
 function isAppDocumentOptions(value: unknown): value is KovoApp['document'] {
