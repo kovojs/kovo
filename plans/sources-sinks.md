@@ -1,0 +1,174 @@
+# Source/Sink Security Plan
+
+**Date:** 2026-06-23
+**Primary objective:** make Kovo's non-SQL security boundaries auditable the same way `plans/sql-injection.md` treats executable SQL: every attacker-controlled or cross-trust input source must have a named, tested path to every dangerous output sink, with default-safe framework handling and explicit branded/audited escape hatches.
+
+## Review Conclusion
+
+Yes, SQL is only one source/sink class. The broader framework has at least eight security-relevant source/sink families beyond executable SQL text:
+
+1. HTML/DOM/script-data/CSS output.
+2. URL, navigation, redirect, module, and selector sinks.
+3. HTTP response headers and cookies.
+4. Request ingress, CSRF, endpoint, and webhook authority boundaries.
+5. Query/live transport, cache, BroadcastChannel, SSE, and fragment target trust.
+6. File upload, file download, static export, storage key, and path containment.
+7. Authorization/IDOR data access and session-derived ownership.
+8. Resource-exhaustion and replay/idempotency chokepoints.
+
+Most high-severity non-SQL incidents have already been fixed or specified in `SPEC.md` and `plans/fix-security.md`, but that work is scattered across XSS, redirect, file, replay, header, cache, and auth fixes. The missing plan is a **single generated source/sink inventory and corpus** that prevents future drift: when a new framework source or sink is added, it should be enrolled in a matrix with a static diagnostic, runtime guard, or a documented reason it is outside the framework boundary.
+
+This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink family and leaves SQL-specific text/parameter provenance to that plan.
+
+## Explicit Non-Goals
+
+- [ ] Remove CSV/TSV/spreadsheet export as a framework-owned capability.
+  - Kovo v1 should not ship first-party CSV/TSV/spreadsheet helpers, diagnostics, corpus fixtures, examples, templates, guide recipes, or public API surface that makes spreadsheet export look supported by the framework. Spreadsheet formula execution is a separate application format hazard, not a Kovo core web-framework sink to bless.
+- [ ] Keep only generic raw response escape hatches for app-owned exports.
+  - If an app needs spreadsheet export, it must be ordinary app-owned code behind `endpoint()` or `respond.file()`/`respond.stream()` with explicit app security review. The source/sink plan must not add a Kovo spreadsheet-safe helper or formula-hardening lane.
+- [ ] Remove copyable CSV/TSV export patterns from examples, templates, tutorials, and docs.
+  - If existing docs mention CSV/TSV exports, remove them or reframe them as outside the framework's safe-by-default contract.
+
+## Current Evidence
+
+- [x] Identify the normative output-safety contract.
+  - Evidence: `SPEC.md` §4.8 and §5.2 rule 10 require contextual encoding for text, attributes, URL-scheme attributes, script/JSON islands, raw HTML, style, `srcdoc`, and related unsafe contexts; diagnostics registry lists KV236 for unsafe output contexts.
+- [x] Confirm the SQL-specific plan already covers executable SQL text.
+  - Evidence: `plans/sql-injection.md` defines sources (`input`, `req.search`, `req.params`, form bodies, headers/cookies) and sinks (`db.execute`/`query`/`exec`/`prepare`, `sql.raw`, `sql.identifier`, untagged SQL text) plus static and runtime gates.
+- [x] Confirm the prior security plan covered many non-SQL incident fixes but not a durable source/sink inventory.
+  - Evidence: `plans/fix-security.md` covers XSS, URL attributes, redirect normalization, file/stream `nosniff`, header/cookie safety, idempotency, path containment, hardcoded secrets, and workflow/container hardening as incident lanes.
+- [x] Identify concrete HTML/DOM/URL/CSS sink code.
+  - Evidence: `packages/core/src/internal/security-url.ts`, `packages/server/src/html.ts`, `packages/browser/src/security-output.ts`, and `packages/compiler/src/output-context-facts.ts` define shared URL attributes, unsafe scheme detection, trusted HTML/URL brands, output contexts, and server/client escaping.
+- [x] Identify concrete header/cookie/file/redirect sink code.
+  - Evidence: `packages/server/src/response.ts` builds `respond.file`/`respond.stream` headers with `X-Content-Type-Options: nosniff`; `packages/server/src/cookies.ts` validates/encodes typed cookies; `packages/server/src/match.ts` normalizes authority-forming slash/backslash and dot segments; `packages/server/src/mutation.ts` sanitizes mutation redirects through `sanitizeNext`.
+- [x] Identify concrete ingress, CSRF, replay, and rate-limit source code.
+  - Evidence: `packages/server/src/csrf.ts` binds session and anonymous CSRF tokens; `packages/server/src/app-load-shed.ts` enforces pre-dispatch body-size and rate limits; `packages/server/src/guards.ts` owns session/provider/guard/rate-limit/ownership request channels; `packages/server/src/replay.ts` and mutation tests cover idempotency replay.
+- [x] Identify concrete query/live/cache/fragment source/sink code.
+  - Evidence: `packages/server/src/query.ts` stamps `Cache-Control: private, no-store`, `Vary: Cookie`, and `Kovo-Build` on `/_q/` responses; `packages/browser/src/broadcast.ts` stamps/discards per-principal rebroadcasts; `packages/browser/src/fragment-targets.ts` and `packages/browser/src/inline-loader-build.ts` escape selector-based fragment target lookups.
+- [x] Identify concrete file/storage/path source/sink code.
+  - Evidence: `packages/server/src/schema.ts` models uploaded files; `packages/core/src/storage.ts` and related tests cover storage writes; `packages/cli/src/index.kovo-export.test.ts`, `packages/compiler/src/persistent-compile-cache.test.ts`, and `packages/server/src/static-export-*` tests cover path containment/static export references.
+
+## Source Taxonomy
+
+- [ ] Treat these as first-class untrusted or cross-trust sources in the inventory:
+  - `route().params`, `route().search`, GET form URL state, `/_q/` search args, mutation/form `input`, `FormData`, file upload metadata and bytes, request headers, cookies, raw request bodies, endpoint/webhook bodies, webhook provider headers/signatures, `req.session` from app providers, `req.db` records, streamed/model output, compiler-read app source, generated/live DOM stamps (`Kovo-Targets`, `Kovo-Live-Targets`, fragment targets, `data-stream-text`), URL fragments/hashes used by navigation, static-export route paths/assets/manifests, and app config/env values that become secrets, origins, paths, or response headers.
+- [ ] Record source provenance at the narrowest useful level.
+  - Examples: distinguish browser ambient authority (`Cookie`/session) from machine auth (`webhook.verify`); distinguish author-trusted content (`trustedHtml`, `trustedUrl`) from DB/user text; distinguish route-literal URL output from user-supplied redirect/`next`.
+- [ ] Define source ownership in `kovo explain --sources-sinks`.
+  - Output target: a diffable table with columns `source`, `trust`, `schema`, `first parser`, `consumers`, `diagnostics`, and `escape hatch`.
+
+## Sink Taxonomy
+
+- [ ] Enroll HTML/DOM sinks.
+  - Sinks: JSX text, attribute values, raw HTML insertion (`rawHtml`, `trustedHtml`, fragment HTML, morph/`innerHTML`/`insertAdjacentHTML`), `<script type="application/json">`, `<kovo-query>`, `<kovo-text>`, `srcdoc`, event-handler attributes, live property writes, template stamps, and registry-bounded rich-text rendering.
+- [ ] Enroll URL/navigation/module/selector sinks.
+  - Sinks: `href`, `src`, `action`, `formaction`, `poster`, `ping`, `xlink:href`, meta URL content, redirect `Location`, auth `next`, route normalization redirects, enhanced-navigation fetch targets, dynamic `import(url#export)` handler refs, immutable `/c/__v/...` client module URLs, `querySelector` selector construction, hash scrolling, and static-export references to `/_m`/`/_q`/`/c`.
+- [ ] Enroll CSS/style sinks.
+  - Sinks: `style` attribute, `<style>` text/raw CSS, StyleX extraction, CSS custom properties, `url()` inside CSS, `view-transition-name`, runtime style property writers, and generated keyframe/theme output.
+- [ ] Enroll HTTP header/cookie sinks.
+  - Sinks: mutation response header channel, route outcome headers, `Set-Cookie`, `Location`, `Content-Disposition`, `Content-Type`, `Cache-Control`, `Vary`, `ETag`, `Last-Modified`, `Retry-After`, framework `Kovo-*` headers, and adapter-level Node/Bun/Workers header conversion.
+- [ ] Enroll endpoint/webhook/query/live transport sinks.
+  - Sinks: `endpoint()` raw `Response`, `webhook()` responses, `/_q/` typed reads, SSE live query pushes, BroadcastChannel rebroadcast, HMR/dev-only refresh endpoints, mutation/defer streams, `Kovo-Changes`, and fragment target selection.
+- [ ] Enroll file/storage/path/static-export sinks.
+  - Sinks: upload schema storage, storage keys/metadata, filesystem and S3 adapters, `respond.file`, `respond.stream`, static export output paths, Vite manifest asset copies, compiler persistent cache refs, generated graph/output files, and content-disposition filenames.
+- [ ] Enroll auth/data-authorization sinks.
+  - Sinks: owner-annotated table reads/writes, guard/refinement results, session-provider cookies, unauthenticated redirects, CSRF-exempt mutations/endpoints, webhook `verify: none`, replay stores, rate-limit keys, and query cacheability.
+- [ ] Enroll dynamic code/process sinks.
+  - Sinks: `import()` of handler module URLs, compiler/dev HMR module loading, build preset runtime API compatibility, `new Function`/`eval`/`vm`, `child_process`, shell commands in scripts, and adapter-provided asset fetch fallbacks. Current scan found these mainly in tests/build tooling, but the plan should keep a request-path deny/audit gate.
+
+## Phase 1: Inventory Generator
+
+- [ ] Add a repository-level source/sink extraction command.
+  - Proposed command: `kovo check --sources-sinks` or `kovo explain --sources-sinks`.
+  - It should merge compiler output-context facts, route/query/mutation/endpoint registries, app audit metadata, storage/file routes, header/cookie usage, and known raw escape hatches.
+- [ ] Emit a machine-readable artifact for CI.
+  - Proposed artifact: `.kovo/sources-sinks.json`, plus stable text output for review.
+  - Required fields: `source`, `sink`, `context`, `trust`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence`.
+- [ ] Build a sink registry shared by compiler, server, browser, and CLI checks.
+  - Start from existing facts in `packages/core/src/internal/security-url.ts`, `packages/compiler/src/output-context-facts.ts`, `packages/browser/src/security-output.ts`, server response/header/cookie helpers, route matcher, mutation wire parser, query endpoint, storage/static export helpers, and SQL seam predicates from `plans/sql-injection.md`.
+- [ ] Add drift detection.
+  - New sinks named in source (`innerHTML`, `insertAdjacentHTML`, `setAttribute`, `new Response`, `Headers`, `Location`, `Set-Cookie`, `respond.file`, `respond.stream`, `querySelector`, `import(`, `new Function`, `child_process`, `fs`, `path.resolve`) must either map to a registered sink or carry a repo-internal justification.
+
+## Phase 2: Red Corpus by Sink Family
+
+- [ ] HTML/DOM corpus.
+  - Payloads: `<script>`, `<img onerror>`, `</script><script>`, malformed entities, raw JSON breakouts, `srcdoc`, event attributes, SVG payloads, nested fragment payloads, streamed model text, registry rich-text XML, and template-stamp/list update paths.
+  - Expected: default text/JSON contexts encode; unsafe raw contexts require `trustedHtml`/`trustedUrl` and surface in explain output.
+- [ ] URL/navigation/redirect/selector corpus.
+  - Payloads: `javascript:`, `data:`, mixed-case/control-character schemes, protocol-relative `//host`, backslash authority `/\host`, dot segments, hash/id selector breakouts, malformed CSS selectors, hostile `next`, route params used in targets, and stale `/c/__v` module URLs.
+  - Expected: URL sinks neutralize/deny unless branded; redirects stay same-origin single-leading-slash; selectors are escaped or caught; old versioned modules recover by build-skew policy.
+- [ ] Header/cookie corpus.
+  - Payloads: CR/LF/NUL/DEL/control chars, multi-cookie injection attempts, semicolon cookie value attempts, quoted filename breakouts, bad header names, reserved `Kovo-*` app writes, cache header overrides on private data, and raw `Set-Cookie` forwarding from session providers.
+  - Expected: typed builder rejects or encodes; KV415 covers app-authored channels; private/query/session responses keep `no-store`/`Vary: Cookie`.
+- [ ] Endpoint/webhook/CSRF corpus.
+  - Payloads: missing/wrong CSRF, CSRF-exempt mutation with session read, raw endpoint with ambient cookie reliance, webhook signature over prettified body, stale timestamp, rotated signatures, `verify: none`, duplicate event id, malformed body, and provider retry.
+  - Expected: browser authority requires CSRF; machine endpoints require verifier/justification; raw bytes verify before parse; duplicates replay without handler re-execution.
+- [ ] Query/live/broadcast corpus.
+  - Payloads: guarded query through `/_q`, unauthenticated read, cross-principal BroadcastChannel envelope, session switch, live push after guard revocation, stale build token, delta without base, hostile `Kovo-Targets`, and excessive live-target descriptors.
+  - Expected: guard re-check, private cache posture, cross-principal discard, token mismatch refetch/reload, target spoofing cannot bypass authorization, and target caps hold.
+- [ ] File/storage/static-export corpus.
+  - Payloads: traversal in params/filenames/storage keys, dot segments, backslashes, absolute paths, symlinks where relevant, unsafe MIME/SVG/HTML inline, content-disposition injection, oversized uploads, metadata control chars, Vite manifest path escapes, cache ref tampering, and static export links to reserved dynamic endpoints.
+  - Expected: containment and output path checks reject; downloads default attachment + `nosniff`; MIME trust limits are documented; static export fails loudly for dynamic/reserved references.
+- [ ] Dynamic code/process corpus.
+  - Payloads: request-derived import URL/export name, app-authored handler ref strings outside compiler registry, dev HMR URL influence, build preset with unsupported Node APIs, request-path `new Function`/`eval`/`child_process`.
+  - Expected: app request path cannot reach dynamic code/process sinks except compiler-owned versioned handler imports; build/deploy checks fail unsupported or unregistered execution surfaces.
+
+## Phase 3: Diagnostics and Static Gates
+
+- [ ] Allocate source/sink diagnostic codes after checking `diagnosticDefinitions`.
+  - Do not reuse KV236/KV415/KV418/KV414 for unrelated classes; keep each code's question narrow.
+- [ ] Make raw `endpoint()` declarations always auditable.
+  - Require an endpoint-level `reason`/`purpose` string for every `endpoint()` because it is the raw HTTP escape hatch. The audit row should print that reason even when auth and CSRF are otherwise safe.
+  - Require explicit `method`; no implicit `ANY` for app-authored endpoints. Prefix mounts require an additional `mountJustification` because they enlarge the routed surface.
+  - Require explicit auth posture: `verifier:<name>`, `custom:<name>`, or `none:<justification>`. An omitted auth declaration should become a blocking diagnostic rather than only an unguarded warning for raw endpoints.
+  - Keep the existing `csrf: false` named justification, and keep KV418 for any CSRF-exempt endpoint that depends on ambient session/cookie authority.
+  - Require declared output posture for raw responses: `body: 'html' | 'json' | 'text' | 'bytes' | 'stream' | 'redirect'`, cache posture, and whether app code owns all encoding/header safety. This is metadata for audit and drift checks; it does not make raw endpoints part of the safe component/mutation protocol.
+- [ ] Add a general "unregistered sink" diagnostic for app source.
+  - Any app-authored direct dangerous sink not behind a Kovo helper or explicit trust API should fail with a teaching message pointing to the safe surface.
+- [ ] Extend `kovo explain --endpoints`.
+  - Include routes returning `respond.file`/`respond.stream`, endpoints/webhooks, CSRF posture, auth scheme, cache posture, body-size/rate-limit posture, header writes, file outputs, and dynamic export surfaces in one ingress table.
+- [ ] Add `kovo explain --trust`.
+  - List every `trustedHtml`, `trustedUrl`, future `trustedSql`, raw endpoint, webhook custom/none verifier, and static export path override with source spans and justifications.
+
+## Phase 4: Runtime Chokepoints
+
+- [ ] Keep runtime guards at framework-owned chokepoints, not at scattered call sites.
+  - Chokepoints: server renderer, browser update plan, fragment/morph apply, route/mutation/query response builders, header/cookie builder, request shell, CSRF/replay lifecycle, query endpoint, endpoint/webhook dispatcher, storage adapter, static export writer, client module registry, and DB handle guard from `plans/sql-injection.md`.
+- [ ] Add parity tests for each paired server/browser sink.
+  - Required pairs: server URL attributes vs browser bound attributes, server text/JSON vs browser query/fragment apply, modular vs inline loader selector escaping, route redirects vs mutation redirects/auth `next`, and query endpoint vs BroadcastChannel/live transports.
+- [ ] Fail closed where runtime can prove shape safety.
+  - Examples: bad headers/cookies, unsafe URL scheme, selector construction failure, CSRF mismatch, body too large, cross-principal broadcast, stale build token, disallowed storage path, and unbranded raw SQL per `plans/sql-injection.md`.
+
+## Phase 5: Docs, Examples, and Templates
+
+- [ ] Update the security guide with the source/sink model.
+  - Include one table: "source", "safe Kovo path", "dangerous sink", "escape hatch", "diagnostic".
+- [ ] Add copyable rules for common app code.
+  - Never interpolate request/DB/model data into HTML, URL, SQL, headers, cookies, filesystem paths, or raw endpoints without the corresponding Kovo safe helper or trust API; do not present CSV/TSV/spreadsheet export as a Kovo-supported safe-by-default pattern.
+- [ ] Audit examples/templates against the inventory.
+  - Starter templates, tutorial steps, reference apps, examples, site demos, and gallery code should have zero unregistered app-authored sinks.
+
+## Phase 6: Verification and Acceptance
+
+- [ ] Acceptance: the generated inventory is complete for the current repo.
+  - Run: `rg -n "innerHTML|outerHTML|insertAdjacentHTML|setAttribute\\(|new Response|Headers|Location|Set-Cookie|respond\\.(file|stream)|querySelector\\(|import\\(|new Function|eval\\(|child_process|path\\.resolve|fs\\." packages examples site tests` and account for every request-path/framework sink in the registry or an explicit exclusion.
+- [ ] Acceptance: every sink family has at least one negative and one positive test.
+  - Negative tests prove the dangerous source is rejected/encoded/neutralized.
+  - Positive tests prove the blessed helper path still works without forcing apps into raw escape hatches.
+- [ ] Acceptance: existing security lanes remain green.
+  - Include the focused suites from `plans/fix-security.md`, SQL corpus from `plans/sql-injection.md` once implemented, endpoint/webhook conformance, query cache tests, static export containment tests, browser fragment/morph tests, and `git diff --check`.
+- [ ] Keep this ledger compact.
+  - As implementation lands, replace checklist prose with the narrowest evidence: one test command or authoritative file/artifact per completed item, plus a short latest verification section.
+
+## Latest Verification
+
+- `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
+- `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
+- `sed -n '1,260p' plans/fix-security.md` inspected prior non-SQL security remediation lanes.
+- `rg -n "security|XSS|CSRF|csrf|sanitize|escape|trusted|raw|unsafe|script|style|cookie|header|redirect|endpoint|webhook|file|asset|upload|download|path|URL|url|href|src|innerHTML|outerHTML|HTML|json|JSON|CSP|content-security|nonce|origin|Host|Referer|referrer|Authorization|auth|session|credential|token|secret|eval|Function|import\\(|on:\\*|handler|params|search" SPEC.md` inspected normative source/sink vocabulary.
+- `rg -n "innerHTML|outerHTML|insertAdjacentHTML|setAttribute\\(|href|srcdoc|trustedHtml|trustedUrl|safeUrl|sanitize|escapeHtml|escapeText|escapeAttribute|kovoBoundAttributeValue|javascript:|data:" packages tests examples site -g '!packages/icons/src/**'` inspected output sinks.
+- `rg -n "headers\\.|new Headers|Set-Cookie|serializeCookie|cookies\\.set|Content-Disposition|Content-Type|nosniff|Location|redirect|safeSameOrigin|same-origin|same origin|normalizePathname|nodeRequestUrl" packages tests examples site` inspected header, cookie, redirect, and cache sinks.
+- `rg -n "respond\\.(file|stream)|FileSchema|StoredFile|parseFile|contentType|mime|upload|download|storage|path\\.resolve|path\\.join|fs\\.|readFile|writeFile|createReadStream|sendFile|static" packages tests examples site -g '!packages/icons/src/**'` inspected file/storage/static-export sinks.
+- `rg -n "endpoint\\(|webhook\\(|csrf:\\s*false|csrf|Origin|Sec-Fetch|signature|hmac|constantTime|rateLimit|pre-dispatch|body size|maxBody|Kovo-Idem|replay|idempot" packages tests examples conformance site -g '!packages/icons/src/**'` inspected ingress, CSRF, endpoint, webhook, and replay surfaces.
+- `sed -n '1,220p' packages/core/src/internal/security-url.ts`, `sed -n '1,260p' packages/server/src/html.ts`, `sed -n '1,260p' packages/compiler/src/output-context-facts.ts`, and `sed -n '1,260p' packages/browser/src/security-output.ts` inspected shared output-safety implementations.
+- `sed -n '1,340p' packages/server/src/response.ts`, `sed -n '1,260p' packages/server/src/cookies.ts`, `sed -n '1,260p' packages/server/src/app-load-shed.ts`, `sed -n '1,260p' packages/server/src/csrf.ts`, and `sed -n '1,260p' packages/server/src/match.ts` inspected server chokepoints.
