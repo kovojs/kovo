@@ -26,6 +26,7 @@
     "test": "vitest --run",
     "test:browser": "vp run browser",
     "test:gallery-browser": "pnpm --filter @kovojs/example-gallery run test:browser",
+    "test:examples-live": "pnpm --filter @kovojs/site run test:examples-live",
     "test:compiler-perf": "vp run compiler-perf",
     "test:conformance": "vp run conformance",
     "test:integration": "vp run integration",
