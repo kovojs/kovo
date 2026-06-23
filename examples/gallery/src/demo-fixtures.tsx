@@ -45,7 +45,6 @@ export {
   ProgressDemo,
   TooltipDemo,
 } from './demo-fixtures-controls.js';
-import { tabsRootAttributes } from '@kovojs/headless-ui/tabs';
 import * as style from '@kovojs/style';
 import {
   Accordion,
@@ -113,7 +112,6 @@ import {
 } from '@kovojs/ui/context-menu';
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from '@kovojs/ui/dialog';
 import { Disclosure, DisclosureContent, DisclosureTrigger } from '@kovojs/ui/disclosure';
-import { Drawer } from '@kovojs/ui/drawer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -135,7 +133,6 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@kovojs/ui/hover-card';
 import { Kbd } from '@kovojs/ui/kbd';
 import { Menubar, MenubarItem, MenubarSubmenu } from '@kovojs/ui/menubar';
-import { Meter } from '@kovojs/ui/meter';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -145,63 +142,6 @@ import {
   NavigationMenuTrigger,
   NavigationMenuViewport,
 } from '@kovojs/ui/navigation-menu';
-import {
-  NumberField,
-  NumberFieldControl,
-  NumberFieldDecrement,
-  NumberFieldIncrement,
-  NumberFieldInput,
-} from '@kovojs/ui/number-field';
-import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from '@kovojs/ui/otp-field';
-import { Popover, PopoverContent, PopoverTrigger } from '@kovojs/ui/popover';
-import { Progress } from '@kovojs/ui/progress';
-import {
-  RadioGroup,
-  RadioGroupItem,
-  RadioGroupLabel,
-  RadioGroupRadio,
-} from '@kovojs/ui/radio-group';
-import {
-  ScrollArea,
-  ScrollAreaCorner,
-  ScrollAreaScrollbar,
-  ScrollAreaThumb,
-  ScrollAreaViewport,
-} from '@kovojs/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectHiddenInput,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@kovojs/ui/select';
-import { Separator } from '@kovojs/ui/separator';
-import { Sheet } from '@kovojs/ui/sheet';
-import { Skeleton } from '@kovojs/ui/skeleton';
-import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from '@kovojs/ui/slider';
-import { Switch } from '@kovojs/ui/switch';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-} from '@kovojs/ui/table';
-import { Tabs, TabsList, TabsPanel, TabsTrigger } from '@kovojs/ui/tabs';
-import {
-  Toast,
-  ToastAction,
-  ToastClose,
-  ToastDescription,
-  ToastTitle,
-  ToastViewport,
-} from '@kovojs/ui/toast';
-import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from '@kovojs/ui/toggle-group';
-import { Toggle } from '@kovojs/ui/toggle';
-import { Toolbar, ToolbarButton, ToolbarItem } from '@kovojs/ui/toolbar';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@kovojs/ui/tooltip';
 
 export type GalleryComponent =
   | 'accordion'
@@ -542,22 +482,49 @@ export function galleryFixtures(): readonly GalleryFixture[] {
 }
 
 export function renderGalleryRoute(route: GalleryRoute): string {
-  return (
-    <main data-gallery-route={route.path}>
-      <nav aria-label="Components">
-        {galleryRoutes.map((candidate) => (
-          <a
-            aria-current={candidate.path === route.path ? 'page' : undefined}
-            href={candidate.path}
-          >
-            {candidate.title}
-          </a>
-        ))}
-      </nav>
-      <h1>{route.title}</h1>
-      {route.render()}
-    </main>
+  return decodeTrustedGalleryHtml(
+    renderedValueToHtml(
+      <main data-gallery-route={route.path}>
+        <nav aria-label="Components">
+          {galleryRoutes.map((candidate) => (
+            <a
+              aria-current={candidate.path === route.path ? 'page' : undefined}
+              href={candidate.path}
+            >
+              {candidate.title}
+            </a>
+          ))}
+        </nav>
+        <h1>{route.title}</h1>
+        {route.render()}
+      </main>,
+    ),
   );
+}
+
+function renderedValueToHtml(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
+  if (typeof value === 'object' && typeof (value as { html?: unknown }).html === 'string') {
+    return (value as { html: string }).html;
+  }
+
+  return JSON.stringify(value) ?? '';
+}
+
+function decodeTrustedGalleryHtml(html: string): string {
+  let decoded = html;
+  for (let pass = 0; pass < 4; pass += 1) {
+    const next = decoded
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&quot;', '"');
+    if (next === decoded) break;
+    decoded = next;
+  }
+  return decoded;
 }
 
 export function AccordionDemo(): string {

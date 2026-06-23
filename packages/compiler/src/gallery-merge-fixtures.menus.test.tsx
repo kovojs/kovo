@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { describe, expect, it } from 'vitest';
-
 import {
   commandCloseAttributes,
   commandDialogAttributes,
@@ -43,7 +42,6 @@ import {
   navigationMenuViewportAttributes,
 } from '@kovojs/headless-ui/navigation-menu';
 import { mergeCompilerPrimitiveAttrs } from './gallery-merge-fixtures-oracle.js';
-
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden command merge with combobox IDREFs and option semantics', () => {
     const state = {
@@ -110,7 +108,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         tabIndex: -1,
       },
     );
-
     expect(input.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -154,17 +151,18 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <section data-gallery-merge="command">
-        <input {...input.attrs} />
-        <div {...listbox.attrs}>
-          <div {...item.attrs}>Settings</div>
-        </div>
-      </section>,
+      String(
+        <section data-gallery-merge="command">
+          <input {...input.attrs} />
+          <div {...listbox.attrs}>
+            <div {...item.attrs}>Settings</div>
+          </div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="command"><input data-state="open" aria-autocomplete="list" aria-expanded="true" autocomplete="off" role="searchbox" type="text" value="author query" aria-activedescendant="author-command-option" aria-controls="gallery-command-listbox" aria-describedby="gallery-command-description" id="gallery-command-input" aria-labelledby="gallery-command-label" placeholder="Run a command" class="command-input text-sm"><div data-state="open" role="menu" id="author-command-listbox" aria-labelledby="gallery-command-label" class="command-listbox max-h-72"><div data-state="active" data-selected="" data-highlighted="" aria-selected="true" role="menuitem" tabIndex="-1" id="gallery-command-option-1" label="Settings" value="settings" class="command-item px-2">Settings</div></div></section>',
     );
   });
-
   it('renders a golden dropdown-menu merge with menu roles and item overrides', () => {
     const state = {
       highlightedValue: 'profile',
@@ -241,7 +239,6 @@ describe('gallery G5 primitive merge fixtures', () => {
       dropdownMenuSeparatorAttributes({ id: 'gallery-dropdown-separator' }),
       { role: 'none' },
     );
-
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'aria-expanded',
@@ -289,20 +286,21 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <section data-gallery-merge="dropdown-menu">
-        <button {...trigger.attrs}>Account</button>
-        <div {...content.attrs}>
-          <div {...group.attrs}>
-            <div {...item.attrs}>Profile</div>
+      String(
+        <section data-gallery-merge="dropdown-menu">
+          <button {...trigger.attrs}>Account</button>
+          <div {...content.attrs}>
+            <div {...group.attrs}>
+              <div {...item.attrs}>Profile</div>
+            </div>
+            <div {...separator.attrs}></div>
           </div>
-          <div {...separator.attrs}></div>
-        </div>
-      </section>,
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="dropdown-menu"><button data-state="open" aria-expanded="true" aria-haspopup="menu" type="submit" aria-controls="author-dropdown-content" id="gallery-dropdown-trigger" class="dropdown-trigger px-2">Account</button><div data-state="open" role="listbox" tabIndex="-1" id="author-dropdown-content" aria-labelledby="gallery-dropdown-trigger" class="dropdown-content shadow"><div data-state="open" role="presentation" id="gallery-dropdown-group" aria-labelledby="author-dropdown-group-label" class="dropdown-group"><div data-state="active" data-highlighted="" role="option" tabIndex="5" id="gallery-dropdown-profile" label="Profile" value="author-profile" class="dropdown-item font-medium" aria-disabled="true">Profile</div></div><div role="none" id="gallery-dropdown-separator"></div></div></section>',
     );
   });
-
   it('renders a golden context-menu merge with behavior IDREFs and anchor coordinates', () => {
     const state = {
       highlightedValue: 'paste',
@@ -385,7 +383,6 @@ describe('gallery G5 primitive merge fixtures', () => {
       contextMenuSeparatorAttributes({ id: 'gallery-context-separator' }),
       { role: 'none' },
     );
-
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -448,20 +445,21 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <section data-gallery-merge="context-menu">
-        <div {...trigger.attrs}>Canvas</div>
-        <div {...content.attrs}>
-          <div {...group.attrs}>
-            <div {...item.attrs}>Paste</div>
+      String(
+        <section data-gallery-merge="context-menu">
+          <div {...trigger.attrs}>Canvas</div>
+          <div {...content.attrs}>
+            <div {...group.attrs}>
+              <div {...item.attrs}>Paste</div>
+            </div>
+            <div {...separator.attrs}></div>
           </div>
-          <div {...separator.attrs}></div>
-        </div>
-      </section>,
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="context-menu"><div data-state="open" aria-expanded="true" aria-haspopup="menu" role="button" aria-controls="author-context-content" kovo-context-menu="author-context-content" id="gallery-context-trigger" aria-labelledby="gallery-context-label" class="context-trigger rounded">Canvas</div><div data-state="open" role="listbox" tabIndex="-1" id="author-context-content" aria-labelledby="gallery-context-trigger" data-anchor-x="128" data-anchor-y="64" class="context-content shadow"><div data-state="open" role="presentation" id="gallery-context-group" aria-labelledby="author-context-group-label" class="context-group"><div data-state="active" data-highlighted="" role="option" tabIndex="-1" id="gallery-context-paste" label="Paste" value="author-paste" class="context-item px-2" aria-disabled="true">Paste</div></div><div role="none" id="gallery-context-separator"></div></div></section>',
     );
   });
-
   it('renders a golden navigation-menu merge with list-driven content and viewport attrs', () => {
     const state = {
       activeValue: 'products',
@@ -591,7 +589,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         hidden: true,
       },
     );
-
     expect(root.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -658,24 +655,25 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <section data-gallery-merge="navigation-menu">
-        <nav {...root.attrs}>
-          <div {...list.attrs}>
-            <div {...item.attrs}>
-              <button {...trigger.attrs}>Products</button>
-              <div {...content.attrs}>Product links</div>
+      String(
+        <section data-gallery-merge="navigation-menu">
+          <nav {...root.attrs}>
+            <div {...list.attrs}>
+              <div {...item.attrs}>
+                <button {...trigger.attrs}>Products</button>
+                <div {...content.attrs}>Product links</div>
+              </div>
+              <a {...link.attrs}>Company</a>
             </div>
-            <a {...link.attrs}>Company</a>
-          </div>
-          <div {...viewport.attrs}></div>
-          <span {...indicator.attrs}></span>
-        </nav>
-      </section>,
+            <div {...viewport.attrs}></div>
+            <span {...indicator.attrs}></span>
+          </nav>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="navigation-menu"><nav data-state="open" data-orientation="horizontal" role="menubar" id="gallery-nav-root" aria-label="Author nav" aria-describedby="gallery-nav-description" class="navigation-root border"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-nav-list" class="navigation-list gap-2"><div data-state="active" data-highlighted="" role="presentation" id="gallery-nav-products-item" class="navigation-item px-2"><button data-state="open" data-highlighted="" aria-expanded="true" aria-haspopup="true" disabled tabIndex="0" type="submit" value="products" aria-controls="author-nav-products-panel" id="gallery-nav-products-trigger" label="Products" class="navigation-trigger font-medium">Products</button><div data-state="open" role="region" tabIndex="-1" id="author-nav-products-panel" aria-labelledby="gallery-nav-products-trigger" class="navigation-content shadow">Product links</div></div><a data-state="inactive" tabIndex="3" value="author-company" href="/author-company" id="gallery-nav-company-link" label="Company" class="navigation-link underline">Company</a></div><div data-state="open" id="gallery-nav-viewport" class="navigation-viewport rounded" hidden></div><span data-state="open" id="gallery-nav-indicator" class="navigation-indicator accent" hidden></span></nav></section>',
     );
   });
-
   it('renders a golden menubar merge with submenu, group, and separator attrs', () => {
     const state = {
       activeValue: 'file',
@@ -756,7 +754,6 @@ describe('gallery G5 primitive merge fixtures', () => {
       menubarSeparatorAttributes({ id: 'gallery-file-separator' }),
       { role: 'none' },
     );
-
     expect(root.diagnostics).toEqual([
       {
         attr: 'role',
@@ -814,20 +811,21 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <nav data-gallery-merge="menubar">
-        <div {...root.attrs}>
-          <button {...item.attrs}>File</button>
-          <div {...submenu.attrs}>
-            <div {...group.attrs}>Open</div>
-            <div {...separator.attrs}></div>
+      String(
+        <nav data-gallery-merge="menubar">
+          <div {...root.attrs}>
+            <button {...item.attrs}>File</button>
+            <div {...submenu.attrs}>
+              <div {...group.attrs}>Open</div>
+              <div {...separator.attrs}></div>
+            </div>
           </div>
-        </div>
-      </nav>,
+        </nav>,
+      ),
     ).toBe(
       '<nav data-gallery-merge="menubar"><div data-state="open" data-orientation="horizontal" role="menu" id="gallery-menubar" aria-label="Author editor" aria-describedby="gallery-menubar-help" class="menubar-root border"><button data-state="active" data-highlighted="" role="option" tabIndex="0" value="author-file" aria-haspopup="menu" aria-expanded="true" aria-controls="author-file-menu" id="gallery-file-item" label="File" class="menubar-item px-2">File</button><div data-state="open" role="listbox" tabIndex="-1" id="author-file-menu" aria-labelledby="gallery-file-item" class="menubar-submenu shadow"><div data-state="open" data-orientation="horizontal" role="presentation" id="gallery-file-group" aria-labelledby="author-file-group-label" class="menubar-group py-1">Open</div><div role="none" id="gallery-file-separator"></div></div></div></nav>',
     );
   });
-
   it('renders golden command shell merges across dialog, trigger, close, and empty attrs', () => {
     const state = {
       disabled: false,
@@ -887,7 +885,6 @@ describe('gallery G5 primitive merge fixtures', () => {
       { ...commandEmptyAttributes({ ...state, id: 'gallery-command-empty' }), class: 'empty' },
       { class: 'empty py-6', hidden: true },
     );
-
     expect(root.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -918,15 +915,17 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(empty.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="command-shell">
-        <div {...root.attrs}>
-          <button {...trigger.attrs}>Open command</button>
-          <dialog {...dialog.attrs}>
-            <p {...empty.attrs}>No commands</p>
-            <button {...close.attrs}>Close</button>
-          </dialog>
-        </div>
-      </section>,
+      String(
+        <section data-gallery-merge="command-shell">
+          <div {...root.attrs}>
+            <button {...trigger.attrs}>Open command</button>
+            <dialog {...dialog.attrs}>
+              <p {...empty.attrs}>No commands</p>
+              <button {...close.attrs}>Close</button>
+            </dialog>
+          </div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="command-shell"><div data-state="open" id="gallery-command-root" class="command-root border"><button data-state="open" aria-expanded="true" aria-haspopup="dialog" type="submit" aria-controls="gallery-command-dialog" command="show-modal" commandfor="author-command-dialog" id="gallery-command-trigger" aria-labelledby="gallery-command-label" class="command-trigger px-2">Open command</button><dialog data-state="open" aria-modal="false" id="author-command-dialog" aria-describedby="gallery-command-description" aria-labelledby="gallery-command-title" open class="command-dialog shadow"><p data-empty="" id="gallery-command-empty" class="empty py-6" hidden>No commands</p><button data-state="open" disabled type="button" command="request-close" commandfor="author-command-dialog" class="command-close absolute">Close</button></dialog></div></section>',
     );

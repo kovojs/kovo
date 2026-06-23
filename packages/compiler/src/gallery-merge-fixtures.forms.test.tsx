@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { describe, expect, it } from 'vitest';
-
 import {
   autocompleteInputAttributes,
   autocompleteListAttributes,
@@ -61,7 +60,6 @@ import {
   toolbarRootAttributes,
 } from '@kovojs/headless-ui/toolbar';
 import { mergeCompilerPrimitiveAttrs, rewriteIdrefs } from './gallery-merge-fixtures-oracle.js';
-
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden combobox merge with active descendant and option conflicts', () => {
     const state = {
@@ -128,7 +126,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         role: 'menuitem',
       },
     );
-
     expect(input.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -167,17 +164,18 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <section data-gallery-merge="combobox">
-        <input {...input.attrs} />
-        <div {...listbox.attrs}>
-          <div {...option.attrs}>Enterprise</div>
-        </div>
-      </section>,
+      String(
+        <section data-gallery-merge="combobox">
+          <input {...input.attrs} />
+          <div {...listbox.attrs}>
+            <div {...option.attrs}>Enterprise</div>
+          </div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="combobox"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" role="combobox" type="text" value="enterprise" aria-activedescendant="gallery-combobox-listbox-option-0" aria-controls="gallery-combobox-listbox" id="gallery-combobox-input" aria-labelledby="gallery-combobox-label" aria-describedby="author-combobox-description" aria-invalid="true" name="author-plan" placeholder="Choose a plan" required class="combobox-input rounded"><div data-state="open" data-invalid="" data-required="" role="menu" id="gallery-combobox-listbox" aria-labelledby="gallery-combobox-label" class="combobox-listbox shadow"><div data-state="checked" data-highlighted="" aria-selected="true" role="menuitem" id="gallery-combobox-option-1" label="Enterprise" value="enterprise" class="combobox-option font-medium">Enterprise</div></div></section>',
     );
   });
-
   it('renders a golden autocomplete merge with native datalist attrs and value display', () => {
     const state = {
       highlightedValue: 'chicago',
@@ -263,7 +261,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-autocomplete-value',
       },
     );
-
     expect(input.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -291,18 +288,19 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(value.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="autocomplete">
-        <input {...input.attrs} />
-        <datalist {...list.attrs}>
-          <option {...option.attrs}>Chicago</option>
-        </datalist>
-        <span {...value.attrs}>Choose a city</span>
-      </section>,
+      String(
+        <section data-gallery-merge="autocomplete">
+          <input {...input.attrs} />
+          <datalist {...list.attrs}>
+            <option {...option.attrs}>Chicago</option>
+          </datalist>
+          <span {...value.attrs}>Choose a city</span>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="autocomplete"><input data-state="open" data-invalid="" data-required="" aria-autocomplete="list" aria-expanded="true" autocomplete="name" role="searchbox" type="text" value="chi" aria-activedescendant="gallery-autocomplete-list-option-0" aria-controls="gallery-autocomplete-list" id="gallery-autocomplete-input" aria-labelledby="gallery-autocomplete-label" aria-describedby="author-autocomplete-help" aria-invalid="true" name="author-city" placeholder="Choose a city" required class="autocomplete-input rounded"><datalist data-state="open" data-invalid="" data-required="" id="author-autocomplete-list" aria-labelledby="gallery-autocomplete-label" role="listbox" class="autocomplete-list shadow"><option data-state="unchecked" data-highlighted="" aria-selected="false" role="option" value="chicago" id="gallery-autocomplete-option-2" label="Author Chicago" class="autocomplete-option font-medium" disabled selected>Chicago</option></datalist><span data-placeholder="author-placeholder" id="author-autocomplete-value" class="autocomplete-value text-muted">Choose a city</span></section>',
     );
   });
-
   it('renders a golden slider merge with native range input and decorative parts', () => {
     const state = {
       invalid: true,
@@ -369,7 +367,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 8,
       },
     );
-
     expect(input.diagnostics).toEqual([
       {
         attr: 'aria-orientation',
@@ -381,18 +378,19 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(thumb.diagnostics).toEqual([]);
     expect(hidden.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="slider">
-        <input {...input.attrs} />
-        <input {...hidden.attrs} />
-        <div {...track.attrs}>
-          <span {...thumb.attrs} />
-        </div>
-      </section>,
+      String(
+        <section data-gallery-merge="slider">
+          <input {...input.attrs} />
+          <input {...hidden.attrs} />
+          <div {...track.attrs}>
+            <span {...thumb.attrs} />
+          </div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="slider"><input data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="author-value" aria-describedby="gallery-slider-description gallery-slider-error" aria-invalid="true" aria-orientation="horizontal" aria-labelledby="gallery-slider-label" aria-valuetext="60 percent" id="gallery-slider-input" max="12" min="0" name="author-volume" required step="2" type="range" value="6" class="slider-input sr-only"><input form="gallery-slider-form" name="gallery-volume" type="hidden" value="8" class="slider-hidden author-hidden"><div data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" data-part="track" data-value-ratio="0.6" id="gallery-slider-track" class="slider-track h-24" aria-hidden="false" role="presentation"><span data-orientation="vertical" data-invalid="" data-required="" data-max="10" data-min="0" data-value="6" aria-invalid="true" aria-orientation="vertical" aria-valuemax="10" aria-valuemin="0" aria-valuenow="6" data-part="thumb" data-value-ratio="author-ratio" id="gallery-slider-thumb" role="slider" tabIndex="0" class="slider-thumb shadow"></span></div></section>',
     );
   });
-
   it('renders a golden toggle merge with authored class, handlers, scalars, and state overrides', () => {
     const merged = mergeCompilerPrimitiveAttrs(
       {
@@ -413,7 +411,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-
     expect(merged.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -426,12 +423,11 @@ describe('gallery G5 primitive merge fixtures', () => {
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
-    expect(<button {...merged.attrs}>Saved</button>).toBe(
+    expect(String(<button {...merged.attrs}>Saved</button>)).toBe(
       // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "true" wins over author "mixed".
       '<button data-state="pressed" aria-pressed="true" disabled type="submit" class="inline-flex saved rounded-sm" kovo-deps="toggle:pressed route:gallery" on:click="/gallery/author.client.js#trackToggle /gallery/toggle.client.js#primitiveToggle" style="--toggle-state: pressed; color: blue; color: red; margin: 0">Saved</button>',
     );
   });
-
   it('renders a golden checkbox merge with native control logical-OR attributes', () => {
     const merged = mergeCompilerPrimitiveAttrs(
       {
@@ -453,7 +449,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-yes',
       },
     );
-
     expect(merged.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -466,12 +461,11 @@ describe('gallery G5 primitive merge fixtures', () => {
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
-    expect(<input {...merged.attrs} />).toBe(
+    expect(String(<input {...merged.attrs} />)).toBe(
       // SPEC.md §4.6 J1: state-aria is primitive-wins; primitive "mixed" wins over author "false".
       '<input data-state="indeterminate" aria-checked="mixed" disabled name="author-consent" required type="checkbox" value="author-yes" class="checkbox-control rounded border">',
     );
   });
-
   it('renders a golden field merge with native label and control wiring', () => {
     const root = mergeCompilerPrimitiveAttrs(
       {
@@ -514,7 +508,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         for: 'author-field-email',
       },
     );
-
     expect(root.diagnostics).toEqual([]);
     expect(control.diagnostics).toEqual([
       {
@@ -536,17 +529,18 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <div data-gallery-merge="field">
-        <div {...root.attrs}>
-          <label {...label.attrs}>Email</label>
-          <input {...control.attrs} />
-        </div>
-      </div>,
+      String(
+        <div data-gallery-merge="field">
+          <div {...root.attrs}>
+            <label {...label.attrs}>Email</label>
+            <input {...control.attrs} />
+          </div>
+        </div>,
+      ),
     ).toBe(
       '<div data-gallery-merge="field"><div data-invalid="author-invalid" data-required="" id="author-field" class="field-root grid gap-1"><label for="author-field-email" class="field-label">Email</label><input data-invalid="" data-required="" aria-describedby="author-field-description" aria-invalid="false" id="gallery-field-email" name="author-email" required class="field-control border"></div></div>',
     );
   });
-
   it('renders a golden otp-field merge with aggregate input and slot overrides', () => {
     const root = mergeCompilerPrimitiveAttrs(
       {
@@ -605,7 +599,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: '9',
       },
     );
-
     expect(root.diagnostics).toEqual([
       {
         attr: 'role',
@@ -633,17 +626,18 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <div data-gallery-merge="otp-field">
-        <div {...root.attrs}>
-          <input {...hiddenInput.attrs} />
-          <input {...slot.attrs} />
-        </div>
-      </div>,
+      String(
+        <div data-gallery-merge="otp-field">
+          <div {...root.attrs}>
+            <input {...hiddenInput.attrs} />
+            <input {...slot.attrs} />
+          </div>
+        </div>,
+      ),
     ).toBe(
       '<div data-gallery-merge="otp-field"><div data-invalid="" data-required="" role="application" id="gallery-otp-field" aria-labelledby="gallery-otp-label" aria-describedby="author-otp-description" aria-invalid="true" class="otp-root gap-2"><input data-required="" aria-hidden="false" data-slot="hidden-input" autoComplete="one-time-code" disabled inputMode="numeric" maxLength="6" minLength="6" tabIndex="-1" type="text" value="1234" name="author-otp-code" pattern="[0-9]*" required class="otp-hidden sr-only"><input data-required="" data-filled="" aria-label="Author digit label" data-slot="0" autoComplete="one-time-code" inputMode="numeric" maxLength="2" type="text" value="9" required class="otp-slot text-center"></div></div>',
     );
   });
-
   it('renders a golden number-field merge with native input scalars and step button wiring', () => {
     const input = mergeCompilerPrimitiveAttrs(
       {
@@ -689,7 +683,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-
     expect(input.diagnostics).toEqual([
       {
         attr: 'aria-describedby',
@@ -699,15 +692,16 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(increment.diagnostics).toEqual([]);
     expect(
-      <div data-gallery-merge="number-field">
-        <input {...input.attrs} />
-        <button {...increment.attrs}>+</button>
-      </div>,
+      String(
+        <div data-gallery-merge="number-field">
+          <input {...input.attrs} />
+          <button {...increment.attrs}>+</button>
+        </div>,
+      ),
     ).toBe(
       '<div data-gallery-merge="number-field"><input data-invalid="author-invalid" data-required="" aria-describedby="author-number-description" aria-invalid="true" aria-labelledby="gallery-number-label" id="gallery-number-input" max="8" min="0" name="author-quantity" required step="2" type="number" value="6" class="number-input tabular-nums"><button data-action="author-increment" aria-label="Increase quantity" type="submit" id="gallery-number-increment" aria-controls="gallery-number-input" class="number-step rounded-r">+</button></div>',
     );
   });
-
   it('renders a golden select merge with custom trigger and option scalars', () => {
     const state = {
       items: [
@@ -753,7 +747,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-growth',
       },
     );
-
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -775,14 +768,15 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <button {...trigger.attrs}>
-        <div {...option.attrs}>Growth</div>
-      </button>,
+      String(
+        <button {...trigger.attrs}>
+          <div {...option.attrs}>Growth</div>
+        </button>,
+      ),
     ).toBe(
       '<button data-state="open" data-required="" aria-expanded="true" aria-haspopup="listbox" role="combobox" type="button" id="gallery-select" aria-labelledby="gallery-select-label" class="select-trigger min-w-40" name="author-plan"><div data-state="checked" aria-selected="true" role="option" id="select-option-1" value="author-growth" label="Author Growth" class="select-option font-medium">Growth</div></button>',
     );
   });
-
   it('renders a golden switch merge with native logical-OR attributes', () => {
     const merged = mergeCompilerPrimitiveAttrs(
       {
@@ -802,7 +796,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         required: false,
       },
     );
-
     expect(merged.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -816,11 +809,10 @@ describe('gallery G5 primitive merge fixtures', () => {
         message: 'Author override of primitive ARIA/role attribute per SPEC.md section 4.6',
       },
     ]);
-    expect(<input {...merged.attrs} />).toBe(
+    expect(String(<input {...merged.attrs} />)).toBe(
       '<input data-state="checked" aria-checked="true" checked disabled name="gallery-notifications" role="switch" required type="checkbox" value="enabled" class="switch-control rounded-full">',
     );
   });
-
   it('renders golden checkbox-group merges across root, item, control, and label attrs', () => {
     const state = {
       activeValue: 'email',
@@ -889,7 +881,6 @@ describe('gallery G5 primitive merge fixtures', () => {
       ),
       { class: 'checkbox-group-label' },
     );
-
     expect(root.diagnostics).toEqual([
       {
         attr: 'role',
@@ -919,19 +910,20 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(label.diagnostics).toEqual([]);
     expect(
-      <fieldset data-gallery-merge="checkbox-group">
-        <div {...root.attrs}>
-          <div {...item.attrs}>
-            <input {...control.attrs} />
-            <label {...label.attrs}>Email</label>
+      String(
+        <fieldset data-gallery-merge="checkbox-group">
+          <div {...root.attrs}>
+            <div {...item.attrs}>
+              <input {...control.attrs} />
+              <label {...label.attrs}>Email</label>
+            </div>
           </div>
-        </div>
-      </fieldset>,
+        </fieldset>,
+      ),
     ).toBe(
       '<fieldset data-gallery-merge="checkbox-group"><div data-orientation="vertical" data-invalid="" data-required="" role="group" id="gallery-notifications" aria-labelledby="gallery-notifications-label" aria-describedby="author-notifications-help" aria-invalid="true" aria-required="true" class="checkbox-group gap-2"><div data-state="checked" id="author-notifications-email-item" class="checkbox-group-item flex"><input data-state="checked" aria-checked="true" checked disabled tabIndex="0" type="checkbox" value="email" id="author-notifications-email" name="notifications" required class="checkbox-group-control"><label data-state="checked" for="author-notifications-email" id="gallery-notifications-email-label" class="checkbox-group-label">Email</label></div></div></fieldset>',
     );
   });
-
   it('renders golden toggle-group and toolbar merges for roving button attrs', () => {
     const toggleState = {
       activeValue: 'bold',
@@ -1026,7 +1018,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-align-left',
       },
     );
-
     expect(toggleRoot.diagnostics).toEqual([
       {
         attr: 'role',
@@ -1076,23 +1067,24 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <section data-gallery-merge="roving-groups">
-        <div {...toggleRoot.attrs}>
-          <span {...toggleItem.attrs}>
-            <button {...toggleButton.attrs}>Bold</button>
-          </span>
-        </div>
-        <div {...toolbar.attrs}>
-          <span {...toolbarItem.attrs}>
-            <button {...toolbarButton.attrs}>Left</button>
-          </span>
-        </div>
-      </section>,
+      String(
+        <section data-gallery-merge="roving-groups">
+          <div {...toggleRoot.attrs}>
+            <span {...toggleItem.attrs}>
+              <button {...toggleButton.attrs}>Bold</button>
+            </span>
+          </div>
+          <div {...toolbar.attrs}>
+            <span {...toolbarItem.attrs}>
+              <button {...toolbarButton.attrs}>Left</button>
+            </span>
+          </div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="roving-groups"><div data-orientation="horizontal" role="toolbar" id="gallery-formatting" aria-labelledby="author-formatting-label" aria-describedby="gallery-formatting-help" class="toggle-group rounded"><span data-state="pressed" id="gallery-bold-item" class="toggle-group-item selected"><button data-state="pressed" aria-pressed="true" disabled tabIndex="0" type="button" value="author-bold" id="gallery-bold-button" class="toggle-group-button">Bold</button></span></div><div data-orientation="vertical" role="group" id="gallery-toolbar" aria-label="Editor toolbar" aria-describedby="gallery-toolbar-help" aria-orientation="horizontal" class="toolbar-root gap-1"><span id="gallery-align-left-item" class="toolbar-item shrink-0"><button disabled tabIndex="0" type="button" value="author-align-left" aria-pressed="true" data-pressed="true" id="gallery-align-left-button" class="toolbar-button">Left</button></span></div></section>',
     );
   });
-
   it('renders golden select merges across root, trigger, content, value, and option attrs', () => {
     const state = {
       disabled: true,
@@ -1175,7 +1167,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         value: 'author-growth',
       },
     );
-
     expect(root.diagnostics).toEqual([]);
     expect(trigger.diagnostics).toEqual([
       {
@@ -1194,21 +1185,22 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(value.diagnostics).toEqual([]);
     expect(option.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="select-family">
-        <div {...root.attrs}>
-          <button {...trigger.attrs}>
-            <div {...option.attrs}>Growth</div>
-          </button>
-          <div {...content.attrs}>
-            <span {...value.attrs}>Choose a plan</span>
+      String(
+        <section data-gallery-merge="select-family">
+          <div {...root.attrs}>
+            <button {...trigger.attrs}>
+              <div {...option.attrs}>Growth</div>
+            </button>
+            <div {...content.attrs}>
+              <span {...value.attrs}>Choose a plan</span>
+            </div>
           </div>
-        </div>
-      </section>,
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="select-family"><div data-state="closed" data-disabled="" data-placeholder="author-placeholder" data-invalid="" data-required="" id="author-select-root" class="select-root grid"><button data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" aria-expanded="false" aria-haspopup="listbox" role="combobox" type="button" disabled id="gallery-select-trigger" aria-labelledby="gallery-select-label" aria-describedby="author-select-description" aria-invalid="true" class="select-trigger w-44" name="author-plan"><div data-state="unchecked" data-disabled="" aria-selected="false" role="option" id="select-option-1" aria-disabled="true" value="author-growth" label="Growth" class="select-option font-medium" selected>Growth</div></button><div data-state="closed" data-disabled="" data-placeholder="" data-invalid="" data-required="" role="listbox" id="gallery-select-content" aria-labelledby="author-select-label" hidden class="select-content shadow"><span data-placeholder="author-placeholder" id="author-select-value" class="select-value text-muted">Choose a plan</span></div></div></section>',
     );
   });
-
   it('renders golden fieldset merges for grouped field semantics', () => {
     const root = mergeCompilerPrimitiveAttrs(
       {
@@ -1242,7 +1234,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         'data-invalid': 'author-invalid',
       },
     );
-
     expect(root.diagnostics).toEqual([
       {
         attr: 'aria-describedby',
@@ -1252,9 +1243,11 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(legend.diagnostics).toEqual([]);
     expect(
-      <fieldset {...root.attrs}>
-        <legend {...legend.attrs}>Shipping speed</legend>
-      </fieldset>,
+      String(
+        <fieldset {...root.attrs}>
+          <legend {...legend.attrs}>Shipping speed</legend>
+        </fieldset>,
+      ),
     ).toBe(
       '<fieldset data-disabled="" data-invalid="" data-required="" aria-describedby="author-fieldset-description" aria-invalid="true" disabled id="gallery-fieldset" class="fieldset-root gap-2"><legend data-invalid="author-invalid" data-required="" id="gallery-fieldset-legend" class="fieldset-legend text-sm">Shipping speed</legend></fieldset>',
     );

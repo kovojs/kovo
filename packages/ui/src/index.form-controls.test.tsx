@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
-
 import * as style from '@kovojs/style';
-
 import { Checkbox } from './checkbox.js';
 import {
   CheckboxGroup,
@@ -43,7 +41,6 @@ import { Switch } from './switch.js';
 import { Toggle } from './toggle.js';
 import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from './toggle-group.js';
 import { Toolbar, ToolbarButton, ToolbarItem } from './toolbar.js';
-
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless checkbox-group primitive as styled native checkboxes', () => {
     const items = [
@@ -59,37 +56,45 @@ describe('@kovojs/ui styled package foundation', () => {
       required: true,
       value: ['updates'] as const,
     };
-
-    const root = CheckboxGroup.definition.render({
-      ...state,
-      children: 'checkbox options',
-      errorId: 'notifications-error',
-      id: 'notifications',
-      invalid: true,
-      labelledBy: 'notifications-label',
-    });
-    const item = CheckboxGroupItem.definition.render({
-      ...state,
-      children: 'updates input',
-      itemValue: 'updates',
-    });
-    const control = CheckboxGroupControl.definition.render({
-      ...state,
-      controlId: 'notifications-updates',
-      itemValue: 'updates',
-    });
-    const disabledControl = CheckboxGroupControl.definition.render({
-      ...state,
-      controlId: 'notifications-security',
-      itemValue: 'security',
-    });
-    const label = CheckboxGroupLabel.definition.render({
-      ...state,
-      children: 'Product updates',
-      controlId: 'notifications-updates',
-      itemValue: 'updates',
-    });
-
+    const root = String(
+      CheckboxGroup.definition.render({
+        ...state,
+        children: 'checkbox options',
+        errorId: 'notifications-error',
+        id: 'notifications',
+        invalid: true,
+        labelledBy: 'notifications-label',
+      }),
+    );
+    const item = String(
+      CheckboxGroupItem.definition.render({
+        ...state,
+        children: 'updates input',
+        itemValue: 'updates',
+      }),
+    );
+    const control = String(
+      CheckboxGroupControl.definition.render({
+        ...state,
+        controlId: 'notifications-updates',
+        itemValue: 'updates',
+      }),
+    );
+    const disabledControl = String(
+      CheckboxGroupControl.definition.render({
+        ...state,
+        controlId: 'notifications-security',
+        itemValue: 'security',
+      }),
+    );
+    const label = String(
+      CheckboxGroupLabel.definition.render({
+        ...state,
+        children: 'Product updates',
+        controlId: 'notifications-updates',
+        itemValue: 'updates',
+      }),
+    );
     expect(root).toContain('aria-describedby="notifications-help notifications-error"');
     expect(root).toContain('aria-invalid="true"');
     expect(root).toContain('aria-required="true"');
@@ -110,7 +115,6 @@ describe('@kovojs/ui styled package foundation', () => {
       checkboxGroupLabelClasses: [style.attrs(checkboxGroupStyles.label).class ?? ''] as const,
     }).toMatchSnapshot();
   });
-
   it('wraps the headless radio-group primitive as styled native radios', () => {
     const items = [
       { value: 'standard' },
@@ -125,35 +129,43 @@ describe('@kovojs/ui styled package foundation', () => {
       required: true,
       value: 'express',
     };
-
-    const root = RadioGroup.definition.render({
-      ...state,
-      children: 'radio options',
-      id: 'shipping-speed',
-      invalid: true,
-    });
-    const item = RadioGroupItem.definition.render({
-      ...state,
-      children: 'express input',
-      itemValue: 'express',
-    });
-    const radio = RadioGroupRadio.definition.render({
-      ...state,
-      controlId: 'shipping-express',
-      itemValue: 'express',
-    });
-    const disabledRadio = RadioGroupRadio.definition.render({
-      ...state,
-      controlId: 'shipping-freight',
-      itemValue: 'freight',
-    });
-    const label = RadioGroupLabel.definition.render({
-      ...state,
-      children: 'Express',
-      controlId: 'shipping-express',
-      itemValue: 'express',
-    });
-
+    const root = String(
+      RadioGroup.definition.render({
+        ...state,
+        children: 'radio options',
+        id: 'shipping-speed',
+        invalid: true,
+      }),
+    );
+    const item = String(
+      RadioGroupItem.definition.render({
+        ...state,
+        children: 'express input',
+        itemValue: 'express',
+      }),
+    );
+    const radio = String(
+      RadioGroupRadio.definition.render({
+        ...state,
+        controlId: 'shipping-express',
+        itemValue: 'express',
+      }),
+    );
+    const disabledRadio = String(
+      RadioGroupRadio.definition.render({
+        ...state,
+        controlId: 'shipping-freight',
+        itemValue: 'freight',
+      }),
+    );
+    const label = String(
+      RadioGroupLabel.definition.render({
+        ...state,
+        children: 'Express',
+        controlId: 'shipping-express',
+        itemValue: 'express',
+      }),
+    );
     expect(root).toContain('aria-describedby="shipping-help"');
     expect(root).toContain('aria-invalid="true"');
     expect(root).toContain('aria-required="true"');
@@ -168,35 +180,39 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disabledRadio).toContain('tabIndex="-1" type="radio" value="freight"');
     expect(label).toContain('for="shipping-express"');
   });
-
   it('wraps headless form-control primitives as styled native controls', () => {
-    const checkbox = Checkbox.definition.render({
-      checked: 'indeterminate',
-      children: 'Some permissions',
-      describedBy: 'permissions-help permissions-error',
-      form: 'permissions-form',
-      id: 'permissions-partial',
-      labelledBy: 'permissions-label',
-      name: 'permissions',
-      required: true,
-      value: 'partial',
-    });
-    const switchControl = Switch.definition.render({
-      checked: true,
-      children: 'Notifications',
-      describedBy: 'notifications-help',
-      form: 'preferences-form',
-      id: 'notifications-switch',
-      labelledBy: 'notifications-label',
-      name: 'notifications',
-      value: 'enabled',
-    });
-    const toggle = Toggle.definition.render({
-      children: 'Bold',
-      pressed: true,
-      variant: 'subtle',
-    });
-
+    const checkbox = String(
+      Checkbox.definition.render({
+        checked: 'indeterminate',
+        children: 'Some permissions',
+        describedBy: 'permissions-help permissions-error',
+        form: 'permissions-form',
+        id: 'permissions-partial',
+        labelledBy: 'permissions-label',
+        name: 'permissions',
+        required: true,
+        value: 'partial',
+      }),
+    );
+    const switchControl = String(
+      Switch.definition.render({
+        checked: true,
+        children: 'Notifications',
+        describedBy: 'notifications-help',
+        form: 'preferences-form',
+        id: 'notifications-switch',
+        labelledBy: 'notifications-label',
+        name: 'notifications',
+        value: 'enabled',
+      }),
+    );
+    const toggle = String(
+      Toggle.definition.render({
+        children: 'Bold',
+        pressed: true,
+        variant: 'subtle',
+      }),
+    );
     expect(checkbox).toContain('data-state="indeterminate"');
     expect(checkbox).toContain('aria-checked="mixed"');
     expect(checkbox).toContain('aria-describedby="permissions-help permissions-error"');
@@ -218,7 +234,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(toggle).toContain('data-state="pressed"');
     expect(toggle).toContain('aria-pressed="true"');
   });
-
   it('wraps the headless toggle-group primitive as styled roving buttons', () => {
     const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'strike' }];
     const state = {
@@ -227,33 +242,39 @@ describe('@kovojs/ui styled package foundation', () => {
       type: 'multiple' as const,
       value: ['bold'] as const,
     };
-
-    const root = ToggleGroup.definition.render({
-      ...state,
-      children: 'format controls',
-      descriptionId: 'format-help',
-      id: 'formatting',
-      labelledBy: 'format-label',
-      orientation: 'vertical',
-    });
-    const item = ToggleGroupItem.definition.render({
-      ...state,
-      children: 'bold button',
-      id: 'bold-item',
-      itemValue: 'bold',
-    });
-    const button = ToggleGroupButton.definition.render({
-      ...state,
-      children: 'Bold',
-      id: 'bold-button',
-      itemValue: 'bold',
-    });
-    const disabledButton = ToggleGroupButton.definition.render({
-      ...state,
-      children: 'Strike',
-      itemValue: 'strike',
-    });
-
+    const root = String(
+      ToggleGroup.definition.render({
+        ...state,
+        children: 'format controls',
+        descriptionId: 'format-help',
+        id: 'formatting',
+        labelledBy: 'format-label',
+        orientation: 'vertical',
+      }),
+    );
+    const item = String(
+      ToggleGroupItem.definition.render({
+        ...state,
+        children: 'bold button',
+        id: 'bold-item',
+        itemValue: 'bold',
+      }),
+    );
+    const button = String(
+      ToggleGroupButton.definition.render({
+        ...state,
+        children: 'Bold',
+        id: 'bold-button',
+        itemValue: 'bold',
+      }),
+    );
+    const disabledButton = String(
+      ToggleGroupButton.definition.render({
+        ...state,
+        children: 'Strike',
+        itemValue: 'strike',
+      }),
+    );
     expect(root).toContain('aria-describedby="format-help"');
     expect(root).toContain('aria-labelledby="format-label"');
     expect(root).toContain('data-orientation="vertical" id="formatting" role="group"');
@@ -268,7 +289,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(item).toContain('data-style-src="toggle-group.tsx#item"');
     expect(root).toContain('data-style-src="toggle-group.tsx#root"');
   });
-
   it('wraps the headless toolbar primitive as styled roving controls', () => {
     const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'link' }];
     const state = {
@@ -276,34 +296,40 @@ describe('@kovojs/ui styled package foundation', () => {
       items,
       orientation: 'vertical' as const,
     };
-
-    const root = Toolbar.definition.render({
-      ...state,
-      children: 'format controls',
-      descriptionId: 'format-help',
-      id: 'formatting-toolbar',
-      labelledBy: 'format-label',
-    });
-    const item = ToolbarItem.definition.render({
-      ...state,
-      children: 'bold button',
-      id: 'bold-item',
-      itemValue: 'bold',
-    });
-    const button = ToolbarButton.definition.render({
-      ...state,
-      children: 'Bold',
-      id: 'bold-button',
-      itemValue: 'bold',
-      pressed: true,
-    });
-    const disabledButton = ToolbarButton.definition.render({
-      ...state,
-      children: 'Link',
-      itemValue: 'link',
-      pressed: false,
-    });
-
+    const root = String(
+      Toolbar.definition.render({
+        ...state,
+        children: 'format controls',
+        descriptionId: 'format-help',
+        id: 'formatting-toolbar',
+        labelledBy: 'format-label',
+      }),
+    );
+    const item = String(
+      ToolbarItem.definition.render({
+        ...state,
+        children: 'bold button',
+        id: 'bold-item',
+        itemValue: 'bold',
+      }),
+    );
+    const button = String(
+      ToolbarButton.definition.render({
+        ...state,
+        children: 'Bold',
+        id: 'bold-button',
+        itemValue: 'bold',
+        pressed: true,
+      }),
+    );
+    const disabledButton = String(
+      ToolbarButton.definition.render({
+        ...state,
+        children: 'Link',
+        itemValue: 'link',
+        pressed: false,
+      }),
+    );
     expect(root).toContain('aria-describedby="format-help"');
     expect(root).toContain('aria-labelledby="format-label"');
     expect(root).toContain('aria-orientation="vertical"');
@@ -319,7 +345,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(item).toContain('data-style-src="toolbar.tsx#item"');
     expect(root).toContain('data-style-src="toolbar.tsx#root"');
   });
-
   it('wraps the headless number-field primitive as a styled native number input', () => {
     const state = {
       invalid: true,
@@ -330,42 +355,52 @@ describe('@kovojs/ui styled package foundation', () => {
       step: 2,
       value: 2,
     };
-
-    const root = NumberField.definition.render({
-      ...state,
-      children: 'quantity controls',
-      id: 'quantity-field',
-    });
-    const control = NumberFieldControl.definition.render({
-      ...state,
-      children: 'stepper',
-      id: 'quantity-control',
-    });
-    const decrement = NumberFieldDecrement.definition.render({
-      ...state,
-      id: 'quantity-decrement',
-      inputId: 'quantity-input',
-      label: 'Decrease quantity',
-    });
-    const input = NumberFieldInput.definition.render({
-      ...state,
-      descriptionId: 'quantity-description',
-      errorId: 'quantity-error',
-      form: 'cart-form',
-      id: 'quantity-input',
-      labelledBy: 'quantity-label',
-    });
-    const increment = NumberFieldIncrement.definition.render({
-      ...state,
-      id: 'quantity-increment',
-      inputId: 'quantity-input',
-      label: 'Increase quantity',
-    });
-    const disabledAtMax = NumberFieldIncrement.definition.render({
-      max: 10,
-      value: 10,
-    });
-
+    const root = String(
+      NumberField.definition.render({
+        ...state,
+        children: 'quantity controls',
+        id: 'quantity-field',
+      }),
+    );
+    const control = String(
+      NumberFieldControl.definition.render({
+        ...state,
+        children: 'stepper',
+        id: 'quantity-control',
+      }),
+    );
+    const decrement = String(
+      NumberFieldDecrement.definition.render({
+        ...state,
+        id: 'quantity-decrement',
+        inputId: 'quantity-input',
+        label: 'Decrease quantity',
+      }),
+    );
+    const input = String(
+      NumberFieldInput.definition.render({
+        ...state,
+        descriptionId: 'quantity-description',
+        errorId: 'quantity-error',
+        form: 'cart-form',
+        id: 'quantity-input',
+        labelledBy: 'quantity-label',
+      }),
+    );
+    const increment = String(
+      NumberFieldIncrement.definition.render({
+        ...state,
+        id: 'quantity-increment',
+        inputId: 'quantity-input',
+        label: 'Increase quantity',
+      }),
+    );
+    const disabledAtMax = String(
+      NumberFieldIncrement.definition.render({
+        max: 10,
+        value: 10,
+      }),
+    );
     expect(root).toContain('data-invalid="" data-required="" id="quantity-field"');
     expect(control).toContain('data-invalid="" data-required="" id="quantity-control"');
     expect(decrement).toContain('aria-controls="quantity-input"');
@@ -386,7 +421,6 @@ describe('@kovojs/ui styled package foundation', () => {
       numberFieldInputClasses: [style.attrs(numberFieldStyles.input).class ?? ''] as const,
     }).toMatchSnapshot();
   });
-
   it('wraps the headless otp-field primitive as styled aggregate and slot inputs', () => {
     const state = {
       descriptionId: 'otp-description',
@@ -400,31 +434,37 @@ describe('@kovojs/ui styled package foundation', () => {
       required: true,
       value: '1234',
     };
-
-    const root = OtpField.definition.render({
-      ...state,
-      children: 'otp controls',
-      id: 'otp-field',
-    });
-    const group = OtpFieldGroup.definition.render({ children: 'slots' });
-    const hidden = OtpFieldHiddenInput.definition.render({ ...state, id: 'otp-code' });
-    const firstSlot = OtpFieldInput.definition.render({
-      ...state,
-      id: 'otp-slot-1',
-      label: 'One-time code digit 1',
-      slotIndex: 0,
-    });
-    const emptySlot = OtpFieldInput.definition.render({
-      ...state,
-      id: 'otp-slot-6',
-      slotIndex: 5,
-    });
-    const completeDisabled = OtpField.definition.render({
-      disabled: true,
-      length: 4,
-      value: '9876',
-    });
-
+    const root = String(
+      OtpField.definition.render({
+        ...state,
+        children: 'otp controls',
+        id: 'otp-field',
+      }),
+    );
+    const group = String(OtpFieldGroup.definition.render({ children: 'slots' }));
+    const hidden = String(OtpFieldHiddenInput.definition.render({ ...state, id: 'otp-code' }));
+    const firstSlot = String(
+      OtpFieldInput.definition.render({
+        ...state,
+        id: 'otp-slot-1',
+        label: 'One-time code digit 1',
+        slotIndex: 0,
+      }),
+    );
+    const emptySlot = String(
+      OtpFieldInput.definition.render({
+        ...state,
+        id: 'otp-slot-6',
+        slotIndex: 5,
+      }),
+    );
+    const completeDisabled = String(
+      OtpField.definition.render({
+        disabled: true,
+        length: 4,
+        value: '9876',
+      }),
+    );
     expect(root).toContain('aria-describedby="otp-description otp-error"');
     expect(root).toContain('aria-invalid="true"');
     expect(root).toContain('data-required=""');
@@ -450,88 +490,103 @@ describe('@kovojs/ui styled package foundation', () => {
       otpFieldInputClasses: [style.attrs(otpFieldStyles.input).class ?? ''] as const,
     }).toMatchSnapshot();
   });
-
   it('wraps field and fieldset primitives as styled native form wiring', () => {
     const state = {
       invalid: true,
       required: true,
     };
-
-    const root = Field.definition.render({
-      ...state,
-      children: 'email field',
-      id: 'email-field',
-    });
-    const label = FieldLabel.definition.render({
-      ...state,
-      children: 'Email',
-      controlId: 'email',
-      id: 'email-label',
-    });
-    const control = FieldControl.definition.render({
-      ...state,
-      autoComplete: 'email',
-      descriptionId: 'email-description',
-      errorId: 'email-error',
-      form: 'profile-form',
-      id: 'email',
-      inputMode: 'email',
-      maxLength: 80,
-      minLength: 3,
-      name: 'email',
-      pattern: '.+@example\\.com',
-      placeholder: 'ada@example.com',
-      type: 'email',
-      value: 'ada@example.com',
-    });
-    const textarea = FieldTextarea.definition.render({
-      autoComplete: 'off',
-      descriptionId: 'bio-description',
-      form: 'profile-form',
-      id: 'bio',
-      maxLength: 240,
-      name: 'bio',
-      placeholder: 'Short bio',
-      rows: 4,
-    });
-    const select = FieldSelect.definition.render({
-      children:
-        '<option value="starter">Starter</option><option value="team" selected>Team</option>',
-      descriptionId: 'plan-description',
-      form: 'profile-form',
-      id: 'plan',
-      name: 'plan',
-      required: true,
-      value: 'team',
-    });
-    const selectOption = FieldSelectOption.definition.render({
-      children: 'Enterprise',
-      disabled: true,
-      selected: true,
-      value: 'enterprise',
-    });
-    const description = FieldDescription.definition.render({
-      children: 'Used for notifications.',
-      id: 'email-description',
-    });
-    const error = FieldError.definition.render({ children: 'Email required.', id: 'email-error' });
-    const fieldset = Fieldset.definition.render({
-      children:
-        FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }) +
-        FieldControl.definition.render({
-          id: 'seat',
-          form: 'profile-form',
-          name: 'seat',
-          value: 'window',
-        }),
-      descriptionId: 'plan-description',
-      disabled: true,
-      form: 'profile-form',
-      id: 'plan-fieldset',
-      invalid: true,
-      name: 'plan-options',
-    });
-
+    const root = String(
+      Field.definition.render({
+        ...state,
+        children: 'email field',
+        id: 'email-field',
+      }),
+    );
+    const label = String(
+      FieldLabel.definition.render({
+        ...state,
+        children: 'Email',
+        controlId: 'email',
+        id: 'email-label',
+      }),
+    );
+    const control = String(
+      FieldControl.definition.render({
+        ...state,
+        autoComplete: 'email',
+        descriptionId: 'email-description',
+        errorId: 'email-error',
+        form: 'profile-form',
+        id: 'email',
+        inputMode: 'email',
+        maxLength: 80,
+        minLength: 3,
+        name: 'email',
+        pattern: '.+@example\\.com',
+        placeholder: 'ada@example.com',
+        type: 'email',
+        value: 'ada@example.com',
+      }),
+    );
+    const textarea = String(
+      FieldTextarea.definition.render({
+        autoComplete: 'off',
+        descriptionId: 'bio-description',
+        form: 'profile-form',
+        id: 'bio',
+        maxLength: 240,
+        name: 'bio',
+        placeholder: 'Short bio',
+        rows: 4,
+      }),
+    );
+    const select = String(
+      FieldSelect.definition.render({
+        children:
+          '<option value="starter">Starter</option><option value="team" selected>Team</option>',
+        descriptionId: 'plan-description',
+        form: 'profile-form',
+        id: 'plan',
+        name: 'plan',
+        required: true,
+        value: 'team',
+      }),
+    );
+    const selectOption = String(
+      FieldSelectOption.definition.render({
+        children: 'Enterprise',
+        disabled: true,
+        selected: true,
+        value: 'enterprise',
+      }),
+    );
+    const description = String(
+      FieldDescription.definition.render({
+        children: 'Used for notifications.',
+        id: 'email-description',
+      }),
+    );
+    const error = String(
+      FieldError.definition.render({ children: 'Email required.', id: 'email-error' }),
+    );
+    const fieldset = String(
+      Fieldset.definition.render({
+        children:
+          FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }) +
+          FieldControl.definition.render({
+            id: 'seat',
+            form: 'profile-form',
+            name: 'seat',
+            value: 'window',
+          }),
+        descriptionId: 'plan-description',
+        disabled: true,
+        form: 'profile-form',
+        id: 'plan-fieldset',
+        invalid: true,
+        name: 'plan-options',
+      }),
+    );
     expect(root).toContain('data-invalid="" data-required="" id="email-field"');
     expect(label).toContain('for="email" id="email-label"');
     expect(control).toContain('aria-describedby="email-description email-error"');
@@ -560,7 +615,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(select).toContain('aria-describedby="plan-description"');
     expect(select).toContain('form="profile-form"');
     expect(select).toContain('id="plan" name="plan" required value="team"');
-    expect(select).toContain('<option value="team" selected>Team</option>');
+    expect(select).toContain('&lt;option value="team" selected&gt;Team&lt;/option&gt;');
     expect(select).not.toMatch(/\sdisabled(?:\s|>|=)/);
     expect(selectOption).toContain('data-style-src="field.tsx#selectOption"');
     expect(selectOption).toContain('disabled selected value="enterprise">Enterprise</option>');

@@ -1,18 +1,16 @@
 import { describe, expect, it } from 'vitest';
-
 import * as style from '@kovojs/style';
-
 import { Badge, badgeStyles } from './badge.js';
-
 describe('@kovojs/ui Badge StyleX styles', () => {
   it('renders default and variant StyleX classes', () => {
-    const neutral = Badge.definition.render({ children: 'Draft' }) as string;
-    const success = Badge.definition.render({ children: 'Live', variant: 'success' }) as string;
-    const warning = Badge.definition.render({
-      children: 'Needs review',
-      variant: 'warning',
-    }) as string;
-
+    const neutral = String(Badge.definition.render({ children: 'Draft' }));
+    const success = String(Badge.definition.render({ children: 'Live', variant: 'success' }));
+    const warning = String(
+      Badge.definition.render({
+        children: 'Needs review',
+        variant: 'warning',
+      }),
+    );
     expect(neutral).toContain('<span class="kv-badge-align-');
     expect(neutral).toContain('data-style-src="badge.tsx#root; badge.tsx#neutral"');
     expect(success).toContain('kv-badge-variant-bg-');
@@ -41,7 +39,6 @@ describe('@kovojs/ui Badge StyleX styles', () => {
       ).join(' '),
     ).toContain('kv-badge-variant-bg-');
   });
-
   it('accepts author-last StyleX overrides', () => {
     const overrides = style.create(
       {
@@ -52,19 +49,18 @@ describe('@kovojs/ui Badge StyleX styles', () => {
       },
       { namespace: 'appBadge', source: 'app-badge.tsx' },
     );
-
-    const rendered = Badge.definition.render({
-      children: 'Custom',
-      style: overrides.root,
-      variant: 'success',
-    }) as string;
-
+    const rendered = String(
+      Badge.definition.render({
+        children: 'Custom',
+        style: overrides.root,
+        variant: 'success',
+      }),
+    );
     expect(rendered).toContain('kv-app-badge-bg-');
     expect(rendered).toContain('kv-app-badge-fg-');
     expect(rendered).toContain('app-badge.tsx#root');
     expect(rendered).not.toContain('kv-badge-variant-bg-');
   });
-
   it('exports StyleX style groups instead of variant helpers', () => {
     expect(badgeStyles.base.root.$$css).toBe(true);
     expect(badgeStyles.variants.neutral.$$css).toBe(true);

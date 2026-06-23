@@ -20,27 +20,35 @@ export function escapeAttribute(value: string): string {
 }
 
 const kovoRenderedHtml = Symbol.for('kovo.renderedHtml');
+const coercedRenderedHtmlPrefix = `\uE000kovo-rendered-html:${Math.random().toString(36).slice(2)}:`;
+const coercedRenderedHtmlSuffix = '\uE001';
+const coercedRenderedHtmlValues = new Map<string, string>();
+let coercedRenderedHtmlId = 0;
 
 /** @internal framework-rendered HTML, distinct from app-authored text strings. */
-export interface RenderedHtml {
+export type RenderedHtml = string & {
   readonly [kovoRenderedHtml]: true;
   readonly html: string;
   [Symbol.toPrimitive](): string;
+  toJSON(): string;
   toString(): string;
-}
+};
 
 /** @internal create a branded framework-rendered HTML value. */
 export function renderedHtml(html: string): RenderedHtml {
   return {
     [kovoRenderedHtml]: true,
     html,
-    [Symbol.toPrimitive]() {
-      return html;
+    [Symbol.toPrimitive](hint: string) {
+      return hint === 'default' ? coerceRenderedHtml(html) : html;
     },
     toString() {
       return html;
     },
-  };
+    toJSON() {
+      return html;
+    },
+  } as unknown as RenderedHtml;
 }
 
 /** @internal true for values produced by the server JSX/runtime HTML renderer. */
@@ -60,12 +68,65 @@ export function isRenderedHtml(value: unknown): value is RenderedHtml {
 export function renderHtmlValue(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (isRenderedHtml(value)) return value.html;
-  if (typeof value === 'string') return escapeText(value);
+  if (typeof value === 'string') return escapeTextWithRenderedHtml(value);
   if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
     return escapeText(value);
   }
 
   return escapeText(JSON.stringify(value) ?? '');
+}
+
+/** @internal escape text while preserving framework-rendered HTML coerced via `+`. */
+export function escapeTextWithRenderedHtml(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return '';
+  if (isRenderedHtml(value)) return coerceRenderedHtml(value.html);
+  if (Array.isArray(value)) return value.map((item) => escapeTextWithRenderedHtml(item)).join('');
+
+  // Mirrors renderJsxChildren's scalar coercion so escaped text stays byte-identical for safe values.
+  // eslint-disable-next-line @typescript-eslint/no-base-to-string
+  return renderStringWithCoercedRenderedHtml(String(value), escapeHtml);
+}
+
+/** @internal unwrap framework-rendered HTML coerced via `+`, leaving other text raw. */
+export function unwrapCoercedRenderedHtml(value: string): string {
+  return renderStringWithCoercedRenderedHtml(value, (text) => text);
+}
+
+function coerceRenderedHtml(html: string): string {
+  const marker = `${coercedRenderedHtmlPrefix}${(coercedRenderedHtmlId += 1)}${coercedRenderedHtmlSuffix}`;
+  coercedRenderedHtmlValues.set(marker, html);
+  return marker;
+}
+
+function renderStringWithCoercedRenderedHtml(
+  value: string,
+  renderText: (text: string) => string,
+): string {
+  if (!value.includes(coercedRenderedHtmlPrefix)) return renderText(value);
+
+  let html = '';
+  let offset = 0;
+  while (offset < value.length) {
+    const markerStart = value.indexOf(coercedRenderedHtmlPrefix, offset);
+    if (markerStart === -1) {
+      html += renderText(value.slice(offset));
+      break;
+    }
+
+    html += renderText(value.slice(offset, markerStart));
+    const markerEnd = value.indexOf(coercedRenderedHtmlSuffix, markerStart);
+    if (markerEnd === -1) {
+      html += renderText(value.slice(markerStart));
+      break;
+    }
+
+    const marker = value.slice(markerStart, markerEnd + coercedRenderedHtmlSuffix.length);
+    const rendered = coercedRenderedHtmlValues.get(marker);
+    html += rendered === undefined ? renderText(marker) : rendered;
+    offset = markerEnd + coercedRenderedHtmlSuffix.length;
+  }
+
+  return html;
 }
 
 /**
@@ -104,13 +165,7 @@ export function safeUrlValue(value: string): string {
  * for compiler-emitted code, not app authors.
  */
 export function escapeText(value: unknown): string {
-  if (value === null || value === undefined || typeof value === 'boolean') return '';
-  if (Array.isArray(value)) return value.map((item) => escapeText(item)).join('');
-
-  // Mirrors renderJsxChildren's `String(children)` coercion exactly (objects render as
-  // "[object Object]"), so escaped text is byte-identical to the unescaped path for safe values.
-  // eslint-disable-next-line @typescript-eslint/no-base-to-string
-  return escapeHtml(String(value));
+  return escapeTextWithRenderedHtml(value);
 }
 
 /**

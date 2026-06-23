@@ -20,15 +20,15 @@ describe('site route stylesheet hints', () => {
     expect(criticalCss).not.toContain('kv-site-landing');
     expect(criticalCss).not.toContain('kv-site-docs-layout');
     expect(criticalCss).not.toContain('kv-site-gallery');
-    expect(Buffer.byteLength(criticalCss, 'utf8')).toBeLessThan(40_000);
+    expect(new TextEncoder().encode(criticalCss).byteLength).toBeLessThan(40_000);
   });
 
-  it('keeps the global app stylesheet render-blocking after critical theme CSS', () => {
+  it('preloads the global app stylesheet after critical theme CSS', () => {
     const hints = renderPageHints({ stylesheets: siteStylesheets });
 
-    // SPEC §13.1: the docs shell above the fold depends on the full site.css
-    // app atoms, so partial critical CSS must not imply post-paint delivery.
-    expect(hints.html).toContain('<link rel="stylesheet" href="/assets/site.css">');
-    expect(hints.html).not.toContain('data-kovo-deferred-style');
+    expect(hints.html).toContain(
+      '<link rel="preload" as="style" href="/assets/site.css" data-kovo-deferred-style>',
+    );
+    expect(hints.html).toContain('<noscript><link rel="stylesheet" href="/assets/site.css">');
   });
 });

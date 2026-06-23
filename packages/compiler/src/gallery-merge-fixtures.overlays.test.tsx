@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { describe, expect, it } from 'vitest';
-
 import {
   alertDialogActionAttributes,
   alertDialogCancelAttributes,
@@ -22,7 +21,6 @@ import {
   toastViewportAttributes,
 } from '@kovojs/headless-ui/toast';
 import { mergeCompilerPrimitiveAttrs } from './gallery-merge-fixtures-oracle.js';
-
 describe('gallery G5 primitive merge fixtures', () => {
   it('renders a golden toast merge with live-region roles and action buttons', () => {
     const state = { id: 'gallery-toast', open: true };
@@ -81,7 +79,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         'data-dismiss': 'author-dismiss',
       },
     );
-
     expect(viewport.diagnostics).toEqual([
       {
         attr: 'aria-label',
@@ -114,19 +111,20 @@ describe('gallery G5 primitive merge fixtures', () => {
     expect(action.diagnostics).toEqual([]);
     expect(close.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="toast">
-        <div {...viewport.attrs}>
-          <article {...root.attrs}>
-            <button {...action.attrs}>Retry</button>
-            <button {...close.attrs}>Dismiss</button>
-          </article>
-        </div>
-      </section>,
+      String(
+        <section data-gallery-merge="toast">
+          <div {...viewport.attrs}>
+            <article {...root.attrs}>
+              <button {...action.attrs}>Retry</button>
+              <button {...close.attrs}>Dismiss</button>
+            </article>
+          </div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="toast"><div data-placement="top-end" aria-label="Author notifications" role="log" tabIndex="0" id="gallery-toast-viewport" class="toast-viewport fixed"><article data-state="open" data-variant="error" aria-atomic="true" aria-live="polite" aria-describedby="gallery-toast-description" aria-labelledby="gallery-toast-title" id="gallery-toast" role="status" class="toast-root border"><button data-state="open" data-variant="default" data-action="" disabled type="submit" value="retry" class="toast-action underline">Retry</button><button data-state="open" data-variant="default" data-dismiss="author-dismiss" type="button" class="toast-close absolute">Dismiss</button></article></div></section>',
     );
   });
-
   it('renders a golden alert-dialog merge with command wiring and action intents', () => {
     const trigger = mergeCompilerPrimitiveAttrs(
       {
@@ -191,7 +189,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         disabled: true,
       },
     );
-
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -231,18 +228,19 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(action.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="alert-dialog">
-        <button {...trigger.attrs}>Delete</button>
-        <dialog {...content.attrs}>
-          <button {...cancel.attrs}>Cancel</button>
-          <button {...action.attrs}>Confirm</button>
-        </dialog>
-      </section>,
+      String(
+        <section data-gallery-merge="alert-dialog">
+          <button {...trigger.attrs}>Delete</button>
+          <dialog {...content.attrs}>
+            <button {...cancel.attrs}>Cancel</button>
+            <button {...action.attrs}>Confirm</button>
+          </dialog>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="alert-dialog"><button data-state="open" aria-expanded="true" aria-haspopup="dialog" type="button" aria-controls="gallery-delete-dialog" command="show-modal" commandfor="author-delete-dialog" class="alert-dialog-trigger destructive">Delete</button><dialog data-state="open" aria-modal="true" open role="dialog" id="author-delete-dialog" aria-labelledby="gallery-delete-title" aria-describedby="author-delete-description" class="alert-dialog-panel shadow-xl"><button data-state="open" data-intent="cancel" type="submit" command="request-close" commandfor="author-delete-dialog" class="alert-dialog-cancel muted">Cancel</button><button data-state="open" data-intent="author-danger" disabled type="button" command="request-close" commandfor="gallery-delete-dialog" class="alert-dialog-action danger">Confirm</button></dialog></section>',
     );
   });
-
   it('renders a golden popover merge with native popover target conflicts', () => {
     const trigger = mergeCompilerPrimitiveAttrs(
       {
@@ -275,7 +273,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         popover: 'manual',
       },
     );
-
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -301,15 +298,16 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(content.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="popover">
-        <button {...trigger.attrs}>Account</button>
-        <div {...content.attrs}>Menu</div>
-      </section>,
+      String(
+        <section data-gallery-merge="popover">
+          <button {...trigger.attrs}>Account</button>
+          <div {...content.attrs}>Menu</div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="popover"><button data-state="closed" aria-expanded="false" type="submit" aria-controls="author-account-popover" popovertarget="author-account-popover" popovertargetaction="toggle" class="popover-trigger compact">Account</button><div data-state="closed" id="author-account-popover" popover="manual" class="popover-content min-w-48">Menu</div></section>',
     );
   });
-
   it('renders a golden hover-card merge with package-prefixed behavior IDREFs', () => {
     const trigger = mergeCompilerPrimitiveAttrs(
       {
@@ -342,7 +340,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         popover: 'auto',
       },
     );
-
     expect(trigger.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -357,15 +354,16 @@ describe('gallery G5 primitive merge fixtures', () => {
     ]);
     expect(content.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="hover-card">
-        <a {...trigger.attrs}>Ada</a>
-        <aside {...content.attrs}>Profile</aside>
-      </section>,
+      String(
+        <section data-gallery-merge="hover-card">
+          <a {...trigger.attrs}>Ada</a>
+          <aside {...content.attrs}>Profile</aside>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="hover-card"><a data-state="open" kovo-hover-card="author-profile-card" class="hover-card-trigger underline" aria-controls="author-profile-card" aria-expanded="false">Ada</a><aside data-state="closed" id="author-profile-card" class="hover-card-content w-64" popover="auto">Profile</aside></section>',
     );
   });
-
   it('renders golden dialog root and close merges with native command relationships', () => {
     const state = {
       contentId: 'gallery-profile-dialog',
@@ -386,7 +384,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         type: 'submit',
       },
     );
-
     expect(root.diagnostics).toEqual([
       {
         attr: 'data-state',
@@ -402,16 +399,17 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
     expect(
-      <section data-gallery-merge="dialog-close">
-        <div {...root.attrs}>
-          <button {...close.attrs}>Close</button>
-        </div>
-      </section>,
+      String(
+        <section data-gallery-merge="dialog-close">
+          <div {...root.attrs}>
+            <button {...close.attrs}>Close</button>
+          </div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="dialog-close"><div data-state="open" class="dialog-root isolate" id="author-dialog-root"><button data-state="open" disabled type="submit" command="request-close" commandfor="author-profile-dialog" class="dialog-close top-2">Close</button></div></section>',
     );
   });
-
   it('renders golden toast title and description merges with part attrs', () => {
     const title = mergeCompilerPrimitiveAttrs(
       { ...toastTitleAttributes({ id: 'gallery-toast-title' }), class: 'toast-title' },
@@ -432,14 +430,15 @@ describe('gallery G5 primitive merge fixtures', () => {
         id: 'author-toast-description',
       },
     );
-
     expect(title.diagnostics).toEqual([]);
     expect(description.diagnostics).toEqual([]);
     expect(
-      <article data-gallery-merge="toast-parts">
-        <h2 {...title.attrs}>Synced</h2>
-        <p {...description.attrs}>Changes are available offline.</p>
-      </article>,
+      String(
+        <article data-gallery-merge="toast-parts">
+          <h2 {...title.attrs}>Synced</h2>
+          <p {...description.attrs}>Changes are available offline.</p>
+        </article>,
+      ),
     ).toBe(
       '<article data-gallery-merge="toast-parts"><h2 data-part="author-title" id="author-toast-title" class="toast-title font-medium">Synced</h2><p data-part="author-description" id="author-toast-description" class="toast-description text-sm">Changes are available offline.</p></article>',
     );

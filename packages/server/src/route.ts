@@ -28,7 +28,14 @@ import {
   type RouteResponseOutcome,
 } from './response.js';
 import type { Schema } from './schema.js';
-import { escapeAttribute, isRenderedHtml, renderedHtml, renderHtmlValue } from './html.js';
+import {
+  escapeAttribute,
+  isRenderedHtml,
+  renderedHtml,
+  renderHtmlValue,
+  unwrapCoercedRenderedHtml,
+  type RenderedHtml,
+} from './html.js';
 import type {
   CompiledRouteNavigationSegment,
   CompiledRoutePageFunction,
@@ -581,16 +588,17 @@ function stampRouteNavigationSegment(
   segment: CompiledRouteNavigationSegment | undefined,
   value: unknown,
 ): unknown {
-  if (!segment || !isRenderedHtml(value)) return value;
+  const rendered = stampableRouteHtml(value);
+  if (!segment || !rendered) return value;
 
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value.html);
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(rendered.html);
   if (!opening) return value;
 
   const tagName = opening[1];
   const attrs = opening[2] ?? '';
   const stampedAttrs = stampRouteNavigationAttributes(attrs, segment);
   const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return renderedHtml(`${stampedOpening}${value.html.slice(opening[0].length)}`);
+  return renderedHtml(`${stampedOpening}${rendered.html.slice(opening[0].length)}`);
 }
 
 function stampRouteNavigationAttributes(
@@ -619,18 +627,25 @@ function stampLayoutLiveTarget(
   layoutDeclaration: LayoutDeclaration<any, any, any>,
   value: unknown,
 ): unknown {
-  if (!isRenderedHtml(value)) return value;
+  const rendered = stampableRouteHtml(value);
+  if (!rendered) return value;
   const metadata = layoutLiveTargetMetadata.get(layoutDeclaration);
   if (!metadata || metadata.deps.length === 0) return value;
 
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value.html);
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(rendered.html);
   if (!opening) return value;
 
   const tagName = opening[1];
   const attrs = opening[2] ?? '';
   const stampedAttrs = stampLayoutAttributes(attrs, metadata);
   const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return renderedHtml(`${stampedOpening}${value.html.slice(opening[0].length)}`);
+  return renderedHtml(`${stampedOpening}${rendered.html.slice(opening[0].length)}`);
+}
+
+function stampableRouteHtml(value: unknown): RenderedHtml | undefined {
+  if (isRenderedHtml(value)) return value;
+  if (typeof value === 'string') return renderedHtml(unwrapCoercedRenderedHtml(value));
+  return undefined;
 }
 
 function stampLayoutAttributes(attrs: string, metadata: LayoutLiveTargetMetadata): string {

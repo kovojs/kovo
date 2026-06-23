@@ -13,6 +13,8 @@ import type { CrmDb } from './db.js';
 import {
   CRM_DEMO_USER_ID,
   CRM_STAGES,
+  contact,
+  deal,
   type AddContactInput,
   type CloseDealInput,
   type CreateDealInput,
@@ -137,6 +139,7 @@ export const addContact = mutation('addContact', {
     },
   },
   queue: 'crm',
+  registry: { touches: [contact] },
   handler: addContactHandler,
 });
 
@@ -217,6 +220,7 @@ export const createDeal = mutation('createDeal', {
     },
   },
   queue: 'crm',
+  registry: { touches: [contact, deal] },
   handler: createDealHandler,
 });
 
@@ -261,6 +265,7 @@ export const moveDeal = mutation('moveDeal', {
     pipelineByStage: 'await-fragment',
   },
   queue: 'crm',
+  registry: { touches: [deal] },
   handler: moveDealHandler,
 });
 
@@ -326,6 +331,7 @@ export const closeDeal = mutation('closeDeal', {
     pipelineByStage: 'await-fragment',
   },
   queue: 'crm',
+  registry: { touches: [deal] },
   handler: closeDealHandler,
 });
 

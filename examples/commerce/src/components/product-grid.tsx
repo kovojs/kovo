@@ -138,17 +138,17 @@ export const GuestProductGrid = component({
   ),
 });
 
-export function ProductGridError(): string {
+export function ProductGridError() {
   return renderProductGridError();
 }
 
-function renderProductGridError(): string {
+function renderProductGridError() {
   return (
     <section style={productGridStyles.panelError}>Products are temporarily unavailable.</section>
   );
 }
 
-export function renderProductGridItems(result: ProductGridResult, signedIn = true): string {
+export function renderProductGridItems(result: ProductGridResult, signedIn = true) {
   const cards = result.items.map((item) => renderProductCard(item, signedIn));
   return <>{cards}</>;
 }
@@ -168,14 +168,14 @@ export function priceLabel(cents: number): string {
 }
 
 /** Low stock reads as a warning badge; healthy stock as success. */
-function stockBadge(stock: number): string {
+function stockBadge(stock: number) {
   if (stock === 0) return Badge.definition.render({ variant: 'warning', children: 'Sold out' });
   if (stock <= 2)
     return Badge.definition.render({ variant: 'warning', children: `Only ${stock} left` });
   return Badge.definition.render({ variant: 'success', children: `${stock} in stock` });
 }
 
-function renderProductCard(item: ProductItem, signedIn: boolean): string {
+function renderProductCard(item: ProductItem, signedIn: boolean) {
   const body = (
     <div style={productGridStyles.stack}>
       <div style={productGridStyles.row}>
@@ -195,7 +195,7 @@ function renderProductCard(item: ProductItem, signedIn: boolean): string {
   return <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>;
 }
 
-export function renderAddToCartForm(item: { id: string; stock: number }, signedIn = true): string {
+export function renderAddToCartForm(item: { id: string; stock: number }, signedIn = true) {
   if (!signedIn) {
     return (
       <div style={productGridStyles.authPrompt}>

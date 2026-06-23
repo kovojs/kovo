@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { describe, expect, it } from 'vitest';
-
 import { dialogContentAttributes, dialogTriggerAttributes } from '@kovojs/headless-ui/dialog';
 import {
   radioGroupLabelAttributes,
@@ -19,7 +18,6 @@ import {
   rewriteIdrefs,
   samplePrimitiveAttributes,
 } from './gallery-merge-fixtures-oracle.js';
-
 describe('gallery G5 primitive merge fixtures', () => {
   it('rewires dialog trigger IDREFs when an authored dialog content id wins', () => {
     const idRewrites = new Map([['gallery-dialog-content', 'authored-dialog-content']]);
@@ -39,19 +37,19 @@ describe('gallery G5 primitive merge fixtures', () => {
       }),
       { class: 'dialog-panel', id: 'authored-dialog-content' },
     );
-
     expect(trigger.diagnostics).toEqual([]);
     expect(content.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="dialog-idref">
-        <button {...trigger.attrs}>Open</button>
-        <dialog {...content.attrs}>Body</dialog>
-      </section>,
+      String(
+        <section data-gallery-merge="dialog-idref">
+          <button {...trigger.attrs}>Open</button>
+          <dialog {...content.attrs}>Body</dialog>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="dialog-idref"><button data-state="closed" aria-expanded="false" aria-haspopup="dialog" type="button" aria-controls="authored-dialog-content" command="show-modal" commandfor="authored-dialog-content" class="dialog-trigger">Open</button><dialog data-state="open" aria-modal="true" closedby="any" open role="dialog" id="authored-dialog-content" aria-labelledby="gallery-dialog-title" aria-describedby="gallery-dialog-description" class="dialog-panel">Body</dialog></section>',
     );
   });
-
   it('rewires tab trigger and panel IDREFs when authored ids win', () => {
     const idRewrites = new Map([
       ['gallery-tabs-overview', 'authored-tabs-overview'],
@@ -82,19 +80,19 @@ describe('gallery G5 primitive merge fixtures', () => {
       ),
       { class: 'tabs-panel', id: 'authored-tabs-overview-panel' },
     );
-
     expect(trigger.diagnostics).toEqual([]);
     expect(panel.diagnostics).toEqual([]);
     expect(
-      <section data-gallery-merge="tabs-idref">
-        <button {...trigger.attrs}>Overview</button>
-        <div {...panel.attrs}>Panel</div>
-      </section>,
+      String(
+        <section data-gallery-merge="tabs-idref">
+          <button {...trigger.attrs}>Overview</button>
+          <div {...panel.attrs}>Panel</div>
+        </section>,
+      ),
     ).toBe(
       '<section data-gallery-merge="tabs-idref"><button data-state="active" aria-selected="true" role="tab" tabIndex="0" type="button" value="overview" aria-controls="authored-tabs-overview-panel" id="authored-tabs-overview" class="tabs-trigger">Overview</button><div data-state="active" role="tabpanel" tabIndex="0" aria-labelledby="authored-tabs-overview" id="authored-tabs-overview-panel" class="tabs-panel">Panel</div></section>',
     );
   });
-
   it('rewires radio label IDREFs when an authored native radio id wins', () => {
     const idRewrites = new Map([['gallery-radio-express', 'authored-radio-express']]);
     const state = {
@@ -122,19 +120,19 @@ describe('gallery G5 primitive merge fixtures', () => {
       ),
       { class: 'radio-label' },
     );
-
     expect(radio.diagnostics).toEqual([]);
     expect(label.diagnostics).toEqual([]);
     expect(
-      <div data-gallery-merge="radio-idref">
-        <input {...radio.attrs} />
-        <label {...label.attrs}>Express</label>
-      </div>,
+      String(
+        <div data-gallery-merge="radio-idref">
+          <input {...radio.attrs} />
+          <label {...label.attrs}>Express</label>
+        </div>,
+      ),
     ).toBe(
       '<div data-gallery-merge="radio-idref"><input data-state="checked" aria-checked="true" checked tabIndex="0" type="radio" value="express" id="authored-radio-express" name="gallery-shipping-speed" required class="radio-input"><label data-state="checked" for="authored-radio-express" class="radio-label">Express</label></div>',
     );
   });
-
   it('pins KV231 for package-prefixed behavior IDREF conflicts', () => {
     const merged = mergeCompilerPrimitiveAttrs(
       tooltipTriggerAttributes({
@@ -143,7 +141,6 @@ describe('gallery G5 primitive merge fixtures', () => {
       }),
       { 'kovo-tooltip': 'author-tooltip-content' },
     );
-
     expect(merged.diagnostics).toEqual([
       {
         attr: 'kovo-tooltip',
@@ -152,13 +149,11 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
   });
-
   it('pins KV231 for double-wired dialog trigger relationships', () => {
     const merged = mergeCompilerPrimitiveAttrs(
       dialogTriggerAttributes({ contentId: 'gallery-dialog-content', open: false }),
       { commandfor: 'other-dialog' },
     );
-
     expect(merged.diagnostics).toEqual([
       {
         attr: 'commandfor',
@@ -167,15 +162,12 @@ describe('gallery G5 primitive merge fixtures', () => {
       },
     ]);
   });
-
   it('covers every exported primitive attrs builder with the merge oracle', () => {
     const exportedAttributeBuilders = Object.keys(primitiveExports)
       .filter((name) => /^[a-z]/.test(name) && name.endsWith('Attributes'))
       .filter((name) => name !== 'mergeDataAttributes')
       .sort();
-
     expect([...primitiveAttributeBuilderNames].sort()).toEqual(exportedAttributeBuilders);
-
     const cases = primitiveAttributeBuilderNames.map((name) => {
       const primitive: AttributeRecord = {
         ...samplePrimitiveAttributes(name),
@@ -183,13 +175,10 @@ describe('gallery G5 primitive merge fixtures', () => {
       };
       const author = authorStressAttrs(name, primitive);
       const merged = mergeCompilerPrimitiveAttrs(primitive, author);
-
       expect(merged.attrs.class).toBe(`primitive-${name} author-${name}`);
-
       for (const attr of Object.keys(primitive)) {
         const authorValue = author[attr];
         if (authorValue === undefined || primitive[attr] === authorValue) continue;
-
         if (attr === 'data-state') {
           expect(merged.diagnostics).toContainEqual({
             attr,
@@ -197,7 +186,6 @@ describe('gallery G5 primitive merge fixtures', () => {
             message: 'Author override of primitive-owned state attribute per SPEC.md section 4.6',
           });
         }
-
         if (attr === 'role' || attr.startsWith('aria-')) {
           if (idrefAttributes.has(attr)) {
             expect(merged.diagnostics).toContainEqual({
@@ -214,7 +202,6 @@ describe('gallery G5 primitive merge fixtures', () => {
             expect(['KV232', 'KV317']).toContain(ariaDiagnostic?.code);
           }
         }
-
         if (idrefAttributes.has(attr)) {
           expect(merged.diagnostics).toContainEqual({
             attr,
@@ -223,7 +210,6 @@ describe('gallery G5 primitive merge fixtures', () => {
           });
         }
       }
-
       return {
         attrCount: Object.keys(primitive).length,
         diagnostics: merged.diagnostics.length,
@@ -231,7 +217,6 @@ describe('gallery G5 primitive merge fixtures', () => {
         name,
       };
     });
-
     expect(cases).toHaveLength(136);
     expect(cases.some((testCase) => testCase.diagnostics > 0)).toBe(true);
     expect(cases.filter((testCase) => testCase.attrCount > 1).length).toBeGreaterThan(100);

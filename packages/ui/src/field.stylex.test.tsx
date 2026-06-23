@@ -16,6 +16,10 @@ import {
   fieldStyles,
 } from './field.js';
 
+function trustedHtml(value: string) {
+  return { __kovoTrustedHtml: true, value };
+}
+
 describe('@kovojs/ui Field StyleX styles', () => {
   it('matches semantic field markup with StyleX output', () => {
     const state = {
@@ -73,8 +77,9 @@ describe('@kovojs/ui Field StyleX styles', () => {
         id: 'email-field',
       }),
       select: FieldSelect.definition.render({
-        children:
+        children: trustedHtml(
           '<option value="starter">Starter</option><option value="team" selected>Team</option>',
+        ) as unknown as string,
         descriptionId: 'plan-description',
         form: 'profile-form',
         id: 'plan',

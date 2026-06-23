@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -82,14 +82,16 @@ function galleryUrl(galleryRoutePath: string): string {
  * itself runs inside the export's vite SSR graph; spinning a nested vite server to
  * load the gallery sources is what scripts/build.mjs did and is acceptable. */
 async function loadGalleryData(): Promise<GalleryData> {
-  const vite = await createServer({
-    appType: 'custom',
-    logLevel: 'error',
-    root: repoRoot,
-    server: { hmr: false, middlewareMode: true, watch: null, ws: false },
-  });
+  const cleanupGeneratedServerArtifacts = await ensureGalleryInteractiveServerArtifacts();
+  let vite: Awaited<ReturnType<typeof createServer>> | undefined;
 
   try {
+    vite = await createServer({
+      appType: 'custom',
+      logLevel: 'error',
+      root: repoRoot,
+      server: { hmr: false, middlewareMode: true, watch: null, ws: false },
+    });
     const gallery = await vite.ssrLoadModule('/examples/gallery/src/demo-fixtures.tsx');
     const interactive = await vite.ssrLoadModule('/examples/gallery/src/interactive-docs.tsx');
     const appShell = await vite.ssrLoadModule('/examples/gallery/src/app-shell.ts');
@@ -100,8 +102,48 @@ async function loadGalleryData(): Promise<GalleryData> {
       supportClientHrefs: appShell.galleryInteractiveSupportClientModuleHrefs,
     };
   } finally {
-    await vite.close();
+    await vite?.close();
+    cleanupGeneratedServerArtifacts();
   }
+}
+
+async function ensureGalleryInteractiveServerArtifacts(): Promise<() => void> {
+  const generatedDir = path.join(repoRoot, 'examples/gallery/src/generated/interactive');
+  if (existsSync(generatedDir)) return () => {};
+
+  mkdirSync(generatedDir, { recursive: true });
+  for (const fileName of sortedDirectoryEntries(
+    path.join(repoRoot, 'examples/gallery/src/interactive'),
+  )) {
+    if (!fileName.endsWith('-demo.tsx')) continue;
+
+    const source = readFileSync(
+      path.join(repoRoot, 'examples/gallery/src/interactive', fileName),
+      'utf8',
+    );
+    const result = compileComponentModule({
+      fileName: `src/interactive/${fileName}`,
+      source,
+    });
+    const serverFile = result.files.find((file) => file.kind === 'server');
+    if (serverFile === undefined) {
+      throw new Error(
+        `site app shell: gallery interactive demo ${fileName} produced no server module.`,
+      );
+    }
+
+    const { renderSource } = (await import(
+      `data:text/javascript;base64,${Buffer.from(serverFile.source).toString('base64')}`
+    )) as { renderSource: () => string };
+    writeFileSync(path.join(generatedDir, fileName), renderSource(), 'utf8');
+  }
+
+  return () => {
+    rmSync(path.join(repoRoot, 'examples/gallery/src/generated'), {
+      force: true,
+      recursive: true,
+    });
+  };
 }
 
 interface SupportRegistration {

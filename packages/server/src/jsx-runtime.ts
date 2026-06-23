@@ -21,10 +21,12 @@ import {
 import {
   escapeAttribute,
   escapeText,
+  escapeTextWithRenderedHtml,
   isRenderedHtml,
   renderedHtml,
   type RenderedHtml,
   safeUrlAttribute,
+  unwrapCoercedRenderedHtml,
 } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
@@ -513,7 +515,7 @@ function renderJsxChildren(children: JsxChild): MaybePromise<string> {
       : (rendered as string[]).join('');
   }
 
-  return escapeText(children);
+  return escapeTextWithRenderedHtml(children);
 }
 
 function toRenderedHtml(value: MaybePromise<string>): MaybePromise<RenderedHtml> {
@@ -535,7 +537,10 @@ async function renderKovoComponent(
     slots: ComponentRenderSlots,
   ) => unknown;
   const rendered = render({ ...props, ...queries }, state, slots) as JsxNode;
-  const html = await renderJsxChildren(rendered);
+  const html =
+    typeof rendered === 'string'
+      ? unwrapCoercedRenderedHtml(rendered)
+      : await renderJsxChildren(rendered);
   return renderedHtml(stampKovoComponentRoot(component, props, html, jsxKey));
 }
 

@@ -8,7 +8,7 @@ import {
 } from './document-core.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
-import { renderHtmlValue } from './html.js';
+import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
 import {
   appendResponseHeader,
   routeResponseToDocumentResponse,
@@ -258,6 +258,9 @@ export function appRequestUrl(url: URL): string {
 }
 
 function renderDefaultRouteValue(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return '';
+  if (isRenderedHtml(value)) return value.html;
+  if (typeof value === 'string') return unwrapCoercedRenderedHtml(value);
   return renderHtmlValue(value);
 }
 

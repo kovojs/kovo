@@ -9,13 +9,13 @@ exports[`@kovojs/ui Card StyleX styles > exports a StyleX style group 1`] = `
 }
 `;
 
-exports[`@kovojs/ui Card StyleX styles > matches author-last override output 1`] = `"<section class="kv-card-bd-1gezg0 kv-card-bd-lc6y2t kv-card-bd-17dppo kv-card-bd-5grtwb kv-card-box-xlni9o kv-app-card-bg-1c68yj kv-app-card-fg-sutien kv-app-card-pad-1nfkkb" data-style-src="card.tsx#root; app-card.tsx#root"><p>Total</p></section>"`;
+exports[`@kovojs/ui Card StyleX styles > matches author-last override output 1`] = `"<section class="kv-card-bd-1gezg0 kv-card-bd-lc6y2t kv-card-bd-17dppo kv-card-bd-5grtwb kv-card-box-xlni9o kv-app-card-bg-1c68yj kv-app-card-fg-sutien kv-app-card-pad-1nfkkb" data-style-src="card.tsx#root; app-card.tsx#root">&lt;p&gt;Total&lt;/p&gt;</section>"`;
 
 exports[`@kovojs/ui Card StyleX styles > matches the rendered StyleX snapshot 1`] = `
 {
   "classes": [
     "kv-card-bg-gz0aiu kv-card-bd-1gezg0 kv-card-bd-lc6y2t kv-card-bd-17dppo kv-card-bd-5grtwb kv-card-box-xlni9o kv-card-fg-18y7qo kv-card-pad-1uhz8j",
   ],
-  "rendered": "<section class="kv-card-bg-gz0aiu kv-card-bd-1gezg0 kv-card-bd-lc6y2t kv-card-bd-17dppo kv-card-bd-5grtwb kv-card-box-xlni9o kv-card-fg-18y7qo kv-card-pad-1uhz8j" data-style-src="card.tsx#root"><h2>Release candidate</h2><p>Ready for audit.</p></section>",
+  "rendered": "<section class="kv-card-bg-gz0aiu kv-card-bd-1gezg0 kv-card-bd-lc6y2t kv-card-bd-17dppo kv-card-bd-5grtwb kv-card-box-xlni9o kv-card-fg-18y7qo kv-card-pad-1uhz8j" data-style-src="card.tsx#root">&lt;h2&gt;Release candidate&lt;/h2&gt;&lt;p&gt;Ready for audit.&lt;/p&gt;</section>",
 }
 `;

@@ -252,7 +252,10 @@ function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): Style
   return assets;
 }
 
-function mergeStylesheetAsset(existing: StylesheetAsset, incoming: StylesheetAsset): StylesheetAsset {
+function mergeStylesheetAsset(
+  existing: StylesheetAsset,
+  incoming: StylesheetAsset,
+): StylesheetAsset {
   const merged: StylesheetAsset = { ...existing };
   if (!merged.criticalCss && incoming.criticalCss) merged.criticalCss = incoming.criticalCss;
   if (incoming.cspHash !== undefined) merged.cspHash = incoming.cspHash;

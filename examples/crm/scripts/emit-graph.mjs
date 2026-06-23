@@ -163,10 +163,10 @@ for (const fact of effectFacts) {
 // overrides above; each affected handler still publishes concrete Drizzle write
 // touch sites, so only the known owner-helper KV406 entries are filtered here.
 const REQUEST_BOUND_OWNER_DIAGNOSTIC_SITES = new Set([
-  'examples/crm/src/mutations.ts:95',
-  'examples/crm/src/mutations.ts:149',
-  'examples/crm/src/mutations.ts:229',
-  'examples/crm/src/mutations.ts:295',
+  'examples/crm/src/mutations.ts:99',
+  'examples/crm/src/mutations.ts:154',
+  'examples/crm/src/mutations.ts:235',
+  'examples/crm/src/mutations.ts:302',
 ]);
 
 const crmTouchGraph = {};

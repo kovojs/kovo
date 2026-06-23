@@ -16,7 +16,7 @@ import { createCommerceScenarioClient } from './app-test-helpers.js';
 describe('commerce example', () => {
   it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', async () => {
     const client = createCommerceScenarioClient();
-    const form = renderAddToCartForm({ id: 'p1', stock: 5 }, true);
+    const form = String(renderAddToCartForm({ id: 'p1', stock: 5 }, true));
     const response = await client.get('/cart');
     const html = await response.text();
     const [addForm] = htmlFormFacts(form);

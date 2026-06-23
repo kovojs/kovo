@@ -4,7 +4,7 @@ import type {
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
-import { renderHtmlValue } from './html.js';
+import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
 import type { MutationFail } from './mutation.js';
 import type { ValidationFailurePayload } from './schema.js';
 
@@ -63,7 +63,15 @@ export function renderComponent<
     slots: ComponentRenderSlots,
   ) => unknown;
 
-  return renderHtmlValue(render(queries, state, slots));
+  return renderComponentValue(render(queries, state, slots));
+}
+
+function renderComponentValue(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return '';
+  if (isRenderedHtml(value)) return value.html;
+  if (typeof value === 'string') return unwrapCoercedRenderedHtml(value);
+
+  return renderHtmlValue(value);
 }
 
 /**
