@@ -265,6 +265,10 @@ guard-owned, and natural-key applications.
   - Ensure private scope never becomes a browser-visible query instance key.
   - Add leak-check fixtures for `kovo-deps`, `Kovo-Targets`, generated optimistic exports,
     transform inputs, and lowered browser code.
+  - [x] Optimistic transform codegen preflights patch programs for private-scope leaks.
+    - Evidence: `pnpm exec vitest --run packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts`
+      covers scoped exact-row derivation erasing `sessionId` from lowered browser code and rejects
+      `session`, `tenant`, or `guard` values before generated optimistic source is emitted.
   - Evidence when complete: tenant/session fixture proves precise invalidation without target-key
     leakage.
 

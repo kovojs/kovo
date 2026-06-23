@@ -1,6 +1,11 @@
-import type { PatchProgram } from '@kovojs/core/internal/derivation';
+import type {
+  AlgebraicQueryShape,
+  PatchProgram,
+  SymbolicEffect,
+} from '@kovojs/core/internal/derivation';
 import { describe, expect, it } from 'vitest';
 
+import { deriveOptimistic } from './derive.js';
 import { lowerTransform, serializeDerivedOptimistic } from './derive-codegen.js';
 
 // SPEC.md §10.4 Phase 3 — the generated module is committed, reviewable, and
@@ -87,6 +92,62 @@ describe('serializeDerivedOptimistic', () => {
       'Overridden in the mutation module (derivation suppressed): cart, productGrid.',
     );
   });
+
+  it('erases private session scope from a derived scoped exact-row transform', () => {
+    const rowset = {
+      filters: [
+        { column: 'sessionId', op: 'eq' as const, value: { kind: 'session' as const, path: 'id' } },
+      ],
+      key: 'sessionId,id',
+      orderBy: [],
+      table: 'questions',
+    };
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['id', 'score'],
+          rowKey: 'sessionId,id',
+          rowset,
+        },
+      },
+      query: 'questionList',
+    };
+    const effect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: {
+        score: {
+          kind: 'arith',
+          left: { kind: 'col', column: 'score' },
+          op: '+',
+          right: { kind: 'const', value: 1 },
+        },
+      },
+      table: 'questions',
+    };
+    const result = deriveOptimistic([effect], shape);
+    if (result.kind !== 'derived') throw new Error(`expected derived, got ${result.kind}`);
+
+    const source = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'questionVoteDerivedOptimistic',
+      entries: [{ program: result.program, query: 'questionList' }],
+      formImport: { name: 'voteQuestionForm', path: '../../app.js' },
+    });
+
+    expect(source).toContain('entry.id === $input.targetId');
+    expect(source).not.toContain('sessionId');
+    expect(source).not.toContain('session:');
+    expect(source).not.toContain('$input.session');
+    expect(source).not.toContain('tenant');
+  });
 });
 
 describe('lowerTransform — codegen ≡ interpreter parity', () => {
@@ -144,6 +205,49 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
         { id: 'p2', stock: 9 },
       ],
     });
+  });
+
+  it('rejects private scope values before generating browser-visible code', () => {
+    const leakedSessionMatch: PatchProgram = {
+      ops: [
+        {
+          guard: 'find-or-noop',
+          match: [{ column: 'sessionId', value: { kind: 'session', path: 'id' } }],
+          op: 'remove-row',
+          path: 'items',
+        },
+      ],
+      query: 'questionList',
+    };
+    const leakedTenantRow: PatchProgram = {
+      ops: [
+        {
+          op: 'push-row',
+          path: 'items',
+          placeholderColumns: [],
+          position: 'end',
+          row: {
+            id: { kind: 'param', path: 'id' },
+            tenantId: { kind: 'tenant', path: 'id' },
+          },
+        },
+      ],
+      query: 'tickets',
+    };
+    const leakedGuardValue: PatchProgram = {
+      ops: [{ op: 'set-field', path: 'owner', value: { kind: 'guard', path: 'owner.id' } }],
+      query: 'owner',
+    };
+
+    expect(() => lowerTransform(leakedSessionMatch)).toThrow(
+      'private scope value leaked into optimistic codegen (session:id)',
+    );
+    expect(() => lowerTransform(leakedTenantRow)).toThrow(
+      'private scope value leaked into optimistic codegen (tenant:id)',
+    );
+    expect(() => lowerTransform(leakedGuardValue)).toThrow(
+      'private scope value leaked into optimistic codegen (guard:owner.id)',
+    );
   });
 
   // C5 (SPEC.md §10.5:1172 commuting diagram) — node-postgres serializes

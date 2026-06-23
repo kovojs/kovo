@@ -102,6 +102,7 @@ ${planBody}
  * codegen↔interpreter parity test (it must agree with `applyPatchProgram`).
  */
 export function lowerTransform(program: PatchProgram): string {
+  assertNoPrivateScopeLeak(program);
   // Indent relative to the arrow's own start (body +2, close +0); the caller
   // re-indents the whole arrow to its nesting depth, keeping braces aligned.
   const statements = program.ops.flatMap((op) => lowerOp(op));
@@ -188,6 +189,59 @@ function lowerPush(op: Extract<PatchOp, { op: 'push-row' }>): string[] {
     `  else draft.${op.path}.splice(index, 0, row);`,
     `}`,
   ];
+}
+
+function assertNoPrivateScopeLeak(program: PatchProgram): void {
+  for (const op of program.ops) {
+    switch (op.op) {
+      case 'inc':
+        assertNoPrivateScopeValue(op.by);
+        break;
+      case 'set-field':
+        assertNoPrivateScopeValue(op.value);
+        break;
+      case 'remove-row':
+        assertNoPrivateScopeMatch(op.match);
+        break;
+      case 'update-row':
+        assertNoPrivateScopeMatch(op.match);
+        for (const value of Object.values(op.sets)) assertNoPrivateScopeValue(value);
+        break;
+      case 'push-row':
+        for (const value of Object.values(op.row)) assertNoPrivateScopeValue(value);
+        break;
+      case 'recount':
+      case 'resum':
+        break;
+    }
+  }
+}
+
+function assertNoPrivateScopeMatch(
+  match: readonly { column: string; value: SymbolicValue }[],
+): void {
+  for (const entry of match) assertNoPrivateScopeValue(entry.value);
+}
+
+function assertNoPrivateScopeValue(value: SymbolicValue): void {
+  switch (value.kind) {
+    case 'arith':
+      assertNoPrivateScopeValue(value.left);
+      assertNoPrivateScopeValue(value.right);
+      return;
+    case 'guard':
+    case 'session':
+    case 'tenant':
+      throw new Error(
+        `derive-codegen: private scope value leaked into optimistic codegen (${value.kind}:${value.path})`,
+      );
+    case 'col':
+    case 'const':
+    case 'opaque':
+    case 'param':
+    case 'placeholder':
+      return;
+  }
 }
 
 function matchExpression(match: readonly { column: string; value: SymbolicValue }[]): string {
