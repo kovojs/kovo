@@ -261,7 +261,9 @@ the rest of the explain output, so a new endpoint or a `csrf: false` opt-out can
 4. **Annotate `owner:`** on every per-user table and scope predicates to `req.session`, never to
    client input.
 5. **Leave CSRF on**; justify every `csrf: false` and confirm it in `--endpoints`.
-6. **Run the three audits in CI** with fail-on-findings, next to `kovo check`.
+6. **Never interpolate request, form, or query data into SQL text**; bind values as parameters and
+   choose identifiers/sort directions from typed allowlists or schema facts.
+7. **Run the three audits in CI** with fail-on-findings, next to `kovo check`.
 
 ## Next
 
