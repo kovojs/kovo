@@ -107,6 +107,14 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
     `pnpm run check:kovo`, `pnpm run check:api-surface`.
 
 - [ ] **Split `packages/better-auth/src/internal.ts` into adapter concern modules.**
+  - [x] Extract structural Better Auth contracts and schema/input bridge declarations to
+    `packages/better-auth/src/internal/contracts.ts`, with compatibility re-exports from
+    `internal.ts` and public root re-exports for app-facing companion types.
+    Evidence: `wc -l packages/better-auth/src/internal.ts packages/better-auth/src/internal/contracts.ts` reports `internal.ts` at 1,994 LoC and `contracts.ts` at 545 LoC; `pnpm run check:api-surface` passed with 30 recursive-publicness baseline entries fixed.
+  - [x] Extract credential cookie forwarding, credential success classification, active-organization
+    guards, and plugin metadata constants to `packages/better-auth/src/internal/credential.ts`
+    and `packages/better-auth/src/internal/plugin-metadata.ts`.
+    Evidence: `pnpm exec vitest --run packages/better-auth/src` passed 5 files / 76 tests; `pnpm run check:imports` and `git diff --check` passed.
   - Target shape:
     - `internal/session-api.ts`: structural Better Auth API/request/response/session contracts.
     - `internal/schema-bridge.ts`: schema validation, table metadata, source annotation, generated

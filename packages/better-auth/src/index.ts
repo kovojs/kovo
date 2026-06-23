@@ -2,6 +2,26 @@ export type { BetterAuthRoleRequest, BetterAuthRoleSession, BetterAuthRoleUser }
 export { authed, role } from './guards.js';
 export type { BetterAuthMountOptions } from './mount.js';
 export { mount } from './mount.js';
+export type {
+  BetterAuthApi,
+  BetterAuthCredentialMutationValue,
+  BetterAuthGetSessionOptions,
+  BetterAuthGetSessionWithHeadersOptions,
+  BetterAuthGetSessionWithHeadersResult,
+  BetterAuthLike,
+  BetterAuthMountHandler,
+  BetterAuthMountLike,
+  BetterAuthRequestLike,
+  BetterAuthResponseLike,
+  BetterAuthSignInEmailApi,
+  BetterAuthSignInEmailBody,
+  BetterAuthSignInEmailLike,
+  BetterAuthSignOutApi,
+  BetterAuthSignOutLike,
+  BetterAuthSignUpEmailApi,
+  BetterAuthSignUpEmailBody,
+  BetterAuthSignUpEmailLike,
+} from './internal.js';
 export {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
