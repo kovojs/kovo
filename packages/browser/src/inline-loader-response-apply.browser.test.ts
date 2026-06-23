@@ -144,4 +144,40 @@ describe('browser inline loader response apply', () => {
       ).toBe('fresh fragment target');
     });
   });
+
+  it('aborts removed same-component keyed island signals by identity', async () => {
+    const root = document.createElement('main');
+    root.innerHTML = [
+      '<ul kovo-fragment-target="cart-list">',
+      '<li kovo-c="cart-row" kovo-key="row-1" on:click="/c/cart-row.js#mount">one</li>',
+      '<li kovo-c="cart-row" kovo-key="row-2" on:click="/c/cart-row.js#mount">two</li>',
+      '</ul>',
+    ].join('');
+    document.body.append(root);
+
+    installInlineKovoLoader(async () => ({}));
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    (root.querySelector('[kovo-key="row-1"]') as (Element & { a?: AbortController }) | null)!.a =
+      firstController;
+    (root.querySelector('[kovo-key="row-2"]') as (Element & { a?: AbortController }) | null)!.a =
+      secondController;
+
+    // SPEC.md §4.4/§13.2/§14.1: a removed island is identified by kovo-c plus
+    // kovo-key/id, not by a component-name substring in replacement HTML.
+    (globalThis as unknown as { __kovo_a?: (body: string) => void }).__kovo_a?.(
+      [
+        '<kovo-fragment target="cart-list">',
+        '<ul kovo-fragment-target="cart-list">',
+        '<li kovo-c="cart-row" kovo-key="row-2" on:click="/c/cart-row.js#mount">two fresh</li>',
+        '</ul>',
+        '</kovo-fragment>',
+      ].join(''),
+    );
+
+    expect(firstController.signal.aborted).toBe(true);
+    expect(secondController.signal.aborted).toBe(false);
+    expect(root.querySelector('[kovo-key="row-1"]')).toBeNull();
+    expect(root.querySelector('[kovo-key="row-2"]')?.textContent).toBe('two fresh');
+  });
 });

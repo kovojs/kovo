@@ -242,6 +242,42 @@ describe('optimistic query rebase', () => {
     expect(store.get('cart')).toEqual({ count: 100 });
   });
 
+  it('rebases and rolls back with structural sharing for untouched server truth', () => {
+    const store = createQueryStore();
+    const rebaser = new OptimisticRebaser(store);
+    const baseUntouched = { rows: Array.from({ length: 32 }, (_value, id) => ({ id })) };
+    const base = { count: 0, untouched: baseUntouched };
+    const truthUntouched = { rows: [{ id: 'server-row' }] };
+    const truth = { count: 10, untouched: truthUntouched };
+    store.set('cart', base);
+
+    rebaser.add(
+      'm1',
+      { quantity: 2 },
+      {
+        transforms: {
+          cart(draft, input) {
+            const cart = draft as typeof base;
+            cart.count += input.quantity;
+          },
+        },
+      },
+    );
+
+    const predicted = store.get<typeof base>('cart')!;
+    expect(predicted).not.toBe(base);
+    expect(predicted.untouched).toBe(baseUntouched);
+
+    rebaser.applyServerTruth('cart', truth);
+    const rebased = store.get<typeof truth>('cart')!;
+    expect(rebased).not.toBe(truth);
+    expect(rebased.count).toBe(12);
+    expect(rebased.untouched).toBe(truthUntouched);
+
+    rebaser.settleWithoutServerTruth('m1', 'cart');
+    expect(store.get('cart')).toBe(truth);
+  });
+
   it('discards pending optimistic transforms back to server truth on pagehide', () => {
     const store = createQueryStore();
     const rebaser = new OptimisticRebaser(store);

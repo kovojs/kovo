@@ -2,6 +2,7 @@ import type { TargetCollectorRoot } from './mutation-targets.js';
 import { DomMorphRoot, type MorphRoot } from './morph.js';
 import type { FragmentTargetRoot } from './fragment-targets.js';
 import type { EnhancedMutationFetch } from './mutation-fetch.js';
+import { definedProps } from './defined-props.js';
 
 /**
  * The browser root that `installKovoLoader` (and `applyKovoDeferredStreamResponse`)
@@ -39,6 +40,7 @@ export const defaultEnhancedFetch: EnhancedMutationFetch = (url, options) => {
     headers: options.headers,
     keepalive: options.keepalive,
     method: options.method,
+    ...definedProps({ signal: options.signal }),
   };
 
   if (options.body !== undefined) {

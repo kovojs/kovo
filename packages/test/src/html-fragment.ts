@@ -4,11 +4,7 @@
 // subpath; this public surface keeps only the generic HTML element/form/key/text
 // extractors. Two public helpers still build on the wire-shape internals, so they
 // import them back here.
-import {
-  htmlJsonScriptFacts,
-  kovoResponseBodyFact,
-  type HtmlJsonScriptFact,
-} from '@kovojs/test/internal/html-wire';
+import { htmlJsonScriptFacts, kovoResponseBodyFact } from '@kovojs/test/internal/html-wire';
 
 /**
  * Extracts the server-rendered HTML for a single fragment target from a page
@@ -57,6 +53,14 @@ export interface HtmlElementFact {
 export interface HtmlElementSelector {
   attrs?: Record<string, string | true>;
   tag?: string;
+}
+
+/** One decoded JSON script found in a server-rendered document (SPEC.md §9.1, §12). */
+export interface HtmlJsonScriptFact {
+  attrs: Record<string, string>;
+  html: string;
+  json: unknown;
+  rawJson: string;
 }
 
 /**

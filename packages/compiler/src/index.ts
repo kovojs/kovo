@@ -43,10 +43,12 @@ export type {
 } from './types.js';
 export {
   assertFixpoint,
+  assertProductionRenderPlanGate,
   assertRenderEquivalence,
   assertRenderPlanTokenMonotonicity,
   compileComponentModule,
   computeCompilerRenderPlanFingerprint,
+  CompilerDiagnosticError,
   type AssertRenderPlanTokenMonotonicityOptions,
   type CompilerRenderPlanFingerprintInput,
 } from './compile.js';

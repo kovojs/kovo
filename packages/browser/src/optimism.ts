@@ -187,7 +187,7 @@ export class OptimisticRebaser {
     for (const entry of staged) {
       const pending = this.#pendingByQuery.get(entry.storeKey) ?? [];
       if (pending.length === 0) {
-        this.#serverTruthByQuery.set(entry.storeKey, structuredClone(entry.previous));
+        this.#serverTruthByQuery.set(entry.storeKey, entry.previous);
       }
       pending.push({ change, id, transform: entry.transform });
       this.#pendingByQuery.set(entry.storeKey, pending);
@@ -214,23 +214,30 @@ export class OptimisticRebaser {
     if (!pending) return;
 
     const nextPending = pending.filter((item) => item.id !== id);
-    let next = structuredClone(this.#serverTruthByQuery.get(storeKey));
+    let next = this.#serverTruthByQuery.get(storeKey);
+    const survivors: PendingTransform[] = [];
 
     for (const pendingTransform of nextPending) {
-      next = applyOptimisticTransform(
-        next,
-        pendingTransform.change.input,
-        pendingTransform.transform,
-      );
+      try {
+        next = applyOptimisticTransform(
+          next,
+          pendingTransform.change.input,
+          pendingTransform.transform,
+        );
+      } catch (error) {
+        reportRuntimeError(this.#onError, error);
+        continue;
+      }
+      survivors.push(pendingTransform);
     }
 
     this.#store.set(queryName, next, key);
 
-    if (nextPending.length === 0) {
+    if (survivors.length === 0) {
       this.#pendingByQuery.delete(storeKey);
       this.#serverTruthByQuery.delete(storeKey);
     } else {
-      this.#pendingByQuery.set(storeKey, nextPending);
+      this.#pendingByQuery.set(storeKey, survivors);
     }
   }
 
@@ -260,7 +267,7 @@ export class OptimisticRebaser {
     }
 
     if (pendingTransforms.length > 0) {
-      this.#serverTruthByQuery.set(storeKey, structuredClone(value));
+      this.#serverTruthByQuery.set(storeKey, value);
     } else {
       this.#serverTruthByQuery.delete(storeKey);
     }
@@ -306,11 +313,7 @@ export class OptimisticRebaser {
       if (!this.#pendingByQuery.has(storeKey)) continue;
 
       const identity = queryIdentityFromStoreKey(storeKey);
-      this.#store.set(
-        identity.name,
-        structuredClone(this.#serverTruthByQuery.get(storeKey)),
-        identity.key,
-      );
+      this.#store.set(identity.name, this.#serverTruthByQuery.get(storeKey), identity.key);
       this.#pendingByQuery.delete(storeKey);
       this.#serverTruthByQuery.delete(storeKey);
       discarded.push(identity.name);
@@ -390,9 +393,110 @@ function applyOptimisticTransform<Input>(
   input: Input,
   transform: OptimisticTransform<Input>,
 ): unknown {
-  const draft = structuredClone(current);
-  const returned = transform(draft, input);
-  return returned === undefined ? draft : returned;
+  const draft = createCopyOnWriteDraft(current);
+  const returned = transform(draft.value, input);
+  return returned === undefined ? draft.finish() : returned;
+}
+
+type DraftObject = Record<PropertyKey, unknown> | unknown[];
+
+interface DraftState {
+  base: DraftObject;
+  copy?: DraftObject;
+  parent?: DraftState;
+  parentKey?: PropertyKey;
+  proxy?: DraftObject;
+}
+
+interface CopyOnWriteDraft {
+  finish(): unknown;
+  value: unknown;
+}
+
+function createCopyOnWriteDraft(value: unknown): CopyOnWriteDraft {
+  if (!isDraftable(value)) {
+    return {
+      finish: () => value,
+      value,
+    };
+  }
+
+  const states = new WeakMap<DraftObject, DraftState>();
+
+  const mutableCopyFor = (state: DraftState): DraftObject => {
+    if (!state.copy) {
+      state.copy = Array.isArray(state.base) ? [...state.base] : { ...state.base };
+      if (state.parent && state.parentKey !== undefined) {
+        const parentCopy = mutableCopyFor(state.parent);
+        Reflect.set(parentCopy, state.parentKey, state.copy);
+      }
+    }
+
+    return state.copy;
+  };
+
+  const stateFor = (
+    base: DraftObject,
+    parent: DraftState | undefined,
+    parentKey: PropertyKey | undefined,
+  ): DraftState => {
+    const existing = states.get(base);
+    if (existing) return existing;
+
+    const state: DraftState = { base };
+    if (parent) {
+      state.parent = parent;
+      if (parentKey !== undefined) state.parentKey = parentKey;
+    }
+    states.set(base, state);
+    return state;
+  };
+
+  const proxyFor = (
+    base: DraftObject,
+    parent: DraftState | undefined,
+    parentKey: PropertyKey | undefined,
+  ): DraftObject => {
+    const state = stateFor(base, parent, parentKey);
+    if (state.proxy) return state.proxy;
+
+    state.proxy = new Proxy(base, {
+      deleteProperty(_target, property) {
+        const copy = mutableCopyFor(state);
+        return Reflect.deleteProperty(copy, property);
+      },
+      get(_target, property) {
+        const source = state.copy ?? state.base;
+        const child = Reflect.get(source, property);
+        return isDraftable(child) ? proxyFor(child, state, property) : child;
+      },
+      getOwnPropertyDescriptor(_target, property) {
+        return Reflect.getOwnPropertyDescriptor(state.copy ?? state.base, property);
+      },
+      has(_target, property) {
+        return Reflect.has(state.copy ?? state.base, property);
+      },
+      ownKeys() {
+        return Reflect.ownKeys(state.copy ?? state.base);
+      },
+      set(_target, property, propertyValue) {
+        const copy = mutableCopyFor(state);
+        return Reflect.set(copy, property, propertyValue);
+      },
+    });
+
+    return state.proxy;
+  };
+
+  const rootState = stateFor(value, undefined, undefined);
+  return {
+    finish: () => rootState.copy ?? rootState.base,
+    value: proxyFor(value, undefined, undefined),
+  };
+}
+
+function isDraftable(value: unknown): value is DraftObject {
+  return typeof value === 'object' && value !== null;
 }
 
 export function optimisticChangeFromInput<Input>(

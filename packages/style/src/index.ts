@@ -4,10 +4,12 @@ export type {
   CssValue,
   Keyframes,
   Style,
+  StyleIdentityOptions,
   StyleInput,
   StyleNamespaces,
   StyleObject,
   StylePrimitive,
+  StyleRecord,
   Theme,
   Vars,
 } from './engine.js';

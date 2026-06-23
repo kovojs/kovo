@@ -170,9 +170,9 @@ export const SliderDemo = component({
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     expect({
-      clientSource: clientSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
+      clientSource: clientSource.replace(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\//g, '/c/__v/HASH/'),
       diagnostics: result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236'),
-      serverSource: serverSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
+      serverSource: serverSource.replace(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\//g, '/c/__v/HASH/'),
     }).toMatchInlineSnapshot(`
       {
         "clientSource": "// @kovojs-ir

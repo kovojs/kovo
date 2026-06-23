@@ -6,6 +6,7 @@ import {
   type MutationRegistry,
 } from './mutation.js';
 import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
+import { mutationCsrfOptions } from './csrf.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
@@ -13,6 +14,7 @@ import type {
   AppMutationResponseContext,
   AppMutationResponseOptions,
   AppMutationResponsePolicy,
+  AppMutationDeclaration,
   KovoApp,
 } from './app-types.js';
 import {
@@ -44,13 +46,18 @@ export async function handleAppMutationRequest(
     ...(app.db === undefined ? {} : { db: app.db }),
     ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
   });
+  const currentUrl = appRequestUrl(url);
+  const sourceUrl = mutationSourceUrl(request, url);
 
-  // SPEC §9.2: parse the body BEFORE proceeding further; an attacker-controllable
-  // malformed body must return a typed 422, not a 500 through onError. We short-circuit
-  // here, before CSRF, because an invalid Content-Type or parse failure is not a CSRF
-  // concern — the mutation lifecycle never starts.
   const bodyResult = await readMutationRequestBody(mutationRequest);
   if (!bodyResult.ok) {
+    // SPEC §6.6/§10.3: CSRF is the first mutation lifecycle gate. If the body cannot
+    // be safely decoded to read the submitted token, a CSRF-protected mutation fails
+    // closed as CSRF instead of leaking body/schema diagnostics ahead of CSRF.
+    if (mutationRequiresPreBodyCsrf(mutation, app)) {
+      return renderPreBodyCsrfFailure(app, mutation, mutationRequest, url, sourceUrl);
+    }
+
     return new Response(
       JSON.stringify({ code: 'VALIDATION', payload: { reason: bodyResult.reason } }),
       {
@@ -60,8 +67,6 @@ export async function handleAppMutationRequest(
     );
   }
   const rawInput = bodyResult.value;
-  const currentUrl = appRequestUrl(url);
-  const sourceUrl = mutationSourceUrl(request, url);
   const mutationResponseOptions = await resolveAppMutationResponsePolicy(app, {
     currentUrl,
     key: mutation.key,
@@ -137,6 +142,60 @@ export async function handleAppMutationRequest(
   });
 
   return serverResponseToWebResponse(endpointResponse, mutationRequest);
+}
+
+async function renderPreBodyCsrfFailure(
+  app: KovoApp,
+  mutation: AppMutationDeclaration,
+  request: Request,
+  url: URL,
+  sourceUrl: URL,
+): Promise<Response> {
+  const inheritedStylesheets = sourceRouteStylesheets(app, sourceUrl);
+  const defaultFailurePageRenderer = defaultAppMutationFailurePageRenderer(
+    app,
+    request,
+    sourceUrl,
+    mutation.key,
+    {},
+  );
+  const requestMutation = mutationWithAppQueries(
+    mutation as unknown as MutationDefinition<
+      string,
+      Schema<unknown>,
+      Record<string, Schema<unknown>>,
+      Request
+    >,
+    app.queries as readonly RegisteredQueryDefinition[],
+  );
+  const buildToken = app.clientModules.buildToken();
+
+  const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
+    ...(buildToken !== '' ? { buildToken } : {}),
+    ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
+    currentUrl: appRequestUrl(sourceUrl),
+    headers: request.headers,
+    rawInput: {},
+    redirectTo:
+      mutation.redirectTo ??
+      mutation.defaultRedirectTo ??
+      defaultMutationRedirectTo(request, appRequestUrl(url)),
+    ...(inheritedStylesheets.length === 0 ? {} : { failureStylesheets: inheritedStylesheets }),
+    ...(defaultFailurePageRenderer === undefined
+      ? {}
+      : { renderFailurePage: defaultFailurePageRenderer }),
+    request,
+  });
+
+  return serverResponseToWebResponse(endpointResponse, request);
+}
+
+function mutationRequiresPreBodyCsrf(appMutation: AppMutationDeclaration, app: KovoApp): boolean {
+  const csrf = mutationCsrfOptions(
+    appMutation as unknown as { csrf?: KovoApp['csrf'] | false },
+    app.csrf,
+  );
+  return csrf !== false;
 }
 
 function sourceRouteStylesheets(

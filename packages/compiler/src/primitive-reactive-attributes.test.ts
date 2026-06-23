@@ -337,7 +337,7 @@ export const LocalSwitchDemo = component({
     expect(server).not.toContain('data-bind:data-state=');
   });
 
-  it('skips an attribute the author wrote literally (no KV233 double-bind)', () => {
+  it('keeps primitive-owned state aria live when the author wrote a static collision', () => {
     const result = compileComponentModule({
       fileName: 'authored-aria.tsx',
       source: `/** @jsxImportSource @kovojs/server */
@@ -352,10 +352,9 @@ export const AuthoredAriaDemo = component({
 `,
     });
     const server = result.files.find((file) => file.fileName.endsWith('.server.js'))?.source ?? '';
-    // The authored aria-checked is preserved and not re-derived.
-    expect(server).not.toContain('data-bind:aria-checked=');
-    expect(server).not.toContain('AuthoredAriaDemo$Switch_aria_checked_derive');
-    // data-state is still auto-bound (not authored).
+    // SPEC.md §4.6: primitive-owned state aria-* is primitive-wins and remains live.
+    expect(server).toContain('data-bind:aria-checked=');
+    expect(server).toContain('AuthoredAriaDemo$Switch_aria_checked_derive');
     expect(server).toContain('data-bind:data-state=');
   });
 

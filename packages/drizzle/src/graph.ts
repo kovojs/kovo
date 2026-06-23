@@ -71,6 +71,7 @@ export function serializeDomainRegistry(tables: readonly DomainRegistryInput[]):
 
 /** @internal */
 export function createTouchGraphEntry(input: {
+  rawTables?: readonly string[];
   reads?: readonly ReadSummaryInput[];
   unresolved?: readonly UnresolvedSummaryInput[];
   writes?: readonly WriteSummaryInput[];
@@ -103,6 +104,9 @@ export function createTouchGraphEntry(input: {
       message: unresolvedMessage(site),
       site: site.site,
     })),
+    ...(input.rawTables && input.rawTables.length > 0
+      ? { tables: [...new Set(input.rawTables)].sort() }
+      : {}),
   };
 }
 
@@ -156,6 +160,9 @@ export function serializeTouchGraph(graph: TouchGraph): string {
       );
     }
     lines.push('    ],');
+    if (entry.tables && entry.tables.length > 0) {
+      lines.push(`    tables: [${entry.tables.map((table) => JSON.stringify(table)).join(', ')}],`);
+    }
     lines.push('  },');
   }
 

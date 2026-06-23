@@ -1,11 +1,25 @@
-import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
+import { serializeCookie } from './cookies.js';
 import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
 import { formLikeToRecord } from './schema.js';
 
-/** CSRF config: a `secret` and a `sessionId` extractor that binds the token to a session. */
+/**
+ * Anonymous CSRF binding cookie settings for sessionless mutation forms (SPEC §6.6).
+ */
+export interface CsrfAnonymousCookieOptions {
+  maxAge?: number;
+  name?: string;
+  path?: string;
+  sameSite?: 'lax' | 'none' | 'strict';
+  secure?: boolean;
+}
+
+/** CSRF config: a `secret`, a session extractor, and optional anonymous form binding. */
 export interface CsrfOptions<Request> {
+  /** Configure or disable the anonymous CSRF cookie used when `sessionId` returns undefined. */
+  anonymousCookie?: CsrfAnonymousCookieOptions | false;
   secret: string;
   sessionId: (request: Request) => string | undefined;
 }
@@ -31,10 +45,10 @@ export interface CsrfValidationOptions<Request> extends CsrfOptions<Request> {
  * });
  */
 export function csrfToken<Request>(request: Request, options: CsrfOptions<Request>): string {
-  const sessionId = options.sessionId(request);
-  if (!sessionId) throw new Error('csrfToken requires a session id');
+  const binding = resolveCsrfBinding(request, options);
+  if (!binding) throw new Error('csrfToken requires a session id or anonymous CSRF cookie');
 
-  return createCsrfToken(sessionId, options.secret);
+  return createCsrfToken(binding.value, options.secret);
 }
 
 /**
@@ -62,8 +76,10 @@ export function renderMutationCsrfField<Request>(definition: {
   const context = currentJsxFrameworkContext();
   const csrf = definition.csrf ?? context?.csrf;
   if (!context || !csrf) return '';
-  if (!csrf.sessionId(context.request as Request)) return '';
-  return csrfField(context.request as Request, csrf);
+  const binding = resolveCsrfBinding(context.request as Request, csrf, { mintAnonymous: true });
+  if (!binding) return '';
+  if (binding.setCookie) context.onCsrfSetCookie?.(binding.setCookie);
+  return csrfFieldForBinding(binding.value, csrf);
 }
 
 /**
@@ -98,25 +114,94 @@ export function validateCsrfToken<Request>(
   request: Request,
   options: CsrfValidationOptions<Request>,
 ): boolean {
-  const sessionId = options.sessionId(request);
-  if (!sessionId) return false;
+  const binding = resolveCsrfBinding(request, options);
+  if (!binding) return false;
 
   const submitted = formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf'];
   if (typeof submitted !== 'string') return false;
 
-  return secureEqual(submitted, createCsrfToken(sessionId, options.secret));
+  return secureEqual(submitted, createCsrfToken(binding.value, options.secret));
 }
 
 export function mutationCsrfOptions<Request>(
-  definition: { csrf?: CsrfValidationOptions<Request> | false },
+  definition: { csrf?: CsrfValidationOptions<Request> | false | undefined },
   defaultOptions?: CsrfValidationOptions<Request>,
 ): CsrfValidationOptions<Request> | false | undefined {
   if (definition.csrf === false) return false;
   return definition.csrf ?? defaultOptions;
 }
 
-function createCsrfToken(sessionId: string, secret: string): string {
-  return createHmac('sha256', secret).update(sessionId).digest('base64url');
+interface CsrfBinding {
+  setCookie?: string;
+  value: string;
+}
+
+const DEFAULT_ANONYMOUS_CSRF_COOKIE = 'kovo_csrf';
+
+function csrfFieldForBinding<Request>(
+  binding: string,
+  options: CsrfOptions<Request> & { field?: string },
+): string {
+  return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(createCsrfToken(binding, options.secret))}">`;
+}
+
+function resolveCsrfBinding<Request>(
+  request: Request,
+  options: CsrfOptions<Request>,
+  mintOptions: { mintAnonymous?: boolean } = {},
+): CsrfBinding | undefined {
+  const sessionId = options.sessionId(request);
+  if (sessionId) return { value: sessionId };
+  if (options.anonymousCookie === false) return undefined;
+
+  const cookieOptions = options.anonymousCookie ?? {};
+  const name = cookieOptions.name ?? DEFAULT_ANONYMOUS_CSRF_COOKIE;
+  const existing = readCookieValue(request, name);
+  if (isUsableAnonymousCsrfSecret(existing)) return { value: `anonymous:${existing}` };
+  if (!mintOptions.mintAnonymous) return undefined;
+
+  const anonymousSecret = randomBytes(32).toString('base64url');
+  return {
+    setCookie: serializeCookie(name, anonymousSecret, {
+      httpOnly: true,
+      maxAge: cookieOptions.maxAge ?? 24 * 60 * 60,
+      path: cookieOptions.path ?? '/',
+      sameSite: cookieOptions.sameSite ?? 'lax',
+      secure: cookieOptions.secure ?? requestIsHttps(request),
+    }),
+    value: `anonymous:${anonymousSecret}`,
+  };
+}
+
+function readCookieValue(request: unknown, name: string): string | undefined {
+  if (!(request instanceof Request)) return undefined;
+  const header = request.headers.get('cookie');
+  if (!header) return undefined;
+
+  for (const cookie of header.split(';')) {
+    const [rawName, ...rawValue] = cookie.trim().split('=');
+    if (rawName !== name) continue;
+    const value = rawValue.join('=');
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function isUsableAnonymousCsrfSecret(value: string | undefined): value is string {
+  return value !== undefined && /^[A-Za-z0-9_-]{32,}$/.test(value);
+}
+
+function requestIsHttps(request: unknown): boolean {
+  return request instanceof Request && new URL(request.url).protocol === 'https:';
+}
+
+function createCsrfToken(binding: string, secret: string): string {
+  return createHmac('sha256', secret).update(binding).digest('base64url');
 }
 
 function secureEqual(left: string, right: string): boolean {

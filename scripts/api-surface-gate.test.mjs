@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
-import { classifyExport, compareViolations, computeViolations } from './api-surface-gate.mjs';
+import { classifyExport, compareViolations, computeSurfaceReport } from './api-surface-gate.mjs';
 import { repoRoot } from './public-packages.mjs';
 
 /**
@@ -12,16 +12,71 @@ import { repoRoot } from './public-packages.mjs';
  */
 
 describe('api-surface gate', () => {
+  let surfaceReport;
+
+  beforeAll(() => {
+    surfaceReport = computeSurfaceReport();
+  });
+
   it('keeps the committed baseline in sync with the real public surface', () => {
     const baseline = JSON.parse(
       readFileSync(path.join(repoRoot, 'api-surface-baseline.json'), 'utf8'),
     );
-    const current = computeViolations();
+    const current = surfaceReport.undocumentedPublic;
     // No drift in either direction: every current violation is baselined, and the
     // baseline lists nothing already fixed (regenerate with --write after curating).
     const { added, removed } = compareViolations(baseline.violations, current);
     expect(added, `new undocumented/untagged public exports: ${added.join(', ')}`).toEqual([]);
     expect(removed, `baseline lists fixed exports — regenerate: ${removed.join(', ')}`).toEqual([]);
+  });
+
+  it('keeps the committed recursive-publicness baseline in sync', () => {
+    const baseline = JSON.parse(
+      readFileSync(path.join(repoRoot, 'api-surface-baseline.json'), 'utf8'),
+    );
+    const current = surfaceReport.recursivePublicnessViolations;
+    const { added, removed } = compareViolations(
+      baseline.recursivePublicnessViolations ?? [],
+      current,
+    );
+    expect(added, `new recursive publicness violations: ${added.join(', ')}`).toEqual([]);
+    expect(
+      removed,
+      `recursive baseline lists fixed exports — regenerate: ${removed.join(', ')}`,
+    ).toEqual([]);
+  });
+
+  it('does not expose style compiler/provenance helper types through the public style surface', () => {
+    const current = surfaceReport.recursivePublicnessViolations;
+    expect(
+      current.filter(
+        (violation) =>
+          violation.startsWith('@kovojs/style#') &&
+          /(?:AtomicRule|CompiledStyle|StyleIdentityOptions)/.test(violation),
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not expose harness verifier internals through public harness options', () => {
+    const current = surfaceReport.recursivePublicnessViolations;
+    expect(
+      current.filter(
+        (violation) =>
+          violation.startsWith('@kovojs/test./harness#KovoTestHarnessOptions') &&
+          /(?:DbVerificationConfig|TouchGraph)/.test(violation),
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not expose internal/public-adjacent test helper implementation types', () => {
+    const current = surfaceReport.recursivePublicnessViolations;
+    expect(
+      current.filter(
+        (violation) =>
+          /@kovojs\/test\.(?:\/html-fragment|\/sqlite)#/.test(violation) &&
+          /(?:HtmlJsonScriptFact|BetterSqliteHandle|BetterSqliteStatement)/.test(violation),
+      ),
+    ).toEqual([]);
   });
 
   it('detects a newly leaked (untagged, undocumented) public export', () => {

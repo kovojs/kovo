@@ -50,6 +50,56 @@ describe('@kovojs/test DB verifier', () => {
     expect(() => verifier.assertCovered()).not.toThrow();
   });
 
+  it('allows raw SQL writes to declared raw table allowlists', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          tables: ['cart_items'],
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' }],
+          unresolved: [
+            {
+              code: 'KV406',
+              domain: 'cart',
+              message: expectedDiagnosticMessage('KV406'),
+              site: 'cart.domain.ts:9',
+            },
+          ],
+        },
+      },
+      { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("insert into cart_items (product_id) values ('p1')");
+
+    expect(() => verifier.assertCovered()).not.toThrow();
+  });
+
+  it('fails closed when raw SQL writes outside declared raw table allowlists', () => {
+    const verifier = createDbVerifier(
+      {
+        'cart.addItem': {
+          tables: ['cart_items'],
+          touches: [{ domain: 'cart', keys: null, site: 'cart.domain.ts:8', via: 'cart_items' }],
+          unresolved: [
+            {
+              code: 'KV406',
+              domain: 'cart',
+              message: expectedDiagnosticMessage('KV406'),
+              site: 'cart.domain.ts:9',
+            },
+          ],
+        },
+      },
+      { domainByTable: { audit_log: 'audit', cart_items: 'cart' } },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql("update audit_log set product_id = 'p1' where id = 'a1'");
+
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV406', 'audit_log'));
+  });
+
   it('limits domain-scoped KV406 coverage to the annotated domain', () => {
     const verifier = createDbVerifier(
       {

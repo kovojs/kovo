@@ -104,7 +104,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
             op: '*',
             right: { kind: 'const', value: 2 },
           },
-          tag: { kind: 'opaque', expr: 'serverTag()' },
+          tag: { kind: 'opaque', expr: 'unsummarized-helper:serverTag' },
         },
       });
     });

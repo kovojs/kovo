@@ -76,7 +76,7 @@ describe('inline loader minified artifact', () => {
       "dq('kovo:query',{detail:{['quer'+'ies']:chunks.qs,},});",
     );
     expect(inlineKovoLoaderInstallerSource).toContain(
-      "for(const x of chunks.fragments){if(x.mode==='append')continue;const e=ft(x.target);if(e)for(const y of qa(e,'[kovo-c]')){if(x.html.includes(y.getAttribute('kovo-c')))continue;y.a?.abort();}}ai(chunks,{ff:ft});",
+      `for(const x of chunks.fragments){if(x.mode==='append')continue;const e=ft(x.target);if(e)for(const y of qa(e,'[kovo-c]')){if(x.html.includes('kovo-c="'+y.getAttribute('kovo-c')+'"')&&(!y.getAttribute('kovo-key')&&!y.getAttribute('id')||x.html.includes('kovo-key="'+y.getAttribute('kovo-key')+'"')||x.html.includes('id="'+y.getAttribute('id')+'"')))continue;y.a?.abort();}}ai(chunks,{ff:ft});`,
     );
     expect(inlineKovoLoaderInstallerSource).toContain('function m(c,n)');
     expect(inlineKovoLoaderInstallerSource).toContain(

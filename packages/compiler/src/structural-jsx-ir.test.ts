@@ -64,7 +64,7 @@ export const ProductPage = component({
     expect(serverSource).toContain('class="primitive nav-link"');
     expect(serverSource).toContain('href="/products/p1"');
     expect(serverSource).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/product-page\.client\.js#ProductPage\$selectProduct \/c\/primitive#click"/,
+      /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/product-page\.client\.js#ProductPage\$selectProduct \/c\/primitive#click"/,
     );
     expect(serverSource).toContain('data-state="closed"');
     expect(serverSource).toContain('commandfor="details" command="show-modal"');
@@ -173,9 +173,9 @@ export const ImportOrder = component({
     const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
 
     expect({
-      clientSource: clientSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
+      clientSource: clientSource.replace(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\//g, '/c/__v/HASH/'),
       diagnostics: result.diagnostics,
-      serverSource: serverSource.replace(/\/c\/__v\/[0-9a-f]{8}\//g, '/c/__v/HASH/'),
+      serverSource: serverSource.replace(/\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\//g, '/c/__v/HASH/'),
     }).toMatchInlineSnapshot(`
       {
         "clientSource": "// @kovojs-ir

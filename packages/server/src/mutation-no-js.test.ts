@@ -258,4 +258,36 @@ describe('no-JS mutation responses', () => {
     expect(second.status).toBe(303);
     expect(handlerCalls).toBe(1);
   });
+
+  it('fails closed instead of running no-JS mutations when replay reservation is refused', async () => {
+    let handlerCalls = 0;
+    const addToCart = mutation('cart/add', {
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+    const noJsReplayStore: import('./mutation-wire.js').NoJsMutationReplayStore = {
+      get() {
+        return undefined;
+      },
+      reserve() {
+        return undefined;
+      },
+    };
+
+    const response = await renderNoJsMutationResponse(addToCart, {
+      idem: 'idem_saturated',
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      replayStore: noJsReplayStore,
+      request: { sessionId: 's1' },
+    });
+
+    expect(handlerCalls).toBe(0);
+    expect(response.status).toBe(429);
+    expect(response.headers['Retry-After']).toBe('1');
+    expect(response.body).toContain('data-error-code="RATE_LIMITED"');
+  });
 });

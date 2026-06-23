@@ -264,6 +264,11 @@ export interface WriteDefinition<
 > {
   key: Key;
   run: (...args: Args) => Promise<Value> | Value;
+  /**
+   * Raw-SQL write table allowlist (SPEC §10.3): opaque writes declare every
+   * physical table they mutate so runtime verification can fail closed.
+   */
+  tables?: readonly string[];
   touches: Touches;
 }
 
@@ -790,6 +795,7 @@ export async function renderMutationResponse<
 
   const reservationResult = await reserveMutationReplayBeforeRun(replay);
   if (reservationResult.kind === 'replayed') return reservationResult.response;
+  if (reservationResult.kind === 'unavailable') return renderReplayUnavailableFragment(wireRequest);
   const reservation =
     reservationResult.kind === 'reserved' ? reservationResult.reservation : undefined;
 
@@ -1451,7 +1457,13 @@ export async function renderNoJsMutationResponse<
     const replayed = await noJsRequest.replayStore.get(noJsScope, idem);
     if (replayed) return replayed;
 
-    const reservation = noJsRequest.replayStore.reserve(noJsScope, idem);
+    let reservation = noJsRequest.replayStore.reserve(noJsScope, idem);
+    if (!reservation) {
+      const pending = await noJsRequest.replayStore.get(noJsScope, idem);
+      if (pending) return pending;
+      reservation = noJsRequest.replayStore.reserve(noJsScope, idem);
+      if (!reservation) return renderNoJsReplayUnavailablePage(noJsRequest);
+    }
 
     let result: MutationResult<Value>;
     try {
@@ -1604,6 +1616,44 @@ function noJsMutationServerErrorResponse(): NoJsMutationResponse {
     body: 'Internal Server Error',
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
     status: 500,
+  };
+}
+
+async function renderReplayUnavailableFragment<Request>(
+  wireRequest: MutationWireRequest<Request>,
+): Promise<MutationWireResponse> {
+  return {
+    body: await renderFailureFragment(replayUnavailableFailure(), wireRequest),
+    headers: {
+      ...mutationWireResponseHeaders(wireRequest),
+      'Retry-After': '1',
+    },
+    status: 429,
+  };
+}
+
+async function renderNoJsReplayUnavailablePage<Request, Value>(
+  noJsRequest: NoJsMutationRequest<Request, Value>,
+): Promise<NoJsMutationResponse> {
+  const failure = replayUnavailableFailure();
+  return {
+    body: noJsRequest.renderFailurePage
+      ? await noJsRequest.renderFailurePage(failure)
+      : renderDefaultFailurePage(failure),
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Retry-After': '1',
+    },
+    status: 429,
+  };
+}
+
+function replayUnavailableFailure(): MutationFail<'RATE_LIMITED', { reason: string }> {
+  return {
+    error: { code: 'RATE_LIMITED', payload: { reason: 'replay-unavailable' } },
+    ok: false,
+    retryAfter: 1,
+    status: 429,
   };
 }
 

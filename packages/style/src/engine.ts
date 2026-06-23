@@ -24,8 +24,15 @@ export interface StyleObject {
   readonly [property: string]: CssValue | StyleObject;
 }
 
+/** Opaque compiled style record that may be passed to `style.attrs`. */
+export interface StyleRecord {
+  readonly [CSS_MARKER]: true | string;
+  readonly [STYLE_SRC]?: string;
+  readonly [property: string]: unknown;
+}
+
 /** Opaque compiled style object that may be passed to `style.attrs`. */
-export type Style = CompiledStyle | null | false | undefined;
+export type Style = StyleRecord | null | false | undefined;
 
 /** A style argument accepted by `attrs`, including arrays and raw inline tuples. */
 export type StyleInput =
@@ -42,9 +49,9 @@ export interface CompiledStyle {
   readonly [property: string]: string | true | readonly AtomicRule[] | undefined;
 }
 
-/** Result shape of `style.create`: one compiled style record per named namespace key. */
+/** Result shape of `style.create`: one opaque style record per named namespace key. */
 export type StyleNamespaces<Styles extends Record<string, StyleObject>> = {
-  readonly [Key in keyof Styles]: CompiledStyle;
+  readonly [Key in keyof Styles]: StyleRecord;
 };
 
 /** Typed CSS variable group returned by `defineVars`; token values are `var(--kovo-*)` strings. */
@@ -53,7 +60,7 @@ export type Vars<Tokens extends Record<string, CssValue>> = {
 } & {
   readonly [CSS_MARKER]: true | string;
   readonly __vars: true;
-  readonly __rules?: readonly AtomicRule[];
+  readonly __rules?: unknown;
 };
 
 /** @internal Compile-time constants returned unchanged for use inside static style objects. */
@@ -63,7 +70,7 @@ export type Consts<Constants extends Record<string, StylePrimitive>> = Readonly<
 export interface Theme {
   readonly [CSS_MARKER]: true | string;
   readonly [STYLE_SRC]?: string;
-  readonly __rules?: readonly AtomicRule[];
+  readonly __rules?: unknown;
   readonly __theme: true;
   readonly className: string;
 }
@@ -81,7 +88,8 @@ export interface AtomicRule {
   readonly source: string;
 }
 
-interface StyleIdentityOptions {
+/** Optional deterministic identity hint for extracted style and keyframe names. */
+export interface StyleIdentityOptions {
   readonly namespace?: string;
   readonly source?: string;
 }
@@ -95,7 +103,7 @@ interface StyleCallSite {
  * and extracted CSS. The compiler ABI consumes this through `@kovojs/style/internal`.
  */
 export interface AtomicCssResult<Styles extends Record<string, StyleObject>> {
-  readonly styles: StyleNamespaces<Styles>;
+  readonly styles: { readonly [Key in keyof Styles]: CompiledStyle };
   readonly rules: readonly AtomicRule[];
   readonly css: string;
 }
@@ -206,7 +214,7 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
 
   const rules = [...rulesByKey.values()].sort(compareRules);
   return {
-    styles: compiled as StyleNamespaces<Styles>,
+    styles: compiled as { readonly [Key in keyof Styles]: CompiledStyle },
     rules,
     css: emitAtomicCss(rules),
   };

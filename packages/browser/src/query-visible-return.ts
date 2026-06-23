@@ -9,6 +9,7 @@ import type { QueryApplyInterposition } from './query-apply.js';
 import type { CompiledQueryUpdatePlans } from './query-bindings.js';
 import { refetchQueries } from './query-refetch.js';
 import type { QueryRefetchOptions } from './query-refetch.js';
+import { readPageBuildToken } from './build-token.js';
 import { createQueryScriptHydrationLedger } from './query-script-hydration.js';
 import type { QueryScriptLike } from './query-script-hydration.js';
 import type { QueryStore } from './query-store.js';
@@ -141,6 +142,9 @@ export function installQueryVisibleReturnRefetch(
       const applied = await refetchQueries({
         ...options.queryRefetch,
         ...definedProps({ onError }),
+        ...definedProps({
+          expectedBuildToken: options.queryRefetch.expectedBuildToken ?? readPageBuildToken(),
+        }),
         ...definedProps({
           applyQuery: options.applyQuery,
           queryPlans: options.queryPlans,

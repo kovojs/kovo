@@ -737,10 +737,13 @@ function lowerPrimitiveReactiveAttributes(
     for (const [attrName, attr] of Object.entries(manifest.attrs)) {
       // Idempotency: skip attributes already bound (by this pass on a previous
       // lowering, or by the inline-attribute-derive pass for the control prop
-      // itself, e.g. `data-bind:checked`). Skip author-written attributes to
-      // avoid the KV233 double-bind.
+      // itself, e.g. `data-bind:checked`). SPEC.md §4.6 makes primitive-owned
+      // state aria-* primitive-wins and live even when an author wrote a static
+      // attribute, so those attrs still receive a data-bind stamp.
       if (hasAttribute(element, stateBindingAttributeName(attrName))) continue;
-      if (hasAuthoredAttribute(element, attrName)) continue;
+      if (hasAuthoredAttribute(element, attrName) && !isPrimitiveStateAriaAttribute(attrName)) {
+        continue;
+      }
 
       lowerPrimitiveReactiveAttribute(
         element,
@@ -2011,6 +2014,17 @@ function hasAttribute(element: JsxIrElement, name: string): boolean {
 function hasAuthoredAttribute(element: JsxIrElement, name: string): boolean {
   return element.attributes.some(
     (attribute) => attribute.name === name && attribute.ownership === 'author',
+  );
+}
+
+function isPrimitiveStateAriaAttribute(name: string): boolean {
+  return (
+    name === 'aria-expanded' ||
+    name === 'aria-selected' ||
+    name === 'aria-checked' ||
+    name === 'aria-pressed' ||
+    name === 'aria-current' ||
+    name === 'aria-disabled'
   );
 }
 

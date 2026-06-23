@@ -1,19 +1,21 @@
 import { createRequire } from 'node:module';
 
 interface BetterSqliteConstructor {
-  new (filename: string, options?: SqliteTestDbOptions): BetterSqliteHandle;
+  new (filename: string, options?: SqliteTestDbOptions): SqliteNativeHandle;
 }
 
-interface BetterSqliteHandle {
-  close(): void;
-  exec(statement: string): unknown;
-  prepare<Row = unknown>(statement: string): BetterSqliteStatement<Row>;
-  transaction<Callback extends (...args: never[]) => unknown>(callback: Callback): Callback;
-}
-
-interface BetterSqliteStatement<Row = unknown> {
+/** Minimal better-sqlite3 statement handle surfaced by `SqliteTestDb.sqlite`. */
+export interface SqliteNativeStatement<Row = unknown> {
   all(...params: unknown[]): Row[];
   run(...params: unknown[]): unknown;
+}
+
+/** Minimal better-sqlite3 database handle surfaced by `SqliteTestDb.sqlite`. */
+export interface SqliteNativeHandle {
+  close(): void;
+  exec(statement: string): unknown;
+  prepare<Row = unknown>(statement: string): SqliteNativeStatement<Row>;
+  transaction<Callback extends (...args: never[]) => unknown>(callback: Callback): Callback;
 }
 
 /** Options passed through to the better-sqlite3 constructor used by `createSqliteTestDb()`. */
@@ -43,7 +45,7 @@ export interface SqliteTestDb {
     statement: string,
     params?: readonly unknown[],
   ): Row[];
-  sqlite: BetterSqliteHandle;
+  sqlite: SqliteNativeHandle;
   write(table: string, value: Record<string, unknown>): void;
 }
 

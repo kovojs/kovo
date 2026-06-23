@@ -79,6 +79,7 @@ export function assertObservedWritesCovered(
   const scopedTouchGraph = selectTouchGraph(touchGraph, touchGraphKey);
 
   assertRowKeys(observed, config);
+  assertRawWriteTablesAllowed(observed, scopedTouchGraph);
   assertKeyedWritesObserved(observed, scopedTouchGraph, config);
   assertMutationReadsCovered(observed, scopedTouchGraph, config);
 
@@ -189,6 +190,26 @@ function assertKeyedWritesObserved(
     )
     .join(', ');
   throw new Error(diagnosticMessage('KV408', details));
+}
+
+function assertRawWriteTablesAllowed(
+  observed: readonly ObservedDbOperation[],
+  touchGraph: CoreGraph.TouchGraph,
+): void {
+  const declaredTables = Object.values(touchGraph).flatMap((entry) => entry.tables ?? []);
+  if (declaredTables.length === 0) return;
+
+  const allowedTables = new Set(declaredTables);
+  const unexpected = observed.filter(
+    (operation) =>
+      operation.kind === 'write' &&
+      operation.sql !== undefined &&
+      !allowedTables.has(operation.table),
+  );
+  if (unexpected.length === 0) return;
+
+  const tables = [...new Set(unexpected.map((operation) => operation.table))].sort().join(', ');
+  throw new Error(diagnosticMessage('KV406', tables));
 }
 
 function selectTouchGraph(

@@ -571,16 +571,15 @@ describe('compiled interactive gallery demos', () => {
     expect(menubarSelectEvent.defaultPrevented).toBe(true);
     expect(menubarState).toEqual({ activeValue: 'file', openValue: '', value: 'new' });
 
-    // Meter demo thresholds were retuned so the default 72% reads as `optimum`
-    // (green) instead of the old alarming brown; the toggle now drops to 30%
-    // (below `low`, so `suboptimum`) and back.
-    const meterState = { dataState: 'optimum', value: 72 };
+    // The meter's visual data-state is derived from `value`; the handler only
+    // mutates the authored state field.
+    const meterState = { value: 72 };
     clientHandler(meter, 'GalleryMeterDemo$button_click')(new Event('click'), {
       params: {},
       signal,
       state: meterState,
     });
-    expect(meterState).toEqual({ dataState: 'suboptimum', value: 30 });
+    expect(meterState).toEqual({ value: 30 });
 
     const navigationMenuState = { activeValue: 'products', openValue: '', value: 'none' };
     clientHandler(navigationMenu, 'GalleryNavigationMenuDemo$section_keydown')(

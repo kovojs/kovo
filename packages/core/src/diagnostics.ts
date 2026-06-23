@@ -56,6 +56,9 @@ export type DiagnosticCode =
   | 'KV412'
   | 'KV413'
   | 'KV414'
+  | 'KV415'
+  | 'KV416'
+  | 'KV417'
   | 'KV418'
   | 'KV419'
   | 'KV420'
@@ -702,6 +705,39 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Owner-table access is not scoped to the session principal (IDOR).',
+  },
+  KV415: {
+    code: 'KV415',
+    help: [
+      'Would lower to: a typed response header record that serializes only framework-allowed header names and cookie values produced by the typed cookie builder.',
+      'Blocked reason: arbitrary header names/values can smuggle forbidden response metadata or split headers when they contain CR/LF/NUL/control characters.',
+      'Fixes: use the typed response-header allowlist, route cookies through the typed cookie builder, or remove the forbidden header write.',
+      'SPEC §9.1.1 keeps response headers in a typed channel so generated wire responses remain auditable.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Response header channel contains a forbidden header name or unsafe header value.',
+  },
+  KV416: {
+    code: 'KV416',
+    help: [
+      'Would lower to: a production delta payload whose render-plan token matches the full dev render contract and whose delta applies back to the same HTML.',
+      'Blocked reason: production delta output or render-plan token monotonicity failed, so a stale tab could patch DOM produced by a different render contract.',
+      'Fixes: include every query shape and the update-plan grammar version in the render-plan token, fix the delta encoder, or disable the production build until the corpus gate passes.',
+      'SPEC §5.2.2 makes this a build-failing production render-equivalence gate.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Prod render-equivalence gate failed.',
+  },
+  KV417: {
+    code: 'KV417',
+    help: [
+      'Would lower to: a deploy-skew policy that retains prior immutable /c/__v/... modules and per-token /_q reads for at least 24 hours.',
+      'Blocked reason: the configured serving layer cannot retain the previous render-plan contract long enough for stale documents to recover safely.',
+      'Fixes: raise the deploy-skew retention window to at least 24 hours, configure immutable client-module retention, and keep prior-token query reads available for the window.',
+      'SPEC §14 requires stale documents to fail loud or recover instead of silently merging cross-build data.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Deploy-skew retention window is below the required floor.',
   },
   KV418: {
     code: 'KV418',

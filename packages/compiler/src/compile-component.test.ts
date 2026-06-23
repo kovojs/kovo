@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertFixpoint,
+  assertProductionRenderPlanGate,
   assertRenderEquivalence,
   assertRenderPlanTokenMonotonicity,
   compileComponentModule,
   computeCompilerRenderPlanFingerprint,
+  CompilerDiagnosticError,
 } from './index.js';
 import { emitServerModule, semanticRenderEquivalenceCheck } from './emit/server.js';
 import { parseComponentModule } from './scan/parse.js';
@@ -27,7 +29,7 @@ export const CartBadge = component({
 function expectHandlerRef(source: string, path: string, exportName: string): void {
   const relativePath = escapeRegExp(path.replace(/^\/c\//, ''));
   expect(source).toMatch(
-    new RegExp(`/c/__v/[0-9a-f]{8}/${relativePath}#${escapeRegExp(exportName)}`),
+    new RegExp(`/c/__v/[0-9a-f]{16}-[0-9a-f]{8}/${relativePath}#${escapeRegExp(exportName)}`),
   );
 }
 
@@ -1184,7 +1186,16 @@ describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () =>
 
     expect(() =>
       assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken }),
-    ).toThrow(/KV416/);
+    ).toThrow(CompilerDiagnosticError);
+    try {
+      assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken });
+    } catch (error) {
+      expect(error).toBeInstanceOf(CompilerDiagnosticError);
+      expect((error as CompilerDiagnosticError).diagnostic).toMatchObject({
+        code: 'KV416',
+        severity: 'error',
+      });
+    }
   });
 
   it('throws KV416 when a new query is added but the token does not move (coverage: added field)', () => {
@@ -1195,7 +1206,7 @@ describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () =>
 
     expect(() =>
       assertRenderPlanTokenMonotonicity({ before, after, tokenFn: frozenToken }),
-    ).toThrow(/KV416/);
+    ).toThrow(CompilerDiagnosticError);
   });
 
   it('does NOT throw KV416 when shapes differ and a correct token function moves (real fingerprint)', () => {
@@ -1215,5 +1226,46 @@ describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () =>
         tokenFn: computeCompilerRenderPlanFingerprint,
       }),
     ).not.toThrow();
+  });
+
+  it('wires KV416 into the production compile gate diagnostics', () => {
+    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      productionRenderPlanGate: {
+        previous: { cart: '{count:number}' },
+        tokenFn: frozenToken,
+      },
+      queryShapes: { cart: { total: 'number' } },
+      source: cartBadgeSource,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV416',
+          severity: 'error',
+          message: expect.stringContaining('render-plan token failed to move'),
+        }),
+      ]),
+    );
+  });
+
+  it('exposes a production render-plan gate assertion that throws diagnostic-shaped KV416', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      queryShapes: { cart: { count: 'number' } },
+      source: cartBadgeSource,
+    });
+    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+
+    expect(() =>
+      assertProductionRenderPlanGate({
+        result,
+        before: { cart: '{count:number}' },
+        after: { cart: '{total:number}' },
+        tokenFn: frozenToken,
+      }),
+    ).toThrow(CompilerDiagnosticError);
   });
 });

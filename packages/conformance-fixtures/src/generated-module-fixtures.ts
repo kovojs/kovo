@@ -526,7 +526,9 @@ interface InlineEnhancedFormFetchOptions {
   method: string;
 }
 
-export type GeneratedHandlerReferenceVersionShape = 'lower-hex-8' | 'invalid';
+export type GeneratedHandlerReferenceVersionShape =
+  | 'render-plan-hex-16-plus-hash-hex-8'
+  | 'invalid';
 
 export interface GeneratedHandlerReferenceFact {
   handlerName: string;
@@ -587,8 +589,6 @@ export interface GeneratedRenderEquivalenceOptions {
   };
 }
 
-const isLowerHex = (value: string): boolean => /^[0-9a-f]+$/.test(value);
-
 export function generatedHandlerReferenceFact(
   href: string,
   baseUrl = 'http://kovo.test',
@@ -604,10 +604,12 @@ export function generatedHandlerReferenceFact(
       ? `/c/__v/${version}/${pathVersion[2] ?? ''}?cache=1`
       : `${url.pathname}?cache=1&v=${version}`,
     staleVersionRequestPath: pathVersion
-      ? `/c/__v/00000000/${pathVersion[2] ?? ''}`
+      ? `/c/__v/0000000000000000-00000000/${pathVersion[2] ?? ''}`
       : `${url.pathname}?v=00000000`,
     version,
-    versionShape: version.length === 8 && isLowerHex(version) ? 'lower-hex-8' : 'invalid',
+    versionShape: /^[0-9a-f]{16}-[0-9a-f]{8}$/.test(version)
+      ? 'render-plan-hex-16-plus-hash-hex-8'
+      : 'invalid',
   };
 }
 

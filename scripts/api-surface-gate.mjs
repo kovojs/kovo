@@ -88,6 +88,162 @@ function exportId(entry, symbolName) {
   return `${entry.pkg}${entry.subpath === '.' ? '' : entry.subpath}#${symbolName}`;
 }
 
+function normalizedPath(fileName) {
+  return path.resolve(fileName).split(path.sep).join('/');
+}
+
+function declarationPath(symbol, checker) {
+  const resolved = symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+  const declaration = resolved.declarations?.[0];
+  if (!declaration) return null;
+  return normalizedPath(declaration.getSourceFile().fileName);
+}
+
+function collectExportedSymbols(entries, program, checker) {
+  const publicExportSymbols = new Set();
+  const entryByPath = new Map();
+
+  for (const entry of entries) {
+    entryByPath.set(normalizedPath(entry.absPath), entry);
+    if (entry.tier !== 'public') continue;
+
+    const sourceFile = program.getSourceFile(entry.absPath);
+    if (!sourceFile) continue;
+    const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
+    if (!moduleSymbol) continue;
+
+    for (const symbol of checker.getExportsOfModule(moduleSymbol)) {
+      const resolved =
+        symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+      publicExportSymbols.add(resolved);
+    }
+  }
+
+  return { entryByPath, publicExportSymbols };
+}
+
+function referencedTypeSymbols(decls, checker) {
+  const symbols = [];
+
+  function pushSymbolAt(node) {
+    const symbol = checker.getSymbolAtLocation(node);
+    if (!symbol) return;
+    const resolved =
+      symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+    symbols.push(resolved);
+  }
+
+  function visit(node) {
+    if (ts.isTypeReferenceNode(node)) {
+      pushSymbolAt(node.typeName);
+    } else if (ts.isExpressionWithTypeArguments(node)) {
+      pushSymbolAt(node.expression);
+    } else if (ts.isImportTypeNode(node) && node.qualifier) {
+      pushSymbolAt(node.qualifier);
+    }
+    ts.forEachChild(node, visit);
+  }
+
+  function visitTypeParameter(param) {
+    if (param.constraint) visit(param.constraint);
+    if (param.default) visit(param.default);
+  }
+
+  for (const decl of decls) {
+    if (ts.isTypeAliasDeclaration(decl)) {
+      decl.typeParameters?.forEach(visitTypeParameter);
+      visit(decl.type);
+      continue;
+    }
+
+    if (ts.isInterfaceDeclaration(decl) || ts.isClassDeclaration(decl)) {
+      decl.typeParameters?.forEach(visitTypeParameter);
+      decl.heritageClauses?.forEach(visit);
+      for (const member of decl.members) visit(member);
+      continue;
+    }
+
+    if (ts.isFunctionDeclaration(decl) || ts.isMethodSignature(decl)) {
+      decl.typeParameters?.forEach(visitTypeParameter);
+      decl.parameters.forEach((param) => {
+        if (param.type) visit(param.type);
+      });
+      if (decl.type) visit(decl.type);
+      continue;
+    }
+
+    if (ts.isVariableDeclaration(decl)) {
+      if (decl.type) visit(decl.type);
+      continue;
+    }
+
+    if (
+      ts.isPropertySignature(decl) ||
+      ts.isPropertyDeclaration(decl) ||
+      ts.isParameter(decl) ||
+      ts.isCallSignatureDeclaration(decl) ||
+      ts.isConstructSignatureDeclaration(decl)
+    ) {
+      visit(decl);
+    }
+  }
+
+  return symbols;
+}
+
+function isExternalDeclaration(symbol, checker) {
+  if (symbol.declarations?.every((decl) => ts.isTypeParameterDeclaration(decl))) return true;
+  const declarationFile = declarationPath(symbol, checker);
+  if (!declarationFile) return true;
+  if (declarationFile.includes('/node_modules/')) return true;
+  return !declarationFile.startsWith(normalizedPath(repoRoot));
+}
+
+function recursivePublicnessViolationsForExport(exportSymbol, exportName, context, checker) {
+  const violations = [];
+  const queue = [{ symbol: exportSymbol, path: [exportName] }];
+  const seen = new Set();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    const symbol = current.symbol;
+    if (seen.has(symbol)) continue;
+    seen.add(symbol);
+
+    const decls = symbol.declarations ?? [];
+    for (const referenced of referencedTypeSymbols(decls, checker)) {
+      if (referenced === symbol) continue;
+      if (context.publicExportSymbols.has(referenced)) {
+        queue.push({ symbol: referenced, path: [...current.path, referenced.name] });
+        continue;
+      }
+      if (isExternalDeclaration(referenced, checker)) continue;
+
+      const state = symbolDocState(referenced, checker);
+      const referencedPath = declarationPath(referenced, checker);
+      const referencedEntry = referencedPath ? context.entryByPath.get(referencedPath) : undefined;
+      const label = state.internal
+        ? 'internal-type-in-public-signature'
+        : state.generated
+          ? 'generated-type-in-public-signature'
+          : referencedEntry?.tier === 'internal'
+            ? 'internal-entry-type-in-public-signature'
+            : referencedEntry?.tier === 'generated'
+              ? 'generated-entry-type-in-public-signature'
+              : 'non-public-type-in-public-signature';
+
+      violations.push({
+        label,
+        path: [...current.path, referenced.name].join(' -> '),
+        symbol: referenced,
+      });
+      queue.push({ symbol: referenced, path: [...current.path, referenced.name] });
+    }
+  }
+
+  return violations;
+}
+
 export function classifyExport({ tier, documented, internal, generated }) {
   if (tier === 'public') {
     if (internal) return 'internal-on-public';
@@ -113,9 +269,11 @@ export function computeSurfaceReport() {
   const entries = publicEntryFiles();
   const program = createProgram(entries.map((entry) => entry.absPath));
   const checker = program.getTypeChecker();
+  const publicnessContext = collectExportedSymbols(entries, program, checker);
   const report = {
     undocumentedPublic: [],
     boundaryViolations: [],
+    recursivePublicnessViolations: [],
   };
 
   for (const entry of entries) {
@@ -126,12 +284,28 @@ export function computeSurfaceReport() {
     for (const symbol of checker.getExportsOfModule(moduleSymbol)) {
       const state = symbolDocState(symbol, checker);
       const violation = classifyExport({ tier: entry.tier, ...state });
-      if (violation === null) continue;
       const id = exportId(entry, symbol.name);
-      if (violation === 'undocumented-public') {
-        report.undocumentedPublic.push(id);
-      } else {
-        report.boundaryViolations.push(`${id} (${violation})`);
+      if (violation !== null) {
+        if (violation === 'undocumented-public') {
+          report.undocumentedPublic.push(id);
+        } else {
+          report.boundaryViolations.push(`${id} (${violation})`);
+        }
+      }
+
+      if (entry.tier === 'public') {
+        const resolved =
+          symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+        for (const recursiveViolation of recursivePublicnessViolationsForExport(
+          resolved,
+          symbol.name,
+          publicnessContext,
+          checker,
+        )) {
+          report.recursivePublicnessViolations.push(
+            `${id} -> ${recursiveViolation.path} (${recursiveViolation.label})`,
+          );
+        }
       }
     }
   }
@@ -141,6 +315,9 @@ export function computeSurfaceReport() {
     ),
     boundaryViolations: [...new Set(report.boundaryViolations)].sort((left, right) =>
       left.localeCompare(right),
+    ),
+    recursivePublicnessViolations: [...new Set(report.recursivePublicnessViolations)].sort(
+      (left, right) => left.localeCompare(right),
     ),
   };
 }
@@ -163,6 +340,7 @@ export function compareViolations(baselineList, currentList) {
 export function runGate({ write = false } = {}) {
   const report = computeSurfaceReport();
   const violations = report.undocumentedPublic;
+  const recursivePublicnessViolations = report.recursivePublicnessViolations;
 
   if (write) {
     writeFileSync(
@@ -170,7 +348,8 @@ export function runGate({ write = false } = {}) {
       `${JSON.stringify(
         {
           $comment:
-            'api-surface gate ratchet baseline - known untagged/undocumented public exports. Shrinks as plans/api-cleanup.md Phases 4-8 land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
+            'api-surface gate ratchet baseline - known untagged/undocumented public exports and recursive publicness debt. Shrinks as plans/api-cleanup.md Phases 4-8 and audit-plan AUD-011 fixes land. Regenerate with `node scripts/api-surface-gate.mjs --write`. Never ADD entries by hand.',
+          recursivePublicnessViolations,
           violations,
         },
         null,
@@ -178,9 +357,9 @@ export function runGate({ write = false } = {}) {
       )}\n`,
     );
     process.stdout.write(
-      `api-surface: wrote baseline with ${String(violations.length)} known violations\n`,
+      `api-surface: wrote baseline with ${String(violations.length)} known violations and ${String(recursivePublicnessViolations.length)} recursive publicness violations\n`,
     );
-    return { ok: true, violations, added: [], removed: [] };
+    return { ok: true, violations, recursivePublicnessViolations, added: [], removed: [] };
   }
 
   const baseline = loadBaseline();
@@ -188,6 +367,9 @@ export function runGate({ write = false } = {}) {
     throw new Error('api-surface: no baseline; run `node scripts/api-surface-gate.mjs --write`');
   }
   const { added, removed } = compareViolations(baseline.violations, violations);
+  const recursiveBaseline = baseline.recursivePublicnessViolations ?? [];
+  const { added: addedRecursivePublicness, removed: removedRecursivePublicness } =
+    compareViolations(recursiveBaseline, recursivePublicnessViolations);
 
   if (report.boundaryViolations.length > 0) {
     process.stderr.write(
@@ -195,7 +377,34 @@ export function runGate({ write = false } = {}) {
         report.boundaryViolations.map((v) => '  + ' + String(v)).join('\n') +
         `\nMove @internal/@generated exports behind manifest-declared non-public subpaths, or document public re-exported types. See rules/api-surface.md.\n`,
     );
-    return { ok: false, violations, boundaryViolations: report.boundaryViolations, added, removed };
+    return {
+      ok: false,
+      violations,
+      recursivePublicnessViolations,
+      boundaryViolations: report.boundaryViolations,
+      added,
+      removed,
+      addedRecursivePublicness,
+      removedRecursivePublicness,
+    };
+  }
+
+  if (addedRecursivePublicness.length > 0) {
+    process.stderr.write(
+      `api-surface: ${String(addedRecursivePublicness.length)} NEW recursive publicness violation(s):\n` +
+        addedRecursivePublicness.map((v) => `  + ${v}`).join('\n') +
+        `\nPublic signatures must not require internal/generated/non-public helper types recursively. See rules/api-surface.md.\n`,
+    );
+    return {
+      ok: false,
+      violations,
+      recursivePublicnessViolations,
+      boundaryViolations: [],
+      added,
+      removed,
+      addedRecursivePublicness,
+      removedRecursivePublicness,
+    };
   }
 
   if (added.length > 0) {
@@ -207,9 +416,18 @@ export function runGate({ write = false } = {}) {
     return { ok: false, violations, boundaryViolations: [], added, removed };
   }
   process.stdout.write(
-    `api-surface/v1 public-exports-needing-attention=${String(violations.length)} (baseline=${String(baseline.violations.length)}, fixed-this-run=${String(removed.length)})\n`,
+    `api-surface/v1 public-exports-needing-attention=${String(violations.length)} (baseline=${String(baseline.violations.length)}, fixed-this-run=${String(removed.length)}), recursive-publicness-needing-attention=${String(recursivePublicnessViolations.length)} (baseline=${String(recursiveBaseline.length)}, fixed-this-run=${String(removedRecursivePublicness.length)})\n`,
   );
-  return { ok: true, violations, boundaryViolations: [], added, removed };
+  return {
+    ok: true,
+    violations,
+    recursivePublicnessViolations,
+    boundaryViolations: [],
+    added,
+    removed,
+    addedRecursivePublicness,
+    removedRecursivePublicness,
+  };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -93,13 +93,13 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(accordion).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_keydown"/,
     );
     expect(accordion).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click"/,
     );
     expect(accordion).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/accordion-demo\.client\.js#GalleryAccordionDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(alertDialog).toContain('data-gallery-interactive="alert-dialog"');
@@ -114,10 +114,10 @@ describe('compiled interactive gallery demos', () => {
     expect(alertDialog).toContain('data-bind:open=');
     expect(alertDialog).not.toContain('closedby');
     expect(alertDialog).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_click"/,
     );
     expect(alertDialog).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/alert-dialog-demo\.client\.js#GalleryAlertDialogDemo\$[A-Za-z]+_cancel"/,
     );
     expect(alertDialog).not.toContain('on:keydown=');
     expect(alertDialog).toContain('GalleryAlertDialogDemo$AlertDialogCancel_click');
@@ -139,13 +139,13 @@ describe('compiled interactive gallery demos', () => {
     expect(autocomplete).toContain('data-bind:aria-activedescendant=');
     expect(autocomplete).toContain('data-bind:hidden=');
     expect(autocomplete).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_input"/,
+      /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_input"/,
     );
     expect(autocomplete).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_keydown"/,
     );
     expect(autocomplete).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/autocomplete-demo\.client\.js#GalleryAutocompleteDemo\$[A-Za-z]+_click_2"/,
     );
     expect(autocompleteClient).toContain('autocompleteInput as _autocompleteInput');
     expect(autocompleteClient).toContain('autocompleteKeyDown as _autocompleteKeyDown');
@@ -157,13 +157,13 @@ describe('compiled interactive gallery demos', () => {
     expect(toggle).toContain('data-gallery-interactive="toggle"');
     expect(toggle).toContain('kovo-state=\'{"pressed":false}\'');
     expect(toggle).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toggle-demo\.client\.js#GalleryToggleDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toggle-demo\.client\.js#GalleryToggleDemo\$[A-Za-z]+_click"/,
     );
 
     expect(checkbox).toContain('data-gallery-interactive="checkbox"');
     expect(checkbox).toContain('kovo-state=\'{"checked":"indeterminate"}\'');
     expect(checkbox).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/checkbox-demo\.client\.js#GalleryCheckboxDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/checkbox-demo\.client\.js#GalleryCheckboxDemo\$[A-Za-z]+_click"/,
     );
 
     expect(checkboxGroup).toContain('data-gallery-interactive="checkbox-group"');
@@ -196,13 +196,13 @@ describe('compiled interactive gallery demos', () => {
     expect(combobox).toContain('data-bind:aria-activedescendant=');
     expect(combobox).toContain('data-bind:hidden=');
     expect(combobox).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_input"/,
+      /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_input"/,
     );
     expect(combobox).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_keydown"/,
     );
     expect(combobox).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/combobox-demo\.client\.js#GalleryComboboxDemo\$[A-Za-z]+_click"/,
     );
     expect(comboboxClient).toContain('comboboxInput as _comboboxInput');
     expect(comboboxClient).toContain('comboboxKeyDown as _comboboxKeyDown');
@@ -229,10 +229,10 @@ describe('compiled interactive gallery demos', () => {
     expect(command).toContain('data-bind:aria-activedescendant=');
     expect(command).toContain('data-bind:hidden=');
     expect(command).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_input"/,
+      /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_input"/,
     );
     expect(command).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/command-demo\.client\.js#GalleryCommandDemo\$[A-Za-z]+_keydown"/,
     );
     expect(command).toContain('GalleryCommandDemo$CommandItem_click');
     expect(command).toContain('GalleryCommandDemo$CommandItem_click_2');
@@ -274,25 +274,25 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(contextMenu).toMatch(
-      /on:contextmenu="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_contextmenu"/,
+      /on:contextmenu="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_contextmenu"/,
     );
     expect(contextMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(contextMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown"/,
     );
     expect(contextMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown_2"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_keydown_2"/,
     );
     expect(contextMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/context-menu-demo\.client\.js#GalleryContextMenuDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(disclosure).toContain('data-gallery-interactive="disclosure"');
     expect(disclosure).toContain('kovo-state=\'{"open":false}\'');
     expect(disclosure).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/disclosure-demo\.client\.js#GalleryDisclosureDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/disclosure-demo\.client\.js#GalleryDisclosureDemo\$[A-Za-z]+_click"/,
     );
 
     expect(dialog).toContain('data-gallery-interactive="dialog"');
@@ -303,10 +303,10 @@ describe('compiled interactive gallery demos', () => {
     expect(dialog).toContain('dialogCloseClick as _dialogCloseClick');
     expect(dialog).toContain('data-bind:open=');
     expect(dialog).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_click"/,
     );
     expect(dialog).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dialog-demo\.client\.js#GalleryDialogDemo\$[A-Za-z]+_cancel"/,
     );
     expect(dialog).not.toContain('on:keydown=');
 
@@ -322,10 +322,10 @@ describe('compiled interactive gallery demos', () => {
     expect(drawer).toContain('Vaul drag, snap, and background-scale gestures are not');
     expect(drawer).toContain('modeled.');
     expect(drawer).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_click"/,
     );
     expect(drawer).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/drawer-demo\.client\.js#GalleryDrawerDemo\$[A-Za-z]+_cancel"/,
     );
     expect(drawer).not.toContain('on:keydown=');
     expect(drawer).toContain('GalleryDrawerDemo$DrawerTrigger_click');
@@ -358,16 +358,16 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(dropdownMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown_2"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_keydown_2"/,
     );
     expect(dropdownMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/dropdown-menu-demo\.client\.js#GalleryDropdownMenuDemo\$[A-Za-z]+_click_2"/,
     );
     expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_keydown');
     expect(dropdownMenu).toContain('GalleryDropdownMenuDemo$DropdownMenuItem_keydown_2');
@@ -393,13 +393,13 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(field).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_input"/,
+      /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_input"/,
     );
     expect(field).toMatch(
-      /on:change="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_change"/,
+      /on:change="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_change"/,
     );
     expect(field).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/field-demo\.client\.js#GalleryFieldDemo\$[A-Za-z]+_click"/,
     );
 
     expect(hoverCard).toContain('data-gallery-interactive="hover-card"');
@@ -421,13 +421,13 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(hoverCard).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_focus"/,
     );
     expect(hoverCard).toMatch(
-      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_pointerenter"/,
+      /on:pointerenter="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_pointerenter"/,
     );
     expect(hoverCard).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/hover-card-demo\.client\.js#GalleryHoverCardDemo\$[A-Za-z]+_keydown"/,
     );
 
     expect(menubar).toContain('data-gallery-interactive="menubar"');
@@ -452,29 +452,30 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(menubar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
     );
     expect(menubar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click"/,
     );
     expect(menubar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown"/,
     );
     expect(menubar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_2"/,
     );
     expect(menubar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown_2"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_keydown_2"/,
     );
     expect(menubar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_3"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/menubar-demo\.client\.js#GalleryMenubarDemo\$[A-Za-z]+_click_3"/,
     );
 
     expect(meter).toContain('data-gallery-interactive="meter"');
-    expect(meter).toContain('kovo-state=\'{"dataState":"optimum","value":72}\'');
+    expect(meter).toContain('kovo-state=\'{"value":72}\'');
     expect(meter).toContain('<Meter');
+    expect(meter).toContain('data-bind:data-state=');
     expect(meter).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/meter-demo\.client\.js#GalleryMeterDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/meter-demo\.client\.js#GalleryMeterDemo\$[A-Za-z]+_click"/,
     );
 
     expect(navigationMenu).toContain('data-gallery-interactive="navigation-menu"');
@@ -505,22 +506,22 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(navigationMenu).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_keydown"/,
     );
     expect(navigationMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(navigationMenu).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
     );
     expect(navigationMenu).toMatch(
-      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_pointerenter"/,
+      /on:pointerenter="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_pointerenter"/,
     );
     expect(navigationMenu).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_click"/,
     );
     expect(navigationMenu).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/navigation-menu-demo\.client\.js#GalleryNavigationMenuDemo\$[A-Za-z]+_focus"/,
     );
 
     expect(numberField).toContain('data-gallery-interactive="number-field"');
@@ -536,10 +537,10 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(numberField).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_input"/,
+      /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_input"/,
     );
     expect(numberField).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/number-field-demo\.client\.js#GalleryNumberFieldDemo\$[A-Za-z]+_keydown"/,
     );
     expect(numberField).toContain('GalleryNumberFieldDemo$NumberFieldDecrement_click');
     expect(numberField).toContain('GalleryNumberFieldDemo$NumberFieldIncrement_click');
@@ -555,10 +556,10 @@ describe('compiled interactive gallery demos', () => {
     expect(otpField).toContain('data-bind:data-filled=');
     expect(otpField).toContain('data-bind:tabIndex=');
     expect(otpField).toMatch(
-      /on:input="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_input"/,
+      /on:input="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_input"/,
     );
     expect(otpField).toMatch(
-      /on:paste="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_paste_4"/,
+      /on:paste="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/otp-field-demo\.client\.js#GalleryOtpFieldDemo\$[A-Za-z]+_paste_4"/,
     );
 
     expect(collapsible).toContain('data-gallery-interactive="collapsible"');
@@ -573,7 +574,7 @@ describe('compiled interactive gallery demos', () => {
     expect(popover).toContain('popoverBeforeToggle as _popoverBeforeToggle');
     expect(popover).toContain('data-bind:open=');
     expect(popover).toMatch(
-      /on:beforetoggle="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/popover-demo\.client\.js#GalleryPopoverDemo\$[A-Za-z]+_beforetoggle"/,
+      /on:beforetoggle="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/popover-demo\.client\.js#GalleryPopoverDemo\$[A-Za-z]+_beforetoggle"/,
     );
     expect(popover).not.toContain('on:click=');
     expect(popover).not.toContain('on:keydown=');
@@ -586,10 +587,10 @@ describe('compiled interactive gallery demos', () => {
     expect(progress).toContain('kovo-state=\'{"value":40}\'');
     expect(progress).toContain('<Progress');
     expect(progress).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click"/,
     );
     expect(progress).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/progress-demo\.client\.js#GalleryProgressDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(pureMarkup).toContain('data-gallery-interactive="pure-markup"');
@@ -605,10 +606,10 @@ describe('compiled interactive gallery demos', () => {
     expect(radioGroup).toContain('kovo-state=\'{"value":"email"}\'');
     expect(radioGroup).toContain('<RadioGroupRadio');
     expect(radioGroup).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_keydown"/,
     );
     expect(radioGroup).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/radio-group-demo\.client\.js#GalleryRadioGroupDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(scrollArea).toContain('data-gallery-interactive="scroll-area"');
@@ -625,13 +626,13 @@ describe('compiled interactive gallery demos', () => {
     expect(scrollArea).toContain('data-bind:scrollTop=');
     expect(scrollArea).toContain('data-bind:style=');
     expect(scrollArea).toMatch(
-      /on:scroll="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_scroll"/,
+      /on:scroll="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_scroll"/,
     );
     expect(scrollArea).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_click"/,
     );
     expect(scrollArea).toMatch(
-      /on:pointerdown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_pointerdown"/,
+      /on:pointerdown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/scroll-area-demo\.client\.js#GalleryScrollAreaDemo\$[A-Za-z]+_pointerdown"/,
     );
 
     expect(select).toContain('data-gallery-interactive="select"');
@@ -644,10 +645,10 @@ describe('compiled interactive gallery demos', () => {
     expect(select).toContain('<SelectTrigger');
     expect(select).toContain('<SelectItem');
     expect(select).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_click"/,
     );
     expect(select).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/select-demo\.client\.js#GallerySelectDemo\$[A-Za-z]+_keydown"/,
     );
     expect(select).toContain('<SelectContent');
     expect(select).toContain('selectItemClick as _selectItemClick');
@@ -663,10 +664,10 @@ describe('compiled interactive gallery demos', () => {
     expect(sheet).toContain('data-bind:data-state=');
     expect(sheet).toContain('data-bind:open=');
     expect(sheet).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_click"/,
     );
     expect(sheet).toMatch(
-      /on:cancel="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_cancel"/,
+      /on:cancel="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/sheet-demo\.client\.js#GallerySheetDemo\$[A-Za-z]+_cancel"/,
     );
     expect(sheet).not.toContain('on:keydown=');
     expect(sheet).toContain('GallerySheetDemo$SheetTrigger_click');
@@ -682,39 +683,39 @@ describe('compiled interactive gallery demos', () => {
     expect(slider).toContain('<SliderThumb');
     expect(slider).toContain('data-bind:aria-valuenow=');
     expect(slider).toMatch(
-      /on:pointerdown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointerdown"/,
+      /on:pointerdown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointerdown"/,
     );
     expect(slider).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_keydown"/,
     );
     expect(slider).toMatch(
-      /on:pointermove="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointermove"/,
+      /on:pointermove="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/slider-demo\.client\.js#GallerySliderDemo\$[A-Za-z]+_pointermove"/,
     );
 
     expect(switchDemo).toContain('data-gallery-interactive="switch"');
     expect(switchDemo).toContain('form="gallery-switch-form"');
     expect(switchDemo).toContain('kovo-state=\'{"checked":false}\'');
     expect(switchDemo).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/switch-demo\.client\.js#GallerySwitchDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/switch-demo\.client\.js#GallerySwitchDemo\$[A-Za-z]+_click"/,
     );
 
     expect(tabs).toContain('data-gallery-interactive="tabs"');
     expect(tabs).toContain('kovo-state=\'{"activeValue":"overview","value":"overview"}\'');
     expect(tabs).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_keydown"/,
     );
     expect(tabs).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tabs-demo\.client\.js#GalleryTabsDemo\$[A-Za-z]+_click_2"/,
     );
 
     expect(toolbar).toContain('data-gallery-interactive="toolbar"');
     expect(toolbar).toContain('kovo-state=\'{"activeValue":"bold","pressedValue":"bold"}\'');
     expect(toolbar).toContain('<ToolbarButton');
     expect(toolbar).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_keydown"/,
     );
     expect(toolbar).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toolbar-demo\.client\.js#GalleryToolbarDemo\$[A-Za-z]+_click_2"/,
     );
     expect(toolbar).toContain('data-bind:aria-pressed=');
     expect(toolbar).toContain('data-bind:data-pressed=');
@@ -737,23 +738,23 @@ describe('compiled interactive gallery demos', () => {
       /\b(?:Reflect|getElementById|setAttribute|document|globalThis)\b|ctx\.params/,
     );
     expect(tooltip).toMatch(
-      /on:focus="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_focus"/,
+      /on:focus="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_focus"/,
     );
     expect(tooltip).toMatch(
-      /on:pointerenter="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_pointerenter"/,
+      /on:pointerenter="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_pointerenter"/,
     );
     expect(tooltip).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/tooltip-demo\.client\.js#GalleryTooltipDemo\$[A-Za-z]+_keydown"/,
     );
 
     expect(toggleGroup).toContain('data-gallery-interactive="toggle-group"');
     expect(toggleGroup).toContain('kovo-state=\'{"activeValue":"bold","value":"bold"}\'');
     expect(toggleGroup).toContain('<ToggleGroupButton');
     expect(toggleGroup).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_keydown"/,
     );
     expect(toggleGroup).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_click_2"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toggle-group-demo\.client\.js#GalleryToggleGroupDemo\$[A-Za-z]+_click_2"/,
     );
     expect(toggleGroup).toContain('data-bind:aria-pressed=');
     expect(toggleGroup).toContain('data-bind:data-state=');
@@ -779,13 +780,13 @@ describe('compiled interactive gallery demos', () => {
     expect(toast).toContain('data-bind:data-state=');
     expect(toast).toContain('data-demo-state="toast-count"');
     expect(toast).toMatch(
-      /on:keydown="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_keydown"/,
+      /on:keydown="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_keydown"/,
     );
     expect(toast).toMatch(
-      /on:animationend="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_animationend"/,
+      /on:animationend="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_animationend"/,
     );
     expect(toast).toMatch(
-      /on:click="\/c\/__v\/[0-9a-f]{8}\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_click"/,
+      /on:click="\/c\/__v\/[0-9a-f-]+\/src\/interactive\/toast-demo\.client\.js#GalleryToastDemo\$[A-Za-z]+_click"/,
     );
     expect(toast).toContain('GalleryToastDemo$ToastAction_click');
     expect(toast).toContain('GalleryToastDemo$ToastAction_click_2');

@@ -37,9 +37,9 @@ export interface QueryEndpointRequest<
   SessionValue = unknown,
 > extends GuardFailureResponseOptions<Request, SessionValue> {
   /**
-   * Optional build token (SPEC §5.2.1 rule 2(d)): when present, stamped as a
-   * `Kovo-Build` response header on the 200 read response so a plain refetch
-   * into a stale tab is detectable by the client.
+   * Optional build token (SPEC §5.2.1 rule 2(d), §9.4): when present, stamped
+   * as a `Kovo-Build` response header on every typed-read response so a plain
+   * refetch into a stale tab is detectable by the client.
    */
   buildToken?: string;
   request: Request;
@@ -340,11 +340,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
     // any response (even an anon 403) to a different user.
     return {
       body: JSON.stringify(serverErrorPayload()),
-      headers: {
-        'Cache-Control': 'private, no-store',
-        'Content-Type': 'application/json; charset=utf-8',
-        Vary: 'Cookie',
-      },
+      headers: queryJsonHeaders(endpointRequest),
       status: 500,
     };
   }
@@ -358,7 +354,9 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
     });
     // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
     // cache posture — an anon 403 must not be cached and replayed to an authed user.
-    if (authResponse) return withQueryCacheHeaders(authResponse);
+    if (authResponse) {
+      return withQueryBuildHeaders(withQueryCacheHeaders(authResponse), endpointRequest);
+    }
 
     return {
       body: JSON.stringify(result.error),
@@ -366,6 +364,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
         'Cache-Control': 'private, no-store',
         'Content-Type': 'application/json; charset=utf-8',
         Vary: 'Cookie',
+        ...queryBuildHeaders(endpointRequest),
         ...retryAfterHeaders(result),
       },
       status: result.status,
@@ -389,11 +388,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
     });
     return {
       body: JSON.stringify(serverErrorPayload()),
-      headers: {
-        'Cache-Control': 'private, no-store',
-        'Content-Type': 'application/json; charset=utf-8',
-        Vary: 'Cookie',
-      },
+      headers: queryJsonHeaders(endpointRequest),
       status: 500,
     };
   }
@@ -411,7 +406,7 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
       Vary: 'Cookie',
       // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
       // tab can detect deploy skew and avoid merging new-build data into a stale document.
-      ...(endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {}),
+      ...queryBuildHeaders(endpointRequest),
     },
     status: 200,
   };
@@ -432,7 +427,10 @@ export async function renderQueryRegistryEndpointResponse<Request>(
   if (!definition) {
     return {
       body: 'Not Found',
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        ...queryBuildHeaders(endpointRequest),
+      },
       status: 404,
     };
   }
@@ -610,6 +608,36 @@ function renderQueryEndpointChunk<const Key extends string, Value, Input, Reques
 
 function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
   return { code: 'SERVER_ERROR', payload: {} };
+}
+
+function queryJsonHeaders<Request>(
+  endpointRequest: QueryEndpointRequest<Request>,
+): Record<string, string> {
+  return {
+    'Cache-Control': 'private, no-store',
+    'Content-Type': 'application/json; charset=utf-8',
+    Vary: 'Cookie',
+    ...queryBuildHeaders(endpointRequest),
+  };
+}
+
+function queryBuildHeaders<Request>(
+  endpointRequest: QueryEndpointRequest<Request>,
+): Record<string, string> {
+  return endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {};
+}
+
+function withQueryBuildHeaders<Request>(
+  response: QueryEndpointResponse,
+  endpointRequest: QueryEndpointRequest<Request>,
+): QueryEndpointResponse {
+  return {
+    ...response,
+    headers: {
+      ...response.headers,
+      ...queryBuildHeaders(endpointRequest),
+    },
+  };
 }
 
 /**

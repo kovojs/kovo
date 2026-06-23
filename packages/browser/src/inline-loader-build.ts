@@ -380,6 +380,7 @@ function installInlineKovoLoader(im) {
   const hs = (el) => ((el = el.closest('[kovo-c]') || el).a ||= new AbortController()).signal;
   const kb = (root = doc) =>
     root.querySelector('meta[name="kovo-build"]')?.getAttribute('content') || '';
+  const bh = (res) => res.headers?.get('Kovo-Build') ?? res.headers?.get('kovo-build') ?? '';
   const ns = (root) => [...root.querySelectorAll('[kovo-nav-segment]')];
   const nk = (el) =>
     [
@@ -546,8 +547,44 @@ function installInlineKovoLoader(im) {
   const dq = (type, init) => {
     dispatchEvent(new CustomEvent(type, init));
   };
-  const ab = (body) => {
+  const qd = (q) => /(?:^|\s)delta(?=\s|=|$|\/|>)/i.test(q.attrs);
+  const qw = (q) => {
+    const name = readAttribute(q.attrs, 'name');
+    const key = readAttribute(q.attrs, 'key');
+    if (!name) return '';
+    const i = key == null ? name.indexOf(':') : -1;
+    const n = key == null && i > 0 ? name.slice(0, i) : name;
+    const k = key == null && i > 0 ? name.slice(i + 1) : key;
+    return '/_q/' + encodeURIComponent(n) + (k == null ? '' : '?key=' + encodeURIComponent(k));
+  };
+  const qr = (q) => {
+    const u = qw(q);
+    if (!u) return;
+    fetch(u, {
+      cache: 'no-store',
+      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
+      method: 'GET',
+    })
+      .then((res) => {
+        if (res.status >= 400) return;
+        if (kb() && bh(res) && bh(res) !== kb()) {
+          location.reload?.();
+          return;
+        }
+        return res.text().then((text) => ab(text, bh(res)));
+      })
+      .catch(() => {});
+  };
+  const ab = (body, build = '', applyTexts = true) => {
     const chunks = readInlineMutationResponseBodyChunks(body);
+    const skew = build && kb() && build !== kb();
+    if (skew) {
+      for (const q of chunks.queries) qr(q);
+      return;
+    }
+    const missed = chunks.queries.filter(qd);
+    for (const q of missed) qr(q);
+    chunks.queries = chunks.queries.filter((q) => !qd(q));
     dq('kovo:query', {
       detail: {
         ['quer' + 'ies']: chunks.queries,
@@ -557,12 +594,12 @@ function installInlineKovoLoader(im) {
       if (x.mode === 'append') continue;
       const e = ft(x.target);
       if (e) for (const y of qa(e, '[kovo-c]')) {
-        if (x.html.includes(y.getAttribute('kovo-c'))) continue;
+        if (x.html.includes('kovo-c="' + y.getAttribute('kovo-c') + '"') && (!y.getAttribute('kovo-key') && !y.getAttribute('id') || x.html.includes('kovo-key="' + y.getAttribute('kovo-key') + '"') || x.html.includes('id="' + y.getAttribute('id') + '"'))) continue;
         y.a?.abort();
       }
     }
     applyInlineMutationResponseChunks(chunks, { findFragmentTarget: ft });
-    at(chunks.texts);
+    if (applyTexts) at(chunks.texts);
   };
   globalThis.__kovo_a = ab;
   const st = {};
@@ -606,9 +643,20 @@ function installInlineKovoLoader(im) {
       for (const x of group) if (x.end > end) end = x.end;
     }
     if (!end) return body;
-    ab(body.slice(0, end));
+    const textEnd = Math.max(0, ...chunks.texts.map((x) => x.end));
+    if (!dones.length) {
+      if (textEnd) {
+        at(readStreamTextChunksFromElements(chunks.texts));
+        if (chunks.queries.length || chunks.fragments.length) return body;
+        return body.slice(textEnd);
+      }
+      return body;
+    }
+    at(readStreamTextChunksFromElements(chunks.texts));
+    const complete = dones.some((x) => (readAttribute(x.attrs, 'reason') ?? 'complete') === 'complete');
+    if (complete) ab(body.slice(0, end), '', false);
     for (const x of dones) {
-      const reason = readAttribute(x.attrs, 'reason');
+      const reason = readAttribute(x.attrs, 'reason') ?? 'complete';
       if (reason && reason !== 'complete') sfail();
     }
     return body.slice(end);
@@ -624,7 +672,10 @@ function installInlineKovoLoader(im) {
         pending = cp(pending + decoder.decode(read.value, { stream: true }));
       }
       pending += decoder.decode();
-      if (pending) ab(pending);
+      if (pending) {
+        sfail();
+        throw Error('Streaming mutation ended without a <kovo-done> terminator.');
+      }
     } catch (error) {
       sfail();
       throw error;
@@ -670,7 +721,7 @@ function installInlineKovoLoader(im) {
         }
         return streaming && response.body
           ? asr(response.body)
-          : response.text().then(ab);
+          : response.text().then((body) => ab(body, bh(response)));
       })
       .catch(() => fsb(form));
   };
