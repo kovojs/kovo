@@ -207,23 +207,23 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies every red-corpus family has non-empty `negativeTestEvidence` and `positiveTestEvidence`.
   - Negative tests prove the dangerous source is rejected/encoded/neutralized.
   - Positive tests prove the blessed helper path still works without forcing apps into raw escape hatches.
-- [ ] Acceptance: existing security lanes remain green.
+- [x] Acceptance: existing security lanes remain green.
+  - Evidence: focused server/core/Drizzle security Vitest lanes, browser security Vitest lanes, endpoint/webhook/file/storage/query Playwright lanes, `pnpm run check:api-surface`, `git diff --check`, and `node packages/cli/src/bin.ts check sources-sinks` all passed in the latest verification section.
   - Include the focused suites from `plans/fix-security.md`, SQL corpus from `plans/sql-injection.md` once implemented, endpoint/webhook conformance, query cache tests, static export containment tests, browser fragment/morph tests, and `git diff --check`.
 - [x] Keep this ledger compact.
-  - Evidence: `wc -l plans/sources-sinks.md` reports 227 lines after the latest implementation evidence updates.
+  - Evidence: `wc -l plans/sources-sinks.md` reports 243 lines after the latest implementation evidence updates.
   - As implementation lands, replace checklist prose with the narrowest evidence: one test command or authoritative file/artifact per completed item, plus a short latest verification section.
 
 ## Latest Verification
 
-- `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts packages/server/src/shell.test.ts packages/better-auth/src/index.session.test.ts` verified explicit endpoint audit metadata, structural retention, no implicit any-method dispatch, prefix mount justification, and Better Auth mount metadata.
-- `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts` verified executable endpoint HMAC/custom auth, fail-closed verifier throws, body preservation, and auth-before-CSRF dispatch ordering.
-- `pnpm exec vitest run packages/server/src/webhook.test.ts` verified webhook raw-byte verification and name-only endpoint auth metadata still self-enforce without dispatcher double verification.
-- `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts` verified full request-handler bad signature → 401 and good signature → 200 with the handler still reading the raw body.
-- `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check` verified type/import boundaries, example typechecks, public API surface baseline, and whitespace.
+- `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/webhook.test.ts packages/server/src/query.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/core/src/storage.test.ts packages/drizzle/src/index.query-shapes.test.ts` verified focused server/core/Drizzle security lanes.
+- `pnpm exec vitest run packages/browser/src/mutation-response-dom.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts packages/browser/src/broadcast-replay.test.ts packages/browser/src/security-output.test.ts packages/browser/src/inline-loader-build.test.ts` verified focused browser security lanes.
+- `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts specs/webhook-hmac.spec.ts specs/webhook-idempotency.spec.ts specs/query-args-search.spec.ts specs/respond-file.spec.ts specs/respond-stream.spec.ts specs/storage-download-route.spec.ts specs/mutation-targets-malicious.spec.ts` verified endpoint/webhook/file/storage/query integration lanes.
+- `pnpm run check:api-surface` and `git diff --check` verified public API surface and whitespace for this slice.
 - `pnpm exec vitest run packages/core/src/diagnostics.test.ts` verified source/sink diagnostic allocation KV422-KV425 in `diagnosticDefinitions` and snapshots.
 - `pnpm --dir site run content` verified the security-guide source/sink model and common app-code rules render through the site content pipeline.
 - `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified Phase 1 source/sink CLI output, source/sink taxonomy enrollment, source ownership columns, and `.kovo/sources-sinks.json` artifact writing.
-- `node packages/cli/src/bin.ts check sources-sinks` verified current-repo drift scan output: `DRIFT-SCAN roots=packages|examples|site|tests files=3467 hits=1938 findings=587 unregistered=0 status=accounted`.
+- `node packages/cli/src/bin.ts check sources-sinks` verified current-repo drift scan output: `DRIFT-SCAN roots=packages|examples|site|tests files=3468 hits=1944 findings=588 unregistered=0 status=accounted`.
 - `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified expanded `kovo explain --endpoints` ingress posture output.
 - `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified `kovo explain --trust` trust-escape output and CLI parsing.
 - `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified KV423 unregistered app-authored sink diagnostics.
