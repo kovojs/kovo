@@ -52,30 +52,41 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Source Taxonomy
 
-- [ ] Treat these as first-class untrusted or cross-trust sources in the inventory:
+- [x] Treat these as first-class untrusted or cross-trust sources in the inventory:
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the source/sink inventory enrolls the required source taxonomy tokens.
   - `route().params`, `route().search`, GET form URL state, `/_q/` search args, mutation/form `input`, `FormData`, file upload metadata and bytes, request headers, cookies, raw request bodies, endpoint/webhook bodies, webhook provider headers/signatures, `req.session` from app providers, `req.db` records, streamed/model output, compiler-read app source, generated/live DOM stamps (`Kovo-Targets`, `Kovo-Live-Targets`, fragment targets, `data-stream-text`), URL fragments/hashes used by navigation, static-export route paths/assets/manifests, and app config/env values that become secrets, origins, paths, or response headers.
-- [ ] Record source provenance at the narrowest useful level.
+- [x] Record source provenance at the narrowest useful level.
+  - Evidence: `packages/cli/src/sources-sinks.ts` records `trust`, `schema`, `firstParser`, and `consumers` for each inventory row; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those fields are printed and serialized.
   - Examples: distinguish browser ambient authority (`Cookie`/session) from machine auth (`webhook.verify`); distinguish author-trusted content (`trustedHtml`, `trustedUrl`) from DB/user text; distinguish route-literal URL output from user-supplied redirect/`next`.
-- [ ] Define source ownership in `kovo explain --sources-sinks`.
+- [x] Define source ownership in `kovo explain --sources-sinks`.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies `kovo explain --sources-sinks` prints source ownership columns including `source`, `trust`, `schema`, `firstParser`, `consumers`, `diagnostic`, and `escapeHatch`.
   - Output target: a diffable table with columns `source`, `trust`, `schema`, `first parser`, `consumers`, `diagnostics`, and `escape hatch`.
 
 ## Sink Taxonomy
 
-- [ ] Enroll HTML/DOM sinks.
+- [x] Enroll HTML/DOM sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the HTML/DOM sink taxonomy tokens.
   - Sinks: JSX text, attribute values, raw HTML insertion (`rawHtml`, `trustedHtml`, fragment HTML, morph/`innerHTML`/`insertAdjacentHTML`), `<script type="application/json">`, `<kovo-query>`, `<kovo-text>`, `srcdoc`, event-handler attributes, live property writes, template stamps, and registry-bounded rich-text rendering.
-- [ ] Enroll URL/navigation/module/selector sinks.
+- [x] Enroll URL/navigation/module/selector sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the URL/navigation/module/selector sink taxonomy tokens.
   - Sinks: `href`, `src`, `action`, `formaction`, `poster`, `ping`, `xlink:href`, meta URL content, redirect `Location`, auth `next`, route normalization redirects, enhanced-navigation fetch targets, dynamic `import(url#export)` handler refs, immutable `/c/__v/...` client module URLs, `querySelector` selector construction, hash scrolling, and static-export references to `/_m`/`/_q`/`/c`.
-- [ ] Enroll CSS/style sinks.
+- [x] Enroll CSS/style sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the CSS/style sink taxonomy tokens.
   - Sinks: `style` attribute, `<style>` text/raw CSS, StyleX extraction, CSS custom properties, `url()` inside CSS, `view-transition-name`, runtime style property writers, and generated keyframe/theme output.
-- [ ] Enroll HTTP header/cookie sinks.
+- [x] Enroll HTTP header/cookie sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the HTTP header/cookie sink taxonomy tokens.
   - Sinks: mutation response header channel, route outcome headers, `Set-Cookie`, `Location`, `Content-Disposition`, `Content-Type`, `Cache-Control`, `Vary`, `ETag`, `Last-Modified`, `Retry-After`, framework `Kovo-*` headers, and adapter-level Node/Bun/Workers header conversion.
-- [ ] Enroll endpoint/webhook/query/live transport sinks.
+- [x] Enroll endpoint/webhook/query/live transport sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the endpoint/webhook/query/live transport sink taxonomy tokens.
   - Sinks: `endpoint()` raw `Response`, `webhook()` responses, `/_q/` typed reads, SSE live query pushes, BroadcastChannel rebroadcast, HMR/dev-only refresh endpoints, mutation/defer streams, `Kovo-Changes`, and fragment target selection.
-- [ ] Enroll file/storage/path/static-export sinks.
+- [x] Enroll file/storage/path/static-export sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the file/storage/path/static-export sink taxonomy tokens.
   - Sinks: upload schema storage, storage keys/metadata, filesystem and S3 adapters, `respond.file`, `respond.stream`, static export output paths, Vite manifest asset copies, compiler persistent cache refs, generated graph/output files, and content-disposition filenames.
-- [ ] Enroll auth/data-authorization sinks.
+- [x] Enroll auth/data-authorization sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the auth/data-authorization sink taxonomy tokens.
   - Sinks: owner-annotated table reads/writes, guard/refinement results, session-provider cookies, unauthenticated redirects, CSRF-exempt mutations/endpoints, webhook `verify: none`, replay stores, rate-limit keys, and query cacheability.
-- [ ] Enroll dynamic code/process sinks.
+- [x] Enroll dynamic code/process sinks.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the inventory enrolls the dynamic code/process sink taxonomy tokens.
   - Sinks: `import()` of handler module URLs, compiler/dev HMR module loading, build preset runtime API compatibility, `new Function`/`eval`/`vm`, `child_process`, shell commands in scripts, and adapter-provided asset fetch fallbacks. Current scan found these mainly in tests/build tooling, but the plan should keep a request-path deny/audit gate.
 
 ## Phase 1: Inventory Generator
@@ -85,9 +96,9 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Proposed command: `kovo check --sources-sinks` or `kovo explain --sources-sinks`.
   - It should merge compiler output-context facts, route/query/mutation/endpoint registries, app audit metadata, storage/file routes, header/cookie usage, and known raw escape hatches.
 - [x] Emit a machine-readable artifact for CI.
-  - Evidence: `packages/cli/src/sources-sinks.test.ts` verifies `.kovo/sources-sinks.json` is written deterministically with `source`, `sink`, `context`, `trust`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence` fields.
+  - Evidence: `packages/cli/src/sources-sinks.test.ts` verifies `.kovo/sources-sinks.json` is written deterministically with `source`, `sink`, `context`, `trust`, `firstParser`, `consumers`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence` fields.
   - Proposed artifact: `.kovo/sources-sinks.json`, plus stable text output for review.
-  - Required fields: `source`, `sink`, `context`, `trust`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence`.
+  - Required fields: `source`, `sink`, `context`, `trust`, `firstParser`, `consumers`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence`.
 - [ ] Build a sink registry shared by compiler, server, browser, and CLI checks.
   - Start from existing facts in `packages/core/src/internal/security-url.ts`, `packages/compiler/src/output-context-facts.ts`, `packages/browser/src/security-output.ts`, server response/header/cookie helpers, route matcher, mutation wire parser, query endpoint, storage/static export helpers, and SQL seam predicates from `plans/sql-injection.md`.
 - [ ] Add drift detection.
@@ -192,7 +203,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check` verified type/import boundaries, example typechecks, public API surface baseline, and whitespace.
 - `pnpm exec vitest run packages/core/src/diagnostics.test.ts` verified source/sink diagnostic allocation KV422-KV425 in `diagnosticDefinitions` and snapshots.
 - `pnpm --dir site run content` verified the security-guide source/sink model and common app-code rules render through the site content pipeline.
-- `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified Phase 1 source/sink CLI output and `.kovo/sources-sinks.json` artifact writing.
+- `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified Phase 1 source/sink CLI output, source/sink taxonomy enrollment, source ownership columns, and `.kovo/sources-sinks.json` artifact writing.
 - `pnpm exec vitest run packages/core/src/storage.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/document.test.ts packages/server/src/endpoint.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm --dir tests/integration exec playwright test specs/respond-file.spec.ts`, and `rg -n -i "\\b(csv|tsv|spreadsheet|excel|formula)\\b|text/csv|orders\\.csv|inventory\\.csv" packages tests examples site docs -g '!node_modules' -g '!packages/icons/**'` verified spreadsheet export is absent from framework-owned helpers/examples/tests except disclaimer text.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
