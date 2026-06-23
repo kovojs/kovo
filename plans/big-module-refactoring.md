@@ -17,10 +17,19 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
 | ---: | --- | --- | --- |
 | 12,244 | `packages/drizzle/src/static.ts` | production source | P0 split target |
 | 8,719 | `packages/icons/package.json` | generated package manifest | do not hand-split; reduce/regenerate only if generator changes |
+| 5,137 | `packages/cli/src/index.ts` | production source | P1 split target |
 | 4,604 | `pnpm-lock.yaml` | lockfile | no module refactor |
 | 4,193 | `benchmarks/results/results.json` | benchmark artifact | archive/prune policy, not code split |
+| 3,938 | `tests/kovo-check.node.mjs` | test/verification runner | P2 split target |
 | 3,216 | `api-surface-baseline.json` | generated baseline | no hand edit except API gate refresh |
+| 2,949 | `conformance/drizzle-pin/src/index.receiver-handoffs.test.ts` | conformance test | P2 test split target |
+| 2,876 | `packages/better-auth/src/internal.ts` | production/internal source | P1 split target |
+| 2,823 | `examples/gallery/src/demo-fixtures.tsx` | example fixture source | P2 split target |
+| 2,374 | `packages/server/src/mutation.ts` | production source | P0 split target |
+| 2,308 | `packages/compiler/src/lower/structural-jsx.ts` | compiler source | P0 split target |
+| 2,184 | `packages/compiler/src/scan/parse.ts` | compiler source | P1 split target |
 | 2,149 | `public-packages.json` | generated/package inventory | no hand edit except source-of-truth refresh |
+| 2,040 | `packages/compiler/src/diagnostic-coverage-matrix.test.ts` | compiler test | P2 split target |
 
 Current command output after completed splits:
 `git ls-files | while IFS= read -r file; do [ -f "$file" ] || continue; case "$file" in *.png|*.jpg|*.jpeg|*.gif|*.webp|*.woff2|*.svg|*.snap) continue ;; esac; wc -l "$file"; done | awk '$1 > 2000 { print $1, $2 }' | sort -nr`
