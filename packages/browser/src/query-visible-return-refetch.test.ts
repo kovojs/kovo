@@ -156,6 +156,52 @@ describe('query visible-return refetch', () => {
     expect(binding.textContent).toBe('2');
   });
 
+  it('defaults visible-return typed reads to the document build token', async () => {
+    const globalRecord = globalThis as unknown as Record<string, unknown>;
+    const originalDocument = globalRecord.document;
+    const root = new FakeRoot();
+    const store = createQueryStore();
+    const onBuildSkew = vi.fn();
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'Kovo-Build' ? 'build-B' : null) },
+      status: 200,
+      text: async () => '<kovo-query name="cart">{"count":99}</kovo-query>',
+    }));
+
+    root.scripts = [
+      {
+        getAttribute: (name) => (name === 'kovo-query' ? 'cart' : null),
+        textContent: '{"count":1}',
+      },
+    ];
+
+    try {
+      globalRecord.document = {
+        querySelector(selector: string) {
+          return selector === 'meta[name="kovo-build"]'
+            ? { getAttribute: (name: string) => (name === 'content' ? 'build-A' : null) }
+            : null;
+        },
+      };
+
+      installQueryVisibleReturnRefetch({
+        queryRefetch: { fetch, onBuildSkew },
+        queryStore: store,
+        root,
+      });
+
+      await root.listeners.get('visibilitychange')?.(visibleReturnEvent());
+
+      // SPEC.md §5.2.1/§9.4/§14: the loader defaults expectedBuildToken from
+      // <meta name="kovo-build">, so visible-return /_q data from another build is not merged.
+      expect(onBuildSkew).toHaveBeenCalledTimes(1);
+      expect(store.get('cart')).toEqual({ count: 1 });
+    } finally {
+      if (originalDocument === undefined) delete globalRecord.document;
+      else globalRecord.document = originalDocument;
+    }
+  });
+
   it('also listens for browser pageshow when the loader root is document-like', async () => {
     const globalRecord = globalThis as unknown as Record<string, unknown>;
     const originalAddEventListener = globalRecord.addEventListener;
