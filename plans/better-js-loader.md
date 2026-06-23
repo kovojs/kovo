@@ -51,6 +51,12 @@ refetch, and morph application.
     stops being a string-literal array. Verified by
     `pnpm --filter @kovojs/browser run check:inline-loader` and
     `pnpm exec vitest run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader.test.ts packages/browser/src/index.test.ts packages/browser/src/loader.test.ts`.
+- [x] **Fragment-target CSS escaping now has one modular source of truth.**
+  - Evidence: [packages/browser/src/fragment-targets.ts](/Users/mini/kovo/packages/browser/src/fragment-targets.ts:32)
+    owns `escapeCssString`; [packages/browser/src/inline-loader-build.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.ts:27)
+    extracts that helper into the inline bootstrap and aliases it to the compact
+    inline name. Verified by `pnpm --filter @kovojs/browser run check:inline-loader`
+    and `pnpm exec vitest run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader-fragment-target.test.ts packages/browser/src/mutation-response-dom.test.ts packages/browser/src/fragment-targets.test.ts`.
 
 ## Problems
 
@@ -107,11 +113,12 @@ refetch, and morph application.
     read/write, fragment target lookup, target/dependency header collection,
     native indeterminate checkbox initialization, and execution trigger once
     marking.
-  - Evidence: delegated event list converged first; the inline generator now
+  - Evidence: delegated event list and fragment-target CSS escaping converged first; the inline generator now
     reads [packages/browser/src/loader.ts](/Users/mini/kovo/packages/browser/src/loader.ts:73)
+    plus [packages/browser/src/fragment-targets.ts](/Users/mini/kovo/packages/browser/src/fragment-targets.ts:32),
     and [packages/browser/src/inline-loader-build.test.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.test.ts:62)
-    pins parity. Remaining evidence needed: converge additional helpers from
-    the candidate list and prove each with inline artifact parity tests.
+    pins parity. Remaining evidence needed: converge additional helpers from the
+    candidate list and prove each with inline artifact parity tests.
 - [ ] **Phase 4: split enhanced navigation into a modular source helper with an inline build target.**
   - Move navigation eligibility, fetch options, build-token validation,
     segment-key comparison, scroll/focus restoration, and fallback rules into a

@@ -8,6 +8,9 @@ import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
 const modularLoaderSourcePath = fileURLToPath(new URL('./loader.ts', import.meta.url));
+const fragmentTargetsSourcePath = fileURLToPath(
+  new URL('./fragment-targets.ts', import.meta.url),
+);
 const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );
@@ -20,6 +23,15 @@ const wireResponseScannerSourcePath = fileURLToPath(
 );
 
 const inlineHelperSpecs = {
+  fragmentTargetEscape: {
+    label: 'fragment target escape',
+    readableParityLabel: 'canonical fragment target escape helper closure',
+    minifiedParityLabel: 'canonical minified fragment target escape helper closure',
+    rootFunctionNames: ['escapeCssString'],
+    sourceFileName: 'fragment-targets.ts',
+    sourcePath: fragmentTargetsSourcePath,
+    sourcePaths: [fragmentTargetsSourcePath],
+  },
   responseApply: {
     label: 'response apply',
     readableParityLabel: 'canonical response apply helper closure',
@@ -46,6 +58,8 @@ export const inlineKovoLoaderGzipByteBudget = 8192;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
+export const inlineFragmentTargetEscapeReadableSource =
+  readInlineFragmentTargetEscapeReadableSource();
 export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
 
 export const inlineKovoLoaderInstallerReadableSource =
@@ -55,6 +69,7 @@ export function buildInlineKovoLoaderInstallerReadableSource(
   wireParserReadableSource = inlineWireParserReadableSource,
   responseApplyReadableSource = inlineResponseApplyReadableSource,
   delegatedEvents: readonly string[] = inlineDelegatedEvents,
+  fragmentTargetEscapeReadableSource = inlineFragmentTargetEscapeReadableSource,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -302,13 +317,8 @@ function installInlineKovoLoader(im) {
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
       .filter(Boolean);
-  const sq = (value) =>
-    value.replace(/[\n\r\f"\\]/g, (char) => {
-      if (char === '\n') return '\\a ';
-      if (char === '\r') return '\\d ';
-      if (char === '\f') return '\\c ';
-      return '\\' + char;
-    });
+  ${fragmentTargetEscapeReadableSource}
+  const sq = escapeCssString;
   const hsaf = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
   const hsc = (value) => hsaf(value) && !value.includes(':');
   const targetIdentity = (el) =>
@@ -872,6 +882,10 @@ function readInlineWireParserReadableSource(): string {
 
 function readInlineResponseApplyReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.responseApply);
+}
+
+function readInlineFragmentTargetEscapeReadableSource(): string {
+  return readInlineHelperReadableSource(inlineHelperSpecs.fragmentTargetEscape);
 }
 
 function readModularDefaultDelegatedEvents(

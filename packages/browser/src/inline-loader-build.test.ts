@@ -11,9 +11,11 @@ import {
   buildInlineKovoLoaderInstallerSource,
   emitInlineKovoLoaderModule,
   inlineDelegatedEvents,
+  inlineFragmentTargetEscapeReadableSource,
   inlineKovoLoaderGzipByteBudget,
   inlineKovoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
+import { escapeCssString } from './fragment-targets.js';
 import { createInlineKovoLoaderSource, inlineKovoLoaderInstallerSource } from './inline-loader.js';
 import { defaultDelegatedEvents } from './loader.js';
 
@@ -64,6 +66,16 @@ describe('inline loader build source', () => {
     expect(inlineKovoLoaderInstallerReadableSource).toContain(
       `const events = ${JSON.stringify([...defaultDelegatedEvents])};`,
     );
+  });
+
+  it('generates inline fragment-target escaping from the modular helper', () => {
+    // SPEC.md §9.1: inline and modular fragment-target lookup must escape selectors identically.
+    expect(inlineFragmentTargetEscapeReadableSource).toContain('function escapeCssString(value)');
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      inlineFragmentTargetEscapeReadableSource,
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain('const sq = escapeCssString;');
+    expect(escapeCssString('target"bad\\id')).toBe('target\\"bad\\\\id');
   });
 
   it('checks the shipped source literal against the executable installer artifact', () => {

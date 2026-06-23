@@ -37,6 +37,6 @@ export function escapeCssString(value: string): string {
     if (char === '\n') return '\\a ';
     if (char === '\r') return '\\d ';
     if (char === '\f') return '\\c ';
-    return `\\${char}`;
+    return '\\' + char;
   });
 }
