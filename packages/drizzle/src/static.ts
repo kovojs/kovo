@@ -89,6 +89,7 @@ const IGNORED_LOCAL_CALL_NAMES = new Set([
   'kovo',
   'pgTable',
   'return',
+  'sqliteTable',
   'switch',
   'while',
 ]);
@@ -109,7 +110,12 @@ const NUMBER_COLUMN_BUILDERS = new Set([
 ]);
 const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set(['$count', 'execute']);
 const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
-const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set(['pgMaterializedView', 'pgView']);
+const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set(['drizzle-orm/pg-core', 'drizzle-orm/sqlite-core']);
+const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set([
+  'pgMaterializedView',
+  'pgView',
+  'sqliteView',
+]);
 const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   ...DRIZZLE_SELECT_QUERY_METHODS,
   'delete',
@@ -2458,8 +2464,8 @@ function isDrizzleReceiver(receiver: Node): boolean {
     return true;
   }
 
-  // SPEC §11.1 (v1 scope): project receiver proof is restricted to known
-  // Postgres Drizzle database types. SQLite/MySQL conformance is deferred to late hardening.
+  // SPEC §11.1: project receiver proof is restricted to the blessed Drizzle
+  // database type identities listed in drizzle-surface.ts, across supported dialects.
   return false;
 }
 
@@ -2617,8 +2623,8 @@ function unmodeledRelationForInitializer(
   const rootCall = rootCallExpression(initializer);
   const expression = unwrappedStaticExpressionNode(rootCall.getExpression());
   const factoryName = Node.isIdentifier(expression)
-    ? (projectPgCoreIdentifierExportName(expression) ?? expression.getText())
-    : Node.isPropertyAccessExpression(expression) && isDrizzlePgCoreNamespaceMember(expression)
+    ? (projectDrizzleCoreIdentifierExportName(expression) ?? expression.getText())
+    : Node.isPropertyAccessExpression(expression) && isDrizzleCoreNamespaceMember(expression)
       ? expression.getName()
       : undefined;
   if (!factoryName || !DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES.has(factoryName)) {
@@ -2988,7 +2994,7 @@ function projectColumnBuilderShape(initializer: Node | undefined): QueryShape | 
   const builder = projectColumnBuilderName(initializer);
   if (!builder) return undefined;
 
-  const baseShape = columnBuilderBaseShape(builder);
+  const baseShape = columnBuilderBaseShape(builder, columnBuilderMode(initializer));
   if (!baseShape) return undefined;
   return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
@@ -3082,12 +3088,14 @@ function columnBuilderShape(initializer: Node | undefined): QueryShape | undefin
   const builder = columnBuilderName(initializer);
   if (!builder) return undefined;
 
-  const baseShape = columnBuilderBaseShape(builder);
+  const baseShape = columnBuilderBaseShape(builder, columnBuilderMode(initializer));
   if (!baseShape) return undefined;
   return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
-function columnBuilderBaseShape(builder: string): QueryShape | undefined {
+function columnBuilderBaseShape(builder: string, mode?: string): QueryShape | undefined {
+  if (builder === 'integer' && mode === 'boolean') return 'boolean';
+  if (builder === 'text' && mode === 'json') return 'object';
   if (BOOLEAN_COLUMN_BUILDERS.has(builder)) return 'boolean';
   if (NUMBER_COLUMN_BUILDERS.has(builder)) return 'number';
   if (JSON_COLUMN_BUILDERS.has(builder)) return 'object';
@@ -3099,6 +3107,59 @@ function columnBuilderBaseShape(builder: string): QueryShape | undefined {
   ) {
     return 'string';
   }
+  return undefined;
+}
+
+function columnBuilderMode(initializer: Node | undefined): string | undefined {
+  if (!initializer) return undefined;
+  return columnBuilderModeFromExpression(
+    unwrappedTsExpression(initializer.compilerNode as ts.Expression),
+  );
+}
+
+function columnBuilderModeFromExpression(expression: ts.Expression): string | undefined {
+  const rootCall = columnBuilderRootCallExpression(expression);
+  if (!rootCall) return undefined;
+
+  for (const argument of rootCall.arguments) {
+    const value = staticStringPropertyValue(argument, 'mode');
+    if (value) return value;
+  }
+
+  return undefined;
+}
+
+function columnBuilderRootCallExpression(expression: ts.Expression): ts.CallExpression | undefined {
+  const target = unwrappedTsExpression(expression);
+  if (!ts.isCallExpression(target)) return undefined;
+
+  const callee = unwrappedTsExpression(target.expression as ts.Expression);
+  if (ts.isPropertyAccessExpression(callee)) {
+    const base = unwrappedTsExpression(callee.expression);
+    if (ts.isCallExpression(base)) return columnBuilderRootCallExpression(base);
+  }
+
+  return target;
+}
+
+function staticStringPropertyValue(expression: ts.Expression, name: string): string | undefined {
+  const target = unwrappedTsExpression(expression);
+  if (!ts.isObjectLiteralExpression(target)) return undefined;
+
+  for (const property of target.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const propertyName = property.name;
+    const matches =
+      (ts.isIdentifier(propertyName) && propertyName.text === name) ||
+      (ts.isStringLiteral(propertyName) && propertyName.text === name);
+    if (!matches) continue;
+
+    const initializer = unwrappedTsExpression(property.initializer);
+    if (ts.isStringLiteral(initializer) || ts.isNoSubstitutionTemplateLiteral(initializer)) {
+      return initializer.text;
+    }
+  }
+
   return undefined;
 }
 
@@ -3116,7 +3177,7 @@ function projectColumnBuilderName(initializer: Node | undefined): string | undef
   if (!Node.isCallExpression(expression)) return undefined;
 
   const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  if (Node.isIdentifier(callee)) return projectPgCoreIdentifierExportName(callee);
+  if (Node.isIdentifier(callee)) return projectDrizzleCoreIdentifierExportName(callee);
   if (!Node.isPropertyAccessExpression(callee)) return undefined;
 
   const base = unwrappedStaticExpressionNode(callee.getExpression());
@@ -3124,7 +3185,7 @@ function projectColumnBuilderName(initializer: Node | undefined): string | undef
 
   // SPEC §10-§11: project-mode namespace column factories require ts-morph import proof instead
   // of accepting arbitrary `schema.text()` source names.
-  return isDrizzlePgCoreNamespaceMember(callee) ? callee.getName() : undefined;
+  return isDrizzleCoreNamespaceMember(callee) ? callee.getName() : undefined;
 }
 
 function columnBuilderNameFromExpression(expression: ts.Expression): string | undefined {
@@ -3258,7 +3319,7 @@ function isProjectTableInitializerNode(initializer: Node): boolean {
   if (!Node.isCallExpression(initializer)) return false;
   const expression = unwrappedStaticExpressionNode(initializer.getExpression());
   const isTableFactory = Node.isIdentifier(expression)
-    ? isDrizzleTableFactoryName(projectPgCoreIdentifierExportName(expression) ?? '')
+    ? isDrizzleTableFactoryName(projectDrizzleCoreIdentifierExportName(expression) ?? '')
     : Node.isPropertyAccessExpression(expression) &&
       isDrizzleTableFactoryNamespaceMember(expression);
   return isTableFactory;
@@ -3267,10 +3328,10 @@ function isProjectTableInitializerNode(initializer: Node): boolean {
 function isDrizzleTableFactoryNamespaceMember(access: Node): boolean {
   if (!Node.isPropertyAccessExpression(access)) return false;
   if (!isDrizzleTableFactoryName(access.getName())) return false;
-  return isDrizzlePgCoreNamespaceMember(access);
+  return isDrizzleCoreNamespaceMember(access);
 }
 
-function isDrizzlePgCoreNamespaceMember(access: Node): boolean {
+function isDrizzleCoreNamespaceMember(access: Node): boolean {
   if (!Node.isPropertyAccessExpression(access)) return false;
 
   const expression = unwrappedStaticExpressionNode(access.getExpression());
@@ -3282,7 +3343,7 @@ function isDrizzlePgCoreNamespaceMember(access: Node): boolean {
     .some(
       (declaration) =>
         declaration.getNamespaceImport()?.getText() === expression.getText() &&
-        declaration.getModuleSpecifierValue() === 'drizzle-orm/pg-core',
+        isDrizzleCoreModuleSpecifier(declaration.getModuleSpecifierValue()),
     );
   if (namespaceImport) return true;
 
@@ -3291,39 +3352,39 @@ function isDrizzlePgCoreNamespaceMember(access: Node): boolean {
     symbol?.getDeclarations().some((declaration) => {
       if (declaration.getKind() !== SyntaxKind.NamespaceImport) return false;
       const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-      return importDeclaration?.getModuleSpecifierValue() === 'drizzle-orm/pg-core';
+      return isDrizzleCoreModuleSpecifier(importDeclaration?.getModuleSpecifierValue());
     }) ?? false
   );
 }
 
-function projectPgCoreIdentifierExportName(identifier: Node): string | undefined {
+function projectDrizzleCoreIdentifierExportName(identifier: Node): string | undefined {
   if (!Node.isIdentifier(identifier)) return undefined;
 
   const symbol = identifier.getSymbol();
   const declarations = symbol?.getDeclarations() ?? [];
   if (declarations.length === 0) return identifier.getText();
 
-  const directName = pgCoreExportNameFromDeclarations(declarations);
+  const directName = drizzleCoreExportNameFromDeclarations(declarations);
   if (directName) return directName;
 
   const aliased = symbol?.getAliasedSymbol();
-  const aliasName = pgCoreExportNameFromDeclarations(aliased?.getDeclarations() ?? []);
+  const aliasName = drizzleCoreExportNameFromDeclarations(aliased?.getDeclarations() ?? []);
   if (aliasName) return aliasName;
 
   return undefined;
 }
 
-function pgCoreExportNameFromDeclarations(declarations: readonly Node[]): string | undefined {
+function drizzleCoreExportNameFromDeclarations(declarations: readonly Node[]): string | undefined {
   for (const declaration of declarations) {
-    const name = pgCoreImportSpecifierExportName(declaration);
+    const name = drizzleCoreImportSpecifierExportName(declaration);
     if (name) return name;
   }
   for (const declaration of declarations) {
-    const name = pgCoreExportSpecifierExportName(declaration);
+    const name = drizzleCoreExportSpecifierExportName(declaration);
     if (name) return name;
   }
   for (const declaration of declarations) {
-    if (declaration.getSourceFile().getFilePath().includes('drizzle-orm/pg-core')) {
+    if (drizzleCoreModuleSpecifierForDeclaration(declaration)) {
       const name = Node.isIdentifier(declaration)
         ? declaration.getText()
         : declaration.getSymbol()?.getName();
@@ -3334,20 +3395,29 @@ function pgCoreExportNameFromDeclarations(declarations: readonly Node[]): string
   return undefined;
 }
 
-function pgCoreImportSpecifierExportName(declaration: Node): string | undefined {
+function drizzleCoreImportSpecifierExportName(declaration: Node): string | undefined {
   if (!Node.isImportSpecifier(declaration)) return undefined;
   const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-  if (importDeclaration?.getModuleSpecifierValue() !== 'drizzle-orm/pg-core') return undefined;
+  if (!isDrizzleCoreModuleSpecifier(importDeclaration?.getModuleSpecifierValue())) return undefined;
 
   return declaration.getNameNode().getText();
 }
 
-function pgCoreExportSpecifierExportName(declaration: Node): string | undefined {
+function drizzleCoreExportSpecifierExportName(declaration: Node): string | undefined {
   if (!Node.isExportSpecifier(declaration)) return undefined;
   const exportDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ExportDeclaration);
-  if (exportDeclaration?.getModuleSpecifierValue() !== 'drizzle-orm/pg-core') return undefined;
+  if (!isDrizzleCoreModuleSpecifier(exportDeclaration?.getModuleSpecifierValue())) return undefined;
 
   return declaration.getNameNode().getText();
+}
+
+function drizzleCoreModuleSpecifierForDeclaration(declaration: Node): string | undefined {
+  const filePath = declaration.getSourceFile().getFilePath();
+  return [...DRIZZLE_CORE_MODULE_SPECIFIERS].find((specifier) => filePath.includes(specifier));
+}
+
+function isDrizzleCoreModuleSpecifier(specifier: string | undefined): boolean {
+  return specifier !== undefined && DRIZZLE_CORE_MODULE_SPECIFIERS.has(specifier);
 }
 
 function isKovoAnnotationCall(node: Node): boolean {

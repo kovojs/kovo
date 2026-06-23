@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { SourceFileInput } from '@kovojs/drizzle/internal/static';
-import { extractTouchGraphFromProject } from '@kovojs/drizzle/internal/static';
+import {
+  extractQueryFactsFromProject,
+  extractTouchGraphFromProject,
+} from '@kovojs/drizzle/internal/static';
 import { describe, expect, it } from 'vitest';
 
+import { drizzleQueryBehaviorSourceFixtures } from './source-fixtures.js';
 import {
   touchGraphProvenanceHonestyFact,
   touchGraphProvenanceFact,
@@ -24,6 +28,20 @@ function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
       '  }',
       '}',
       'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+    ].join('\n'),
+  };
+}
+
+function sqliteDatabaseTypes(methods: readonly string[]): SourceFileInput {
+  return {
+    fileName: 'sqlite-drizzle-types.d.ts',
+    source: [
+      'declare module "drizzle-orm/sqlite-core" {',
+      '  export class BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      ...methods.map((method) => `    ${method}`),
+      '  }',
+      '}',
+      'type BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/sqlite-core").BaseSQLiteDatabase<TResultKind, TRunResult, TFullSchema, TSchema>;',
     ].join('\n'),
   };
 }
@@ -86,6 +104,59 @@ describe('@kovojs/test touch graph fixture seam', () => {
         code: 'KV406',
         message: 'Statically un-analyzable write site; manual touches required.',
         site: 'cart.domain.ts:17',
+      },
+    ]);
+  });
+
+  it('locks the SQLite Drizzle fixture into touch and read-shape extraction', () => {
+    const files = [
+      sqliteDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } & Promise<unknown[]> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      ...drizzleQueryBehaviorSourceFixtures().sqlitePortability,
+    ];
+
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      reserveProduct: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: 'arg:productId',
+            site: 'sqlite.domain.ts:7',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(extractQueryFactsFromProject({ files })).toEqual([
+      {
+        instanceKey: {
+          domain: 'product',
+          key: 'arg:id',
+        },
+        query: 'product/sqlite',
+        reads: ['product'],
+        shape: {
+          active: 'boolean',
+          id: 'string',
+          metadata: {
+            kind: 'nullable',
+            shape: 'object',
+          },
+          stock: 'number',
+        },
+        site: 'sqlite.domain.ts:12',
+      },
+      {
+        query: 'search/sqlite',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+        },
+        site: 'sqlite.domain.ts:23',
       },
     ]);
   });

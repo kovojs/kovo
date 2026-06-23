@@ -1863,6 +1863,7 @@
           "./harness",
           "./html-fragment",
           "./pglite",
+          "./sqlite",
           "./test-case"
         ],
         "generated": [],
@@ -1907,6 +1908,11 @@
             "path": "./pglite",
             "slug": "test-pglite",
             "description": "PGlite-backed test database helpers."
+          },
+          {
+            "path": "./sqlite",
+            "slug": "test-sqlite",
+            "description": "SQLite-backed test database helpers."
           },
           {
             "path": "./test-case",

@@ -23,6 +23,20 @@ export function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
   };
 }
 
+export function sqliteDatabaseTypes(methods: readonly string[]): SourceFileInput {
+  return {
+    fileName: 'sqlite-drizzle-types.d.ts',
+    source: [
+      'declare module "drizzle-orm/sqlite-core" {',
+      '  export class BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      ...methods.map((method) => `    ${method}`),
+      '  }',
+      '}',
+      'type BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/sqlite-core").BaseSQLiteDatabase<TResultKind, TRunResult, TFullSchema, TSchema>;',
+    ].join('\n'),
+  };
+}
+
 export function withPgDatabaseTypes(
   options: TouchGraphProjectOptions,
   methods: readonly string[] = [],

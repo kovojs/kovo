@@ -70,6 +70,31 @@ describe('@kovojs/test verification fixtures', () => {
         rawMutationFailure: 'KV402 Write touched an undeclared domain: audit',
         transactionFailure: 'KV402 Write touched an undeclared domain: audit',
       },
+      sqlite: {
+        libsqlRowKey: 'id',
+        mutationReadCovered: true,
+        preparedStatementObserved: [
+          {
+            branch: undefined,
+            domain: 'product',
+            kind: 'write',
+            mutationRead: undefined,
+            rowKey: undefined,
+            sql: expect.stringContaining('insert into products'),
+            table: 'products',
+          },
+          {
+            branch: undefined,
+            domain: 'price',
+            kind: 'read',
+            mutationRead: true,
+            rowKey: 'product_id',
+            sql: expect.stringContaining('insert into products'),
+            table: 'prices',
+          },
+        ],
+        writeCovered: true,
+      },
       sql: {
         compoundRowKeyCovered: true,
         nestedUpdateCovered: true,

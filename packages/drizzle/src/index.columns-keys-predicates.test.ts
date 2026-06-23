@@ -5,7 +5,7 @@ import {
   extractTouchGraphFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
 } from '@kovojs/drizzle/internal/static';
-import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
+import { pgDatabaseTypes, sqliteDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
 const extractQueryFactsFromProject = (
   options: Parameters<typeof extractQueryFactsFromProjectBase>[0],
@@ -66,6 +66,58 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           stock: 'number',
         },
         site: 'product.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('derives SQLite mode-based query shapes from sqlite-core builders', () => {
+    const facts = extractQueryFactsFromProjectBase({
+      files: [
+        sqliteDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        ]),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+            import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+            import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+            export const products = sqliteTable("products", {
+              active: integer("active", { mode: "boolean" }).notNull(),
+              id: text("id").primaryKey(),
+              metadata: text("metadata", { mode: "json" }),
+              stock: integer("stock").notNull(),
+            }, kovo({ domain: "product", key: "id" }));
+
+            export const productQuery = query("product/sqlite", {
+              load(_input, db: BaseSQLiteDatabase) {
+                return db.select({
+                  active: products.active,
+                  id: products.id,
+                  metadata: products.metadata,
+                  stock: products.stock,
+                }).from(products);
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/sqlite',
+        reads: ['product'],
+        shape: {
+          active: 'boolean',
+          id: 'string',
+          metadata: {
+            kind: 'nullable',
+            shape: 'object',
+          },
+          stock: 'number',
+        },
+        site: 'product.queries.ts:12',
       },
     ]);
   });
