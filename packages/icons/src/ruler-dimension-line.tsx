@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Ruler Dimension Line icon (Lucide). https://lucide.dev/icons/ruler-dimension-line */
-export function RulerDimensionLine(props: IconProps = {}): string {
+export function RulerDimensionLine(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 15v-3"></path>

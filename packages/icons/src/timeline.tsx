@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Timeline icon (Lucide). https://lucide.dev/icons/timeline */
-export function Timeline(props: IconProps = {}): string {
+export function Timeline(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M4 12h.01"></path>

@@ -128,6 +128,17 @@ describe('core authoring APIs', () => {
     expect(assertRegisteredComponent(CartBadge)).toBe(CartBadge);
   });
 
+  it('rejects raw string component render results', () => {
+    const assertRawStringRenderRejected = () => {
+      component({
+        // @ts-expect-error SPEC §4.1: component markup must be TSX/JSX or an explicit trust boundary, not a raw string.
+        render: () => '<cart-badge>3</cart-badge>',
+      });
+    };
+
+    expect(assertRawStringRenderRejected).toBeTypeOf('function');
+  });
+
   it('preserves disableServerRefresh and rejects removed fragmentTarget authoring', () => {
     const cart = query<'cart', { count: number }>('cart');
     const LocalOnlyCartBadge = component({

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Forward icon (Lucide). https://lucide.dev/icons/forward */
-export function Forward(props: IconProps = {}): string {
+export function Forward(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 17 5-5-5-5"></path>

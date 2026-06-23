@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Arrow Down Z A icon (Lucide). https://lucide.dev/icons/arrow-down-z-a */
-export function ArrowDownZA(props: IconProps = {}): string {
+export function ArrowDownZA(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m3 16 4 4 4-4"></path>

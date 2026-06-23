@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Squirrel icon (Lucide). https://lucide.dev/icons/squirrel */
-export function Squirrel(props: IconProps = {}): string {
+export function Squirrel(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15.236 22a3 3 0 0 0-2.2-5"></path>

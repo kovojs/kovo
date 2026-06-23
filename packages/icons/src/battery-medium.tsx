@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Battery Medium icon (Lucide). https://lucide.dev/icons/battery-medium */
-export function BatteryMedium(props: IconProps = {}): string {
+export function BatteryMedium(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 14v-4"></path>

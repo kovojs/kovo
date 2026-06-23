@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chart No Axes Gantt icon (Lucide). https://lucide.dev/icons/chart-no-axes-gantt */
-export function ChartNoAxesGantt(props: IconProps = {}): string {
+export function ChartNoAxesGantt(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M6 5h12"></path>

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import * as packageRootApi from '@kovojs/server';
 import * as packageViteApi from '@kovojs/server/vite';
@@ -659,8 +660,8 @@ describe('server app-shell public API barrels', () => {
     ).toBe(false);
     expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart' }] })).toBe(true);
     expect(publicApi.isKovoApp({ ...app, queries: [{ key: 'cart', reads: [{}] }] })).toBe(false);
-    expect(publicApi.isKovoApp({ ...app, routes: [{ page: () => '<main>Cart</main>' }] })).toBe(
-      false,
-    );
+    expect(
+      publicApi.isKovoApp({ ...app, routes: [{ page: () => trustedHtml('<main>Cart</main>') }] }),
+    ).toBe(false);
   });
 });

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Flashlight icon (Lucide). https://lucide.dev/icons/flashlight */
-export function Flashlight(props: IconProps = {}): string {
+export function Flashlight(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 13v1"></path>

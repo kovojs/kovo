@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Square Arrow Down Right icon (Lucide). https://lucide.dev/icons/square-arrow-down-right */
-export function SquareArrowDownRight(props: IconProps = {}): string {
+export function SquareArrowDownRight(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 15 9 9"></path>

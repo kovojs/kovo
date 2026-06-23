@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Proportions icon (Lucide). https://lucide.dev/icons/proportions */
-export function Proportions(props: IconProps = {}): string {
+export function Proportions(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="20" height="16" x="2" y="4" rx="2"></rect>

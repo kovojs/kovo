@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Volume Off icon (Lucide). https://lucide.dev/icons/volume-off */
-export function VolumeOff(props: IconProps = {}): string {
+export function VolumeOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 9a5 5 0 0 1 .95 2.293"></path>

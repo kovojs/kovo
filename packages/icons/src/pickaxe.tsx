@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Pickaxe icon (Lucide). https://lucide.dev/icons/pickaxe */
-export function Pickaxe(props: IconProps = {}): string {
+export function Pickaxe(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3L11 9.999"></path>

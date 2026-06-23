@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Notebook Tabs icon (Lucide). https://lucide.dev/icons/notebook-tabs */
-export function NotebookTabs(props: IconProps = {}): string {
+export function NotebookTabs(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 6h4"></path>

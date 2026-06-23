@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Copy Minus icon (Lucide). https://lucide.dev/icons/copy-minus */
-export function CopyMinus(props: IconProps = {}): string {
+export function CopyMinus(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="12" x2="18" y1="15" y2="15"></line>

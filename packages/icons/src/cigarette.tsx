@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Cigarette icon (Lucide). https://lucide.dev/icons/cigarette */
-export function Cigarette(props: IconProps = {}): string {
+export function Cigarette(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M17 12H3a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1h14"></path>

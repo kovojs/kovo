@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Scale 3d icon (Lucide). https://lucide.dev/icons/scale-3d */
-export function Scale3d(props: IconProps = {}): string {
+export function Scale3d(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M5 7v11a1 1 0 0 0 1 1h11"></path>

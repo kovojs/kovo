@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Arrow Right From Line icon (Lucide). https://lucide.dev/icons/arrow-right-from-line */
-export function ArrowRightFromLine(props: IconProps = {}): string {
+export function ArrowRightFromLine(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 5v14"></path>

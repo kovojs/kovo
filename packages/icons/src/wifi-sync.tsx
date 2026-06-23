@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Wifi Sync icon (Lucide). https://lucide.dev/icons/wifi-sync */
-export function WifiSync(props: IconProps = {}): string {
+export function WifiSync(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11.965 10.105v4L13.5 12.5a5 5 0 0 1 8 1.5"></path>

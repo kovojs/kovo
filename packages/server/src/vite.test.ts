@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
 import { route } from './route.js';
@@ -74,7 +75,7 @@ describe('public Kovo Vite plugin', () => {
           default: createApp({
             routes: [
               route('/cart', {
-                page: () => '<main>Cart</main>',
+                page: () => trustedHtml('<main>Cart</main>'),
               }),
             ],
           }),
@@ -170,10 +171,10 @@ export const LoginCard = component({
             default: createApp({
               routes: [
                 route('/', {
-                  page: () => '<main>Home</main>',
+                  page: () => trustedHtml('<main>Home</main>'),
                 }),
                 route('/login', {
-                  page: () => '<main>Login</main>',
+                  page: () => trustedHtml('<main>Login</main>'),
                 }),
               ],
             }),

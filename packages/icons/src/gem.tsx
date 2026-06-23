@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Gem icon (Lucide). https://lucide.dev/icons/gem */
-export function Gem(props: IconProps = {}): string {
+export function Gem(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.5 3 8 9l4 13 4-13-2.5-6"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Wheat icon (Lucide). https://lucide.dev/icons/wheat */
-export function Wheat(props: IconProps = {}): string {
+export function Wheat(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 22 16 8"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Clock Arrow Up icon (Lucide). https://lucide.dev/icons/clock-arrow-up */
-export function ClockArrowUp(props: IconProps = {}): string {
+export function ClockArrowUp(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 6v6l1.56.78"></path>

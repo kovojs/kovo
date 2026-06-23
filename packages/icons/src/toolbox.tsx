@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Toolbox icon (Lucide). https://lucide.dev/icons/toolbox */
-export function Toolbox(props: IconProps = {}): string {
+export function Toolbox(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 12v4"></path>

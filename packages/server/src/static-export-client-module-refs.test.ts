@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
@@ -27,7 +28,8 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/cart', {
-          page: () => `<main><button on:click="${cartHref}#Cart$add">Add</button></main>`,
+          page: () =>
+            trustedHtml(`<main><button on:click="${cartHref}#Cart$add">Add</button></main>`),
         }),
       ],
     });
@@ -68,7 +70,10 @@ describe('server static export', () => {
         routes: [
           route('/cart', {
             modulepreloads: [cartHref],
-            page: () => `<main><button on:click="${menuHref}#Menu$open">Open menu</button></main>`,
+            page: () =>
+              trustedHtml(
+                `<main><button on:click="${menuHref}#Menu$open">Open menu</button></main>`,
+              ),
           }),
         ],
       });
@@ -121,7 +126,10 @@ describe('server static export', () => {
         routes: [
           route('/cart', {
             modulepreloads: [cartUrl],
-            page: () => `<main><button on:click="${menuUrl}#Menu$open">Open menu</button></main>`,
+            page: () =>
+              trustedHtml(
+                `<main><button on:click="${menuUrl}#Menu$open">Open menu</button></main>`,
+              ),
           }),
         ],
       });
@@ -155,7 +163,7 @@ describe('server static export', () => {
         routes: [
           route('/', {
             modulepreloads: ['/c/cart.client.js?v=cart-1'],
-            page: () => '<main>Home</main>',
+            page: () => trustedHtml('<main>Home</main>'),
           }),
         ],
       });
@@ -212,7 +220,7 @@ describe('server static export', () => {
         routes: [
           route('/unsafe', {
             modulepreloads: [badHref],
-            page: () => '<main>Unsafe module path</main>',
+            page: () => trustedHtml('<main>Unsafe module path</main>'),
           }),
         ],
       });

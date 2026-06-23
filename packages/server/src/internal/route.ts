@@ -28,6 +28,7 @@ export {
   type RoutePageFailure,
   type RoutePageOutcomeSuccess,
   type RoutePageRenderSuccess,
+  type RoutePageRunResult,
+  type RoutePageRunSuccess,
   type RoutePageResult,
-  type RoutePageSuccess,
 } from '../route.js';

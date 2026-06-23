@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Clipboard Check icon (Lucide). https://lucide.dev/icons/clipboard-check */
-export function ClipboardCheck(props: IconProps = {}): string {
+export function ClipboardCheck(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="8" height="4" x="8" y="2" rx="1" ry="1"></rect>

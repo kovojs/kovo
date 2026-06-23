@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Panel Top Bottom Dashed icon (Lucide). https://lucide.dev/icons/panel-top-bottom-dashed */
-export function PanelTopBottomDashed(props: IconProps = {}): string {
+export function PanelTopBottomDashed(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 15h1"></path>

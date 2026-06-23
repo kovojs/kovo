@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Captions Off icon (Lucide). https://lucide.dev/icons/captions-off */
-export function CaptionsOff(props: IconProps = {}): string {
+export function CaptionsOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.5 5H19a2 2 0 0 1 2 2v8.5"></path>

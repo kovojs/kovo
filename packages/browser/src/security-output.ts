@@ -34,7 +34,13 @@ export interface TrustedHtml {
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
  */
 export function trustedHtml(value: string | BrowserTrustedHTML): TrustedHtml {
-  return { __kovoTrustedHtml: true, value };
+  const trusted = { __kovoTrustedHtml: true, value } as TrustedHtml;
+  const stringify = () => trustedHtmlValueContent(value);
+  Object.defineProperties(trusted, {
+    [Symbol.toPrimitive]: { value: stringify },
+    toString: { value: stringify },
+  });
+  return trusted;
 }
 
 /**

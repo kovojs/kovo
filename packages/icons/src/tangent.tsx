@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Tangent icon (Lucide). https://lucide.dev/icons/tangent */
-export function Tangent(props: IconProps = {}): string {
+export function Tangent(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="17" cy="4" r="2"></circle>

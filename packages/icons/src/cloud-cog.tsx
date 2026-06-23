@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Cloud Cog icon (Lucide). https://lucide.dev/icons/cloud-cog */
-export function CloudCog(props: IconProps = {}): string {
+export function CloudCog(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10.852 19.772-.383.924"></path>

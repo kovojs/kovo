@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Square Dashed Bottom Code icon (Lucide). https://lucide.dev/icons/square-dashed-bottom-code */
-export function SquareDashedBottomCode(props: IconProps = {}): string {
+export function SquareDashedBottomCode(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 9.5 8 12l2 2.5"></path>

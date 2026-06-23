@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Shrimp icon (Lucide). https://lucide.dev/icons/shrimp */
-export function Shrimp(props: IconProps = {}): string {
+export function Shrimp(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 12h.01"></path>

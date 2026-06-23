@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
@@ -48,7 +49,7 @@ describe('server static export', () => {
       routes: [
         route('/', {
           modulepreloads: [cartHref],
-          page: () => '<main>Home</main>',
+          page: () => trustedHtml('<main>Home</main>'),
         }),
       ],
     });
@@ -120,7 +121,7 @@ describe('server static export', () => {
         routes: [
           route('/', {
             modulepreloads: [cartHref],
-            page: () => '<main>Home</main>',
+            page: () => trustedHtml('<main>Home</main>'),
           }),
         ],
       });
@@ -191,11 +192,11 @@ describe('server static export', () => {
       routes: [
         route('/', {
           modulepreloads: [cartHref],
-          page: () => '<main>Home</main>',
+          page: () => trustedHtml('<main>Home</main>'),
         }),
         route('/docs/intro', {
           stylesheets: ['/assets/docs.css'],
-          page: () => '<main>Intro</main>',
+          page: () => trustedHtml('<main>Intro</main>'),
         }),
       ],
     });

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Bookmark Minus icon (Lucide). https://lucide.dev/icons/bookmark-minus */
-export function BookmarkMinus(props: IconProps = {}): string {
+export function BookmarkMinus(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 10H9"></path>

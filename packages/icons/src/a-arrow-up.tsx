@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** A Arrow Up icon (Lucide). https://lucide.dev/icons/a-arrow-up */
-export function AArrowUp(props: IconProps = {}): string {
+export function AArrowUp(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14 11 4-4 4 4"></path>

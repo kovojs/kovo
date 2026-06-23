@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Flashlight Off icon (Lucide). https://lucide.dev/icons/flashlight-off */
-export function FlashlightOff(props: IconProps = {}): string {
+export function FlashlightOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11.652 6H18"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** External Link icon (Lucide). https://lucide.dev/icons/external-link */
-export function ExternalLink(props: IconProps = {}): string {
+export function ExternalLink(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 3h6v6"></path>

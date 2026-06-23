@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Brick Wall Shield icon (Lucide). https://lucide.dev/icons/brick-wall-shield */
-export function BrickWallShield(props: IconProps = {}): string {
+export function BrickWallShield(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 9v1.258"></path>

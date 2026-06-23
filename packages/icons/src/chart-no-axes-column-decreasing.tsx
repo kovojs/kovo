@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chart No Axes Column Decreasing icon (Lucide). https://lucide.dev/icons/chart-no-axes-column-decreasing */
-export function ChartNoAxesColumnDecreasing(props: IconProps = {}): string {
+export function ChartNoAxesColumnDecreasing(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M5 21V3"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Arrow Left Right icon (Lucide). https://lucide.dev/icons/arrow-left-right */
-export function ArrowLeftRight(props: IconProps = {}): string {
+export function ArrowLeftRight(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M8 3 4 7l4 4"></path>

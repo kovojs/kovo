@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Git Merge Conflict icon (Lucide). https://lucide.dev/icons/git-merge-conflict */
-export function GitMergeConflict(props: IconProps = {}): string {
+export function GitMergeConflict(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 6h4a2 2 0 0 1 2 2v7"></path>

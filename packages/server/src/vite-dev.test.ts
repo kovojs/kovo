@@ -2,6 +2,7 @@ import type { IncomingMessage } from 'node:http';
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it, vi } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
@@ -15,6 +16,7 @@ import {
   type KovoAppShellViteMiddleware,
   shouldHandleKovoAppShellViteRequest,
 } from './vite-dev.js';
+import { renderedHtml } from './html.js';
 
 describe('server app shell Vite dev seam', () => {
   it('derives request ownership from the app-shell dispatch table', () => {
@@ -130,7 +132,7 @@ describe('server app shell Vite dev seam', () => {
             routes: [
               route('/cart', {
                 modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
-                page: () => '<main>Cart</main>',
+                page: () => trustedHtml('<main>Cart</main>'),
               }),
             ],
           }),
@@ -293,7 +295,7 @@ describe('server app shell Vite dev seam', () => {
         route('/', {
           modulepreloads: [moduleHref],
           page() {
-            return '<main>dev app shell</main>';
+            return renderedHtml('<main>dev app shell</main>');
           },
         }),
       ],
@@ -379,7 +381,7 @@ describe('server app shell Vite dev seam', () => {
   it('serves build-owned stylesheet chunks through the default dev handler', async () => {
     const ShellLayout = layout({
       render(_queries, _state, { children }) {
-        return `<section data-shell="true">${String(children)}</section>`;
+        return renderedHtml(`<section data-shell="true">${String(children)}</section>`);
       },
     });
     const app = createApp({
@@ -387,12 +389,12 @@ describe('server app shell Vite dev seam', () => {
         route('/', {
           layout: ShellLayout,
           page() {
-            return '<main>styled dev app shell</main>';
+            return renderedHtml('<main>styled dev app shell</main>');
           },
         }),
         route('/login', {
           page() {
-            return '<main>login</main>';
+            return renderedHtml('<main>login</main>');
           },
         }),
       ],
@@ -480,8 +482,8 @@ describe('server app shell Vite dev seam', () => {
   it('serves KV228 route-table diagnostics through the default dev handler', async () => {
     const app = createApp({
       routes: [
-        route('/products/:id', { page: () => '<main>Param</main>' }),
-        route('/products/new', { page: () => '<main>New</main>' }),
+        route('/products/:id', { page: () => trustedHtml('<main>Param</main>') }),
+        route('/products/new', { page: () => trustedHtml('<main>New</main>') }),
       ],
     });
     let middleware: KovoAppShellViteMiddleware | undefined;
@@ -574,7 +576,7 @@ describe('server app shell Vite dev seam', () => {
 
   it('serves and injects the dev-only HMR client through Vite middleware', async () => {
     const app = createApp({
-      routes: [route('/cart', { page: () => '<main>Cart</main>' })],
+      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
     });
     let middleware: KovoAppShellViteMiddleware | undefined;
     const plugin = kovoAppShellViteDevPlugin({
@@ -656,7 +658,7 @@ describe('server app shell Vite dev seam', () => {
       routes: [
         route('/cart', {
           page() {
-            return '<main>Cart refresh</main>';
+            return renderedHtml('<main>Cart refresh</main>');
           },
         }),
       ],
@@ -730,7 +732,7 @@ describe('server app shell Vite dev seam', () => {
         route('/cart', {
           modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
           page() {
-            return '<main>Cart refresh</main>';
+            return renderedHtml('<main>Cart refresh</main>');
           },
         }),
       ],
@@ -870,7 +872,7 @@ describe('server app shell Vite dev seam', () => {
         routes: [
           route('/cart', {
             page() {
-              return '<main>Cart production page</main>';
+              return renderedHtml('<main>Cart production page</main>');
             },
           }),
         ],

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Octagon X icon (Lucide). https://lucide.dev/icons/octagon-x */
-export function OctagonX(props: IconProps = {}): string {
+export function OctagonX(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 9-6 6"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Map Pin Off icon (Lucide). https://lucide.dev/icons/map-pin-off */
-export function MapPinOff(props: IconProps = {}): string {
+export function MapPinOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12.75 7.09a3 3 0 0 1 2.16 2.16"></path>

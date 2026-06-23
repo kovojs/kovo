@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Grip icon (Lucide). https://lucide.dev/icons/grip */
-export function Grip(props: IconProps = {}): string {
+export function Grip(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="5" r="1"></circle>

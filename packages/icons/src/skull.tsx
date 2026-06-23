@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Skull icon (Lucide). https://lucide.dev/icons/skull */
-export function Skull(props: IconProps = {}): string {
+export function Skull(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12.5 17-.5-1-.5 1h1z"></path>

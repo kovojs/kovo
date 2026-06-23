@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Squares Intersect icon (Lucide). https://lucide.dev/icons/squares-intersect */
-export function SquaresIntersect(props: IconProps = {}): string {
+export function SquaresIntersect(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 22a2 2 0 0 1-2-2"></path>

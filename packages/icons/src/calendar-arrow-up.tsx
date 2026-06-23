@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Calendar Arrow Up icon (Lucide). https://lucide.dev/icons/calendar-arrow-up */
-export function CalendarArrowUp(props: IconProps = {}): string {
+export function CalendarArrowUp(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14 18 4-4 4 4"></path>

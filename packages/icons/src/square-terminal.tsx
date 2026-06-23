@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Square Terminal icon (Lucide). https://lucide.dev/icons/square-terminal */
-export function SquareTerminal(props: IconProps = {}): string {
+export function SquareTerminal(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m7 11 2-2-2-2"></path>

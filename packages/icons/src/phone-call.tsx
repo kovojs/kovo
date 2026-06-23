@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Phone Call icon (Lucide). https://lucide.dev/icons/phone-call */
-export function PhoneCall(props: IconProps = {}): string {
+export function PhoneCall(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13 2a9 9 0 0 1 9 9"></path>

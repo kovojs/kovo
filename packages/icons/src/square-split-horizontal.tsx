@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Square Split Horizontal icon (Lucide). https://lucide.dev/icons/square-split-horizontal */
-export function SquareSplitHorizontal(props: IconProps = {}): string {
+export function SquareSplitHorizontal(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M8 19H5c-1 0-2-1-2-2V7c0-1 1-2 2-2h3"></path>

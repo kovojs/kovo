@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Heater icon (Lucide). https://lucide.dev/icons/heater */
-export function Heater(props: IconProps = {}): string {
+export function Heater(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 8c2-3-2-3 0-6"></path>

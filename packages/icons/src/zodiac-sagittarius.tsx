@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Zodiac Sagittarius icon (Lucide). https://lucide.dev/icons/zodiac-sagittarius */
-export function ZodiacSagittarius(props: IconProps = {}): string {
+export function ZodiacSagittarius(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 3h6v6"></path>

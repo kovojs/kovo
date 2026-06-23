@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Touchpad Off icon (Lucide). https://lucide.dev/icons/touchpad-off */
-export function TouchpadOff(props: IconProps = {}): string {
+export function TouchpadOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 20v-6"></path>

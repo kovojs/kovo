@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Wind icon (Lucide). https://lucide.dev/icons/wind */
-export function Wind(props: IconProps = {}): string {
+export function Wind(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12.8 19.6A2 2 0 1 0 14 16H2"></path>

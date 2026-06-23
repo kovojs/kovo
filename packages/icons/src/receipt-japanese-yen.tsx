@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Receipt Japanese Yen icon (Lucide). https://lucide.dev/icons/receipt-japanese-yen */
-export function ReceiptJapaneseYen(props: IconProps = {}): string {
+export function ReceiptJapaneseYen(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12 10 3-3"></path>

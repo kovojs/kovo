@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Flower icon (Lucide). https://lucide.dev/icons/flower */
-export function Flower(props: IconProps = {}): string {
+export function Flower(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="12" r="3"></circle>

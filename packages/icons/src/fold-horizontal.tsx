@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Fold Horizontal icon (Lucide). https://lucide.dev/icons/fold-horizontal */
-export function FoldHorizontal(props: IconProps = {}): string {
+export function FoldHorizontal(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 12h6"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Toggle Left icon (Lucide). https://lucide.dev/icons/toggle-left */
-export function ToggleLeft(props: IconProps = {}): string {
+export function ToggleLeft(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="9" cy="12" r="3"></circle>

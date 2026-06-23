@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Reply All icon (Lucide). https://lucide.dev/icons/reply-all */
-export function ReplyAll(props: IconProps = {}): string {
+export function ReplyAll(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12 17-5-5 5-5"></path>

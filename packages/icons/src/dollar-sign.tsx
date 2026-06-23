@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Dollar Sign icon (Lucide). https://lucide.dev/icons/dollar-sign */
-export function DollarSign(props: IconProps = {}): string {
+export function DollarSign(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="12" x2="12" y1="2" y2="22"></line>

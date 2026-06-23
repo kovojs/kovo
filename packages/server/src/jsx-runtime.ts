@@ -113,7 +113,7 @@ export function jsx(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
   key?: unknown,
-): MaybeAsyncJsxNode {
+): MaybePromise<RenderedHtml> {
   if (isErrorBoundaryComponent(type)) {
     return renderErrorBoundary(props as unknown as ErrorBoundaryProps);
   }
@@ -186,7 +186,7 @@ export function jsxDEV(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
   key?: unknown,
-): MaybeAsyncJsxNode {
+): MaybePromise<RenderedHtml> {
   return jsx(type, props, key);
 }
 

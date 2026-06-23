@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Gamepad 2 icon (Lucide). https://lucide.dev/icons/gamepad-2 */
-export function Gamepad2(props: IconProps = {}): string {
+export function Gamepad2(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="6" x2="10" y1="11" y2="11"></line>

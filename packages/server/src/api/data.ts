@@ -5,8 +5,6 @@ export type { Domain, Tag } from '../domain.js';
 export { errorBoundary, mutation, stream, write } from '../mutation.js';
 /** Build JSX-spread attributes for a SPEC §6.3 enhanced mutation form. */
 export { mutationFormAttributes } from '../mutation.js';
-/** Render string-template attributes for a SPEC §6.3 enhanced mutation form. */
-export { renderMutationFormAttributes } from '../mutation.js';
 export type {
   ChangeRecord,
   InvalidateOptions,
@@ -19,6 +17,7 @@ export type {
   MutationStreamContext,
   MutationStreamDoneChunk,
   MutationStreamFragmentChunk,
+  MutationStreamFragmentHtml,
   MutationStreamQueryChunk,
   MutationStreamSource,
   MutationStreamTextChunk,

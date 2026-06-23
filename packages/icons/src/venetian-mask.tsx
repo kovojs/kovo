@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Venetian Mask icon (Lucide). https://lucide.dev/icons/venetian-mask */
-export function VenetianMask(props: IconProps = {}): string {
+export function VenetianMask(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 11c-1.5 0-2.5.5-3 2"></path>

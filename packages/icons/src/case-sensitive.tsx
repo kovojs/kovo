@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Case Sensitive icon (Lucide). https://lucide.dev/icons/case-sensitive */
-export function CaseSensitive(props: IconProps = {}): string {
+export function CaseSensitive(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m2 16 4.039-9.69a.5.5 0 0 1 .923 0L11 16"></path>

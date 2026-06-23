@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Phone Forwarded icon (Lucide). https://lucide.dev/icons/phone-forwarded */
-export function PhoneForwarded(props: IconProps = {}): string {
+export function PhoneForwarded(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 6h8"></path>

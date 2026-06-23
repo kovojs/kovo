@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Earth Lock icon (Lucide). https://lucide.dev/icons/earth-lock */
-export function EarthLock(props: IconProps = {}): string {
+export function EarthLock(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M7 3.34V5a3 3 0 0 0 3 3"></path>

@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { redirect } from '@kovojs/core';
 
+import { renderedHtml, renderHtmlValue } from './html.js';
 import { renderPageHints } from './hints.js';
 import { meta } from './meta.js';
 import {
+  layout,
   notFound,
   parseRouteRequest,
   renderRoutePageResponse,
@@ -13,13 +15,31 @@ import {
 import { s } from './schema.js';
 
 describe('route primitives', () => {
+  it('rejects raw string route pages and layout renders', () => {
+    const assertRawStringPageRejected = () => {
+      route('/raw-page', {
+        // @ts-expect-error SPEC §4.1/§9.1: route page markup must be TSX/JSX or an explicit trust boundary.
+        page: () => '<main>Raw</main>',
+      });
+    };
+    const assertRawStringLayoutRejected = () => {
+      layout({
+        // @ts-expect-error SPEC §4.1/§9.5: layout chrome markup must be TSX/JSX or an explicit trust boundary.
+        render: () => '<main>Raw</main>',
+      });
+    };
+
+    expect(assertRawStringPageRejected).toBeTypeOf('function');
+    expect(assertRawStringLayoutRejected).toBeTypeOf('function');
+  });
+
   it('declares route schemas, route-owned hints, and typed PRG redirects', async () => {
     const productRoute = route('/products/:id', {
       meta: meta({ title: 'Product detail' }),
       page(context) {
         const id: string = context.params.id;
         const max: number = context.search.max;
-        return `${id}:${max}`;
+        return renderedHtml(`${id}:${max}`);
       },
       params: s.object({ id: s.string() }),
       prefetch: 'conservative',
@@ -37,7 +57,7 @@ describe('route primitives', () => {
       path: '/products/:id',
       search: { max: 25, sort: 'price' },
     });
-    expect(await productRoute.page?.(request, {})).toBe('p1:25');
+    expect(renderHtmlValue(await productRoute.page?.(request, {}))).toBe('p1:25');
     expect(renderPageHints(productRoute)).toEqual({
       csp: {
         scripts: ['sha256-fKxQlvzc78mE71qhW0Eccfc4+tOL6x+GN3K5zPR3noE='],
@@ -69,22 +89,23 @@ describe('route primitives', () => {
         request.session?.userId === 'u1',
       page(context, request: { session: { userId: string } }) {
         if (context.params.id === 'missing') return notFound();
-        return `${request.session.userId}:${context.params.id}:${context.search.tab}`;
+        return renderedHtml(`${request.session.userId}:${context.params.id}:${context.search.tab}`);
       },
       params: s.object({ id: s.string() }),
       search: s.object({ tab: s.string() }),
     });
 
-    await expect(
-      runRoutePage(
-        productRoute,
-        { params: { id: 'p1' }, search: { tab: 'details' } },
-        { session: { userId: 'u1' } },
-      ),
-    ).resolves.toEqual({
-      ok: true,
-      value: 'u1:p1:details',
-    });
+    const guardedPageResult = await runRoutePage(
+      productRoute,
+      { params: { id: 'p1' }, search: { tab: 'details' } },
+      { session: { userId: 'u1' } },
+    );
+    expect(guardedPageResult.ok).toBe(true);
+    expect(
+      guardedPageResult.ok && 'value' in guardedPageResult
+        ? renderHtmlValue(guardedPageResult.value)
+        : undefined,
+    ).toBe('u1:p1:details');
     await expect(
       runRoutePage(
         productRoute,
@@ -140,7 +161,7 @@ describe('route primitives', () => {
 
   it('escapes default route string returns as text', async () => {
     const unsafeStringRoute = route('/unsafe', {
-      page: () => '<img src=x onerror=alert(1)>',
+      page: (() => '<img src=x onerror=alert(1)>') as any,
     });
 
     await expect(renderRoutePageResponse(unsafeStringRoute, {}, {})).resolves.toMatchObject({
@@ -161,7 +182,7 @@ describe('route primitives', () => {
     });
     const throwingRenderer = route('/cart', {
       page() {
-        return 'cart';
+        return renderedHtml('cart');
       },
     });
     // SPEC §9.2 keeps server exceptions private while preserving onError diagnostics.

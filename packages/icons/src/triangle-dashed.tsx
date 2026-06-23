@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Triangle Dashed icon (Lucide). https://lucide.dev/icons/triangle-dashed */
-export function TriangleDashed(props: IconProps = {}): string {
+export function TriangleDashed(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.17 4.193a2 2 0 0 1 3.666.013"></path>

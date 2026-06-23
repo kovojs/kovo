@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Panels Left Bottom icon (Lucide). https://lucide.dev/icons/panels-left-bottom */
-export function PanelsLeftBottom(props: IconProps = {}): string {
+export function PanelsLeftBottom(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="18" height="18" x="3" y="3" rx="2"></rect>

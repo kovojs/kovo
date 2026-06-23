@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Trending Up icon (Lucide). https://lucide.dev/icons/trending-up */
-export function TrendingUp(props: IconProps = {}): string {
+export function TrendingUp(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 7h6v6"></path>

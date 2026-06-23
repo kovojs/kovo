@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Clipboard Paste icon (Lucide). https://lucide.dev/icons/clipboard-paste */
-export function ClipboardPaste(props: IconProps = {}): string {
+export function ClipboardPaste(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 14h10"></path>

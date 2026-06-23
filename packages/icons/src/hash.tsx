@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Hash icon (Lucide). https://lucide.dev/icons/hash */
-export function Hash(props: IconProps = {}): string {
+export function Hash(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="4" x2="20" y1="9" y2="9"></line>

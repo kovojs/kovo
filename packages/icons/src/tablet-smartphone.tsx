@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Tablet Smartphone icon (Lucide). https://lucide.dev/icons/tablet-smartphone */
-export function TabletSmartphone(props: IconProps = {}): string {
+export function TabletSmartphone(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="10" height="14" x="3" y="8" rx="2"></rect>

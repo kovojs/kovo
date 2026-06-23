@@ -14,6 +14,7 @@ function appModuleSource(options: {
 }): string {
   return [
     ...(options.prelude ?? []),
+    'const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });',
     'const modules = new Map();',
     'const versionedHref = (module) => `/c/__v/${encodeURIComponent(module.version)}/${module.path.slice("/c/".length)}`;',
     options.exportKind === 'named' ? 'export const app = {' : 'export default {',
@@ -70,7 +71,8 @@ describe('kovo export', () => {
       writeFileSync(
         appPath,
         appModuleSource({
-          route: "{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }",
+          route:
+            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
         }),
         'utf8',
       );
@@ -104,7 +106,8 @@ describe('kovo export', () => {
       writeFileSync(
         appPath,
         appModuleSource({
-          route: "{ path: '/docs/intro', page: () => '<main data-pretty-export>Intro</main>' }",
+          route:
+            "{ path: '/docs/intro', page: () => trustedHtml('<main data-pretty-export>Intro</main>') }",
         }),
         'utf8',
       );
@@ -136,7 +139,7 @@ describe('kovo export', () => {
         appModuleSource({
           closed: false,
           exportKind: 'named',
-          route: "{ path: '/products/:id', page: () => '<main>Product</main>' }",
+          route: "{ path: '/products/:id', page: () => trustedHtml('<main>Product</main>') }",
         }),
         'utf8',
       );
@@ -176,7 +179,7 @@ describe('kovo export', () => {
             '  start: { line: 4, column: 12 },',
             '}];',
           ],
-          route: "{ path: '/', page: () => '<main>Home</main>' }",
+          route: "{ path: '/', page: () => trustedHtml('<main>Home</main>') }",
         }),
         'utf8',
       );
@@ -221,7 +224,8 @@ describe('kovo export', () => {
       writeFileSync(
         appPath,
         appModuleSource({
-          route: "{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }",
+          route:
+            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
         }),
         'utf8',
       );
@@ -276,7 +280,8 @@ describe('kovo export', () => {
       writeFileSync(
         appPath,
         appModuleSource({
-          route: "{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }",
+          route:
+            "{ path: '/', page: () => trustedHtml('<main data-export-cli>CLI export</main>') }",
         }),
         'utf8',
       );
@@ -330,7 +335,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            '{ path: \'/\', page: () => `<link href="${process.env.KOVO_TEST_STYLESHEET_HREF}"><main>Home</main>` }',
+            '{ path: \'/\', page: () => trustedHtml(`<link href="${process.env.KOVO_TEST_STYLESHEET_HREF}"><main>Home</main>`) }',
         }),
         'utf8',
       );
@@ -391,7 +396,7 @@ describe('kovo export', () => {
         appPath,
         appModuleSource({
           route:
-            "{ path: '/', page: () => `<main data-vite-export>${process.env.KOVO_TEST_VITE_STYLESHEET}</main>` }",
+            "{ path: '/', page: () => trustedHtml(`<main data-vite-export>${process.env.KOVO_TEST_VITE_STYLESHEET}</main>`) }",
         }),
         'utf8',
       );

@@ -54,7 +54,7 @@ describe('Defer JSX primitive', () => {
         Defer({
           fallback: ['Loading ', '<b>raw</b>', trustedHtml('<i>trusted</i>')],
           priority: 'visible',
-          render: () => '<strong>raw region</strong>',
+          render: () => trustedHtml('<strong>raw region</strong>'),
           target: 'rail&details',
         }),
       ),

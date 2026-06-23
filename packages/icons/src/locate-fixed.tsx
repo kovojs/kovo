@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Locate Fixed icon (Lucide). https://lucide.dev/icons/locate-fixed */
-export function LocateFixed(props: IconProps = {}): string {
+export function LocateFixed(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="2" x2="5" y1="12" y2="12"></line>

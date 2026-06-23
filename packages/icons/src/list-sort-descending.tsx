@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** List Sort Descending icon (Lucide). https://lucide.dev/icons/list-sort-descending */
-export function ListSortDescending(props: IconProps = {}): string {
+export function ListSortDescending(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 12H3"></path>

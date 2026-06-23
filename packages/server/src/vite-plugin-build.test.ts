@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
+import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { writeKovoAppShellVitePluginBuild } from './vite-plugin-build.js';
 import type { KovoAppShellBuild } from './vite-build.js';
@@ -27,11 +28,13 @@ describe('server app shell Vite plugin build boundary', () => {
           routes: [
             route('/cart', {
               page() {
-                return [
-                  '<main class="cart">Cart',
-                  '<button on:click="/c/__v/cart-v1/cart.client.js#Cart$add">Add</button>',
-                  '</main>',
-                ].join('');
+                return renderedHtml(
+                  [
+                    '<main class="cart">Cart',
+                    '<button on:click="/c/__v/cart-v1/cart.client.js#Cart$add">Add</button>',
+                    '</main>',
+                  ].join(''),
+                );
               },
             }),
           ],

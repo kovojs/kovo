@@ -8,6 +8,7 @@ import {
   type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
 
 import {
   accountRoute,
@@ -61,14 +62,16 @@ export const referencePublicRoute = route('/', {
   },
   modulepreloads: [referencePublicClientModuleHref],
   page() {
-    return [
-      '<section data-reference-public-shell>',
-      '<h1>Kovo Reference App</h1>',
-      '<p>Public route exported by the shared request shell.</p>',
-      `<button type="button" on:click="${referencePublicClientModuleHref}#Reference$markReady">Check shell</button>`,
-      '<output id="reference-status">Waiting for client module.</output>',
-      '</section>',
-    ].join('');
+    return trustedHtml(
+      [
+        '<section data-reference-public-shell>',
+        '<h1>Kovo Reference App</h1>',
+        '<p>Public route exported by the shared request shell.</p>',
+        `<button type="button" on:click="${referencePublicClientModuleHref}#Reference$markReady">Check shell</button>`,
+        '<output id="reference-status">Waiting for client module.</output>',
+        '</section>',
+      ].join(''),
+    );
   },
 });
 
@@ -79,7 +82,7 @@ export const referenceLoginRoute = route('/login', {
   },
   page(context, request: ReferenceShellRequest) {
     const next = typeof context.search.next === 'string' ? context.search.next : '/account';
-    return `<main>${renderReferenceLoginForm(request, { next })}</main>`;
+    return trustedHtml(`<main>${renderReferenceLoginForm(request, { next })}</main>`);
   },
 });
 

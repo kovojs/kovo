@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Brick Wall Fire icon (Lucide). https://lucide.dev/icons/brick-wall-fire */
-export function BrickWallFire(props: IconProps = {}): string {
+export function BrickWallFire(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 3v2.107"></path>

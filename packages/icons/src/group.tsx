@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Group icon (Lucide). https://lucide.dev/icons/group */
-export function Group(props: IconProps = {}): string {
+export function Group(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 7V5c0-1.1.9-2 2-2h2"></path>

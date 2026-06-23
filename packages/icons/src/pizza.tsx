@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Pizza icon (Lucide). https://lucide.dev/icons/pizza */
-export function Pizza(props: IconProps = {}): string {
+export function Pizza(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12 14-1 1"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Globe Check icon (Lucide). https://lucide.dev/icons/globe-check */
-export function GlobeCheck(props: IconProps = {}): string {
+export function GlobeCheck(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 6 2 2 4-4"></path>

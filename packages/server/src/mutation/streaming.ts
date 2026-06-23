@@ -1,5 +1,9 @@
+import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
+import type { TrustedHtml } from '@kovojs/browser';
+
 import { reportServerError } from '../diagnostics.js';
 import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
+import { isRenderedHtml } from '../html.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
 import type { MutationReplayReservation } from '../replay.js';
 import {
@@ -10,9 +14,18 @@ import {
 } from '../wire-html.js';
 import type { MutationSuccess } from './definition.js';
 
+/** Rendered JSX or explicit trusted HTML accepted by `stream.fragment()` (SPEC §9.1, KV236). */
+export type MutationStreamFragmentHtml =
+  | TrustedHtml
+  | {
+      readonly html: string;
+      [Symbol.toPrimitive](): string;
+      toString(): string;
+    };
+
 /** A server-rendered fragment chunk for a SPEC §9.1 streaming mutation response. */
 export interface MutationStreamFragmentChunk {
-  html: string;
+  html: MutationStreamFragmentHtml;
   kind: 'fragment';
   mode?: 'append' | 'replace';
   target: string;
@@ -81,7 +94,7 @@ export const stream = {
     return { kind: 'done', ...(options.reason === undefined ? {} : { reason: options.reason }) };
   },
   fragment(options: {
-    html: string;
+    html: MutationStreamFragmentHtml;
     mode?: 'append' | 'replace';
     target: string;
   }): MutationStreamFragmentChunk {
@@ -335,7 +348,7 @@ function renderMutationStreamChunk(chunk: MutationStreamChunk): string {
       return renderDoneWireHtml({ reason: chunk.reason });
     case 'fragment':
       return renderFragmentWireHtml({
-        html: chunk.html,
+        html: renderMutationStreamFragmentHtml(chunk.html),
         mode: chunk.mode,
         target: chunk.target,
       });
@@ -354,4 +367,19 @@ function renderMutationStreamChunk(chunk: MutationStreamChunk): string {
         text: chunk.text,
       });
   }
+}
+
+function renderMutationStreamFragmentHtml(html: MutationStreamFragmentHtml): string {
+  if (isRenderedHtml(html)) return html.html;
+  const trustedHtml = kovoTrustedHtmlContent(html);
+  if (trustedHtml !== '') return trustedHtml;
+  if (
+    typeof html === 'object' &&
+    html !== null &&
+    'html' in html &&
+    typeof html.html === 'string'
+  ) {
+    return html.html;
+  }
+  return '';
 }

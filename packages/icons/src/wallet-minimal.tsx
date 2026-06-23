@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Wallet Minimal icon (Lucide). https://lucide.dev/icons/wallet-minimal */
-export function WalletMinimal(props: IconProps = {}): string {
+export function WalletMinimal(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M17 14h.01"></path>

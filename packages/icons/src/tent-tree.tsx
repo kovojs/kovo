@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Tent Tree icon (Lucide). https://lucide.dev/icons/tent-tree */
-export function TentTree(props: IconProps = {}): string {
+export function TentTree(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="4" cy="4" r="2"></circle>

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import { domain } from './domain.js';
 import { s } from './schema.js';
+import { renderedHtml } from './html.js';
 
 describe('createApp provider-typed authoring context', () => {
   it('infers db and session in app-scoped query, mutation, layout, and route callbacks', () => {
@@ -54,7 +55,7 @@ describe('createApp provider-typed authoring context', () => {
             // @ts-expect-error provider shape exposes `stock`, not a renamed `inventory`.
             void request.db.inventory;
 
-            return `${String(children)}:${userId}:${request.db.stock}`;
+            return renderedHtml(`${String(children)}:${userId}:${request.db.stock}`);
           },
         });
 
@@ -70,7 +71,7 @@ describe('createApp provider-typed authoring context', () => {
               // @ts-expect-error provider shape exposes `user.id`, not a renamed `user.uuid`.
               void request.session?.user.uuid;
 
-              return `${count}:${request.session?.user.id}`;
+              return renderedHtml(`${count}:${request.session?.user.id}`);
             },
           }),
         ];

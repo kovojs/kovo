@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** List Chevrons Up Down icon (Lucide). https://lucide.dev/icons/list-chevrons-up-down */
-export function ListChevronsUpDown(props: IconProps = {}): string {
+export function ListChevronsUpDown(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 5h8"></path>

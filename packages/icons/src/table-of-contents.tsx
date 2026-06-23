@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Table Of Contents icon (Lucide). https://lucide.dev/icons/table-of-contents */
-export function TableOfContents(props: IconProps = {}): string {
+export function TableOfContents(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 5H3"></path>

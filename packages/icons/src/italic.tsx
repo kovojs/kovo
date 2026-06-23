@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Italic icon (Lucide). https://lucide.dev/icons/italic */
-export function Italic(props: IconProps = {}): string {
+export function Italic(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="19" x2="10" y1="4" y2="4"></line>

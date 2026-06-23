@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Sun Medium icon (Lucide). https://lucide.dev/icons/sun-medium */
-export function SunMedium(props: IconProps = {}): string {
+export function SunMedium(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="12" r="4"></circle>

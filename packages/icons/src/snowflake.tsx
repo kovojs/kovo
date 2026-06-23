@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Snowflake icon (Lucide). https://lucide.dev/icons/snowflake */
-export function Snowflake(props: IconProps = {}): string {
+export function Snowflake(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10 20-1.25-2.5L6 18"></path>

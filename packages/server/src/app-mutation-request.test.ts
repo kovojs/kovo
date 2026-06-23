@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
@@ -113,7 +114,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const cartRoute = route('/cart', {
-      page: () => '<main>Cart</main>',
+      page: () => trustedHtml('<main>Cart</main>'),
       stylesheets: [stylesheet('./cart.css')],
     });
     const app = createApp({
@@ -160,7 +161,7 @@ describe('server app mutation request boundary', () => {
       },
     });
     const cartRoute = route('/cart', {
-      page: () => '<main>Cart</main>',
+      page: () => trustedHtml('<main>Cart</main>'),
       stylesheets: [stylesheet('./cart.css')],
     });
     const app = createApp({

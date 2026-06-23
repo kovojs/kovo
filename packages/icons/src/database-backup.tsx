@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Database Backup icon (Lucide). https://lucide.dev/icons/database-backup */
-export function DatabaseBackup(props: IconProps = {}): string {
+export function DatabaseBackup(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** User Check icon (Lucide). https://lucide.dev/icons/user-check */
-export function UserCheck(props: IconProps = {}): string {
+export function UserCheck(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 11 2 2 4-4"></path>

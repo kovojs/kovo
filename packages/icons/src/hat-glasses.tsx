@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Hat Glasses icon (Lucide). https://lucide.dev/icons/hat-glasses */
-export function HatGlasses(props: IconProps = {}): string {
+export function HatGlasses(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 18a2 2 0 0 0-4 0"></path>

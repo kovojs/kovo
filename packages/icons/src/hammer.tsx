@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Hammer icon (Lucide). https://lucide.dev/icons/hammer */
-export function Hammer(props: IconProps = {}): string {
+export function Hammer(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 12-9.373 9.373a1 1 0 0 1-3.001-3L12 9"></path>
