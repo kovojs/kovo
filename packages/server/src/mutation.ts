@@ -752,7 +752,11 @@ export async function renderMutationResponse<
   );
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
-    const reauthResponse = enhancedMutationReauthResponse(guardFailure, lifecycleRequestForGuard, (wireRequest.currentUrl === undefined ? {} : { currentUrl: wireRequest.currentUrl }));
+    const reauthResponse = enhancedMutationReauthResponse(
+      guardFailure,
+      lifecycleRequestForGuard,
+      wireRequest.currentUrl === undefined ? {} : { currentUrl: wireRequest.currentUrl },
+    );
     if (reauthResponse) return reauthResponse;
     const status = mutationGuardFailureStatus(guardFailure);
     return {
@@ -1413,7 +1417,11 @@ export async function renderNoJsMutationResponse<
   );
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
-    const reauthResponse = noJsMutationReauthResponse(guardFailure, lifecycleRequestForGuard, (noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl }));
+    const reauthResponse = noJsMutationReauthResponse(
+      guardFailure,
+      lifecycleRequestForGuard,
+      noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl },
+    );
     if (reauthResponse) return reauthResponse;
     const status = mutationGuardFailureStatus(guardFailure);
     const body = noJsRequest.renderFailurePage
