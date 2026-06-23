@@ -4,7 +4,9 @@ import { dirname, join, relative, sep } from 'node:path';
 import {
   dangerousSinkTokens as registryDangerousSinkTokens,
   frameworkSourceSinkInventory as registryFrameworkSourceSinkInventory,
+  sourceSinkRedCorpus as registrySourceSinkRedCorpus,
   type DangerousSinkToken,
+  type SourceSinkCorpusEntry,
   type SourceSinkInventoryEntry,
 } from '@kovojs/core/internal/source-sink-registry';
 
@@ -14,12 +16,14 @@ export const sourcesSinksArtifactVersion = 'kovo-sources-sinks/v1';
 export const sourcesSinksArtifactPath = join('.kovo', 'sources-sinks.json');
 
 export type { DangerousSinkToken, SourceSinkInventoryEntry };
+export type { SourceSinkCorpusEntry };
 
 export interface SourceSinkInventoryArtifact {
   dangerousSinkTokens: readonly DangerousSinkToken[];
   driftScan?: SourceSinkDriftScanSummary;
   entries: readonly SourceSinkInventoryEntry[];
   generatedBy: 'kovo sources-sinks inventory';
+  redCorpus: readonly SourceSinkCorpusEntry[];
   version: typeof sourcesSinksArtifactVersion;
 }
 
@@ -60,6 +64,10 @@ export function dangerousSinkTokens(): readonly DangerousSinkToken[] {
   return registryDangerousSinkTokens();
 }
 
+export function sourceSinkRedCorpus(): readonly SourceSinkCorpusEntry[] {
+  return registrySourceSinkRedCorpus();
+}
+
 export function sourcesSinksArtifact(
   options: SourcesSinksArtifactOptions = {},
 ): SourceSinkInventoryArtifact {
@@ -67,6 +75,7 @@ export function sourcesSinksArtifact(
     dangerousSinkTokens: dangerousSinkTokens(),
     entries: frameworkSourceSinkInventory(),
     generatedBy: 'kovo sources-sinks inventory',
+    redCorpus: sourceSinkRedCorpus(),
     version: sourcesSinksArtifactVersion,
   };
   if (options.driftScan) artifact.driftScan = options.driftScan;
@@ -158,6 +167,10 @@ function sourcesSinksTextLines(version: string): string[] {
     lines.push(sourceSinkTextLine(entry));
   }
 
+  for (const entry of sourceSinkRedCorpus()) {
+    lines.push(sourceSinkCorpusLine(entry));
+  }
+
   lines.push(
     `DRIFT-TOKENS ${dangerousSinkTokens()
       .map((token) => `${token.token}:${token.owner}`)
@@ -184,6 +197,17 @@ function sourceSinkTextLine(entry: SourceSinkInventoryEntry): string {
     `escapeHatch=${entry.escapeHatch}`,
     `specAnchor=${entry.specAnchor}`,
     `testEvidence=${entry.testEvidence.join(',')}`,
+  ].join(' ');
+}
+
+function sourceSinkCorpusLine(entry: SourceSinkCorpusEntry): string {
+  return [
+    'CORPUS',
+    `family=${entry.family}`,
+    `payloads=${entry.payloads.join('|')}`,
+    `expected=${JSON.stringify(entry.expected)}`,
+    `negative=${entry.negativeTestEvidence.join(',')}`,
+    `positive=${entry.positiveTestEvidence.join(',')}`,
   ].join(' ');
 }
 

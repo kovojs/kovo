@@ -8,6 +8,7 @@ import { kovoCheck, kovoExplain, main } from './index.js';
 import {
   frameworkSourceSinkInventory,
   scanSourceSinkDrift,
+  sourceSinkRedCorpus,
   sourcesSinksArtifactPath,
   sourcesSinksArtifactVersion,
 } from './sources-sinks.js';
@@ -165,6 +166,53 @@ describe('source/sink inventory', () => {
     expect(searchableInventory).toContain('adapter-asset-fetch-fallbacks');
   });
 
+  it('accounts for the Phase 2 red corpus payload families', () => {
+    const corpus = sourceSinkRedCorpus();
+    const corpusByFamily = new Map(corpus.map((entry) => [entry.family, entry]));
+    const requiredFamilies = [
+      'dynamic.import.process',
+      'file.storage.static-export',
+      'html.dom.output',
+      'http.header.cookie',
+      'ingress.endpoint.webhook',
+      'transport.query.live.broadcast',
+      'url.navigation.selector',
+    ];
+
+    expect([...corpusByFamily.keys()].sort()).toEqual(requiredFamilies);
+    for (const family of requiredFamilies) {
+      const entry = corpusByFamily.get(family);
+      expect(entry?.payloads.length).toBeGreaterThanOrEqual(8);
+      expect(entry?.negativeTestEvidence.length).toBeGreaterThanOrEqual(1);
+      expect(entry?.positiveTestEvidence.length).toBeGreaterThanOrEqual(1);
+    }
+
+    const searchableCorpus = corpus
+      .map((entry) =>
+        [
+          entry.family,
+          entry.payloads.join('|'),
+          entry.expected,
+          entry.negativeTestEvidence.join('|'),
+          entry.positiveTestEvidence.join('|'),
+        ].join('|'),
+      )
+      .join('\n');
+
+    expect(searchableCorpus).toContain('<script>');
+    expect(searchableCorpus).toContain('<img onerror>');
+    expect(searchableCorpus).toContain('javascript:');
+    expect(searchableCorpus).toContain('protocol-relative //host');
+    expect(searchableCorpus).toContain('CR/LF/NUL/DEL/control chars');
+    expect(searchableCorpus).toContain('webhook signature over prettified body');
+    expect(searchableCorpus).toContain('cross-principal BroadcastChannel envelope');
+    expect(searchableCorpus).toContain('hostile Kovo-Targets');
+    expect(searchableCorpus).toContain('traversal in params/filenames/storage keys');
+    expect(searchableCorpus).toContain('Vite manifest path escapes');
+    expect(searchableCorpus).toContain('request-derived import URL');
+    expect(searchableCorpus).toContain('request-path child_process');
+  });
+
   it('prints stable explain text with the required Phase 1 fields', () => {
     expect(kovoExplain({}, { sourcesSinks: true })).toMatchObject({
       exitCode: 0,
@@ -185,6 +233,9 @@ describe('source/sink inventory', () => {
     expect(result.output).toContain(' consumers=');
     expect(result.output).toContain(' diagnostic=');
     expect(result.output).toContain(' escapeHatch=');
+    expect(result.output).toContain('CORPUS family=html.dom.output');
+    expect(result.output).toContain(' negative=');
+    expect(result.output).toContain(' positive=');
   });
 
   it('writes deterministic JSON from the check command', () => {
@@ -203,6 +254,7 @@ describe('source/sink inventory', () => {
       ) as Record<string, unknown>;
       expect(artifact.version).toBe(sourcesSinksArtifactVersion);
       expect(artifact.generatedBy).toBe('kovo sources-sinks inventory');
+      expect(artifact.redCorpus).toEqual(expect.any(Array));
       expect(artifact.driftScan).toMatchObject({
         status: 'accounted',
         totalFiles: 0,

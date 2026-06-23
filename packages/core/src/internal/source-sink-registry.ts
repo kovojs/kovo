@@ -23,6 +23,15 @@ export interface DangerousSinkToken {
   token: string;
 }
 
+/** @internal */
+export interface SourceSinkCorpusEntry {
+  expected: string;
+  family: string;
+  negativeTestEvidence: readonly string[];
+  payloads: readonly string[];
+  positiveTestEvidence: readonly string[];
+}
+
 const existingEvidence = {
   browserOutput: 'packages/browser/src/security-output.test.ts',
   browserSelector: 'packages/browser/src/inline-loader-fragment-target.test.ts',
@@ -50,6 +59,11 @@ export function frameworkSourceSinkInventory(): readonly SourceSinkInventoryEntr
 /** @internal */
 export function dangerousSinkTokens(): readonly DangerousSinkToken[] {
   return driftTokens;
+}
+
+/** @internal */
+export function sourceSinkRedCorpus(): readonly SourceSinkCorpusEntry[] {
+  return redCorpus;
 }
 
 const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
@@ -257,4 +271,194 @@ const driftTokens: readonly DangerousSinkToken[] = [
   { owner: 'dynamic.import.process', token: 'child_process' },
   { owner: 'file.storage.static-export', token: 'path.resolve' },
   { owner: 'file.storage.static-export', token: 'fs.' },
+] as const;
+
+const redCorpus: readonly SourceSinkCorpusEntry[] = [
+  {
+    expected:
+      'default text/JSON contexts encode; unsafe raw contexts require trustedHtml/trustedUrl and surface in explain output',
+    family: 'html.dom.output',
+    negativeTestEvidence: [
+      'packages/compiler/src/output-context-security.test.ts',
+      'packages/browser/src/mutation-response-dom.browser.test.ts',
+    ],
+    payloads: [
+      '<script>',
+      '<img onerror>',
+      '</script><script>',
+      'malformed entities',
+      'raw JSON breakout',
+      'srcdoc',
+      'event attributes',
+      'SVG payload',
+      'nested fragment payload',
+      'streamed model text',
+      'registry rich-text XML',
+      'template-stamp/list update',
+    ],
+    positiveTestEvidence: [
+      'packages/compiler/src/output-context-security.test.ts',
+      'packages/server/src/jsx-runtime.test.ts',
+    ],
+  },
+  {
+    expected:
+      'URL sinks neutralize/deny unless branded; redirects stay same-origin single-leading-slash; selectors escape or fail closed; stale modules recover by build-skew policy',
+    family: 'url.navigation.selector',
+    negativeTestEvidence: [
+      'packages/core/src/security-url.test.ts',
+      'packages/compiler/src/output-context-security.test.ts',
+      'packages/browser/src/inline-loader-response-apply.browser.test.ts',
+    ],
+    payloads: [
+      'javascript:',
+      'data:',
+      'mixed-case scheme',
+      'control-character scheme',
+      'protocol-relative //host',
+      'backslash authority /\\host',
+      'dot segments',
+      'hash/id selector breakout',
+      'malformed CSS selector',
+      'hostile next',
+      'route params in targets',
+      'stale /c/__v module URL',
+    ],
+    positiveTestEvidence: [
+      'packages/server/src/match.test.ts',
+      'packages/browser/src/inline-loader-navigation.browser.test.ts',
+      'packages/browser/src/inline-loader-build.test.ts',
+    ],
+  },
+  {
+    expected:
+      'typed builders reject or encode controls; KV415 covers app-authored channels; private/query/session responses keep no-store and Vary: Cookie',
+    family: 'http.header.cookie',
+    negativeTestEvidence: [
+      'packages/server/src/cookies.test.ts',
+      'packages/server/src/response.test.ts',
+    ],
+    payloads: [
+      'CR/LF/NUL/DEL/control chars',
+      'multi-cookie injection',
+      'semicolon cookie value',
+      'quoted filename breakout',
+      'bad header names',
+      'reserved Kovo-* writes',
+      'private cache override',
+      'raw Set-Cookie forwarding',
+    ],
+    positiveTestEvidence: [
+      'packages/server/src/cookies.test.ts',
+      'tests/integration/specs/query-args-search.spec.ts',
+      'tests/integration/specs/mutation-response-headers.spec.ts',
+    ],
+  },
+  {
+    expected:
+      'browser authority requires CSRF; machine endpoints require verifier/justification; raw bytes verify before parse; duplicates replay without handler re-execution',
+    family: 'ingress.endpoint.webhook',
+    negativeTestEvidence: [
+      'packages/server/src/endpoint.test.ts',
+      'packages/server/src/webhook.test.ts',
+      'conformance/webhook-spike/src/index.test.ts',
+    ],
+    payloads: [
+      'missing/wrong CSRF',
+      'CSRF-exempt mutation with session read',
+      'raw endpoint with ambient cookie reliance',
+      'webhook signature over prettified body',
+      'stale timestamp',
+      'rotated signatures',
+      'verify: none',
+      'duplicate event id',
+      'malformed body',
+      'provider retry',
+    ],
+    positiveTestEvidence: [
+      'tests/integration/specs/endpoint-raw-request.spec.ts',
+      'tests/integration/specs/webhook-hmac.spec.ts',
+      'tests/integration/specs/webhook-idempotency.spec.ts',
+    ],
+  },
+  {
+    expected:
+      'guard re-check, private cache posture, cross-principal discard, token mismatch refetch/reload, target spoofing authorization, and target caps hold',
+    family: 'transport.query.live.broadcast',
+    negativeTestEvidence: [
+      'packages/browser/src/broadcast-replay.test.ts',
+      'packages/browser/src/mutation-fetch.test.ts',
+      'tests/integration/specs/mutation-targets-malicious.spec.ts',
+    ],
+    payloads: [
+      'guarded query through /_q',
+      'unauthenticated read',
+      'cross-principal BroadcastChannel envelope',
+      'session switch',
+      'live push after guard revocation',
+      'stale build token',
+      'delta without base',
+      'hostile Kovo-Targets',
+      'excessive live-target descriptors',
+    ],
+    positiveTestEvidence: [
+      'tests/integration/specs/query-args-search.spec.ts',
+      'packages/browser/src/loader-enhanced-mutation-broadcast.test.ts',
+      'tests/integration/specs/hmr-dev-client.spec.ts',
+    ],
+  },
+  {
+    expected:
+      'containment and output path checks reject; downloads default attachment plus nosniff; MIME trust limits are documented; static export fails for dynamic/reserved references',
+    family: 'file.storage.static-export',
+    negativeTestEvidence: [
+      'packages/core/src/storage.test.ts',
+      'packages/server/src/static-export-route-guards.test.ts',
+      'packages/server/src/static-export-output.test.ts',
+    ],
+    payloads: [
+      'traversal in params/filenames/storage keys',
+      'dot segments',
+      'backslashes',
+      'absolute paths',
+      'symlinks',
+      'unsafe MIME/SVG/HTML inline',
+      'content-disposition injection',
+      'oversized uploads',
+      'metadata control chars',
+      'Vite manifest path escapes',
+      'cache ref tampering',
+      'reserved dynamic endpoint references',
+    ],
+    positiveTestEvidence: [
+      'tests/integration/specs/respond-file.spec.ts',
+      'tests/integration/specs/respond-stream.spec.ts',
+      'tests/integration/specs/storage-download-route.spec.ts',
+    ],
+  },
+  {
+    expected:
+      'app request path cannot reach dynamic code/process sinks except compiler-owned versioned handler imports; build/deploy checks fail unsupported or unregistered execution surfaces',
+    family: 'dynamic.import.process',
+    negativeTestEvidence: [
+      'packages/browser/src/handlers.test.ts',
+      'packages/compiler/src/conformance-compat.test.ts',
+      'packages/cli/src/index.kovo-build.test.ts',
+    ],
+    payloads: [
+      'request-derived import URL',
+      'request-derived export name',
+      'app-authored handler ref outside compiler registry',
+      'dev HMR URL influence',
+      'unsupported Node API build preset',
+      'request-path new Function',
+      'request-path eval',
+      'request-path child_process',
+    ],
+    positiveTestEvidence: [
+      'packages/browser/src/inline-loader-delegated.test.ts',
+      'packages/compiler/src/compile-component.test.ts',
+      'tests/integration/specs/client-module-versioning.spec.ts',
+    ],
+  },
 ] as const;

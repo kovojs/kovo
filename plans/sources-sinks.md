@@ -108,25 +108,32 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Phase 2: Red Corpus by Sink Family
 
-- [ ] HTML/DOM corpus.
+- [x] HTML/DOM corpus.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the HTML/DOM red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
   - Payloads: `<script>`, `<img onerror>`, `</script><script>`, malformed entities, raw JSON breakouts, `srcdoc`, event attributes, SVG payloads, nested fragment payloads, streamed model text, registry rich-text XML, and template-stamp/list update paths.
   - Expected: default text/JSON contexts encode; unsafe raw contexts require `trustedHtml`/`trustedUrl` and surface in explain output.
-- [ ] URL/navigation/redirect/selector corpus.
+- [x] URL/navigation/redirect/selector corpus.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the URL/navigation/selector red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
   - Payloads: `javascript:`, `data:`, mixed-case/control-character schemes, protocol-relative `//host`, backslash authority `/\host`, dot segments, hash/id selector breakouts, malformed CSS selectors, hostile `next`, route params used in targets, and stale `/c/__v` module URLs.
   - Expected: URL sinks neutralize/deny unless branded; redirects stay same-origin single-leading-slash; selectors are escaped or caught; old versioned modules recover by build-skew policy.
-- [ ] Header/cookie corpus.
+- [x] Header/cookie corpus.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the header/cookie red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
   - Payloads: CR/LF/NUL/DEL/control chars, multi-cookie injection attempts, semicolon cookie value attempts, quoted filename breakouts, bad header names, reserved `Kovo-*` app writes, cache header overrides on private data, and raw `Set-Cookie` forwarding from session providers.
   - Expected: typed builder rejects or encodes; KV415 covers app-authored channels; private/query/session responses keep `no-store`/`Vary: Cookie`.
-- [ ] Endpoint/webhook/CSRF corpus.
+- [x] Endpoint/webhook/CSRF corpus.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the endpoint/webhook/CSRF red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
   - Payloads: missing/wrong CSRF, CSRF-exempt mutation with session read, raw endpoint with ambient cookie reliance, webhook signature over prettified body, stale timestamp, rotated signatures, `verify: none`, duplicate event id, malformed body, and provider retry.
   - Expected: browser authority requires CSRF; machine endpoints require verifier/justification; raw bytes verify before parse; duplicates replay without handler re-execution.
-- [ ] Query/live/broadcast corpus.
+- [x] Query/live/broadcast corpus.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the query/live/broadcast red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
   - Payloads: guarded query through `/_q`, unauthenticated read, cross-principal BroadcastChannel envelope, session switch, live push after guard revocation, stale build token, delta without base, hostile `Kovo-Targets`, and excessive live-target descriptors.
   - Expected: guard re-check, private cache posture, cross-principal discard, token mismatch refetch/reload, target spoofing cannot bypass authorization, and target caps hold.
-- [ ] File/storage/static-export corpus.
+- [x] File/storage/static-export corpus.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the file/storage/static-export red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
   - Payloads: traversal in params/filenames/storage keys, dot segments, backslashes, absolute paths, symlinks where relevant, unsafe MIME/SVG/HTML inline, content-disposition injection, oversized uploads, metadata control chars, Vite manifest path escapes, cache ref tampering, and static export links to reserved dynamic endpoints.
   - Expected: containment and output path checks reject; downloads default attachment + `nosniff`; MIME trust limits are documented; static export fails loudly for dynamic/reserved references.
-- [ ] Dynamic code/process corpus.
+- [x] Dynamic code/process corpus.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` enrolls the dynamic code/process red corpus payloads and positive/negative evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies those corpus rows are emitted and serialized.
   - Payloads: request-derived import URL/export name, app-authored handler ref strings outside compiler registry, dev HMR URL influence, build preset with unsupported Node APIs, request-path `new Function`/`eval`/`child_process`.
   - Expected: app request path cannot reach dynamic code/process sinks except compiler-owned versioned handler imports; build/deploy checks fail unsupported or unregistered execution surfaces.
 
@@ -193,7 +200,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - [x] Acceptance: the generated inventory is complete for the current repo.
   - Evidence: `node packages/cli/src/bin.ts check sources-sinks` generated `.kovo/sources-sinks.json` and reported `unregistered=0 status=accounted` across the plan's source roots for all registered dangerous sink tokens.
   - Run: `rg -n "innerHTML|outerHTML|insertAdjacentHTML|setAttribute\\(|new Response|Headers|Location|Set-Cookie|respond\\.(file|stream)|querySelector\\(|import\\(|new Function|eval\\(|child_process|path\\.resolve|fs\\." packages examples site tests` and account for every request-path/framework sink in the registry or an explicit exclusion.
-- [ ] Acceptance: every sink family has at least one negative and one positive test.
+- [x] Acceptance: every sink family has at least one negative and one positive test.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies every red-corpus family has non-empty `negativeTestEvidence` and `positiveTestEvidence`.
   - Negative tests prove the dangerous source is rejected/encoded/neutralized.
   - Positive tests prove the blessed helper path still works without forcing apps into raw escape hatches.
 - [ ] Acceptance: existing security lanes remain green.
@@ -216,6 +224,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified expanded `kovo explain --endpoints` ingress posture output.
 - `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified `kovo explain --trust` trust-escape output and CLI parsing.
 - `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified KV423 unregistered app-authored sink diagnostics.
+- `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified red-corpus payload rows plus positive/negative evidence for every enrolled corpus family.
 - `pnpm exec vitest --run scripts/public-packages.test.mjs` verified the shared core-internal source/sink registry export is classified as internal in `public-packages.json`.
 - `pnpm exec vitest run packages/core/src/storage.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/document.test.ts packages/server/src/endpoint.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm --dir tests/integration exec playwright test specs/respond-file.spec.ts`, and `rg -n -i "\\b(csv|tsv|spreadsheet|excel|formula)\\b|text/csv|orders\\.csv|inventory\\.csv" packages tests examples site docs -g '!node_modules' -g '!packages/icons/**'` verified spreadsheet export is absent from framework-owned helpers/examples/tests except disclaimer text.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
