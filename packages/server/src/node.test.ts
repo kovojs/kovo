@@ -105,6 +105,42 @@ describe('server node adapter', () => {
     }
   });
 
+  it('serves multiple Early Hints Link values through node:http', async () => {
+    const link =
+      '</assets/app.css>; rel=preload; as=style, </c/app.client.js>; rel=modulepreload';
+    const server = await serveWithNode(
+      toNodeHandler(
+        async () =>
+          new Response('multi-linked', {
+            headers: {
+              'Content-Type': 'text/html; charset=utf-8',
+              Link: link,
+            },
+          }),
+        { compression: false },
+      ),
+    );
+
+    try {
+      const response = await server.fetch('/multi-linked');
+
+      expect(response).toMatchObject({
+        body: 'multi-linked',
+        earlyHints: [
+          {
+            link,
+          },
+        ],
+        headers: expect.objectContaining({
+          link,
+        }),
+        status: 200,
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('compresses eligible text responses by default when the client accepts Brotli', async () => {
     const server = await serveWithNode(
       toNodeHandler(
