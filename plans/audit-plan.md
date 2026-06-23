@@ -11,82 +11,84 @@
   - Evidence: lane reports cite direct `SPEC.md`, `rules/`, source, test, and generated-declaration evidence before prior-plan notes.
 - [x] Confirm or refute the remaining suspected findings below with focused repros.
   - Evidence: SUS-001 was promoted to AUD-016 by a temporary Vitest repro; SUS-002 was promoted to AUD-017 by production-call-site inspection.
+- [x] Confirmed findings AUD-001 through AUD-018 were repaired on `agent/audit-fixes`.
+  - Evidence: merge/checkpoint commits through `16b74b21`; final `pnpm run check:kovo` passed 52/52 and `vp run build` passed with `prod-emit-check/v1`.
 
 ## Confirmed Findings - First Wave
 
-- [ ] **AUD-001 - Critical - anonymous/pre-auth CSRF is missing.** `SPEC.md` requires anonymous CSRF bound to a framework-owned signed-cookie secret when `req.session` is null. Current CSRF token creation requires a session id and rendered mutation CSRF fields are omitted when `sessionId()` is empty.
+- [x] **AUD-001 - Critical - anonymous/pre-auth CSRF is missing.** `SPEC.md` requires anonymous CSRF bound to a framework-owned signed-cookie secret when `req.session` is null. Current CSRF token creation requires a session id and rendered mutation CSRF fields are omitted when `sessionId()` is empty.
   - Evidence: `SPEC.md:735`; `packages/server/src/csrf.ts:33`, `packages/server/src/csrf.ts:63`, `packages/server/src/csrf.ts:101`; `packages/server/src/csrf.test.ts:31`.
-  - Verification: add an anonymous enhanced/no-JS mutation fixture; expected result is a CSRF token minted and validated without an app session.
+  - Verification: `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/client-modules.test.ts packages/server/src/build.test.ts` passed after integration.
 
-- [ ] **AUD-002 - Critical - app-level mutation dispatch parses bodies before CSRF.** `SPEC.md` requires CSRF validation before replay reservation, input parsing/coercion, and guards. `handleAppMutationRequest()` reads/parses JSON/FormData before CSRF, and current tests encode that inverse order.
+- [x] **AUD-002 - Critical - app-level mutation dispatch parses bodies before CSRF.** `SPEC.md` requires CSRF validation before replay reservation, input parsing/coercion, and guards. `handleAppMutationRequest()` reads/parses JSON/FormData before CSRF, and current tests encode that inverse order.
   - Evidence: `SPEC.md:735`, `SPEC.md:1062`; `packages/server/src/app-mutation-request.ts:48`; `packages/server/src/app-mutation-request.test.ts:244`; lower-level direct paths validate earlier at `packages/server/src/mutation.ts:725` and `packages/server/src/mutation.ts:1373`.
-  - Verification: change or add app-boundary tests so malformed unauthenticated mutation bodies fail CSRF before schema/body diagnostics.
+  - Verification: `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/client-modules.test.ts packages/server/src/build.test.ts` passed after integration.
 
-- [ ] **AUD-003 - High - raw SQL write declarations lack the SPEC-mandated `tables:` allowlist and fail-closed executor.** `SPEC.md` and `rules/data-layer-policy.md` require raw writes to declare both affected tables and touch domains. The app-facing `write()` surface exposes only `touches`; fixtures model unresolved raw writes without a table allowlist.
+- [x] **AUD-003 - High - raw SQL write declarations lack the SPEC-mandated `tables:` allowlist and fail-closed executor.** `SPEC.md` and `rules/data-layer-policy.md` require raw writes to declare both affected tables and touch domains. The app-facing `write()` surface exposes only `touches`; fixtures model unresolved raw writes without a table allowlist.
   - Evidence: `SPEC.md:1046`, `SPEC.md:1060`, `SPEC.md:1254`; `rules/data-layer-policy.md:26`; `packages/server/src/mutation.ts:259`, `packages/server/src/mutation.ts:267`; `tests/integration/fixtures/manual-touches-raw-write/app.tsx:24`, `tests/integration/fixtures/manual-touches-raw-write/app.tsx:74`; runtime verifier domain checks at `packages/test/src/verifier-diagnostics.ts:98`.
-  - Verification: add raw SQL mutation tests for declared `tables:` success and undeclared-table fail-closed behavior.
+  - Verification: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/test/src/verifier.test.ts packages/test/src/harness-verifier.test.ts --reporter=dot` passed after integration.
 
-- [ ] **AUD-004 - High - inline enhanced mutation apply lacks build-token and delta-miss recovery.** `SPEC.md` requires prod deltas and deploy-skew mismatches to validate the build token and never merge cross-build data. The modular path validates tokens, but the inline submit path reads the body and applies chunks without reading `Kovo-Build`.
+- [x] **AUD-004 - High - inline enhanced mutation apply lacks build-token and delta-miss recovery.** `SPEC.md` requires prod deltas and deploy-skew mismatches to validate the build token and never merge cross-build data. The modular path validates tokens, but the inline submit path reads the body and applies chunks without reading `Kovo-Build`.
   - Evidence: `SPEC.md:852`, `SPEC.md:1433`; `packages/browser/src/inline-loader-build.ts:549`, `packages/browser/src/inline-loader-build.ts:665`; modular path at `packages/browser/src/apply-mutation-response.ts:96` and `packages/browser/src/mutation-submit.ts:199`.
-  - Verification: inline-loader browser test for stale `Kovo-Build`, delta miss, and full reload/refetch recovery.
+  - Verification: `pnpm --filter @kovojs/browser run check:inline-loader`; `pnpm exec vitest --run --config vitest.browser.config.ts packages/browser/src/inline-loader-response-apply.browser.test.ts` passed after integration.
 
-- [ ] **AUD-005 - High - visible-return `/_q/` refetch can merge cross-build data unless callers pass a token.** `refetchQueries()` enforces build-token mismatch only when `expectedBuildToken` is provided; `installKovoLoader()` does not default it from `<meta name="kovo-build">`.
+- [x] **AUD-005 - High - visible-return `/_q/` refetch can merge cross-build data unless callers pass a token.** `refetchQueries()` enforces build-token mismatch only when `expectedBuildToken` is provided; `installKovoLoader()` does not default it from `<meta name="kovo-build">`.
   - Evidence: `SPEC.md:906`, `SPEC.md:1431`; `packages/browser/src/query-refetch.ts:121`; `packages/browser/src/loader.ts:158`; `packages/browser/src/query-visible-return.ts:139`; explicit-token-only coverage at `packages/browser/src/query-refetch.test.ts:259`.
-  - Verification: browser/runtime test proving visible-return refetch reads the document build token and rejects mismatched responses.
+  - Verification: `pnpm exec vitest --run packages/browser/src/query-visible-return-refetch.test.ts packages/browser/src/query-refetch.test.ts packages/browser/src/mutation-apply.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts` passed after integration.
 
-- [ ] **AUD-006 - High - `/_q/` non-200 responses omit the build token.** `SPEC.md` requires every typed read response to carry the render-plan token. Current server code stamps `Kovo-Build` on success only; guard/error responses omit it.
+- [x] **AUD-006 - High - `/_q/` non-200 responses omit the build token.** `SPEC.md` requires every typed read response to carry the render-plan token. Current server code stamps `Kovo-Build` on success only; guard/error responses omit it.
   - Evidence: `SPEC.md:460`, `SPEC.md:906`; success path `packages/server/src/query.ts:401`; non-200 paths `packages/server/src/query.ts:341`, `packages/server/src/query.ts:363`; success-only test at `packages/server/src/query-endpoint.test.ts:307`.
-  - Verification: extend query endpoint tests to assert `Kovo-Build` on 422, 500, guard-denied, and redirect read responses.
+  - Verification: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/client-modules.test.ts packages/server/src/build.test.ts` passed after integration.
 
-- [ ] **AUD-007 - High - deploy-skew retention floor and KV417 are not enforced.** `SPEC.md` requires at least 24 hours of prior immutable `/c/__v/...` modules and prior-token `/_q` support, with KV417 if unsupported. Current memory registry is count-based and can evict immediately via `maxVersionsPerPath`; builds warn rather than gate.
+- [x] **AUD-007 - High - deploy-skew retention floor and KV417 are not enforced.** `SPEC.md` requires at least 24 hours of prior immutable `/c/__v/...` modules and prior-token `/_q` support, with KV417 if unsupported. Current memory registry is count-based and can evict immediately via `maxVersionsPerPath`; builds warn rather than gate.
   - Evidence: `SPEC.md:1435`; `packages/server/src/client-modules.ts:291`; `packages/server/src/build.ts:310`.
-  - Verification: build/server test that simulates redeploy bursts and asserts 24-hour retention or KV417 failure.
+  - Verification: `pnpm exec vitest --run packages/server/src/query-endpoint.test.ts packages/server/src/client-modules.test.ts packages/server/src/build.test.ts` and final `vp run build` with `prod-emit-check/v1` passed.
 
-- [ ] **AUD-008 - High - compiler diagnostic registry diverges from SPEC for KV415-KV417.** `SPEC.md` lists KV415, KV416, and KV417 as shared diagnostic codes and says the diagnostic registry owns severity. `DiagnosticCode` skips KV415-KV417; KV416 is thrown as a raw compiler `Error`.
+- [x] **AUD-008 - High - compiler diagnostic registry diverges from SPEC for KV415-KV417.** `SPEC.md` lists KV415, KV416, and KV417 as shared diagnostic codes and says the diagnostic registry owns severity. `DiagnosticCode` skips KV415-KV417; KV416 is thrown as a raw compiler `Error`.
   - Evidence: `SPEC.md:1314`, `SPEC.md:1320`; `packages/core/src/diagnostics.ts:58`; `packages/compiler/src/compile.ts:670`.
   - Dedupe: related architectural split is noted in `plans/bugs-and-testing.md`.
-  - Verification: either add registry entries/non-compiler diagnostic tier or update `SPEC.md` so release-gate errors are not represented as shared diagnostics.
+  - Verification: `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/conformance-compat.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/output-context-payloads.test.ts packages/compiler/src/output-context-raw-html.test.ts packages/compiler/src/output-context-security.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/primitive-reactive-attributes.test.ts packages/compiler/src/structural-jsx-ir.test.ts packages/compiler/src/vite.test.ts packages/conformance-fixtures/src/diagnostic-output-fixtures.test.ts packages/conformance-fixtures/src/generated-module-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts packages/conformance-fixtures/src/vite-fixtures.test.ts packages/core/src/diagnostics.test.ts --reporter=dot` passed.
 
-- [ ] **AUD-009 - High - compiler-emitted handler refs are versioned from client-source hash, not the render-plan token.** `SPEC.md` requires prod emitted module URLs to carry the render-plan version token. Compiler output computes `clientHref` from `clientModuleVersion(clientSource)`, and tests assert source-hash behavior.
+- [x] **AUD-009 - High - compiler-emitted handler refs are versioned from client-source hash, not the render-plan token.** `SPEC.md` requires prod emitted module URLs to carry the render-plan version token. Compiler output computes `clientHref` from `clientModuleVersion(clientSource)`, and tests assert source-hash behavior.
   - Evidence: `SPEC.md:440`, `SPEC.md:459`; `packages/compiler/src/compile.ts:153`; `packages/compiler/src/lower/handlers.ts:164`; `packages/compiler/src/handler-lowering.test.ts:350`; server token includes render fingerprints at `packages/server/src/client-modules.ts:48`.
-  - Verification: production build repro where query/render-plan shape changes without client-byte changes, then inspect served `on:*` refs and module URLs.
+  - Verification: changed compiler/conformance Vitest set above passed, and final `vp run build` passed with `prod-emit-check/v1`.
 
-- [ ] **AUD-010 - High - primitive-owned ARIA can freeze when an authored prop is present.** `SPEC.md` says primitive-updated state `aria-*` is primitive-wins and reactive positions must stay live. The compiler skips primitive reactive stamps when an authored attribute with the same name exists; tests currently expect stale static `aria-checked` for `Switch`.
+- [x] **AUD-010 - High - primitive-owned ARIA can freeze when an authored prop is present.** `SPEC.md` says primitive-updated state `aria-*` is primitive-wins and reactive positions must stay live. The compiler skips primitive reactive stamps when an authored attribute with the same name exists; tests currently expect stale static `aria-checked` for `Switch`.
   - Evidence: `SPEC.md:283`, `SPEC.md:345`; `rules/accessibility-conformance.md`; `packages/compiler/src/lower/structural-jsx.ts:719`; `packages/compiler/src/primitive-reactive-attributes.test.ts:283`.
-  - Verification: update compiler tests so contradictory static state ARIA gets KV317/KV232 behavior and reactive control props still emit live ARIA bindings.
+  - Verification: changed compiler/conformance Vitest set above passed, including `packages/compiler/src/primitive-reactive-attributes.test.ts`.
 
-- [ ] **AUD-011 - High - public API recursive-publicness is not enforced and current public signatures name internal/generated shapes.** `rules/api-surface.md` requires every public signature's referenced helper types to be public recursively. `scripts/api-surface-gate.mjs` only classifies exported top-level symbols and does not walk parameter/return/property types. Current public declarations expose compiler/provenance internals in `@kovojs/style` and internal graph/verifier types in `@kovojs/test`.
+- [x] **AUD-011 - High - public API recursive-publicness is not enforced and current public signatures name internal/generated shapes.** `rules/api-surface.md` requires every public signature's referenced helper types to be public recursively. `scripts/api-surface-gate.mjs` only classifies exported top-level symbols and does not walk parameter/return/property types. Current public declarations expose compiler/provenance internals in `@kovojs/style` and internal graph/verifier types in `@kovojs/test`.
   - Evidence: rule at `rules/api-surface.md:40`; gate export-only loop at `scripts/api-surface-gate.mjs:121`; `@kovojs/style` public re-exports at `packages/style/src/index.ts:1`, internal/provenance fields at `packages/style/src/engine.ts:28`, `packages/style/src/engine.ts:37`, `packages/style/src/engine.ts:71`, public identity overload at `packages/style/src/engine.ts:150`; `@kovojs/test` imports `@kovojs/core/internal/graph` and exposes it on public options at `packages/test/src/harness.ts:1`, `packages/test/src/harness.ts:46`.
   - Generated declaration evidence: `/tmp/kovo-style-dts/engine.d.ts:20`, `/tmp/kovo-style-dts/engine.d.ts:24`, `/tmp/kovo-style-dts/engine.d.ts:54`; `/tmp/kovo-test-dts/harness.d.ts:1`, `/tmp/kovo-test-dts/harness.d.ts:26`.
-  - Verification: add recursive type-reachability checks to `scripts/api-surface-gate.mjs`; then narrow/promote the referenced public types.
+  - Verification: `pnpm exec vitest --run scripts/api-surface-gate.test.mjs scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs --reporter=dot` and `pnpm run check:api-surface` passed after integration.
 
-- [ ] **AUD-012 - Medium-high - optimistic snapshots are unbounded whole-value clones.** `SPEC.md` requires touched-subset structural-sharing snapshots. The query store and rebaser clone whole query values/baselines.
+- [x] **AUD-012 - Medium-high - optimistic snapshots are unbounded whole-value clones.** `SPEC.md` requires touched-subset structural-sharing snapshots. The query store and rebaser clone whole query values/baselines.
   - Evidence: `SPEC.md:1129`; `packages/browser/src/query-store.ts:67`; `packages/browser/src/optimism.ts:190`, `packages/browser/src/optimism.ts:393`.
-  - Verification: add a large untouched subtree test proving optimistic/rebase operations do not clone or rewrite untouched data.
+  - Verification: `pnpm exec vitest --run packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts packages/browser/src/mutation-queue.test.ts packages/browser/src/mutation-optimistic-queue.test.ts --reporter=dot` passed.
 
-- [ ] **AUD-013 - Medium-high - named mutation queues lack the full SPEC timeout/depth/revalidation contract.** `SPEC.md` requires bounded timeout/abort, failed-head tail revalidation, and bounded queue depth. Current `MutationQueue` is only a per-name promise tail.
+- [x] **AUD-013 - Medium-high - named mutation queues lack the full SPEC timeout/depth/revalidation contract.** `SPEC.md` requires bounded timeout/abort, failed-head tail revalidation, and bounded queue depth. Current `MutationQueue` is only a per-name promise tail.
   - Evidence: `SPEC.md:1137`; `packages/browser/src/mutation-queue.ts:5`; ordering-only tests at `packages/browser/src/mutation-optimistic-queue.test.ts:81`.
-  - Verification: queue tests for hung head timeout, abort, max depth, and failed-head tail revalidation.
+  - Verification: `pnpm exec vitest --run packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts packages/browser/src/mutation-queue.test.ts packages/browser/src/mutation-optimistic-queue.test.ts --reporter=dot` passed.
 
-- [ ] **AUD-014 - High - replay `maxPending` overflow falls through to unreserved execution.** The in-memory replay store refuses excess pending reservations, and `reserveMutationReplayBeforeRun()` eventually returns `{ kind: 'disabled' }`; enhanced mutation execution then proceeds with no reservation. The no-JS path similarly proceeds when `reserve()` returns undefined.
+- [x] **AUD-014 - High - replay `maxPending` overflow falls through to unreserved execution.** The in-memory replay store refuses excess pending reservations, and `reserveMutationReplayBeforeRun()` eventually returns `{ kind: 'disabled' }`; enhanced mutation execution then proceeds with no reservation. The no-JS path similarly proceeds when `reserve()` returns undefined.
   - Evidence: `SPEC.md:1075`; `packages/server/src/replay.ts:130`, `packages/server/src/replay.ts:313`; enhanced caller at `packages/server/src/mutation.ts:791`, `packages/server/src/mutation.ts:793`, `packages/server/src/mutation.ts:798`; no-JS caller at `packages/server/src/mutation.ts:1454`, `packages/server/src/mutation.ts:1458`.
-  - Verification: saturate `maxPending`, submit a distinct stable idempotency key, and assert the framework fails closed or sheds instead of running unreserved.
+  - Verification: `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/client-modules.test.ts packages/server/src/build.test.ts` passed after integration.
 
-- [ ] **AUD-015 - High - inline streaming mutation failure applies partial truth without rollback.** The inline streaming path applies parsed query/fragment/text chunks before checking `<kovo-done>`, marks only stream-text targets as error on non-complete done, and applies any trailing pending body when no terminal done appears. The modular path tracks query revert state and throws on missing/non-complete done.
+- [x] **AUD-015 - High - inline streaming mutation failure applies partial truth without rollback.** The inline streaming path applies parsed query/fragment/text chunks before checking `<kovo-done>`, marks only stream-text targets as error on non-complete done, and applies any trailing pending body when no terminal done appears. The modular path tracks query revert state and throws on missing/non-complete done.
   - Evidence: `SPEC.md:810`; inline path at `packages/browser/src/inline-loader-build.ts:601`, `packages/browser/src/inline-loader-build.ts:609`, `packages/browser/src/inline-loader-build.ts:612`, `packages/browser/src/inline-loader-build.ts:627`; modular rollback/rejection at `packages/browser/src/apply-mutation-response.ts:222`, `packages/browser/src/apply-mutation-response.ts:230`.
-  - Verification: inline-loader browser test with partial query/fragment chunks followed by missing or error `<kovo-done>`; expected behavior is rollback/refetch/failure parity with the modular runtime.
+  - Verification: `pnpm exec vitest --run --config vitest.browser.config.ts packages/browser/src/inline-loader-response-apply.browser.test.ts` and `pnpm --filter @kovojs/browser run check:inline-loader` passed after integration.
 
-- [ ] **AUD-016 - High - raw query receiver declarations ignore explicit `reads:` and `output`.** `SPEC.md` frames opaque reads as requiring declared `reads:` plus an output schema. A temporary first-principles repro using the Drizzle test harness showed `db.execute(sql select ...)` with explicit `reads` and `output` still produces KV406, empty reads, and empty shape.
+- [x] **AUD-016 - High - raw query receiver declarations ignore explicit `reads:` and `output`.** `SPEC.md` frames opaque reads as requiring declared `reads:` plus an output schema. A temporary first-principles repro using the Drizzle test harness showed `db.execute(sql select ...)` with explicit `reads` and `output` still produces KV406, empty reads, and empty shape.
   - Evidence: `SPEC.md:1020`; existing raw receiver test at `packages/drizzle/src/index.query-shapes.test.ts:1194`; temporary command `pnpm exec vitest --run --root /tmp /tmp/kovo-raw-query-*.test.ts --reporter=dot` passed with output showing `diagnostics[0].code === "KV406"`, `reads: []`, `shape: {}` for explicit `reads` plus `output`.
-  - Verification: add a committed Drizzle static test for explicit raw-read declarations, then either accept them as declared opaque reads or emit a dedicated teaching diagnostic aligned with `SPEC.md`.
+  - Verification: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/test/src/verifier.test.ts packages/test/src/harness-verifier.test.ts --reporter=dot` passed after integration.
 
-- [ ] **AUD-017 - High - KV416 render-plan token/delta gate is test-only or partially wired.** `assertRenderPlanTokenMonotonicity()` exists and is tested, but source search found no production caller outside exports/tests. The component compile path emits semantic render-equivalence checks, but the inspected gates do not prove the `apply_delta(base, render_prod(delta)) == render_dev(full)` production-delta invariant.
+- [x] **AUD-017 - High - KV416 render-plan token/delta gate is test-only or partially wired.** `assertRenderPlanTokenMonotonicity()` exists and is tested, but source search found no production caller outside exports/tests. The component compile path emits semantic render-equivalence checks, but the inspected gates do not prove the `apply_delta(base, render_prod(delta)) == render_dev(full)` production-delta invariant.
   - Evidence: `SPEC.md:463`; semantic component check at `packages/compiler/src/compile.ts:246`; token monotonicity helper at `packages/compiler/src/compile.ts:659`; helper export at `packages/compiler/src/index.ts:47`; tests at `packages/compiler/src/compile-component.test.ts:1162`; boundary test at `packages/compiler/src/render-equivalence-boundary.test.ts:34`.
-  - Verification: add a production build/delta fixture that would fail if a dropped-field delta can pass; wire KV416 or equivalent release-gate failure into the build path.
+  - Verification: changed compiler/conformance Vitest set above passed, final `vp run build` passed with `prod-emit-check/v1`, and `pnpm run check:kovo` passed 52/52.
 
-- [ ] **AUD-018 - High - inline loader aborts removed island `ctx.signal` by component-name substring instead of island identity.** `SPEC.md` requires island signals to survive keyed reorders and abort when the morph layer removes the island. The modular path compares `kovo-c` plus `kovo-key`/`id`, but the inline loader stores the controller on the element and preserves every existing island whose component name appears anywhere in replacement HTML. In a keyed list replaced from rows `row-1,row-2` to only `row-2`, row 1 can be disconnected without aborting its signal because `<li kovo-c="cart-row" kovo-key="row-2">` still contains `cart-row`.
+- [x] **AUD-018 - High - inline loader aborts removed island `ctx.signal` by component-name substring instead of island identity.** `SPEC.md` requires island signals to survive keyed reorders and abort when the morph layer removes the island. The modular path compares `kovo-c` plus `kovo-key`/`id`, but the inline loader stores the controller on the element and preserves every existing island whose component name appears anywhere in replacement HTML. In a keyed list replaced from rows `row-1,row-2` to only `row-2`, row 1 can be disconnected without aborting its signal because `<li kovo-c="cart-row" kovo-key="row-2">` still contains `cart-row`.
   - Evidence: `SPEC.md:196`, `SPEC.md:343`, `SPEC.md:1421`; inline signal storage at `packages/browser/src/inline-loader-build.ts:380`; inline cleanup at `packages/browser/src/inline-loader-build.ts:556`, `packages/browser/src/inline-loader-build.ts:560`, `packages/browser/src/inline-loader-build.ts:561`; generated-source snapshot currently locks the substring algorithm at `packages/browser/src/inline-loader-artifact-minifier.test.ts:79`; modular identity cleanup uses component plus key/id at `packages/browser/src/handler-context.ts:143` and has keyed coverage at `packages/browser/src/delegated-island-signal-abort.test.ts:159`.
-  - Verification: add an inline-loader browser/runtime test that creates two same-component keyed islands, registers both signals, applies a replacement fragment retaining only the second key, and asserts the first signal aborts while the second remains alive.
+  - Verification: `pnpm exec vitest --run --config vitest.browser.config.ts packages/browser/src/inline-loader-response-apply.browser.test.ts` and `pnpm --filter @kovojs/browser run check:inline-loader` passed after integration.
 
 ## Suspected Findings Needing Repro
 
@@ -95,12 +97,18 @@
 
 ## Coverage Gaps - First Wave
 
-- [ ] Add anonymous/pre-auth CSRF tests.
-- [ ] Add app-boundary tests for CSRF-before-body-parse ordering.
-- [ ] Add query endpoint tests asserting `Kovo-Build` on all non-200 typed-read responses.
-- [ ] Add KV417/deploy-skew retention-floor tests.
-- [ ] Add inline loader build-skew, delta, and delta-miss tests.
-- [ ] Add visible-return refetch tests for default document build-token wiring.
+- [x] Add anonymous/pre-auth CSRF tests.
+  - Evidence: server focused mutation/CSRF/replay Vitest command in Latest Verification passed.
+- [x] Add app-boundary tests for CSRF-before-body-parse ordering.
+  - Evidence: server focused mutation/CSRF/replay Vitest command in Latest Verification passed.
+- [x] Add query endpoint tests asserting `Kovo-Build` on all non-200 typed-read responses.
+  - Evidence: server query/build/client-module Vitest command in Latest Verification passed.
+- [x] Add KV417/deploy-skew retention-floor tests.
+  - Evidence: server query/build/client-module Vitest command and final `vp run build` in Latest Verification passed.
+- [x] Add inline loader build-skew, delta, and delta-miss tests.
+  - Evidence: browser inline-loader commands in Latest Verification passed.
+- [x] Add visible-return refetch tests for default document build-token wiring.
+  - Evidence: browser query/refetch command in Latest Verification passed.
 - [ ] Add manifest-enforced accessibility state matrix coverage for every claimed primitive/state in `rules/accessibility-conformance.md`.
 - [ ] Replace Commerce and CRM hand-built enhanced-mutation live-target headers with DOM-derived or browser-observed headers.
   - Evidence: `examples/commerce/src/app-test-helpers.ts:173`, `examples/commerce/src/app-test-helpers.ts:283`, `examples/crm/src/interactive-app.test.ts:36`.
@@ -108,7 +116,7 @@
   - Evidence: row-count observation at `packages/test/src/sql-observer.ts:73`, `packages/test/src/sql-observer.ts:91`; static KV413 extraction at `packages/drizzle/src/static.ts:6305`.
 - [ ] Upgrade site example health checks from liveness-only to behavior-level checks where they are used as release confidence.
   - Evidence: `site/scripts/example-health.mjs:24`.
-- [ ] Add inline-loader keyed island `ctx.signal` cleanup parity coverage.
+- [x] Add inline-loader keyed island `ctx.signal` cleanup parity coverage.
   - Evidence: AUD-018.
 
 ## Refuted or Supported High-Risk Areas
@@ -135,8 +143,8 @@
 
 ## Completed Audit Procedure
 
-- [x] Ground rules followed: `SPEC.md` and `rules/` were treated as normative, prior plans were used only after first-principles inspection, confirmed findings require direct evidence, and this pass stayed in audit mode rather than implementing repairs.
-  - Evidence: Execution Status plus direct source/SPEC/rule citations on AUD-001 through AUD-018.
+- [x] Ground rules followed: `SPEC.md` and `rules/` were treated as normative, prior plans were used only after first-principles inspection, and confirmed fixes require direct evidence.
+  - Evidence: Execution Status plus direct source/SPEC/rule citations and repair verification on AUD-001 through AUD-018.
 - [x] Finding ledger normalized: confirmed findings use severity-ranked AUD ids, current source/rule evidence, and a focused verification or repro sketch; refuted areas are closed separately.
   - Evidence: Confirmed Findings, Coverage Gaps, Refuted or Supported High-Risk Areas, and Latest Verification sections.
 - [x] First-principles invariant map completed.
@@ -188,15 +196,17 @@
 
 ## Latest Verification
 
-- [x] Server/public API focused checks passed where run locally.
-  - Evidence: `pnpm exec vitest --run scripts/api-surface-gate.test.mjs scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs` passed twice locally: 3 files, 24 tests.
-  - Evidence: `pnpm run check:api-surface` passed with `public-exports-needing-attention=1338`.
-- [x] Main-thread declaration inspection captured public type-shape evidence for AUD-011.
-  - Evidence: `pnpm exec tsc --ignoreConfig --declaration --emitDeclarationOnly --outDir /tmp/kovo-style-dts ... packages/style/src/index.ts` succeeded; `pnpm exec tsc --ignoreConfig --declaration --emitDeclarationOnly --outDir /tmp/kovo-test-dts ... packages/test/src/harness.ts` emitted declarations while also reporting TS2209 project-root ambiguity.
-- [x] Temporary raw-query repro confirmed AUD-016 without leaving repo files behind.
-  - Evidence: `pnpm exec vitest --run --root /tmp /tmp/kovo-raw-query-*.test.ts --reporter=dot` passed and printed a KV406 fact with `reads: []` and `shape: {}` for explicit `reads` plus `output`.
-- [x] Sub-agent verification commands completed for compiler and data/verifier lanes.
-  - Evidence: compiler lane reported 5 Vitest files, 19 tests passed, plus `tests/kovo-check.node.mjs` run with 52 tests passed.
-  - Evidence: data/verifier lane reported 7 files, 117 tests passed and 4 files, 56 tests passed.
-- [x] Browser lane verification commands completed.
-  - Evidence: browser lane reported `pnpm --filter @kovojs/browser test -- query-refetch.test.ts apply-mutation-response-delta.test.ts inline-loader-build.test.ts mutation-optimistic-queue.test.ts` and `pnpm --filter @kovojs/server test -- query-endpoint.test.ts mutation-delta.test.ts`, both successful.
+- [x] Final integration gates passed on `agent/audit-fixes`.
+  - Evidence: `vp run build` passed with `prod-emit-check/v1`; `pnpm run check:kovo` passed 52/52 with `kovo-check/v1 OK`; `git diff --check` passed.
+- [x] Server CSRF, replay, typed-read, client-module, and build checks passed.
+  - Evidence: `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/replay.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/client-modules.test.ts packages/server/src/build.test.ts` passed.
+- [x] Browser inline, refetch, and optimistic queue/snapshot checks passed.
+  - Evidence: `pnpm --filter @kovojs/browser run check:inline-loader`; `pnpm exec vitest --run --config vitest.browser.config.ts packages/browser/src/inline-loader-response-apply.browser.test.ts`; `pnpm exec vitest --run packages/browser/src/query-visible-return-refetch.test.ts packages/browser/src/query-refetch.test.ts packages/browser/src/mutation-apply.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts`; `pnpm exec vitest --run packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-rebase.test.ts packages/browser/src/mutation-queue.test.ts packages/browser/src/mutation-optimistic-queue.test.ts --reporter=dot` all passed.
+- [x] Data/verifier and raw declaration checks passed.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/test/src/verifier.test.ts packages/test/src/harness-verifier.test.ts --reporter=dot` passed.
+- [x] Public API recursive-publicness checks passed.
+  - Evidence: `pnpm exec vitest --run scripts/api-surface-gate.test.mjs scripts/public-packages.test.mjs scripts/exported-symbols.test.mjs --reporter=dot`; `pnpm run check:api-surface`; `pnpm --filter @kovojs/style test -- --reporter=dot`; `pnpm exec vitest --run packages/test/src/harness.test.ts packages/test/src/harness-verifier.test.ts packages/test/src/html-fragment.test.ts --reporter=dot` all passed.
+- [x] Compiler diagnostics, render-plan, Vite, and conformance checks passed.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/conformance-compat.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/output-context-payloads.test.ts packages/compiler/src/output-context-raw-html.test.ts packages/compiler/src/output-context-security.test.ts packages/compiler/src/platform-lowering.test.ts packages/compiler/src/primitive-reactive-attributes.test.ts packages/compiler/src/structural-jsx-ir.test.ts packages/compiler/src/vite.test.ts packages/conformance-fixtures/src/diagnostic-output-fixtures.test.ts packages/conformance-fixtures/src/generated-module-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts packages/conformance-fixtures/src/vite-fixtures.test.ts packages/core/src/diagnostics.test.ts --reporter=dot` passed.
+- [x] Starter/app-shell and strict public source typechecks passed after integration fixes.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts --reporter=dot`; targeted `tsc --ignoreConfig --noEmit ... packages/server/src/csrf.ts packages/server/src/app-mutation-request.ts packages/style/src/engine.ts` passed.
