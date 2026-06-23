@@ -34,7 +34,9 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
   // apps (otherwise a bespoke human-only route family invisible to llms.txt).
   const examplesSection = await buildExamplesLlmsSection({ repoRootPath });
   // Components before Examples to match the human sidebar order (content.ts navGroups).
-  const sections = [...content.sections, buildGalleryLlmsSection(SITE_ORIGIN), examplesSection];
+  const gallerySection = buildGalleryLlmsSection(SITE_ORIGIN);
+  const syntheticSections = [gallerySection, examplesSection];
+  const sections = [...content.sections, ...syntheticSections];
 
   // Search index.
   await writeFile(path.join(outDir, 'search-index.json'), JSON.stringify(content.search), 'utf8');

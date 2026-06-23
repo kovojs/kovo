@@ -60,6 +60,47 @@ const galleryStyles = style.create(
         padding: '0.45rem 0',
       },
     },
+    detail: {
+      borderTopColor: 'var(--edge-soft)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      display: 'grid',
+      gap: '1rem',
+      marginTop: '1.4rem',
+      paddingTop: '1.4rem',
+    },
+    detailGrid: {
+      display: 'grid',
+      gap: '1rem',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(14rem, 1fr))',
+    },
+    detailHeading: {
+      fontSize: '1rem',
+      fontWeight: 700,
+      marginBlock: '0 0.45rem',
+    },
+    detailList: {
+      color: 'var(--dim)',
+      lineHeight: 1.65,
+      marginBlock: 0,
+      paddingInlineStart: '1.2rem',
+    },
+    detailText: {
+      color: 'var(--dim)',
+      lineHeight: 1.65,
+      margin: 0,
+    },
+    inlineCode: {
+      backgroundColor: 'var(--panel)',
+      borderColor: 'var(--edge-soft)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      color: 'var(--ink)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.78rem',
+      paddingBlock: '0.08rem',
+      paddingInline: '0.28rem',
+    },
     head: {
       marginBottom: '1.6rem',
     },
@@ -123,6 +164,8 @@ export interface GalleryRouteView {
 }
 
 export interface GalleryPageInput {
+  /** Component slug, e.g. `button`; also the public @kovojs/ui subpath. */
+  component: string;
   /** The active component route. */
   route: GalleryRouteView;
   /** All component routes, for the switcher nav. */
@@ -131,6 +174,14 @@ export interface GalleryPageInput {
   interactive: boolean;
   /** The demo body markup (interactive demo or static fixture), already href-rewritten. */
   demoHtml: string;
+  /** Source locations backing the page, shown so readers can jump from demo to authored code. */
+  source: {
+    fixture: string;
+    interactiveDemo?: string | undefined;
+    packageSource: string;
+  };
+  /** Authored one-line summary from the gallery catalog. */
+  summary: string;
 }
 
 function galleryUrl(routePath: string): string {
@@ -139,10 +190,11 @@ function galleryUrl(routePath: string): string {
 
 /** Gallery component route page content. */
 export function GalleryPage({ input }: { input: GalleryPageInput }): string {
-  const { demoHtml, interactive, route, routes } = input;
+  const { component, demoHtml, interactive, route, routes, source, summary } = input;
   const blurb = interactive
     ? `Live compiled demo for the ${escapeHtml(route.title)} component contract.`
     : `Static fixture output for the ${escapeHtml(route.title)} component contract.`;
+  const importPath = `@kovojs/ui/${component}`;
 
   return (
     <div style={galleryStyles.page}>
@@ -168,6 +220,54 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
       <div style={galleryStyles.demo} data-gallery-demo-shell>
         {demoHtml}
       </div>
+      <section style={galleryStyles.detail} aria-label={`${escapeHtml(route.title)} usage`}>
+        <div>
+          <h2 style={galleryStyles.detailHeading}>Usage</h2>
+          <p style={galleryStyles.detailText}>{escapeHtml(summary || blurb)}</p>
+          <ul style={galleryStyles.detailList}>
+            <li>
+              Import the versioned component from{' '}
+              <code style={galleryStyles.inlineCode}>{escapeHtml(importPath)}</code>.
+            </li>
+            <li>
+              Copy the source into your app with{' '}
+              <code style={galleryStyles.inlineCode}>{`kovo add ${escapeHtml(component)}`}</code>{' '}
+              when product code should own the implementation.
+            </li>
+          </ul>
+        </div>
+        <div style={galleryStyles.detailGrid}>
+          <div>
+            <h2 style={galleryStyles.detailHeading}>Source</h2>
+            <ul style={galleryStyles.detailList}>
+              <li>
+                Package source:{' '}
+                <code style={galleryStyles.inlineCode}>{escapeHtml(source.packageSource)}</code>
+              </li>
+              <li>
+                Gallery fixture:{' '}
+                <code style={galleryStyles.inlineCode}>{escapeHtml(source.fixture)}</code>
+              </li>
+              {source.interactiveDemo ? (
+                <li>
+                  Interactive demo:{' '}
+                  <code style={galleryStyles.inlineCode}>
+                    {escapeHtml(source.interactiveDemo)}
+                  </code>
+                </li>
+              ) : null}
+            </ul>
+          </div>
+          <div>
+            <h2 style={galleryStyles.detailHeading}>Behavior contract</h2>
+            <p style={galleryStyles.detailText}>
+              The rendered fixture above includes the component contract table. Interactive pages
+              compile the authored TSX demo and then lift the same contract table from the static
+              fixture, so the visible behavior and documented ARIA/data-state surface stay together.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

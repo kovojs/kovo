@@ -27,6 +27,10 @@ export interface WriteKovoProjectResult {
   root: string;
 }
 
+/** Usage line emitted by the `create-kovo` bin and consumed by the docs generator. */
+export const CREATE_KOVO_USAGE =
+  'usage: create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlite]';
+
 const templateRoot = new URL('../templates/', import.meta.url);
 interface TemplateFile {
   path: string;
@@ -151,9 +155,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   const [targetDirectory, ...rest] = args;
 
   if (!targetDirectory || targetDirectory === '--help' || targetDirectory === '-h') {
-    process.stdout.write(
-      'usage: create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlite]\n',
-    );
+    process.stdout.write(`${CREATE_KOVO_USAGE}\n`);
     return targetDirectory ? 0 : 1;
   }
 

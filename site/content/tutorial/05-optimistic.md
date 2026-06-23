@@ -50,8 +50,8 @@ consuming the query updates from one transform, including islands written months
 Two deliberate choices are visible here:
 
 - **`cart` is hand-written** because the prediction is closed over the input: count goes up by
-  `quantity`. (v2 derives transforms like this from the write's dataflow, and the hand-written
-  form shares that IR, so adoption is incremental.)
+  `quantity`. The same coverage slot can also be satisfied by a compiler-derived transform when
+  the write dataflow is provable from the mutation input and query shape.
 - **`products` is `'await-fragment'`** — a recorded decision, not an omission. The stock math
   lives in the handler; predicting it client-side would mean duplicating server logic, so you
   accept the round-trip latency in writing.
@@ -90,8 +90,8 @@ render learns the same trick — streaming expensive fragments without blocking 
 No `invalidate()` in the happy path; transaction lifecycle orders `COMMIT` before re-runs: SPEC
 §10.3. Touch extraction committed as a reviewable graph: SPEC §11.1. Declared touches as the
 adapter floor: SPEC §14. `Kovo-Changes` sanitized write summary: SPEC §9.1. Derived update plan
-across islands: SPEC §4.8. Optimism keyed per (mutation × query): SPEC §10.4. Future-derived
-transforms sharing the IR: SPEC §10.5. Exhaustiveness requirement: SPEC §10.6; a missing
+across islands: SPEC §4.8. Optimism keyed per (mutation × query): SPEC §10.4. Derived
+transforms and explicit punts: SPEC §10.5. Exhaustiveness requirement: SPEC §10.6; a missing
 optimistic entry is **KV310** at the editor and in `kovo check`. Registries as generated files:
 SPEC §6.1. Transform/handler commutation proven over generated states: SPEC §11.4.
 

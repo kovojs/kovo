@@ -393,10 +393,19 @@ export async function buildGalleryRoutePages({
       activePath: url,
       content: {
         gallery: {
+          component: galleryRoute.component,
           demoHtml,
           interactive: Boolean(interactive),
           route: { path: galleryRoute.path, title: galleryRoute.title },
           routes: routeViews,
+          source: {
+            fixture: 'examples/gallery/src/demo-fixtures.tsx',
+            interactiveDemo: interactive
+              ? `examples/gallery/src/interactive/${interactive.name}.tsx`
+              : undefined,
+            packageSource: `packages/ui/src/${galleryRoute.component}.tsx`,
+          },
+          summary: gallerySummaries.get(galleryRoute.component) ?? '',
         },
         kind: 'gallery',
       },

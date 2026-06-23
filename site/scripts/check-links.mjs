@@ -99,6 +99,16 @@ async function main() {
     }
   }
 
+  // llms-full.txt canonical URL lines must also resolve. Agent-only entries may
+  // intentionally point at raw markdown mirrors rather than human route pages.
+  const llmsFull = await readFile(path.join(distDir, 'llms-full.txt'), 'utf8');
+  for (const [, urlPath] of llmsFull.matchAll(/^URL: https:\/\/[^/]+(\/\S*)$/gm)) {
+    const target = targetFor(urlPath);
+    if (!existsSync(target)) {
+      failures.push(`llms-full.txt: missing canonical URL "${urlPath}"`);
+    }
+  }
+
   if (failures.length > 0) {
     process.stderr.write(`check-links/v1\n${failures.join('\n')}\nFAIL total=${failures.length}\n`);
     process.exitCode = 1;

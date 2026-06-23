@@ -97,27 +97,45 @@ write side and the read side — and is the family the runtime verifier enforces
 ∪ KV406-declared`. Source: SPEC §11.3 registry; the verification mechanics in SPEC §11.1–§11.2 and the
 write/read rules in §10.1–§10.2. See [testing](/guides/testing/).
 
-| Code  | Severity   | Meaning                               | Cause                                                                                | Fix / note                                                    |
-| ----- | ---------- | ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| KV402 | error      | Write touched an undeclared domain    | A write touches a domain the static graph didn't list — silent stale UI              | Add the domain to the write's touch set (or fix the write)    |
-| KV403 | warn       | Declared domain never observed        | A declared domain was never actually written — stale claim or untested branch        | Remove the claim, or add a test exercising the branch         |
-| KV404 | error      | Write to an unmapped table            | A write hit a table with no `kovo({ domain })` mapping (write-side only, §10.1)      | Map the table, or mark `kovo({ exempt: true })`               |
-| KV405 | warn       | Unexecuted conditional writes         | Conditional write branches were never executed under instrumentation                 | Add coverage so the branches run, or confirm they're dead     |
-| KV406 | warn/error | Statically un-analyzable write site   | A write the static pass can't follow (raw SQL, node_modules helper, §11.1)           | Declare manual `touches`; runtime-verified for completeness   |
-| KV407 | error      | Query read from an undeclared domain  | A query reads a domain not in its declared read set — missed invalidations           | Add the domain to the query's `reads`                         |
-| KV408 | error      | Declared row key ≠ observed predicate | The declared row key disagrees with the observed row predicate                       | Align the declared key with the actual WHERE predicate        |
-| KV409 | notice     | Non-eq predicate degraded             | A non-eq predicate degraded invalidation to table level                              | Acceptable; use eq on the key column for row-level keys       |
-| KV410 | error      | Opaque projection without schema      | A `sql<T>` / raw projection has no declared output schema (§10.2)                    | Declare an `s.*` output schema; the shape is runtime-verified |
-| KV411 | error      | Query reads an `exempt` table         | A query's read set includes an `exempt` table — exemption is write-side only (§10.1) | Map the table instead; `exempt` is for tables nothing queries |
+| Code  | Severity | Meaning                               | Cause                                                                                | Fix / note                                                    |
+| ----- | -------- | ------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| KV402 | error    | Write touched an undeclared domain    | A write touches a domain the static graph didn't list — silent stale UI              | Add the domain to the write's touch set (or fix the write)    |
+| KV403 | warn     | Declared domain never observed        | A declared domain was never actually written — stale claim or untested branch        | Remove the claim, or add a test exercising the branch         |
+| KV404 | error    | Write to an unmapped table            | A write hit a table with no `kovo({ domain })` mapping (write-side only, §10.1)      | Map the table, or mark `kovo({ exempt: true })`               |
+| KV405 | error    | Unexecuted conditional writes         | Conditional write branches were never executed under instrumentation                 | Add coverage so the branches run, or confirm they're dead     |
+| KV406 | error    | Statically un-analyzable write site   | A write the static pass can't follow (raw SQL, node_modules helper, §11.1)           | Declare manual `touches` and `tables:` for raw SQL; runtime-verified |
+| KV407 | error    | Query read from an undeclared domain  | A query reads a domain not in its declared read set — missed invalidations           | Add the domain to the query's `reads`                         |
+| KV408 | error    | Declared row key != observed predicate | The declared row key disagrees with the observed row predicate                      | Align the declared key with the actual WHERE predicate        |
+| KV409 | notice   | Non-eq predicate degraded             | A non-eq predicate degraded invalidation to table level                              | Acceptable; use eq on the key column for row-level keys       |
+| KV410 | error    | Opaque projection without schema      | A `sql<T>` / raw projection has no declared output schema (§10.2)                    | Declare an `s.*` output schema; the shape is runtime-verified |
+| KV411 | error    | Query reads an `exempt` table         | A query's read set includes an `exempt` table — exemption is write-side only (§10.1) | Map the table instead; `exempt` is for tables nothing queries |
+
+## Advanced app-flow diagnostics (KV414–KV420)
+
+These newer diagnostics cover the app-authoring surfaces that cross security, transport, deployment,
+and fragment refresh. Source: SPEC §11.3 with tighter references below.
+
+| Code  | Severity | Meaning                             | Cause                                                                 | Fix / note                                                                 |
+| ----- | -------- | ----------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| KV414 | error    | IDOR ownership gap                  | An `owner:` table is reached through a key not traceable to session or `owns()` | Scope by `req.session`, add an `owns()` guard, or record a public-read justification |
+| KV415 | error    | Unsafe response header channel      | Header name/value is outside the typed allowlist or contains CR/LF/NUL/control chars | Use typed header/cookie builders; reject rather than sanitize              |
+| KV416 | error    | Prod render-equivalence failed      | Delta output cannot reconstruct the dev full render, or a query/update-plan shape changed without moving the token | Fix the delta/update-plan path or move the render-plan token               |
+| KV417 | error    | Deploy-skew retention is too weak   | The serving layer cannot keep prior `/c/__v/*` modules and prior-token `/_q/` reads for at least 24 hours | Increase retention or change hosting shape                                 |
+| KV418 | error    | Unsound `csrf: false` mutation      | A CSRF-exempt mutation reads `req.session` or runs a cookie/session-derived guard | Keep CSRF on, or move non-browser writes to `endpoint()` / `webhook()`     |
+| KV419 | error    | Unsafe moderate prerender           | `prefetch: 'moderate'` is set on guarded/session-dependent/not-proven-side-effect-free route without justification | Use `conservative`, prove safety, or add a named justification             |
+| KV420 | error    | Stateful island inside refresh target | A local-state island renders inside another component's server-refreshable fragment target | Lift state to a query, make the child isomorphic, disable server refresh, or move it |
 
 ## Where each grouping comes from
 
-- **KV201–KV242, KV301–KV330, KV402–KV411** are all defined in the **SPEC §11.3 diagnostic-code
+- **KV201–KV242, KV301–KV330, KV402–KV420** are all defined in the **SPEC §11.3 diagnostic-code
   registry** (the single severity source). The section headings above group them by the SPEC area each
   cites (compiler/lowering §4–§6, islands/coverage §4.8–§4.9 and §10.6, data access §10.3, touch-graph
-  verification §10.1–§11.2).
+  verification §10.1–§11.2, advanced flows §8–§14).
 - The **KV402–KV411 family** is additionally described in [testing](/guides/testing/) (the
   `observed ⊆ static ∪ declared` verifier) and the runtime cross-check in SPEC §11.2.
+- **KV414–KV420** are additionally described in [security](/guides/security/),
+  [endpoints & webhooks](/guides/endpoints-webhooks/), [deployment](/guides/deployment/), and
+  [interactive islands](/guides/islands/).
 - **KV310** and **KV311** also appear in [reading kovo check & kovo explain](/guides/kovo-explain/) as
   the coverage gates `kovo check` enforces.
 - **KV330** appears in [mutations](/guides/mutations/) and [the data-layer guide](/guides/data-layer/).
@@ -129,6 +147,8 @@ one of the above.
 
 - [Testing with @kovojs/test](/guides/testing/) — the runtime verifier behind KV402–KV411.
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — the surface that prints these codes.
+- [Endpoints & webhooks](/guides/endpoints-webhooks/) — KV415, KV418, and the endpoint audit.
+- [Deployment](/guides/deployment/) — KV417 deploy-skew retention.
 - [Domains, writes & data access](/guides/data-layer/) — KV330, KV402–KV411 in context.
 
 <details>
@@ -138,8 +158,7 @@ The full diagnostic-code registry and severity-to-behavior mapping: SPEC §11.3.
 (behind KV402–KV409): SPEC §11.1. Runtime cross-check `observed ⊆ static ∪ KV406-declared` and the
 read-side half of KV410/KV411: SPEC §11.2. Update plan and coverage (KV302, KV311): SPEC §4.8–§4.9.
 Optimistic exhaustiveness (KV310): SPEC §10.6. Schema-as-domain-registry and `exempt` (KV404, KV411):
-SPEC §10.1. The verification surface that prints these: SPEC §11.4.
+SPEC §10.1. Advanced-flow diagnostics KV414-KV420: SPEC §11.3. The verification surface that prints
+these: SPEC §11.4.
 
 </details>
-</content>
-</invoke>

@@ -205,7 +205,8 @@ dependencies.
 ## Reading a query over the network
 
 Every query is addressable over GET. The loader uses this for refetch-on-focus (re-running a query
-when a stale tab comes back), and GET forms use it for fragment responses:
+when a stale tab comes back), GET forms use it for fragment responses, async option/search controls
+can use it for reads, and live subscriptions use the same query instance key:
 
 ```http
 GET /_q/product?id=p1
@@ -220,7 +221,29 @@ Content-Type: text/html; charset=utf-8
 ```
 
 Arguments arrive as search params through the query's `args` schema, and the query's `guard` runs on
-every read.
+every read. The response's `name` is the canonical instance key (`product:p1`), the same currency
+used by `kovo-deps`, optimistic transforms, live subscriptions, and graph output.
+
+### Cache and version headers
+
+Every `/_q/` response carries the build's render-plan version token. If a stale document asks for a
+query and receives a token from another build, the loader does not merge it. It treats the response
+as deploy skew: discard the in-place update, fetch a full value for the query if possible, and reload
+the current route if the document and server cannot agree on a token. See
+[deployment](/guides/deployment/) for the 24-hour prior-token retention requirement.
+
+Guarded or session-dependent reads are credentialed GETs, so their default cache posture is private:
+
+```http
+Cache-Control: private, no-store
+Vary: Cookie
+```
+
+That applies to every path through `/_q/`: loader fetches, refetch-on-focus, GET-form fragments,
+async option/search reads, and SSE subscription recovery. The posture may be relaxed only for a query
+the compiler proves session-independent: no guard, no `req.session` read in the instance key, and no
+session read in `load`. A guarded query is never served from a shared cache, because the guard must
+run on every read.
 
 ## How an update reaches the DOM
 
@@ -246,6 +269,7 @@ refresh behavior from every cart mutation ever written, with nothing to remember
 ## Next
 
 - [Mutations & forms](/guides/mutations/) — the write side of this graph.
+- [Live queries](/guides/live-queries/) — subscribing to the same query instance keys over SSE.
 - [Optimistic updates](/guides/optimistic/) — predicting results before the server confirms.
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — asserting these facts in CI.
 
@@ -256,7 +280,8 @@ Queries and the touch graph: SPEC §10.1–10.3, §11.1. Derived stamps (`kovo-d
 SPEC §4.8. Binding a path through a nullable segment without `?.` is **KV227**. A query reading an
 `exempt` table is **KV411** (nothing could invalidate it). Manual touches at an opaque write are
 **KV406**, verified by `observed ⊆ static ∪ declared` in tests. Update-status coverage on every
-query-dependent position is **KV311**. The typed read endpoint: SPEC §9.4. Reconciliation by morph:
-SPEC §2 (design test 5).
+query-dependent position is **KV311**. The typed read endpoint, per-read guards, cache posture, and
+render-plan version token: SPEC §9.4. Live subscriptions reuse query instance keys: SPEC §9.3.
+Reconciliation by morph: SPEC §2 (design test 5).
 
 </details>

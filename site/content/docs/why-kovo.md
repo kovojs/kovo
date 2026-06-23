@@ -82,8 +82,8 @@ Kovo makes sharp choices, and they cost you things. Here's where it's the wrong 
   sound subset: `strict` on, no `any`, no `as` casts, no non-null `!`. If your team leans on those,
   expect friction — they're lint errors here, not warnings.
 - **Pick-your-own-database freedom, today.** The automatic "which write refreshes which query"
-  graph is derived from Drizzle on Postgres in v1. Other databases work, but you write the
-  invalidation links by hand until later releases.
+  graph is derived from Drizzle metadata on the blessed dialects. Other data stacks can work, but
+  you own the query/write metadata instead of getting it from the Drizzle extractor.
 
 And the honest status line: **Kovo is pre-v1 and not published to npm.** You can build with it today
 inside the repository (the [Tutorial](/tutorial/) does exactly that), but it isn't a `pnpm add`

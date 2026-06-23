@@ -211,6 +211,27 @@ emit('filter:changed', { max: 500 }); // ✓ UI intent, no query data
 emit('cart:updated', { count: 3 }); // ✗ KV320 — count is server truth; use a transform
 ```
 
+## State inside server-refreshable targets
+
+Fragment morphs preserve browser-owned DOM state: focus, caret/selection, scroll position,
+transitions, `<details>` state, and media element state. They do not serialize an island's private
+`kovo-state`. If a parent component is an inferred server-refreshable fragment target, its subtree is
+re-rendered from declared queries plus stamped props; a nested island's private state would be
+re-emitted at the render-time default and clobbered.
+
+The compiler rejects that position as **KV420**: an island declaring local `state` may not render
+inside another component's server-refreshable target. Use one of the explicit fixes:
+
+- Lift the value into a declared query so it travels in the server-refreshable channel.
+- Mark the child `isomorphic: true` so it self-renders through the client update plan.
+- Set `disableServerRefresh: true` on the enclosing component when that component should not be a
+  server fragment target.
+- Move the stateful island outside the refreshable region.
+- Use `renderOnce` only for document-lifetime-immutable local state.
+
+This is why the mutations guide says fragments preserve browser state but not nested island-local
+state. The boundary keeps fragment responses fully describable by the server.
+
 ## The loader and the 8KB budget
 
 One inline script — capped at **8KB gzip** — is the entire always-loaded path. It does event
@@ -234,7 +255,8 @@ Component anatomy, `state` / `JsonValue`, and the query-vs-local-state split: SP
 lowering and capture channels: SPEC §4.3. The 8KB loader: SPEC §4.4. Execution triggers
 (`on:visible`/`on:idle`/`on:load`): SPEC §4.7. The update plan (bindings, derives, stamps): SPEC §4.8.
 Update coverage exhaustiveness: SPEC §4.9. The Interaction Ladder and cross-island coordination order:
-SPEC §7. Server fact in local state is **KV301**; unserializable closure capture is **KV201**;
+SPEC §7. Server-refreshable fragment targets and KV420: SPEC §4.5 and §9.1. Server fact in local
+state is **KV301**; unserializable closure capture is **KV201**;
 hand-written stamp disagreement is **KV222**, redundant stamp is **KV223**; `on:load` without
 justification is **KV211**; event payload overlapping query data is **KV320**; an uncovered
 query/state-dependent position is **KV311**.
