@@ -572,4 +572,160 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     });
     expect(entryFallbackSource).toContain("openTasks: 'await-fragment'");
   });
+
+  it('requires typed helper summaries for private-scope provenance', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'invoice.pipeline.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const invoices = pgTable("invoices", {',
+          '  sessionId: text("session_id").notNull(),',
+          '  id: text("id").notNull(),',
+          '  status: text("status").notNull(),',
+          '}, kovo({ domain: "invoice", key: "sessionId,id" }));',
+          '',
+          'function requireSessionId(context: { request?: { session?: { id?: string } | null } }) {',
+          '  if (!context.request?.session?.id) throw new Error("auth required");',
+          '  return context.request.session.id;',
+          '}',
+          'kovoAnalyzerSummary(requireSessionId, { returns: { kind: "session", path: "id" } });',
+          '',
+          'function hiddenSessionId(context: { request?: { session?: { id?: string } | null } }) {',
+          '  if (!context.request?.session?.id) throw new Error("auth required");',
+          '  return context.request.session.id;',
+          '}',
+          '',
+          'export const invoiceList = query("invoiceList", {',
+          '  async load(_input: {}, db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }) {',
+          '    const sessionId = requireSessionId(context);',
+          '    return {',
+          '      items: await db.select({ id: invoices.id, status: invoices.status }).from(invoices).where(eq(invoices.sessionId, sessionId)),',
+          '    };',
+          '  },',
+          '});',
+          '',
+          'export async function markPaid(db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }, targetId: string) {',
+          '  const sessionId = requireSessionId(context);',
+          '  await db.update(invoices).set({ status: "paid" }).where(and(eq(invoices.sessionId, sessionId), eq(invoices.id, targetId)));',
+          '}',
+          '',
+          'export async function unsafeMarkPaid(db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }, targetId: string) {',
+          '  const sessionId = hiddenSessionId(context);',
+          '  await db.update(invoices).set({ status: "paid" }).where(and(eq(invoices.sessionId, sessionId), eq(invoices.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const graph = extractTouchGraphFromProject({ files });
+    expect(graph.markPaid?.touches).toMatchObject([
+      {
+        domain: 'invoice',
+        keys: 'arg:targetId',
+        via: 'invoices',
+      },
+    ]);
+    expect(graph.unsafeMarkPaid?.touches).toMatchObject([
+      {
+        domain: 'invoice',
+        keys: null,
+        predicate: 'non-eq',
+        via: 'invoices',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toMatchObject([
+      {
+        code: 'KV409',
+        severity: 'notice',
+      },
+    ]);
+
+    const queryFact = extractQueryFactsFromProject({ files }).find(
+      (candidate) => candidate.query === 'invoiceList',
+    );
+    expect(queryFact).toMatchObject({
+      query: 'invoiceList',
+      reads: ['invoice'],
+      sessionAnchoredReads: ['invoice'],
+    });
+    expect(queryFact?.instanceKey).toBeUndefined();
+
+    const shape = extractAlgebraicShapesFromProject({ files }).find(
+      (candidate) => candidate.query === 'invoiceList',
+    );
+    if (!shape) throw new Error('expected invoiceList algebraic shape');
+    expect(shape.fields.items).toMatchObject({
+      kind: 'agg',
+      projection: ['id', 'status'],
+      rowKey: 'sessionId,id',
+      rowset: {
+        filters: [{ column: 'sessionId', op: 'eq', value: { kind: 'session', path: 'id' } }],
+        key: 'sessionId,id',
+        table: 'invoices',
+      },
+    });
+
+    const effects = extractSymbolicEffectsFromProject({ files });
+    const summarizedEffect = effects.find((candidate) => candidate.writeKey === 'markPaid');
+    if (!summarizedEffect) throw new Error('expected markPaid symbolic effect');
+    expect(summarizedEffect.effect).toMatchObject({
+      match: {
+        eq: [
+          { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'paid' } },
+      table: 'invoices',
+    });
+
+    const summarizedResult = deriveOptimistic([summarizedEffect.effect], shape);
+    if (summarizedResult.kind !== 'derived') {
+      throw new Error(`expected markPaid derived, got ${summarizedResult.kind}`);
+    }
+    expect(summarizedResult.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'update-row',
+        path: 'items',
+        sets: { status: { kind: 'const', value: 'paid' } },
+      },
+    ]);
+
+    const unsummarizedEffect = effects.find((candidate) => candidate.writeKey === 'unsafeMarkPaid');
+    if (!unsummarizedEffect) throw new Error('expected unsafeMarkPaid symbolic effect');
+    expect(unsummarizedEffect.effect).toMatchObject({
+      match: { expr: 'unsummarized-helper:hiddenSessionId', kind: 'opaque' },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'paid' } },
+      table: 'invoices',
+    });
+    expect(deriveOptimistic([unsummarizedEffect.effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'non-key-match', expr: 'unsummarized-helper:hiddenSessionId' },
+    });
+
+    const source = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'invoiceMarkPaidDerivedOptimistic',
+      entries: [{ program: summarizedResult.program, query: 'invoiceList' }],
+      formImport: { name: 'markPaidForm', path: '../../app.js' },
+    });
+    expect(source).toContain('entry.id === $input.targetId');
+    expect(source).toContain('target.status = "paid";');
+    expect(source).not.toContain('sessionId');
+    expect(source).not.toContain('session:');
+    expect(source).not.toContain('$input.session');
+  });
 });
