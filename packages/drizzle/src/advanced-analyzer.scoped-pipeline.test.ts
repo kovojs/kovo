@@ -490,6 +490,98 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     });
   });
 
+  it('keeps guard-owned private scope out of generated browser-visible leak surfaces', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'guard-owned.leak-check.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const documents = pgTable("documents", {',
+          '  guardId: text("guard_id").notNull(),',
+          '  id: text("id").notNull(),',
+          '  status: text("status").notNull(),',
+          '}, kovo({ domain: "document", key: "guardId,id" }));',
+          '',
+          'function currentGuardId(context: { guard?: { ownerId?: string } | null }) {',
+          '  if (!context.guard?.ownerId) throw new Error("owner guard required");',
+          '  return context.guard.ownerId;',
+          '}',
+          'kovoAnalyzerSummary(currentGuardId, { returns: { kind: "guard", path: "owner.id" } });',
+          '',
+          'export const openDocuments = query("openDocuments", {',
+          '  async load(_input: {}, db: PgDatabase<any, any, any>, context: { guard?: { ownerId?: string } | null }) {',
+          '    const guardId = currentGuardId(context);',
+          '    return {',
+          '      items: await db.select({ id: documents.id, status: documents.status }).from(documents).where(and(eq(documents.guardId, guardId), eq(documents.status, "open"))),',
+          '    };',
+          '  },',
+          '});',
+          '',
+          'export async function archiveDocument(db: PgDatabase<any, any, any>, context: { guard?: { ownerId?: string } | null }, targetId: string) {',
+          '  const guardId = currentGuardId(context);',
+          '  await db.update(documents).set({ status: "archived" }).where(and(eq(documents.guardId, guardId), eq(documents.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const queryFact = extractQueryFactsFromProject({ files }).find(
+      (candidate) => candidate.query === 'openDocuments',
+    );
+    if (!queryFact) throw new Error('expected openDocuments query fact');
+    expect(queryFact.instanceKey).toBeUndefined();
+
+    const shape = extractAlgebraicShapesFromProject({ files }).find(
+      (candidate) => candidate.query === 'openDocuments',
+    );
+    if (!shape) throw new Error('expected openDocuments algebraic shape');
+
+    const effect = extractSymbolicEffectsFromProject({ files }).find(
+      (candidate) => candidate.writeKey === 'archiveDocument',
+    );
+    if (!effect) throw new Error('expected archiveDocument symbolic effect');
+
+    const result = deriveOptimistic([effect.effect], shape);
+    if (result.kind !== 'derived') throw new Error(`expected derived, got ${result.kind}`);
+
+    const loweredBrowserCode = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'documentArchiveDerivedOptimistic',
+      entries: [{ program: result.program, query: 'openDocuments' }],
+      formImport: { name: 'archiveDocumentForm', path: '../../app.js' },
+    });
+    const publicQueryKey = queryFact.instanceKey ?? queryFact.query;
+    const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
+      (match) => match[1] ?? '',
+    );
+
+    expect(result.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'remove-row',
+        path: 'items',
+      },
+    ]);
+    expect(transformInputs).toEqual(['targetId']);
+    expectNoPrivateScopeLeak({
+      'Kovo-Targets': `document-panel=${publicQueryKey}`,
+      'browser-visible query instance key': publicQueryKey,
+      'generated optimistic module exports':
+        loweredBrowserCode.match(/export const \w+/)?.[0] ?? loweredBrowserCode,
+      'generated transform inputs': transformInputs.join(','),
+      'kovo-deps': publicQueryKey,
+      'lowered browser code': loweredBrowserCode,
+    });
+  });
+
   it('derives composite natural-key cart updates with same-scope aggregate witnesses', () => {
     const files = [
       pgDatabaseTypes([
@@ -978,6 +1070,7 @@ function expectNoPrivateScopeLeak(surfaces: Record<string, string>): void {
     '$input.session',
     '$input.tenant',
     'guard:',
+    'guardId',
     'session:',
     'sessionId',
     'tenant:',

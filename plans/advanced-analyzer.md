@@ -311,7 +311,7 @@ from table-level fallback to scoped or exact optimism.
     against those static facts, and reports `KV405` for a declared static branch that runtime did not
     exercise.
 
-- [ ] **Negative proof fixtures.**
+- [x] **Negative proof fixtures.**
   - [x] Unguarded nullable session/request access is conditional/opaque and cannot prove row
         identity.
     - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/core/src/derivation.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts` covers unguarded nullable aliases and direct session access degrading to non-eq/opaque.
@@ -332,11 +332,11 @@ from table-level fallback to scoped or exact optimism.
     - Evidence: same command covers the scoped-pipeline leak fixture for public query keys,
       `kovo-deps`, `Kovo-Targets`, generated optimistic export names, transform inputs, and lowered
       browser code.
-  - [ ] Guard/request/session/tenant private-scope leakage fails on every browser-visible surface,
+  - [x] Guard/request/session/tenant private-scope leakage fails on every browser-visible surface,
         not only Stack Overflow query targets.
-    - Evidence when complete: leak-check fixtures cover query keys, `kovo-deps`, `Kovo-Targets`,
-      generated optimistic export names, transform inputs, and lowered browser code across session,
-      tenant, and guard scoped proof facts.
+    - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+      covers session, tenant, and guard scoped leak fixtures for query keys, `kovo-deps`,
+      `Kovo-Targets`, generated optimistic export names, transform inputs, and lowered browser code.
 
 ## Implementation Sequence
 
