@@ -112,6 +112,17 @@ describe('applyQueryDelta', () => {
     expect(base).toEqual(snapshot);
   });
 
+  it('applies a delta when the held base is a proxy-backed optimistic draft', () => {
+    const base = new Proxy({ count: 5, items: [{ kovoKey: 'a' }] }, {}) as unknown as JsonValue;
+
+    expect(
+      applyQueryDelta(base, {
+        set: { count: 6 },
+        lists: { items: { key: 'kovoKey', upsert: [{ kovoKey: 'b' }] } },
+      }),
+    ).toEqual({ count: 6, items: [{ kovoKey: 'a' }, { kovoKey: 'b' }] });
+  });
+
   it('throws on a missing base so the caller refetches full', () => {
     expect(() => applyQueryDelta(undefined, { set: { count: 1 } })).toThrow(QueryDeltaApplyError);
   });

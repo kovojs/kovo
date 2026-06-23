@@ -1,4 +1,5 @@
 import type { JsonValue } from './index.js';
+import { cloneJsonValue } from './json-clone.js';
 
 /**
  * @internal
@@ -189,7 +190,7 @@ export function applyQueryDelta(base: JsonValue | undefined, delta: QueryDelta):
     throw new QueryDeltaApplyError('query delta "lists" is not a plain object');
   }
 
-  const next: { [key: string]: JsonValue } = structuredClone(base);
+  const next: { [key: string]: JsonValue } = cloneJsonValue(base);
 
   // SPEC §843/§848 (KV416): for non-collection (non-keyed) top-level fields the
   // value is "the parent object sent whole" — `set` is the authoritative

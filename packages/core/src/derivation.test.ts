@@ -27,6 +27,16 @@ describe('derivation patch interpreter', () => {
     expect(value).toEqual({ count: 3 });
   });
 
+  it('runs against proxy-backed optimistic drafts', () => {
+    const program: PatchProgram = {
+      ops: [{ by: { kind: 'param', path: 'quantity' }, op: 'inc', path: 'count' }],
+      query: 'cart',
+    };
+    const value = new Proxy({ count: 3 }, {}) as never;
+
+    expect(applyPatchProgram(value, { quantity: 2 }, program)).toEqual({ count: 5 });
+  });
+
   // C6 (SPEC.md §10.5:1172) — node-postgres serializes numeric/decimal/bigint columns
   // as STRINGS, so the held SUM base is a string like '100.50'. `inc` must coerce the
   // existing total numerically (asNumber), not reset a non-`number` base to 0; otherwise

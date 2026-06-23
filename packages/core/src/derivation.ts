@@ -1,4 +1,5 @@
 import type { JsonValue } from './index.js';
+import { cloneJsonValue } from './json-clone.js';
 
 // SPEC.md §10.5 (derivation algebra). This module is the *shared contract* every
 // derived-optimism slice consumes: Stage-1 write→effect lowering, Stage-2 query
@@ -389,7 +390,7 @@ export function applyPatchProgram(
 ): JsonValue {
   const tempId = options.tempId ?? (() => '__tempId__');
   const now = options.now ?? (() => 0);
-  const next = structuredClone(value);
+  const next = cloneJsonValue(value);
 
   for (const op of program.ops) {
     applyPatchOp(next, input, op, { now, tempId });
