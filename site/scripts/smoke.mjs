@@ -64,11 +64,11 @@ try {
   const noJsPage = await noJs.newPage();
   await noJsPage.goto(`${origin}/`);
   check(
-    (await noJsPage.locator('h1').first().textContent())?.includes('Builds like React'),
+    (await noJsPage.locator('h1').first().textContent())?.includes('The secure web framework'),
     'no-JS: landing hero renders',
   );
   check(
-    (await noJsPage.locator('body').textContent())?.includes('stale UI is a compile error'),
+    (await noJsPage.locator('body').textContent())?.includes('security holes a build error'),
     'no-JS: landing tagline renders',
   );
   await noJsPage.click('a[href="/docs/why-kovo/"]');
