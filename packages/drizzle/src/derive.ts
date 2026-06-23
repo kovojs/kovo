@@ -479,7 +479,11 @@ function matchToRowMatches(
       value: [],
     };
   }
-  return { value: [...alternatives.value[0].match] };
+  const alternative = alternatives.value[0];
+  if (!alternative) {
+    return { reason: { code: 'unsupported', detail: 'empty scalar row match' }, value: [] };
+  }
+  return { value: [...alternative.match] };
 }
 
 function matchToRowMatchAlternatives(
