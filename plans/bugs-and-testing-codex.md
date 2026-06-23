@@ -102,15 +102,16 @@ The only remaining open checkbox is the deployed-service health follow-up surfac
 
 - [ ] **Restore stable deployed example service health exposed by the live gate.**
   - **Current evidence:** `pnpm run test:examples-live` remains red on 2026-06-23. The latest run
-    passed CRM `/` and `/contacts`, but observed Commerce `/` and `/cart` as timeouts, Stack
-    Overflow `/` as HTTP 503, and Stack Overflow `/questions/q1` as timeout. Earlier post-merge
-    runs alternated between Commerce, CRM, and Stack Overflow 503/timeout failures.
+    passed CRM `/`, Stack Overflow `/`, and Stack Overflow `/questions/q1`, but observed Commerce
+    `/` and `/cart` as timeouts and CRM `/contacts` as HTTP 503. Earlier post-merge runs alternated
+    between Commerce, CRM, and Stack Overflow 503/timeout failures.
   - **Local evidence:** Running `examples/commerce/scripts/demo-serve.mjs` locally with
     `KOVO_DEMO_WARM_SESSIONS=10` served Commerce `/` and `/cart` with HTTP 200, so the checked-out
     source path does not reproduce the Commerce 503 locally.
   - **Access gap:** `gcloud` works with `CLOUDSDK_PYTHON=/usr/local/bin/python3`, but no active
-    account is configured in this environment; `gh auth status` also failed. Cloud Run inspection or
-    redeploy still requires authenticated project access.
+    account or project is configured in this environment; application-default credentials exist but
+    require reauthentication. `gh auth status` also failed. Cloud Run inspection or redeploy still
+    requires authenticated project access.
   - **Next step:** Redeploy or inspect the Cloud Run services, then rerun `pnpm run
     test:examples-live` and mark this complete only when all six probes pass.
 
