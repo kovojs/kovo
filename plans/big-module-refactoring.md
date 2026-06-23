@@ -153,8 +153,10 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
   - Verification: `pnpm run test -- examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/component-catalog.test.ts`,
     and browser gallery tests if rendered markup changes.
 
-- [ ] **Split `packages/compiler/src/diagnostic-coverage-matrix.test.ts` into matrix data and
+- [x] **Split `packages/compiler/src/diagnostic-coverage-matrix.test.ts` into matrix data and
   scenario groups.**
+  - Evidence: matrix data moved to `packages/compiler/src/diagnostic-coverage-matrix.data.ts`;
+    `packages/compiler/src/diagnostic-coverage-matrix.test.ts` is now 994 LoC; `pnpm exec vitest --run packages/compiler/src/diagnostic-coverage-matrix.test.ts` passed 1 file / 4 tests; `git diff --check` passed.
   - Candidate modules: matrix definitions, expected-code coverage meta-test, JSX diagnostics,
     mutation/query diagnostics, route/style diagnostics.
   - Verification: `pnpm run test -- packages/compiler/src/diagnostic-coverage-matrix.test.ts`.
