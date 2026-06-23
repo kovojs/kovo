@@ -61,6 +61,10 @@ Current command output after completed splits:
     `packages/drizzle/src/static/domain-writes.ts`.
     Evidence: `packages/drizzle/src/static/domain-writes.ts` is 745 LoC and
     `packages/drizzle/src/static.ts` is reduced to 9,180 LoC; `pnpm exec vitest --run packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.write-callbacks-aliases.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts` passed 4 files / 70 tests; `git diff --check` passed.
+  - [x] Extract receiver alias, carrier, helper-handoff, and unclassified receiver-surface analysis
+    to `packages/drizzle/src/static/receiver-surface.ts`.
+    Evidence: `packages/drizzle/src/static/receiver-surface.ts` is 1,854 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 7,476 LoC; `pnpm exec vitest --run packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.query-loader-config.test.ts` passed 5 files / 94 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
