@@ -554,6 +554,47 @@ describe('kovo check', () => {
     `);
   });
 
+  it('fails KV423 for graph-reported app-authored dangerous sinks', () => {
+    const result = kovoCheck({
+      unregisteredSinks: [
+        {
+          safePath: 'trustedHtml(...) with provenance or a component text binding',
+          sink: 'innerHTML',
+          site: 'app/promo.tsx:12',
+          source: 'cms.body',
+        },
+      ],
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain(
+      'ERROR KV423 app/promo.tsx:12 sink=innerHTML source=cms.body safe=trustedHtml(...) with provenance or a component text binding',
+    );
+    expect(result.output).toContain(
+      'App-authored dangerous sink is not registered or behind a safe Kovo surface.',
+    );
+    expect(result.output).toContain('Fixes: route the value through the corresponding Kovo helper');
+  });
+
+  it('fails generic KV423 static diagnostics from compiler source spans', () => {
+    expect(
+      kovoCheck({
+        diagnostics: [
+          {
+            code: 'KV423',
+            site: 'app/export.ts',
+            start: { column: 5, line: 8 },
+          },
+        ],
+      }),
+    ).toMatchObject({
+      exitCode: 1,
+      output: expect.stringContaining(
+        'ERROR KV423 app/export.ts:8:5 App-authored dangerous sink is not registered or behind a safe Kovo surface.',
+      ),
+    });
+  });
+
   it('reports KV320 when event payload facts overlap query data facts', () => {
     expect(
       kovoCheck({

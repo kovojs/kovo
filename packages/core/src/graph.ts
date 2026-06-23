@@ -68,6 +68,7 @@ export interface KovoCheckInput {
   scopeAudits?: readonly ScopeAuditFact[];
   touchGraph?: TouchGraph;
   trustEscapes?: readonly TrustEscapeExplain[];
+  unregisteredSinks?: readonly UnregisteredSinkFact[];
   updateCoverage?: readonly UpdateCoverageFact[];
   verificationCoverage?: readonly VerificationCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
@@ -323,6 +324,14 @@ export interface TrustEscapeExplain {
 }
 
 /** @internal */
+export interface UnregisteredSinkFact {
+  safePath: string;
+  sink: string;
+  site: string;
+  source?: string;
+}
+
+/** @internal */
 export interface UpdateCoverageFact {
   component: string;
   detail?: string;
@@ -438,6 +447,7 @@ const arrayFields = [
   'renderEquivalenceChecks',
   'scopeAudits',
   'trustEscapes',
+  'unregisteredSinks',
   'updateCoverage',
   'verificationCoverage',
   'verificationDiagnostics',

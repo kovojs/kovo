@@ -604,6 +604,10 @@ export function kovoCheck(
       );
     }
 
+    for (const sink of graph.unregisteredSinks ?? []) {
+      pushFinding(unregisteredSinkLine(sink), true);
+    }
+
     for (const coverage of graph.verificationCoverage ?? []) {
       if (!coverage.observed) pushFinding(verificationCoverageGapLine(coverage), true);
     }
@@ -988,6 +992,14 @@ function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): strin
   const definition = diagnosticDefinitions[diagnostic.code];
   const severity = diagnostic.severity ?? definition.severity;
   return `${severity.toUpperCase()} ${diagnostic.code} ${diagnosticSite(diagnostic)} ${diagnostic.message ?? definition.message}`;
+}
+
+function unregisteredSinkLine(sink: CoreGraph.UnregisteredSinkFact): string {
+  const source = sink.source ? ` source=${sink.source}` : '';
+  return [
+    `ERROR KV423 ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
+    diagnosticDefinitionText('KV423', { includeHelp: true }),
+  ].join(' ');
 }
 
 function diagnosticSite(diagnostic: CoreGraph.StaticDiagnosticFact): string {

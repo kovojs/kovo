@@ -36,6 +36,7 @@ export type {
   TouchSite,
   TriggerExplain,
   TrustEscapeExplain,
+  UnregisteredSinkFact,
   UnresolvedWriteSite,
   UpdateCoverageFact,
   VerificationCoverageFact,
