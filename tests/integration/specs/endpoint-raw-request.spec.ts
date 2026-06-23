@@ -1,8 +1,13 @@
 // SPEC.md §9.1 and §9.5: endpoint() is raw Request -> Response machine ingress
 // and dispatches before the route table without ambient session.
+import { createHmac } from 'node:crypto';
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'endpoint-raw-request' });
+
+function sign(body: string): string {
+  return createHmac('sha256', 'whsec_endpoint_raw').update(body).digest('hex');
+}
 
 test('declared raw endpoints receive raw bodies without ambient session', async ({ request }) => {
   const rawBody = '{ "sku": "p1", "quantity": 2 }';
@@ -11,7 +16,7 @@ test('declared raw endpoints receive raw bodies without ambient session', async 
     headers: {
       cookie: 'endpoint_raw_session=1',
       'content-type': 'application/json',
-      'x-signature': 'sig_123',
+      'x-signature': sign(rawBody),
     },
   });
 
@@ -19,8 +24,24 @@ test('declared raw endpoints receive raw bodies without ambient session', async 
   expect(await response.json()).toEqual({
     body: rawBody,
     sessionAmbient: false,
-    signature: 'sig_123',
+    signature: sign(rawBody),
   });
+});
+
+test('declared raw endpoints enforce executable verifier auth before dispatch', async ({
+  request,
+}) => {
+  const body = '{ "sku": "p1" }';
+  const response = await request.post('/machine/exact', {
+    data: body,
+    headers: {
+      'content-type': 'application/json',
+      'x-signature': sign('{}'),
+    },
+  });
+
+  expect(response.status()).toBe(401);
+  expect(await response.text()).toBe('Unauthorized');
 });
 
 test('exact and prefix endpoint mounts dispatch apart from page routes', async ({
@@ -33,7 +54,7 @@ test('exact and prefix endpoint mounts dispatch apart from page routes', async (
 
   const exactPost = await request.post('/machine/exact', {
     data: 'posted-to-endpoint',
-    headers: { 'x-signature': 'sig_456' },
+    headers: { 'x-signature': sign('posted-to-endpoint') },
   });
   expect(exactPost.status()).toBe(200);
   expect(await exactPost.json()).toMatchObject({ body: 'posted-to-endpoint' });

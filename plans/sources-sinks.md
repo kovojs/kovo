@@ -115,13 +115,19 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Phase 3: Diagnostics and Static Gates
 
-- [ ] Make `endpoint()` `auth` executable, not just declared — close the highest-severity endpoint gap (rank this above the audit/metadata items below: a complete audit table over unenforced declarations is the more dangerous state).
+- [x] Make `endpoint()` `auth` executable, not just declared — close the highest-severity endpoint gap (rank this above the audit/metadata items below: a complete audit table over unenforced declarations is the more dangerous state).
+  - Evidence: `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts`, `pnpm exec vitest run packages/server/src/webhook.test.ts`, `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts`, `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check` verify executable endpoint auth enforcement, webhook name-only self-enforcement, integration dispatch behavior, type/import boundaries, public API surface, and whitespace.
   - Gap: `dispatchMatchedAppRequest` (`packages/server/src/app-dispatch.ts:79-85`) runs CSRF then `runEndpoint`; it never resolves or runs the declared verifier, so `auth: { kind: 'verifier', name }` passes the audit while the handler runs fully unauthenticated. `webhook()` is the only enforced path (`packages/server/src/webhook.ts:245-257` verifies fail-closed before parse). There is no verifier registry — `webhook()` embeds its verifier object inline — so executable endpoint auth must carry the verifier on the declaration, not a name to resolve.
-  - [ ] Extend `EndpointAuthDeclaration` (`packages/server/src/endpoint.ts:14-17`): add an optional `verify?: WebhookVerifier` to the `verifier`/`custom` variants, reusing the core kit (`packages/core/src/verifier.ts`: `hmacSignature`/`standardWebhooks`/`customVerifier`). No new public types; inherits constant-time compare, timestamp tolerance, rotated secrets/multi-sig. `verify` stays optional so name-only declarations and webhook's own metadata are unaffected.
-  - [ ] Add `runEndpointAuth(endpoint, request)` to `endpoint.ts` (mirrors `runEndpoint`/`endpointMatches`): clone the request, verify over raw wire bytes `{ headers, payload }`, fail-closed (catch → `401`); `kind: 'none'` or absent `verify` → skip. Call it before `validateEndpointCsrf` in `app-dispatch.ts`.
-  - [ ] Keep `webhookAuth()` (`packages/server/src/webhook.ts:395-411`) emitting name-only declarations so `webhook()` self-enforces in its own lifecycle and the dispatcher skips it (no double verification).
-  - [ ] Add a normative note to SPEC §9.1 (`SPEC.md:898`): an endpoint `auth` declaration MAY carry an executable verifier that the dispatcher enforces fail-closed over wire bytes before the handler runs, the same signature-before-parse guarantee `webhook()` makes.
-  - [ ] Tests (`packages/server/src/endpoint.test.ts` + `tests/integration/fixtures/endpoint-raw-request/app.tsx`): bad signature → 401, good signature → 200, handler still reads the body, `customVerifier` predicate path, and fail-closed on a verifier throw.
+  - [x] Extend `EndpointAuthDeclaration` (`packages/server/src/endpoint.ts:14-17`): add an optional `verify?: WebhookVerifier` to the `verifier`/`custom` variants, reusing the core kit (`packages/core/src/verifier.ts`: `hmacSignature`/`standardWebhooks`/`customVerifier`). No new public types; inherits constant-time compare, timestamp tolerance, rotated secrets/multi-sig. `verify` stays optional so name-only declarations and webhook's own metadata are unaffected.
+    - Evidence: `pnpm run check:api-surface` verified the public type surface stayed within the existing baseline.
+  - [x] Add `runEndpointAuth(endpoint, request)` to `endpoint.ts` (mirrors `runEndpoint`/`endpointMatches`): clone the request, verify over raw wire bytes `{ headers, payload }`, fail-closed (catch → `401`); `kind: 'none'` or absent `verify` → skip. Call it before `validateEndpointCsrf` in `app-dispatch.ts`.
+    - Evidence: `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts` verified fail-closed auth, body preservation, and auth-before-CSRF ordering.
+  - [x] Keep `webhookAuth()` (`packages/server/src/webhook.ts:395-411`) emitting name-only declarations so `webhook()` self-enforces in its own lifecycle and the dispatcher skips it (no double verification).
+    - Evidence: `pnpm exec vitest run packages/server/src/webhook.test.ts` verified webhook raw-byte verification and metadata behavior after dispatcher auth enforcement was added.
+  - [x] Add a normative note to SPEC §9.1 (`SPEC.md:898`): an endpoint `auth` declaration MAY carry an executable verifier that the dispatcher enforces fail-closed over wire bytes before the handler runs, the same signature-before-parse guarantee `webhook()` makes.
+    - Evidence: `SPEC.md` §9.1 now states executable endpoint auth runs fail-closed over cloned raw wire bytes before CSRF and handler dispatch.
+  - [x] Tests (`packages/server/src/endpoint.test.ts` + `tests/integration/fixtures/endpoint-raw-request/app.tsx`): bad signature → 401, good signature → 200, handler still reads the body, `customVerifier` predicate path, and fail-closed on a verifier throw.
+    - Evidence: `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts` and `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts`.
   - Note: this makes the declared `verifier:`/`custom:` posture an enforced guarantee. The metadata/justification items below (required `method`, `reason`, `mountJustification`, omitted-auth diagnostic) remain valuable but are secondary to enforcement.
 - [ ] Allocate source/sink diagnostic codes after checking `diagnosticDefinitions`.
   - Do not reuse KV236/KV415/KV418/KV414 for unrelated classes; keep each code's question narrow.
@@ -170,6 +176,10 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Latest Verification
 
+- `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts` verified executable endpoint HMAC/custom auth, fail-closed verifier throws, body preservation, and auth-before-CSRF dispatch ordering.
+- `pnpm exec vitest run packages/server/src/webhook.test.ts` verified webhook raw-byte verification and name-only endpoint auth metadata still self-enforce without dispatcher double verification.
+- `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts` verified full request-handler bad signature → 401 and good signature → 200 with the handler still reading the raw body.
+- `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check` verified type/import boundaries, example typechecks, public API surface baseline, and whitespace.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
 - `sed -n '1,260p' plans/fix-security.md` inspected prior non-SQL security remediation lanes.

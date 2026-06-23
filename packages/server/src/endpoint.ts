@@ -1,3 +1,5 @@
+import type { WebhookVerifier } from '@kovojs/core';
+
 /** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
 export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
 
@@ -12,9 +14,9 @@ export interface EndpointCsrfExemption {
 
 /** How an endpoint authenticates: a named verifier, a named custom scheme, or a justified `none`. */
 export type EndpointAuthDeclaration =
-  | { kind: 'custom'; name: string }
+  | { kind: 'custom'; name: string; verify?: WebhookVerifier }
   | { kind: 'none'; justification: string }
-  | { kind: 'verifier'; name: string };
+  | { kind: 'verifier'; name: string; verify?: WebhookVerifier };
 
 /** A raw HTTP endpoint descriptor: path, method, mount mode, and auth/CSRF declarations. */
 export interface Endpoint<
@@ -126,6 +128,38 @@ export async function runEndpoint(
 }
 
 /**
+ * Enforce an endpoint's executable auth verifier before dispatch. Name-only
+ * auth declarations remain audit metadata; declarations carrying `verify` are
+ * checked fail-closed over cloned raw bytes so the handler still receives the
+ * original body (SPEC §9.1).
+ *
+ * @param definition - The endpoint whose auth declaration should run.
+ * @param request - The incoming request.
+ * @returns A 401 `Response` when auth fails, otherwise `undefined`.
+ * @internal
+ */
+export async function runEndpointAuth(
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  request: Request,
+): Promise<Response | undefined> {
+  const verifier = definition.auth?.kind === 'none' ? undefined : definition.auth?.verify;
+  if (verifier === undefined) return undefined;
+
+  let verified = false;
+  try {
+    const authRequest = endpointRequestWithoutSession(request.clone());
+    verified = await verifier.verify({
+      headers: authRequest.headers,
+      payload: new Uint8Array(await authRequest.arrayBuffer()),
+    });
+  } catch {
+    verified = false;
+  }
+
+  return verified ? undefined : endpointAuthFailureResponse();
+}
+
+/**
  * Test whether an endpoint matches a method and pathname, honoring exact vs
  * `prefix` mounting.
  *
@@ -168,4 +202,11 @@ export function endpointRequestWithoutSession(request: Request): EndpointRequest
       return property in target;
     },
   }) as EndpointRequest;
+}
+
+function endpointAuthFailureResponse(): Response {
+  return new Response('Unauthorized', {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    status: 401,
+  });
 }

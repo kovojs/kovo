@@ -1,3 +1,5 @@
+import { createHmac } from 'node:crypto';
+import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
@@ -131,6 +133,54 @@ describe('server app matched dispatch boundary', () => {
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe('updated');
     expect(handlerCalls).toBe(1);
+  });
+
+  it('enforces executable endpoint auth before CSRF or handler dispatch', async () => {
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      payload: (request) => request.payload,
+      secret: 'endpoint-secret',
+    });
+    let handlerCalls = 0;
+    const signedEndpoint = endpoint('/machine/signed', {
+      auth: { kind: 'verifier', name: verifier.resolved.scheme, verify: verifier },
+      handler() {
+        handlerCalls += 1;
+        return new Response('signed');
+      },
+      method: 'POST',
+    });
+    const app = createApp({
+      csrf: { secret: 'csrf-secret', sessionId: () => 's1' },
+      endpoints: [signedEndpoint],
+    });
+    const body = 'payload';
+    const badSignature = createHmac('sha256', 'endpoint-secret').update('other').digest('hex');
+    const badRequest = new Request('https://shop.example.test/machine/signed', {
+      body,
+      headers: { 'x-signature': badSignature },
+      method: 'POST',
+    });
+
+    const badResponse = await dispatchMatchedAppRequest(matchedAppRequest(app, badRequest));
+
+    expect(badResponse.status).toBe(401);
+    await expect(badResponse.text()).resolves.toBe('Unauthorized');
+    expect(handlerCalls).toBe(0);
+
+    const goodSignature = createHmac('sha256', 'endpoint-secret').update(body).digest('hex');
+    const goodRequest = new Request('https://shop.example.test/machine/signed', {
+      body,
+      headers: { 'x-signature': goodSignature },
+      method: 'POST',
+    });
+
+    const goodResponse = await dispatchMatchedAppRequest(matchedAppRequest(app, goodRequest));
+
+    expect(goodResponse.status).toBe(422);
+    await expect(goodResponse.text()).resolves.toBe('CSRF');
+    expect(handlerCalls).toBe(0);
   });
 
   it('preserves raw body dispatch for explicitly CSRF-exempt endpoints', async () => {
