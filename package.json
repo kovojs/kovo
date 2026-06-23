@@ -23,6 +23,7 @@
     "check:inline-loader": "pnpm --filter @kovojs/browser run check:inline-loader",
     "bump": "node scripts/bump.mjs",
     "docs:serve": "pnpm run check:build && pnpm --filter @kovojs/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
+    "perf:fcp": "node scripts/fcp-harness.mjs",
     "test": "vitest --run",
     "test:browser": "vp run browser",
     "test:gallery-browser": "pnpm --filter @kovojs/example-gallery run test:browser",

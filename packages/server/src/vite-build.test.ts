@@ -35,6 +35,19 @@ import {
   kovoAppShellViteStaticExportAssetsFromManifestFile,
 } from './vite-build-assets.js';
 
+const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const runtimeClientModuleInventoryItem = expect.objectContaining({
+  href: expect.stringMatching(runtimeClientModulePath),
+  kind: 'client-module',
+  path: expect.stringMatching(runtimeClientModulePath),
+  status: 200,
+});
+const runtimeClientModuleManifestItem = expect.objectContaining({
+  href: expect.stringMatching(runtimeClientModulePath),
+  path: expect.stringMatching(runtimeClientModulePath),
+  status: 200,
+});
+
 describe('server app shell Vite build seam', () => {
   it('wires route-entry hints, compiled modules, output files, and static export assets', async () => {
     const distDir = await mkdtemp(join(tmpdir(), 'kovo-vite-build-seam-dist-'));
@@ -408,6 +421,7 @@ describe('server app shell Vite build seam', () => {
           path: '/c/shop.client.js',
           status: 200,
         },
+        runtimeClientModuleInventoryItem,
         {
           headers: { 'content-type': 'text/css; charset=utf-8' },
           kind: 'static-asset',
@@ -767,6 +781,7 @@ describe('server app shell Vite build seam', () => {
           path: '/catalog/index.html',
           status: 200,
         },
+        runtimeClientModuleInventoryItem,
         {
           headers: { 'content-type': 'text/css; charset=utf-8' },
           kind: 'static-asset',
@@ -871,6 +886,7 @@ describe('server app shell Vite build seam', () => {
             path: '/c/docs.client.js',
             status: 200,
           },
+          runtimeClientModuleManifestItem,
         ],
         files: [
           {
@@ -894,6 +910,7 @@ describe('server app shell Vite build seam', () => {
             path: '/c/docs.client.js',
             status: 200,
           },
+          runtimeClientModuleInventoryItem,
           {
             headers: { 'content-type': 'text/css; charset=utf-8' },
             kind: 'static-asset',

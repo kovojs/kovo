@@ -4,7 +4,7 @@ import {
   buildInlineKovoLoaderInstallerSource,
   inlineKovoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
-import { createInlineKovoLoaderSource } from './inline-loader.js';
+import { inlineKovoLoaderInstallerSource } from './inline-loader.js';
 
 // Security finding M10: the inline loader's fragment-target lookup (`ft`) builds `querySelector`
 // strings from wire data. Escaping keeps selector-hostile but valid ids targetable, while the
@@ -18,7 +18,7 @@ describe('inline loader fragment-target selector guard (M10)', () => {
   const sources: readonly [string, string][] = [
     ['readable build source', inlineKovoLoaderInstallerReadableSource],
     ['freshly minified build source', buildInlineKovoLoaderInstallerSource()],
-    ['generated bootstrap source', createInlineKovoLoaderSource('globalThis.__kovoInlineImport')],
+    ['generated runtime installer source', inlineKovoLoaderInstallerSource],
   ];
 
   it.each(sources)('guards the fragment-target querySelector in the %s', (_name, source) => {

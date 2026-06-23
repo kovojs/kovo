@@ -50,6 +50,8 @@ export interface I18nCatalog<Messages extends Record<string, string> = Record<st
 export interface StylesheetAsset {
   criticalCss?: string;
   cspHash?: string;
+  /** When criticalCss exists, defer the full stylesheet by default; set false to block. */
+  deferFull?: boolean;
   href: string;
   preload?: boolean;
 }
@@ -61,8 +63,16 @@ export type StylesheetTheme = string | { readonly css: string };
 export interface StylesheetDeclarationOptions {
   /** Critical CSS to inline before the linked stylesheet identity. */
   criticalCss?: string | readonly string[];
+  /**
+   * How theme CSS prepended to critical CSS should be inlined. The default
+   * (`'used'`) keeps only custom properties reachable from `criticalCss`
+   * `var(...)` references; `'all'` keeps the full theme block.
+   */
+  criticalCssTheme?: 'all' | 'used';
   /** Optional CSP hash for the inlined critical CSS. */
   cspHash?: string;
+  /** When criticalCss exists, defer the full stylesheet by default; set false to block. */
+  deferFull?: boolean;
   /** Public stylesheet href; local sources derive `/assets/<file>` when omitted. */
   href?: string;
   /** Whether Early Hints should preload the linked stylesheet. */
@@ -153,6 +163,7 @@ export function stylesheet(
   return {
     ...(criticalCss ? { criticalCss } : {}),
     ...(options.cspHash === undefined ? {} : { cspHash: options.cspHash }),
+    ...(options.deferFull === undefined ? {} : { deferFull: options.deferFull }),
     href,
     ...(options.preload === undefined ? {} : { preload: options.preload }),
   };
@@ -205,7 +216,7 @@ export function renderPageHints(
 
 export function renderStylesheetLinks(stylesheets: readonly (string | StylesheetAsset)[]): string {
   return dedupeStylesheets(stylesheets)
-    .map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`)
+    .map((asset) => renderStylesheetLink(asset.href))
     .join('');
 }
 
@@ -238,16 +249,28 @@ function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): Style
 }
 
 function renderPageStylesheetHint(asset: StylesheetAsset): InlineHtmlWithCsp {
-  const link = `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`;
+  const link = renderStylesheetLink(asset.href);
   if (!asset.criticalCss) return { html: link };
 
   const cssText = escapeStyleText(asset.criticalCss);
   const hash = asset.cspHash ?? cspSha256(cssText);
+  const fullStylesheet =
+    asset.deferFull === false
+      ? link
+      : `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`;
 
   return {
     csp: { scripts: [], styles: [hash] },
-    html: `<style data-kovo-critical-href="${escapeAttribute(asset.href)}" ${cspHashAttribute(hash)}>${cssText}</style>${link}`,
+    html: `<style data-kovo-critical-href="${escapeAttribute(asset.href)}" ${cspHashAttribute(hash)}>${cssText}</style>${fullStylesheet}`,
   };
+}
+
+function renderStylesheetLink(href: string): string {
+  return `<link rel="stylesheet" href="${escapeAttribute(href)}">`;
+}
+
+function renderDeferredStylesheetLink(href: string): string {
+  return `<link rel="preload" as="style" href="${escapeAttribute(href)}" data-kovo-deferred-style>`;
 }
 
 function renderEarlyHints(
@@ -285,10 +308,21 @@ function isExternalStylesheetSource(source: string): boolean {
 }
 
 function resolveStylesheetCriticalCss(options: StylesheetDeclarationOptions): string | undefined {
-  const parts = [
-    stylesheetThemeCss(options.theme),
-    ...(Array.isArray(options.criticalCss) ? options.criticalCss : [options.criticalCss]),
-  ].filter((part): part is string => typeof part === 'string' && part.length > 0);
+  const themeCss = stylesheetThemeCss(options.theme);
+  const criticalParts = (
+    Array.isArray(options.criticalCss) ? options.criticalCss : [options.criticalCss]
+  ).filter((part): part is string => typeof part === 'string' && part.length > 0);
+  const criticalCss = criticalParts.join('\n');
+  const prunedThemeCss =
+    themeCss === undefined ||
+    criticalCss === '' ||
+    options.criticalCssTheme === 'all' ||
+    options.cspHash !== undefined
+      ? themeCss
+      : (pruneCriticalThemeCss(themeCss, criticalCss) ?? themeCss);
+  const parts = [prunedThemeCss, ...criticalParts].filter(
+    (part): part is string => typeof part === 'string' && part.length > 0,
+  );
 
   return parts.length > 0 ? parts.join('\n') : undefined;
 }
@@ -296,6 +330,216 @@ function resolveStylesheetCriticalCss(options: StylesheetDeclarationOptions): st
 function stylesheetThemeCss(theme: StylesheetTheme | undefined): string | undefined {
   if (typeof theme === 'string') return theme;
   return typeof theme?.css === 'string' ? theme.css : undefined;
+}
+
+interface CriticalCssBlock {
+  declarations: CriticalCssDeclaration[];
+  selector: string;
+}
+
+interface CriticalCssDeclaration {
+  property: string;
+  raw: string;
+  value: string;
+}
+
+function pruneCriticalThemeCss(themeCss: string, criticalCss: string): string | undefined {
+  const blocks = parseCriticalCssBlocks(stripCssComments(themeCss));
+  if (!blocks) return undefined;
+
+  const declarationsByProperty = new Map<string, CriticalCssDeclaration[]>();
+  for (const block of blocks) {
+    for (const declaration of block.declarations) {
+      if (!declaration.property.startsWith('--')) continue;
+      const declarations = declarationsByProperty.get(declaration.property) ?? [];
+      declarations.push(declaration);
+      declarationsByProperty.set(declaration.property, declarations);
+    }
+  }
+
+  const needed = transitiveCriticalCssVariables(criticalCss, declarationsByProperty);
+  const rendered = blocks
+    .map((block) => {
+      const declarations = block.declarations.filter(
+        (declaration) => !declaration.property.startsWith('--') || needed.has(declaration.property),
+      );
+      return declarations.length === 0
+        ? ''
+        : `${block.selector} {\n${declarations.map((declaration) => `  ${declaration.raw}`).join('\n')}\n}`;
+    })
+    .filter(Boolean);
+
+  return rendered.join('\n\n');
+}
+
+function transitiveCriticalCssVariables(
+  criticalCss: string,
+  declarationsByProperty: ReadonlyMap<string, readonly CriticalCssDeclaration[]>,
+): Set<string> {
+  const needed = new Set(collectCssVariableReferences(criticalCss));
+  const queue = [...needed];
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const property = queue[index]!;
+    for (const declaration of declarationsByProperty.get(property) ?? []) {
+      for (const reference of collectCssVariableReferences(declaration.value)) {
+        if (needed.has(reference)) continue;
+        needed.add(reference);
+        queue.push(reference);
+      }
+    }
+  }
+
+  return needed;
+}
+
+function collectCssVariableReferences(css: string): string[] {
+  return [...css.matchAll(/var\(\s*(--[-_a-zA-Z0-9]+)/g)].map((match) => match[1]!);
+}
+
+function stripCssComments(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+function parseCriticalCssBlocks(css: string): CriticalCssBlock[] | undefined {
+  const blocks: CriticalCssBlock[] = [];
+  let offset = 0;
+
+  while (offset < css.length) {
+    const open = css.indexOf('{', offset);
+    if (open === -1) {
+      return css.slice(offset).trim() === '' ? blocks : undefined;
+    }
+
+    const selector = css.slice(offset, open).trim();
+    if (!selector) return undefined;
+    const close = findMatchingCriticalCssBlockClose(css, open);
+    if (close === undefined) return undefined;
+    const body = css.slice(open + 1, close);
+    if (body.includes('{') || body.includes('}')) return undefined;
+    const declarations = parseCriticalCssDeclarations(body);
+    if (!declarations) return undefined;
+    blocks.push({ declarations, selector });
+    offset = close + 1;
+  }
+
+  return blocks;
+}
+
+function findMatchingCriticalCssBlockClose(css: string, open: number): number | undefined {
+  let quote: '"' | "'" | undefined;
+  let parenDepth = 0;
+
+  for (let index = open + 1; index < css.length; index += 1) {
+    const char = css[index];
+    if (quote !== undefined) {
+      if (char === '\\') {
+        index += 1;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      parenDepth += 1;
+      continue;
+    }
+    if (char === ')' && parenDepth > 0) {
+      parenDepth -= 1;
+      continue;
+    }
+    if (char === '}' && parenDepth === 0) return index;
+  }
+
+  return undefined;
+}
+
+function parseCriticalCssDeclarations(body: string): CriticalCssDeclaration[] | undefined {
+  const declarations: CriticalCssDeclaration[] = [];
+  for (const rawDeclaration of splitCriticalCssDeclarations(body)) {
+    const raw = rawDeclaration.trim();
+    if (!raw) continue;
+    const colon = findCriticalCssDeclarationColon(raw);
+    if (colon === undefined) return undefined;
+    const property = raw.slice(0, colon).trim();
+    const value = raw.slice(colon + 1).trim();
+    if (!property || !value) return undefined;
+    declarations.push({ property, raw: `${property}: ${value};`, value });
+  }
+  return declarations;
+}
+
+function splitCriticalCssDeclarations(body: string): string[] {
+  const declarations: string[] = [];
+  let start = 0;
+  let quote: '"' | "'" | undefined;
+  let parenDepth = 0;
+
+  for (let index = 0; index < body.length; index += 1) {
+    const char = body[index];
+    if (quote !== undefined) {
+      if (char === '\\') {
+        index += 1;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      parenDepth += 1;
+      continue;
+    }
+    if (char === ')' && parenDepth > 0) {
+      parenDepth -= 1;
+      continue;
+    }
+    if (char !== ';' || parenDepth !== 0) continue;
+    declarations.push(body.slice(start, index));
+    start = index + 1;
+  }
+
+  declarations.push(body.slice(start));
+  return declarations;
+}
+
+function findCriticalCssDeclarationColon(declaration: string): number | undefined {
+  let quote: '"' | "'" | undefined;
+  let parenDepth = 0;
+
+  for (let index = 0; index < declaration.length; index += 1) {
+    const char = declaration[index];
+    if (quote !== undefined) {
+      if (char === '\\') {
+        index += 1;
+        continue;
+      }
+      if (char === quote) quote = undefined;
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      parenDepth += 1;
+      continue;
+    }
+    if (char === ')' && parenDepth > 0) {
+      parenDepth -= 1;
+      continue;
+    }
+    if (char === ':' && parenDepth === 0) return index;
+  }
+
+  return undefined;
 }
 
 function renderSpeculationRules(

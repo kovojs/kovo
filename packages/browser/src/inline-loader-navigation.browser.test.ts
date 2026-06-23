@@ -209,6 +209,58 @@ describe('browser inline loader enhanced navigation', () => {
     );
   });
 
+  it('promotes deferred full stylesheet links after enhanced navigation commits head markup', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Products</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
+      '</main>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return [
+          '<!doctype html><html><head>',
+          '<meta name="kovo-build" content="build-a">',
+          '<title>Cart</title>',
+          '<style data-kovo-critical-href="/cart.css">main{display:block}</style>',
+          '<link rel="preload" as="style" href="/cart.css" data-kovo-deferred-style>',
+          '<noscript><link rel="stylesheet" href="/cart.css"></noscript>',
+          '</head><body>',
+          '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+          '<a id="to-cart" href="/cart">Cart</a>',
+          '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">Cart</section>',
+          '</main>',
+          '</body></html>',
+        ].join('');
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+    vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
+
+    installNavigationLoader();
+    dispatchAnchorLikeClick('/cart');
+
+    await vi.waitFor(() => expect(document.title).toBe('Cart'));
+    await vi.waitFor(() => {
+      const promoted = Array.from(document.head.children).find(
+        (element) =>
+          element.tagName === 'LINK' && element.getAttribute('href') === '/cart.css',
+      );
+      expect(promoted?.getAttribute('rel')).toBe('stylesheet');
+      expect(promoted?.hasAttribute('data-kovo-deferred-style')).toBe(false);
+    });
+    expect(document.head.querySelector('noscript')?.innerHTML).toContain(
+      '<link rel="stylesheet" href="/cart.css">',
+    );
+  });
+
   it('preserves the client-applied docs theme class while updating target shell attributes', async () => {
     localStorage.setItem('theme', 'dark');
     document.documentElement.className = 'dark stale-shell';

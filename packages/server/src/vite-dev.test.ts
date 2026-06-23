@@ -454,8 +454,12 @@ describe('server app shell Vite dev seam', () => {
       expect(documentResponse.status, documentBody).toBe(200);
       expect(documentBody).toContain('data-kovo-critical-href="/assets/base.css"');
       expect(documentBody).toContain('data-kovo-critical-href="/assets/routes/index.css"');
-      expect(documentBody).toContain('<link rel="stylesheet" href="/assets/base.css">');
-      expect(documentBody).toContain('<link rel="stylesheet" href="/assets/routes/index.css">');
+      expect(documentBody).toContain(
+        '<link rel="preload" as="style" href="/assets/base.css" data-kovo-deferred-style>',
+      );
+      expect(documentBody).toContain(
+        '<link rel="preload" as="style" href="/assets/routes/index.css" data-kovo-deferred-style>',
+      );
       expect(documentBody).not.toContain('/assets/routes/login.css');
       expect(documentBody).toContain('.base{display:block}');
       expect(documentBody).toContain('.home{color:teal}');

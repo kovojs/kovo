@@ -6,13 +6,22 @@ import {
   assertMinifiedInlineKovoLoaderInstallerWireParserParity,
   inlineKovoLoaderGzipByteBudget,
 } from './inline-loader-build.js';
-import { inlineKovoLoaderInstallerSource, kovoLoaderSource } from './inline-loader.js';
+import {
+  inlineKovoLoaderBootstrapInstallerSource,
+  inlineKovoLoaderInstallerSource,
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleSource,
+  kovoLoaderSource,
+} from './inline-loader.js';
 import { createInlineKovoLoaderSource as createPublicInlineKovoLoaderSource } from './internal/inline-loader.js';
 
 describe('inline loader minified artifact', () => {
-  it('wraps the extracted installer source as the public bootstrap source', () => {
-    // SPEC.md §4.4: the generated bootstrap is the always-loaded runtime path.
-    expect(kovoLoaderSource).toBe(`(${inlineKovoLoaderInstallerSource})((url)=>import(url));`);
+  it('wraps the tiny bootstrap as the public first-load source', () => {
+    // SPEC.md §4.4: the generated bootstrap is the always-loaded path; the full
+    // loader moves to the versioned runtime module.
+    expect(kovoLoaderSource).toBe(
+      `(${inlineKovoLoaderBootstrapInstallerSource})(${JSON.stringify(kovoDeferredRuntimeModulePath)},(url)=>import(url));`,
+    );
     expect(createPublicInlineKovoLoaderSource()).toBe(kovoLoaderSource);
     expect(gzipSync(kovoLoaderSource).byteLength).toBeLessThanOrEqual(
       inlineKovoLoaderGzipByteBudget,
@@ -20,8 +29,12 @@ describe('inline loader minified artifact', () => {
     expect(kovoLoaderSource).toBe(kovoLoaderSource.trim());
     expect(kovoLoaderSource).not.toMatch(/\n|\s{2,}/);
     expect(kovoLoaderSource).toMatch(
-      /^\(function installInlineKovoLoader\(\w+\)\{.*\}\)\(\(url\)=>import\(url\)\);$/,
+      /^\(function installInlineKovoBootstrap\(\w+,\w+\)\{.*\}\)\("\/c\/kovo-runtime\.client\.js",\(url\)=>import\(url\)\);$/,
     );
+    expect(kovoDeferredRuntimeModuleSource).toContain(
+      `const install=(${inlineKovoLoaderInstallerSource});`,
+    );
+    expect(kovoDeferredRuntimeModuleSource).toContain('installKovoDeferredRuntime');
   });
 
   it('keeps the shipped minified parser helper tied to the canonical runtime parser', () => {

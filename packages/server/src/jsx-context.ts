@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 import type { CsrfValidationOptions } from './csrf.js';
+import type { DeferredStreamChunk } from './deferred-stream.js';
 import type { MutationFail } from './mutation.js';
 
 type MaybePromise<Value> = Promise<Value> | Value;
@@ -14,9 +15,14 @@ export interface JsxMutationFailureContext {
 
 export interface JsxFrameworkContext {
   csrf?: CsrfValidationOptions<any>;
+  deferredRegions?: DeferredRegionCollector;
   mutationFailure?: JsxMutationFailureContext;
   onCsrfSetCookie?: (rawSetCookie: string) => void;
   request: unknown;
+}
+
+export interface DeferredRegionCollector {
+  add(chunk: Promise<DeferredStreamChunk> | DeferredStreamChunk): void;
 }
 
 const jsxRequestContext = new AsyncLocalStorage<JsxFrameworkContext>();

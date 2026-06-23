@@ -9,6 +9,13 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 
+const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const runtimeClientModuleArtifact = expect.objectContaining({
+  href: expect.stringMatching(runtimeClientModulePath),
+  path: expect.stringMatching(runtimeClientModulePath),
+  status: 200,
+});
+
 describe('server static export', () => {
   it('discovers referenced client modules without requiring an output directory', async () => {
     const registry = createMemoryVersionedClientModuleRegistry();
@@ -39,6 +46,7 @@ describe('server static export', () => {
         path: '/c/__v/cart-dry-run/cart.client.js',
         status: 200,
       },
+      runtimeClientModuleArtifact,
     ]);
   });
 
@@ -72,10 +80,12 @@ describe('server static export', () => {
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
         cartHref,
         `${menuHref}#Menu$open`,
+        expect.stringMatching(runtimeClientModulePath),
       ]);
       expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
         '/c/__v/cart-1/cart.client.js',
         '/c/__v/menu-1/menu.client.js',
+        expect.stringMatching(runtimeClientModulePath),
       ]);
 
       const cartResponse = await handler(new Request(`https://kovo.local${cartHref}`));
@@ -125,6 +135,7 @@ describe('server static export', () => {
       expect(result.clientModules.map((artifact) => artifact.href)).toEqual([
         '/c/__v/cart-absolute/cart.client.js',
         '/c/__v/menu-absolute/menu.client.js#Menu$open',
+        expect.stringMatching(runtimeClientModulePath),
       ]);
       await expect(
         readFile(path.join(outDir, 'c/__v/cart-absolute/cart.client.js'), 'utf8'),
@@ -155,10 +166,17 @@ describe('server static export', () => {
         entries() {
           return [];
         },
-        put() {
-          throw new Error('unused');
+        put(module) {
+          return `/c/__v/${module.version}/${module.path.slice('/c/'.length)}`;
         },
-        resolve() {
+        resolve(href) {
+          if (href?.includes('/kovo-runtime.client.js')) {
+            return {
+              body: 'export {};',
+              headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+              status: 200,
+            };
+          }
           return {
             body: '<!doctype html><h1>Wrong handler</h1>',
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -205,10 +223,17 @@ describe('server static export', () => {
         entries() {
           return [];
         },
-        put() {
-          throw new Error('unused');
+        put(module) {
+          return `/c/__v/${module.version}/${module.path.slice('/c/'.length)}`;
         },
-        resolve() {
+        resolve(href) {
+          if (href?.includes('/kovo-runtime.client.js')) {
+            return {
+              body: 'export {};',
+              headers: { 'Content-Type': 'text/javascript; charset=utf-8' },
+              status: 200,
+            };
+          }
           return {
             body: 'export const unsafe = true;',
             headers: { 'Content-Type': 'text/javascript; charset=utf-8' },

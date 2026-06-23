@@ -135,7 +135,9 @@ function parseArgs(args) {
 
 function routeStyleSize(route, html, cssFiles, root) {
   const linkedHrefs = unique(
-    [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map((match) => match[1] ?? ''),
+    [...html.matchAll(/<link rel="(?:stylesheet|preload)"(?: as="style")? href="([^"]+)"/g)].map(
+      (match) => match[1] ?? '',
+    ),
   );
   const linkedCssBytes = linkedHrefs.reduce((total, href) => {
     const file = cssFileForHref(cssFiles, href, root);

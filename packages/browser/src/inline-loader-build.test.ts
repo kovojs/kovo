@@ -11,14 +11,22 @@ import {
   buildInlineKovoLoaderModuleSource,
   buildInlineKovoLoaderInstallerReadableSource,
   buildInlineKovoLoaderInstallerSource,
+  buildInlineKovoLoaderStubInstallerSource,
   emitInlineKovoLoaderModule,
   inlineDelegatedEvents,
   inlineFragmentTargetEscapeReadableSource,
   inlineKovoLoaderGzipByteBudget,
   inlineKovoLoaderInstallerReadableSource,
+  inlineKovoLoaderStubInstallerReadableSource,
 } from './inline-loader-build.js';
 import { escapeCssString } from './fragment-targets.js';
-import { createInlineKovoLoaderSource, inlineKovoLoaderInstallerSource } from './inline-loader.js';
+import {
+  createInlineKovoLoaderSource,
+  inlineKovoLoaderBootstrapInstallerSource,
+  inlineKovoLoaderInstallerSource,
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleSource,
+} from './inline-loader.js';
 import { defaultDelegatedEvents } from './loader.js';
 
 function createOversizedInlineLoaderSource(): string {
@@ -57,6 +65,14 @@ describe('inline loader build source', () => {
     expect(moduleSource).toBe(readFileSync(new URL('./inline-loader.ts', import.meta.url), 'utf8'));
     expect(moduleSource).toContain('const inlineKovoLoaderInstaller = (');
     expect(moduleSource).toContain('inlineKovoLoaderInstaller(importModule);');
+    expect(moduleSource).toContain('const inlineKovoLoaderBootstrapInstaller = (');
+    expect(moduleSource).toContain('installInlineKovoBootstrap(');
+    expect(moduleSource).toContain('kovoDeferredRuntimeModuleSource');
+    expect(kovoDeferredRuntimeModuleSource).toContain('installKovoDeferredRuntime');
+    expect(kovoDeferredRuntimeModuleSource).toContain(inlineKovoLoaderInstallerSource);
+    expect(inlineKovoLoaderBootstrapInstallerSource).toBe(
+      buildInlineKovoLoaderStubInstallerSource(),
+    );
     expect(moduleSource).toContain('importModule: ImportHandlerModule,');
     expect(moduleSource).not.toContain('InlineImportHandlerModule');
     expect(moduleSource).not.toContain('eval');
@@ -67,6 +83,9 @@ describe('inline loader build source', () => {
     expect(inlineDelegatedEvents).toEqual([...defaultDelegatedEvents]);
     expect(inlineKovoLoaderInstallerReadableSource).toContain(
       `const events = ${JSON.stringify([...defaultDelegatedEvents])};`,
+    );
+    expect(inlineKovoLoaderStubInstallerReadableSource).toContain(
+      "const events = ['click', 'submit'];",
     );
   });
 
@@ -166,7 +185,10 @@ describe('inline loader build source', () => {
 
   it('trims custom import expressions in generated public bootstrap source', () => {
     expect(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport ')).toContain(
-      ')(globalThis.__kovoInlineImport);',
+      `)(${JSON.stringify(kovoDeferredRuntimeModulePath)},globalThis.__kovoInlineImport);`,
     );
+    expect(
+      createInlineKovoLoaderSource(' "/c/custom-runtime.js" ', ' globalThis.__kovoInlineImport '),
+    ).toContain(')("/c/custom-runtime.js",globalThis.__kovoInlineImport);');
   });
 });

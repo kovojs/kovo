@@ -33,7 +33,12 @@ describe('server static export', () => {
 
     const result = await exportStaticApp(app);
 
-    expect(result.clientModules).toEqual([]);
+    expect(result.clientModules).toEqual([
+      expect.objectContaining({
+        path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+        status: 200,
+      }),
+    ]);
     expect(result.diagnostics).toEqual([]);
     expect(result.artifacts).toHaveLength(1);
     expect(result.artifacts[0]).toMatchObject({
@@ -62,10 +67,16 @@ describe('server static export', () => {
     const handled = await handler(new Request('https://kovo.local/'));
 
     expect(exported.artifacts[0]?.path).toBe('/index.html');
-    expect(exported.clientModules).toEqual([]);
+    expect(exported.clientModules).toEqual([
+      expect.objectContaining({
+        path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+        status: 200,
+      }),
+    ]);
     await expect(handled.text()).resolves.toBe(exported.artifacts[0]?.body);
     expect(exported.artifacts[0]?.body).toContain('<main data-url="/">from-page</main>');
-    expect(exported.artifacts[0]?.body).toContain('installInlineKovoLoader');
+    expect(exported.artifacts[0]?.body).toContain('installInlineKovoBootstrap');
+    expect(exported.artifacts[0]?.body).toContain('/kovo-runtime.client.js');
   });
 
   it('writes replayed html artifacts under the configured output directory', async () => {
@@ -87,7 +98,12 @@ describe('server static export', () => {
 
       const result = await exportStaticApp(app, { outDir: pathToFileURL(outDir) });
 
-      expect(result.clientModules).toEqual([]);
+      expect(result.clientModules).toEqual([
+        expect.objectContaining({
+          path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+          status: 200,
+        }),
+      ]);
       expect(result.diagnostics).toEqual([]);
       expect(result.artifacts.map((artifact) => artifact.path)).toEqual([
         '/index.html',

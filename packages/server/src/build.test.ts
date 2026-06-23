@@ -12,6 +12,9 @@ import { cloudflare, node, vercel } from './build.js';
 import { stylesheet } from './hints.js';
 import { writeKovoNeutralBuild } from './neutral-build.js';
 
+const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
     expect(packageBuildApi.cloudflare).toBe(cloudflare);
@@ -373,6 +376,11 @@ describe('server build-time deployment API', () => {
             path: '/c/__v/app-v1/app.client.js',
             version: 'app-v1',
           },
+          expect.objectContaining({
+            file: expect.stringMatching(runtimeClientModuleFile),
+            href: expect.stringMatching(runtimeClientModulePath),
+            path: expect.stringMatching(runtimeClientModulePath),
+          }),
         ],
       });
       expect(build.clientModules).toEqual([
@@ -383,6 +391,12 @@ describe('server build-time deployment API', () => {
           source: 'export const appClient = true;',
           version: 'app-v1',
         },
+        expect.objectContaining({
+          file: expect.stringMatching(runtimeClientModuleFile),
+          href: expect.stringMatching(runtimeClientModulePath),
+          path: expect.stringMatching(runtimeClientModulePath),
+          source: expect.stringContaining('installKovoDeferredRuntime'),
+        }),
       ]);
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -1090,6 +1104,12 @@ export default async function handler() {
       await expect(
         cloudflare().inspect!(build, { declaredEnv: ['DATABASE_URL'] }),
       ).resolves.toEqual([
+        {
+          code: 'client-module-retention',
+          message:
+            'The cloudflare preset emits immutable /c/* client modules. Keep old versioned /c/ artifacts published until documents that reference them expire; never purge or rewrite them during deploys.',
+          severity: 'warning',
+        },
         {
           code: 'cloudflare-tcp-database',
           message:

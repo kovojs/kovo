@@ -2,6 +2,7 @@ import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createServer as createNodeServer } from 'node:http';
 import path from 'node:path';
+import { createBrotliCompress, createGzip } from 'node:zlib';
 
 import { createServer as createViteServer } from 'vite-plus';
 
@@ -133,7 +134,7 @@ export async function runDemoServeCli(makeServer) {
   return served;
 }
 
-async function tryServeBuiltAsset(req, res, distDir) {
+export async function tryServeBuiltAsset(req, res, distDir) {
   const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (!pathname.startsWith('/assets/')) return false;
   const filePath = path.join(distDir, pathname);
@@ -141,15 +142,84 @@ async function tryServeBuiltAsset(req, res, distDir) {
   try {
     const info = await stat(filePath);
     if (!info.isFile()) return false;
-    res.writeHead(200, {
-      'content-type': STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream',
+    const contentType = STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream';
+    const compression = isCompressibleContentType(contentType)
+      ? preferredCompression(String(req.headers['accept-encoding'] ?? ''))
+      : undefined;
+    const headers = {
+      'content-type': contentType,
       'cache-control': cacheControlForAsset(pathname),
+      ...(isCompressibleContentType(contentType) ? { vary: 'Accept-Encoding' } : {}),
+      ...(compression ? { 'content-encoding': compression } : {}),
+    };
+    res.writeHead(200, {
+      ...headers,
     });
-    createReadStream(filePath).pipe(res);
+    if (req.method === 'HEAD') {
+      res.end();
+      return true;
+    }
+    const source = createReadStream(filePath);
+    const body =
+      compression === 'br'
+        ? source.pipe(createBrotliCompress())
+        : compression === 'gzip'
+          ? source.pipe(createGzip())
+          : source;
+    body.once('error', (error) => {
+      res.destroy(error instanceof Error ? error : undefined);
+    });
+    body.pipe(res);
     return true;
   } catch {
     return false;
   }
+}
+
+function preferredCompression(acceptEncoding) {
+  const encodings = parseAcceptEncoding(acceptEncoding);
+  const wildcard = encodings.get('*') ?? 0;
+  const br = encodings.get('br') ?? wildcard;
+  const gzip = encodings.get('gzip') ?? wildcard;
+  if (br <= 0 && gzip <= 0) return undefined;
+  return br >= gzip && br > 0 ? 'br' : 'gzip';
+}
+
+function parseAcceptEncoding(value) {
+  const encodings = new Map();
+  for (const rawEntry of value.split(',')) {
+    const entry = rawEntry.trim();
+    if (!entry) continue;
+    const [rawName, ...params] = entry.split(';');
+    const name = rawName?.trim().toLowerCase();
+    if (!name) continue;
+    let q = 1;
+    for (const param of params) {
+      const [rawKey, rawValue] = param.trim().split('=');
+      if (rawKey?.toLowerCase() !== 'q') continue;
+      const parsed = Number(rawValue);
+      q = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0;
+    }
+    encodings.set(name, q);
+  }
+  return encodings;
+}
+
+function isCompressibleContentType(contentType) {
+  const type = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  return (
+    type.startsWith('text/') ||
+    type === 'application/javascript' ||
+    type === 'application/json' ||
+    type === 'application/ld+json' ||
+    type === 'application/manifest+json' ||
+    type === 'application/x-javascript' ||
+    type === 'application/xhtml+xml' ||
+    type === 'application/xml' ||
+    type === 'image/svg+xml' ||
+    type.endsWith('+json') ||
+    type.endsWith('+xml')
+  );
 }
 
 function cacheControlForAsset(pathname) {

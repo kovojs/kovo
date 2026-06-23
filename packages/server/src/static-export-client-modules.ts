@@ -1,4 +1,9 @@
 import { collectStaticExportClientModuleHrefs } from './static-export-document-refs.js';
+import {
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleVersion,
+} from '@kovojs/browser/internal/inline-loader';
+import { versionedClientModuleHref } from './client-modules.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import { replayStaticExportRequest } from './static-export-request.js';
 import type { StaticExportReplayContext } from './static-export-replay-context.js';
@@ -20,7 +25,19 @@ export async function replayStaticExportClientModuleArtifacts({
   const artifacts: StaticExportClientModuleArtifact[] = [];
   const artifactByTargetPath = new Map<string, StaticExportClientModuleArtifact>();
 
-  for (const href of collectStaticExportClientModuleHrefs(routeArtifacts, context.origin)) {
+  const hrefs = new Set([
+    ...collectStaticExportClientModuleHrefs(routeArtifacts, context.origin),
+    ...(routeArtifacts.length === 0
+      ? []
+      : [
+          versionedClientModuleHref(
+            kovoDeferredRuntimeModulePath,
+            kovoDeferredRuntimeModuleVersion,
+          ),
+        ]),
+  ]);
+
+  for (const href of hrefs) {
     const artifact = await replayStaticExportClientModuleArtifact({ context, href });
     const existingArtifact = artifactByTargetPath.get(artifact.path);
     if (

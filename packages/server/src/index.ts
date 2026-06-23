@@ -122,6 +122,7 @@ export type {
 } from './api/data.js';
 export {
   cspSha256,
+  defer,
   i18n,
   meta,
   metaFromQuery,
@@ -132,6 +133,7 @@ export {
 export type {
   ContentSecurityPolicyOptions,
   CspInlineMetadata,
+  DeferredRegionOptions,
   DocumentParts,
   DocumentTemplate,
   DocumentTemplateContext,
@@ -141,6 +143,7 @@ export type {
   RouteMetaFactory,
   RouteMetaSource,
   RoutePrefetch,
+  RegionPriority,
   StylesheetAsset,
   StylesheetDeclarationOptions,
   StylesheetTheme,

@@ -5,6 +5,8 @@
 // inline script/style they author so it can be admitted by the same policy.
 export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
+export { defer } from '../deferred-region.js';
+export type { DeferredRegionOptions, RegionPriority } from '../deferred-region.js';
 export type { DocumentParts, DocumentTemplate, DocumentTemplateContext } from '../document-core.js';
 export { stylesheet } from '../hints.js';
 export type {

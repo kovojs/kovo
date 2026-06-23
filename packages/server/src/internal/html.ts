@@ -14,6 +14,13 @@ export {
 } from '../component-render.js';
 export { renderContentSecurityPolicy } from '../csp.js';
 export {
+  createDeferredRegionChunkCollector,
+  defer,
+  type DeferredRegionChunkCollector,
+  type DeferredRegionOptions,
+  type RegionPriority,
+} from '../deferred-region.js';
+export {
   renderDeferredStream,
   type DeferredFragmentChunk,
   type DeferredPriority,

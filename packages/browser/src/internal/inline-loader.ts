@@ -6,7 +6,13 @@
 // framework-owned tests and emit tooling.
 export {
   createInlineKovoLoaderSource,
+  inlineKovoLoaderBootstrapInstallerSource,
+  inlineKovoLoaderInstallerSource,
+  installInlineKovoBootstrap,
   installInlineKovoLoader,
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleSource,
+  kovoDeferredRuntimeModuleVersion,
   kovoLoaderSource,
 } from '../inline-loader.js';
 export {

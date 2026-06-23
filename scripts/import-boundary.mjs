@@ -30,6 +30,7 @@ const explicitlyAllowedInternalImports = new Set([
   'examples/stackoverflow/scripts/emit-components.mjs -> @kovojs/server/internal/wire',
   'examples/stackoverflow/scripts/emit-graph.mjs -> @kovojs/server/internal/execution',
   'examples/stackoverflow/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
+  'examples/stackoverflow/scripts/materialize-demo-css.mjs -> @kovojs/compiler/internal',
   'examples/stackoverflow/scripts/materialize-demo-css.mjs -> @kovojs/compiler/package-styles',
   'examples/reference/src/app.ts -> @kovojs/core/internal/graph',
   'examples/stackoverflow/src/graph.ts -> @kovojs/core/internal/graph',

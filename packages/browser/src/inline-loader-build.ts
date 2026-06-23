@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 
@@ -64,6 +65,8 @@ export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
 
 export const inlineKovoLoaderInstallerReadableSource =
   buildInlineKovoLoaderInstallerReadableSource();
+export const inlineKovoLoaderStubInstallerReadableSource =
+  buildInlineKovoLoaderStubInstallerReadableSource();
 
 export function buildInlineKovoLoaderInstallerReadableSource(
   wireParserReadableSource = inlineWireParserReadableSource,
@@ -476,6 +479,7 @@ function installInlineKovoLoader(im) {
       }
 
       doc.head.innerHTML = nextDoc.head.innerHTML;
+      ps();
       xd(doc.documentElement, nextDoc.documentElement);
       const body = doc.body || triggerRoot;
       if (!body) throw Error();
@@ -674,7 +678,7 @@ function installInlineKovoLoader(im) {
       pending += decoder.decode();
       if (pending) {
         sfail();
-        throw Error('Streaming mutation ended without a <kovo-done> terminator.');
+        throw Error();
       }
     } catch (error) {
       sfail();
@@ -817,6 +821,26 @@ function installInlineKovoLoader(im) {
       root.querySelectorAll('[on\\:visible]').forEach((el) => to(el, 'visible') && observer.observe(el));
     }
   };
+  const ps = () => {
+    const promote = () => {
+      for (const el of qa(doc, 'link[data-kovo-deferred-style]')) {
+        const href = el.getAttribute?.('href');
+        if (!href) continue;
+        const existing = qa(doc, 'link[rel="stylesheet"][href]').some(
+          (link) => link !== el && link.getAttribute?.('href') === href,
+        );
+        if (existing) {
+          el.remove?.();
+          continue;
+        }
+        el.rel = 'stylesheet';
+        el.removeAttribute?.('data-kovo-deferred-style');
+      }
+    };
+    const raf = globalThis.requestAnimationFrame;
+    if (typeof raf === 'function') raf(() => raf(promote));
+    else setTimeout(promote);
+  };
   for (const event of events) addEventListener(event, dispatch, { capture: true });
   // SPEC.md §4.4: synthesize delegated pointerenter/pointerleave from the bubbling
   // pointerover/pointerout pair, firing only when the pointer crosses the on:* element's
@@ -840,7 +864,134 @@ function installInlineKovoLoader(im) {
   // SPEC.md §4.7: declared triggers are legible in body markup, while the default
   // document emits the loader in <head>. Defer the scan one task so the parser can
   // continue into the body; event delegation above is installed immediately.
+  ps();
   setTimeout(() => tr(doc));
+}
+`;
+}
+
+export function buildInlineKovoLoaderStubInstallerReadableSource(): string {
+  return String.raw`
+/* SPEC.md §4.4: tiny paint-first bootstrap; imports the full runtime after paint or interaction. */
+function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
+  const doc = document;
+  const events = ['click', 'submit'];
+  const queued = [];
+  const streamQueue = [];
+  let loading;
+  const previousApply = globalThis.__kovo_a;
+  globalThis.__kovo_a = (body) => {
+    streamQueue.push(body);
+  };
+  const qa = (root, selector) =>
+    root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
+  const ps = () => {
+    const promote = () => {
+      for (const el of qa(doc, 'link[data-kovo-deferred-style]')) {
+        const href = el.getAttribute?.('href');
+        if (!href) continue;
+        const existing = qa(doc, 'link[rel="stylesheet"][href]').some(
+          (link) => link !== el && link.getAttribute?.('href') === href,
+        );
+        if (existing) {
+          el.remove?.();
+          continue;
+        }
+        el.rel = 'stylesheet';
+        el.removeAttribute?.('data-kovo-deferred-style');
+      }
+    };
+    const raf = globalThis.requestAnimationFrame;
+    if (typeof raf === 'function') raf(() => raf(promote));
+    else setTimeout(promote);
+  };
+  const enhancedAnchor = (event) => {
+    if (
+      event.defaultPrevented ||
+      event.button ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    const target = event.target;
+    const anchor = target?.closest?.('a[href]');
+    if (
+      !anchor ||
+      target?.closest?.('[on\\:click]') ||
+      anchor.target ||
+      anchor.hasAttribute?.('download')
+    ) {
+      return;
+    }
+    const url = new URL(anchor.href, location.href);
+    if (url.origin !== location.origin) return;
+    if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
+    return { href: url.href, target, type: 'click' };
+  };
+  const enhancedSubmit = (event) => {
+    const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]');
+    return form ? { submitter: event.submitter, target: form, type: 'submit' } : undefined;
+  };
+  const replay = (item) => {
+    if (!item.target?.isConnected) return;
+    if (item.type === 'submit') {
+      let event;
+      try {
+        event = new SubmitEvent('submit', {
+          bubbles: true,
+          cancelable: true,
+          submitter: item.submitter,
+        });
+      } catch {
+        event = new Event('submit', { bubbles: true, cancelable: true });
+      }
+      item.target.dispatchEvent(event);
+      return;
+    }
+    item.target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  };
+  const fallback = (item) => {
+    if (!item.target?.isConnected) return;
+    if (item.type === 'submit') {
+      if (typeof item.target.submit === 'function') item.target.submit();
+      else replay(item);
+      return;
+    }
+    if (item.href) location.assign?.(item.href);
+  };
+  const cleanup = () => {
+    for (const event of events) removeEventListener(event, capture, { capture: true });
+  };
+  const load = () =>
+    (loading ||= runtimeImport(runtimeUrl)
+      .then((mod) => {
+        cleanup();
+        mod.installKovoDeferredRuntime?.();
+        const apply = globalThis.__kovo_a;
+        if (typeof apply === 'function' && apply !== previousApply) {
+          for (const body of streamQueue.splice(0)) apply(body);
+        }
+        for (const item of queued.splice(0)) replay(item);
+      })
+      .catch(() => {
+        cleanup();
+        for (const item of queued.splice(0)) fallback(item);
+      }));
+  const capture = (event) => {
+    const item = event.type === 'submit' ? enhancedSubmit(event) : enhancedAnchor(event);
+    if (!item) return;
+    event.preventDefault();
+    queued.push(item);
+    void load();
+  };
+  for (const event of events) addEventListener(event, capture, { capture: true });
+  ps();
+  const raf = globalThis.requestAnimationFrame;
+  if (typeof raf === 'function') raf(() => raf(() => void load()));
+  else setTimeout(() => void load());
 }
 `;
 }
@@ -856,6 +1007,12 @@ export function buildInlineKovoLoaderInstallerSource(
   const installerSource = minifyInlineJavaScriptSource(installerInput);
   assertDefaultMinifiedInlineKovoLoaderInstallerHelperParity(source, installerSource);
   return installerSource;
+}
+
+export function buildInlineKovoLoaderStubInstallerSource(
+  source = inlineKovoLoaderStubInstallerReadableSource,
+): string {
+  return minifyInlineJavaScriptSource(source);
 }
 
 export interface EmitInlineKovoLoaderModuleOptions {
@@ -874,7 +1031,17 @@ export function buildInlineKovoLoaderModuleSource(
   source = inlineKovoLoaderInstallerReadableSource,
 ): string {
   const installerSource = buildInlineKovoLoaderInstallerSource(source);
+  const stubInstallerSource = buildInlineKovoLoaderStubInstallerSource();
+  const runtimeModuleSource = buildKovoDeferredRuntimeModuleSource(installerSource);
+  const runtimeModuleVersion = createHash('sha256')
+    .update(runtimeModuleSource)
+    .digest('hex')
+    .slice(0, 12);
   assertInlineKovoLoaderGzipBudget(installerSource, 'Generated inline Kovo loader module');
+  assertInlineKovoLoaderBootstrapGzipBudget(
+    stubInstallerSource,
+    'Generated inline Kovo loader bootstrap',
+  );
 
   const moduleSource = `${[
     '// @ts-nocheck',
@@ -886,6 +1053,14 @@ export function buildInlineKovoLoaderModuleSource(
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
       installerSource,
+    )};`,
+    `export const inlineKovoLoaderBootstrapInstallerSource = ${inlineJavaScriptTemplateLiteral(
+      stubInstallerSource,
+    )};`,
+    "export const kovoDeferredRuntimeModulePath = '/c/kovo-runtime.client.js';",
+    `export const kovoDeferredRuntimeModuleVersion = '${runtimeModuleVersion}';`,
+    `export const kovoDeferredRuntimeModuleSource = ${inlineJavaScriptTemplateLiteral(
+      runtimeModuleSource,
     )};`,
     '',
     '// prettier-ignore',
@@ -900,16 +1075,39 @@ export function buildInlineKovoLoaderModuleSource(
     '  inlineKovoLoaderInstaller(importModule);',
     '}',
     '',
+    '// prettier-ignore',
+    'const inlineKovoLoaderBootstrapInstaller = (',
+    `  ${stubInstallerSource}`,
+    ') as (',
+    '    runtimeUrl: string,',
+    '    runtimeImport: (url: string) => Promise<{ installKovoDeferredRuntime?: () => void }>,',
+    '  ) => void;',
+    '',
+    '/** Runtime API used by Kovo applications and generated runtime integration. */',
+    'export function installInlineKovoBootstrap(',
+    '  runtimeUrl: string,',
+    '  runtimeImport?: (url: string) => Promise<{ installKovoDeferredRuntime?: () => void }>,',
+    '): void {',
+    '  inlineKovoLoaderBootstrapInstaller(runtimeUrl, runtimeImport ?? ((url) => import(/* @vite-ignore */ url)));',
+    '}',
+    '',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     'export function createInlineKovoLoaderSource(',
-    "  importModuleExpression = '(url)=>import(url)',",
+    '  runtimeModuleExpression = JSON.stringify(kovoDeferredRuntimeModulePath),',
+    '  runtimeImportExpression?: string,',
     '): string {',
-    '  const expression = importModuleExpression.trim();',
-    '  if (!expression) {',
-    "    throw new Error('Inline Kovo loader import expression cannot be empty.');",
+    "  const importExpression = (runtimeImportExpression ?? (runtimeModuleExpression === JSON.stringify(kovoDeferredRuntimeModulePath) ? '(url)=>import(url)' : runtimeModuleExpression)).trim();",
+    '  const runtimeExpression = (runtimeImportExpression === undefined',
+    '    ? JSON.stringify(kovoDeferredRuntimeModulePath)',
+    '    : runtimeModuleExpression).trim();',
+    '  if (!runtimeExpression) {',
+    "    throw new Error('Inline Kovo loader runtime expression cannot be empty.');",
+    '  }',
+    '  if (!importExpression) {',
+    "    throw new Error('Inline Kovo loader runtime import expression cannot be empty.');",
     '  }',
     '',
-    '  return `(${inlineKovoLoaderInstallerSource})(${expression});`;',
+    '  return `(${inlineKovoLoaderBootstrapInstallerSource})(${runtimeExpression},${importExpression});`;',
     '}',
     '',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
@@ -920,9 +1118,29 @@ export function buildInlineKovoLoaderModuleSource(
   return moduleSource;
 }
 
+function buildKovoDeferredRuntimeModuleSource(installerSource: string): string {
+  return [
+    `const install=(${installerSource});`,
+    'export function installKovoDeferredRuntime(importModule=(url)=>import(url)){install(importModule);}',
+    '',
+  ].join('\n');
+}
+
 export function assertInlineKovoLoaderGzipBudget(
   installerSource: string,
   label = 'Inline Kovo loader',
+): void {
+  const bytes = gzipSync(createFullInlineKovoLoaderBootstrapSource(installerSource)).byteLength;
+  if (bytes <= inlineKovoLoaderGzipByteBudget) return;
+
+  throw new Error(
+    `${label} exceeds SPEC.md §4.4 gzip budget: ${bytes} bytes > ${inlineKovoLoaderGzipByteBudget} bytes.`,
+  );
+}
+
+export function assertInlineKovoLoaderBootstrapGzipBudget(
+  installerSource: string,
+  label = 'Inline Kovo loader bootstrap',
 ): void {
   const bytes = gzipSync(createInlineKovoLoaderBootstrapSource(installerSource)).byteLength;
   if (bytes <= inlineKovoLoaderGzipByteBudget) return;
@@ -1174,13 +1392,18 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['readMutationResponseElementChunks', 'rc'],
     ['readFragmentChunksFromElements', 'rfs'],
     ['readFragmentElementChunk', 'rf'],
+    ['readStreamTextChunksFromElements', 'rtc'],
+    ['readStreamTextElementChunk', 'rte'],
     ['applyInlineMutationResponseChunks', 'ai'],
+    ['isFragmentResourceHint', 'irh'],
+    ['firstMorphElement', 'fme'],
     ['findFragmentTarget', 'ff'],
     ['readElementChunks', 're'],
     ['matchingElementEnd', 'me'],
     ['escapeRegExp', 'er'],
     ['readAttribute', 'ra'],
     ['unescapeHtml', 'uh'],
+    ['escapeCssString', 'ecs'],
     ['tagClose', 'tc'],
     ['openingEnd', 'oe'],
     ['closingTag', 'ct'],
@@ -1202,6 +1425,8 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     // guard within the SPEC.md §4.4 8KB ceiling.
     ['dispatch', 'dp'],
     ['targetIdentity', 't'],
+    ['liveTargetIdentity', 'lti'],
+    ['liveProps', 'lp'],
     ['trigger', 'tg'],
     ['crossing', 'cr'],
     ['enterType', 'en'],
@@ -1212,6 +1437,23 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['existing', 'ex'],
     ['controller', 'ac'],
     ['nextHtml', 'nh'],
+    ['requestedUrl', 'ru'],
+    ['finalUrl', 'fu'],
+    ['contentType', 'cty'],
+    ['currentSegments', 'csg'],
+    ['nextSegments', 'nsg'],
+    ['triggerRoot', 'trg'],
+    ['focusTarget', 'fot'],
+    ['applyTexts', 'apt'],
+    ['textEnd', 'te'],
+    ['complete', 'cm'],
+    ['streaming', 'sg'],
+    ['formIdem', 'fi'],
+    ['reader', 'rr'],
+    ['decoder', 'de'],
+    ['pending', 'pg'],
+    ['source', 'src'],
+    ['render', 'rn'],
   ]);
   return replaceInlineLoaderIdentifierTokens(source, replacements);
 }
@@ -1665,6 +1907,14 @@ function inlineJavaScriptTemplateLiteral(value: string): string {
 }
 
 function createInlineKovoLoaderBootstrapSource(
+  installerSource: string,
+  runtimeModuleExpression = JSON.stringify('/c/kovo-runtime.client.js'),
+  runtimeImportExpression = '(url)=>import(url)',
+): string {
+  return `(${installerSource})(${runtimeModuleExpression},${runtimeImportExpression});`;
+}
+
+function createFullInlineKovoLoaderBootstrapSource(
   installerSource: string,
   importModuleExpression = '(url)=>import(url)',
 ): string {

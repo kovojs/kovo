@@ -6,6 +6,8 @@ import { respond } from './response.js';
 import { route } from './route.js';
 import { replayStaticExportApp } from './static-export-replay.js';
 
+const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+
 describe('server static export app replay boundary', () => {
   it('owns replay-time non-exportable skip policy while still replaying discovered client modules', async () => {
     const registry = createMemoryVersionedClientModuleRegistry();
@@ -54,6 +56,11 @@ describe('server static export app replay boundary', () => {
           path: '/c/__v/cart-static/cart.client.js',
           status: 200,
         },
+        expect.objectContaining({
+          href: expect.stringMatching(runtimeClientModulePath),
+          path: expect.stringMatching(runtimeClientModulePath),
+          status: 200,
+        }),
       ],
       diagnostics: [
         {

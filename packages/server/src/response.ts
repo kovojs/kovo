@@ -1,3 +1,5 @@
+import type { DeferredStreamChunk } from './deferred-stream.js';
+
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
 
@@ -70,6 +72,8 @@ export interface RoutePageResponse extends ServerResponseBase<
   ResponseHeaders,
   RouteResponseStatus
 > {
+  /** @internal Deferred route-region chunks streamed after the initial document shell. */
+  deferredChunks?: readonly DeferredStreamChunk[];
   /** @internal The request after the route lifecycle resolved session/db (SPEC §6.5). */
   lifecycleRequest?: unknown;
 }

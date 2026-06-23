@@ -1,15 +1,22 @@
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { createBrotliCompress, createGzip } from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
 
 /** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
 export interface NodeHandlerOptions {
+  /** Compress eligible text responses by default; set `false` to opt out. */
+  compression?: boolean;
   earlyHints?: boolean;
   origin?: string | ((request: IncomingMessage) => string);
 }
 
 export interface WriteWebResponseToNodeOptions {
+  acceptEncoding?: string;
+  /** Compress eligible text responses by default; set `false` to opt out. */
+  compression?: boolean;
   earlyHints?: boolean;
   /**
    * L16-2 (RFC 8297): the originating request's HTTP version. 103 Early Hints is an
@@ -46,7 +53,10 @@ export function toNodeHandler(
       const response = await handler(request);
       // L16-2 (RFC 8297): thread the request's HTTP version so 103 Early Hints is gated to
       // HTTP/1.1+ clients (an HTTP/1.0 peer cannot parse interim 1xx responses).
+      const acceptEncoding = firstHeaderValue(nodeRequest.headers['accept-encoding']);
       const writeOptions: WriteWebResponseToNodeOptions = {
+        ...(acceptEncoding === undefined ? {} : { acceptEncoding }),
+        ...(options.compression === undefined ? {} : { compression: options.compression }),
         ...(options.earlyHints === undefined ? {} : { earlyHints: options.earlyHints }),
         httpVersion: nodeRequest.httpVersion,
       };
@@ -125,7 +135,14 @@ export async function writeWebResponseToNode(
   method = 'GET',
   options: WriteWebResponseToNodeOptions = {},
 ): Promise<void> {
-  const headers = responseHeadersToNodeHeaders(response.headers);
+  const compression = responseCompression(response, options, method);
+  const responseHeaders = new Headers(response.headers);
+  if (compression) {
+    responseHeaders.set('Content-Encoding', compression);
+    responseHeaders.delete('Content-Length');
+    appendVary(responseHeaders, 'Accept-Encoding');
+  }
+  const headers = responseHeadersToNodeHeaders(responseHeaders);
   const earlyHints = response.headers.get('Link');
 
   if (
@@ -146,21 +163,84 @@ export async function writeWebResponseToNode(
   }
   const responseBody = response.body;
 
-  await new Promise<void>((resolve, reject) => {
-    const source = Readable.fromWeb(responseBody as NodeReadableStream<Uint8Array>);
-    // E1 (SPEC §9.5/§9.2): the head is already committed (writeHead above). A source-stream
-    // error mid-body must not let the caller append error text onto the partial response —
-    // tear the socket so the client sees a truncated/aborted transfer, then reject so the
-    // caller's catch knows the write failed (its `headersSent` guard short-circuits).
-    source
-      .once('error', (error) => {
-        nodeResponse.destroy(error instanceof Error ? error : undefined);
-        reject(error);
-      })
-      .pipe(nodeResponse)
-      .once('error', reject)
-      .once('finish', resolve);
-  });
+  const source = Readable.fromWeb(responseBody as NodeReadableStream<Uint8Array>);
+  // E1 (SPEC §9.5/§9.2): the head is already committed (writeHead above). A source-stream
+  // error mid-body must not let the caller append error text onto the partial response —
+  // tear the socket so the client sees a truncated/aborted transfer, then reject so the
+  // caller's catch knows the write failed (its `headersSent` guard short-circuits).
+  if (compression === 'br') await pipeline(source, createBrotliCompress(), nodeResponse);
+  else if (compression === 'gzip') await pipeline(source, createGzip(), nodeResponse);
+  else await pipeline(source, nodeResponse);
+}
+
+function responseCompression(
+  response: Response,
+  options: WriteWebResponseToNodeOptions,
+  method: string,
+): 'br' | 'gzip' | undefined {
+  if (options.compression === false) return undefined;
+  if (method === 'HEAD' || response.body === null) return undefined;
+  if (response.status === 204 || response.status === 304) return undefined;
+  if (response.headers.has('Content-Encoding')) return undefined;
+  if (/\bno-transform\b/i.test(response.headers.get('Cache-Control') ?? '')) return undefined;
+  if (!isCompressibleContentType(response.headers.get('Content-Type') ?? '')) return undefined;
+  return preferredCompression(options.acceptEncoding ?? '');
+}
+
+function preferredCompression(acceptEncoding: string): 'br' | 'gzip' | undefined {
+  const encodings = parseAcceptEncoding(acceptEncoding);
+  const wildcard = encodings.get('*') ?? 0;
+  const br = encodings.get('br') ?? wildcard;
+  const gzip = encodings.get('gzip') ?? wildcard;
+  if (br <= 0 && gzip <= 0) return undefined;
+  return br >= gzip && br > 0 ? 'br' : 'gzip';
+}
+
+function parseAcceptEncoding(value: string): Map<string, number> {
+  const encodings = new Map<string, number>();
+  for (const rawEntry of value.split(',')) {
+    const entry = rawEntry.trim();
+    if (!entry) continue;
+    const [rawName, ...params] = entry.split(';');
+    const name = rawName?.trim().toLowerCase();
+    if (!name) continue;
+    let q = 1;
+    for (const param of params) {
+      const [rawKey, rawValue] = param.trim().split('=');
+      if (rawKey?.toLowerCase() !== 'q') continue;
+      const parsed = Number(rawValue);
+      q = Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0;
+    }
+    encodings.set(name, q);
+  }
+  return encodings;
+}
+
+function isCompressibleContentType(contentType: string): boolean {
+  const type = contentType.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+  return (
+    type.startsWith('text/') ||
+    type === 'application/javascript' ||
+    type === 'application/json' ||
+    type === 'application/ld+json' ||
+    type === 'application/manifest+json' ||
+    type === 'application/x-javascript' ||
+    type === 'application/xhtml+xml' ||
+    type === 'application/xml' ||
+    type === 'image/svg+xml' ||
+    type.endsWith('+json') ||
+    type.endsWith('+xml')
+  );
+}
+
+function appendVary(headers: Headers, token: string): void {
+  const existing = headers.get('Vary');
+  if (!existing) {
+    headers.set('Vary', token);
+    return;
+  }
+  const tokens = existing.split(',').map((entry) => entry.trim().toLowerCase());
+  if (!tokens.includes(token.toLowerCase())) headers.set('Vary', `${existing}, ${token}`);
 }
 
 function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): string {

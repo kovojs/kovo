@@ -182,7 +182,9 @@ describe('kovo build', () => {
       expect(readFileSync(routeCss.filePath, 'utf8')).toContain('auto-css-card');
       const routeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
       expect(routeDocument).toContain(`data-kovo-critical-href="${routeCss.href}"`);
-      expect(routeDocument).toContain(`<link rel="stylesheet" href="${routeCss.href}">`);
+      expect(routeDocument).toContain(
+        `<link rel="preload" as="style" href="${routeCss.href}" data-kovo-deferred-style>`,
+      );
       const viteStylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
         'main{color:#639}',
@@ -1445,7 +1447,9 @@ function routeCssSignature(document: string): {
     ]
       .map((match) => ({ css: match[2] ?? '', href: match[1] ?? '' }))
       .filter((entry) => isSplitChunk(entry.href)),
-    links: [...document.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)]
+    links: [
+      ...document.matchAll(/<link rel="(?:stylesheet|preload)"(?: as="style")? href="([^"]+)"/g),
+    ]
       .map((match) => match[1] ?? '')
       .filter(isSplitChunk),
   };
