@@ -33,6 +33,7 @@ substitutions:
   _MAX_INSTANCES: '10'
   _SESSION_AFFINITY: 'true' # best-effort routing back to the instance holding the visitor demo DB
   _MAX_SESSIONS: '40'
+  _WARM_SESSIONS: '10'
   _IDLE_MS: '1200000' # 20 min idle TTL per session
   _COMMERCE_WEBHOOK_SECRET_NAME: 'commerce-webhook-secret'
 
@@ -68,7 +69,7 @@ steps:
         IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
         for EX in commerce crm stackoverflow; do
           echo "Deploying kovo-$$EX ..."
-          ENV_VARS="EXAMPLE=$$EX,KOVO_DEMO_MAX_SESSIONS=${_MAX_SESSIONS},KOVO_DEMO_IDLE_MS=${_IDLE_MS}"
+          ENV_VARS="EXAMPLE=$$EX,KOVO_DEMO_MAX_SESSIONS=${_MAX_SESSIONS},KOVO_DEMO_WARM_SESSIONS=${_WARM_SESSIONS},KOVO_DEMO_IDLE_MS=${_IDLE_MS}"
           SECRET_FLAGS=()
           AFFINITY_FLAGS=(--session-affinity)
           if [[ "${_SESSION_AFFINITY}" != "true" ]]; then
