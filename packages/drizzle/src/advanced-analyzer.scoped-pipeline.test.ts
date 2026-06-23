@@ -12,7 +12,7 @@ import { serializeDerivedOptimistic } from './derive-codegen.js';
 import { pgDatabaseTypes } from './test-helpers.js';
 
 describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
-  it('derives scoped composite-key row updates from extracted query and mutation facts', () => {
+  it('derives Stack Overflow-style scoped composite-key updates from extracted facts', () => {
     const files = [
       pgDatabaseTypes([
         'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
@@ -21,13 +21,14 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       {
         fileName: 'question.pipeline.ts',
         source: [
-          'import { and, eq } from "drizzle-orm";',
+          'import { and, eq, sum } from "drizzle-orm";',
           'import type { PgDatabase } from "drizzle-orm/pg-core";',
           '',
           'export const questions = pgTable("questions", {',
           '  sessionId: text("session_id").notNull(),',
           '  id: text("id").notNull(),',
           '  score: integer("score").notNull(),',
+          '  answerCount: integer("answer_count").notNull(),',
           '}, kovo({ domain: "question", key: "sessionId,id" }));',
           '',
           'export const questionList = query("questionList", {',
@@ -35,10 +36,26 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
           '    const sessionId = context.request?.session?.id;',
           '    if (!sessionId) throw new Error("auth required");',
           '    return {',
-          '      items: await db.select({ id: questions.id, score: questions.score }).from(questions).where(eq(questions.sessionId, sessionId)),',
+          '      items: await db.select({ id: questions.id, score: questions.score, answerCount: questions.answerCount }).from(questions).where(eq(questions.sessionId, sessionId)),',
           '    };',
           '  },',
           '});',
+          '',
+          'export const questionScore = query("questionScore", {',
+          '  async load(_input: {}, db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }) {',
+          '    const sessionId = context.request?.session?.id;',
+          '    if (!sessionId) throw new Error("auth required");',
+          '    const items = await db.select({ id: questions.id, score: questions.score, answerCount: questions.answerCount }).from(questions).where(eq(questions.sessionId, sessionId));',
+          '    const scoreRows = await db.select({ value: sum(questions.score) }).from(questions).where(eq(questions.sessionId, sessionId));',
+          '    return { items: items, totalScore: Number(scoreRows[0]?.value ?? 0) };',
+          '  },',
+          '});',
+          '',
+          'export async function postAnswer(db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }, targetId: string) {',
+          '  const sessionId = context.request?.session?.id;',
+          '  if (!sessionId) throw new Error("auth required");',
+          '  await db.update(questions).set({ answerCount: questions.answerCount + 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+          '}',
           '',
           'export async function voteUp(db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }, targetId: string) {',
           '  const sessionId = context.request?.session?.id;',
@@ -50,40 +67,95 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     ];
 
     const graph = extractTouchGraphFromProject({ files });
-    expect(graph.voteUp?.touches).toEqual([
+    expect(graph.postAnswer?.touches).toMatchObject([
       {
         domain: 'question',
         keys: 'arg:targetId',
-        site: 'question.pipeline.ts:23',
+        via: 'questions',
+      },
+    ]);
+    expect(graph.voteUp?.touches).toMatchObject([
+      {
+        domain: 'question',
+        keys: 'arg:targetId',
         via: 'questions',
       },
     ]);
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
 
-    const shape = extractAlgebraicShapesFromProject({ files }).find(
-      (candidate) => candidate.query === 'questionList',
-    );
+    const queryFacts = extractQueryFactsFromProject({ files });
+    const questionListFact = queryFacts.find((candidate) => candidate.query === 'questionList');
+    expect(questionListFact).toMatchObject({ query: 'questionList', reads: ['question'] });
+    expect(questionListFact?.instanceKey).toBeUndefined();
+    const questionScoreFact = queryFacts.find((candidate) => candidate.query === 'questionScore');
+    expect(questionScoreFact).toMatchObject({ query: 'questionScore', reads: ['question'] });
+    expect(questionScoreFact?.instanceKey).toBeUndefined();
+
+    const shapes = extractAlgebraicShapesFromProject({ files });
+    const shape = shapes.find((candidate) => candidate.query === 'questionList');
     if (!shape) throw new Error('expected questionList algebraic shape');
+    const scopedQuestionRowset = {
+      filters: [
+        {
+          column: 'sessionId',
+          op: 'eq' as const,
+          value: { kind: 'session' as const, path: 'id' },
+        },
+      ],
+      key: 'sessionId,id',
+      orderBy: [],
+      table: 'questions',
+    };
     expect(shape.fields.items).toMatchObject({
       kind: 'agg',
-      projection: ['id', 'score'],
+      projection: ['id', 'score', 'answerCount'],
       rowKey: 'sessionId,id',
-      rowset: {
-        filters: [
-          {
-            column: 'sessionId',
-            op: 'eq',
-            value: { kind: 'session', path: 'id' },
-          },
-        ],
-        key: 'sessionId,id',
-        table: 'questions',
-      },
+      rowset: scopedQuestionRowset,
     });
 
-    const effect = extractSymbolicEffectsFromProject({ files }).find(
-      (candidate) => candidate.writeKey === 'voteUp',
-    );
+    const scoreShape = shapes.find((candidate) => candidate.query === 'questionScore');
+    if (!scoreShape) throw new Error('expected questionScore algebraic shape');
+    expect(scoreShape.fields.items).toMatchObject({
+      kind: 'agg',
+      projection: ['id', 'score', 'answerCount'],
+      rowKey: 'sessionId,id',
+      rowset: scopedQuestionRowset,
+    });
+    expect(scoreShape.fields.totalScore).toMatchObject({
+      arith: { column: 'score', kind: 'col' },
+      kind: 'sum',
+      rowset: scopedQuestionRowset,
+    });
+    expect(scoreShape.rowsByTable?.questions).toMatchObject({
+      columns: ['id', 'score', 'answerCount'],
+      rowsPath: 'items',
+      rowset: scopedQuestionRowset,
+    });
+
+    const effects = extractSymbolicEffectsFromProject({ files });
+    const postAnswerEffect = effects.find((candidate) => candidate.writeKey === 'postAnswer');
+    if (!postAnswerEffect) throw new Error('expected postAnswer symbolic effect');
+    expect(postAnswerEffect.effect).toMatchObject({
+      match: {
+        eq: [
+          { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: {
+        answerCount: {
+          kind: 'arith',
+          left: { kind: 'col', column: 'answerCount' },
+          op: '+',
+          right: { kind: 'const', value: 1 },
+        },
+      },
+      table: 'questions',
+    });
+
+    const effect = effects.find((candidate) => candidate.writeKey === 'voteUp');
     if (!effect) throw new Error('expected voteUp symbolic effect');
     expect(effect.effect).toMatchObject({
       match: {
@@ -94,8 +166,37 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
         kind: 'keys',
       },
       op: 'update',
+      sets: {
+        score: {
+          kind: 'arith',
+          left: { kind: 'col', column: 'score' },
+          op: '+',
+          right: { kind: 'const', value: 1 },
+        },
+      },
       table: 'questions',
     });
+
+    const postAnswerResult = deriveOptimistic([postAnswerEffect.effect], shape);
+    if (postAnswerResult.kind !== 'derived') {
+      throw new Error(`expected postAnswer derived, got ${postAnswerResult.kind}`);
+    }
+    expect(postAnswerResult.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'update-row',
+        path: 'items',
+        sets: {
+          answerCount: {
+            kind: 'arith',
+            left: { kind: 'col', column: 'answerCount' },
+            op: '+',
+            right: { kind: 'const', value: 1 },
+          },
+        },
+      },
+    ]);
 
     const result = deriveOptimistic([effect.effect], shape);
     if (result.kind !== 'derived') throw new Error(`expected derived, got ${result.kind}`);
@@ -116,6 +217,40 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       },
     ]);
 
+    const scoreResult = deriveOptimistic([effect.effect], scoreShape);
+    if (scoreResult.kind !== 'derived') {
+      throw new Error(`expected questionScore derived, got ${scoreResult.kind}`);
+    }
+    expect(scoreResult.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'update-row',
+        path: 'items',
+        sets: {
+          score: {
+            kind: 'arith',
+            left: { kind: 'col', column: 'score' },
+            op: '+',
+            right: { kind: 'const', value: 1 },
+          },
+        },
+      },
+      { column: 'score', from: 'items', op: 'resum', path: 'totalScore' },
+    ]);
+
+    const postAnswerSource = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'answerPostDerivedOptimistic',
+      entries: [{ program: postAnswerResult.program, query: 'questionList' }],
+      formImport: { name: 'postAnswerForm', path: '../../app.js' },
+    });
+    expect(postAnswerSource).toContain('entry.id === $input.targetId');
+    expect(postAnswerSource).toContain('target.answerCount = (n(target.answerCount) + n(1));');
+    expect(postAnswerSource).not.toContain('sessionId');
+    expect(postAnswerSource).not.toContain('session:');
+    expect(postAnswerSource).not.toContain('$input.session');
+
     const source = serializeDerivedOptimistic({
       complete: true,
       constName: 'questionVoteDerivedOptimistic',
@@ -127,6 +262,21 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     expect(source).not.toContain('sessionId');
     expect(source).not.toContain('session:');
     expect(source).not.toContain('$input.session');
+
+    const scoreSource = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'questionScoreDerivedOptimistic',
+      entries: [{ program: scoreResult.program, query: 'questionScore' }],
+      formImport: { name: 'voteQuestionForm', path: '../../app.js' },
+    });
+    expect(scoreSource).toContain('entry.id === $input.targetId');
+    expect(scoreSource).toContain('target.score = (n(target.score) + n(1));');
+    expect(scoreSource).toContain(
+      'draft.totalScore = draft.items.reduce((sum, row) => sum + n(row.score), 0);',
+    );
+    expect(scoreSource).not.toContain('sessionId');
+    expect(scoreSource).not.toContain('session:');
+    expect(scoreSource).not.toContain('$input.session');
   });
 
   it('derives tenant-scoped filtered-list exits without exposing tenant scope', () => {

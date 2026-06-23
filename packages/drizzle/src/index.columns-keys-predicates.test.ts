@@ -1295,6 +1295,57 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
   });
 
+  it('keeps guarded session aliases stable across repeated Drizzle predicate uses', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'question.domain.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+          '',
+          'export async function syncTwoQuestions(db: PgDatabase, request: { session?: { id?: string } | null }, firstId: string, secondId: string) {',
+          '  const sessionId = request.session?.id;',
+          '  if (!sessionId) throw new Error("auth required");',
+          '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, firstId)));',
+          '  await db.update(questions).set({ score: 2 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, secondId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractTouchGraphFromProject({ files }).syncTwoQuestions?.touches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ domain: 'question', keys: 'arg:firstId', via: 'questions' }),
+        expect.objectContaining({ domain: 'question', keys: 'arg:secondId', via: 'questions' }),
+      ]),
+    );
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toMatchObject([
+      {
+        match: {
+          eq: [
+            { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+            { column: 'id', value: { kind: 'param', path: 'firstId' } },
+          ],
+          kind: 'keys',
+        },
+      },
+      {
+        match: {
+          eq: [
+            { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+            { column: 'id', value: { kind: 'param', path: 'secondId' } },
+          ],
+          kind: 'keys',
+        },
+      },
+    ]);
+  });
+
   it('accepts return exits as nullable session guards', () => {
     const graph = extractTouchGraphFromProject({
       files: [

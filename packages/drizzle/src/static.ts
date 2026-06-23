@@ -10883,9 +10883,7 @@ function directPrivateScopeGuardDominatesUse(target: PrivateScopeProvenance, use
     }
     if (!statementContainsPrivateScope(statement, target)) continue;
     if (!guarded) return false;
-    // advanced-analyzer.md Layer 1: an intervening direct private-scope use is an
-    // escape/opaque boundary just like an intervening guarded alias use.
-    return false;
+    if (statementContainsPrivateScopeEscape(statement, target)) return false;
   }
 
   return guarded;
@@ -10918,10 +10916,7 @@ function sessionAliasGuardDominatesUse(alias: SessionAlias, use: Node): boolean 
     if (!guarded) {
       return false;
     }
-    // advanced-analyzer.md Layer 1: once a nullable private-scope alias is guarded,
-    // any other intervening use is an alias escape/opaque helper boundary. Keep the
-    // proof conditional rather than guessing that the guarded value is still stable.
-    return false;
+    if (statementContainsAliasEscape(statement, alias.name)) return false;
   }
 
   return guarded;
@@ -10990,6 +10985,20 @@ function statementContainsPrivateScope(statement: Node, target: PrivateScopeProv
   });
 }
 
+function statementContainsPrivateScopeEscape(
+  statement: Node,
+  target: PrivateScopeProvenance,
+): boolean {
+  return statement.getDescendants().some((node) => {
+    const direct = directPrivateScopeForExpression(node);
+    return (
+      direct !== undefined &&
+      privateScopeMatches(direct, target) &&
+      privateScopeUseEscapes(node, statement)
+    );
+  });
+}
+
 function privateScopeMatches(left: PrivateScopeProvenance, right: PrivateScopeProvenance): boolean {
   return left.kind === right.kind && left.path === right.path;
 }
@@ -11045,6 +11054,75 @@ function statementContainsAliasIdentifier(statement: Node, aliasName: string): b
   return statement
     .getDescendantsOfKind(SyntaxKind.Identifier)
     .some((identifier) => identifier.getText() === aliasName);
+}
+
+function statementContainsAliasEscape(statement: Node, aliasName: string): boolean {
+  return statement
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some(
+      (identifier) =>
+        identifier.getText() === aliasName && privateScopeUseEscapes(identifier, statement),
+    );
+}
+
+function privateScopeUseEscapes(use: Node, statement: Node): boolean {
+  const call = nearestCallExpressionAncestor(use, statement);
+  if (call) return !isPrivateScopeProofCall(call);
+
+  const variable = nearestVariableDeclarationAncestor(use, statement);
+  if (variable) {
+    const initializer = variable.getInitializer();
+    if (initializer && nodeContains(initializer, use)) return true;
+  }
+
+  return true;
+}
+
+function nearestCallExpressionAncestor(use: Node, boundary: Node): CallExpression | undefined {
+  let current: Node | undefined = use;
+  while (current && !sameSourceNode(current, boundary)) {
+    if (Node.isCallExpression(current)) return current;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function nearestVariableDeclarationAncestor(
+  use: Node,
+  boundary: Node,
+): VariableDeclaration | undefined {
+  let current: Node | undefined = use;
+  while (current && !sameSourceNode(current, boundary)) {
+    if (Node.isVariableDeclaration(current)) return current;
+    current = current.getParent();
+  }
+  return undefined;
+}
+
+function isPrivateScopeProofCall(call: CallExpression): boolean {
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
+  const name = Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+  return (
+    name === 'and' ||
+    name === 'eq' ||
+    name === 'gt' ||
+    name === 'gte' ||
+    name === 'inArray' ||
+    name === 'isNotNull' ||
+    name === 'isNull' ||
+    name === 'lt' ||
+    name === 'lte' ||
+    name === 'not' ||
+    name === 'or'
+  );
+}
+
+function nodeContains(ancestor: Node, candidate: Node): boolean {
+  return (
+    ancestor.getSourceFile().getFilePath() === candidate.getSourceFile().getFilePath() &&
+    ancestor.getStart() <= candidate.getStart() &&
+    ancestor.getEnd() >= candidate.getEnd()
+  );
 }
 
 function appendTableEntries<Table>(
