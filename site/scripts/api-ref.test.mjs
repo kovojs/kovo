@@ -96,12 +96,15 @@ describe('api-ref generator', () => {
   it('emits one page per documented package, with app-facing subpaths on that page', () => {
     expect(result.packages.map((pkg) => pkg.file)).toEqual([
       'core.md',
+      'icons.md',
       'server.md',
       'browser.md',
       'test.md',
       'drizzle.md',
+      'headless-ui.md',
       'style.md',
       'better-auth.md',
+      'ui.md',
       'cli.md',
     ]);
     expect(result.packages.find((pkg) => pkg.name === '@kovojs/server').subpaths).toContain(
@@ -120,6 +123,9 @@ describe('api-ref generator', () => {
     expect(
       documentedApiEntries([
         packageManifest({
+          apiBoundary: {
+            public: ['.', './build', './vite'],
+          },
           apiRef: {
             description: 'A fixture package.',
             entries: ['.', { path: './build', slug: 'fixture-build' }],
@@ -289,13 +295,15 @@ describe('api-ref generator', () => {
     const expected = {
       '@kovojs/core': 68,
       '@kovojs/drizzle': 4,
+      '@kovojs/headless-ui': 103,
+      '@kovojs/icons': 1,
       '@kovojs/browser': 90,
       '@kovojs/server': 160,
       '@kovojs/style': 34,
       '@kovojs/better-auth': 13,
-      '@kovojs/compiler': 12,
       '@kovojs/cli': 12,
       '@kovojs/test': 26,
+      '@kovojs/ui': 2,
     };
     for (const pkg of result.packages) {
       expect(pkg.documented, `${pkg.name} documented`).toBeGreaterThanOrEqual(expected[pkg.name]);

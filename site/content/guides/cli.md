@@ -217,6 +217,7 @@ wiring proof-carrying without executing a browser.
 ## Next
 
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — interpreting the output in depth.
+- [create-kovo command reference](/api/create-kovo/) — scaffold flags, dialects, and write safety.
 - [Deployment](/guides/deployment/) — `kovo build` presets and `kovo export`.
 - [Testing](/guides/testing/) — what `vp test` runs and the browser-free verification surface.
 
