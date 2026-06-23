@@ -15,6 +15,8 @@ import { fileURLToPath } from 'node:url';
 
 import { parseFrontmatter, renderMarkdown } from '../scripts/md.mjs';
 import { loadTutorialSnippets, substituteSnippets } from '../tutorial/extract-snippets.mjs';
+import { galleryComponentCatalog } from '../../examples/gallery/src/component-catalog.js';
+import { EXAMPLES, LLMS_ONLY_EXAMPLES } from '../scripts/examples.mjs';
 
 import { clientHrefs } from './client/modules.js';
 
@@ -337,6 +339,7 @@ async function buildSiteContent(): Promise<SiteContent> {
     title: 'Kovo Specification',
     url: '/spec/',
   });
+  search.push(...componentSearchEntries(), ...exampleSearchEntries());
 
   return {
     groups: navGroups(sections),
@@ -360,13 +363,82 @@ function navGroups(sections: DocSection[]): NavGroup[] {
     }));
   groups.push({
     key: 'components',
-    pages: [{ title: 'Components', url: '/components/' }],
+    pages: [
+      { title: 'Components', url: '/components/' },
+      ...galleryComponentCatalog.map((entry) => ({
+        title: entry.title,
+        url: `/components/${entry.component}/`,
+      })),
+    ],
     title: 'Components',
   });
   groups.push({
     key: 'examples',
-    pages: [{ title: 'Examples', url: '/examples/' }],
+    pages: [
+      { title: 'Examples', url: '/examples/' },
+      ...(EXAMPLES as ExampleSearchManifest[]).map((example) => ({
+        title: example.title,
+        url: `/examples/${example.name}/`,
+      })),
+    ],
     title: 'Examples',
   });
   return groups;
+}
+
+interface ExampleSearchManifest {
+  blurb: string;
+  name: string;
+  title: string;
+}
+
+function componentSearchEntries(): SearchEntry[] {
+  return galleryComponentCatalog.map((entry) => ({
+    section: 'Components',
+    text: [
+      entry.title,
+      entry.component,
+      entry.summary,
+      `@kovojs/ui/${entry.component}`,
+      `kovo add ${entry.component}`,
+      `packages/ui/src/${entry.component}.tsx`,
+      `examples/gallery/src/interactive/${entry.component}-demo.tsx`,
+    ].join(' '),
+    title: entry.title,
+    url: `/components/${entry.component}/`,
+  }));
+}
+
+function exampleSearchEntries(): SearchEntry[] {
+  const humanExamples = EXAMPLES as ExampleSearchManifest[];
+  const agentExamples = LLMS_ONLY_EXAMPLES as ExampleSearchManifest[];
+  return [
+    ...humanExamples.map((example) => exampleSearchEntry(example, `/examples/${example.name}/`)),
+    ...agentExamples.map((example) =>
+      exampleSearchEntry(
+        example,
+        example.name === 'devtool'
+          ? '/guides/dataflow-devtool/'
+          : example.name === 'reference'
+            ? '/guides/auth-better-auth/'
+            : `/examples/${example.name}/`,
+      ),
+    ),
+  ];
+}
+
+function exampleSearchEntry(example: ExampleSearchManifest, url: string): SearchEntry {
+  return {
+    section: 'Examples',
+    text: [
+      example.title,
+      example.name,
+      example.blurb,
+      url,
+      example.name === 'reference' ? 'Better Auth security auth csrf session guards' : '',
+      example.name === 'devtool' ? 'dataflow MCP kovo_explain graph devtool' : '',
+    ].join(' '),
+    title: example.title,
+    url,
+  };
 }
