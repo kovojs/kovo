@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
@@ -181,7 +182,7 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
         <h1 style={exampleSplitStyles.headTitle}>{escapeHtml(title)}</h1>
         <p style={exampleSplitStyles.headBlurb}>{escapeHtml(blurb)}</p>
       </header>
-      <style>{tabStyle}</style>
+      <style rawHtml={trustedHtml(tabStyle)} />
       <div style={exampleSplitStyles.split}>
         <section style={exampleSplitStyles.shell} aria-label={`${title} running app`}>
           <div style={exampleSplitStyles.bar}>
@@ -232,9 +233,12 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
           </div>
           <div data-example-panels>
             {files.map((file, index) => (
-              <div style={exampleSplitStyles.panel} data-index={index} data-example-panel>
-                {file.html}
-              </div>
+              <div
+                style={exampleSplitStyles.panel}
+                data-index={index}
+                data-example-panel
+                rawHtml={trustedHtml(file.html)}
+              />
             ))}
           </div>
         </section>

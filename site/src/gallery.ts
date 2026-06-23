@@ -295,6 +295,17 @@ function extractBehaviorContract(staticHtml: string): string {
   return match ? match[0] : '';
 }
 
+function renderedValueToHtml(value: unknown): string {
+  if (value === null || value === undefined || typeof value === 'boolean') return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'bigint') return `${value}`;
+  if (typeof value === 'object' && typeof (value as { html?: unknown }).html === 'string') {
+    return (value as { html: string }).html;
+  }
+
+  return JSON.stringify(value) ?? '';
+}
+
 /** Re-root the gallery demo's internal links into the docs /components/ namespace
  * so they resolve on the static host (and the W9 link gate passes). Component
  * links are authored as `/components/<name>` and need only a trailing slash. */
@@ -395,8 +406,8 @@ export async function buildGalleryRoutePages({
   // pages with an interactive demo.
   for (const galleryRoute of galleryRoutes) {
     const interactive = interactiveByComponent.get(galleryRoute.component);
-    const staticHtml = await galleryRoute.render();
-    const interactiveHtml = interactive ? await interactive.render() : '';
+    const staticHtml = renderedValueToHtml(await galleryRoute.render());
+    const interactiveHtml = interactive ? renderedValueToHtml(await interactive.render()) : '';
     // Wrap with the demo's id (as the standalone interactive page did) so any
     // in-demo self-anchor (e.g. hover-card → #hover-card-demo) still resolves.
     const demoSource = interactive

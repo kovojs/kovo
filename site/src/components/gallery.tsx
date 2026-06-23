@@ -1,11 +1,12 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 // Gallery page chrome (SPEC §4.5): the eyebrow header, the component switcher
 // nav, and the demo body. Composed at render time as TSX; the demo markup
 // (the compiled interactive demo or the static styled fixture) arrives as a
-// pre-rendered HTML string and is spliced in verbatim, the same way the docs
+// pre-rendered HTML string and is spliced in through Kovo's raw-HTML sink, the same way the docs
 // layout splices markdown prose. See scripts/build.mjs renderGalleryPage for
 // the reference rendering this ports.
 
@@ -217,9 +218,7 @@ export function GalleryPage({ input }: { input: GalleryPageInput }): string {
           </a>
         ))}
       </nav>
-      <div style={galleryStyles.demo} data-gallery-demo-shell>
-        {demoHtml}
-      </div>
+      <div style={galleryStyles.demo} data-gallery-demo-shell rawHtml={trustedHtml(demoHtml)} />
       <section style={galleryStyles.detail} aria-label={`${escapeHtml(route.title)} usage`}>
         <div>
           <h2 style={galleryStyles.detailHeading}>Usage</h2>
