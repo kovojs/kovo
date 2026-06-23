@@ -12,9 +12,15 @@ export interface KovoCheckCoverageFact {
   raw: string;
 }
 
+export interface KovoCheckOptimisticProofFact {
+  properties: Record<string, string>;
+  raw: string;
+}
+
 export interface KovoCheckOutput {
   coverage: KovoCheckCoverageFact[];
   diagnostics: KovoCheckDiagnosticFact[];
+  optimisticProofs: KovoCheckOptimisticProofFact[];
   status: 'issues' | 'ok';
   version: 'kovo-check/v1';
 }
@@ -30,11 +36,13 @@ export interface KovoCheckResultFact extends KovoCheckOutput {
 
 export type KovoCheckDiagnosticAssertionFact = Omit<KovoCheckDiagnosticFact, 'raw'>;
 export type KovoCheckCoverageAssertionFact = Omit<KovoCheckCoverageFact, 'raw'>;
+export type KovoCheckOptimisticProofAssertionFact = Omit<KovoCheckOptimisticProofFact, 'raw'>;
 
 export interface KovoCheckAssertionFact {
   coverage: KovoCheckCoverageAssertionFact[];
   diagnostics: KovoCheckDiagnosticAssertionFact[];
   exitCode: number;
+  optimisticProofs: KovoCheckOptimisticProofAssertionFact[];
   status: KovoCheckOutput['status'];
   version: KovoCheckOutput['version'];
 }
@@ -50,6 +58,7 @@ export interface KovoCheckUnguardedAuditBehaviorFact {
   coverage: KovoCheckCoverageAssertionFact[];
   diagnostics: KovoCheckDiagnosticAssertionFact[];
   exitCode: number;
+  optimisticProofs: KovoCheckOptimisticProofAssertionFact[];
   status: KovoCheckOutput['status'];
   targets: {
     mutation: string[];
@@ -77,11 +86,12 @@ export function parseKovoCheckOutput(output: string): KovoCheckOutput {
 
   const body = lines.slice(1).filter((line) => line.length > 0);
   if (body.length === 1 && body[0] === 'OK') {
-    return { coverage: [], diagnostics: [], status: 'ok', version };
+    return { coverage: [], diagnostics: [], optimisticProofs: [], status: 'ok', version };
   }
 
   const coverage: KovoCheckCoverageFact[] = [];
   const diagnostics: KovoCheckDiagnosticFact[] = [];
+  const optimisticProofs: KovoCheckOptimisticProofFact[] = [];
 
   for (const line of body) {
     if (line.startsWith('COVERAGE ')) {
@@ -92,14 +102,24 @@ export function parseKovoCheckOutput(output: string): KovoCheckOutput {
       continue;
     }
 
+    if (line.startsWith('OPTIMISTIC-PROOF ')) {
+      optimisticProofs.push({
+        properties: parseKeyValueFields(line.slice('OPTIMISTIC-PROOF '.length)),
+        raw: line,
+      });
+      continue;
+    }
+
     const diagnostic = parseKovoCheckDiagnostic(line);
     if (!diagnostic) {
-      throw new Error(`kovo check output line is a diagnostic or coverage fact: ${line}`);
+      throw new Error(
+        `kovo check output line is a diagnostic, coverage, or optimistic proof fact: ${line}`,
+      );
     }
     diagnostics.push(diagnostic);
   }
 
-  return { coverage, diagnostics, status: 'issues', version };
+  return { coverage, diagnostics, optimisticProofs, status: 'issues', version };
 }
 
 export function kovoCheckResultFact(result: KovoCheckResultLike): KovoCheckResultFact {
@@ -113,6 +133,7 @@ export function kovoCheckAssertionFact(result: KovoCheckResultLike): KovoCheckAs
     coverage: fact.coverage.map(({ raw: _raw, ...coverage }) => coverage),
     diagnostics: fact.diagnostics.map(({ raw: _raw, ...diagnostic }) => diagnostic),
     exitCode: fact.exitCode,
+    optimisticProofs: fact.optimisticProofs.map(({ raw: _raw, ...proof }) => proof),
     status: fact.status,
     version: fact.version,
   };
@@ -194,6 +215,16 @@ export function kovoCheckCoverageFacts(output: string): KovoCheckCoverageFact[] 
 
 export function kovoCheckCoverageAssertionFacts(output: string): KovoCheckCoverageAssertionFact[] {
   return kovoCheckCoverageFacts(output).map(({ raw: _raw, ...fact }) => fact);
+}
+
+export function kovoCheckOptimisticProofFacts(output: string): KovoCheckOptimisticProofFact[] {
+  return parseKovoCheckOutput(output).optimisticProofs;
+}
+
+export function kovoCheckOptimisticProofAssertionFacts(
+  output: string,
+): KovoCheckOptimisticProofAssertionFact[] {
+  return kovoCheckOptimisticProofFacts(output).map(({ raw: _raw, ...fact }) => fact);
 }
 
 function parseKovoCheckDiagnostic(line: string): KovoCheckDiagnosticFact | undefined {

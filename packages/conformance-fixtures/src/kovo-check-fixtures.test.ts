@@ -7,6 +7,8 @@ import {
   kovoCheckDiagnosticAssertionFacts,
   kovoCheckDiagnosticFacts,
   kovoCheckOkAssertionFact,
+  kovoCheckOptimisticProofAssertionFacts,
+  kovoCheckOptimisticProofFacts,
   kovoCheckResultFact,
   kovoCheckUnguardedAuditBehaviorFact,
   parseKovoCheckOutput,
@@ -18,6 +20,7 @@ describe('@kovojs/test kovo-check fixture seam', () => {
       coverage: [],
       diagnostics: [],
       exitCode: 0,
+      optimisticProofs: [],
       status: 'ok',
       version: 'kovo-check/v1',
     });
@@ -25,6 +28,7 @@ describe('@kovojs/test kovo-check fixture seam', () => {
       coverage: [],
       diagnostics: [],
       exitCode: 0,
+      optimisticProofs: [],
       status: 'ok',
       version: 'kovo-check/v1',
     });
@@ -40,6 +44,8 @@ describe('@kovojs/test kovo-check fixture seam', () => {
     const output = [
       'kovo-check/v1',
       'WARN KV310 cart/add -> cart Invalidated query lacks optimistic transform.',
+      'OPTIMISTIC-PROOF mutation=cart/add query=cart status=derived derivation=derived level=exact-row private-scope=session:id',
+      'OPTIMISTIC-PROOF mutation=cart/add query=orders status=await-fragment derivation=PUNTED level=opaque private-scope=- reason="Opaque: compute_total"',
       'WARN KV311 component=CartBadge query=cart.discount position="conditional <dot>" Query/state-dependent DOM position has no update status.',
       'COVERAGE component=OrderHistory query=orderHistory position=undefined status=fragment detail="text binding"',
       'WARN UNGUARDED cart/add mutation is reachable without an auth guard.',
@@ -106,6 +112,31 @@ describe('@kovojs/test kovo-check fixture seam', () => {
         raw: 'COVERAGE component=OrderHistory query=orderHistory position=undefined status=fragment detail="text binding"',
       },
     ]);
+    expect(kovoCheckOptimisticProofFacts(output)).toEqual([
+      {
+        properties: {
+          derivation: 'derived',
+          level: 'exact-row',
+          mutation: 'cart/add',
+          'private-scope': 'session:id',
+          query: 'cart',
+          status: 'derived',
+        },
+        raw: 'OPTIMISTIC-PROOF mutation=cart/add query=cart status=derived derivation=derived level=exact-row private-scope=session:id',
+      },
+      {
+        properties: {
+          derivation: 'PUNTED',
+          level: 'opaque',
+          mutation: 'cart/add',
+          'private-scope': '-',
+          query: 'orders',
+          reason: 'Opaque: compute_total',
+          status: 'await-fragment',
+        },
+        raw: 'OPTIMISTIC-PROOF mutation=cart/add query=orders status=await-fragment derivation=PUNTED level=opaque private-scope=- reason="Opaque: compute_total"',
+      },
+    ]);
     expect(kovoCheckDiagnosticAssertionFacts(output)).toEqual([
       {
         code: 'KV310',
@@ -155,6 +186,29 @@ describe('@kovojs/test kovo-check fixture seam', () => {
           position: 'undefined',
           query: 'orderHistory',
           status: 'fragment',
+        },
+      },
+    ]);
+    expect(kovoCheckOptimisticProofAssertionFacts(output)).toEqual([
+      {
+        properties: {
+          derivation: 'derived',
+          level: 'exact-row',
+          mutation: 'cart/add',
+          'private-scope': 'session:id',
+          query: 'cart',
+          status: 'derived',
+        },
+      },
+      {
+        properties: {
+          derivation: 'PUNTED',
+          level: 'opaque',
+          mutation: 'cart/add',
+          'private-scope': '-',
+          query: 'orders',
+          reason: 'Opaque: compute_total',
+          status: 'await-fragment',
         },
       },
     ]);
@@ -220,6 +274,7 @@ describe('@kovojs/test kovo-check fixture seam', () => {
         },
       ],
       exitCode: 0,
+      optimisticProofs: [],
       status: 'issues',
       targets: {
         mutation: ['inventory/sync'],

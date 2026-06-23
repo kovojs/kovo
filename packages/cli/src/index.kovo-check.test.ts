@@ -56,6 +56,66 @@ describe('kovo check', () => {
     });
   });
 
+  it('prints optimistic proof metadata in the optimistic check family', () => {
+    expect(
+      kovoCheck(
+        {
+          optimistic: [
+            {
+              derivation: {
+                proof: { level: 'scoped-rowset', privateScope: ['tenant:id'] },
+                status: 'derived',
+              },
+              mutation: 'cart/add',
+              query: 'cart.total',
+              status: 'derived',
+            },
+            {
+              derivation: {
+                proof: { level: 'exact-row', privateScope: ['session:id'] },
+                status: 'derived',
+              },
+              mutation: 'cart/add',
+              query: 'cart',
+              status: 'derived',
+            },
+            {
+              derivation: {
+                proof: { level: 'opaque' },
+                reason: { code: 'opaque-set', expr: 'compute_total' },
+                status: 'PUNTED',
+              },
+              mutation: 'cart/add',
+              query: 'orders',
+              status: 'await-fragment',
+            },
+            {
+              derivation: {
+                proof: { level: 'table-level' },
+                reason: { code: 'non-key-match', expr: 'gt(orders.total, 100)' },
+                status: 'PUNTED',
+              },
+              mutation: 'cart/add',
+              query: 'orders.byPrice',
+              status: 'await-fragment',
+            },
+          ],
+        },
+        { family: 'optimistic' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-check/v1',
+        'OPTIMISTIC-PROOF mutation=cart/add query=cart status=derived derivation=derived level=exact-row private-scope=session:id',
+        'OPTIMISTIC-PROOF mutation=cart/add query=cart.total status=derived derivation=derived level=scoped-rowset private-scope=tenant:id',
+        'OPTIMISTIC-PROOF mutation=cart/add query=orders status=await-fragment derivation=PUNTED level=opaque private-scope=- reason="Opaque: compute_total"',
+        'OPTIMISTIC-PROOF mutation=cart/add query=orders.byPrice status=await-fragment derivation=PUNTED level=table-level private-scope=- reason="non-key match: gt(orders.total, 100)"',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('prints stable KV311 update coverage rows and warnings', () => {
     expect(
       kovoCheck({

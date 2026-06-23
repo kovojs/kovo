@@ -127,6 +127,8 @@ import {
   kovoCheckDiagnosticAssertionFacts,
   kovoCheckDiagnosticFacts,
   kovoCheckOkAssertionFact,
+  kovoCheckOptimisticProofAssertionFacts,
+  kovoCheckOptimisticProofFacts,
   kovoCheckResultFact,
   kovoCheckUnguardedAuditBehaviorFact,
   parseKovoCheckOutput,
@@ -136,6 +138,8 @@ import {
   type KovoCheckDiagnosticAssertionFact,
   type KovoCheckDiagnosticFact,
   type KovoCheckOkAssertionFact,
+  type KovoCheckOptimisticProofAssertionFact,
+  type KovoCheckOptimisticProofFact,
   type KovoCheckOutput,
   type KovoCheckResultFact,
   type KovoCheckUnguardedAuditBehaviorFact,
@@ -1475,6 +1479,28 @@ describe('@kovojs/test package subpath exports', () => {
       },
     ]);
     expect(
+      kovoCheckOptimisticProofFacts(
+        'kovo-check/v1\nOPTIMISTIC-PROOF mutation=cart/add query=cart status=derived derivation=derived level=exact-row private-scope=session:id\n',
+      ),
+    ).toMatchObject([{ properties: { level: 'exact-row', mutation: 'cart/add', query: 'cart' } }]);
+    expect(
+      kovoCheckOptimisticProofAssertionFacts(
+        'kovo-check/v1\nOPTIMISTIC-PROOF mutation=cart/add query=orders status=await-fragment derivation=PUNTED level=opaque private-scope=- reason="Opaque: compute_total"\n',
+      ),
+    ).toEqual([
+      {
+        properties: {
+          derivation: 'PUNTED',
+          level: 'opaque',
+          mutation: 'cart/add',
+          'private-scope': '-',
+          query: 'orders',
+          reason: 'Opaque: compute_total',
+          status: 'await-fragment',
+        },
+      },
+    ]);
+    expect(
       kovoExplainMutationAssertionFact({
         exitCode: 0,
         output: [
@@ -1743,6 +1769,8 @@ type _PublicSubpathTypes = [
   KovoCheckDiagnosticAssertionFact,
   KovoCheckDiagnosticFact,
   KovoCheckOkAssertionFact,
+  KovoCheckOptimisticProofAssertionFact,
+  KovoCheckOptimisticProofFact,
   KovoCheckOutput,
   KovoCheckResultFact,
   KovoCheckUnguardedAuditBehaviorFact,
