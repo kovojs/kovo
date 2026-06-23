@@ -2,8 +2,8 @@
 
 Server-side rendering of LLM/DB-authored rich text that embeds a closed set of pre-approved
 components as well-formed XML tags (e.g. `<kovo-chart title="Q3">…</kovo-chart>`). Safe by
-construction and lazy by default; the dynamic *shape* of the tree is data-driven while the
-*set* of renderable components stays statically declared and auditable.
+construction and lazy by default; the dynamic _shape_ of the tree is data-driven while the
+_set_ of renderable components stays statically declared and auditable.
 
 ## Design (normative: `SPEC.md` §4.10; cites §4.5 composition, §4.8 output safety, §6.3 schemas)
 
@@ -13,7 +13,7 @@ construction and lazy by default; the dynamic *shape* of the tree is data-driven
   cannot render a component — the pre-approval guarantee is structural.
 - `renderTree` walks the AST server-side and dispatches each element through the existing server
   JSX runtime (`jsx`, `packages/server/src/jsx-runtime.ts`). This is framework-internal dynamic
-  dispatch: the compiler's static-wiring ban (§4.5, KV230) governs *app-authored* TSX, not a
+  dispatch: the compiler's static-wiring ban (§4.5, KV230) governs _app-authored_ TSX, not a
   framework runtime walker, so **no new compiler lowering pass is required** for the core feature.
 - Security invariants:
   - Text nodes are escaped by the walker (`escapeText`) — raw `jsx` inserts children unescaped
@@ -60,4 +60,4 @@ construction and lazy by default; the dynamic *shape* of the tree is data-driven
       compile-time diagnostic.
 - [ ] Streaming/incremental parse for token-by-token LLM output (v1 assumes complete, well-formed XML).
 - [ ] Client-side refresh of the dynamic tree after a mutation (today it is server-rendered once,
-      per §4.5; refreshing the *shape* would require the static wiring the design deliberately avoids).
+      per §4.5; refreshing the _shape_ would require the static wiring the design deliberately avoids).

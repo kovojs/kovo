@@ -14,11 +14,7 @@ import { s } from './schema.js';
 // A component that emits its prop into an ATTRIBUTE (the JSX runtime escapes/URL-checks
 // attributes; SPEC §4.8) and re-emits walker-escaped children verbatim.
 const Callout = component({
-  render: (
-    { title }: { title: string },
-    _state,
-    { children }: { children?: unknown },
-  ) => (
+  render: ({ title }: { title: string }, _state, { children }: { children?: unknown }) => (
     <section data-title={title}>{children}</section>
   ),
 });
@@ -110,7 +106,9 @@ describe('renderTree', () => {
   it('neutralizes XSS in attribute values', async () => {
     const html = await renderTree(
       registry,
-      parseComponentXml('<kovo-callout title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;">x</kovo-callout>'),
+      parseComponentXml(
+        '<kovo-callout title="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;">x</kovo-callout>',
+      ),
     );
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
@@ -127,7 +125,9 @@ describe('renderTree', () => {
   it('passes only schema-declared props — no arbitrary attribute passthrough', async () => {
     const html = await renderTree(
       registry,
-      parseComponentXml('<kovo-callout title="ok" onclick="evil()" data-extra="x">y</kovo-callout>'),
+      parseComponentXml(
+        '<kovo-callout title="ok" onclick="evil()" data-extra="x">y</kovo-callout>',
+      ),
     );
     expect(html).toBe('<section data-title="ok">y</section>');
     expect(html).not.toContain('onclick');
@@ -145,7 +145,9 @@ describe('renderTree', () => {
   it('renders an unknown tag as its children with the wrapper dropped (default)', async () => {
     const html = await renderTree(
       registry,
-      parseComponentXml('<kovo-unknown>kept <kovo-callout title="t">inner</kovo-callout></kovo-unknown>'),
+      parseComponentXml(
+        '<kovo-unknown>kept <kovo-callout title="t">inner</kovo-callout></kovo-unknown>',
+      ),
     );
     expect(html).toBe('kept <section data-title="t">inner</section>');
   });
