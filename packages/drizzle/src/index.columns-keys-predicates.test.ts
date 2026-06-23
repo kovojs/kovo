@@ -1136,6 +1136,53 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('degrades row identity when an unsupported conjunction child affects membership', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { and, eq, gt } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProduct(db: PgDatabase, productId: string) {',
+          '  await db.update(products).set({ reserved: true }).where(and(eq(products.id, productId), gt(products.stock, 0)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const graph = extractTouchGraphFromProject({ files });
+
+    expect(graph.syncProduct?.touches).toEqual([
+      {
+        domain: 'product',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'product.domain.ts:7',
+        via: 'products',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toMatchObject([
+      { code: 'KV409', site: 'product.domain.ts:7' },
+    ]);
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
+      {
+        match: {
+          expr: 'and(eq(products.id, productId), gt(products.stock, 0))',
+          kind: 'opaque',
+        },
+        op: 'update',
+        sets: { reserved: { kind: 'const', value: true } },
+        table: 'products',
+      },
+    ]);
+  });
+
   it('extracts composite parameter keys from and(eq(...)) predicates', () => {
     const graph = extractTouchGraphFromProject({
       files: [

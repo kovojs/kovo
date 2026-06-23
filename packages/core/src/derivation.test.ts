@@ -191,6 +191,10 @@ describe('derivation result constructors + punt labels', () => {
       [{ code: 'opaque-projection', expr: 'sql`...`' }, 'Opaque projection: sql`...`'],
       [{ code: 'no-row-witness', field: 'total' }, 'no client rows: total'],
       [{ code: 'membership-entry', field: 'items' }, 'membership entry: items'],
+      [
+        { code: 'partial-key', columns: ['tenantId'], table: 'tickets' },
+        'partial key on tickets: tenantId',
+      ],
       [{ code: 'unsupported', detail: 'INSERT × scalar' }, 'unsupported: INSERT × scalar'],
     ];
 

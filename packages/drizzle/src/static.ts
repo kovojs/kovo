@@ -5995,20 +5995,7 @@ interface QueryInstanceKeyComparisons {
  * branches are included here but must never discharge an instance key.
  */
 function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
-  const expression = unwrappedStaticExpressionNode(predicate);
-  if (!Node.isCallExpression(expression)) return [];
-
-  const conjuncts: EqPredicateConjunct[] = [];
-  for (const descendant of [
-    expression,
-    ...expression.getDescendantsOfKind(SyntaxKind.CallExpression),
-  ]) {
-    const callee = descendant.getExpression();
-    if (!Node.isIdentifier(callee) || callee.getText() !== 'eq') continue;
-    const [left, right] = descendant.getArguments();
-    if (left && right) conjuncts.push({ left, right });
-  }
-  return conjuncts;
+  return pnfAllEqOperandPairs(predicatePnf(predicate));
 }
 
 function queryInstanceKeyOperand(
@@ -10152,16 +10139,17 @@ function extractPredicateFactsFromWriteChain(
   const whereCall = calls.find((call) => propertyAccessCallName(call) === 'where');
   const predicate = whereCall?.getArguments()[0];
   if (!predicate) return facts;
+  const pnf = predicatePnf(predicate);
 
   const parameterizedKeys = extractParameterizedKeys(
-    predicate,
+    pnf,
     resolveIdentifier,
     paramSymbolKeys,
     sessionContext,
   );
   facts.push(...parameterizedKeys);
 
-  if (!eqPredicateConjuncts(predicate)) {
+  if (!pnfExactConjuncts(pnf)) {
     for (const reference of tableKeyReferences(predicate, resolveIdentifier)) {
       facts.push({ ...reference, predicate: 'non-eq' });
     }
@@ -10191,6 +10179,7 @@ function writeInstanceKeyComparisons(
   const whereCall = calls.find((call) => propertyAccessCallName(call) === 'where');
   const predicate = whereCall?.getArguments()[0];
   if (!predicate) return { argCandidates: [], instanceKey: [] };
+  const pnf = predicatePnf(predicate);
 
   const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
     left: queryInstanceKeyOperand(left, resolveIdentifier, sessionContext),
@@ -10198,18 +10187,18 @@ function writeInstanceKeyComparisons(
   });
 
   return {
-    argCandidates: allEqOperandPairs(predicate).map(toComparison),
-    instanceKey: (eqPredicateConjuncts(predicate) ?? []).map(toComparison),
+    argCandidates: pnfAllEqOperandPairs(pnf).map(toComparison),
+    instanceKey: (pnfExactConjuncts(pnf) ?? []).map(toComparison),
   };
 }
 
 function extractParameterizedKeys(
-  predicate: Node,
+  pnf: PredicatePnf,
   resolveIdentifier?: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string> = new Set(),
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): ExtractedPredicateFact[] {
-  const conjuncts = eqPredicateConjuncts(predicate);
+  const conjuncts = pnfExactConjuncts(pnf);
   if (!conjuncts) return [];
 
   const facts: ExtractedPredicateFact[] = [];
@@ -10244,27 +10233,57 @@ interface EqPredicateConjunct {
   right: Node;
 }
 
-function eqPredicateConjuncts(node: Node): EqPredicateConjunct[] | null {
+type PredicatePnf =
+  | { expr: string; kind: 'and'; nodes: readonly PredicatePnf[] }
+  | { kind: 'eq'; left: Node; right: Node }
+  | { expr: string; kind: 'opaque' }
+  | { expr: string; kind: 'or'; nodes: readonly PredicatePnf[] };
+
+function predicatePnf(node: Node): PredicatePnf {
   const expression = unwrappedStaticExpressionNode(node);
-  if (!Node.isCallExpression(expression)) return null;
+  if (!Node.isCallExpression(expression)) return { expr: expression.getText(), kind: 'opaque' };
 
   const callee = expression.getExpression();
-  if (!Node.isIdentifier(callee)) return null;
+  if (!Node.isIdentifier(callee)) return { expr: expression.getText(), kind: 'opaque' };
   const name = callee.getText();
 
-  if (name === 'and') {
+  if (name === 'and' || name === 'or') {
+    return {
+      expr: expression.getText(),
+      kind: name,
+      nodes: expression.getArguments().map((argument) => predicatePnf(argument)),
+    };
+  }
+
+  if (name !== 'eq') return { expr: expression.getText(), kind: 'opaque' };
+  const [left, right] = expression.getArguments();
+  return left && right
+    ? { kind: 'eq', left, right }
+    : { expr: expression.getText(), kind: 'opaque' };
+}
+
+function pnfExactConjuncts(pnf: PredicatePnf): EqPredicateConjunct[] | null {
+  if (pnf.kind === 'eq') return [{ left: pnf.left, right: pnf.right }];
+  if (pnf.kind === 'and') {
     const conjuncts: EqPredicateConjunct[] = [];
-    for (const argument of expression.getArguments()) {
-      const nested = eqPredicateConjuncts(argument);
+    for (const child of pnf.nodes) {
+      const nested = pnfExactConjuncts(child);
       if (!nested) return null;
       conjuncts.push(...nested);
     }
     return conjuncts;
   }
+  return null;
+}
 
-  if (name !== 'eq') return null;
-  const [left, right] = expression.getArguments();
-  return left && right ? [{ left, right }] : null;
+function eqPredicateConjuncts(node: Node): EqPredicateConjunct[] | null {
+  return pnfExactConjuncts(predicatePnf(node));
+}
+
+function pnfAllEqOperandPairs(pnf: PredicatePnf): EqPredicateConjunct[] {
+  if (pnf.kind === 'eq') return [{ left: pnf.left, right: pnf.right }];
+  if (pnf.kind === 'and' || pnf.kind === 'or') return pnf.nodes.flatMap(pnfAllEqOperandPairs);
+  return [];
 }
 
 function tableKeyReferences(
@@ -11092,46 +11111,46 @@ function keyEqMatchesFromPredicate(
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
 ): KeyEqMatchParseResult | null {
-  const expression = unwrappedStaticExpressionNode(predicate);
-  if (Node.isCallExpression(expression)) {
-    const callee = expression.getExpression();
-    if (Node.isIdentifier(callee) && callee.getText() === 'or') {
-      return keyEqDisjunctionMatchesFromPredicate(
-        expression,
-        resolveTable,
-        paramSymbolKeys,
-        sessionContext,
-      );
-    }
-  }
-
-  return keyEqConjunctionMatchesFromPredicate(
-    predicate,
+  return keyEqMatchesFromPnf(
+    predicatePnf(predicate),
     resolveTable,
     paramSymbolKeys,
     sessionContext,
   );
 }
 
-function keyEqDisjunctionMatchesFromPredicate(
-  predicate: CallExpression,
+function keyEqMatchesFromPnf(
+  pnf: PredicatePnf,
+  resolveTable: (node: Node) => string | undefined,
+  paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext,
+): KeyEqMatchParseResult | null {
+  if (pnf.kind === 'or') {
+    return keyEqDisjunctionMatchesFromPnf(pnf, resolveTable, paramSymbolKeys, sessionContext);
+  }
+
+  return keyEqConjunctionMatchesFromPnf(pnf, resolveTable, paramSymbolKeys, sessionContext);
+}
+
+function keyEqDisjunctionMatchesFromPnf(
+  pnf: Extract<PredicatePnf, { kind: 'or' }>,
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
 ): KeyEqMatchParseResult {
   const arms: { eq: { column: string; value: SymbolicValue }[] }[] = [];
-  for (const argument of predicate.getArguments()) {
-    const parsed = keyEqConjunctionMatchesFromPredicate(
-      argument,
+  for (const arm of pnf.nodes) {
+    const parsed = keyEqConjunctionMatchesFromPnf(
+      arm,
       resolveTable,
       paramSymbolKeys,
       sessionContext,
     );
     if (!parsed || parsed.kind !== 'matches') {
       return {
-        expr: predicate.getText(),
+        expr: pnf.expr,
         kind: 'opaque',
-        reason: { code: 'mixed-disjunction', expr: predicate.getText() },
+        reason: { code: 'mixed-disjunction', expr: pnf.expr },
       };
     }
     arms.push({ eq: parsed.matches });
@@ -11139,19 +11158,19 @@ function keyEqDisjunctionMatchesFromPredicate(
   return arms.length > 0
     ? { arms, kind: 'or' }
     : {
-        expr: predicate.getText(),
+        expr: pnf.expr,
         kind: 'opaque',
-        reason: { code: 'mixed-disjunction', expr: predicate.getText() },
+        reason: { code: 'mixed-disjunction', expr: pnf.expr },
       };
 }
 
-function keyEqConjunctionMatchesFromPredicate(
-  predicate: Node,
+function keyEqConjunctionMatchesFromPnf(
+  pnf: PredicatePnf,
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
 ): KeyEqMatchParseResult | null {
-  const conjuncts = eqPredicateConjuncts(predicate);
+  const conjuncts = pnfExactConjuncts(pnf);
   if (!conjuncts) return null;
 
   const matches: { column: string; value: SymbolicValue }[] = [];

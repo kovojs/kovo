@@ -286,6 +286,7 @@ export type PuntReason =
   | { code: 'opaque-projection'; expr: string }
   | { code: 'opaque-set'; expr: string }
   | { code: 'opaque-shape'; detail?: string; shape: 'distinct' | 'group-by-having' | 'window' }
+  | { code: 'partial-key'; columns: readonly string[]; table: string }
   | { code: 'unsupported'; detail: string }
   | { code: 'untraceable-param'; expr: string };
 
@@ -351,6 +352,8 @@ export function puntReasonLabel(reason: PuntReason): string {
       return `Opaque: ${reason.expr}`;
     case 'opaque-shape':
       return reason.detail ? `${reason.shape} shape: ${reason.detail}` : `${reason.shape} shape`;
+    case 'partial-key':
+      return `partial key on ${reason.table}: ${reason.columns.join(',')}`;
     case 'unsupported':
       return `unsupported: ${reason.detail}`;
     case 'untraceable-param':

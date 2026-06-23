@@ -163,10 +163,18 @@ function deriveAgg(
   // (SPEC.md §10.5 "eq(t.col,value) only when cols provably cover the table key")
   if (field.rowKey) {
     const keyColumns = field.rowKey.split(',').map((c) => c.trim());
-    const allArmsCoverKey = alternatives.value.every((alternative) =>
-      keyColumns.every((keyColumn) => alternative.coveredColumns.has(keyColumn)),
-    );
-    if (!allArmsCoverKey) {
+    for (const alternative of alternatives.value) {
+      const coveredKeyColumns = keyColumns.filter((keyColumn) =>
+        alternative.coveredColumns.has(keyColumn),
+      );
+      if (coveredKeyColumns.length === keyColumns.length) continue;
+      if (coveredKeyColumns.length > 0) {
+        return fail({
+          code: 'partial-key',
+          columns: keyColumns.filter((keyColumn) => !alternative.coveredColumns.has(keyColumn)),
+          table: field.rowset.table,
+        });
+      }
       return fail({ code: 'non-key-match', expr: `non-key eq on ${field.rowset.table}` });
     }
   }
