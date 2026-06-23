@@ -8,7 +8,8 @@ import { boolean, integer, pgTable, serial, text } from 'drizzle-orm/pg-core';
 export const questions = pgTable(
   'questions',
   {
-    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    id: text('id').notNull(),
     title: text('title').notNull(),
     body: text('body').notNull(),
     authorId: text('author_id').notNull(),
@@ -18,13 +19,14 @@ export const questions = pgTable(
     tags: text('tags').notNull().default(''),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: 'question', key: (t) => t.id }),
+  kovo({ domain: 'question', key: 'sessionId,id' }),
 );
 
 export const answers = pgTable(
   'answers',
   {
-    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    id: text('id').notNull(),
     questionId: text('question_id').notNull(),
     authorId: text('author_id').notNull(),
     body: text('body').notNull(),
@@ -33,17 +35,18 @@ export const answers = pgTable(
     authorName: text('author_name').notNull().default('Anonymous'),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: 'answer', key: (t) => t.id }),
+  kovo({ domain: 'answer', key: 'sessionId,id' }),
 );
 
 export const votes = pgTable(
   'votes',
   {
     id: serial('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
     targetType: text('target_type').notNull(),
     targetId: text('target_id').notNull(),
     userId: text('user_id').notNull(),
     value: integer('value').notNull(),
   },
-  kovo({ domain: 'vote', key: (t) => t.id }),
+  kovo({ domain: 'vote', key: 'sessionId,id' }),
 );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { createPerSessionDispatcher, parseCookies } from './dispatcher.mjs';
+import { createPerSessionDispatcher, DEMO_SESSION_HEADER, parseCookies } from './dispatcher.mjs';
 
 // A minimal fake of the Node req/res surface the dispatcher touches.
 function fakeReq(cookie) {
@@ -94,6 +94,30 @@ describe('createPerSessionDispatcher', () => {
     const res = fakeRes();
     await dispatcher.dispatch(fakeReq('kovo_demo_sid=../etc/passwd'), res);
     expect(sidFromRes(res)).toBeTruthy(); // replaced, not honored
+  });
+
+  it('overwrites the internal session header with the resolved cookie session', async () => {
+    const seen = [];
+    const dispatcher = createPerSessionDispatcher({
+      buildHandler: () => (req, res) => {
+        seen.push(req.headers[DEMO_SESSION_HEADER]);
+        res.writeHead(200);
+      },
+    });
+
+    const firstRes = fakeRes();
+    await dispatcher.dispatch(fakeReq(), firstRes);
+    const sid = sidFromRes(firstRes);
+    await dispatcher.dispatch(
+      {
+        headers: { cookie: `kovo_demo_sid=${sid}`, [DEMO_SESSION_HEADER]: 'spoofed' },
+        method: 'GET',
+        url: '/',
+      },
+      fakeRes(),
+    );
+
+    expect(seen).toEqual([sid, sid]);
   });
 
   it('expires idle sessions past the TTL', async () => {

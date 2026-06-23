@@ -2,7 +2,7 @@ import '../../../tests/example-generated-graphs.setup.js';
 
 import { readFileSync } from 'node:fs';
 
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
@@ -15,11 +15,15 @@ const questionListTarget = 'question-list-region';
 const questionListComponent = 'components/question-list/question-list-region';
 const questionDetailTarget = 'question-detail-region';
 const questionDetailComponent = 'components/question-detail/question-detail-region';
-const demoCsrfRequest = { session: { id: 'demo-session' } };
+const demoSessionHeader = 'x-kovo-demo-sid';
 
 function withCsrf(fields: Record<string, string>): Record<string, string> {
+  return withSessionCsrf('demo-session', fields);
+}
+
+function withSessionCsrf(sessionId: string, fields: Record<string, string>): Record<string, string> {
   return {
-    csrf: csrfToken(demoCsrfRequest, soCsrf),
+    csrf: csrfToken({ session: { id: sessionId } }, soCsrf),
     ...fields,
   };
 }
@@ -89,6 +93,7 @@ async function postForm(
   fields: Record<string, string>,
   targets: string,
   liveTargets: string,
+  headers: Record<string, string> = {},
 ): Promise<{ status: number; html: string }> {
   const response = await handler(
     new Request(`http://example.test/_m/${key}`, {
@@ -99,6 +104,7 @@ async function postForm(
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
         'Kovo-Live-Targets': liveTargets,
         'Kovo-Targets': targets,
+        ...headers,
       },
       body: new URLSearchParams(fields),
     }),
@@ -299,5 +305,57 @@ describe('stackoverflow interactive app', () => {
     expect(html).toContain(`target="${questionListTarget}"`);
     expect(html).toContain('data-error-code="DUPLICATE_TITLE"');
     expect(html).toContain(`A question titled "${question.title}" already exists.`);
+  });
+
+  it('shares one handler while keeping browser sessions isolated by session id', async () => {
+    const { db, handler } = await buildSoInteractiveApp();
+    const sessionA = 'session-a';
+    const sessionB = 'session-b';
+    const title = 'Session A only question';
+
+    await handler(
+      new Request('http://example.test/', {
+        headers: { Accept: 'text/html', [demoSessionHeader]: sessionA },
+      }),
+    );
+    await handler(
+      new Request('http://example.test/', {
+        headers: { Accept: 'text/html', [demoSessionHeader]: sessionB },
+      }),
+    );
+
+    const { status } = await postForm(
+      handler,
+      'postQuestion',
+      withSessionCsrf(sessionA, {
+        id: 'q-session-a-only',
+        title,
+        body: 'This should not appear in another browser session.',
+        authorId: 'demo-viewer',
+      }),
+      `${questionListTarget}=questionList questionScore`,
+      liveHeader(questionListTarget, questionListComponent),
+      { [demoSessionHeader]: sessionA },
+    );
+
+    expect(status).toBe(200);
+
+    const rowsA = await db
+      .select()
+      .from(questions)
+      .where(and(eq(questions.sessionId, sessionA), eq(questions.id, 'q-session-a-only')));
+    const rowsB = await db
+      .select()
+      .from(questions)
+      .where(and(eq(questions.sessionId, sessionB), eq(questions.id, 'q-session-a-only')));
+    expect(rowsA).toHaveLength(1);
+    expect(rowsB).toHaveLength(0);
+
+    const sessionBHome = await handler(
+      new Request('http://example.test/', {
+        headers: { Accept: 'text/html', [demoSessionHeader]: sessionB },
+      }),
+    );
+    expect(await sessionBHome.text()).not.toContain(title);
   });
 });

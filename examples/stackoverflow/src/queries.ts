@@ -1,5 +1,5 @@
 import { query, s, type QueryLoadContext } from '@kovojs/server';
-import { asc, eq, sum } from 'drizzle-orm';
+import { and, asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
 import { type QuestionAnswersResult, type QuestionDetailResult, type SoRequest } from './model.js';
@@ -15,6 +15,7 @@ type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
 export const questionList = query('questionList', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
+    const sessionId = requireSoSessionId(context);
     const items = await db
       .select({
         authorId: questions.authorId,
@@ -28,6 +29,7 @@ export const questionList = query('questionList', {
         answerCount: questions.answerCount,
       })
       .from(questions)
+      .where(eq(questions.sessionId, sessionId))
       .orderBy(questions.id);
     // Keep the explicit property for the artifact generator.
     return { items: items };
@@ -38,6 +40,7 @@ export const questionList = query('questionList', {
 export const answerList = query('answerList', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
+    const sessionId = requireSoSessionId(context);
     const items = await db
       .select({
         id: answers.id,
@@ -46,6 +49,7 @@ export const answerList = query('answerList', {
         score: answers.score,
       })
       .from(answers)
+      .where(eq(answers.sessionId, sessionId))
       .orderBy(answers.id);
     return { items: items };
   },
@@ -58,6 +62,7 @@ export const questionDetail = query('questionDetail', {
     context?: SoQueryLoadContext,
   ): Promise<QuestionDetailResult | null> => {
     const db = requireSoQueryDb(context);
+    const sessionId = requireSoSessionId(context);
     const [row] = await db
       .select({
         id: questions.id,
@@ -71,7 +76,7 @@ export const questionDetail = query('questionDetail', {
         createdAt: questions.createdAt,
       })
       .from(questions)
-      .where(eq(questions.id, input.id))
+      .where(and(eq(questions.sessionId, sessionId), eq(questions.id, input.id)))
       .limit(1);
     return row ?? null;
   },
@@ -84,6 +89,7 @@ export const questionAnswers = query('questionAnswers', {
     context?: SoQueryLoadContext,
   ): Promise<QuestionAnswersResult> => {
     const db = requireSoQueryDb(context);
+    const sessionId = requireSoSessionId(context);
     return db
       .select({
         id: answers.id,
@@ -96,7 +102,7 @@ export const questionAnswers = query('questionAnswers', {
         createdAt: answers.createdAt,
       })
       .from(answers)
-      .where(eq(answers.questionId, input.questionId))
+      .where(and(eq(answers.sessionId, sessionId), eq(answers.questionId, input.questionId)))
       .orderBy(asc(answers.id));
   },
 });
@@ -105,7 +111,11 @@ export const questionAnswers = query('questionAnswers', {
 export const questionScore = query('questionScore', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
-    const rows = await db.select({ value: sum(votes.value) }).from(votes);
+    const sessionId = requireSoSessionId(context);
+    const rows = await db
+      .select({ value: sum(votes.value) })
+      .from(votes)
+      .where(eq(votes.sessionId, sessionId));
     return { score: Number(rows[0]?.value ?? 0) };
   },
 });
@@ -116,4 +126,12 @@ function requireSoQueryDb(context?: SoQueryLoadContext): SoDb {
     throw new Error('stackoverflow query loaders require context.db or request.db');
   }
   return db;
+}
+
+function requireSoSessionId(context?: SoQueryLoadContext): string {
+  const sessionId = context?.request?.session?.id;
+  if (!sessionId) {
+    throw new Error('stackoverflow query loaders require request.session.id');
+  }
+  return sessionId;
 }

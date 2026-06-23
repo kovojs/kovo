@@ -14,6 +14,7 @@ import {
   type RequestHandler,
 } from '@kovojs/server';
 import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
+import { eq } from 'drizzle-orm';
 
 import { QuestionDetailRegion } from './components/question-detail.js';
 import { QuestionListRegion } from './components/question-list.js';
@@ -33,6 +34,7 @@ import {
   questionList,
   questionScore,
 } from './queries.js';
+import { questions } from './schema.js';
 import { soTheme } from './theme.js';
 
 // SPEC.md §9.1: KovOverflow — the Stack Overflow example as a fully interactive
@@ -48,7 +50,9 @@ const soStylesheets = [
     theme: soTheme,
   }),
 ] as const;
-const demoSession = { id: 'demo-session', user: { id: 'demo-viewer', roles: ['member'] as const } };
+const SO_DEMO_SESSION_HEADER = 'x-kovo-demo-sid';
+const SO_DEMO_SESSION_COOKIE = 'kovo_demo_sid';
+export const FALLBACK_SO_DEMO_SESSION_ID = 'demo-session';
 const soStaticQuestionPaths = Array.from(
   { length: 14 },
   (_unused, index) => `/questions/q${index + 1}`,
@@ -159,20 +163,17 @@ export interface BuildSoInteractiveAppOptions {
 }
 
 /**
- * Build the interactive KovOverflow app over a (seeded) PGlite database. Pass an
- * existing `db` to share state with an already-rendered shell; otherwise a fresh
- * seeded database is created. The returned handler is what the Node server
- * (scripts/serve.mjs) serves — mutations round-trip natively over PGlite.
+ * Build the interactive KovOverflow app over a PGlite database. The app keeps
+ * one database handle and seeds each browser session's rows on first request, so
+ * the hosted demo avoids rebuilding a full app/PGlite instance for every
+ * cookieless visitor while preserving isolated public ids like q1/q2.
  */
 export async function buildSoInteractiveApp(
   options: BuildSoInteractiveAppOptions = {},
 ): Promise<SoInteractiveApp> {
-  let db = options.db;
-  if (!db) {
-    db = await createSoDb();
-    await seedSoDemo(db);
-  }
-  const database = db;
+  const database = options.db ?? (await createSoDb());
+  const ensureDemoSession = createSoDemoSessionSeeder(database);
+  await ensureDemoSession(FALLBACK_SO_DEMO_SESSION_ID);
 
   // SPEC.md §5.1: one parameterized detail route (not a route per seeded row), so
   // questions posted at runtime are immediately viewable. SPEC.md §9.5 route
@@ -211,7 +212,11 @@ export async function buildSoInteractiveApp(
 
   const app = createApp({
     clientModules: createMemoryVersionedClientModuleRegistry(),
-    db: () => database,
+    db: async (request) => {
+      const sessionId = request.session?.id ?? FALLBACK_SO_DEMO_SESSION_ID;
+      await ensureDemoSession(sessionId);
+      return database;
+    },
     document: { lang: 'en-US' },
     liveTargetRenderers: sourceLiveTargetRenderers,
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
@@ -248,10 +253,57 @@ export async function buildSoInteractiveApp(
       }),
       userProfileRoute,
     ],
-    sessionProvider: () => demoSession,
+    sessionProvider: soDemoSessionProvider,
   });
 
   const handler: RequestHandler = createRequestHandler(app);
 
   return { app, db: database, handler };
+}
+
+function soDemoSessionProvider(request: Request) {
+  const id =
+    request.headers.get(SO_DEMO_SESSION_HEADER) ??
+    readCookie(request.headers.get('cookie'), SO_DEMO_SESSION_COOKIE) ??
+    FALLBACK_SO_DEMO_SESSION_ID;
+  return { id, user: { id: 'demo-viewer', roles: ['member'] as const } };
+}
+
+function readCookie(header: string | null, name: string): string | undefined {
+  if (!header) return undefined;
+  for (const part of header.split(';')) {
+    const eqIndex = part.indexOf('=');
+    if (eqIndex === -1) continue;
+    if (part.slice(0, eqIndex).trim() !== name) continue;
+    return decodeURIComponent(part.slice(eqIndex + 1).trim());
+  }
+  return undefined;
+}
+
+function createSoDemoSessionSeeder(db: SoDb): (sessionId: string) => Promise<void> {
+  const seeded = new Set<string>();
+  const pending = new Map<string, Promise<void>>();
+
+  return async function ensureSoDemoSession(sessionId: string): Promise<void> {
+    if (seeded.has(sessionId)) return;
+    const inFlight = pending.get(sessionId);
+    if (inFlight) return inFlight;
+
+    const seed = (async () => {
+      const [existing] = await db
+        .select({ id: questions.id })
+        .from(questions)
+        .where(eq(questions.sessionId, sessionId))
+        .limit(1);
+      if (!existing) {
+        await seedSoDemo(db, sessionId);
+      }
+      seeded.add(sessionId);
+    })().finally(() => {
+      pending.delete(sessionId);
+    });
+
+    pending.set(sessionId, seed);
+    return seed;
+  };
 }

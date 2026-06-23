@@ -1,14 +1,43 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
 import { DEMO_ANSWER_ROWS, DEMO_QUESTION_ROWS } from './directory.js';
 import { answers, questions, votes } from './schema.js';
 
-// The richer KovOverflow dataset, layered on top of the tiny createSoDb() base
-// seed. The base seed (db.ts) creates q1/q2 + a1 with the minimal columns the
-// focused tests rely on; here we dress those rows up and add q3…q14 plus their
-// answers so the served app reads like a real Q&A site. Author identities,
-// reputations, tags, and timestamps all come from ./directory.ts.
+// The richer KovOverflow dataset is inserted per browser session. q1/q2 + a1
+// are seeded first for focused tests, then dressed up and expanded with q3…q14
+// plus their answers so the served app reads like a real Q&A site. Author
+// identities, reputations, tags, and timestamps all come from ./directory.ts.
+
+const BASE_QUESTION_ROWS = [
+  {
+    id: 'q1',
+    title: 'How do I derive optimistic updates?',
+    body: 'Compiler-derived from Drizzle.',
+    authorId: 'u1',
+    score: 3,
+    answerCount: 1,
+  },
+  {
+    id: 'q2',
+    title: 'How do I keep demo state isolated?',
+    body: 'Use a fresh in-memory database per run.',
+    authorId: 'u2',
+    score: 1,
+    answerCount: 0,
+  },
+] as const;
+
+const BASE_ANSWER_ROWS = [
+  {
+    id: 'a1',
+    questionId: 'q1',
+    authorId: 'u2',
+    body: 'Use deriveOptimistic.',
+    score: 2,
+    accepted: false,
+  },
+] as const;
 
 // Presentation overlay for the two base-seed questions. The tests rely on q1/q2
 // existing and on q1 being the first row by id (with a votable score and an
@@ -87,12 +116,16 @@ const DEMO_VOTES = VOTE_TARGETS.map((targetId, index) => ({
   value: 1,
 }));
 
-/** Insert the richer demo dataset into a freshly-created KovOverflow db. */
-export async function seedSoDemo(db: SoDb): Promise<void> {
-  await db.insert(questions).values(DEMO_QUESTION_ROWS);
-  await db.insert(answers).values(DEMO_ANSWER_ROWS);
-  await db.insert(answers).values(DEMO_EXTRA_ANSWER_ROWS);
-  await db.insert(votes).values(DEMO_VOTES);
+/** Insert the richer demo dataset for one KovOverflow browser session. */
+export async function seedSoDemo(db: SoDb, sessionId: string): Promise<void> {
+  const scope = <Row extends object>(row: Row) => ({ ...row, sessionId });
+
+  await db.insert(questions).values(BASE_QUESTION_ROWS.map(scope));
+  await db.insert(answers).values(BASE_ANSWER_ROWS.map(scope));
+  await db.insert(questions).values(DEMO_QUESTION_ROWS.map(scope));
+  await db.insert(answers).values(DEMO_ANSWER_ROWS.map(scope));
+  await db.insert(answers).values(DEMO_EXTRA_ANSWER_ROWS.map(scope));
+  await db.insert(votes).values(DEMO_VOTES.map(scope));
 
   // Dress up the two base-seed questions for the served demo.
   for (const overlay of DEMO_BASE_QUESTION_OVERLAY) {
@@ -108,7 +141,7 @@ export async function seedSoDemo(db: SoDb): Promise<void> {
         answerCount: overlay.answerCount,
         body: overlay.body,
       })
-      .where(eq(questions.id, overlay.id));
+      .where(and(eq(questions.sessionId, sessionId), eq(questions.id, overlay.id)));
   }
   for (const overlay of DEMO_BASE_ANSWER_OVERLAY) {
     await db
@@ -121,6 +154,6 @@ export async function seedSoDemo(db: SoDb): Promise<void> {
         accepted: overlay.accepted,
         body: overlay.body,
       })
-      .where(eq(answers.id, overlay.id));
+      .where(and(eq(answers.sessionId, sessionId), eq(answers.id, overlay.id)));
   }
 }

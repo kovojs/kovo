@@ -3,8 +3,8 @@ import { execFileSync } from 'node:child_process';
 
 import { createDemoServeServer, runDemoServeCli } from '../../../scripts/demo-session/serve.mjs';
 
-// Per-visitor demo server for the Stack Overflow example. Each browser session
-// gets its own seeded PGlite instance.
+// Hosted demo server for the Stack Overflow example. Browser sessions share one
+// app/PGlite instance; rows are scoped by the dispatcher session id.
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -23,13 +23,14 @@ export function createSoDemoServer(options = {}) {
           'stackoverflow /src/interactive-app.tsx must export buildSoInteractiveApp.',
         );
       }
-      // buildSoInteractiveApp() with no db mints a fresh seeded PGlite; the
-      // reference instance only supplies the route table for the ownership
-      // predicate, every visitor gets their own.
+      // The app's db provider seeds each browser session on demand, so the
+      // dispatcher can reuse this handler instead of rebuilding Kovo + PGlite
+      // for every cookieless visitor.
       const reference = await buildSoInteractiveApp();
+      const sharedHandler = toNodeHandler(reference.handler);
       return {
         referenceApp: reference.app,
-        buildHandler: async () => toNodeHandler((await buildSoInteractiveApp()).handler),
+        buildHandler: () => sharedHandler,
       };
     },
     ...options,

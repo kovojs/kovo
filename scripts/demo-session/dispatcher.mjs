@@ -26,6 +26,7 @@ import { randomUUID } from 'node:crypto';
 const DEFAULT_COOKIE_NAME = 'kovo_demo_sid';
 const DEFAULT_IDLE_MS = 20 * 60_000;
 const DEFAULT_MAX_SESSIONS = 40;
+export const DEMO_SESSION_HEADER = 'x-kovo-demo-sid';
 
 /**
  * @param {{
@@ -188,6 +189,10 @@ export function createPerSessionDispatcher({
 
     const session = getSession(sid, at);
     enforceCap();
+
+    // Let shared-instance demos scope their own data by the dispatcher-selected
+    // session id without trusting a client-supplied header.
+    req.headers[DEMO_SESSION_HEADER] = sid;
 
     const handler = session.handler ?? (await session.pending);
     return handler(req, res);
