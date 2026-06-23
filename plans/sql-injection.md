@@ -98,9 +98,10 @@ acceptance set (b)); these checkboxes implement it.
   - Accept: Kovo-branded values (`ParameterizedSql`/`StaticSqlText`/`TrustedSql`), Drizzle-native `SQL`/query-builder objects, and driver carriers with separated `{ text, values }`/`{ text, params }`/`{ sql, args }`.
   - Drizzle-native objects must be accepted because the blessed query builder (`db.select().where(eq(...))`) emits them unbranded — so a Drizzle object poisoned via `sql.raw(<dynamic>)` is **not** caught here and must be caught statically (Phase 4).
   - Evidence: `packages/core/src/internal/sql-safety.ts` implements `validateManagedSqlStatement` for Kovo brands, separated carriers, and object-shaped Drizzle builders; `packages/server/src/guards.test.ts` covers branded and separated-carrier acceptance.
-- [ ] Forbid unbranded raw strings on Kovo-managed DB handles by default.
+- [x] Forbid unbranded raw strings on Kovo-managed DB handles under the current rollout default.
   - In dev/test this is an immediate teaching error pointing at `sql\`\``/`staticSql\`\``.
-  - In production the managed handle fails closed (diagnostic-class server error, no DB execution) rather than executing an unbranded raw string. The production gate is a cheap shape/brand check, **not** a SQL parse (see Phase 5).
+  - In production, the no-live-finding intake keeps the guard on the warn-then-enforce ramp: default warn mode logs `KV422` and executes, while `KOVO_SQL_GUARD=enforce` flips to fail closed with the same cheap shape/brand check.
+  - Evidence: `packages/server/src/guards.ts` implements the dev/test enforce default, production warn default, and explicit enforce override; `packages/server/src/guards.test.ts` verifies raw strings are rejected before driver execution and production warn mode logs `KV422`.
 - [x] Preserve table/read verification.
   - The SQL safety gate runs before execution; KV406/KV410/KV411/KV413 runtime verification (test-time) still parses the accepted statement text for coverage and side-effect proof.
   - Evidence: `pnpm exec vitest --run packages/server/src/guards.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/core/src/sql-safety.test.ts` passes; `packages/test/src/query-verifier.test.ts` still records structured SQL reads without replacing adapter arguments.
@@ -189,7 +190,8 @@ acceptance set (b)); these checkboxes implement it.
 
 ## Latest Verification
 
-- `pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/guards.test.ts packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/core/src/diagnostics.test.ts` passed.
+- `pnpm exec vitest --run packages/core/src/sql-safety.test.ts packages/server/src/guards.test.ts packages/test/src/query-verifier.test.ts packages/test/src/verifier-sql.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/cli/src/index.kovo-compile.test.ts packages/drizzle/src/runtime-surface.test.ts packages/core/src/diagnostics.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts` passed.
 - `pnpm run check:api-surface`, `pnpm run check:imports`, `pnpm run check:publish`, and `git diff --check` passed.
 - `vp check --no-lint packages/core/package.json packages/core/src/diagnostics.test.ts packages/core/src/diagnostics.ts packages/core/src/internal/sql-safety.ts packages/core/src/sql-safety.test.ts packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/runtime.ts packages/drizzle/src/static.ts packages/drizzle/src/sql-safety-static.test.ts packages/server/src/guards.test.ts packages/server/src/guards.ts packages/test/src/verifier.ts public-packages.json` passed format and type checks.
-- Full `vp check`/scoped lint remains blocked by pre-existing unrelated unused-import lint warnings and a Vite+ stdout panic; the scoped no-lint check above proves the touched files' formatter/type surface.
+- `vp check --fix --no-lint .github/workflows/ci.yml plans/sql-injection.md` passed formatting; `vp check --no-lint .github/workflows/ci.yml plans/sql-injection.md` reports the files are formatted but exits with the repo tool's `No files found to lint` startup error for YAML/Markdown-only input.
+- Full `vp check`/scoped lint remains blocked by pre-existing unrelated unused-import lint warnings and a Vite+ stdout panic; scoped no-lint checks above prove the touched TypeScript files' formatter/type surface.
