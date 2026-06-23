@@ -115,7 +115,7 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
   - [x] Extract structural Better Auth contracts and schema/input bridge declarations to
     `packages/better-auth/src/internal/contracts.ts`, with compatibility re-exports from
     `internal.ts` and public root re-exports for app-facing companion types.
-    Evidence: `wc -l packages/better-auth/src/internal.ts packages/better-auth/src/internal/contracts.ts` reports `internal.ts` at 1,994 LoC and `contracts.ts` at 545 LoC; `pnpm run check:api-surface` passed with 30 recursive-publicness baseline entries fixed.
+    Evidence: `wc -l packages/better-auth/src/internal.ts packages/better-auth/src/internal/contracts.ts` reports `internal.ts` at 1,995 LoC and `contracts.ts` at 545 LoC; `pnpm run check:api-surface` passed with 30 recursive-publicness baseline entries fixed.
   - [x] Extract credential cookie forwarding, credential success classification, active-organization
     guards, and plugin metadata constants to `packages/better-auth/src/internal/credential.ts`
     and `packages/better-auth/src/internal/plugin-metadata.ts`.
@@ -157,7 +157,11 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
     destructured/aliased receiver handoffs.
   - Verification: `pnpm run test:conformance`.
 
-- [ ] **Split `tests/kovo-check.node.mjs` into reusable fixtures plus command scenarios.**
+- [x] **Split `tests/kovo-check.node.mjs` into reusable fixtures plus command scenarios.**
+  - Evidence: split into `tests/kovo-check.node.mjs` (1,680 LoC),
+    `tests/kovo-check.compiler-runtime.node.mjs` (1,629 LoC), and
+    `tests/kovo-check.server-browser.node.mjs` (1,255 LoC); `vp run build` produced fresh
+    dist artifacts and `pnpm run check:kovo` passed 52 tests.
   - Preserve the current `vp run kovo-check` task entrypoint.
   - Candidate modules: temp workspace setup, CLI invocation, graph fixture builders, expected-output
     assertions, scenario list.

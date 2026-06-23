@@ -26,6 +26,7 @@ import {
   type BetterAuthResponseLike,
   type BetterAuthSchemaBridge,
   type BetterAuthSchemaBridgeAnnotation,
+  type BetterAuthSchemaBridgeDomainAnnotation,
   type BetterAuthSchemaBridgeExtensions,
   type BetterAuthSchemaBridgeValidation,
   type BetterAuthSchemaBridgeValidationOptions,
