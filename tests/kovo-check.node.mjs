@@ -2186,6 +2186,31 @@ void test('P9 verification layer evidence remains represented', async () => {
         rawMutationFailure: 'KV402 Write touched an undeclared domain: audit',
         transactionFailure: 'KV402 Write touched an undeclared domain: audit',
       },
+      sqlite: {
+        libsqlRowKey: 'id',
+        mutationReadCovered: true,
+        preparedStatementObserved: [
+          {
+            branch: undefined,
+            domain: 'product',
+            kind: 'write',
+            mutationRead: undefined,
+            rowKey: undefined,
+            sql: 'insert into products (id, price) values (?, ?) on conflict (id) do update set price = ( select amount from prices where prices.product_id = products.id ) returning id',
+            table: 'products',
+          },
+          {
+            branch: undefined,
+            domain: 'price',
+            kind: 'read',
+            mutationRead: true,
+            rowKey: 'product_id',
+            sql: 'insert into products (id, price) values (?, ?) on conflict (id) do update set price = ( select amount from prices where prices.product_id = products.id ) returning id',
+            table: 'prices',
+          },
+        ],
+        writeCovered: true,
+      },
       sql: {
         compoundRowKeyCovered: true,
         nestedUpdateCovered: true,

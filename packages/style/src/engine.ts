@@ -214,7 +214,7 @@ function createAtomicStylesInternal<const Styles extends Record<string, StyleObj
 
   const rules = [...rulesByKey.values()].sort(compareRules);
   return {
-    styles: compiled as StyleNamespaces<Styles>,
+    styles: compiled as { readonly [Key in keyof Styles]: CompiledStyle },
     rules,
     css: emitAtomicCss(rules),
   };
