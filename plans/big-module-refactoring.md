@@ -81,6 +81,10 @@ Current command output after completed splits:
     project receiver alias helpers to `packages/drizzle/src/static/project-receivers.ts`.
     Evidence: `packages/drizzle/src/static/project-receivers.ts` is 1,274 LoC and
     `packages/drizzle/src/static.ts` is reduced to 3,286 LoC; `pnpm exec vitest --run packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 5 files / 96 tests; `git diff --check` passed.
+  - [x] Extract query read diagnostics, query instance-key/scope facts, touch summaries, and
+    predicate/read-source helpers to `packages/drizzle/src/static/summaries.ts`.
+    Evidence: `packages/drizzle/src/static/summaries.ts` is 1,521 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 1,979 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/derive.test.ts` passed 8 files / 186 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
