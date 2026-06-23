@@ -1,0 +1,174 @@
+# Big Module Refactoring
+
+**Date:** 2026-06-23
+**Scope:** tracked, text-like files over roughly 2,000 LoC, with source and test modules prioritized
+over generated manifests, baselines, lockfiles, and benchmark artifacts.
+
+Normative constraints: preserve `SPEC.md` §5.2 compiler/generated-artifact rules, §6.5 Better Auth
+adapter behavior, §9.1/§9.2 mutation wire semantics, and §10/§11 data-plane verification semantics.
+For compiler behavior edits also follow `rules/compiler-hard-rules.md`; for public/internal export
+changes follow `rules/api-surface.md`.
+
+## Current Inventory
+
+Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || continue; case "$file" in *.png|*.jpg|*.jpeg|*.gif|*.webp|*.woff2|*.svg|*.snap) continue ;; esac; wc -l "$file"; done | awk '$1 > 2000 { print $1, $2 }' | sort -nr`
+
+| LoC | File | Classification | Refactoring stance |
+| ---: | --- | --- | --- |
+| 12,244 | `packages/drizzle/src/static.ts` | production source | P0 split target |
+| 8,719 | `packages/icons/package.json` | generated package manifest | do not hand-split; reduce/regenerate only if generator changes |
+| 5,137 | `packages/cli/src/index.ts` | production source | P1 split target |
+| 4,604 | `pnpm-lock.yaml` | lockfile | no module refactor |
+| 4,193 | `benchmarks/results/results.json` | benchmark artifact | archive/prune policy, not code split |
+| 3,938 | `tests/kovo-check.node.mjs` | test/verification runner | P2 split target |
+| 3,216 | `api-surface-baseline.json` | generated baseline | no hand edit except API gate refresh |
+| 2,949 | `conformance/drizzle-pin/src/index.receiver-handoffs.test.ts` | conformance test | P1/P2 test split target |
+| 2,876 | `packages/better-auth/src/internal.ts` | production/internal source | P1 split target |
+| 2,823 | `examples/gallery/src/demo-fixtures.tsx` | example fixture source | P2 split target |
+| 2,374 | `packages/server/src/mutation.ts` | production source | P0 split target |
+| 2,308 | `packages/compiler/src/lower/structural-jsx.ts` | compiler source | P0 split target |
+| 2,184 | `packages/compiler/src/scan/parse.ts` | compiler source | P1 split target |
+| 2,149 | `public-packages.json` | generated/package inventory | no hand edit except source-of-truth refresh |
+| 2,040 | `packages/compiler/src/diagnostic-coverage-matrix.test.ts` | compiler test | P2 split target |
+
+## Refactoring Rules
+
+- [ ] Keep every extraction behavior-neutral unless the specific item says otherwise. The first
+  checkpoint for each source split should be a pure move with unchanged exported names and unchanged
+  call sites except imports.
+- [ ] Prefer concern modules that match existing package boundaries instead of generic `utils.ts`
+  buckets.
+- [ ] Preserve public and declared internal subpath exports. Any renamed export or removed symbol needs
+  an explicit API-surface decision and `pnpm run check:api-surface`.
+- [ ] For compiler source moves, prove byte/fact neutrality with focused compiler tests, not fixpoint
+  alone; `SPEC.md` §5.2 says emitted/generated artifacts are inspection targets, not hand-authored
+  source.
+- [ ] For server mutation and data-plane moves, include focused unit tests plus the relevant
+  conformance or `kovo-check` path before committing.
+- [ ] Leave generated JSON, manifests, and lockfiles out of manual refactoring. If their size is a
+  problem, change the generator, prune stale content, or document the refresh command.
+
+## P0 Source Splits
+
+- [ ] **Split `packages/drizzle/src/static.ts` into static-analysis concern modules.**
+  - Target shape:
+    - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
+    - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
+    - `static/query-shapes.ts`: read/query-loader shape extraction.
+    - `static/writes.ts`: write receiver classification, mutation touch extraction, predicate facts.
+    - `static/session-provenance.ts`: private/session scope aliasing and KV414-related facts.
+    - `static/symbolic-effects.ts`: `extractSymbolicEffectsFromProject` and derivation callbacks.
+    - `static/algebraic-shapes.ts`: `extractAlgebraicShapesFromProject` and rowset/projection helpers.
+    - `static.ts`: compatibility barrel for the existing `./internal/static` export.
+  - Keep `packages/drizzle/package.json` exports unchanged.
+  - Verification: `pnpm run test -- packages/drizzle/src`, `pnpm run test:conformance`,
+    `pnpm run check:api-surface`, `pnpm run check:imports`.
+
+- [ ] **Split `packages/server/src/mutation.ts` around the mutation response pipeline.**
+  - Target shape:
+    - `mutation/definition.ts`: `write`, `mutation`, mutation form attributes, and type helpers.
+    - `mutation/run.ts`: input parsing, guard execution, replay reservation, result normalization.
+    - `mutation/enhanced-response.ts`: enhanced mutation wire selection and response headers.
+    - `mutation/no-js-response.ts`: PRG/no-JS rendering and replay-unavailable pages.
+    - `mutation/streaming.ts`: stream coalescing, chunk rendering, streaming error handling.
+    - `mutation/targets.ts`: query rerun selection, fragment/live target rendering, target matching.
+    - `mutation.ts`: compatibility barrel preserving current imports.
+  - Verification: `pnpm run test -- packages/server/src/mutation*.test.ts packages/server/src/replay.test.ts packages/server/src/query-endpoint.test.ts`,
+    plus `pnpm run check:api-surface` if exports move.
+
+- [ ] **Split `packages/compiler/src/lower/structural-jsx.ts` by declared lowering phases.**
+  - Use `structuralJsxPhaseOrder` as the module boundary guide: primitive spreads/composition,
+    navigation/static hrefs, platform substitutions, view-transition stamps, inline attribute derives,
+    primitive reactive attributes, inline text bindings, static text escaping, and helper import
+    insertion.
+  - Keep the existing phase order explicit in one orchestrator file so future changes can be reviewed
+    against `SPEC.md` §5.2.
+  - Verification: `pnpm run test -- packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/gallery-merge-fixtures.*.test.tsx packages/compiler/src/diagnostic-coverage-matrix.test.ts`,
+    plus `pnpm run check:api-surface`.
+
+## P1 Source Splits
+
+- [ ] **Split `packages/cli/src/index.ts` into command-facing modules.**
+  - Target shape:
+    - `dispatch.ts`: `main`, `mainAsync`, usage/error routing.
+    - `commands/check.ts`, `commands/audit.ts`, `commands/explain.ts`: graph command execution and
+      output formatting.
+    - `commands/build.ts`, `commands/compile.ts`, `commands/export.ts`: async filesystem/Vite commands.
+    - `commands/mcp.ts`: MCP server/tool definitions.
+    - `graph-output.ts`: stable JSON/text formatting helpers shared by check/audit/explain.
+    - `index.ts`: internal compatibility barrel; `api.ts` remains the public API entry.
+  - Verification: `pnpm run test -- packages/cli/src/index.*.test.ts packages/cli/src/commands-manifest.test.ts`,
+    `pnpm run check:kovo`, `pnpm run check:api-surface`.
+
+- [ ] **Split `packages/better-auth/src/internal.ts` into adapter concern modules.**
+  - Target shape:
+    - `internal/session-api.ts`: structural Better Auth API/request/response/session contracts.
+    - `internal/schema-bridge.ts`: schema validation, table metadata, source annotation, generated
+      schema source.
+    - `internal/cookies.ts`: Set-Cookie parsing/forwarding and credential success classification.
+    - `internal/credential-mutations.ts`: credential mutation options, touch graph, failure/success
+      resolution.
+    - `internal/guards.ts`: active organization and auth guard helpers.
+    - `internal.ts`: compatibility barrel preserving the existing `./internal` subpath.
+  - Verification: `pnpm run test -- packages/better-auth/src`, `pnpm run check:api-surface`,
+    `pnpm run check:imports`.
+
+- [ ] **Split `packages/compiler/src/scan/parse.ts` after parser-fact seams are stable.**
+  - Target shape:
+    - `scan/model.ts`: exported model interfaces and shared span types.
+    - `scan/source-file.ts`: `parseSourceFile` and TypeScript module setup.
+    - `scan/imports.ts`: import/export/module-scope binding models.
+    - `scan/jsx.ts`: JSX element/attribute/expression/comment extraction.
+    - `scan/calls.ts`: call expression, object literal, arrow function, temporal read extraction.
+    - `scan/component.ts`: `parseComponentModule` orchestration.
+  - Verification: `pnpm run test -- packages/compiler/src/scan packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts`,
+    plus fact-level snapshots if model field construction changes.
+
+## P2 Test And Fixture Splits
+
+- [ ] **Split `conformance/drizzle-pin/src/index.receiver-handoffs.test.ts` by handoff class.**
+  - Candidate files: domain receiver handoffs, query-loader receiver handoffs, write-callback handoffs,
+    destructured/aliased receiver handoffs.
+  - Verification: `pnpm run test:conformance`.
+
+- [ ] **Split `tests/kovo-check.node.mjs` into reusable fixtures plus command scenarios.**
+  - Preserve the current `vp run kovo-check` task entrypoint.
+  - Candidate modules: temp workspace setup, CLI invocation, graph fixture builders, expected-output
+    assertions, scenario list.
+  - Verification: `pnpm run check:kovo`.
+
+- [ ] **Split `examples/gallery/src/demo-fixtures.tsx` by primitive or demo family.**
+  - Candidate modules: controls, disclosure/dialog/menu, list/table, forms, routing/navigation,
+    streaming/async demos.
+  - Preserve gallery route IDs and snapshot names unless a snapshot refresh is intentionally included.
+  - Verification: `pnpm run test -- examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/component-catalog.test.ts`,
+    and browser gallery tests if rendered markup changes.
+
+- [ ] **Split `packages/compiler/src/diagnostic-coverage-matrix.test.ts` into matrix data and
+  scenario groups.**
+  - Candidate modules: matrix definitions, expected-code coverage meta-test, JSX diagnostics,
+    mutation/query diagnostics, route/style diagnostics.
+  - Verification: `pnpm run test -- packages/compiler/src/diagnostic-coverage-matrix.test.ts`.
+
+## Generated Or Artifact Size Policy
+
+- [ ] **Document ownership for large generated/package inventory files.**
+  - Files: `packages/icons/package.json`, `api-surface-baseline.json`, `public-packages.json`,
+    `benchmarks/results/results.json`.
+  - Outcome should name each generator/refresh command and the review rule for accepting large diffs.
+
+- [ ] **Evaluate whether `benchmarks/results/results.json` belongs in an archive or rolling summary.**
+  - If historical detail is still useful, move old data to an archive file and keep the active artifact
+    bounded.
+
+## Sequencing
+
+- [ ] Start with `packages/server/src/mutation.ts` or `packages/compiler/src/lower/structural-jsx.ts`
+  for a bounded P0 proof-of-pattern. These are large but have strong local tests and clearer seams than
+  Drizzle static extraction.
+- [ ] Tackle `packages/drizzle/src/static.ts` in multiple worktree-backed slices after the proof-of-pattern
+  lands; avoid one giant move commit.
+- [ ] Run independent P1/P2 test-file splits in parallel worktrees only after the relevant source split is
+  not actively changing the same ownership area.
+- [ ] After each split, update this plan with the exact verification command that proved the checkbox before
+  marking it complete.
