@@ -65,6 +65,12 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
     `pnpm run check:api-surface`, `pnpm run check:imports`.
 
 - [ ] **Split `packages/server/src/mutation.ts` around the mutation response pipeline.**
+  - [x] Extract public definition/form/type surface to `packages/server/src/mutation/definition.ts`.
+    Evidence: `pnpm exec vitest --run packages/server/src/mutation-delta.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation.test.ts packages/server/src/replay.test.ts packages/server/src/query-endpoint.test.ts` passed 8 files / 119 tests after extraction; `pnpm run check:api-surface` unchanged at baseline 1338/1871; `pnpm run check:imports` passed.
+  - [x] Extract streaming chunk helpers and renderer to `packages/server/src/mutation/streaming.ts`.
+    Evidence: same focused server mutation command above passed after extraction.
+  - [x] Extract query rerun, fragment rendering, and live-target selection to `packages/server/src/mutation/targets.ts`.
+    Evidence: same focused server mutation command above passed after extraction; `packages/server/src/mutation.ts` is now 1,225 LoC.
   - Target shape:
     - `mutation/definition.ts`: `write`, `mutation`, mutation form attributes, and type helpers.
     - `mutation/run.ts`: input parsing, guard execution, replay reservation, result normalization.
@@ -114,6 +120,9 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
     `pnpm run check:imports`.
 
 - [ ] **Split `packages/compiler/src/scan/parse.ts` after parser-fact seams are stable.**
+  - [x] Extract exported scanner model interfaces to `packages/compiler/src/scan/model.ts` and
+    re-export them from `parse.ts`.
+    Evidence: `pnpm exec vitest --run packages/compiler/src/scan packages/compiler/src/compile-component.test.ts packages/compiler/src/compiler-conformance.test.ts` passed 6 files / 82 tests after deletion of the original declarations; `pnpm run check:imports` passed; `packages/compiler/src/scan/parse.ts` is now 1,946 LoC.
   - Target shape:
     - `scan/model.ts`: exported model interfaces and shared span types.
     - `scan/source-file.ts`: `parseSourceFile` and TypeScript module setup.
