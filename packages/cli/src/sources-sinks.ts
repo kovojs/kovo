@@ -5,9 +5,11 @@ import {
   dangerousSinkTokens as registryDangerousSinkTokens,
   frameworkSourceSinkInventory as registryFrameworkSourceSinkInventory,
   sourceSinkRedCorpus as registrySourceSinkRedCorpus,
+  sourceSinkRuntimeEvidence as registrySourceSinkRuntimeEvidence,
   type DangerousSinkToken,
   type SourceSinkCorpusEntry,
   type SourceSinkInventoryEntry,
+  type SourceSinkRuntimeEvidence,
 } from '@kovojs/core/internal/source-sink-registry';
 
 import { type KovoCheckResult } from './shared.js';
@@ -17,6 +19,7 @@ export const sourcesSinksArtifactPath = join('.kovo', 'sources-sinks.json');
 
 export type { DangerousSinkToken, SourceSinkInventoryEntry };
 export type { SourceSinkCorpusEntry };
+export type { SourceSinkRuntimeEvidence };
 
 export interface SourceSinkInventoryArtifact {
   dangerousSinkTokens: readonly DangerousSinkToken[];
@@ -24,6 +27,7 @@ export interface SourceSinkInventoryArtifact {
   entries: readonly SourceSinkInventoryEntry[];
   generatedBy: 'kovo sources-sinks inventory';
   redCorpus: readonly SourceSinkCorpusEntry[];
+  runtimeEvidence: SourceSinkRuntimeEvidence;
   version: typeof sourcesSinksArtifactVersion;
 }
 
@@ -68,6 +72,10 @@ export function sourceSinkRedCorpus(): readonly SourceSinkCorpusEntry[] {
   return registrySourceSinkRedCorpus();
 }
 
+export function sourceSinkRuntimeEvidence(): SourceSinkRuntimeEvidence {
+  return registrySourceSinkRuntimeEvidence();
+}
+
 export function sourcesSinksArtifact(
   options: SourcesSinksArtifactOptions = {},
 ): SourceSinkInventoryArtifact {
@@ -76,6 +84,7 @@ export function sourcesSinksArtifact(
     entries: frameworkSourceSinkInventory(),
     generatedBy: 'kovo sources-sinks inventory',
     redCorpus: sourceSinkRedCorpus(),
+    runtimeEvidence: sourceSinkRuntimeEvidence(),
     version: sourcesSinksArtifactVersion,
   };
   if (options.driftScan) artifact.driftScan = options.driftScan;
@@ -169,6 +178,38 @@ function sourcesSinksTextLines(version: string): string[] {
 
   for (const entry of sourceSinkRedCorpus()) {
     lines.push(sourceSinkCorpusLine(entry));
+  }
+
+  const runtime = sourceSinkRuntimeEvidence();
+  for (const entry of runtime.runtimeChokepoints) {
+    lines.push(
+      [
+        'CHOKEPOINT',
+        `name=${entry.chokepoint}`,
+        `guard=${entry.guard}`,
+        `testEvidence=${entry.testEvidence.join(',')}`,
+      ].join(' '),
+    );
+  }
+  for (const entry of runtime.parityPairs) {
+    lines.push(
+      [
+        'PARITY',
+        `pair=${entry.pair}`,
+        `claim=${entry.claim}`,
+        `testEvidence=${entry.testEvidence.join(',')}`,
+      ].join(' '),
+    );
+  }
+  for (const entry of runtime.failClosedCases) {
+    lines.push(
+      [
+        'FAIL-CLOSED',
+        `shape=${entry.shape}`,
+        `guard=${entry.guard}`,
+        `testEvidence=${entry.testEvidence.join(',')}`,
+      ].join(' '),
+    );
   }
 
   lines.push(

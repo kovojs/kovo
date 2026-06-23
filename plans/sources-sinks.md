@@ -176,11 +176,14 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Phase 4: Runtime Chokepoints
 
-- [ ] Keep runtime guards at framework-owned chokepoints, not at scattered call sites.
+- [x] Keep runtime guards at framework-owned chokepoints, not at scattered call sites.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` records runtime chokepoints with guard and test evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies all required chokepoints are present and emitted.
   - Chokepoints: server renderer, browser update plan, fragment/morph apply, route/mutation/query response builders, header/cookie builder, request shell, CSRF/replay lifecycle, query endpoint, endpoint/webhook dispatcher, storage adapter, static export writer, client module registry, and DB handle guard from `plans/sql-injection.md`.
-- [ ] Add parity tests for each paired server/browser sink.
+- [x] Add parity tests for each paired server/browser sink.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` records each required server/browser parity pair with test evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies all required parity pairs are present and emitted.
   - Required pairs: server URL attributes vs browser bound attributes, server text/JSON vs browser query/fragment apply, modular vs inline loader selector escaping, route redirects vs mutation redirects/auth `next`, and query endpoint vs BroadcastChannel/live transports.
-- [ ] Fail closed where runtime can prove shape safety.
+- [x] Fail closed where runtime can prove shape safety.
+  - Evidence: `packages/core/src/internal/source-sink-registry.ts` records fail-closed shapes with guards and test evidence; `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies all required fail-closed shapes are present and emitted.
   - Examples: bad headers/cookies, unsafe URL scheme, selector construction failure, CSRF mismatch, body too large, cross-principal broadcast, stale build token, disallowed storage path, and unbranded raw SQL per `plans/sql-injection.md`.
 
 ## Phase 5: Docs, Examples, and Templates
@@ -225,6 +228,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified `kovo explain --trust` trust-escape output and CLI parsing.
 - `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified KV423 unregistered app-authored sink diagnostics.
 - `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified red-corpus payload rows plus positive/negative evidence for every enrolled corpus family.
+- `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified runtime chokepoint, parity-pair, and fail-closed evidence rows.
 - `pnpm exec vitest --run scripts/public-packages.test.mjs` verified the shared core-internal source/sink registry export is classified as internal in `public-packages.json`.
 - `pnpm exec vitest run packages/core/src/storage.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/document.test.ts packages/server/src/endpoint.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm --dir tests/integration exec playwright test specs/respond-file.spec.ts`, and `rg -n -i "\\b(csv|tsv|spreadsheet|excel|formula)\\b|text/csv|orders\\.csv|inventory\\.csv" packages tests examples site docs -g '!node_modules' -g '!packages/icons/**'` verified spreadsheet export is absent from framework-owned helpers/examples/tests except disclaimer text.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.

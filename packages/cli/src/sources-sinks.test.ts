@@ -9,6 +9,7 @@ import {
   frameworkSourceSinkInventory,
   scanSourceSinkDrift,
   sourceSinkRedCorpus,
+  sourceSinkRuntimeEvidence,
   sourcesSinksArtifactPath,
   sourcesSinksArtifactVersion,
 } from './sources-sinks.js';
@@ -213,6 +214,57 @@ describe('source/sink inventory', () => {
     expect(searchableCorpus).toContain('request-path child_process');
   });
 
+  it('accounts for runtime chokepoints, parity pairs, and fail-closed shapes', () => {
+    const runtime = sourceSinkRuntimeEvidence();
+
+    expect(runtime.runtimeChokepoints.map((entry) => entry.chokepoint).sort()).toEqual([
+      'CSRF/replay lifecycle',
+      'DB handle guard',
+      'browser update plan',
+      'client module registry',
+      'endpoint/webhook dispatcher',
+      'fragment/morph apply',
+      'header/cookie builder',
+      'query endpoint',
+      'request shell',
+      'route/mutation/query response builders',
+      'server renderer',
+      'static export writer',
+      'storage adapter',
+    ]);
+    expect(runtime.parityPairs.map((entry) => entry.pair).sort()).toEqual([
+      'modular vs inline loader selector escaping',
+      'query endpoint vs BroadcastChannel/live transports',
+      'route redirects vs mutation redirects/auth next',
+      'server URL attributes vs browser bound attributes',
+      'server text/JSON vs browser query/fragment apply',
+    ]);
+    expect(runtime.failClosedCases.map((entry) => entry.shape).sort()).toEqual([
+      'CSRF mismatch',
+      'bad headers/cookies',
+      'body too large',
+      'cross-principal broadcast',
+      'disallowed storage path',
+      'selector construction failure',
+      'stale build token',
+      'unbranded raw SQL',
+      'unsafe URL scheme',
+    ]);
+
+    for (const entry of runtime.runtimeChokepoints) {
+      expect(entry.guard).not.toBe('');
+      expect(entry.testEvidence.length).toBeGreaterThanOrEqual(1);
+    }
+    for (const entry of runtime.parityPairs) {
+      expect(entry.claim).not.toBe('');
+      expect(entry.testEvidence.length).toBeGreaterThanOrEqual(1);
+    }
+    for (const entry of runtime.failClosedCases) {
+      expect(entry.guard).not.toBe('');
+      expect(entry.testEvidence.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
   it('prints stable explain text with the required Phase 1 fields', () => {
     expect(kovoExplain({}, { sourcesSinks: true })).toMatchObject({
       exitCode: 0,
@@ -236,6 +288,11 @@ describe('source/sink inventory', () => {
     expect(result.output).toContain('CORPUS family=html.dom.output');
     expect(result.output).toContain(' negative=');
     expect(result.output).toContain(' positive=');
+    expect(result.output).toContain('CHOKEPOINT name=server renderer');
+    expect(result.output).toContain(
+      'PARITY pair=server URL attributes vs browser bound attributes',
+    );
+    expect(result.output).toContain('FAIL-CLOSED shape=unsafe URL scheme');
   });
 
   it('writes deterministic JSON from the check command', () => {
@@ -255,6 +312,7 @@ describe('source/sink inventory', () => {
       expect(artifact.version).toBe(sourcesSinksArtifactVersion);
       expect(artifact.generatedBy).toBe('kovo sources-sinks inventory');
       expect(artifact.redCorpus).toEqual(expect.any(Array));
+      expect(artifact.runtimeEvidence).toEqual(expect.any(Object));
       expect(artifact.driftScan).toMatchObject({
         status: 'accounted',
         totalFiles: 0,

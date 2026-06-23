@@ -32,6 +32,34 @@ export interface SourceSinkCorpusEntry {
   positiveTestEvidence: readonly string[];
 }
 
+/** @internal */
+export interface SourceSinkFailClosedCase {
+  guard: string;
+  shape: string;
+  testEvidence: readonly string[];
+}
+
+/** @internal */
+export interface SourceSinkParityPair {
+  claim: string;
+  pair: string;
+  testEvidence: readonly string[];
+}
+
+/** @internal */
+export interface SourceSinkRuntimeChokepoint {
+  chokepoint: string;
+  guard: string;
+  testEvidence: readonly string[];
+}
+
+/** @internal */
+export interface SourceSinkRuntimeEvidence {
+  failClosedCases: readonly SourceSinkFailClosedCase[];
+  parityPairs: readonly SourceSinkParityPair[];
+  runtimeChokepoints: readonly SourceSinkRuntimeChokepoint[];
+}
+
 const existingEvidence = {
   browserOutput: 'packages/browser/src/security-output.test.ts',
   browserSelector: 'packages/browser/src/inline-loader-fragment-target.test.ts',
@@ -64,6 +92,11 @@ export function dangerousSinkTokens(): readonly DangerousSinkToken[] {
 /** @internal */
 export function sourceSinkRedCorpus(): readonly SourceSinkCorpusEntry[] {
   return redCorpus;
+}
+
+/** @internal */
+export function sourceSinkRuntimeEvidence(): SourceSinkRuntimeEvidence {
+  return runtimeEvidence;
 }
 
 const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
@@ -462,3 +495,202 @@ const redCorpus: readonly SourceSinkCorpusEntry[] = [
     ],
   },
 ] as const;
+
+const runtimeEvidence: SourceSinkRuntimeEvidence = {
+  failClosedCases: [
+    {
+      guard: 'unsafe URL scheme rejection/drop',
+      shape: 'unsafe URL scheme',
+      testEvidence: [
+        'packages/core/src/security-url.test.ts',
+        'packages/compiler/src/output-context-security.test.ts',
+        'packages/browser/src/security-output.test.ts',
+      ],
+    },
+    {
+      guard: 'typed header/cookie validation',
+      shape: 'bad headers/cookies',
+      testEvidence: ['packages/server/src/cookies.test.ts', 'packages/server/src/response.test.ts'],
+    },
+    {
+      guard: 'CSS.escape selector construction and invalid-target fallback',
+      shape: 'selector construction failure',
+      testEvidence: [
+        'packages/browser/src/inline-loader-response-apply.browser.test.ts',
+        'packages/browser/src/fragment-targets.test.ts',
+      ],
+    },
+    {
+      guard: 'request shell CSRF gate',
+      shape: 'CSRF mismatch',
+      testEvidence: [
+        'packages/server/src/csrf.test.ts',
+        'tests/integration/specs/csrf-required.spec.ts',
+      ],
+    },
+    {
+      guard: 'pre-dispatch load shedding',
+      shape: 'body too large',
+      testEvidence: ['packages/server/src/app-load-shed.test.ts'],
+    },
+    {
+      guard: 'principal fingerprint discard',
+      shape: 'cross-principal broadcast',
+      testEvidence: ['packages/browser/src/broadcast-replay.test.ts'],
+    },
+    {
+      guard: 'build token mismatch refetch/reload',
+      shape: 'stale build token',
+      testEvidence: [
+        'packages/browser/src/inline-loader-enhanced-submit.test.ts',
+        'tests/integration/specs/hmr-dev-client.spec.ts',
+      ],
+    },
+    {
+      guard: 'path containment and storage key validation',
+      shape: 'disallowed storage path',
+      testEvidence: [
+        'packages/core/src/storage.test.ts',
+        'packages/server/src/static-export-output.test.ts',
+      ],
+    },
+    {
+      guard: 'SQL source/sink runtime observed-subset cross-check',
+      shape: 'unbranded raw SQL',
+      testEvidence: ['packages/drizzle/src/index.query-shapes.test.ts'],
+    },
+  ],
+  parityPairs: [
+    {
+      claim: 'server URL attributes and browser bound attributes share unsafe URL rules',
+      pair: 'server URL attributes vs browser bound attributes',
+      testEvidence: [
+        'packages/compiler/src/output-context-security.test.ts',
+        'packages/browser/src/security-output.test.ts',
+      ],
+    },
+    {
+      claim: 'server text/JSON output and browser query/fragment apply preserve escaped text',
+      pair: 'server text/JSON vs browser query/fragment apply',
+      testEvidence: [
+        'packages/server/src/jsx-runtime.test.ts',
+        'packages/browser/src/mutation-response-dom.browser.test.ts',
+        'packages/browser/src/wire-parser.test.ts',
+      ],
+    },
+    {
+      claim: 'inline and modular loaders use the same selector escaping',
+      pair: 'modular vs inline loader selector escaping',
+      testEvidence: [
+        'packages/browser/src/inline-loader-build.test.ts',
+        'packages/browser/src/inline-loader-response-apply-extract.test.ts',
+      ],
+    },
+    {
+      claim: 'route redirects, mutation redirects, and auth next normalize same-origin targets',
+      pair: 'route redirects vs mutation redirects/auth next',
+      testEvidence: [
+        'packages/server/src/match.test.ts',
+        'packages/server/src/mutation.test.ts',
+        'conformance/better-auth-pin/src/index.session-credentials.test.ts',
+      ],
+    },
+    {
+      claim: 'query endpoint and BroadcastChannel/live transports preserve guard/cache posture',
+      pair: 'query endpoint vs BroadcastChannel/live transports',
+      testEvidence: [
+        'tests/integration/specs/query-args-search.spec.ts',
+        'packages/browser/src/broadcast-replay.test.ts',
+        'packages/browser/src/loader-enhanced-mutation-broadcast.test.ts',
+      ],
+    },
+  ],
+  runtimeChokepoints: [
+    {
+      chokepoint: 'server renderer',
+      guard: 'contextual HTML/attribute/script/style encoding',
+      testEvidence: ['packages/server/src/jsx-runtime.test.ts'],
+    },
+    {
+      chokepoint: 'browser update plan',
+      guard: 'compiled update plans use generated selectors and contextual writers',
+      testEvidence: ['packages/compiler/src/query-update-plans.test.ts'],
+    },
+    {
+      chokepoint: 'fragment/morph apply',
+      guard: 'fragment target resolution and morphing preserve escaped server truth',
+      testEvidence: ['packages/browser/src/mutation-response-dom.browser.test.ts'],
+    },
+    {
+      chokepoint: 'route/mutation/query response builders',
+      guard: 'typed status/header/cache/query response protocol',
+      testEvidence: [
+        'packages/server/src/response.test.ts',
+        'packages/server/src/mutation.test.ts',
+        'packages/server/src/query.test.ts',
+      ],
+    },
+    {
+      chokepoint: 'header/cookie builder',
+      guard: 'control character rejection and structural cookie serialization',
+      testEvidence: ['packages/server/src/cookies.test.ts', 'packages/server/src/response.test.ts'],
+    },
+    {
+      chokepoint: 'request shell',
+      guard: 'session, guard, rate-limit, and ownership request channels',
+      testEvidence: ['packages/server/src/guards.test.ts'],
+    },
+    {
+      chokepoint: 'CSRF/replay lifecycle',
+      guard: 'token validation and idempotency replay store',
+      testEvidence: [
+        'packages/server/src/csrf.test.ts',
+        'packages/server/src/replay.test.ts',
+        'tests/integration/specs/webhook-idempotency.spec.ts',
+      ],
+    },
+    {
+      chokepoint: 'query endpoint',
+      guard: 'private no-store cache and guard re-check',
+      testEvidence: [
+        'packages/server/src/query.test.ts',
+        'tests/integration/specs/query-args-search.spec.ts',
+      ],
+    },
+    {
+      chokepoint: 'endpoint/webhook dispatcher',
+      guard: 'auth-before-handler and raw-byte verify-before-parse',
+      testEvidence: [
+        'packages/server/src/endpoint.test.ts',
+        'packages/server/src/webhook.test.ts',
+        'tests/integration/specs/endpoint-raw-request.spec.ts',
+      ],
+    },
+    {
+      chokepoint: 'storage adapter',
+      guard: 'schema-bound stored files and storage key validation',
+      testEvidence: ['packages/core/src/storage.test.ts'],
+    },
+    {
+      chokepoint: 'static export writer',
+      guard: 'reserved dynamic endpoint refusal and output path containment',
+      testEvidence: [
+        'packages/server/src/static-export-output.test.ts',
+        'packages/server/src/static-export-route-guards.test.ts',
+      ],
+    },
+    {
+      chokepoint: 'client module registry',
+      guard: 'versioned handler module imports only from declared registry',
+      testEvidence: [
+        'packages/browser/src/handlers.test.ts',
+        'tests/integration/specs/client-module-versioning.spec.ts',
+      ],
+    },
+    {
+      chokepoint: 'DB handle guard',
+      guard: 'observed query/write set must be static or declared',
+      testEvidence: ['packages/drizzle/src/index.query-shapes.test.ts'],
+    },
+  ],
+};
