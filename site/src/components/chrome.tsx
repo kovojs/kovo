@@ -1,5 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { Code } from '@kovojs/icons/code';
+import { Sun } from '@kovojs/icons/sun';
 import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
@@ -61,8 +63,6 @@ export function sidebarGroupsForPath(groups: NavGroup[], activePath: string): Na
   return filtered.length > 0 ? filtered : groups;
 }
 
-const THEME_ICON = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2m0 14v2M5.6 5.6l1.4 1.4m9.9 9.9 1.4 1.4M3 12h2m14 0h2M5.6 18.4 7 17m9.9-9.9 1.4-1.4"/></svg>`;
-const SOURCE_ICON = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`;
 const SEARCH_ICON = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`;
 // The hamburger swaps to an X when its <details> menu is open (CSS-only, the
 // header mobile nav is an L0 disclosure — zero JavaScript).
@@ -281,6 +281,14 @@ const chromeStyles = style.create(
       ':hover': {
         color: 'var(--ink)',
       },
+    },
+    themeIcon: {
+      height: 18,
+      width: 18,
+    },
+    sourceIcon: {
+      height: 14,
+      width: 14,
     },
     mark: {
       color: 'var(--teal)',
@@ -581,7 +589,7 @@ export const SiteHeader = component({
             on:click={`${clients.theme}#toggle`}
             aria-label="Toggle dark mode"
           >
-            {THEME_ICON}
+            <Sun style={chromeStyles.themeIcon} />
           </button>
           <a
             style={chromeStyles.iconButton}
@@ -761,7 +769,7 @@ export const ApiSidebar = component({
                       rel="external"
                       aria-label={`Source for ${escapeHtml(symbol.name)}`}
                     >
-                      {SOURCE_ICON}
+                      <Code style={chromeStyles.sourceIcon} />
                     </a>
                   </li>
                 ))}

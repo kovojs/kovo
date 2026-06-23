@@ -627,6 +627,9 @@ importers:
       '@kovojs/headless-ui':
         specifier: workspace:*
         version: link:../packages/headless-ui
+      '@kovojs/icons':
+        specifier: workspace:*
+        version: link:../packages/icons
       '@kovojs/server':
         specifier: workspace:*
         version: link:../packages/server
