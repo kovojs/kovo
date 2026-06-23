@@ -5,6 +5,9 @@ import { defineConfig } from 'vitest/config';
 import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 
 export default defineConfig({
+  optimizeDeps: {
+    include: ['@material/material-color-utilities', 'axe-core'],
+  },
   plugins: [exampleKovoCompilerPlugin({ include: ['src/interactive'] })],
   resolve: {
     alias: {

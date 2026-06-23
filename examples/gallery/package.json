@@ -21,6 +21,7 @@
     "@kovojs/cli": "workspace:*",
     "@kovojs/conformance-fixtures": "workspace:*",
     "@kovojs/test": "workspace:*",
+    "@material/material-color-utilities": "^0.3.0",
     "axe-core": "^4.12.1",
     "typescript": "^6.0.3",
     "vitest": "4.1.8"
