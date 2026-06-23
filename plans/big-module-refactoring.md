@@ -100,6 +100,17 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
 ## P1 Source Splits
 
 - [ ] **Split `packages/cli/src/index.ts` into command-facing modules.**
+  - [x] Extract graph/check/audit/explain output and input parsing to
+    `packages/cli/src/graph-output.ts`, preserving the internal compatibility exports from
+    `packages/cli/src/index.ts`.
+    Evidence: `packages/cli/src/index.ts` is now 151 LoC and
+    `packages/cli/src/graph-output.ts` is 1,736 LoC; `pnpm exec vitest --run packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-add.test.ts packages/cli/src/index.kovo-audit.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/index.compile-mcp.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-export.test.ts` passed 8 files / 132 tests; `pnpm run check:api-surface`, `pnpm run check:imports`, and `git diff --check` passed.
+  - [x] Extract add/compile, build/export, MCP, and shared result helpers to command modules
+    under `packages/cli/src/commands/` plus `packages/cli/src/shared.ts`.
+    Evidence: `wc -l packages/cli/src/index.ts packages/cli/src/graph-output.ts packages/cli/src/commands/*.ts packages/cli/src/shared.ts` reports all split CLI modules under 2,000 LoC; the non-build CLI vitest command above passed after extraction.
+  - [ ] Reconcile the existing build-command tests with the current KV417 deploy-skew retention
+    preset policy before marking the full CLI split verified.
+    Gap: `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-build-browser.test.ts` still fails 7 tests because built-in node/vercel/cloudflare presets emit KV417 when app client modules require a 24-hour retention proof.
   - Target shape:
     - `dispatch.ts`: `main`, `mainAsync`, usage/error routing.
     - `commands/check.ts`, `commands/audit.ts`, `commands/explain.ts`: graph command execution and
