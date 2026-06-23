@@ -153,7 +153,7 @@ export async function writeWebResponseToNode(
     // interim response, so emitting one desynchronizes the connection. Suppress for '1.0'.
     options.httpVersion !== '1.0'
   ) {
-    nodeResponse.writeEarlyHints({ link: earlyHints });
+    nodeResponse.writeEarlyHints({ link: nodeEarlyHintsLinkValue(earlyHints) });
   }
 
   nodeResponse.writeHead(response.status, response.statusText, headers);
@@ -307,4 +307,41 @@ function responseHeadersToNodeHeaders(headers: Headers): Record<string, string |
 
 function firstHeaderValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function nodeEarlyHintsLinkValue(header: string): string | string[] {
+  const entries = splitLinkHeaderEntries(header);
+  return entries.length > 1 ? entries : header;
+}
+
+function splitLinkHeaderEntries(header: string): string[] {
+  const entries: string[] = [];
+  let start = 0;
+  let inQuote = false;
+  let escaped = false;
+
+  for (let index = 0; index < header.length; index += 1) {
+    const char = header[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (inQuote && char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inQuote = !inQuote;
+      continue;
+    }
+    if (char !== ',' || inQuote) continue;
+
+    const entry = header.slice(start, index).trim();
+    if (entry) entries.push(entry);
+    start = index + 1;
+  }
+
+  const tail = header.slice(start).trim();
+  if (tail) entries.push(tail);
+  return entries;
 }
