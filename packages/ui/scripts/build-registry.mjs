@@ -33,6 +33,7 @@ const sorted = (values) => [...values].sort((a, b) => a.localeCompare(b));
 const PUBLIC_KOVO_DEPS = new Set([
   '@kovojs/core',
   '@kovojs/headless-ui',
+  '@kovojs/icons',
   '@kovojs/server',
   '@kovojs/style',
 ]);
@@ -99,6 +100,7 @@ for (const file of files) {
   const styleSymbols = new Set();
   const serverSymbols = new Set();
   const coreSymbols = new Set();
+  const iconsSymbols = new Set();
   const uiComponents = new Set(); // sibling ui components copied alongside this one
   const otherDeps = new Set();
 
@@ -113,7 +115,9 @@ for (const file of files) {
       }
     } else if (module === '@kovojs/server') symbols.forEach((s) => serverSymbols.add(s));
     else if (module === '@kovojs/core') symbols.forEach((s) => coreSymbols.add(s));
-    else if (module === '@kovojs/ui' || module.startsWith('@kovojs/ui/')) {
+    else if (module === '@kovojs/icons' || module.startsWith('@kovojs/icons/')) {
+      symbols.forEach((s) => iconsSymbols.add(s));
+    } else if (module === '@kovojs/ui' || module.startsWith('@kovojs/ui/')) {
       findings.push(`${file}: imports @kovojs/ui itself (${module}) — not copy-in safe`);
       otherDeps.add(module);
     } else if (module.startsWith('./') || module.startsWith('../')) {
@@ -150,6 +154,7 @@ for (const file of files) {
       ...(styleSymbols.size ? { '@kovojs/style': sorted(styleSymbols) } : {}),
       ...(coreSymbols.size ? { '@kovojs/core': sorted(coreSymbols) } : {}),
       ...(serverSymbols.size ? { '@kovojs/server': sorted(serverSymbols) } : {}),
+      ...(iconsSymbols.size ? { '@kovojs/icons': sorted(iconsSymbols) } : {}),
       ...(otherDeps.size ? { other: sorted(otherDeps) } : {}),
     },
     uiComponents: sorted(uiComponents),
@@ -158,8 +163,14 @@ for (const file of files) {
 
 const registry = {
   $comment:
-    'shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), and optionally @kovojs/server (escape helpers). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.',
-  registryDependencies: ['@kovojs/headless-ui', '@kovojs/style', '@kovojs/core', '@kovojs/server'],
+    'shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.',
+  registryDependencies: [
+    '@kovojs/headless-ui',
+    '@kovojs/style',
+    '@kovojs/core',
+    '@kovojs/server',
+    '@kovojs/icons',
+  ],
   components,
 };
 

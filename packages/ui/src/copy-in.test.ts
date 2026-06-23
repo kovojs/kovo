@@ -46,6 +46,7 @@ function linkKovoDep(nodeModules: string, pkg: string): void {
 }
 
 const COMPONENTS = [
+  { file: 'alert-dialog.tsx', label: 'overlay + @kovojs/icons X close glyph' },
   { file: 'button.tsx', label: 'static (no headless behavior)' },
   { file: 'hover-card.tsx', label: 'overlay slot overrides + href sanitization' },
   { file: 'popover.tsx', label: 'overlay slot overrides + native popover wiring' },
@@ -92,6 +93,7 @@ describe('@kovojs/ui copy-in model', () => {
       for (const pkg of [
         '@kovojs/core',
         '@kovojs/headless-ui',
+        '@kovojs/icons',
         '@kovojs/server',
         '@kovojs/style',
       ]) {
@@ -142,6 +144,7 @@ describe('@kovojs/ui copy-in model', () => {
     const PUBLIC = new Set([
       '@kovojs/core',
       '@kovojs/headless-ui',
+      '@kovojs/icons',
       '@kovojs/server',
       '@kovojs/style',
     ]);

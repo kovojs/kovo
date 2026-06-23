@@ -1,10 +1,11 @@
 {
-  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), and optionally @kovojs/server (escape helpers). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
+  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
   "registryDependencies": [
     "@kovojs/headless-ui",
     "@kovojs/style",
     "@kovojs/core",
-    "@kovojs/server"
+    "@kovojs/server",
+    "@kovojs/icons"
   ],
   "components": [
     {
@@ -58,7 +59,8 @@
           "alertDialogTriggerAttributes"
         ],
         "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+        "@kovojs/core": ["component"],
+        "@kovojs/icons": ["X"]
       },
       "uiComponents": ["pass-through", "theme"]
     },
@@ -271,7 +273,8 @@
           "commandValueText"
         ],
         "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+        "@kovojs/core": ["component"],
+        "@kovojs/icons": ["Search"]
       },
       "uiComponents": ["pass-through", "theme"]
     },
@@ -516,7 +519,8 @@
           "navigationMenuViewportAttributes"
         ],
         "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+        "@kovojs/core": ["component"],
+        "@kovojs/icons": ["ChevronDown"]
       },
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
@@ -696,7 +700,8 @@
           "dialogTriggerAttributes"
         ],
         "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+        "@kovojs/core": ["component"],
+        "@kovojs/icons": ["X"]
       },
       "uiComponents": ["pass-through", "theme"]
     },
