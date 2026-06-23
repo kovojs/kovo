@@ -65,6 +65,12 @@ refetch, and morph application.
     [packages/server/src/app-document.ts](/Users/mini/kovo/packages/server/src/app-document.ts:1)
     uses the same parser. Verified by `pnpm --filter @kovojs/browser run check:inline-loader`
     and `pnpm exec vitest run packages/core/src/document-protocol.test.ts packages/browser/src/inline-loader-build.test.ts packages/server/src/app.test.ts`.
+- [x] **No-loader documents omit the loader CSP hash as well as the loader script.**
+  - Evidence: [packages/server/src/document.test.ts](/Users/mini/kovo/packages/server/src/document.test.ts:84)
+    renders `loader: 'omit'` with query hydration and asserts the body, CSP hash
+    list, and rendered CSP policy omit the inline loader hash while preserving
+    query scripts. Verified by
+    `pnpm exec vitest run packages/server/src/document.test.ts`.
 
 ## Problems
 
@@ -193,10 +199,11 @@ refetch, and morph application.
     section 4.4's always-loaded budget.
   - Evidence: the negotiated no-loader document variant is implemented and
     verified by focused server, inline-loader, protocol, and browser navigation
-    tests named above. Remaining evidence needed: demo/network measurement
-    against Stack Overflow, a stricter CSP assertion for the no-loader variant,
-    and a recorded decision on whether to keep the first load inline or move to
-    a cacheable external loader asset.
+    tests named above; [packages/server/src/document.test.ts](/Users/mini/kovo/packages/server/src/document.test.ts:84)
+    directly proves the no-loader variant omits the loader CSP hash. Remaining
+    evidence needed: demo/network measurement against Stack Overflow and a
+    recorded decision on whether to keep the first load inline or move to a
+    cacheable external loader asset.
 - [ ] **Phase 7: keep the modular runtime as the authoritative behavior.**
   - After helper convergence, add a CI gate that fails when an inline-owned
     behavior changes without either updating the modular source-of-truth helper
