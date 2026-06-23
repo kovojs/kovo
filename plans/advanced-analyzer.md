@@ -314,6 +314,11 @@ guard-owned, and natural-key applications.
     punts.
   - Update KV409 wording if needed to distinguish “valid table-level fallback” from “untraceable
     value.”
+  - [x] `kovo explain --optimistic` renders typed derivation proof levels and private scope from
+        optimistic facts.
+    - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-compile.test.ts packages/core/src/derivation.test.ts` covers `OPTIMISTIC-PROOF` output for `exact-row`, `scoped-rowset`, `table-level`, and `opaque`, plus compile facts emitted with typed proof metadata.
+  - [ ] `kovo check` renders the same proof levels/private scope without depending on source-text
+        snippets.
   - Evidence when complete: snapshot tests cover exact-row, scoped-rowset, table-level, and opaque
     outputs.
 

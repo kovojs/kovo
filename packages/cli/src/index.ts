@@ -31,6 +31,15 @@ import {
   isDiagnosticCode,
 } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
+import type {
+  AlgebraicQueryShape,
+  DerivationProof,
+  DerivationProofLevel,
+  DerivationResult,
+  PatchOp,
+  PuntReason,
+  SymbolicEffect,
+} from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
@@ -2021,7 +2030,7 @@ async function runCompileDrizzleOptimisticCommand(
   const awaitFragmentQueries: string[] = [];
   const matviewAwaitFragmentQueries = materializedViewAwaitFragmentQueries(input);
   const facts: {
-    derivation?: { reason?: unknown; status: 'PUNTED' | 'derived' };
+    derivation?: { proof?: DerivationProof; reason?: unknown; status: 'PUNTED' | 'derived' };
     query: string;
     status: DrizzleOptimisticEntryStatus;
   }[] = [];
@@ -2050,13 +2059,34 @@ async function runCompileDrizzleOptimisticCommand(
         );
       }
       derivedEntries.push({ program: result.program, query: entry.query });
-      facts.push({ derivation: { status: 'derived' }, query: entry.query, status });
+      facts.push({
+        derivation: {
+          proof: derivationProofForResult(
+            result,
+            input.effects as readonly SymbolicEffect[],
+            entry.shape as AlgebraicQueryShape,
+          ),
+          status: 'derived',
+        },
+        query: entry.query,
+        status,
+      });
       continue;
     }
 
     facts.push({
       ...(result.kind === 'punt'
-        ? { derivation: { status: 'PUNTED' as const, reason: result.reason } }
+        ? {
+            derivation: {
+              proof: derivationProofForResult(
+                result,
+                input.effects as readonly SymbolicEffect[],
+                entry.shape as AlgebraicQueryShape,
+              ),
+              reason: result.reason,
+              status: 'PUNTED' as const,
+            },
+          }
         : {}),
       query: entry.query,
       status,
@@ -2129,6 +2159,84 @@ function materializedViewAwaitFragmentQueries(input: DrizzleOptimisticCommandInp
       .filter(([, domains]) => [...refreshDomains].some((domain) => domains.has(domain)))
       .map(([query]) => query),
   );
+}
+
+function derivationProofForResult(
+  result: DerivationResult,
+  effects: readonly SymbolicEffect[],
+  shape: AlgebraicQueryShape,
+): DerivationProof {
+  return compactProof({
+    level:
+      result.kind === 'derived'
+        ? derivedProofLevel(result.program.ops)
+        : puntProofLevel(result.reason),
+    privateScope: privateScopesForDerivation(effects, shape),
+  });
+}
+
+function compactProof(proof: DerivationProof): DerivationProof {
+  const privateScope = proof.privateScope?.filter(
+    (entry, index, all) => all.indexOf(entry) === index,
+  );
+  return privateScope && privateScope.length > 0
+    ? { level: proof.level, privateScope }
+    : { level: proof.level };
+}
+
+function derivedProofLevel(ops: readonly PatchOp[]): DerivationProofLevel {
+  if (ops.some((op) => op.op === 'remove-row' || op.op === 'update-row')) return 'exact-row';
+  if (ops.some((op) => op.op === 'push-row')) return 'membership-filter';
+  return 'scoped-rowset';
+}
+
+function puntProofLevel(reason: PuntReason): DerivationProofLevel {
+  switch (reason.code) {
+    case 'membership-entry':
+    case 'no-row-witness':
+      return 'membership-filter';
+    case 'non-key-match':
+    case 'partial-key':
+      return 'table-level';
+    case 'interprocedural':
+    case 'mixed-disjunction':
+    case 'opaque-orderby':
+    case 'opaque-projection':
+    case 'opaque-set':
+    case 'opaque-shape':
+    case 'unsupported':
+    case 'untraceable-param':
+      return 'opaque';
+  }
+}
+
+function privateScopesForDerivation(
+  effects: readonly SymbolicEffect[],
+  shape: AlgebraicQueryShape,
+): string[] {
+  const scopes: string[] = [];
+  const visit = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    const kind = record.kind;
+    if (
+      (kind === 'guard' || kind === 'session' || kind === 'tenant') &&
+      typeof record.path === 'string'
+    ) {
+      scopes.push(`${kind}:${record.path}`);
+    }
+    for (const child of Object.values(record)) {
+      if (Array.isArray(child)) {
+        for (const item of child) visit(item);
+      } else if (child && typeof child === 'object') {
+        visit(child);
+      }
+    }
+  };
+
+  for (const effect of effects) visit(effect);
+  visit(shape);
+  return scopes.sort();
 }
 
 async function runCompilePackageCssCommand(
@@ -3801,6 +3909,9 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
         // so it renders as a separate OPTIMISTIC-PUNT line with its named reason and
         // the pair keeps its real status (UNHANDLED still shows the fix line).
         lines.push(`OPTIMISTIC ${coverage.query} ${coverage.status}`);
+        if (coverage.derivation?.proof) {
+          lines.push(optimisticProofLine(coverage.query, coverage.derivation.proof));
+        }
         if (coverage.derivation?.status === 'PUNTED') {
           // Field form (`<key>: <value>`) so the named reason's own colons stay in
           // the value; the key carries the query.
@@ -4625,6 +4736,15 @@ function optimisticSummary(coverages: readonly CoreGraph.OptimisticCoverage[]): 
     `await-fragment=${counts['await-fragment']}`,
     `UNHANDLED=${counts.UNHANDLED}`,
     `PUNTED=${punted}`,
+  ].join(' ');
+}
+
+function optimisticProofLine(query: string, proof: DerivationProof): string {
+  return [
+    'OPTIMISTIC-PROOF',
+    query,
+    `level=${proof.level}`,
+    `private-scope=${list(proof.privateScope)}`,
   ].join(' ');
 }
 

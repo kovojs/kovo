@@ -674,7 +674,11 @@ export const addToCart = mutation('cart/add', {
       expect(stderr).not.toHaveBeenCalled();
       expect(readFileSync(outPath, 'utf8')).toContain('export const cartAddDerivedOptimistic = {');
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
-        { derivation: { status: 'derived' }, query: 'cart', status: 'derived' },
+        {
+          derivation: { proof: { level: 'scoped-rowset' }, status: 'derived' },
+          query: 'cart',
+          status: 'derived',
+        },
       ]);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE drizzle-optimistic path=${JSON.stringify(outPath)}`,
@@ -765,7 +769,11 @@ export const addToCart = mutation('cart/add', {
         'Overridden in the mutation module (derivation suppressed): productGrid.',
       );
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toEqual([
-        { derivation: { status: 'derived' }, query: 'cart', status: 'derived' },
+        {
+          derivation: { proof: { level: 'scoped-rowset' }, status: 'derived' },
+          query: 'cart',
+          status: 'derived',
+        },
         { query: 'productGrid', status: 'hand-written' },
       ]);
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
