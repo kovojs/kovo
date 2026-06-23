@@ -259,14 +259,14 @@ database, model, generated DOM stamp, static-export path, or environment boundar
 Kovo parser, schema, guard, or trust API narrows it. Treat every output that can execute, navigate,
 select, cache, download, store, or authorize as a sink.
 
-| Source | Safe Kovo path | Dangerous sink | Escape hatch | Diagnostic |
-| ------ | -------------- | -------------- | ------------ | ---------- |
-| Request params, search, forms, query args, headers, cookies | Route/query/mutation schemas, CSRF, guards, typed redirects | HTML text/attributes, URL attrs, redirects, selectors | `trustedHtml` / `trustedUrl` with provenance | KV236, KV423, KV425 |
-| Session and provider state | `session(s.object(...))`, `sessionProvider`, `guards.authed`, `owner:` predicates | Owner-table reads/writes, auth redirects, cacheable private reads | Public-read or custom guard justification | KV414, KV418 |
-| Raw endpoint or webhook body | `endpoint()` audit metadata, executable verifier auth, `webhook()` verify-before-parse lifecycle | Raw `Response`, `Location`, headers, cookies, file/stream output | Raw endpoint purpose plus verifier/custom/none justification | KV415, KV418, KV422 |
-| Database, model, or streamed text | Query output schemas, `<kovo-query>`, `<kovo-text>`, contextual escaping | Raw HTML insertion, script/JSON islands, stream renderers | `trustedHtml` from reviewed renderer code | KV236, KV423, KV425 |
-| Files, storage keys, manifests, static export paths | `respond.file`, `respond.stream`, containment checks, static-export validation | Filesystem/S3 paths, `Content-Disposition`, inline HTML/SVG/MIME | App-owned raw download endpoint with review | KV415, KV424 |
-| Framework code paths and generated artifacts | Shared source/sink registry plus drift detection | `innerHTML`, `Headers`, `querySelector`, dynamic import, eval/process/fs | Narrow repo-internal exclusion with evidence | KV424 |
+| Source                                                      | Safe Kovo path                                                                                   | Dangerous sink                                                           | Escape hatch                                                 | Diagnostic          |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------ | ------------------- |
+| Request params, search, forms, query args, headers, cookies | Route/query/mutation schemas, CSRF, guards, typed redirects                                      | HTML text/attributes, URL attrs, redirects, selectors                    | `trustedHtml` / `trustedUrl` with provenance                 | KV236, KV423, KV425 |
+| Session and provider state                                  | `session(s.object(...))`, `sessionProvider`, `guards.authed`, `owner:` predicates                | Owner-table reads/writes, auth redirects, cacheable private reads        | Public-read or custom guard justification                    | KV414, KV418        |
+| Raw endpoint or webhook body                                | `endpoint()` audit metadata, executable verifier auth, `webhook()` verify-before-parse lifecycle | Raw `Response`, `Location`, headers, cookies, file/stream output         | Raw endpoint purpose plus verifier/custom/none justification | KV415, KV418, KV422 |
+| Database, model, or streamed text                           | Query output schemas, `<kovo-query>`, `<kovo-text>`, contextual escaping                         | Raw HTML insertion, script/JSON islands, stream renderers                | `trustedHtml` from reviewed renderer code                    | KV236, KV423, KV425 |
+| Files, storage keys, manifests, static export paths         | `respond.file`, `respond.stream`, containment checks, static-export validation                   | Filesystem/S3 paths, `Content-Disposition`, inline HTML/SVG/MIME         | App-owned raw download endpoint with review                  | KV415, KV424        |
+| Framework code paths and generated artifacts                | Shared source/sink registry plus drift detection                                                 | `innerHTML`, `Headers`, `querySelector`, dynamic import, eval/process/fs | Narrow repo-internal exclusion with evidence                 | KV424               |
 
 Common app code rules are intentionally blunt:
 
