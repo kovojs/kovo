@@ -22,9 +22,92 @@ export type ParsedSqlOperation = Pick<
   'kind' | 'mutationRead' | 'rowKey' | 'table'
 >;
 
+/** @internal SQL parser configuration for the runtime verifier (SPEC.md §11.2). */
+export interface ParseSqlOperationsOptions {
+  dialect?: 'postgres' | 'sqlite' | undefined;
+}
+
 /** @internal Parse a SQL statement into the read/write operations it performs (SPEC.md §11.2). */
-export function parseSqlOperations(statement: string): ParsedSqlOperation[] {
-  return parse(statement).flatMap((parsed) => operationsForStatement(parsed, new Set()));
+export function parseSqlOperations(
+  statement: string,
+  options: ParseSqlOperationsOptions = {},
+): ParsedSqlOperation[] {
+  const dialectStatement =
+    options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
+  return parse(dialectStatement).flatMap((parsed) => operationsForStatement(parsed, new Set()));
+}
+
+function normalizeSqlitePlaceholders(statement: string): string {
+  let normalized = '';
+  let parameterIndex = 0;
+
+  for (let index = 0; index < statement.length; index += 1) {
+    const char = statement[index];
+    const next = statement[index + 1];
+
+    if (char === "'") {
+      const [value, end] = readQuoted(statement, index, "'");
+      normalized += value;
+      index = end;
+      continue;
+    }
+
+    if (char === '"') {
+      const [value, end] = readQuoted(statement, index, '"');
+      normalized += value;
+      index = end;
+      continue;
+    }
+
+    if (char === '-' && next === '-') {
+      const end = statement.indexOf('\n', index + 2);
+      if (end === -1) return normalized + statement.slice(index);
+      normalized += statement.slice(index, end + 1);
+      index = end;
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      const end = statement.indexOf('*/', index + 2);
+      if (end === -1) return normalized + statement.slice(index);
+      normalized += statement.slice(index, end + 2);
+      index = end + 1;
+      continue;
+    }
+
+    if (char === '?') {
+      let digitEnd = index + 1;
+      while (/\d/.test(statement[digitEnd] ?? '')) digitEnd += 1;
+      const explicitIndex = statement.slice(index + 1, digitEnd);
+      parameterIndex = explicitIndex === '' ? parameterIndex + 1 : Number(explicitIndex);
+      normalized += `$${parameterIndex}`;
+      index = digitEnd - 1;
+      continue;
+    }
+
+    normalized += char;
+  }
+
+  return normalized;
+}
+
+function readQuoted(
+  statement: string,
+  start: number,
+  quote: "'" | '"',
+): [value: string, end: number] {
+  let index = start + 1;
+  while (index < statement.length) {
+    if (statement[index] === quote) {
+      if (statement[index + 1] === quote) {
+        index += 2;
+        continue;
+      }
+      return [statement.slice(start, index + 1), index];
+    }
+    index += 1;
+  }
+  return [statement.slice(start), statement.length - 1];
 }
 
 function operationsForStatement(

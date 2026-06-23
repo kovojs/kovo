@@ -51,7 +51,7 @@ function observeSqlStatement(
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
 ): ObservedDbOperation[] {
-  const observed = parseSqlOperations(statement).map(
+  const observed = parseSqlOperations(statement, { dialect: config.sqlDialect }).map(
     (operation): ObservedDbOperation => ({
       branch: undefined,
       domain: config.domainByTable[operation.table],

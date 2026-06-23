@@ -282,6 +282,70 @@ describe('@kovojs/test DB verifier', () => {
     expect(Reflect.get(db, 'write')).toBe(Reflect.get(db, 'write'));
   });
 
+  it('observes better-sqlite3-style prepared statement execution through raw handles', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { products: 'product' }, sqlDialect: 'sqlite' },
+    );
+    const preparedRuns: unknown[][] = [];
+    const sqlite = {
+      exec() {
+        return undefined;
+      },
+      prepare(statement: string) {
+        return {
+          run(...params: unknown[]) {
+            preparedRuns.push([statement, ...params]);
+            return { changes: 1 };
+          },
+        };
+      },
+      transaction<T extends (...args: never[]) => unknown>(callback: T): T {
+        return callback;
+      },
+    };
+    const db = verifier.wrap({ sqlite });
+
+    db.sqlite.prepare('insert into products (id) values (?)').run('p1');
+
+    expect(preparedRuns).toEqual([['insert into products (id) values (?)', 'p1']]);
+    expect(verifier.observed).toEqual([
+      expect.objectContaining({
+        kind: 'write',
+        sql: 'insert into products (id) values (?)',
+        table: 'products',
+      }),
+    ]);
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'product'));
+  });
+
+  it('observes libsql-style execute calls through client handles', () => {
+    const verifier = createDbVerifier(
+      {},
+      { domainByTable: { products: 'product' }, sqlDialect: 'sqlite' },
+    );
+    const calls: unknown[] = [];
+    const db = verifier.wrap({
+      client: {
+        execute(statement: unknown) {
+          calls.push(statement);
+          return { rows: [] };
+        },
+      },
+    });
+
+    db.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] });
+
+    expect(calls).toEqual([{ sql: 'select * from products where id = ?', args: ['p1'] }]);
+    expect(verifier.observed).toEqual([
+      expect.objectContaining({
+        kind: 'read',
+        rowKey: 'id',
+        table: 'products',
+      }),
+    ]);
+  });
+
   it('does not observe a root query method without a DB adapter seam', () => {
     const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
     const calls: unknown[] = [];

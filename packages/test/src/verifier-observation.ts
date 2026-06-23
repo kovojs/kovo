@@ -13,6 +13,7 @@ export interface DbVerificationConfig {
   domainByTable: Record<string, string>;
   exemptTables?: readonly string[];
   keyByTable?: Record<string, string>;
+  sqlDialect?: 'postgres' | 'sqlite';
 }
 
 /** @internal A single observed database read/write operation (SPEC.md §11.2). */

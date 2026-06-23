@@ -382,6 +382,57 @@ describe('@kovojs/test SQL verifier integration', () => {
     expect(() => deleteVerifier.assertCovered()).toThrow(expectedDiagnostic('KV407', 'price'));
   });
 
+  it('normalizes SQLite ? placeholders before parsing ON CONFLICT and RETURNING SQL', () => {
+    const verifier = createDbVerifier(
+      {
+        'product.upsert': {
+          touches: [
+            { domain: 'product', keys: 'arg:productId', site: 'product.ts:1', via: 'products' },
+          ],
+          unresolved: [],
+        },
+      },
+      {
+        domainByTable: { prices: 'price', products: 'product' },
+        sqlDialect: 'sqlite',
+      },
+    );
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql(
+      [
+        'insert into products (id, price) values (?, ?)',
+        'on conflict (id) do update set price = (',
+        'select amount from prices where prices.product_id = products.id',
+        ') returning id',
+      ].join(' '),
+    );
+
+    expect(verifier.observed).toEqual([
+      expect.objectContaining({
+        kind: 'write',
+        rowKey: undefined,
+        table: 'products',
+      }),
+      expect.objectContaining({
+        kind: 'read',
+        mutationRead: true,
+        rowKey: 'product_id',
+        table: 'prices',
+      }),
+    ]);
+    expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV407', 'price'));
+  });
+
+  it('keeps Postgres parsing unchanged for bare ? placeholders', () => {
+    const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
+    const db = verifier.wrap(createFakeDb());
+
+    db.sql('select * from products where id = ?');
+
+    expect(verifier.observed).toEqual([]);
+  });
+
   it('verifies select expression subqueries as query reads', () => {
     const verifier = createDbVerifier(
       {

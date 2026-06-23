@@ -1,5 +1,9 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { observeSqlEngineSideEffects, tableCounts } from './sql-observer.js';
+import {
+  observeSqlEngineSideEffects,
+  observeSqlStatementArgument,
+  tableCounts,
+} from './sql-observer.js';
 import {
   assertObservedReadsCovered,
   assertObservedWritesCovered,
@@ -114,7 +118,7 @@ export function createDbVerifier(
           if (prop === '__kovoObserved') return recorder.observed;
           const value = Reflect.get(target, prop, receiver);
 
-          if (prop === 'pglite' && isSqlHandleLike(value)) {
+          if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
             return wrapSqlHandle(value, config, recorder, sqlHandleProxyCache, methodCache);
           }
 
@@ -150,12 +154,25 @@ export function createDbVerifier(
           }
 
           if (
-            (prop === 'query' || prop === 'exec') &&
+            (prop === 'query' || prop === 'exec' || prop === 'execute') &&
             typeof value === 'function' &&
             (isDbAdapterLike(target) || isSqlHandleLike(target))
           ) {
             return cachedMethod(target, prop, value, methodCache, () =>
               observableSqlMethod(target, value, config, recorder),
+            );
+          }
+
+          if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(target)) {
+            return cachedMethod(target, prop, value, methodCache, () =>
+              observablePrepareMethod(
+                target,
+                value,
+                config,
+                recorder,
+                sqlHandleProxyCache,
+                methodCache,
+              ),
             );
           }
 
@@ -214,9 +231,18 @@ function wrapSqlHandle<Handle extends object>(
         );
       }
 
-      if ((prop === 'query' || prop === 'exec') && typeof value === 'function') {
+      if (
+        (prop === 'query' || prop === 'exec' || prop === 'execute') &&
+        typeof value === 'function'
+      ) {
         return cachedMethod(target, prop, value, methodCache, () =>
           observableSqlMethod(target, value, config, recorder),
+        );
+      }
+
+      if (prop === 'prepare' && typeof value === 'function') {
+        return cachedMethod(target, prop, value, methodCache, () =>
+          observablePrepareMethod(target, value, config, recorder, proxyCache, methodCache),
         );
       }
 
@@ -230,22 +256,97 @@ function wrapSqlHandle<Handle extends object>(
   return proxy;
 }
 
+function observablePrepareMethod(
+  target: object,
+  value: Function,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+): (statement: unknown, ...args: unknown[]) => unknown {
+  return (statement: unknown, ...args: unknown[]) => {
+    const prepared = value.call(target, statement, ...args);
+    return typeof prepared === 'object' && prepared !== null
+      ? wrapPreparedSqlStatement(prepared, statement, config, recorder, proxyCache, methodCache)
+      : prepared;
+  };
+}
+
+function wrapPreparedSqlStatement<Statement extends object>(
+  statementHandle: Statement,
+  statement: unknown,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, CachedMethod>>,
+): Statement {
+  const cached = proxyCache.get(statementHandle);
+  if (cached) return cached as Statement;
+
+  const proxy = new Proxy(statementHandle as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+
+      if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
+        return cachedMethod(target, prop, value, methodCache, () =>
+          observablePreparedSqlMethod(target, value, statement, config, recorder),
+        );
+      }
+
+      return typeof value === 'function'
+        ? cachedMethod(target, prop, value, methodCache, () => value.bind(target))
+        : value;
+    },
+  }) as Statement;
+
+  proxyCache.set(statementHandle, proxy);
+  return proxy;
+}
+
+function observablePreparedSqlMethod(
+  target: object,
+  value: Function,
+  statement: unknown,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+): (...args: unknown[]) => unknown {
+  return (...args: unknown[]) => {
+    observeSqlStatementArgument(statement, config, recorder);
+    return value.call(target, ...args);
+  };
+}
+
+function isPreparedStatementExecutionMethod(prop: PropertyKey): boolean {
+  return prop === 'all' || prop === 'get' || prop === 'run' || prop === 'iterate';
+}
+
+function isSqlHandleProperty(prop: PropertyKey): boolean {
+  return prop === 'pglite' || prop === 'sqlite' || prop === 'client' || prop === '$client';
+}
+
 function isDbAdapterLike(value: unknown): value is Record<PropertyKey, unknown> {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<PropertyKey, unknown>;
 
   return (
+    isSqlHandleLike(value) ||
     isSqlHandleLike(record.pglite) ||
+    isSqlHandleLike(record.sqlite) ||
+    isSqlHandleLike(record.client) ||
+    isSqlHandleLike(record.$client) ||
     typeof record.read === 'function' ||
     typeof record.write === 'function' ||
     typeof record.sql === 'function' ||
-    (typeof record.exec === 'function' && typeof record.query === 'function')
+    (typeof record.exec === 'function' && typeof record.query === 'function') ||
+    typeof record.execute === 'function'
   );
 }
 
 function isSqlHandleLike(value: unknown): value is object {
   if (typeof value !== 'object' || value === null) return false;
   const record = value as Record<PropertyKey, unknown>;
+  if (typeof record.prepare === 'function' && typeof record.exec === 'function') return true;
+  if (typeof record.execute === 'function') return true;
   const handleMethodCount = [
     typeof record.transaction === 'function',
     typeof record.exec === 'function',
