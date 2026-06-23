@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
@@ -118,7 +119,9 @@ export const TaggedQuestionsRegion = component({
         </p>
         {matches.length > 0 ? (
           <ul style={cardStyles.list}>
-            {matches.map((question) => renderQuestionRow(question, { interactive: false }))}
+            {matches.map((question) =>
+              trustedHtml(renderQuestionRow(question, { interactive: false })),
+            )}
           </ul>
         ) : (
           <p style={taggedStyles.empty}>

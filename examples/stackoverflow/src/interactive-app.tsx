@@ -197,7 +197,7 @@ function stackOverflowBaseStylesheets(
       href: manifest.href ?? '/assets/styles.css',
       theme: soTheme,
     }),
-    ...manifest.app,
+    ...deferredStylesheetRefs(manifest.app),
   ];
 }
 
@@ -205,7 +205,10 @@ function stackOverflowRouteStylesheets(
   manifest: StackOverflowStylesheetManifest,
   routePath: string,
 ): readonly StylesheetAsset[] {
-  return [...stackOverflowBaseStylesheets(manifest), ...(manifest.routes[routePath] ?? [])];
+  return [
+    ...stackOverflowBaseStylesheets(manifest),
+    ...deferredStylesheetRefs(manifest.routes[routePath] ?? []),
+  ];
 }
 
 function stackOverflowFragmentStylesheets(
@@ -227,11 +230,23 @@ function stylesheetAssetList(value: unknown): readonly StylesheetAsset[] {
   return value.filter(isStylesheetAsset);
 }
 
+function deferredStylesheetRefs(assets: readonly StylesheetAsset[]): readonly StylesheetAsset[] {
+  return assets.map((asset) => ({
+    deferFull: true,
+    href: asset.href,
+    ...(asset.preload === undefined ? {} : { preload: asset.preload }),
+  }));
+}
+
 function isStylesheetAsset(value: unknown): value is StylesheetAsset {
   if (!isRecord(value) || typeof value.href !== 'string' || !localAssetHref(value.href)) {
     return false;
   }
-  return value.criticalCss === undefined || typeof value.criticalCss === 'string';
+  return (
+    (value.criticalCss === undefined || typeof value.criticalCss === 'string') &&
+    (value.deferFull === undefined || typeof value.deferFull === 'boolean') &&
+    (value.preload === undefined || typeof value.preload === 'boolean')
+  );
 }
 
 function localAssetHref(value: string): boolean {

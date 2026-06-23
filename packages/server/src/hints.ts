@@ -50,7 +50,10 @@ export interface I18nCatalog<Messages extends Record<string, string> = Record<st
 export interface StylesheetAsset {
   criticalCss?: string;
   cspHash?: string;
-  /** When criticalCss exists, opt into deferring the full stylesheet until after first paint. */
+  /**
+   * `true` defers the linked stylesheet behind a preload plus no-JS fallback. Critical CSS assets
+   * do this by default; set `false` on a critical CSS asset to keep the full stylesheet blocking.
+   */
   deferFull?: boolean;
   href: string;
   preload?: boolean;
@@ -71,7 +74,10 @@ export interface StylesheetDeclarationOptions {
   criticalCssTheme?: 'all' | 'used';
   /** Optional CSP hash for the inlined critical CSS. */
   cspHash?: string;
-  /** When criticalCss exists, opt into deferring the full stylesheet until after first paint. */
+  /**
+   * `true` defers the linked stylesheet behind a preload plus no-JS fallback. Critical CSS assets
+   * do this by default; set `false` on a critical CSS asset to keep the full stylesheet blocking.
+   */
   deferFull?: boolean;
   /** Public stylesheet href; local sources derive `/assets/<file>` when omitted. */
   href?: string;
@@ -235,9 +241,7 @@ function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): Style
     const existingIndex = seen.get(asset.href);
     if (existingIndex !== undefined) {
       const existing = assets[existingIndex];
-      if (existing && !existing.criticalCss && asset.criticalCss) {
-        assets[existingIndex] = { ...existing, criticalCss: asset.criticalCss };
-      }
+      if (existing) assets[existingIndex] = mergeStylesheetAsset(existing, asset);
       continue;
     }
 
@@ -248,16 +252,32 @@ function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): Style
   return assets;
 }
 
+function mergeStylesheetAsset(existing: StylesheetAsset, incoming: StylesheetAsset): StylesheetAsset {
+  const merged: StylesheetAsset = { ...existing };
+  if (!merged.criticalCss && incoming.criticalCss) merged.criticalCss = incoming.criticalCss;
+  if (incoming.cspHash !== undefined) merged.cspHash = incoming.cspHash;
+  if (incoming.deferFull !== undefined) merged.deferFull = incoming.deferFull;
+  if (incoming.preload !== undefined) merged.preload = incoming.preload;
+  return merged;
+}
+
 function renderPageStylesheetHint(asset: StylesheetAsset): InlineHtmlWithCsp {
   const link = renderStylesheetLink(asset.href);
-  if (!asset.criticalCss) return { html: link };
+  if (!asset.criticalCss) {
+    return {
+      html:
+        asset.deferFull === true
+          ? `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`
+          : link,
+    };
+  }
 
   const cssText = escapeStyleText(asset.criticalCss);
   const hash = asset.cspHash ?? cspSha256(cssText);
   const fullStylesheet =
-    asset.deferFull === true
-      ? `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`
-      : link;
+    asset.deferFull === false
+      ? link
+      : `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`;
 
   return {
     csp: { scripts: [], styles: [hash] },

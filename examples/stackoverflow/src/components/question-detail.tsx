@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import { defer } from '@kovojs/server';
 import * as style from '@kovojs/style';
@@ -227,12 +228,14 @@ function renderQuestionPost(question: QuestionDetailResult): string {
   const tags = parseTags(question.tags);
   return (
     <div style={detailStyles.post}>
-      <div style={detailStyles.gutter}>{voteButton(question.id, question.score)}</div>
+      <div style={detailStyles.gutter}>{trustedHtml(voteButton(question.id, question.score))}</div>
       <div style={detailStyles.postMain}>
         <p style={detailStyles.body}>{question.body}</p>
         <div style={detailStyles.postFooter}>
-          {renderTags(tags)}
-          {renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked')}
+          {trustedHtml(renderTags(tags))}
+          {trustedHtml(
+            renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked'),
+          )}
         </div>
       </div>
     </div>
@@ -269,7 +272,9 @@ function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
         <p style={detailStyles.body}>{answer.body}</p>
         <div style={detailStyles.postFooter}>
           <span />
-          {renderUserCard(answer.authorId, answer.authorName, answer.createdAt, 'answered')}
+          {trustedHtml(
+            renderUserCard(answer.authorId, answer.authorName, answer.createdAt, 'answered'),
+          )}
         </div>
       </div>
     </li>
@@ -289,7 +294,9 @@ function renderQuestionDetailSecondary(
         </h2>
         <span style={detailStyles.sortControl}>Sorted by: Highest score</span>
       </div>
-      <ul style={detailStyles.answerList}>{ordered.map(renderAnswerPost)}</ul>
+      <ul style={detailStyles.answerList}>
+        {ordered.map((answer) => trustedHtml(renderAnswerPost(answer)))}
+      </ul>
 
       {/* Native form; enhanced submissions refresh this whole region. */}
       <form enhance mutation={postAnswerMutation} id="your-answer" style={detailStyles.composer}>
@@ -381,15 +388,17 @@ export const QuestionDetailRegion = component({
           </div>
         </div>
 
-        {renderQuestionPost(question)}
+        {trustedHtml(renderQuestionPost(question))}
 
-        {defer({
-          fallback:
-            '<section aria-busy="true" style="min-height:720px" data-kovo-region-placeholder="answers"></section>',
-          priority: 'after-paint',
-          render: () => renderQuestionDetailSecondary(question, ordered, questionId),
-          target: secondaryTarget,
-        })}
+        {trustedHtml(
+          defer({
+            fallback:
+              '<section aria-busy="true" style="min-height:720px" data-kovo-region-placeholder="answers"></section>',
+            priority: 'after-paint',
+            render: () => renderQuestionDetailSecondary(question, ordered, questionId),
+            target: secondaryTarget,
+          }) as string,
+        )}
       </div>
     );
   },

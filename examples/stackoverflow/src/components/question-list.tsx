@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
@@ -186,7 +187,11 @@ export const QuestionListRegion = component({
           </div>
         </div>
 
-        <ul>{questions.map((question) => renderQuestionRow(question, { interactive: true }))}</ul>
+        <ul>
+          {questions.map((question) =>
+            trustedHtml(renderQuestionRow(question, { interactive: true })),
+          )}
+        </ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
         <form enhance mutation={postQuestionMutation} id="ask-question" style={listStyles.composer}>

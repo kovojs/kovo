@@ -274,6 +274,12 @@ describe('server jsx runtime', () => {
     expect(html(jsx('section', { html: '<b>not trusted</b>' }))).toBe('<section></section>');
   });
 
+  it('renders trusted HTML child values without escaping', () => {
+    expect(html(jsx('section', { children: trustedHtml('<kovo-defer></kovo-defer>') }))).toBe(
+      '<section><kovo-defer></kovo-defer></section>',
+    );
+  });
+
   it('renders void elements without closing tags', () => {
     expect(html(jsx('input', { name: 'quantity', type: 'number', min: 1 }))).toBe(
       '<input name="quantity" type="number" min="1">',

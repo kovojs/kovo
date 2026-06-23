@@ -215,18 +215,18 @@ describe('page hints', () => {
       },
       html: [
         '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
-        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
+        '<link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style>',
+        '<noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
       ].join(''),
     });
   });
 
-  it('can opt critical stylesheets into deferred full stylesheet delivery', () => {
+  it('defers full stylesheet delivery by default when critical CSS is inlined', () => {
     expect(
       renderPageHints({
         stylesheets: [
           {
             criticalCss: 'cart-badge { color: teal; }',
-            deferFull: true,
             href: '/assets/components/cart/cart-badge.css',
           },
         ],
@@ -234,6 +234,35 @@ describe('page hints', () => {
     ).toContain(
       '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style><link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style><noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
     );
+  });
+
+  it('can opt critical stylesheets back into render-blocking full stylesheet delivery', () => {
+    expect(
+      renderPageHints({
+        stylesheets: [
+          {
+            criticalCss: 'cart-badge { color: teal; }',
+            deferFull: false,
+            href: '/assets/components/cart/cart-badge.css',
+          },
+        ],
+      }).html,
+    ).toContain(
+      '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style><link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
+    );
+  });
+
+  it('can defer non-critical stylesheet assets with a no-js fallback', () => {
+    expect(
+      renderPageHints({
+        stylesheets: [{ deferFull: true, href: '/assets/routes/cart.css' }],
+      }),
+    ).toEqual({
+      earlyHints: {
+        Link: '</assets/routes/cart.css>; rel=preload; as=style',
+      },
+      html: '<link rel="preload" as="style" href="/assets/routes/cart.css" data-kovo-deferred-style><noscript><link rel="stylesheet" href="/assets/routes/cart.css"></noscript>',
+    });
   });
 
   it('selects manifest stylesheets for pages and late fragments', () => {
@@ -266,7 +295,8 @@ describe('page hints', () => {
       },
       html: [
         '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style>',
-        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
+        '<link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style>',
+        '<noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
         '<link rel="stylesheet" href="/assets/components/cart/cart-drawer.css">',
       ].join(''),
     });

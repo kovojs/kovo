@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import * as style from '@kovojs/style';
 
 import type { QuestionListItem } from '../model.js';
@@ -159,7 +160,7 @@ function voteStat(question: QuestionListItem, interactive: boolean): string {
   if (interactive) {
     return (
       <div style={cardStyles.statVotes}>
-        {voteButton(question.id, question.score)}
+        {trustedHtml(voteButton(question.id, question.score))}
         <span style={cardStyles.statVotesLabel}>votes</span>
       </div>
     );
@@ -186,8 +187,8 @@ export function renderQuestionRow(
   return (
     <li kovo-key={question.id} style={cardStyles.row}>
       <div style={cardStyles.stats}>
-        {voteStat(question, interactive)}
-        {answerStat(question.answerCount)}
+        {trustedHtml(voteStat(question, interactive))}
+        {trustedHtml(answerStat(question.answerCount))}
         <span style={cardStyles.statViews}>{`${compactCount(views)} views`}</span>
       </div>
       <div style={cardStyles.rowMain}>
@@ -196,8 +197,10 @@ export function renderQuestionRow(
         </a>
         {question.body ? <p style={cardStyles.rowExcerpt}>{question.body}</p> : ''}
         <div style={cardStyles.rowMeta}>
-          {renderTags(tags)}
-          {renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked')}
+          {trustedHtml(renderTags(tags))}
+          {trustedHtml(
+            renderUserCard(question.authorId, question.authorName, question.createdAt, 'asked'),
+          )}
         </div>
       </div>
     </li>

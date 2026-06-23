@@ -7,6 +7,7 @@ import type {
   FormErrorProps,
   JsonValue,
 } from '@kovojs/core';
+import type { TrustedHtml } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
@@ -61,7 +62,15 @@ const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
-export type JsxNode = JsxChild[] | boolean | null | number | RenderedHtml | string | undefined;
+export type JsxNode =
+  | JsxChild[]
+  | boolean
+  | null
+  | number
+  | RenderedHtml
+  | string
+  | TrustedHtml
+  | undefined;
 
 /** @generated JSX automatic-runtime ABI child value, including async component output. */
 export type JsxChild = JsxNode | Promise<JsxNode>;
@@ -491,6 +500,10 @@ function renderJsxChildren(children: JsxChild): MaybePromise<string> {
   if (children === null || children === undefined || typeof children === 'boolean') return '';
   if (isPromiseLike(children)) return children.then((child) => renderJsxChildren(child));
   if (isRenderedHtml(children)) return children.html;
+  if (typeof children === 'object') {
+    const trustedHtml = kovoTrustedHtmlContent(children);
+    if (trustedHtml !== '') return trustedHtml;
+  }
   if (Array.isArray(children)) {
     const rendered = children.map((child) => renderJsxChildren(child));
     return rendered.some(isPromiseLike)

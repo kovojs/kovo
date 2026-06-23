@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
@@ -274,7 +275,7 @@ export const UserProfileRegion = component({
           {theirQuestions.length > 0 ? (
             <ul style={cardStyles.list}>
               {theirQuestions.map((question) =>
-                renderQuestionRow(question, { interactive: false }),
+                trustedHtml(renderQuestionRow(question, { interactive: false })),
               )}
             </ul>
           ) : (

@@ -70,7 +70,7 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain('<!doctype html><html lang="en-US"><head>');
     expect(document.html).toContain('<title>Cart</title>');
     expect(document.html).toContain(
-      '<style data-kovo-critical-href="/assets/app.css" data-kovo-csp-hash="sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E=">body{color:red}</style><link rel="stylesheet" href="/assets/app.css">',
+      '<style data-kovo-critical-href="/assets/app.css" data-kovo-csp-hash="sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E=">body{color:red}</style><link rel="preload" as="style" href="/assets/app.css" data-kovo-deferred-style><noscript><link rel="stylesheet" href="/assets/app.css"></noscript>',
     );
     expect(document.html).toContain(`<script data-kovo-csp-hash="${loaderHash}">`);
     expect(document.html).toContain('installInlineKovoLoader');

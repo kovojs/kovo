@@ -182,7 +182,12 @@ describe('kovo build', () => {
       expect(readFileSync(routeCss.filePath, 'utf8')).toContain('auto-css-card');
       const routeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
       expect(routeDocument).toContain(`data-kovo-critical-href="${routeCss.href}"`);
-      expect(routeDocument).toContain(`<link rel="stylesheet" href="${routeCss.href}">`);
+      expect(routeDocument).toContain(
+        `<link rel="preload" as="style" href="${routeCss.href}" data-kovo-deferred-style>`,
+      );
+      expect(routeDocument).toContain(
+        `<noscript><link rel="stylesheet" href="${routeCss.href}"></noscript>`,
+      );
       const viteStylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
         'main{color:#639}',
@@ -254,6 +259,18 @@ describe('kovo build', () => {
       expect(homeDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
       expect(homeDocument).toContain(`data-kovo-critical-href="${homeCss.href}"`);
       expect(homeDocument).not.toContain(`data-kovo-critical-href="${loginCss.href}"`);
+      expect(homeDocument).toContain(
+        `<link rel="preload" as="style" href="${baseCss.href}" data-kovo-deferred-style>`,
+      );
+      expect(homeDocument).toContain(
+        `<link rel="preload" as="style" href="${homeCss.href}" data-kovo-deferred-style>`,
+      );
+      expect(homeDocument).toContain(
+        `<noscript><link rel="stylesheet" href="${baseCss.href}"></noscript>`,
+      );
+      expect(homeDocument).toContain(
+        `<noscript><link rel="stylesheet" href="${homeCss.href}"></noscript>`,
+      );
       expect(inlinedCriticalCssBytes(homeDocument)).toBe(homeRouteCriticalCssBytes);
       const loginDocument = readFileSync(join(outDir, '.kovo/static/login/index.html'), 'utf8');
       expect(loginDocument).toContain(baseCss.href);
@@ -262,6 +279,18 @@ describe('kovo build', () => {
       expect(loginDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
       expect(loginDocument).toContain(`data-kovo-critical-href="${loginCss.href}"`);
       expect(loginDocument).not.toContain(`data-kovo-critical-href="${homeCss.href}"`);
+      expect(loginDocument).toContain(
+        `<link rel="preload" as="style" href="${baseCss.href}" data-kovo-deferred-style>`,
+      );
+      expect(loginDocument).toContain(
+        `<link rel="preload" as="style" href="${loginCss.href}" data-kovo-deferred-style>`,
+      );
+      expect(loginDocument).toContain(
+        `<noscript><link rel="stylesheet" href="${baseCss.href}"></noscript>`,
+      );
+      expect(loginDocument).toContain(
+        `<noscript><link rel="stylesheet" href="${loginCss.href}"></noscript>`,
+      );
       expect(inlinedCriticalCssBytes(loginDocument)).toBe(loginRouteCriticalCssBytes);
     } finally {
       stdout.mockRestore();

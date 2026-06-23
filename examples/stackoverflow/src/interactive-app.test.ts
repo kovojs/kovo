@@ -99,6 +99,10 @@ function decodeHtmlText(value: string): string {
   return decodeHtmlAttribute(value);
 }
 
+function stripNoscript(html: string): string {
+  return html.replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, '');
+}
+
 function readKovoQuery<T>(html: string, name: string): T {
   const pattern = new RegExp(`<kovo-query\\s+name="${name}"[^>]*>([\\s\\S]*?)<\\/kovo-query>`);
   const match = pattern.exec(html);
@@ -110,6 +114,7 @@ function materializeStackOverflowCssFixture(): {
   distDir: string;
   manifest: {
     app?: readonly { criticalCss?: string; href: string }[];
+    href?: string;
     routes?: Record<string, readonly { criticalCss?: string; href: string }[]>;
   };
   remove(): void;
@@ -138,6 +143,7 @@ function materializeStackOverflowCssFixture(): {
       readFileSync(join(distDir, 'stackoverflow-css-manifest.json'), 'utf8'),
     ) as {
       app?: readonly { criticalCss?: string; href: string }[];
+      href?: string;
       routes?: Record<string, readonly { criticalCss?: string; href: string }[]>;
     },
     remove() {
@@ -233,9 +239,15 @@ describe('stackoverflow interactive app', () => {
       ].map((asset) => asset.href);
 
       expect(response.status).toBe(200);
+      expect(html).toContain(`data-kovo-critical-href="${fixture.manifest.href}"`);
       for (const href of routeHrefs) {
-        expect(html).toContain(`data-kovo-critical-href="${href}"`);
+        expect(html).not.toContain(`data-kovo-critical-href="${href}"`);
+        expect(html).toContain(
+          `<link rel="preload" as="style" href="${href}" data-kovo-deferred-style>`,
+        );
+        expect(html).toContain(`<noscript><link rel="stylesheet" href="${href}"></noscript>`);
       }
+      expect(stripNoscript(html)).not.toContain('<link rel="stylesheet"');
       expect(html).not.toContain('/assets/routes/users-');
       expect(html).not.toContain('/assets/routes/users-id-');
       expect(html).not.toContain('/assets/routes/tags-');
