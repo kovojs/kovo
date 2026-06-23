@@ -96,9 +96,9 @@ export const IGNORED_LOCAL_CALL_NAMES = new Set([
 ]);
 const KV411_MESSAGE = 'Query read set includes an exempt table';
 export const UNRESOLVED_READ_SOURCE_EXPRESSION = '__kovoUnresolvedReadSource';
-const BOOLEAN_COLUMN_BUILDERS = new Set(['boolean']);
-const JSON_COLUMN_BUILDERS = new Set(['json', 'jsonb']);
-const NUMBER_COLUMN_BUILDERS = new Set([
+export const BOOLEAN_COLUMN_BUILDERS = new Set(['boolean']);
+export const JSON_COLUMN_BUILDERS = new Set(['json', 'jsonb']);
+export const NUMBER_COLUMN_BUILDERS = new Set([
   'bigint',
   'doublePrecision',
   'integer',
@@ -111,8 +111,8 @@ const NUMBER_COLUMN_BUILDERS = new Set([
 ]);
 export const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set(['$count', 'execute']);
 export const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
-const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set(['drizzle-orm/pg-core', 'drizzle-orm/sqlite-core']);
-const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set([
+export const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set(['drizzle-orm/pg-core', 'drizzle-orm/sqlite-core']);
+export const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set([
   'pgMaterializedView',
   'pgView',
   'sqliteView',
@@ -129,7 +129,7 @@ export const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
 export const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
 export const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
 export const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
-const UNMODELED_RELATION_EXPRESSION_PREFIX = '__kovoUnmodeledRelation';
+export const UNMODELED_RELATION_EXPRESSION_PREFIX = '__kovoUnmodeledRelation';
 const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
 const TOUCH_BODY_ITERATION_CALLBACK_METHODS = new Set([
   'filter',
@@ -341,7 +341,7 @@ export interface ExtractedTable {
   foreignKeys?: readonly ExtractedForeignKey[];
 }
 
-interface ExtractedForeignKey {
+export interface ExtractedForeignKey {
   column: string;
   onDelete?: string;
   onUpdate?: string;
@@ -684,14 +684,14 @@ export function createProjectExtraction(options: TouchGraphProjectOptions): Proj
   };
 }
 
-function projectSourceFileName(fileName: string): string {
+export function projectSourceFileName(fileName: string): string {
   // SPEC §11.1: project-mode receiver proof depends on TypeScript resolving Drizzle package
   // symbols. Anchor virtual source files under this package so root-launched and package-launched
   // Vitest runs resolve the same peer/dev dependency graph.
   return isAbsolute(fileName) ? fileName : join(DRIZZLE_STATIC_PROJECT_ROOT, fileName);
 }
 
-function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {
+export function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {
   return extraction.files.map((file, index) => {
     const sourceFile = extraction.sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
@@ -2188,7 +2188,7 @@ export function projectTableNameForNode(
   return projectTableNameForSymbol(node, tableNamesBySymbol);
 }
 
-function projectTableNameForSymbol(
+export function projectTableNameForSymbol(
   node: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): string | undefined {
@@ -2217,7 +2217,7 @@ export function projectNamespaceTableNamesByLocal(
   return namespaces;
 }
 
-function projectExportedTableNamesByName(
+export function projectExportedTableNamesByName(
   sourceFile: SourceFile,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): Map<string, string> {
@@ -2385,1146 +2385,6 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
   }
 
   return diagnostics;
-}
-
-function sourceColumnShapesForTables(
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
-): Readonly<Record<string, QueryShape>> {
-  const scoped: Record<string, QueryShape> = {};
-
-  for (const [identifier, entries] of tables) {
-    for (const table of entries) {
-      for (const [column, shape] of Object.entries(table.columns)) {
-        scoped[`${identifier}.${column}`] = shape;
-        scoped[`${table.annotation.name}.${column}`] = shape;
-      }
-    }
-  }
-
-  return scoped;
-}
-
-function projectRelationalTableNamesByProperty(
-  sourceFile: SourceFile,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-): ReadonlyMap<string, string> {
-  const names = new Map<string, string>();
-  const ambiguous = new Set<string>();
-
-  const append = (name: string, node: Node) => {
-    const tableName = tableNamesBySymbol.get(resolvedSymbolKey(node.getSymbol()) ?? '');
-    if (!tableName) return;
-
-    const existing = names.get(name);
-    if (existing && existing !== tableName) {
-      ambiguous.add(name);
-      return;
-    }
-
-    names.set(name, tableName);
-  };
-
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    const name = declaration.getNameNode();
-    if (Node.isIdentifier(name)) append(name.getText(), name);
-  }
-
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    for (const specifier of declaration.getNamedImports()) {
-      const local = specifier.getAliasNode() ?? specifier.getNameNode();
-      append(local.getText(), local);
-    }
-
-    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-    if (!declaration.getNamespaceImport() || !moduleSourceFile) continue;
-    for (const [name, tableName] of projectExportedTableNamesByName(
-      moduleSourceFile,
-      tableNamesBySymbol,
-    )) {
-      const existing = names.get(name);
-      if (existing && existing !== tableName) {
-        ambiguous.add(name);
-        continue;
-      }
-      names.set(name, tableName);
-    }
-  }
-
-  for (const text of ambiguous) names.delete(text);
-  return names;
-}
-
-export function isDrizzleWriteCall(call: CallExpression): boolean {
-  const expression = call.getExpression();
-  const name = staticAccessName(expression);
-  return (
-    name === 'delete' ||
-    name === 'insert' ||
-    name === 'refreshMaterializedView' ||
-    name === 'update'
-  );
-}
-
-function isDrizzleReceiver(receiver: Node): boolean {
-  const type = receiver.getType();
-  if (isDrizzleDatabaseType(type)) {
-    return true;
-  }
-  if (isDrizzleDatabaseTypeAnnotation(receiver)) {
-    return true;
-  }
-
-  // SPEC §11.1: project receiver proof is restricted to the blessed Drizzle
-  // database type identities listed in drizzle-surface.ts, across supported dialects.
-  return false;
-}
-
-export function isDrizzleDatabaseTypeAnnotation(receiver: Node): boolean {
-  const parameter = receiverParameterDeclaration(receiver);
-  const typeNode = parameter?.getTypeNode();
-  return typeNode ? isDrizzleDatabaseTypeNode(typeNode) : false;
-}
-
-export function isDrizzleDatabaseType(type: MorphType): boolean {
-  // SPEC §11.1: project receiver proof comes from ts-morph type identity. Avoid source-text
-  // membership checks that can promote arbitrary aliases like `NotPgDatabase`.
-  return (
-    drizzleDatabaseTypeNames(type, new Set()).some(isDrizzleDatabaseTypeName) &&
-    drizzleDatabaseTypeDeclarations(type, new Set()).some((declaration) =>
-      isDrizzleOrmDeclaration(declaration),
-    )
-  );
-}
-
-function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] {
-  const key =
-    type.getAliasSymbol()?.getFullyQualifiedName() ??
-    type.getSymbol()?.getFullyQualifiedName() ??
-    type.getText();
-  if (seen.has(key)) return [];
-  seen.add(key);
-
-  const names = new Set<string>();
-  const aliasName = type.getAliasSymbol()?.getName();
-  const symbolName = type.getSymbol()?.getName();
-  const apparentSymbolName = type.getApparentType().getSymbol()?.getName();
-  if (aliasName) names.add(aliasName);
-  if (symbolName) names.add(symbolName);
-  if (apparentSymbolName) names.add(apparentSymbolName);
-
-  for (const baseType of type.getBaseTypes()) {
-    for (const name of drizzleDatabaseTypeNames(baseType, seen)) names.add(name);
-  }
-
-  return [...names];
-}
-
-function drizzleDatabaseTypeDeclarations(type: MorphType, seen: Set<string>): Node[] {
-  const key =
-    type.getAliasSymbol()?.getFullyQualifiedName() ??
-    type.getSymbol()?.getFullyQualifiedName() ??
-    type.getText();
-  if (seen.has(key)) return [];
-  seen.add(key);
-
-  return [
-    ...(type.getAliasSymbol()?.getDeclarations() ?? []),
-    ...(type.getSymbol()?.getDeclarations() ?? []),
-    ...(type.getApparentType().getSymbol()?.getDeclarations() ?? []),
-    ...type.getBaseTypes().flatMap((baseType) => drizzleDatabaseTypeDeclarations(baseType, seen)),
-  ];
-}
-
-function isDrizzleDatabaseTypeNode(typeNode: Node): boolean {
-  if (typeNode.getKind() !== SyntaxKind.TypeReference) return false;
-  if (isDrizzleDatabaseType(typeNode.getType())) return true;
-
-  const typeReference = typeNode.asKind(SyntaxKind.TypeReference);
-  const typeNameSymbol = typeReference?.getTypeName().getSymbol();
-  const symbol = typeNameSymbol?.getAliasedSymbol() ?? typeNameSymbol;
-  if (!symbol || !isDrizzleDatabaseTypeName(symbol.getName())) return false;
-
-  return symbol.getDeclarations().some((declaration) => isDrizzleOrmDeclaration(declaration));
-}
-
-function projectTableNamesBySymbol(
-  sourceFiles: readonly SourceFile[],
-): ReadonlyMap<string, string> {
-  const namesBySymbol = new Map<string, string>();
-  let nextTable = 0;
-
-  for (const sourceFile of sourceFiles) {
-    for (const declaration of sourceFile.getVariableDeclarations()) {
-      const initializer = declaration.getInitializer();
-      if (!initializer || !isProjectTableInitializerNode(initializer)) continue;
-
-      const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
-      if (!symbolKey) continue;
-
-      namesBySymbol.set(symbolKey, `__kovoProjectTable${nextTable}`);
-      nextTable += 1;
-    }
-  }
-
-  appendProjectAliasTableNames(sourceFiles, namesBySymbol);
-  return namesBySymbol;
-}
-
-interface UnmodeledRelationFact {
-  expression: string;
-  kind: 'materialized-view' | 'view';
-  name: string;
-}
-
-function projectUnmodeledRelationNamesBySymbol(
-  sourceFiles: readonly SourceFile[],
-): ReadonlyMap<string, string> {
-  const namesBySymbol = new Map<string, string>();
-
-  for (const sourceFile of sourceFiles) {
-    for (const declaration of sourceFile.getVariableDeclarations()) {
-      const initializer = declaration.getInitializer();
-      const relation = unmodeledRelationForInitializer(initializer);
-      if (!relation) continue;
-
-      const symbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
-      if (!symbolKey) continue;
-
-      namesBySymbol.set(symbolKey, unmodeledRelationExpression(relation.kind, relation.name));
-    }
-  }
-
-  return namesBySymbol;
-}
-
-function projectUnmodeledRelationNameForNode(
-  node: Node,
-  relationNamesBySymbol: ReadonlyMap<string, string>,
-): string | undefined {
-  const expression = unwrappedStaticExpressionNode(node);
-  if (expression !== node) {
-    return projectUnmodeledRelationNameForNode(expression, relationNamesBySymbol);
-  }
-
-  if (Node.isPropertyAccessExpression(node)) {
-    return projectUnmodeledRelationNameForSymbol(node.getNameNode(), relationNamesBySymbol);
-  }
-  if (Node.isElementAccessExpression(node)) {
-    return projectUnmodeledRelationNameForSymbol(node, relationNamesBySymbol);
-  }
-
-  return projectUnmodeledRelationNameForSymbol(node, relationNamesBySymbol);
-}
-
-function projectUnmodeledRelationNameForSymbol(
-  node: Node,
-  relationNamesBySymbol: ReadonlyMap<string, string>,
-): string | undefined {
-  const symbolKey = resolvedSymbolKey(node.getSymbol());
-  if (!symbolKey) return undefined;
-  return relationNamesBySymbol.get(symbolKey);
-}
-
-function unmodeledRelationForInitializer(
-  initializer: Node | undefined,
-): Pick<UnmodeledRelationFact, 'kind' | 'name'> | undefined {
-  if (!initializer || !Node.isCallExpression(initializer)) return undefined;
-
-  const rootCall = rootCallExpression(initializer);
-  const expression = unwrappedStaticExpressionNode(rootCall.getExpression());
-  const factoryName = Node.isIdentifier(expression)
-    ? (projectDrizzleCoreIdentifierExportName(expression) ?? expression.getText())
-    : Node.isPropertyAccessExpression(expression) && isDrizzleCoreNamespaceMember(expression)
-      ? expression.getName()
-      : undefined;
-  if (!factoryName || !DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES.has(factoryName)) {
-    return undefined;
-  }
-
-  return {
-    kind: factoryName === 'pgMaterializedView' ? 'materialized-view' : 'view',
-    name: tableNameArgument(rootCall) ?? '<unknown>',
-  };
-}
-
-function rootCallExpression(call: CallExpression): CallExpression {
-  let current = call;
-
-  while (true) {
-    const receiver = staticAccessExpression(current.getExpression());
-    if (!receiver || !Node.isCallExpression(receiver)) return current;
-    current = receiver;
-  }
-}
-
-function unmodeledRelationExpression(kind: UnmodeledRelationFact['kind'], name: string): string {
-  return `${UNMODELED_RELATION_EXPRESSION_PREFIX}:${kind}:${name}`;
-}
-
-export function unmodeledRelationFromExpression(expression: string): UnmodeledRelationFact | undefined {
-  const [prefix, kind, ...nameParts] = expression.split(':');
-  const name = nameParts.join(':');
-  if (
-    prefix !== UNMODELED_RELATION_EXPRESSION_PREFIX ||
-    (kind !== 'materialized-view' && kind !== 'view') ||
-    name.length === 0
-  ) {
-    return undefined;
-  }
-
-  return { expression, kind, name };
-}
-
-function appendProjectAliasTableNames(
-  sourceFiles: readonly SourceFile[],
-  namesBySymbol: Map<string, string>,
-): void {
-  // SPEC §10-§11: project-mode aliases preserve the resolved Drizzle table symbol instead of
-  // reusing the source-mode alias-name compatibility path.
-  let changed = true;
-  while (changed) {
-    changed = false;
-
-    for (const sourceFile of sourceFiles) {
-      for (const declaration of sourceFile.getVariableDeclarations()) {
-        const aliasSymbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
-        if (!aliasSymbolKey || namesBySymbol.has(aliasSymbolKey)) continue;
-
-        const tableName = projectAliasTargetTableName(declaration.getInitializer(), namesBySymbol);
-        if (!tableName) continue;
-
-        namesBySymbol.set(aliasSymbolKey, tableName);
-        changed = true;
-      }
-    }
-  }
-}
-
-function appendProjectConditionalTableNames(
-  sourceFiles: readonly SourceFile[],
-  namesBySymbol: Map<string, string>,
-): ReadonlyMap<string, readonly string[]> {
-  // SPEC §11.1: conditional table initializers are safe over-approximations. Project mode keeps
-  // exact ts-morph branch symbols and lets unresolved branches degrade separately to KV406.
-  const targetsBySyntheticName = new Map<string, string[]>();
-  let nextConditional = 0;
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-
-    for (const sourceFile of sourceFiles) {
-      for (const declaration of sourceFile.getVariableDeclarations()) {
-        const aliasSymbolKey = resolvedSymbolKey(declaration.getNameNode().getSymbol());
-        if (!aliasSymbolKey || namesBySymbol.has(aliasSymbolKey)) continue;
-
-        const targets = projectConditionalTargetTableNames(
-          declaration.getInitializer(),
-          namesBySymbol,
-        );
-        if (targets.length === 0) continue;
-
-        const syntheticName = `__kovoProjectConditional${nextConditional}`;
-        nextConditional += 1;
-        namesBySymbol.set(aliasSymbolKey, syntheticName);
-        targetsBySyntheticName.set(syntheticName, targets);
-        changed = true;
-      }
-    }
-  }
-
-  return targetsBySyntheticName;
-}
-
-function projectUnresolvedConditionalTableExpressions(extraction: ProjectExtraction): Set<string> {
-  const unresolved = new Set<string>();
-
-  for (const sourceFile of extraction.sourceFiles) {
-    for (const declaration of sourceFile.getVariableDeclarations()) {
-      const syntheticName = extraction.tableNamesBySymbol.get(
-        resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
-      );
-      const initializer = declaration.getInitializer();
-      if (!syntheticName || !initializer) continue;
-
-      const expression = unwrappedStaticExpressionNode(initializer);
-      if (!Node.isConditionalExpression(expression)) continue;
-
-      const targets = [expression.getWhenTrue(), expression.getWhenFalse()].map((branch) =>
-        projectTableNameForNode(branch, extraction.tableNamesBySymbol),
-      );
-      const resolvedCount = targets.filter((target) => target !== undefined).length;
-      if (resolvedCount > 0 && resolvedCount < targets.length) unresolved.add(syntheticName);
-    }
-  }
-
-  return unresolved;
-}
-
-function projectConditionalTargetTableNames(
-  initializer: Node | undefined,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-): string[] {
-  if (!initializer) return [];
-
-  const expression = unwrappedStaticExpressionNode(initializer);
-  if (!Node.isConditionalExpression(expression)) return [];
-
-  return [expression.getWhenTrue(), expression.getWhenFalse()]
-    .map((branch) => projectTableNameForNode(branch, tableNamesBySymbol))
-    .filter((target): target is string => target !== undefined);
-}
-
-function projectAliasTargetTableName(
-  initializer: Node | undefined,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-): string | undefined {
-  if (!initializer) return undefined;
-
-  const expression = unwrappedStaticExpressionNode(initializer);
-  if (!Node.isCallExpression(expression)) return undefined;
-  if (!isProjectDrizzleAliasCall(expression)) return undefined;
-
-  const target = expression.getArguments()[0];
-  return target ? projectTableNameForNode(target, tableNamesBySymbol) : undefined;
-}
-
-function isProjectDrizzleAliasCall(call: CallExpression): boolean {
-  const expression = call.getExpression();
-  if (!Node.isIdentifier(expression) || expression.getText() !== 'alias') return false;
-
-  const symbol = expression.getSymbol()?.getAliasedSymbol() ?? expression.getSymbol();
-  return (
-    symbol?.getDeclarations().some((declaration) => isDrizzleOrmDeclaration(declaration)) ?? false
-  );
-}
-
-function isDrizzleOrmDeclaration(declaration: Node): boolean {
-  if (declaration.getSourceFile().getFilePath().includes('drizzle-orm')) return true;
-
-  const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-  if (importDeclaration?.getModuleSpecifierValue().startsWith('drizzle-orm')) return true;
-
-  const moduleDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ModuleDeclaration);
-  const moduleName = moduleDeclaration?.getNameNode();
-  return Node.isStringLiteral(moduleName) && moduleName.getLiteralText().startsWith('drizzle-orm');
-}
-
-function projectColumnShapesByTable(
-  sourceFiles: readonly SourceFile[],
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-): ReadonlyMap<string, Readonly<Record<string, QueryShape>>> {
-  const shapes = new Map<string, Record<string, QueryShape>>();
-
-  for (const sourceFile of sourceFiles) {
-    for (const declaration of sourceFile.getVariableDeclarations()) {
-      const initializer = declaration.getInitializer();
-      if (!initializer || !isProjectTableInitializerNode(initializer)) continue;
-
-      const tableName = tableNamesBySymbol.get(
-        resolvedSymbolKey(declaration.getNameNode().getSymbol()) ?? '',
-      );
-      if (!tableName) continue;
-
-      const columns = tableColumnShapes(initializer, 'project');
-      if (Object.keys(columns).length > 0) shapes.set(tableName, columns);
-    }
-  }
-
-  return shapes;
-}
-
-export function tableColumnShapes(
-  initializer: Node,
-  mode: 'project' | 'source' = 'source',
-): Record<string, QueryShape> {
-  const call = Node.isCallExpression(initializer) ? initializer : undefined;
-  const columns = call?.getArguments()[1];
-  if (!columns || !Node.isObjectLiteralExpression(columns)) return {};
-
-  const shapes: Record<string, QueryShape> = {};
-  for (const property of columns.getProperties()) {
-    if (!Node.isPropertyAssignment(property)) continue;
-
-    const name = propertyNameText(property.getNameNode());
-    if (!name) continue;
-
-    const shape =
-      mode === 'project'
-        ? projectColumnBuilderShape(property.getInitializer())
-        : columnBuilderShape(property.getInitializer());
-    if (shape) shapes[name] = shape;
-  }
-
-  return shapes;
-}
-
-export function projectForeignKeysForTable(
-  initializer: Node,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-  namespaceTableNames: ProjectNamespaceTableNames,
-): ExtractedForeignKey[] {
-  const call = Node.isCallExpression(initializer) ? initializer : undefined;
-  const columns = call?.getArguments()[1];
-  if (!columns || !Node.isObjectLiteralExpression(columns)) return [];
-
-  const foreignKeys: ExtractedForeignKey[] = [];
-  for (const property of columns.getProperties()) {
-    if (!Node.isPropertyAssignment(property)) continue;
-
-    const column = propertyNameText(property.getNameNode());
-    const columnInitializer = property.getInitializer();
-    if (!column || !columnInitializer) continue;
-
-    const foreignKey = projectForeignKeyForColumn(
-      column,
-      columnInitializer,
-      tableNamesBySymbol,
-      namespaceTableNames,
-    );
-    if (foreignKey) foreignKeys.push(foreignKey);
-  }
-
-  return foreignKeys;
-}
-
-function projectForeignKeyForColumn(
-  column: string,
-  initializer: Node,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-  namespaceTableNames: ProjectNamespaceTableNames,
-): ExtractedForeignKey | null {
-  const calls = [
-    ...(Node.isCallExpression(initializer) ? [initializer] : []),
-    ...initializer.getDescendantsOfKind(SyntaxKind.CallExpression),
-  ];
-  const referencesCall = calls.find((call) => propertyAccessCallName(call) === 'references');
-  if (!referencesCall) return null;
-
-  const target = foreignKeyTargetTableExpression(
-    referencesCall.getArguments()[0],
-    tableNamesBySymbol,
-    namespaceTableNames,
-  );
-  if (!target) return null;
-
-  return {
-    column,
-    ...foreignKeyActions(referencesCall, calls),
-    targetTableExpression: target,
-  };
-}
-
-function foreignKeyTargetTableExpression(
-  callback: Node | undefined,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-  namespaceTableNames: ProjectNamespaceTableNames,
-): string | undefined {
-  const target = foreignKeyCallbackReturnExpression(callback);
-  if (!target) return undefined;
-
-  const tableExpression = Node.isPropertyAccessExpression(target)
-    ? target.getExpression()
-    : Node.isElementAccessExpression(target)
-      ? target.getExpression()
-      : target;
-  return projectTableNameForNode(tableExpression, tableNamesBySymbol, namespaceTableNames);
-}
-
-function foreignKeyCallbackReturnExpression(callback: Node | undefined): Node | undefined {
-  if (!callback) return undefined;
-
-  const expression = unwrappedStaticExpressionNode(callback);
-  if (Node.isArrowFunction(expression)) {
-    const body = expression.getBody();
-    return Node.isBlock(body) ? blockSingleReturnExpression(body) : body;
-  }
-  if (Node.isFunctionExpression(expression)) {
-    const body = expression.getBody();
-    return body ? blockSingleReturnExpression(body) : undefined;
-  }
-
-  return undefined;
-}
-
-function blockSingleReturnExpression(body: Node): Node | undefined {
-  if (!Node.isBlock(body)) return undefined;
-
-  const statements = body.getStatements();
-  if (statements.length !== 1) return undefined;
-
-  const statement = statements[0];
-  if (!statement || !Node.isReturnStatement(statement)) return undefined;
-
-  return statement.getExpression();
-}
-
-function foreignKeyActions(
-  referencesCall: CallExpression,
-  calls: readonly CallExpression[],
-): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
-  const optionObject = referencesCall.getArguments()[1];
-  return {
-    ...foreignKeyActionOptions(optionObject),
-    ...foreignKeyActionMethods(calls),
-  };
-}
-
-function foreignKeyActionOptions(
-  options: Node | undefined,
-): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
-  if (!options || !Node.isObjectLiteralExpression(options)) return {};
-
-  const onDelete = stringPropertyFromObject(options, 'onDelete');
-  const onUpdate = stringPropertyFromObject(options, 'onUpdate');
-  return {
-    ...(onDelete ? { onDelete } : {}),
-    ...(onUpdate ? { onUpdate } : {}),
-  };
-}
-
-function foreignKeyActionMethods(
-  calls: readonly CallExpression[],
-): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
-  const actions: Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> = {};
-
-  for (const call of calls) {
-    const name = propertyAccessCallName(call);
-    if (name !== 'onDelete' && name !== 'onUpdate') continue;
-
-    const action = call.getArguments()[0];
-    if (!action || !Node.isStringLiteral(action)) continue;
-    actions[name] = action.getLiteralText();
-  }
-
-  return actions;
-}
-
-function projectColumnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
-  const builder = projectColumnBuilderName(initializer);
-  if (!builder) return undefined;
-
-  const baseShape = columnBuilderBaseShape(builder, columnBuilderMode(initializer));
-  if (!baseShape) return undefined;
-  return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
-}
-
-export function propertyNameText(name: Node, resolveStaticComputed = false): string | undefined {
-  if (Node.isIdentifier(name) || Node.isStringLiteral(name) || Node.isNumericLiteral(name)) {
-    return name.getText().replace(/^["']|["']$/g, '');
-  }
-  const compilerNode = name.compilerNode;
-  if (ts.isComputedPropertyName(compilerNode)) {
-    const expression = compilerNode.expression;
-    if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
-      return expression.text;
-    }
-    if (ts.isNumericLiteral(expression)) return expression.text;
-  }
-  if (!resolveStaticComputed) return undefined;
-  const expression = computedPropertyNameExpression(name);
-  const staticText = expression ? staticPropertyNameExpressionText(expression) : undefined;
-  if (staticText) return staticText;
-  return undefined;
-}
-
-export function computedPropertyNameExpression(name: Node): Node | undefined {
-  if (!ts.isComputedPropertyName(name.compilerNode)) return undefined;
-
-  return name.getChildren().find((child) => {
-    const kind = child.getKind();
-    return kind !== SyntaxKind.OpenBracketToken && kind !== SyntaxKind.CloseBracketToken;
-  });
-}
-
-function staticPropertyNameExpressionText(
-  expression: Node,
-  seen: Set<string> = new Set(),
-): string | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (Node.isStringLiteral(node) || Node.isNumericLiteral(node)) {
-    return node.getLiteralText();
-  }
-  if (Node.isNoSubstitutionTemplateLiteral(node)) return node.getLiteralText();
-
-  const staticReference = staticLiteralReferenceFromExpression(node);
-  if (staticReference && staticReference !== node) {
-    return staticPropertyNameExpressionText(staticReference, seen);
-  }
-
-  const key = `${node.getSourceFile().getFilePath()}:${node.getStart()}`;
-  if (seen.has(key)) return undefined;
-  seen.add(key);
-
-  for (const declaration of symbolForCallbackReference(node)?.getDeclarations() ?? []) {
-    const initializer = staticLiteralContainerInitializer(declaration);
-    if (!initializer) continue;
-    const text = staticPropertyNameExpressionText(initializer, seen);
-    if (text) return text;
-  }
-
-  return undefined;
-}
-
-export function objectAssignmentTargetNode(
-  property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
-): Node | undefined {
-  if (Node.isShorthandPropertyAssignment(property)) return property.getNameNode();
-  if (!Node.isPropertyAssignment(property)) return undefined;
-  const initializer = property.getInitializer();
-  return initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-}
-
-export function objectAssignmentPropertyName(
-  property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
-): string | undefined {
-  if (!Node.isShorthandPropertyAssignment(property) && !Node.isPropertyAssignment(property)) {
-    return undefined;
-  }
-  return propertyNameText(property.getNameNode());
-}
-
-function objectHasProperty(object: Node, name: string): boolean {
-  if (!Node.isObjectLiteralExpression(object)) return false;
-
-  return object.getProperties().some((property) => {
-    if (!Node.isPropertyAssignment(property)) return false;
-    return propertyNameText(property.getNameNode()) === name;
-  });
-}
-
-export function objectPropertyInitializer(object: Node, name: string): Node | undefined {
-  if (!Node.isObjectLiteralExpression(object)) return undefined;
-
-  for (const property of object.getProperties()) {
-    if (!Node.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.getNameNode()) !== name) continue;
-    const initializer = property.getInitializer();
-    return initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
-  }
-
-  return undefined;
-}
-
-function queryDeclaredReadExpressions(
-  body: ObjectLiteralExpression,
-  readTableIdentifier: ((node: Node) => string | undefined) | undefined,
-): string[] {
-  const reads = objectPropertyInitializer(body, 'reads');
-  if (!reads || !Node.isArrayLiteralExpression(reads)) return [];
-
-  return reads.getElements().flatMap((element) => {
-    const expression = unwrappedStaticExpressionNode(element);
-    if (Node.isIdentifier(expression) || Node.isPropertyAccessExpression(expression)) {
-      return [readTableIdentifier?.(expression) ?? expression.getText()];
-    }
-    return [];
-  });
-}
-
-function queryOutputShape(body: ObjectLiteralExpression): QueryShape | undefined {
-  const output = objectPropertyInitializer(body, 'output');
-  return output ? queryShapeFromSchemaExpression(output) : undefined;
-}
-
-function queryShapeFromSchemaExpression(expression: Node): QueryShape | undefined {
-  const node = unwrappedStaticExpressionNode(expression);
-  if (!Node.isCallExpression(node)) return undefined;
-
-  const callee = node.getExpression();
-  if (Node.isPropertyAccessExpression(callee)) {
-    const method = callee.getName();
-    if (method === 'optional') {
-      const inner = queryShapeFromSchemaExpression(callee.getExpression());
-      return inner ? { kind: 'optional', shape: inner } : undefined;
-    }
-    if (method === 'nullable') {
-      const inner = queryShapeFromSchemaExpression(callee.getExpression());
-      return inner ? { kind: 'nullable', shape: inner } : undefined;
-    }
-    if (['int', 'min', 'max', 'default'].includes(method)) {
-      return queryShapeFromSchemaExpression(callee.getExpression());
-    }
-    if (Node.isIdentifier(callee.getExpression()) && callee.getExpression().getText() === 's') {
-      if (method === 'string') return 'string';
-      if (method === 'number') return 'number';
-      if (method === 'boolean') return 'boolean';
-      if (method === 'array') {
-        const element = node.getArguments()[0];
-        const shape = element ? queryShapeFromSchemaExpression(element) : undefined;
-        return shape ? [shape] : 'array';
-      }
-      if (method === 'object') {
-        const fields = node.getArguments()[0];
-        if (!fields || !Node.isObjectLiteralExpression(fields)) return 'object';
-        const shape: Record<string, QueryShape> = {};
-        for (const property of fields.getProperties()) {
-          if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property))
-            continue;
-          const name = propertyNameText(property.getNameNode());
-          if (!name) continue;
-          const initializer = Node.isPropertyAssignment(property)
-            ? property.getInitializer()
-            : property.getNameNode();
-          const fieldShape = initializer ? queryShapeFromSchemaExpression(initializer) : undefined;
-          if (fieldShape) shape[name] = fieldShape;
-        }
-        return shape;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-function columnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
-  // SPEC §10-§11: column nullability is a parsed call-chain fact, not string contents.
-  const builder = columnBuilderName(initializer);
-  if (!builder) return undefined;
-
-  const baseShape = columnBuilderBaseShape(builder, columnBuilderMode(initializer));
-  if (!baseShape) return undefined;
-  return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
-}
-
-function columnBuilderBaseShape(builder: string, mode?: string): QueryShape | undefined {
-  if (builder === 'integer' && mode === 'boolean') return 'boolean';
-  if (builder === 'text' && mode === 'json') return 'object';
-  if (BOOLEAN_COLUMN_BUILDERS.has(builder)) return 'boolean';
-  if (NUMBER_COLUMN_BUILDERS.has(builder)) return 'number';
-  if (JSON_COLUMN_BUILDERS.has(builder)) return 'object';
-  if (
-    builder === 'text' ||
-    builder === 'varchar' ||
-    builder === 'uuid' ||
-    builder === 'timestamp'
-  ) {
-    return 'string';
-  }
-  return undefined;
-}
-
-function columnBuilderMode(initializer: Node | undefined): string | undefined {
-  if (!initializer) return undefined;
-  return columnBuilderModeFromExpression(
-    unwrappedTsExpression(initializer.compilerNode as ts.Expression),
-  );
-}
-
-function columnBuilderModeFromExpression(expression: ts.Expression): string | undefined {
-  const rootCall = columnBuilderRootCallExpression(expression);
-  if (!rootCall) return undefined;
-
-  for (const argument of rootCall.arguments) {
-    const value = staticStringPropertyValue(argument, 'mode');
-    if (value) return value;
-  }
-
-  return undefined;
-}
-
-function columnBuilderRootCallExpression(expression: ts.Expression): ts.CallExpression | undefined {
-  const target = unwrappedTsExpression(expression);
-  if (!ts.isCallExpression(target)) return undefined;
-
-  const callee = unwrappedTsExpression(target.expression as ts.Expression);
-  if (ts.isPropertyAccessExpression(callee)) {
-    const base = unwrappedTsExpression(callee.expression);
-    if (ts.isCallExpression(base)) return columnBuilderRootCallExpression(base);
-  }
-
-  return target;
-}
-
-function staticStringPropertyValue(expression: ts.Expression, name: string): string | undefined {
-  const target = unwrappedTsExpression(expression);
-  if (!ts.isObjectLiteralExpression(target)) return undefined;
-
-  for (const property of target.properties) {
-    if (!ts.isPropertyAssignment(property)) continue;
-    const propertyName = property.name;
-    const matches =
-      (ts.isIdentifier(propertyName) && propertyName.text === name) ||
-      (ts.isStringLiteral(propertyName) && propertyName.text === name);
-    if (!matches) continue;
-
-    const initializer = unwrappedTsExpression(property.initializer);
-    if (ts.isStringLiteral(initializer) || ts.isNoSubstitutionTemplateLiteral(initializer)) {
-      return initializer.text;
-    }
-  }
-
-  return undefined;
-}
-
-function columnBuilderName(initializer: Node | undefined): string | undefined {
-  if (!initializer) return undefined;
-  return columnBuilderNameFromExpression(
-    unwrappedTsExpression(initializer.compilerNode as ts.Expression),
-  );
-}
-
-function projectColumnBuilderName(initializer: Node | undefined): string | undefined {
-  if (!initializer) return undefined;
-
-  const expression = unwrappedStaticExpressionNode(initializer);
-  if (!Node.isCallExpression(expression)) return undefined;
-
-  const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  if (Node.isIdentifier(callee)) return projectDrizzleCoreIdentifierExportName(callee);
-  if (!Node.isPropertyAccessExpression(callee)) return undefined;
-
-  const base = unwrappedStaticExpressionNode(callee.getExpression());
-  if (Node.isCallExpression(base)) return projectColumnBuilderName(base);
-
-  // SPEC §10-§11: project-mode namespace column factories require ts-morph import proof instead
-  // of accepting arbitrary `schema.text()` source names.
-  return isDrizzleCoreNamespaceMember(callee) ? callee.getName() : undefined;
-}
-
-function columnBuilderNameFromExpression(expression: ts.Expression): string | undefined {
-  const target = unwrappedTsExpression(expression);
-  if (!ts.isCallExpression(target)) return undefined;
-
-  const callee = unwrappedTsExpression(target.expression as ts.Expression);
-  if (ts.isIdentifier(callee)) return callee.text;
-  if (!ts.isPropertyAccessExpression(callee)) return undefined;
-
-  const base = unwrappedTsExpression(callee.expression);
-  return ts.isCallExpression(base) ? columnBuilderNameFromExpression(base) : undefined;
-}
-
-function columnBuilderIsNonNull(initializer: Node | undefined): boolean {
-  if (!initializer) return false;
-
-  for (const method of columnBuilderChainMethods(
-    unwrappedTsExpression(initializer.compilerNode as ts.Expression),
-  )) {
-    if (method === 'notNull' || method === 'primaryKey') return true;
-  }
-
-  return false;
-}
-
-function columnBuilderChainMethods(expression: ts.Expression): string[] {
-  const target = unwrappedTsExpression(expression);
-  if (!ts.isCallExpression(target)) return [];
-
-  const callee = unwrappedTsExpression(target.expression as ts.Expression);
-  if (!ts.isPropertyAccessExpression(callee)) return [];
-
-  const base = unwrappedTsExpression(callee.expression);
-  const methods = ts.isCallExpression(base) ? columnBuilderChainMethods(base) : [];
-  return [...methods, callee.name.text];
-}
-
-function columnShapesForFile(
-  sourceFile: SourceFile,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-  columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
-): Readonly<Record<string, QueryShape>> {
-  const shapes: Record<string, QueryShape> = {};
-  const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
-
-  for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
-    const symbolKey = resolvedSymbolKey(identifier.getSymbol());
-    const tableName = tableNamesBySymbol.get(symbolKey ?? '');
-    const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
-    if (!tableName || !tableShapes) continue;
-
-    appendColumnShapesForTablePath(shapes, identifier.getText(), tableShapes);
-    appendColumnShapesForTablePath(shapes, tableName, tableShapes);
-  }
-
-  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAccessExpression)) {
-    const tableName = projectTableNameForColumnShapeAccess(
-      access,
-      tableNamesBySymbol,
-      namespaceTableNames,
-    );
-    const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
-    const tablePath = staticExpressionPath(access);
-    if (!tableShapes || !tablePath) continue;
-
-    appendColumnShapesForTablePath(shapes, tablePath, tableShapes);
-  }
-
-  for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
-    const tableName = projectTableNameForColumnShapeAccess(
-      access,
-      tableNamesBySymbol,
-      namespaceTableNames,
-    );
-    const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
-    const tablePath = staticExpressionPath(access);
-    if (!tableShapes || !tablePath) continue;
-
-    appendColumnShapesForTablePath(shapes, tablePath, tableShapes);
-  }
-
-  return shapes;
-}
-
-function projectTableNameForColumnShapeAccess(
-  node: Node,
-  tableNamesBySymbol: ReadonlyMap<string, string>,
-  namespaceTableNames: ProjectNamespaceTableNames,
-): string | undefined {
-  const namespaceTableName = projectNamespaceAccessTableName(node, namespaceTableNames)
-    ?.split('.')
-    .at(-1);
-  return (
-    projectTableNameForSymbol(node, tableNamesBySymbol) ??
-    namespaceTableName ??
-    projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames)
-  );
-}
-
-function appendColumnShapesForTablePath(
-  shapes: Record<string, QueryShape>,
-  tablePath: string,
-  tableShapes: Readonly<Record<string, QueryShape>>,
-): void {
-  // SPEC §10-§11: project projection shapes follow the resolved Drizzle table symbol, including
-  // namespace/static-element paths, instead of guessing from selected aliases.
-  for (const [column, shape] of Object.entries(tableShapes)) {
-    shapes[`${tablePath}.${column}`] = shape;
-  }
-}
-
-export function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined {
-  const target = symbol?.getAliasedSymbol() ?? symbol;
-  const declaration = target?.getDeclarations()[0];
-  if (!declaration) return undefined;
-
-  return `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}`;
-}
-
-export function isTableInitializerNode(initializer: Node): boolean {
-  if (!Node.isCallExpression(initializer)) return false;
-  const expression = initializer.getExpression();
-  if (!Node.isIdentifier(expression)) return false;
-  if (!isDrizzleTableFactoryName(expression.getText())) return false;
-
-  return true;
-}
-
-export function isProjectTableInitializerNode(initializer: Node): boolean {
-  if (!Node.isCallExpression(initializer)) return false;
-  const expression = unwrappedStaticExpressionNode(initializer.getExpression());
-  const isTableFactory = Node.isIdentifier(expression)
-    ? isDrizzleTableFactoryName(projectDrizzleCoreIdentifierExportName(expression) ?? '')
-    : Node.isPropertyAccessExpression(expression) &&
-      isDrizzleTableFactoryNamespaceMember(expression);
-  return isTableFactory;
-}
-
-function isDrizzleTableFactoryNamespaceMember(access: Node): boolean {
-  if (!Node.isPropertyAccessExpression(access)) return false;
-  if (!isDrizzleTableFactoryName(access.getName())) return false;
-  return isDrizzleCoreNamespaceMember(access);
-}
-
-function isDrizzleCoreNamespaceMember(access: Node): boolean {
-  if (!Node.isPropertyAccessExpression(access)) return false;
-
-  const expression = unwrappedStaticExpressionNode(access.getExpression());
-  if (!Node.isIdentifier(expression)) return false;
-
-  const namespaceImport = access
-    .getSourceFile()
-    .getImportDeclarations()
-    .some(
-      (declaration) =>
-        declaration.getNamespaceImport()?.getText() === expression.getText() &&
-        isDrizzleCoreModuleSpecifier(declaration.getModuleSpecifierValue()),
-    );
-  if (namespaceImport) return true;
-
-  const symbol = expression.getSymbol()?.getAliasedSymbol() ?? expression.getSymbol();
-  return (
-    symbol?.getDeclarations().some((declaration) => {
-      if (declaration.getKind() !== SyntaxKind.NamespaceImport) return false;
-      const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-      return isDrizzleCoreModuleSpecifier(importDeclaration?.getModuleSpecifierValue());
-    }) ?? false
-  );
-}
-
-function projectDrizzleCoreIdentifierExportName(identifier: Node): string | undefined {
-  if (!Node.isIdentifier(identifier)) return undefined;
-
-  const symbol = identifier.getSymbol();
-  const declarations = symbol?.getDeclarations() ?? [];
-  if (declarations.length === 0) return identifier.getText();
-
-  const directName = drizzleCoreExportNameFromDeclarations(declarations);
-  if (directName) return directName;
-
-  const aliased = symbol?.getAliasedSymbol();
-  const aliasName = drizzleCoreExportNameFromDeclarations(aliased?.getDeclarations() ?? []);
-  if (aliasName) return aliasName;
-
-  return undefined;
-}
-
-function drizzleCoreExportNameFromDeclarations(declarations: readonly Node[]): string | undefined {
-  for (const declaration of declarations) {
-    const name = drizzleCoreImportSpecifierExportName(declaration);
-    if (name) return name;
-  }
-  for (const declaration of declarations) {
-    const name = drizzleCoreExportSpecifierExportName(declaration);
-    if (name) return name;
-  }
-  for (const declaration of declarations) {
-    if (drizzleCoreModuleSpecifierForDeclaration(declaration)) {
-      const name = Node.isIdentifier(declaration)
-        ? declaration.getText()
-        : declaration.getSymbol()?.getName();
-      if (name) return name;
-    }
-  }
-
-  return undefined;
-}
-
-function drizzleCoreImportSpecifierExportName(declaration: Node): string | undefined {
-  if (!Node.isImportSpecifier(declaration)) return undefined;
-  const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-  if (!isDrizzleCoreModuleSpecifier(importDeclaration?.getModuleSpecifierValue())) return undefined;
-
-  return declaration.getNameNode().getText();
-}
-
-function drizzleCoreExportSpecifierExportName(declaration: Node): string | undefined {
-  if (!Node.isExportSpecifier(declaration)) return undefined;
-  const exportDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ExportDeclaration);
-  if (!isDrizzleCoreModuleSpecifier(exportDeclaration?.getModuleSpecifierValue())) return undefined;
-
-  return declaration.getNameNode().getText();
-}
-
-function drizzleCoreModuleSpecifierForDeclaration(declaration: Node): string | undefined {
-  const filePath = declaration.getSourceFile().getFilePath();
-  return [...DRIZZLE_CORE_MODULE_SPECIFIERS].find((specifier) => filePath.includes(specifier));
-}
-
-function isDrizzleCoreModuleSpecifier(specifier: string | undefined): boolean {
-  return specifier !== undefined && DRIZZLE_CORE_MODULE_SPECIFIERS.has(specifier);
-}
-
-function isKovoAnnotationCall(node: Node): boolean {
-  if (!Node.isCallExpression(node)) return false;
-  const expression = node.getExpression();
-  return Node.isIdentifier(expression) && isKovoExtraConfigCallName(expression.getText());
-}
-
-export function tableNameArgument(initializer: Node): string | undefined {
-  if (!Node.isCallExpression(initializer)) return undefined;
-  const name = initializer.getArguments()[0];
-  if (!name || !Node.isStringLiteral(name)) return undefined;
-  return name.getLiteralText();
 }
 
 export interface ExtractedFunction {
@@ -4997,7 +3857,7 @@ function isUnmappedTableAnnotation(
   return 'unmapped' in annotation && annotation.unmapped === true;
 }
 
-function stringPropertyFromObject(object: Node, name: string): string | undefined {
+export function stringPropertyFromObject(object: Node, name: string): string | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
 
   for (const property of object.getProperties()) {
@@ -5272,7 +4132,6 @@ import {
   isTimeVolatileSqlProjection,
   nullableJoinTables,
   nullableNestedShape,
-  nullableShape,
   objectLiteralStaticPropertyReference,
   opaqueLocalQueryHelperDiagnostics,
   opaqueProjectionDiagnostics,
@@ -5308,7 +4167,6 @@ import {
   sourceQueryDestructuredReceiverNames,
   staticFactoryBlockReturnExpression,
   staticLiteralContainerExpression,
-  staticLiteralContainerInitializer,
   staticTsElementAccessName,
   staticTsExpressionPath,
   symbolForStaticMemberReference,
@@ -5353,7 +4211,102 @@ export {
   callbackFunctionFromProperty,
   callbackFunctionFromDeclaration,
   callbackFunctionFromBindingElement,
+  staticLiteralContainerInitializer,
+  nullableShape,
 } from './static/query-shapes.js';
+import {
+  appendColumnShapesForTablePath,
+  appendProjectAliasTableNames,
+  appendProjectConditionalTableNames,
+  blockSingleReturnExpression,
+  columnBuilderBaseShape,
+  columnBuilderChainMethods,
+  columnBuilderIsNonNull,
+  columnBuilderMode,
+  columnBuilderModeFromExpression,
+  columnBuilderName,
+  columnBuilderNameFromExpression,
+  columnBuilderRootCallExpression,
+  columnBuilderShape,
+  columnShapesForFile,
+  computedPropertyNameExpression,
+  drizzleCoreExportNameFromDeclarations,
+  drizzleCoreExportSpecifierExportName,
+  drizzleCoreImportSpecifierExportName,
+  drizzleCoreModuleSpecifierForDeclaration,
+  drizzleDatabaseTypeDeclarations,
+  drizzleDatabaseTypeNames,
+  foreignKeyActionMethods,
+  foreignKeyActionOptions,
+  foreignKeyActions,
+  foreignKeyCallbackReturnExpression,
+  foreignKeyTargetTableExpression,
+  isDrizzleCoreModuleSpecifier,
+  isDrizzleCoreNamespaceMember,
+  isDrizzleDatabaseType,
+  isDrizzleDatabaseTypeAnnotation,
+  isDrizzleDatabaseTypeNode,
+  isDrizzleOrmDeclaration,
+  isDrizzleReceiver,
+  isDrizzleTableFactoryNamespaceMember,
+  isDrizzleWriteCall,
+  isKovoAnnotationCall,
+  isProjectDrizzleAliasCall,
+  isProjectTableInitializerNode,
+  isTableInitializerNode,
+  objectAssignmentPropertyName,
+  objectAssignmentTargetNode,
+  objectHasProperty,
+  objectPropertyInitializer,
+  projectAliasTargetTableName,
+  projectColumnBuilderName,
+  projectColumnBuilderShape,
+  projectColumnShapesByTable,
+  projectConditionalTargetTableNames,
+  projectDrizzleCoreIdentifierExportName,
+  projectForeignKeyForColumn,
+  projectForeignKeysForTable,
+  projectRelationalTableNamesByProperty,
+  projectTableNameForColumnShapeAccess,
+  projectTableNamesBySymbol,
+  projectUnmodeledRelationNameForNode,
+  projectUnmodeledRelationNameForSymbol,
+  projectUnmodeledRelationNamesBySymbol,
+  projectUnresolvedConditionalTableExpressions,
+  propertyNameText,
+  queryDeclaredReadExpressions,
+  queryOutputShape,
+  queryShapeFromSchemaExpression,
+  resolvedSymbolKey,
+  rootCallExpression,
+  sourceColumnShapesForTables,
+  staticPropertyNameExpressionText,
+  staticStringPropertyValue,
+  tableColumnShapes,
+  tableNameArgument,
+  unmodeledRelationExpression,
+  unmodeledRelationForInitializer,
+  unmodeledRelationFromExpression,
+  type UnmodeledRelationFact,
+} from './static/schema.js';
+/** @internal */
+export {
+  computedPropertyNameExpression,
+  isDrizzleDatabaseTypeAnnotation,
+  isDrizzleWriteCall,
+  isProjectTableInitializerNode,
+  isTableInitializerNode,
+  objectAssignmentPropertyName,
+  objectAssignmentTargetNode,
+  objectPropertyInitializer,
+  propertyNameText,
+  resolvedSymbolKey,
+  tableColumnShapes,
+  tableNameArgument,
+  unmodeledRelationFromExpression,
+  isDrizzleDatabaseType,
+  projectForeignKeysForTable,
+} from './static/schema.js';
 /** @internal */
 export {
   appendSourceDestructuredReceiverBinding,
