@@ -64,11 +64,11 @@ try {
   const noJsPage = await noJs.newPage();
   await noJsPage.goto(`${origin}/`);
   check(
-    (await noJsPage.locator('h1').first().textContent())?.includes('KOVO'),
+    (await noJsPage.locator('h1').first().textContent())?.includes('Builds like React'),
     'no-JS: landing hero renders',
   );
   check(
-    (await noJsPage.locator('body').textContent())?.includes('hands your agent the fix'),
+    (await noJsPage.locator('body').textContent())?.includes('stale UI is a compile error'),
     'no-JS: landing tagline renders',
   );
   await noJsPage.click('a[href="/docs/why-kovo/"]');
