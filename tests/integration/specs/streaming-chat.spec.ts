@@ -4,10 +4,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'streaming-chat' });
 
-async function postStreamingWire(
-  request: APIRequestContext,
-  body: string,
-) {
+async function postStreamingWire(request: APIRequestContext, body: string) {
   const response = await request.post('/_m/chat/send', {
     form: { body, turns: '1' },
     headers: {
@@ -30,9 +27,7 @@ test('streams chat text through Kovo chunks and reconciles with server truth', a
 }) => {
   const { response: wireResponse, wire } = await postStreamingWire(request, 'show table');
 
-  expect(wireResponse.headers()['content-type']).toBe(
-    'text/vnd.kovo.fragment+html; charset=utf-8',
-  );
+  expect(wireResponse.headers()['content-type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
   expect(wireResponse.headers()['kovo-changes']).toBe('[{"domain":"chat"}]');
   expect(wire).toContain('<kovo-fragment target="messages" mode="append">');
   expect(wire).toContain('<kovo-text target="assistant:2">');
