@@ -6,6 +6,7 @@ import {
   renderErrorDocument,
   renderRouteDocumentResponse,
 } from './document-core.js';
+import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
 import {
   appendResponseHeader,
@@ -96,6 +97,7 @@ export async function renderAppRouteDocumentResponse({
   // Stamp the build-global render-plan version token so the client can detect
   // deploy skew and refetch full rather than applying a delta against a stale
   // base (SPEC §5.1, §9.1.1).
+  const loaderRuntimeHref = ensureKovoLoaderRuntimeClientModule(app.clientModules);
   const buildToken = app.clientModules.buildToken();
 
   // K3 / SPEC §9.3: derive the broadcast fingerprint from the session identity already resolved on
@@ -127,6 +129,7 @@ export async function renderAppRouteDocumentResponse({
       buildToken,
       hints: mergeAppRouteHints(app, route),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+      loaderRuntimeHref,
       ...(app.document.template === undefined ? {} : { template: app.document.template }),
       // bugs-1 F34: a guarded route renders session-dependent content; mark its
       // document no-store so a Back/bfcache restore can't show it after logout.
@@ -242,6 +245,7 @@ export async function renderAppErrorDocumentResponse(
   return renderErrorDocument({
     ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
+    loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
     status,
     ...(app.document.template === undefined ? {} : { template: app.document.template }),
   });

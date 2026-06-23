@@ -285,7 +285,10 @@ describe('server createApp request shell', () => {
 
     const fullBody = await full.text();
     const enhancedBody = await enhanced.text();
-    expect(fullBody).toContain('installInlineKovoLoader');
+    expect(fullBody).toContain('installInlineKovoBootstrap');
+    expect(fullBody).toContain('/c/__v/');
+    expect(fullBody).toContain('/kovo-runtime.client.js');
+    expect(enhancedBody).not.toContain('installInlineKovoBootstrap');
     expect(enhancedBody).not.toContain('installInlineKovoLoader');
     expect(enhancedBody).toContain('<title>Product</title>');
     expect(enhancedBody).toContain('<meta name="kovo-build"');

@@ -9,6 +9,8 @@ import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 
+const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+
 describe('server static export', () => {
   it('rejects exported documents that reference server mutation or query endpoints', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-'));
@@ -102,7 +104,10 @@ describe('server static export', () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/cart/index.html']);
-    expect(result.clientModules.map((artifact) => artifact.path)).toEqual([cartHref]);
+    expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
+      cartHref,
+      expect.stringMatching(runtimeClientModulePath),
+    ]);
   });
 
   it('does not treat comments or raw-text examples as static export server endpoints', async () => {
@@ -140,6 +145,9 @@ describe('server static export', () => {
 
     expect(result.diagnostics).toEqual([]);
     expect(result.artifacts.map((artifact) => artifact.path)).toEqual(['/guide/index.html']);
-    expect(result.clientModules.map((artifact) => artifact.path)).toEqual([realHref]);
+    expect(result.clientModules.map((artifact) => artifact.path)).toEqual([
+      realHref,
+      expect.stringMatching(runtimeClientModulePath),
+    ]);
   });
 });

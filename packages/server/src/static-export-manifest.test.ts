@@ -23,6 +23,19 @@ import {
   staticExportManifest,
 } from './static-export-result.js';
 
+const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const runtimeClientModuleArtifact = expect.objectContaining({
+  href: expect.stringMatching(runtimeClientModulePath),
+  path: expect.stringMatching(runtimeClientModulePath),
+  status: 200,
+});
+const runtimeClientModuleFile = expect.objectContaining({
+  href: expect.stringMatching(runtimeClientModulePath),
+  kind: 'client-module',
+  path: expect.stringMatching(runtimeClientModulePath),
+  status: 200,
+});
+
 describe('server static export', () => {
   it('summarizes dry-run route, client module, and asset inventory in write order', async () => {
     const registry = createMemoryVersionedClientModuleRegistry();
@@ -73,6 +86,7 @@ describe('server static export', () => {
         path: cartHref,
         status: 200,
       },
+      runtimeClientModuleFile,
       {
         headers: { 'content-type': 'text/css; charset=utf-8' },
         kind: 'static-asset',
@@ -129,6 +143,15 @@ describe('server static export', () => {
           targetPath: path.join(outDir, cartHref.replace(/^\//, '')),
         },
         {
+          kind: 'client-module',
+          path: expect.stringMatching(runtimeClientModulePath),
+          targetPath: expect.stringMatching(
+            new RegExp(
+              `${outDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[/\\\\]c[/\\\\]__v[/\\\\][^/\\\\]+[/\\\\]kovo-runtime\\.client\\.js$`,
+            ),
+          ),
+        },
+        {
           kind: 'static-asset',
           path: '/assets/app.css',
           targetPath: path.join(outDir, 'assets', 'app.css'),
@@ -141,6 +164,13 @@ describe('server static export', () => {
       await expect(readFile(path.join(outDir, cartHref.replace(/^\//, '')), 'utf8')).resolves.toBe(
         'export const cart = "output-plan";',
       );
+      const runtimePath = writeResult.clientModules.find((artifact) =>
+        runtimeClientModulePath.test(artifact.path),
+      )?.path;
+      expect(runtimePath).toBeTruthy();
+      await expect(
+        readFile(path.join(outDir, runtimePath!.replace(/^\//, '')), 'utf8'),
+      ).resolves.toContain('installKovoDeferredRuntime');
       await expect(readFile(path.join(outDir, 'assets', 'app.css'), 'utf8')).resolves.toBe(
         'main { display: block; }\n',
       );
@@ -202,6 +232,7 @@ describe('server static export', () => {
           path: cartHref,
           status: 200,
         },
+        runtimeClientModuleArtifact,
       ],
       files: [
         {
@@ -236,6 +267,7 @@ describe('server static export', () => {
           path: cartHref,
           status: 200,
         },
+        runtimeClientModuleFile,
         {
           headers: { 'content-type': 'text/css; charset=utf-8' },
           kind: 'static-asset',
@@ -274,7 +306,7 @@ describe('server static export', () => {
         routeDocuments: manifest.routeDocuments.slice(1),
       }),
     ).toThrow(
-      'Static export manifest does not match the written export result. Expected routeDocuments=2, clientModules=1, assets=1, files=4. Received routeDocuments=1, clientModules=1, assets=1, files=4.',
+      'Static export manifest does not match the written export result. Expected routeDocuments=2, clientModules=2, assets=1, files=5. Received routeDocuments=1, clientModules=2, assets=1, files=5.',
     );
   });
 

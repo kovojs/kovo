@@ -63,7 +63,7 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     and `pnpm --filter @kovojs/browser run check:inline-loader` passed, covering inline loader
     artifact parity and gzip budget after adding stylesheet promotion.
 
-- [ ] **3. Split the inline loader into a tiny early stub plus deferred runtime.**
+- [x] **3. Split the inline loader into a tiny early stub plus deferred runtime.**
   - Current issue: the inline loader is about 23 KB in the head, and Lighthouse reported about
     21 KB unused during first load.
   - Direction: keep only interaction capture and required first-load setup in the head; defer
@@ -79,6 +79,13 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
   - Verification target: tests cover early enhanced link click, enhanced form submit, ordinary
     native link/form fallback, and no early interaction path where runtime import begins only after
     first paint.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader.test.ts packages/browser/src/inline-loader-fragment-target.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/app.test.ts packages/server/src/static-export-handler-doc.test.ts`
+    passed, covering generated stub/runtime artifact parity, app document bootstrap output,
+    versioned runtime module registration/serving, static export runtime emission, and low-level
+    full-inline fallback.
+  - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-bootstrap.browser.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts`
+    passed, covering post-paint runtime import, early enhanced link/form replay, native link
+    pass-through, import-failure submit fallback, and existing enhanced navigation behavior.
 
 - [ ] **4. Reduce route critical CSS and theme-variable payload.**
   - Current issue: the inline critical style block is about 11 KB, dominated by theme variables that
@@ -140,17 +147,25 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
 ## Latest Verification
 
 - [x] 2026-06-22 compression slice: `pnpm exec vitest --run packages/server/src/node.test.ts scripts/demo-session/serve.test.mjs`
-  passed.
+      passed.
 - [x] 2026-06-22 deferred stylesheet slice: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/cli/src/index.kovo-build.test.ts examples/commerce/src/app.rendering.test.ts packages/conformance-fixtures/src/server-fixtures.test.ts packages/server/src/node.test.ts`
-  passed.
+      passed.
 - [x] 2026-06-22 deferred stylesheet browser slice: `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-navigation.browser.test.ts`
-  passed.
+      passed.
 - [x] 2026-06-22 inline loader artifact slice: `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts`
-  and `pnpm --filter @kovojs/browser run check:inline-loader` passed.
+      and `pnpm --filter @kovojs/browser run check:inline-loader` passed.
 - [x] 2026-06-22 FCP harness slice: `pnpm exec vitest --run scripts/fcp-harness.test.mjs`
-  and `pnpm perf:fcp -- --url https://kovo-stackoverflow-34444524520.us-central1.run.app/questions/q3 --output test-results/fcp-harness/stackoverflow-q3-smoke`
+      and `pnpm perf:fcp -- --url https://kovo-stackoverflow-34444524520.us-central1.run.app/questions/q3 --output test-results/fcp-harness/stackoverflow-q3-smoke`
+      passed.
+- [x] 2026-06-22 inline runtime split slice: `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader.test.ts packages/browser/src/inline-loader-fragment-target.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/app.test.ts packages/server/src/static-export-handler-doc.test.ts`
+      and `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-bootstrap.browser.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts`
+      passed.
+- [x] 2026-06-23 inline runtime affected-suite: `pnpm --filter @kovojs/browser run check:inline-loader && pnpm exec vitest --run packages/server/src/static-export-client-module-refs.test.ts packages/server/src/static-export-endpoints.test.ts packages/server/src/static-export-manifest.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-output-targets.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/static-export-result.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-build-wiring.test.ts packages/server/src/vite-dev.test.ts packages/server/src/node.test.ts packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-build.test.ts`
   passed.
-- [x] 2026-06-22 diff hygiene: `git diff --check` passed.
+- [x] 2026-06-23 lint/type without formatting: `vp check --no-fmt` passed with existing warnings
+  for `packages/icons/src/infinity.tsx` and generated `packages/browser/src/inline-loader.ts`
+  length.
+- [x] 2026-06-23 diff hygiene: `git diff --check` passed.
 
 ## Repeatable Perf Harness
 
@@ -196,12 +211,15 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     captured mobile/desktop FCP/resource timing, first-viewport visibility, screenshots, and zero
     console/page errors.
 
-- [ ] **Interaction deferral smoke.**
+- [x] **Interaction deferral smoke.**
   - Command shape: Playwright tests that click an enhanced link and submit an enhanced form before
     the deferred runtime is fully ready, then assert the queued interaction replays or native
     fallback proceeds correctly.
   - Pass criteria: no captured event is dropped; enhanced interactions still update/navigate after
     runtime load; ordinary native links/forms are not intercepted by the bootstrap.
+  - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-bootstrap.browser.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts`
+    covers early enhanced click/form replay, native link pass-through, failed runtime submit
+    fallback, and enhanced navigation after runtime install.
 
 - [ ] **Region priority smoke.**
   - Command shape: route/document tests plus browser tests for `critical`, `after-paint`, and

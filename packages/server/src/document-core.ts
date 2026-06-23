@@ -1,4 +1,7 @@
-import { kovoLoaderSource } from '@kovojs/browser/internal/inline-loader';
+import {
+  createInlineKovoLoaderSource,
+  inlineKovoLoaderInstallerSource,
+} from '@kovojs/browser/internal/inline-loader';
 import {
   cspHashAttribute,
   cspSha256,
@@ -80,6 +83,7 @@ export interface DocumentAssemblyOptions {
    * bootstrap inline.
    */
   loader?: 'inline' | 'omit';
+  loaderRuntimeHref?: string;
   queries?: readonly QueryScriptRenderOptions[];
   /**
    * bugs-1 F13 / SPEC §9.3: an opaque per-session fingerprint. When present, stamped as
@@ -125,6 +129,7 @@ export interface DeferredDocumentAssemblyOptions extends Omit<DocumentAssemblyOp
 export interface ErrorDocumentOptions {
   hints?: PageHintOptions;
   lang?: string;
+  loaderRuntimeHref?: string;
   message?: string;
   status: 403 | 404 | 500;
   template?: DocumentTemplate;
@@ -205,7 +210,14 @@ export function renderDeferredDocument(
 function assembleDocumentParts(
   options: Pick<
     DocumentAssemblyOptions,
-    'body' | 'buildToken' | 'hints' | 'lang' | 'loader' | 'queries' | 'sessionFingerprint'
+    | 'body'
+    | 'buildToken'
+    | 'hints'
+    | 'lang'
+    | 'loader'
+    | 'queries'
+    | 'sessionFingerprint'
+    | 'loaderRuntimeHref'
   >,
 ): { csp: CspInlineMetadata; earlyHints: PageHints['earlyHints']; parts: DocumentParts } {
   // F2 (bugs-part3 L2-early-hints-2): thread the rendered query values into the head
@@ -218,7 +230,8 @@ function assembleDocumentParts(
     Object.keys(queryValues).length > 0 ? { queries: queryValues } : {},
   );
   const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
-  const loader = options.loader === 'omit' ? undefined : inlineLoaderScript();
+  const loader =
+    options.loader === 'omit' ? undefined : inlineLoaderScript(options.loaderRuntimeHref);
   const csp = mergeCspInlineMetadata(
     hints.csp,
     ...(loader === undefined ? [] : [loader.csp]),
@@ -321,6 +334,9 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
       meta: [{ title }, ...withoutStaticTitleMeta(routeMetaArray(options.hints?.meta))],
     },
     ...(options.lang === undefined ? {} : { lang: options.lang }),
+    ...(options.loaderRuntimeHref === undefined
+      ? {}
+      : { loaderRuntimeHref: options.loaderRuntimeHref }),
     ...(options.template === undefined ? {} : { template: options.template }),
   });
 
@@ -405,11 +421,18 @@ function requiredDocumentTemplateParts(
   ].filter(({ value }) => value.length > 0);
 }
 
-function inlineLoaderScript(): { csp: CspInlineMetadata; html: string } {
-  const hash = cspSha256(kovoLoaderSource);
+function inlineLoaderScript(runtimeHref: string | undefined): {
+  csp: CspInlineMetadata;
+  html: string;
+} {
+  const source =
+    runtimeHref === undefined
+      ? `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`
+      : createInlineKovoLoaderSource(JSON.stringify(runtimeHref));
+  const hash = cspSha256(source);
   return {
     csp: { scripts: [hash], styles: [] },
-    html: `<script ${cspHashAttribute(hash)}>${kovoLoaderSource}</script>`,
+    html: `<script ${cspHashAttribute(hash)}>${source}</script>`,
   };
 }
 

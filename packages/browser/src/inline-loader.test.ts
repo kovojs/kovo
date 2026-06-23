@@ -11,14 +11,22 @@ describe('inline loader source', () => {
       document: globalRecord.document,
       importModule: globalRecord.__kovoInlineImport,
       location: globalRecord.location,
+      removeEventListener: globalRecord.removeEventListener,
+      requestAnimationFrame: globalRecord.requestAnimationFrame,
     };
     const listeners = new Map<string, unknown>();
+    const rafCallbacks: Function[] = [];
     const importModule = vi.fn(async () => ({}));
 
     try {
       globalRecord.__kovoInlineImport = importModule;
       globalRecord.addEventListener = (type: string, listener: unknown) => {
         listeners.set(type, listener);
+      };
+      globalRecord.removeEventListener = () => {};
+      globalRecord.requestAnimationFrame = (callback: Function) => {
+        rafCallbacks.push(callback);
+        return rafCallbacks.length;
       };
       globalRecord.document = {
         querySelectorAll() {
@@ -29,34 +37,16 @@ describe('inline loader source', () => {
 
       runInThisContext(createInlineKovoLoaderSource(' globalThis.__kovoInlineImport '));
 
-      expect([...listeners.keys()]).toEqual([
-        'click',
-        'submit',
-        'input',
-        'change',
-        'keydown',
-        'keyup',
-        'contextmenu',
-        'paste',
-        'cancel',
-        'beforetoggle',
-        'animationend',
-        'scroll',
-        'focus',
-        'blur',
-        'pointerdown',
-        'pointermove',
-        'pointerup',
-        'pointerover',
-        'pointerout',
-        'popstate',
-      ]);
+      expect([...listeners.keys()]).toEqual(['click', 'submit']);
+      expect(rafCallbacks).toHaveLength(2);
       expect(importModule).not.toHaveBeenCalled();
     } finally {
       Object.assign(globalRecord, {
         addEventListener: originals.addEventListener,
         document: originals.document,
         location: originals.location,
+        removeEventListener: originals.removeEventListener,
+        requestAnimationFrame: originals.requestAnimationFrame,
       });
       if (originals.importModule === undefined) {
         delete globalRecord.__kovoInlineImport;

@@ -5,6 +5,7 @@ import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
+import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
 import { query } from './query.js';
@@ -94,9 +95,11 @@ export function createApp<
       withGeneratedMutationTouches,
     ),
   );
+  const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
+  ensureKovoLoaderRuntimeClientModule(clientModules);
 
   return {
-    clientModules: options.clientModules ?? createMemoryVersionedClientModuleRegistry(),
+    clientModules,
     diagnostics: [...routeTableDiagnostics(routes), ...routePrefetchGuardDiagnostics(routes)],
     document: options.document ?? {},
     endpoints: options.endpoints ?? [],

@@ -53,8 +53,9 @@ export function toNodeHandler(
       const response = await handler(request);
       // L16-2 (RFC 8297): thread the request's HTTP version so 103 Early Hints is gated to
       // HTTP/1.1+ clients (an HTTP/1.0 peer cannot parse interim 1xx responses).
+      const acceptEncoding = firstHeaderValue(nodeRequest.headers['accept-encoding']);
       const writeOptions: WriteWebResponseToNodeOptions = {
-        acceptEncoding: firstHeaderValue(nodeRequest.headers['accept-encoding']),
+        ...(acceptEncoding === undefined ? {} : { acceptEncoding }),
         ...(options.compression === undefined ? {} : { compression: options.compression }),
         ...(options.earlyHints === undefined ? {} : { earlyHints: options.earlyHints }),
         httpVersion: nodeRequest.httpVersion,

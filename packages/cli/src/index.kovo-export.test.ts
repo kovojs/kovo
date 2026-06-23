@@ -14,12 +14,17 @@ function appModuleSource(options: {
 }): string {
   return [
     ...(options.prelude ?? []),
+    'const modules = new Map();',
+    'const versionedHref = (module) => `/c/__v/${encodeURIComponent(module.version)}/${module.path.slice("/c/".length)}`;',
     options.exportKind === 'named' ? 'export const app = {' : 'export default {',
     '  clientModules: {',
     "    buildToken() { return 'test'; },",
-    '    entries() { return []; },',
-    "    put() { throw new Error('unused'); },",
-    "    resolve() { return { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 }; },",
+    '    entries() { return [...modules.values()]; },',
+    '    put(module) { const href = versionedHref(module); modules.set(new URL(href, "https://kovo.local").pathname, module); return href; },',
+    '    resolve(href) {',
+    '      const module = modules.get(new URL(href ?? "", "https://kovo.local").pathname);',
+    "      return module ? { body: module.source, headers: { 'Content-Type': module.contentType ?? 'text/javascript; charset=utf-8' }, status: 200 } : { body: 'Not Found', headers: { 'Content-Type': 'text/plain; charset=utf-8' }, status: 404 };",
+    '    },',
     '  },',
     '  diagnostics: [],',
     '  document: {},',
@@ -76,7 +81,7 @@ describe('kovo export', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('kovo-export/v1\nHTML /index.html status=200 bytes=');
       expect(output).toContain(
-        `SUMMARY html=1 clientModules=0 assets=0 diagnostics=0 outDir=${JSON.stringify(outDir)}\n`,
+        `SUMMARY html=1 clientModules=1 assets=0 diagnostics=0 outDir=${JSON.stringify(outDir)}\n`,
       );
       expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
         '<main data-export-cli>CLI export</main>',
@@ -238,7 +243,7 @@ describe('kovo export', () => {
       const output = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(output).toContain('ASSET /assets/app.css status=200 bytes=');
       expect(output).toContain('ASSET /assets/app.js status=200 bytes=');
-      expect(output).toContain('SUMMARY html=1 clientModules=0 assets=2 diagnostics=0');
+      expect(output).toContain('SUMMARY html=1 clientModules=1 assets=2 diagnostics=0');
       expect(readFileSync(join(outDir, 'assets', 'app.css'), 'utf8')).toBe('body{color:red}');
       expect(readFileSync(join(outDir, 'assets', 'app.js'), 'utf8')).toBe('console.log("app")');
     } finally {

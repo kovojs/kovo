@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { kovoLoaderSource } from '@kovojs/browser/internal/inline-loader';
+import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
 
 import { cspSha256, renderContentSecurityPolicy } from './csp.js';
 import {
@@ -21,10 +21,11 @@ const deferredApplyHash = cspSha256(deferredApplyScriptBody);
 const deferredCleanupHash = cspSha256(deferredCleanupScriptBody);
 const deferredApplyScript = `<script data-kovo-csp-hash="${deferredApplyHash}">${deferredApplyScriptBody}</script>`;
 const deferredCleanupScript = `<script data-kovo-csp-hash="${deferredCleanupHash}">${deferredCleanupScriptBody}</script>`;
+const fullInlineLoaderSource = `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`;
 
 describe('server app shell document assembly', () => {
   it('assembles deterministic documents with hints, loader, and query hydration before body', () => {
-    const loaderHash = cspSha256(kovoLoaderSource);
+    const loaderHash = cspSha256(fullInlineLoaderSource);
     const document = renderDocument({
       body: '<main><cart-badge kovo-deps="cart"></cart-badge></main>',
       hints: {
@@ -85,7 +86,7 @@ describe('server app shell document assembly', () => {
   });
 
   it('omits the loader script and loader CSP hash for negotiated loader-free documents', () => {
-    const loaderHash = cspSha256(kovoLoaderSource);
+    const loaderHash = cspSha256(fullInlineLoaderSource);
     const document = renderDocument({
       body: '<main>Product</main>',
       loader: 'omit',
@@ -280,7 +281,7 @@ describe('server app shell document assembly', () => {
   });
 
   it('assembles deferred document streams with chunks before the closing shell', () => {
-    const loaderHash = cspSha256(kovoLoaderSource);
+    const loaderHash = cspSha256(fullInlineLoaderSource);
     const response = renderDeferredDocument({
       body: '<main><kovo-defer target="reviews:p1"></kovo-defer></main>',
       chunks: [
