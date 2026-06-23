@@ -74,9 +74,18 @@ describe('commerce example', () => {
       ]),
     );
     expect(pageHints.jsonScripts.map((script) => script.json)).toEqual([commerceMessageCatalog]);
-    expect(pageHints.links).toMatchObject([
-      { attrs: { href: '/assets/styles.css', rel: 'stylesheet' }, tag: 'link' },
-    ]);
+    expect(pageHints.links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          attrs: expect.objectContaining({
+            as: 'style',
+            href: '/assets/styles.css',
+            rel: 'preload',
+          }),
+          tag: 'link',
+        }),
+      ]),
+    );
     expect(cartPage).toContain('class="kv-style-');
   });
 
@@ -176,9 +185,13 @@ function routeCssBytes(html: string): number {
 }
 
 function linkedCssHrefs(html: string): string[] {
-  return [...html.matchAll(/<link rel="stylesheet" href="([^"]+)">/g)].map(
-    (match) => match[1] ?? '',
-  );
+  return [
+    ...new Set(
+      [...html.matchAll(/<link rel="(?:stylesheet|preload)"(?: as="style")? href="([^"]+)"/g)]
+        .map((match) => match[1] ?? '')
+        .filter(Boolean),
+    ),
+  ];
 }
 
 function inlinedCriticalCssBytes(html: string): number {

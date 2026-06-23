@@ -475,6 +475,7 @@ function installInlineKovoLoader(im) {
       }
 
       doc.head.innerHTML = nextDoc.head.innerHTML;
+      ps();
       xd(doc.documentElement, nextDoc.documentElement);
       const body = doc.body || triggerRoot;
       if (!body) throw Error();
@@ -766,6 +767,26 @@ function installInlineKovoLoader(im) {
       root.querySelectorAll('[on\\:visible]').forEach((el) => to(el, 'visible') && observer.observe(el));
     }
   };
+  const ps = () => {
+    const promote = () => {
+      for (const el of qa(doc, 'link[data-kovo-deferred-style]')) {
+        const href = el.getAttribute?.('href');
+        if (!href) continue;
+        const existing = qa(doc, 'link[rel="stylesheet"][href]').some(
+          (link) => link !== el && link.getAttribute?.('href') === href,
+        );
+        if (existing) {
+          el.remove?.();
+          continue;
+        }
+        el.rel = 'stylesheet';
+        el.removeAttribute?.('data-kovo-deferred-style');
+      }
+    };
+    const raf = globalThis.requestAnimationFrame;
+    if (typeof raf === 'function') raf(() => raf(promote));
+    else setTimeout(promote);
+  };
   for (const event of events) addEventListener(event, dispatch, { capture: true });
   // SPEC.md §4.4: synthesize delegated pointerenter/pointerleave from the bubbling
   // pointerover/pointerout pair, firing only when the pointer crosses the on:* element's
@@ -789,6 +810,7 @@ function installInlineKovoLoader(im) {
   // SPEC.md §4.7: declared triggers are legible in body markup, while the default
   // document emits the loader in <head>. Defer the scan one task so the parser can
   // continue into the body; event delegation above is installed immediately.
+  ps();
   setTimeout(() => tr(doc));
 }
 `;

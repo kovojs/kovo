@@ -50,6 +50,8 @@ export interface I18nCatalog<Messages extends Record<string, string> = Record<st
 export interface StylesheetAsset {
   criticalCss?: string;
   cspHash?: string;
+  /** When criticalCss exists, defer the full stylesheet by default; set false to block. */
+  deferFull?: boolean;
   href: string;
   preload?: boolean;
 }
@@ -63,6 +65,8 @@ export interface StylesheetDeclarationOptions {
   criticalCss?: string | readonly string[];
   /** Optional CSP hash for the inlined critical CSS. */
   cspHash?: string;
+  /** When criticalCss exists, defer the full stylesheet by default; set false to block. */
+  deferFull?: boolean;
   /** Public stylesheet href; local sources derive `/assets/<file>` when omitted. */
   href?: string;
   /** Whether Early Hints should preload the linked stylesheet. */
@@ -153,6 +157,7 @@ export function stylesheet(
   return {
     ...(criticalCss ? { criticalCss } : {}),
     ...(options.cspHash === undefined ? {} : { cspHash: options.cspHash }),
+    ...(options.deferFull === undefined ? {} : { deferFull: options.deferFull }),
     href,
     ...(options.preload === undefined ? {} : { preload: options.preload }),
   };
@@ -205,7 +210,7 @@ export function renderPageHints(
 
 export function renderStylesheetLinks(stylesheets: readonly (string | StylesheetAsset)[]): string {
   return dedupeStylesheets(stylesheets)
-    .map((asset) => `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`)
+    .map((asset) => renderStylesheetLink(asset.href))
     .join('');
 }
 
@@ -238,16 +243,28 @@ function dedupeStylesheets(values: readonly (string | StylesheetAsset)[]): Style
 }
 
 function renderPageStylesheetHint(asset: StylesheetAsset): InlineHtmlWithCsp {
-  const link = `<link rel="stylesheet" href="${escapeAttribute(asset.href)}">`;
+  const link = renderStylesheetLink(asset.href);
   if (!asset.criticalCss) return { html: link };
 
   const cssText = escapeStyleText(asset.criticalCss);
   const hash = asset.cspHash ?? cspSha256(cssText);
+  const fullStylesheet =
+    asset.deferFull === false
+      ? link
+      : `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`;
 
   return {
     csp: { scripts: [], styles: [hash] },
-    html: `<style data-kovo-critical-href="${escapeAttribute(asset.href)}" ${cspHashAttribute(hash)}>${cssText}</style>${link}`,
+    html: `<style data-kovo-critical-href="${escapeAttribute(asset.href)}" ${cspHashAttribute(hash)}>${cssText}</style>${fullStylesheet}`,
   };
+}
+
+function renderStylesheetLink(href: string): string {
+  return `<link rel="stylesheet" href="${escapeAttribute(href)}">`;
+}
+
+function renderDeferredStylesheetLink(href: string): string {
+  return `<link rel="preload" as="style" href="${escapeAttribute(href)}" data-kovo-deferred-style>`;
 }
 
 function renderEarlyHints(

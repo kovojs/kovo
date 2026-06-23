@@ -33,7 +33,7 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     covers default Brotli/gzip negotiation, opt-out, conservative skip cases, and demo built asset
     Brotli/gzip responses.
 
-- [ ] **2. Move the full stylesheet off the first-paint critical path.**
+- [x] **2. Move the full stylesheet off the first-paint critical path.**
   - Current issue: the document inlines critical CSS and also emits a normal render-blocking
     `<link rel="stylesheet" href="/assets/styles...css">`; Lighthouse estimated about 260-300 ms
     render-blocking cost.
@@ -53,6 +53,15 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
   - Verification target: rendered document keeps visible first viewport styled, Lighthouse no
     longer reports the full stylesheet as a render-blocking request, and CSS fallback behavior is
     covered by server/document tests.
+  - Evidence: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/cli/src/index.kovo-build.test.ts examples/commerce/src/app.rendering.test.ts packages/conformance-fixtures/src/server-fixtures.test.ts packages/server/src/node.test.ts`
+    passed, covering page hint rendering, document assembly, dev/build parity, commerce fixtures,
+    and the dev-only HMR compression opt-out needed by default Node compression.
+  - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-navigation.browser.test.ts`
+    passed, covering enhanced-navigation promotion from deferred stylesheet preload to applied
+    stylesheet.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts`
+    and `pnpm --filter @kovojs/browser run check:inline-loader` passed, covering inline loader
+    artifact parity and gzip budget after adding stylesheet promotion.
 
 - [ ] **3. Split the inline loader into a tiny early stub plus deferred runtime.**
   - Current issue: the inline loader is about 23 KB in the head, and Lighthouse reported about
@@ -132,6 +141,12 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
 
 - [x] 2026-06-22 compression slice: `pnpm exec vitest --run packages/server/src/node.test.ts scripts/demo-session/serve.test.mjs`
   passed.
+- [x] 2026-06-22 deferred stylesheet slice: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/vite-dev.test.ts packages/cli/src/index.kovo-build.test.ts examples/commerce/src/app.rendering.test.ts packages/conformance-fixtures/src/server-fixtures.test.ts packages/server/src/node.test.ts`
+  passed.
+- [x] 2026-06-22 deferred stylesheet browser slice: `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-navigation.browser.test.ts`
+  passed.
+- [x] 2026-06-22 inline loader artifact slice: `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts`
+  and `pnpm --filter @kovojs/browser run check:inline-loader` passed.
 - [x] 2026-06-22 diff hygiene: `git diff --check` passed.
 
 ## Repeatable Perf Harness

@@ -1106,8 +1106,12 @@ function readKovoAppShellViteDevNodeHandler(
     );
   }
 
-  const nodeOptions =
-    options.earlyHints === undefined ? undefined : { earlyHints: options.earlyHints };
+  // SPEC.md §9.5 dev HMR injection buffers the Node response as text before writing it.
+  // Keep this path unencoded; the production/default Node adapter still compresses by default.
+  const nodeOptions = {
+    compression: false,
+    ...(options.earlyHints === undefined ? {} : { earlyHints: options.earlyHints }),
+  };
   const nodeHandler = toNodeHandler(createRequestHandler(app), nodeOptions);
   return (request, response) => nodeHandler(request, response);
 }
