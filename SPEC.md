@@ -422,6 +422,44 @@ query cart:
 
 Like KV310, the check runs at two altitudes off one derived set: in the compiler during lowering (editor-visible) and as `kovo check coverage` (CI/agents). Together with §10.6 and the touch graph, a mutation's full dataflow is exhaustiveness-checked edge by edge: write → invalidated queries (§11.1) → optimistic prediction (KV310) → every dependent DOM position (KV311) → fragment reconcile (§9.1). No edge from this client's own statically analyzable modeled writes may be silently uncovered; raw-SQL seams, DB-engine fan-outs, wall-clock freshness, and cross-session liveness must be declared through their checked escape hatches or treated as outside the v1 automatic freshness guarantee.
 
+### 4.10 Registry-bounded dynamic rendering
+
+Some content is authored by an LLM or stored in a database as **rich text that embeds components**
+— well-formed XML tags drawn from a fixed vocabulary (`<kovo-chart title="Q3">…</kovo-chart>`).
+The tree's _shape_ is unknown until runtime, but the _set_ of renderable components is fixed ahead of
+time. This is the one place the static composition model of §4.5 does not reach — the call graph
+cannot be scanned because it is data — so v1 provides a bounded runtime primitive rather than an
+app-authored dynamic dispatch (which remains KV230/§4.5).
+
+`renderTree(registry, nodes)` renders such a tree **server-side and once** (the §4.5 posture: no
+client re-render of the dynamic shape). It is framework code, not lowered app TSX, so the static
+ban does not apply; the bound is the registry:
+
+- **The registry is the pre-approval boundary.** `renderRegistry({...})` is a closed map of tag →
+  `{ component, props }`. A tag with no entry can never render a component, so the approved set is
+  structural, not conventional. Registered components must be server-renderable; an `isomorphic`
+  component (§4.8) defeats the lazy posture (it ships its render module) and is not a valid entry.
+- **Parsing is the trust boundary.** The untrusted string is parsed into a plain-data AST and is
+  **never reconstituted into HTML** — there is no markup sink for an injection to reach.
+  `parseComponentXml` is pure and side-effect-free, so validation may run at write time and the AST
+  stored, leaving render-time on already-trusted data.
+- **Output is safe by construction (§4.8).** The walker HTML-escapes every text node itself (the
+  bare JSX runtime inserts a child verbatim — escaping dynamic text is otherwise the compiler's job),
+  passes only schema-declared props to a component (attributes outside the `s.object` schema are
+  dropped, never spread through), and never produces `trustedHtml`/`trustedUrl`. Attribute and URL
+  emission still pass through the §4.8 attribute-escape, URL-scheme allowlist, and `on*`/`srcdoc`
+  refusal. The XSS review therefore reduces to one invariant: no registered component binds untrusted
+  data into a `trustedHtml`/`trustedUrl` sink.
+- **Attributes validate against the component's own schema (§6.3).** The same `s.object({...})` that
+  types the component validates the LLM-supplied attributes — one source of truth. Invalid attributes
+  are dropped (and defaulted where the schema declares a default); a tag whose required attributes
+  cannot be satisfied, or an unknown tag, renders its children with the wrapper dropped rather than
+  failing the whole document.
+
+Lazy loading needs no new mechanism: because the tree renders to light-DOM HTML on the server, an
+unregistered-or-unused component ships no client JS, and a rendered component's handlers still load
+on first interaction through the §4.4 loader.
+
 ---
 
 ## 5. Compiler
