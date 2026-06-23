@@ -73,6 +73,10 @@ Current command output after completed splits:
     to `packages/drizzle/src/static/schema.ts`.
     Evidence: `packages/drizzle/src/static/schema.ts` is 1,196 LoC and
     `packages/drizzle/src/static.ts` is reduced to 4,793 LoC; `pnpm exec vitest --run packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/derive.test.ts` passed 4 files / 126 tests; `git diff --check` passed.
+  - [x] Extract ts-morph project setup and project function extraction assembly to
+    `packages/drizzle/src/static/project-setup.ts`.
+    Evidence: `packages/drizzle/src/static/project-setup.ts` is 468 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 4,386 LoC; `pnpm exec vitest --run packages/drizzle/src/index.tables-factories-wrapped.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 4 files / 72 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
