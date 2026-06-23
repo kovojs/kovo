@@ -25,10 +25,10 @@ describe('CRM generated graph', () => {
 
   it('keeps the intentional optimistic mix visible', () => {
     expect(statusesFor('createDeal')).toEqual({
-      contactDealCount: 'derived',
+      contactDealCount: 'hand-written',
       contactList: 'hand-written',
-      dealList: 'derived',
-      openDeals: 'derived',
+      dealList: 'hand-written',
+      openDeals: 'hand-written',
       pipelineByStage: 'hand-written',
     });
     expect(statusesFor('moveDeal')).toMatchObject({

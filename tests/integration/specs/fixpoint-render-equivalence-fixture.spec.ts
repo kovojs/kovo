@@ -80,6 +80,9 @@ function renderLoweredComponent(loweredSource: string): string {
           },
         };
       }
+      if (specifier === '@kovojs/server/internal/html') {
+        return { escapeText };
+      }
       if (specifier === '@kovojs/server/jsx-runtime') {
         return {
           Fragment(props: { children?: unknown }) {
@@ -153,6 +156,10 @@ function escapeAttribute(value: string): string {
     .replaceAll('"', '&quot;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+}
+
+function escapeText(value: unknown): string {
+  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 interface JsxProps {

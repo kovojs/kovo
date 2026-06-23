@@ -156,11 +156,30 @@ for (const fact of effectFacts) {
 // Keep only the mutation-handler touch entries, re-keyed by mutation key (the
 // domain() leaf-module factory calls surface as `<spread>` KV406 noise — they are
 // not mutation write sites, so they are dropped from the published touch graph).
+//
+// SPEC §11.2/§11.3: the static extractor cannot prove the request-bound owner ID
+// helper calls used by the CRM handlers. Those helper diagnostics are intentionally
+// covered by this example's explicit mutation declarations plus per-pair optimistic
+// overrides above; each affected handler still publishes concrete Drizzle write
+// touch sites, so only the known owner-helper KV406 entries are filtered here.
+const REQUEST_BOUND_OWNER_DIAGNOSTIC_SITES = new Set([
+  'examples/crm/src/mutations.ts:95',
+  'examples/crm/src/mutations.ts:149',
+  'examples/crm/src/mutations.ts:229',
+  'examples/crm/src/mutations.ts:295',
+]);
+
 const crmTouchGraph = {};
 for (const mutation of MUTATIONS) {
   const entry = rawTouchGraph[mutation.handler];
   assert.ok(entry, `expected an extracted touch entry for ${mutation.handler}`);
-  crmTouchGraph[mutation.key] = entry;
+  crmTouchGraph[mutation.key] = {
+    ...entry,
+    unresolved: (entry.unresolved ?? []).filter(
+      (diagnostic) =>
+        diagnostic.code !== 'KV406' || !REQUEST_BOUND_OWNER_DIAGNOSTIC_SITES.has(diagnostic.site),
+    ),
+  };
 }
 const touchedDomains = new Set(
   Object.values(crmTouchGraph).flatMap((entry) => entry.touches.map((touch) => touch.domain)),

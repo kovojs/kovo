@@ -1328,7 +1328,7 @@ function shouldEscapeStaticTextExpression(
   knownQueries: ReadonlySet<string>,
 ): boolean {
   if (expression.solePropertyAccessPath !== undefined) return true;
-  if (isExplicitHtmlCompositionExpression(expression.expression)) return false;
+  if (isExplicitHtmlCompositionExpression(expression, model)) return false;
   const reactiveRoots = new Set(
     expression.propertyAccesses
       .map((access) => queryNameFromPath(access.path))
@@ -1344,8 +1344,17 @@ function shouldEscapeStaticTextExpression(
   return expression.references.some((reference) => renderInputNames.has(reference));
 }
 
-function isExplicitHtmlCompositionExpression(expression: string): boolean {
-  return expression.includes('.definition.render(') || expression.trim().startsWith('trustedHtml(');
+function isExplicitHtmlCompositionExpression(
+  expression: JsxExpressionModel,
+  model: ComponentModuleModel,
+): boolean {
+  const call = model.calls.find(
+    (item) => item.start === expression.start && item.end === expression.end,
+  );
+  if (!call) return false;
+  if (call.name === 'trustedHtml') return true;
+  const parts = call.name.split('.');
+  return parts.at(-2) === 'definition' && parts.at(-1) === 'render';
 }
 
 function mergeStyle(

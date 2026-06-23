@@ -73,7 +73,9 @@ export const ProductPage = component({
     expect(serverSource).toContain('data-derive-attr="title"');
     expect(serverSource).toContain('data-bind:hidden="/c/__v/');
     expect(serverSource).toContain('/product-page.client.js#ProductPage$a_hidden_derive');
-    expect(serverSource).toContain('Product <span data-bind="product.name">{product.name}</span>');
+    expect(serverSource).toContain(
+      'Product <span data-bind="product.name">{escapeText(product.name)}</span>',
+    );
     expect(serverSource).toContain('#ProductPage$span_text_derive');
     expect(serverSource).toContain(
       '<img data-derive="product.ProductPage$img_style_derive" data-derive-attr="style" src="/hero.png"',

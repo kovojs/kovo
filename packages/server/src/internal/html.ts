@@ -12,7 +12,6 @@ export {
   type ComponentMutationFailureRenderOptions,
   type ComponentRenderOptions,
 } from '../component-render.js';
-export { renderContentSecurityPolicy } from '../csp.js';
 export {
   createDeferredRegionChunkCollector,
   defer,

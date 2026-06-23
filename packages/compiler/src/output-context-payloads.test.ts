@@ -293,7 +293,8 @@ export const PayloadCard = component({
         ],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { derive } from '@kovojs/browser/generated';
+        return \`import { escapeText } from '@kovojs/server/internal/html';
+      import { derive } from '@kovojs/browser/generated';
       import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 
 
@@ -306,7 +307,7 @@ export const PayloadCard = component({
         queries: { product: productQuery },
         render: ({ product }) => (
           <article data-bind:title="product.PayloadCard$article_title_derive" data-bind:aria-label="product.PayloadCard$article_aria_label_derive" data-bind:aria-description="product.PayloadCard$article_aria_description_derive" kovo-c="payload-card" kovo-deps="product" kovo-fragment-target="payload-card" kovo-live-component="payload-card/payload-card">
-            <h2 data-bind="product.name">{product.name}</h2>
+            <h2 data-bind="product.name">{escapeText(product.name)}</h2>
           </article>
         ),
       });

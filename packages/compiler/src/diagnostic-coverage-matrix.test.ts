@@ -476,7 +476,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "severity": "error",
           "start": {
             "column": 14,
-            "line": 5,
+            "line": 6,
           },
         },
         {
@@ -867,7 +867,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "severity": "error",
           "start": {
             "column": 30,
-            "line": 5,
+            "line": 6,
           },
         },
         {

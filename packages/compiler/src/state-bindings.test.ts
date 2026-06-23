@@ -24,7 +24,9 @@ export const SwitchDemo = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain('<output data-bind="state.checked">{state.checked}</output>');
+    expect(serverSource).toContain(
+      '<output data-bind="state.checked">{escapeText(state.checked)}</output>',
+    );
     expect(result.queryUpdatePlans).toEqual([]);
     expect(result.updateCoverage).toEqual([
       {
@@ -58,7 +60,7 @@ export const ToggleDemo = component({
     const serverSource = result.files[0]?.source ?? '';
 
     expect(serverSource).toContain(
-      'Toggle is <span data-bind="state.pressed">{state.pressed}</span>',
+      'Toggle is <span data-bind="state.pressed">{escapeText(state.pressed)}</span>',
     );
     expect(result.queryUpdatePlans).toEqual([]);
     expect(result.updateCoverage).toEqual([

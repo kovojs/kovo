@@ -456,9 +456,7 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalHtmlApi.renderRouteDocumentResponse).toBe(
       documentCoreApi.renderRouteDocumentResponse,
     );
-    expect(packageInternalHtmlApi.renderContentSecurityPolicy).toBe(
-      cspApi.renderContentSecurityPolicy,
-    );
+    expect(packageInternalHtmlApi).not.toHaveProperty('renderContentSecurityPolicy');
     expect(packageInternalHtmlApi.renderComponent).toBe(componentRenderApi.renderComponent);
     expect(packageInternalHtmlApi.renderDeferredDocument).toBe(
       documentCoreApi.renderDeferredDocument,

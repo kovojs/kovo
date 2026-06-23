@@ -525,7 +525,9 @@ export const CartBadge = component({
 
     expect(serverSource).toContain('<button title={"cart.count"}>Checkout</button>');
     expect(serverSource).toContain('<span>{"cart.count"}</span>');
-    expect(serverSource).toContain('<output data-bind="cart.count">{cart.count}</output>');
+    expect(serverSource).toContain(
+      '<output data-bind="cart.count">{escapeText(cart.count)}</output>',
+    );
     expect(serverSource).not.toContain('button_title_derive');
     expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
       [
@@ -569,7 +571,7 @@ export const CartBadge = component({
     const serverSource = result.files[0]?.source ?? '';
     const clientSource = result.files[1]?.source ?? '';
 
-    expect(serverSource).toContain('<span data-bind="cart.count">{cart.count}</span>');
+    expect(serverSource).toContain('<span data-bind="cart.count">{escapeText(cart.count)}</span>');
     expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
       [
         {
@@ -623,7 +625,9 @@ export const CartBadge = component({
     });
     const serverSource = result.files[0]?.source ?? '';
 
-    expect(serverSource).toContain('Total: <span data-bind="cart.count">{cart.count}</span> items');
+    expect(serverSource).toContain(
+      'Total: <span data-bind="cart.count">{escapeText(cart.count)}</span> items',
+    );
     expect(result.queryUpdatePlans).toMatchInlineSnapshot(`
       [
         {
