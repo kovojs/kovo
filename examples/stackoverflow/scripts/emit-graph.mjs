@@ -166,18 +166,18 @@ const shapeByQuery = new Map(shapes.map((shape) => [shape.query, shape]));
 const soQueryDomains = queryDomainsFromFacts(queryFacts);
 const invalidatedQueriesByMutation = {
   postQuestion: [
-    { query: 'questionList', status: 'await-fragment' },
+    { query: 'questionList', status: 'derived' },
     { query: 'questionDetail', status: 'await-fragment' },
   ],
   postAnswer: [
-    { query: 'questionList', status: 'await-fragment' },
-    { query: 'answerList', status: 'await-fragment' },
+    { query: 'questionList', status: 'derived' },
+    { query: 'answerList', status: 'derived' },
     { query: 'questionAnswers', status: 'await-fragment' },
     { query: 'questionDetail', status: 'await-fragment' },
   ],
   voteUp: [
-    { query: 'questionList', status: 'await-fragment' },
-    { query: 'questionScore', status: 'await-fragment' },
+    { query: 'questionList', status: 'derived' },
+    { query: 'questionScore', status: 'derived' },
     { query: 'questionDetail', status: 'await-fragment' },
   ],
 };

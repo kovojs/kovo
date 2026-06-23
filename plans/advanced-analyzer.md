@@ -388,7 +388,7 @@ from table-level fallback to scoped or exact optimism.
   - Evidence when complete: tenant/session fixture proves precise invalidation without target-key
     leakage.
 
-- [ ] **Phase 4: Deriver support for scoped exact-row matches.**
+- [x] **Phase 4: Deriver support for scoped exact-row matches.**
   - Update `deriveOptimistic` and codegen to consume match proof objects.
   - Re-enable derived optimism for scoped row updates where query shape already ships the affected
     data.
@@ -397,8 +397,10 @@ from table-level fallback to scoped or exact optimism.
       extracts a session-scoped `questionList` rowset and `voteUp` update from source, derives an
       `update-row` patch matched only by public `id`, and verifies generated optimistic source omits
       private `sessionId` material.
-  - Evidence when complete: Stack Overflow `voteUp` can derive `questionList`/`questionScore` when
-    query shape permits it, or punts only for a specific non-shape limitation.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts examples/stackoverflow/src/kovo-graph.test.ts`
+    covers the real Stack Overflow `voteUp` and `postAnswer` guarded-session insert-then-update
+    pattern extracting public keys instead of `KV409`, and `node examples/stackoverflow/scripts/emit-graph.mjs --check`
+    verifies generated `voteUp` optimism derives `questionList` and `questionScore`.
 
 - [ ] **Phase 5: Explain and diagnostic polish.**
   - `kovo explain --optimistic` and `kovo check` should print proof levels, private scope, and named
@@ -451,10 +453,16 @@ from table-level fallback to scoped or exact optimism.
 
 ## Definition of Done
 
-- [ ] Stack Overflow's shared-db server can keep session-scoped composite predicates without
+- [x] Stack Overflow's shared-db server can keep session-scoped composite predicates without
       `KV409` notices for those exact-row updates.
-- [ ] Derived optimism works for at least one scoped composite-key update whose query shape is
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts examples/stackoverflow/src/kovo-graph.test.ts`
+    verifies Stack Overflow `postAnswer` and `voteUp` scoped composite updates extract
+    `arg:questionId`/`arg:targetId` touches and `kovo check` returns `OK`.
+- [x] Derived optimism works for at least one scoped composite-key update whose query shape is
       otherwise inside the §10.5 grammar.
+  - Evidence: `node examples/stackoverflow/scripts/emit-graph.mjs --check` verifies the real Stack
+    Overflow `voteUp` generated optimistic module derives `questionList` and `questionScore` from
+    the scoped `sessionId,id` update shape.
 - [ ] Punts remain named, stable, and visible in `kovo explain --optimistic`.
 - [ ] Runtime cross-checks still enforce `observed ⊆ static ∪ declared`.
 - [ ] No private session/tenant/guard key material appears in browser-visible query instance keys,
