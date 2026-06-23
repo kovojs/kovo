@@ -78,9 +78,8 @@ describe('commerce example', () => {
       expect.arrayContaining([
         expect.objectContaining({
           attrs: expect.objectContaining({
-            as: 'style',
             href: '/assets/styles.css',
-            rel: 'preload',
+            rel: 'stylesheet',
           }),
           tag: 'link',
         }),
