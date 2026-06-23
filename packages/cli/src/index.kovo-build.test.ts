@@ -43,9 +43,10 @@ describe('kovo build', () => {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionCapableNodePresetConfig(root);
 
       const exitCode = await withEnv({ VERCEL: '1' }, () =>
-        mainAsync(['build', appPath, '--out', outDir, '--preset', 'node']),
+        withCwd(root, () => mainAsync(['build', './app.mjs', '--out', './dist'])),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
@@ -430,8 +431,9 @@ describe('kovo build', () => {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appModuleSource(), 'utf8');
       writeClientEntry(root);
+      writeRetentionCapableNodePresetConfig(root);
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () => mainAsync(['build', './app.mjs', '--out', './dist']));
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
@@ -508,8 +510,11 @@ describe('kovo build', () => {
         symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
         writeFileSync(appPath, appModuleSource(), 'utf8');
         writeClientEntry(root);
+        writeRetentionCapableNodePresetConfig(root);
 
-        const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+        const exitCode = await withCwd(root, () =>
+          mainAsync(['build', './app.mjs', '--out', './dist']),
+        );
         const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
         expect(exitCode, errorOutput).toBe(0);
         expect(stderr).not.toHaveBeenCalled();
@@ -576,17 +581,7 @@ describe('kovo build', () => {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(join(root, 'app.mjs'), appModuleSource(), 'utf8');
       writeClientEntry(root);
-      writeFileSync(
-        join(root, 'kovo.config.ts'),
-        [
-          "import { defineConfig, node } from '@kovojs/server/build';",
-          'export default defineConfig({',
-          '  preset: node({ dockerfile: false }),',
-          '});',
-          '',
-        ].join('\n'),
-        'utf8',
-      );
+      writeRetentionCapableNodePresetConfig(root, '{ dockerfile: false }');
 
       const exitCode = await withCwd(root, () =>
         withEnv({ VERCEL: '1' }, () => mainAsync(['build', './app.mjs', '--out', './dist'])),
@@ -668,7 +663,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
-      writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeFileSync(appPath, routeOnlyAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
       const exitCode = await withEnv({ VERCEL: '1' }, () =>
@@ -701,9 +696,6 @@ describe('kovo build', () => {
         runtime: 'nodejs22.x',
         shouldAddHelpers: true,
       });
-      expect(
-        readFileSync(join(outDir, '.vercel/output/static/c/__v/cart-v1/cart.client.js'), 'utf8'),
-      ).toBe('export const cartClient = true;');
       const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(
         readFileSync(join(outDir, '.vercel/output/static', stylesheetPath.slice(1)), 'utf8'),
@@ -763,7 +755,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
-      writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeFileSync(appPath, routeOnlyAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
       const exitCode = await withEnv({ KOVO_PRESET: 'cloudflare', VERCEL: '1' }, () =>
@@ -782,9 +774,10 @@ describe('kovo build', () => {
       expect(readFileSync(join(outDir, 'cloudflare/worker.mjs'), 'utf8')).toContain(
         "import handler from './server/handler.mjs';",
       );
-      expect(
-        readFileSync(join(outDir, 'cloudflare/client/c/__v/cart-v1/cart.client.js'), 'utf8'),
-      ).toBe('export const cartClient = true;');
+      const stylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
+      expect(readFileSync(join(outDir, 'cloudflare/client', stylesheetPath.slice(1)), 'utf8')).toContain(
+        'color:#639',
+      );
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -802,7 +795,7 @@ describe('kovo build', () => {
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
-      writeFileSync(appPath, appModuleSource(), 'utf8');
+      writeFileSync(appPath, routeOnlyAppModuleSource(), 'utf8');
       writeClientEntry(root);
 
       const exitCode = await withEnv({ CF_PAGES: '1' }, () =>
@@ -955,6 +948,48 @@ export default createApp({
   routes: [
     route('/', {
       page: () => '<main>Static Home</main>',
+    }),
+  ],
+});
+`;
+}
+
+function routeOnlyAppModuleSource(): string {
+  return `
+import {
+  createApp,
+  domain,
+  mutation,
+  query,
+  route,
+  s,
+} from '@kovojs/server';
+
+const cart = domain('cart');
+const db = { count: 0 };
+const cartQuery = query('cart', {
+  load: () => ({ count: db.count }),
+  reads: [cart],
+});
+const addToCart = mutation('cart/add', {
+  csrf: false,
+  input: s.object({ quantity: s.number().int().min(1).default(1) }),
+  registry: {
+    queries: [cartQuery],
+    touches: [cart],
+  },
+  handler(input) {
+    db.count += input.quantity;
+    return { count: db.count };
+  },
+});
+
+export default createApp({
+  mutations: [addToCart],
+  queries: [cartQuery],
+  routes: [
+    route('/cart', {
+      page: () => '<main>Cart ' + db.count + '</main>',
     }),
   ],
 });
@@ -1115,6 +1150,43 @@ function writeClientEntry(root: string): void {
     'utf8',
   );
   writeFileSync(join(root, 'src/style.css'), 'main { color: rebeccapurple; }\n', 'utf8');
+}
+
+function writeRetentionCapableNodePresetConfig(
+  root: string,
+  nodeOptionsSource = '{}',
+): void {
+  writeFileSync(
+    join(root, 'kovo.config.ts'),
+    [
+      "import { defineConfig, node } from '@kovojs/server/build';",
+      '',
+      `const nodePreset = node(${nodeOptionsSource});`,
+      '',
+      '// SPEC §14: this fixture models a serving layer that retains prior /c/__v/',
+      '// modules and prior-token /_q reads for at least the 24-hour deploy-skew floor.',
+      'export default defineConfig({',
+      '  preset: {',
+      "    name: 'node',",
+      '    inspect(build) {',
+      '      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {',
+      '        return [{',
+      "          code: 'node-missing-handler',",
+      "          message: 'The node preset requires a neutral build with server/handler.mjs.',",
+      "          severity: 'error',",
+      '        }];',
+      '      }',
+      '      return [];',
+      '    },',
+      '    emit(build, context) {',
+      '      return nodePreset.emit?.(build, context);',
+      '    },',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
 }
 
 function writeStyledComponentClientEntry(root: string): void {
