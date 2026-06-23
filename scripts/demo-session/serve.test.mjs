@@ -88,6 +88,26 @@ describe('demo-session built asset serving', () => {
       await server.close();
     }
   });
+
+  it('serves a favicon so browsers do not fall through to app dispatch', async () => {
+    const server = await serveAssets(tempDist({}));
+
+    try {
+      const response = await requestAsset(server.origin, '/favicon.ico', {
+        'Accept-Encoding': 'br,gzip',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.headers).toMatchObject({
+        'cache-control': 'public, max-age=86400',
+        'content-type': 'image/x-icon',
+      });
+      expect(response.headers['content-encoding']).toBeUndefined();
+      expect(response.body.subarray(0, 4)).toEqual(Buffer.from([0x00, 0x00, 0x01, 0x00]));
+    } finally {
+      await server.close();
+    }
+  });
 });
 
 function tempDist(files) {

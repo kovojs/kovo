@@ -13,7 +13,7 @@ export interface DeferredQueryChunk {
 }
 
 /** @internal */
-export type DeferredPriority = 'high' | 'normal' | 'low' | number;
+export type DeferredPriority = 'high' | 'normal' | 'low' | 'visible' | number;
 
 /** @internal */
 export interface DeferredFragmentChunk {
@@ -70,7 +70,8 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
   // collides we keep `baseBoundary` verbatim so the canonical wire byte layout (the golden
   // `defer-stream.http` fixture) is unchanged; only a real collision re-rolls to a
   // high-entropy `<base>-<token>` variant and re-checks.
-  const serializedChunks = sortDeferredChunks(options.chunks).map((chunk) => [
+  const sortedChunks = sortDeferredChunks(options.chunks);
+  const serializedChunks = sortedChunks.map((chunk) => [
     ...renderDeferredQueryChunks(chunk.queries ?? []),
     ...chunk.fragments.map(renderDeferredFragmentChunk),
   ]);
@@ -84,11 +85,8 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
   // over the inline content, not the wrapping tag) and each `<script>` is stamped with
   // the matching `data-kovo-csp-hash` so a strict hash-CSP admits them; the hashes are
   // surfaced on `csp` so `renderDeferredDocument` merges them into `document.csp`.
-  const applyScriptBody = `let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()`;
-  const cleanupScriptBody = `for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()`;
-  const applyHash = cspSha256(applyScriptBody);
+  const cleanupScriptBody = `for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()`;
   const cleanupHash = cspSha256(cleanupScriptBody);
-  const deferredChunkApplyScript = `<script ${cspHashAttribute(applyHash)}>${applyScriptBody}</script>`;
   const deferredCloseCleanupScript = `<script ${cspHashAttribute(cleanupHash)}>${cleanupScriptBody}</script>`;
   // SPEC §9:769 ("deferred query JSON is guaranteed to arrive before or with its
   // consumers") is held INTRA-CHUNK: each chunk emits its queries before its fragments,
@@ -101,8 +99,16 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
   // within-chunk priority sort would reorder same-target append/replace pairs (pagination
   // rows out of order, append-before-cleanup). Preserve author order INSIDE a chunk; only
   // chunk-level priority ordering remains (documented behavior).
-  const chunks = serializedChunks.map((chunkLines) =>
-    [`--${boundary}`, ...chunkLines, deferredChunkApplyScript].join('\n'),
+  const applyScriptBodies = sortedChunks.map((chunk) =>
+    deferredChunkApplyScriptBody(boundary, visibleFragmentTargets(chunk)),
+  );
+  const applyHashes = applyScriptBodies.map(cspSha256);
+  const chunks = serializedChunks.map((chunkLines, index) =>
+    [
+      `--${boundary}`,
+      ...chunkLines,
+      `<script ${cspHashAttribute(applyHashes[index] ?? '')}>${applyScriptBodies[index] ?? ''}</script>`,
+    ].join('\n'),
   );
 
   return {
@@ -114,7 +120,7 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
       options.closeHtml ?? '',
     ].join('\n'),
     // Dedupe: the apply hash repeats once per chunk but the CSP hash list is a set.
-    csp: { scripts: [...new Set([applyHash, cleanupHash])], styles: [] },
+    csp: { scripts: [...new Set([...applyHashes, cleanupHash])], styles: [] },
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
     },
@@ -167,6 +173,24 @@ function randomBoundaryToken(): string {
   return randomBytes(16).toString('hex');
 }
 
+function deferredChunkApplyScriptBody(
+  boundary: string,
+  visibleTargets: readonly string[],
+): string {
+  const collectBody = `var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}`;
+  if (visibleTargets.length === 0) {
+    return `${collectBody}globalThis.__kovo_a?.(e.join("\\n"));s.remove()`;
+  }
+
+  return `${collectBody}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){for(var v of ${JSON.stringify(visibleTargets)}){var d=[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
+}
+
+function visibleFragmentTargets(chunk: DeferredStreamChunk): readonly string[] {
+  return chunk.fragments
+    .filter((fragment) => fragment.priority === 'visible')
+    .map((fragment) => fragment.target);
+}
+
 function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
   return renderFragmentWireHtml({
     html: fragment.html,
@@ -217,6 +241,7 @@ function priorityRank(priority: DeferredPriority | undefined): number {
     case 'high':
       return 1;
     case 'low':
+    case 'visible':
       return -1;
     case 'normal':
     case undefined:

@@ -6,13 +6,17 @@ import { renderDeferredStream } from './deferred-stream.js';
 // G1 (bugs-part3 CSP-1): the apply/cleanup scripts now carry a CSP hash attribute and
 // their bodies are hashed for `response.csp`.
 const applyScriptBody =
-  'let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
+  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
 const cleanupScriptBody =
-  'for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
+  'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
+const visibleApplyScriptBody =
+  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){for(var v of ["rail:p1"]){var d=[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()';
 const applyHash = cspSha256(applyScriptBody);
 const cleanupHash = cspSha256(cleanupScriptBody);
+const visibleApplyHash = cspSha256(visibleApplyScriptBody);
 const applyScript = `<script data-kovo-csp-hash="${applyHash}">${applyScriptBody}</script>`;
 const cleanupScript = `<script data-kovo-csp-hash="${cleanupHash}">${cleanupScriptBody}</script>`;
+const visibleApplyScript = `<script data-kovo-csp-hash="${visibleApplyHash}">${visibleApplyScriptBody}</script>`;
 
 describe('deferred streams', () => {
   it('renders deferred streams with shell first and query JSON before fragments', () => {
@@ -67,9 +71,9 @@ describe('deferred streams', () => {
     });
 
     const applyBody =
-      'let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--x-b"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
+      'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--x-b"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
     const cleanupBody =
-      'for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--x-b"))n.remove();document.currentScript.remove()';
+      'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--x-b"))n.remove();document.currentScript.remove()';
     const applyHashXb = cspSha256(applyBody);
     const cleanupHashXb = cspSha256(cleanupBody);
 
@@ -125,6 +129,37 @@ describe('deferred streams', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  it('renders visible deferred chunks with a viewport-gated apply script', () => {
+    const result = renderDeferredStream({
+      chunks: [
+        {
+          fragments: [
+            {
+              html: '<aside>Rail ready</aside>',
+              priority: 'visible',
+              target: 'rail:p1',
+            },
+          ],
+          priority: 'visible',
+        },
+      ],
+      shell: '<!doctype html><html><body><kovo-defer target="rail:p1"></kovo-defer>',
+    });
+
+    expect(result.body).toBe(
+      [
+        '<!doctype html><html><body><kovo-defer target="rail:p1"></kovo-defer>',
+        '--kovo-boundary',
+        '<kovo-fragment target="rail:p1" priority="visible"><aside>Rail ready</aside></kovo-fragment>',
+        visibleApplyScript,
+        '--kovo-boundary--',
+        cleanupScript,
+        '',
+      ].join('\n'),
+    );
+    expect(result.csp.scripts).toEqual([visibleApplyHash, cleanupHash]);
   });
 
   // L2-deferred-2 (bugs-part3): same-target append/replace fragments in one chunk keep

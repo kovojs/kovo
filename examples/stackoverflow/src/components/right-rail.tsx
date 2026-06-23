@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import { defer } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { tagHref } from './chrome.js';
@@ -259,7 +260,13 @@ export function withRail(main: unknown, rail: string): string {
   return (
     <div style={railStyles.columns}>
       <div style={railStyles.mainCol}>{main}</div>
-      {rail}
+      {defer({
+        fallback:
+          '<aside aria-busy="true" style="flex:0 0 300px;min-height:760px;width:300px" data-kovo-region-placeholder="right-rail"></aside>',
+        priority: 'visible',
+        render: () => rail,
+        target: 'stackoverflow-right-rail',
+      })}
     </div>
   );
 }

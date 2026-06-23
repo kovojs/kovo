@@ -128,7 +128,7 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     chrome/detail/rail CSS present, users/profile/tags/tagged/list/card CSS absent, and the rendered
     document carrying only the app/base plus question-detail route critical stylesheet hints.
 
-- [ ] **6. Defer below-the-fold document content.**
+- [x] **6. Defer below-the-fold document content.**
   - Current issue: initial HTML includes the right rail, duplicated hot-question lists, watched
     tags, full answers, and answer composer before first paint.
   - Direction: send header and question content first; stream or defer answers, composer, and rail.
@@ -148,14 +148,18 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     browser tests prove `visible` loads when near viewport and does not load eagerly; mutation tests
     prove deferred live targets refresh correctly after submits; CSS tests prove deferred-region
     styles arrive before/with inserted markup.
-  - Partial evidence: `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/server/src/route.test.ts`
-    and `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts` passed for
-    `critical` and streamed `after-paint` region behavior, including Stack Overflow question
-    answers/composer deferral and no-JS document completeness. `visible` behavior is still open.
+  - Evidence: `pnpm exec vitest --run packages/server/src/deferred-stream.test.ts packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/server/src/route.test.ts`
+    and `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/apply-deferred-stream.browser.test.ts packages/browser/src/inline-loader-bootstrap.browser.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts`
+    passed for `critical`, streamed `after-paint`, and viewport-gated `visible` region behavior.
+  - Evidence: `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts`
+    passed with Stack Overflow question answers/composer deferred as `after-paint`, right rail
+    deferred as `visible`, and no-JS document completeness retained.
 
-- [ ] **7. Fix the favicon 403.**
+- [x] **7. Fix the favicon 403.**
   - Current issue: `/favicon.ico` returns 403 and creates an avoidable failed request after load.
   - Direction: add a valid favicon or explicit icon link.
+  - Evidence: `pnpm exec vitest --run scripts/demo-session/serve.test.mjs` passed, covering
+    `/favicon.ico` as a 200 `image/x-icon` response before app dispatch.
 
 ## Latest Verification
 
@@ -190,6 +194,13 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
       `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts` passed.
 - [x] 2026-06-23 after-paint deferred region lint/type: `vp check --no-fmt packages/server/src/deferred-region.ts packages/server/src/jsx-context.ts packages/server/src/route.ts packages/server/src/response.ts packages/server/src/document-core.ts packages/server/src/api/rendering.ts packages/server/src/index.ts packages/server/src/internal/html.ts packages/server/src/api/app.test.ts packages/server/src/app-document.test.ts packages/browser/src/inline-loader-build.ts packages/browser/src/inline-loader.ts packages/browser/src/inline-loader-bootstrap.browser.test.ts examples/stackoverflow/src/components/question-detail.tsx examples/stackoverflow/src/interactive-app.test.ts plans/fcp-performance.md`
       passed with only the existing generated inline-loader length warning.
+- [x] 2026-06-23 visible region + favicon slice: `pnpm exec vitest --run packages/server/src/deferred-stream.test.ts packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/server/src/route.test.ts`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/apply-deferred-stream.browser.test.ts packages/browser/src/inline-loader-bootstrap.browser.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts`,
+      `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/wire-response-scanner.test.ts scripts/demo-session/serve.test.mjs scripts/fcp-harness.test.mjs`,
+      `pnpm --filter @kovojs/browser run check:inline-loader`, and
+      `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts` passed.
+- [x] 2026-06-23 visible region + favicon lint/type: `vp check --no-fmt packages/server/src/deferred-region.ts packages/server/src/deferred-stream.ts packages/server/src/deferred-stream.test.ts packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/browser/src/apply-deferred-stream.browser.test.ts packages/browser/src/inline-loader-build.ts packages/browser/src/inline-loader.ts examples/stackoverflow/src/components/right-rail.tsx examples/stackoverflow/src/interactive-app.test.ts scripts/demo-session/serve.mjs scripts/demo-session/serve.test.mjs plans/fcp-performance.md`
+      passed with only the existing generated inline-loader length warning.
 - [x] 2026-06-23 touched-file lint/type: `vp check --no-fmt examples/stackoverflow/scripts/materialize-demo-css.mjs examples/stackoverflow/src/interactive-app.tsx examples/stackoverflow/src/interactive-app.test.ts scripts/import-boundary.mjs`
       passed.
 - [x] 2026-06-23 diff hygiene: `git diff --check` passed.
@@ -218,7 +229,7 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
   - Evidence: `pnpm exec vitest --run scripts/fcp-harness.test.mjs` covers deferred stylesheet,
     `noscript`, modulepreload, inline byte, render-blocking, and duplicate asset classification.
 
-- [ ] **Lighthouse mobile performance run.**
+- [x] **Lighthouse mobile performance run.**
   - Command shape:
     `pnpm perf:fcp -- --url "$URL" --lighthouse`
   - Record: FCP, LCP, Speed Index, TBT, render-blocking requests, unused JavaScript, document
@@ -226,6 +237,9 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
   - Pass criteria: FCP does not regress; render-blocking stylesheet finding is removed after item 2;
     unused first-load JS drops after item 3; document-latency compression warning is removed after
     item 1.
+  - Evidence: `pnpm perf:fcp -- --url https://kovo-stackoverflow-34444524520.us-central1.run.app/questions/q3 --lighthouse --output test-results/fcp-harness/stackoverflow-q3-lighthouse-20260623`
+    passed with `lighthouse-ok=true`, performance score 0.99, Lighthouse FCP/LCP 1563.24 ms,
+    TBT 0 ms, and render-blocking count 0.
 
 - [x] **Playwright timing/behavior smoke.**
   - Command shape: `pnpm perf:fcp -- --url "$URL" --output test-results/fcp-harness/<name>`
@@ -248,9 +262,13 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     covers early enhanced click/form replay, native link pass-through, failed runtime submit
     fallback, and enhanced navigation after runtime install.
 
-- [ ] **Region priority smoke.**
+- [x] **Region priority smoke.**
   - Command shape: route/document tests plus browser tests for `critical`, `after-paint`, and
     `visible` regions.
   - Pass criteria: critical region HTML is in the initial shell; `after-paint` content arrives by
     stream or post-paint fetch; `visible` content does not load eagerly and loads when near viewport;
     deferred-region CSS is present before/with inserted markup.
+  - Evidence: `pnpm exec vitest --run packages/server/src/deferred-stream.test.ts packages/server/src/app-document.test.ts`
+    and `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/apply-deferred-stream.browser.test.ts`
+    passed, covering critical inline rendering, `after-paint` streamed fragments with stylesheets,
+    visible stream chunks held until placeholder intersection, and no-IntersectionObserver fallback.

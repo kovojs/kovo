@@ -14,9 +14,9 @@ import { renderDiagnosticDocument } from './document-diagnostics.js';
 
 // G1 (bugs-part3 CSP-1): the deferred apply/cleanup scripts now carry a CSP hash attr.
 const deferredApplyScriptBody =
-  'let s=document.currentScript,n=s.previousSibling,e=[];for(;n;){let p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
+  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
 const deferredCleanupScriptBody =
-  'for(const n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
+  'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
 const deferredApplyHash = cspSha256(deferredApplyScriptBody);
 const deferredCleanupHash = cspSha256(deferredCleanupScriptBody);
 const deferredApplyScript = `<script data-kovo-csp-hash="${deferredApplyHash}">${deferredApplyScriptBody}</script>`;
