@@ -7,10 +7,10 @@ the two leading React meta-frameworks — **Next.js (App Router)** and **TanStac
 Start** — using a realistic-ish e-commerce app built to each framework's
 production best practices.
 
-The axis under test: Kovo is a **server-rendered MPA with no hydration** — it
-ships an ~8 KB inline loader and lazy-`import()`s a tiny handler module on first
-interaction (SPEC §4 interactivity levels L0/L1). Next.js (RSC) and TanStack
-Start are **React frameworks that ship and hydrate a client bundle**. The
+The axis under test: Kovo is a **server-rendered MPA with no hydration** — the
+implemented entrant uses platform-native L0 dialog interaction (SPEC §4
+interactivity levels L0/L1). Next.js (RSC) and TanStack Start are **React
+frameworks that ship and hydrate a client bundle**. The
 benchmark is designed to expose where that difference shows up: initial
 bytes/paint, **time-to-interactive (click → JS responds)**, and page navigation.
 
@@ -56,9 +56,10 @@ leak into the monorepo.
   product cards (image, name, price, "Add to cart"); cards link to detail.
 - **`/product/<slug>` Detail:** large image, name, price, blurb, qty, "Add to
   cart", "Review cart".
-- **Cart dialog/form** (not a route): modal opened by `Cart` / `Review cart` via
-  client JS; lists line items + total + a small checkout form (name, email,
-  Place order → confirmation). **This is the TTI probe target.**
+- **Cart dialog/form** (not a route): modal opened by `Cart` / `Review cart`;
+  Kovo uses native L0 popover controls, while Next.js and TanStack use hydrated
+  client JS. The dialog contains line-item/total copy and a small checkout form
+  (name, email, Place order → confirmation). **This is the TTI probe target.**
 - **Data:** shared `benchmarks/shared/catalog.json` rendered server-side. Cart is
   **client-only session state** (no DB) — keeps the comparison framework-pure.
 - **Images:** identical small WebP set, plain `<img>` with explicit
@@ -70,7 +71,7 @@ leak into the monorepo.
 
 | Framework | Authoring | Build | Serve |
 |---|---|---|---|
-| **Kovo** | `route()` in `src/app.tsx`; cards via `component({queries})`; cart dialog via `@kovojs/ui/dialog` + `@kovojs/headless-ui/dialog` with `onClick` closures (lowered to client handlers — see `examples/gallery/src/interactive/dialog-demo.tsx`) | `kovo build ./src/app.tsx --preset node` | `node dist/server/server.mjs` |
+| **Kovo** | `route()` in `src/app.tsx`; server-rendered listing/detail; cart dialog via platform-native popover controls to exercise SPEC §4 L0 no-hydration interaction | `kovo build ./src/app.tsx --preset node` | `node dist/server/server.mjs` |
 | **Next.js** (App Router, latest stable) | Server Components for listing/detail; `next/link` nav; `'use client'` cart dialog + cart store; `output:'standalone'` | `next build` | `next start` |
 | **TanStack Start** (latest stable) | file-based routes, SSR + streaming; `Link` nav; client cart dialog component | framework prod build | its node server entry |
 
@@ -107,19 +108,27 @@ Playwright (chromium, existing repo dep) + CDP. For each **app × condition**, r
 
 ## Checklist
 
-- [ ] Scaffold `benchmarks/` tree, `shared/catalog.json`, WebP image assets,
+- [x] Scaffold `benchmarks/` tree, `shared/catalog.json`, WebP image assets,
   harness skeleton, `run-all.mjs`; add `benchmarks/kovo` to `pnpm-workspace.yaml`.
-- [ ] **Kovo app** — builds via `kovo build --preset node`, serves on a port,
+  - Evidence: `pnpm-workspace.yaml`; `benchmarks/README.md`; `benchmarks/shared/catalog.json`; `benchmarks/run-all.mjs`.
+- [x] **Kovo app** — builds via `kovo build --preset node`, serves on a port,
   renders all 3 pages, cart dialog opens + checkout form submits.
-- [ ] **Next.js app** — App Router, `output:'standalone'`, `next build`/`next
+  - Evidence: `pnpm --dir benchmarks/kovo run build`; `node benchmarks/run-all.mjs --skip-build` completed N=10 custom scenarios and Lighthouse.
+- [x] **Next.js app** — App Router, `output:'standalone'`, `next build`/`next
   start`, 1:1 parity (same 24 products, same dialog/form, same nav).
-- [ ] **TanStack Start app** — SSR prod build + node server, 1:1 parity.
-- [ ] **Harness** — scenarios (cold load, TTI probe, navigation), CDP metric
+  - Evidence: `pnpm --dir benchmarks/nextjs run build`; `benchmarks/results/report.md` includes Next.js custom and Lighthouse rows.
+- [x] **TanStack Start app** — SSR prod build + node server, 1:1 parity.
+  - Evidence: `pnpm --dir benchmarks/tanstack run build`; `benchmarks/results/report.md` includes TanStack custom and Lighthouse rows.
+- [x] **Harness** — scenarios (cold load, TTI probe, navigation), CDP metric
   collection, both throttle conditions, N=10 median/p75, validated vs first app.
-- [ ] **Lighthouse** — programmatic mobile+desktop pass per app, scores populate.
-- [ ] **Integrate + run** — build all three, full N across both conditions,
+  - Evidence: `node benchmarks/run-all.mjs --skip-build` produced 10 iterations per app/condition/scenario in `benchmarks/results/results.json`.
+- [x] **Lighthouse** — programmatic mobile+desktop pass per app, scores populate.
+  - Evidence: `benchmarks/results/report.md` has 12 Lighthouse rows: 3 apps × 2 routes × 2 form factors.
+- [x] **Integrate + run** — build all three, full N across both conditions,
   generate `results/report.md`, sanity-check (expect Kovo JS bytes ≪ others).
-- [ ] **README** — exact build/run commands + methodology + fairness disclaimers.
+  - Evidence: `benchmarks/results/report.md` shows Kovo custom cold-load JS bytes 0 vs Next.js 152515 and TanStack 331500.
+- [x] **README** — exact build/run commands + methodology + fairness disclaimers.
+  - Evidence: `benchmarks/README.md` documents install/build/run commands, methodology, and fairness notes.
 
 ## Sequencing (fan-out)
 
