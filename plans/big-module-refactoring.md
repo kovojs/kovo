@@ -198,14 +198,21 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
 
 ## Generated Or Artifact Size Policy
 
-- [ ] **Document ownership for large generated/package inventory files.**
-  - Files: `packages/icons/package.json`, `api-surface-baseline.json`, `public-packages.json`,
-    `benchmarks/results/results.json`.
-  - Outcome should name each generator/refresh command and the review rule for accepting large diffs.
+- [x] **Document ownership for large generated/package inventory files.**
+  - Evidence: `scripts/build-icons.mjs` owns `packages/icons/package.json` exports and the icons
+    `public-packages.json` entry (`pnpm --filter @kovojs/icons run build:icons`, check mode via
+    `node scripts/build-icons.mjs --check`); `scripts/api-surface-gate.mjs --write` owns
+    `api-surface-baseline.json`; `public-packages.json` is the package-boundary source of truth
+    loaded by `scripts/public-packages.mjs` and verified by `scripts/public-packages.test.mjs`;
+    `benchmarks/run-all.mjs` writes `benchmarks/results/results.json` and the derived
+    `benchmarks/results/report.md`. Review rule: accept large diffs only with the matching generator
+    or boundary-test command, not by hand-splitting these artifacts.
 
-- [ ] **Evaluate whether `benchmarks/results/results.json` belongs in an archive or rolling summary.**
-  - If historical detail is still useful, move old data to an archive file and keep the active artifact
-    bounded.
+- [x] **Evaluate whether `benchmarks/results/results.json` belongs in an archive or rolling summary.**
+  - Evidence: `benchmarks/run-all.mjs` overwrites one latest-run `results.json` and regenerates
+    `report.md`; `benchmarks/README.md` documents the same active output paths. No archive split is
+    needed while the file remains a single latest-run artifact; add an archive only if multiple
+    historical benchmark runs become intentionally committed.
 
 ## Sequencing
 
