@@ -7,6 +7,7 @@ import type {
   AlgebraicQueryShape,
   ArithOp,
   OrderByColumn,
+  PuntReason,
   Rowset,
   RowsetFilter,
   RowWitness,
@@ -11065,19 +11066,86 @@ function chainMatch(
     sessionContext,
   );
   if (eqMatches?.kind === 'matches') return { eq: eqMatches.matches, kind: 'keys' };
-  if (eqMatches?.kind === 'opaque') return { expr: eqMatches.expr, kind: 'opaque' };
+  if (eqMatches?.kind === 'or') return { arms: eqMatches.arms, kind: 'or' };
+  if (eqMatches?.kind === 'opaque') {
+    return {
+      expr: eqMatches.expr,
+      kind: 'opaque',
+      ...(eqMatches.reason ? { reason: eqMatches.reason } : {}),
+    };
+  }
   return { expr: predicate.getText(), kind: 'opaque' };
 }
 
 type KeyEqMatchParseResult =
   | { kind: 'matches'; matches: { column: string; value: SymbolicValue }[] }
-  | { expr: string; kind: 'opaque' };
+  | { arms: { eq: { column: string; value: SymbolicValue }[] }[]; kind: 'or' }
+  | { expr: string; kind: 'opaque'; reason?: PuntReason };
 
 /**
  * AND-of-`eq(t.col, value)` predicates → key matches, or `null` when ANY conjunct
  * is a non-eq predicate (range / IN / sql / function) ⇒ opaque match ⇒ punt.
  */
 function keyEqMatchesFromPredicate(
+  predicate: Node,
+  resolveTable: (node: Node) => string | undefined,
+  paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext,
+): KeyEqMatchParseResult | null {
+  const expression = unwrappedStaticExpressionNode(predicate);
+  if (Node.isCallExpression(expression)) {
+    const callee = expression.getExpression();
+    if (Node.isIdentifier(callee) && callee.getText() === 'or') {
+      return keyEqDisjunctionMatchesFromPredicate(
+        expression,
+        resolveTable,
+        paramSymbolKeys,
+        sessionContext,
+      );
+    }
+  }
+
+  return keyEqConjunctionMatchesFromPredicate(
+    predicate,
+    resolveTable,
+    paramSymbolKeys,
+    sessionContext,
+  );
+}
+
+function keyEqDisjunctionMatchesFromPredicate(
+  predicate: CallExpression,
+  resolveTable: (node: Node) => string | undefined,
+  paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext,
+): KeyEqMatchParseResult {
+  const arms: { eq: { column: string; value: SymbolicValue }[] }[] = [];
+  for (const argument of predicate.getArguments()) {
+    const parsed = keyEqConjunctionMatchesFromPredicate(
+      argument,
+      resolveTable,
+      paramSymbolKeys,
+      sessionContext,
+    );
+    if (!parsed || parsed.kind !== 'matches') {
+      return {
+        expr: predicate.getText(),
+        kind: 'opaque',
+        reason: { code: 'mixed-disjunction', expr: predicate.getText() },
+      };
+    }
+    arms.push({ eq: parsed.matches });
+  }
+  return arms.length > 0
+    ? { arms, kind: 'or' }
+    : {
+        expr: predicate.getText(),
+        kind: 'opaque',
+        reason: { code: 'mixed-disjunction', expr: predicate.getText() },
+      };
+}
+
+function keyEqConjunctionMatchesFromPredicate(
   predicate: Node,
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,

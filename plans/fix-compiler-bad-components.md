@@ -32,9 +32,8 @@ bindings.
 
 - [x] `<Progress value={state.value} max={100}>` emits compiler-owned reactive stamps for the
       native progress attributes and the visible indicator state.
-  - Evidence: `corepack pnpm --filter @kovojs/compiler exec vitest --run
-src/primitive-reactive-attributes.test.ts` passed; the Progress test asserts
-    `data-bind:value`, `data-bind:data-value`, `data-bind:data-state`, and
+  - Evidence: compiler test `src/primitive-reactive-attributes.test.ts` passed; the Progress test
+    asserts `data-bind:value`, `data-bind:data-value`, `data-bind:data-state`, and
     `data-bind:style`.
 - [x] `<Progress value={state.value} max={state.max}>` handles reactive `max` when the expression
       has a single allowed root (`state` or one known query).
@@ -87,8 +86,8 @@ src/primitive-reactive-attributes.test.ts` passed; the Progress test asserts
 - [x] Add a constrained compiler-owned style derive for indicator width.
   - This must not become arbitrary raw CSS binding. It should mirror the safe serialization used for
     object-literal `style={{ width: ... }}` lowering, limited to `width`.
-  - The emitted stamp should be consumable by the existing `bindingProps(props, ['style',
-'data-state'])` forwarding in `packages/ui/src/progress.tsx` and `packages/ui/src/meter.tsx`.
+  - The emitted stamp should be consumable by the existing `bindingProps` forwarding in
+    `packages/ui/src/progress.tsx` and `packages/ui/src/meter.tsx`.
   - Evidence: generated derives use `kovoStyleProperty("width", ...)`; generated gallery artifacts
     contain indicator-consumed `data-bind:style` for Progress and Meter.
 - [x] Decide whether root `data-state` should also be live.
@@ -101,33 +100,25 @@ src/primitive-reactive-attributes.test.ts` passed; the Progress test asserts
   - Update `examples/gallery/src/interactive/progress-demo.tsx` and meter demo code so they express
     only semantic inputs (`value`, `max`, thresholds, `valueText`) and no compiler workaround
     `style`/`data-state`.
-  - Evidence: `rg "data-state=|style=\\{\\{ width|@kovojs/headless-ui/meter|dataState"
-examples/gallery/src/interactive/progress-demo.tsx
-examples/gallery/src/interactive/meter-demo.tsx` returns no matches.
+  - Evidence: the `rg` workaround search over the Progress and Meter interactive demos returns no
+    matches.
 
 ## Verification
 
 - [x] Run focused compiler tests for primitive reactive lowering.
-  - Evidence: `corepack pnpm --filter @kovojs/compiler exec vitest --run
-src/primitive-reactive-attributes.test.ts` passed, 17 tests.
+  - Evidence: `@kovojs/compiler` focused primitive-reactive vitest passed, 17 tests.
 - [x] Run affected UI StyleX/markup tests.
-  - Evidence: `corepack pnpm --filter @kovojs/ui exec vitest --run
-src/progress.stylex.test.tsx src/meter.stylex.test.tsx src/index.markup.test.tsx` passed,
-    11 tests.
+  - Evidence: `@kovojs/ui` Progress/Meter/markup vitest passed, 11 tests.
 - [x] Run affected gallery interaction tests.
   - Evidence: after regenerating interactive artifacts and copying ignored client artifacts to the
-    browser fixture import path for verification, `corepack pnpm --filter @kovojs/example-gallery
-exec vitest --config vitest.browser.config.ts --run
-src/interactive-gallery.interactions-b.browser.test.ts` passed, 17 tests.
+    browser fixture import path for verification, `@kovojs/example-gallery`
+    `interactive-gallery.interactions-b.browser.test.ts` passed, 17 tests.
 - [x] Run compiler fixpoint/render-equivalence gates touched by the new lowering.
-  - Evidence: focused compiler tests call `assertFixpoint`; `corepack pnpm --filter
-@kovojs/example-gallery run emit:interactive-gallery -- --check` passed and compiles each demo
-    with `--fixpoint --render-equivalence`.
+  - Evidence: focused compiler tests call `assertFixpoint`; gallery emit check passed and compiles
+    each demo with `--fixpoint --render-equivalence`.
 - [x] Inspect emitted gallery HTML or generated server output for Progress and Meter.
-  - Evidence: `rg "data-bind:(style|data-state|data-value|data-max|data-high|data-low|data-optimum)"
-examples/gallery/src/generated/interactive/progress-demo.tsx
-examples/gallery/src/generated/interactive/meter-demo.tsx` shows Progress and Meter generated
-    artifacts include `data-bind:style` and live state/value mirror attrs.
+  - Evidence: `rg` over generated Progress and Meter interactive artifacts shows
+    `data-bind:style` and live state/value mirror attrs.
 
 ## Risks And Open Decisions
 

@@ -7,6 +7,7 @@ import {
   type PatchOp,
   type PuntReason,
   type PushPosition,
+  type RowMatch,
   type Rowset,
   type RowsetFilter,
   type SymbolicEffect,
@@ -26,6 +27,11 @@ interface FieldDerivation {
   connected: boolean;
   reason?: PuntReason;
   rowOps: PatchOp[];
+}
+
+interface RowMatchAlternative {
+  coveredColumns: ReadonlySet<string>;
+  match: readonly RowMatch[];
 }
 
 /**
@@ -148,8 +154,8 @@ function deriveAgg(
     });
   }
 
-  const match = matchToRowMatches(effect.match, field.rowset);
-  if (match.reason) return fail(match.reason);
+  const alternatives = matchToRowMatchAlternatives(effect.match, field.rowset);
+  if (alternatives.reason) return fail(alternatives.reason);
 
   // C5: A `keys`-kind match whose columns don't cover the declared rowKey is a
   // non-key predicate that may match multiple rows.  Only single-row update/delete
@@ -157,18 +163,23 @@ function deriveAgg(
   // (SPEC.md §10.5 "eq(t.col,value) only when cols provably cover the table key")
   if (field.rowKey) {
     const keyColumns = field.rowKey.split(',').map((c) => c.trim());
-    const coveredColumns = new Set([
-      ...match.value.map((m) => m.column),
-      ...privateScopeCoveredColumns(effect.match, field.rowset),
-    ]);
-    const coversKey = keyColumns.every((kc) => coveredColumns.has(kc));
-    if (!coversKey) {
+    const allArmsCoverKey = alternatives.value.every((alternative) =>
+      keyColumns.every((keyColumn) => alternative.coveredColumns.has(keyColumn)),
+    );
+    if (!allArmsCoverKey) {
       return fail({ code: 'non-key-match', expr: `non-key eq on ${field.rowset.table}` });
     }
   }
 
   if (effect.op === 'delete') {
-    return rows({ guard: 'find-or-noop', match: match.value, op: 'remove-row', path });
+    return rows(
+      ...alternatives.value.map((alternative) => ({
+        guard: 'find-or-noop' as const,
+        match: alternative.match,
+        op: 'remove-row' as const,
+        path,
+      })),
+    );
   }
 
   // UPDATE: per-column membership / order / data classification.
@@ -180,15 +191,25 @@ function deriveAgg(
     }
     const filter = field.rowset.filters.find((entry) => entry.column === column);
     if (filter) {
-      const transition = membershipTransition(path, match.value, column, value, filter);
-      if (transition.reason) return fail(transition.reason);
-      ops.push(...transition.rowOps);
+      for (const alternative of alternatives.value) {
+        const transition = membershipTransition(path, alternative.match, column, value, filter);
+        if (transition.reason) return fail(transition.reason);
+        ops.push(...transition.rowOps);
+      }
       continue;
     }
     sets[column] = value;
   }
   if (Object.keys(sets).length > 0) {
-    ops.push({ guard: 'find-or-noop', match: match.value, op: 'update-row', path, sets });
+    ops.push(
+      ...alternatives.value.map((alternative) => ({
+        guard: 'find-or-noop' as const,
+        match: alternative.match,
+        op: 'update-row' as const,
+        path,
+        sets,
+      })),
+    );
   }
   return { aggOps: [], connected: true, rowOps: ops };
 }
@@ -450,19 +471,46 @@ function matchToRowMatches(
   reason?: PuntReason;
   value: { column: string; value: SymbolicValue }[];
 } {
-  if (match.kind === 'opaque')
-    return { reason: { code: 'non-key-match', expr: match.expr }, value: [] };
-  const value = match.eq
-    .filter((entry) => !rowset || !rowsetProvesPrivateScope(rowset, entry))
-    .map((entry) => ({ column: entry.column, value: entry.value }));
-  return { value };
+  const alternatives = matchToRowMatchAlternatives(match, rowset);
+  if (alternatives.reason) return { reason: alternatives.reason, value: [] };
+  if (alternatives.value.length !== 1) {
+    return {
+      reason: { code: 'unsupported', detail: 'disjunctive scalar row match' },
+      value: [],
+    };
+  }
+  return { value: [...alternatives.value[0].match] };
 }
 
-function privateScopeCoveredColumns(match: SymbolicMatch, rowset: Rowset): string[] {
-  if (match.kind === 'opaque') return [];
-  return match.eq
-    .filter((entry) => rowsetProvesPrivateScope(rowset, entry))
-    .map((entry) => entry.column);
+function matchToRowMatchAlternatives(
+  match: SymbolicMatch,
+  rowset?: Rowset,
+): {
+  reason?: PuntReason;
+  value: RowMatchAlternative[];
+} {
+  if (match.kind === 'opaque') {
+    return {
+      reason: match.reason ?? { code: 'non-key-match', expr: match.expr },
+      value: [],
+    };
+  }
+  if (match.kind === 'or') {
+    return { value: match.arms.map((arm) => rowMatchAlternativeFromEq(arm.eq, rowset)) };
+  }
+  return { value: [rowMatchAlternativeFromEq(match.eq, rowset)] };
+}
+
+function rowMatchAlternativeFromEq(
+  eq: readonly { column: string; value: SymbolicValue }[],
+  rowset?: Rowset,
+): RowMatchAlternative {
+  return {
+    coveredColumns: new Set(eq.map((entry) => entry.column)),
+    match: eq
+      .filter((entry) => !rowset || !rowsetProvesPrivateScope(rowset, entry))
+      .map((entry) => ({ column: entry.column, value: entry.value })),
+  };
 }
 
 function rowsetProvesPrivateScope(

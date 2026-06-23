@@ -186,6 +186,7 @@ describe('derivation result constructors + punt labels', () => {
       [{ code: 'opaque-shape', detail: 'rank()', shape: 'distinct' }, 'distinct shape: rank()'],
       [{ code: 'interprocedural', site: 'cart.ts:8' }, 'interprocedural KV406: cart.ts:8'],
       [{ code: 'untraceable-param', expr: 'serverNow()' }, 'untraceable param: serverNow()'],
+      [{ code: 'mixed-disjunction', expr: 'or(...)' }, 'mixed disjunction: or(...)'],
       [{ code: 'opaque-orderby', column: 'rank' }, 'Opaque orderBy: rank'],
       [{ code: 'opaque-projection', expr: 'sql`...`' }, 'Opaque projection: sql`...`'],
       [{ code: 'no-row-witness', field: 'total' }, 'no client rows: total'],
