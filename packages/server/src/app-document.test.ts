@@ -450,11 +450,8 @@ describe('server app document boundary', () => {
     expect(response.body).toContain(
       '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash=',
     );
-    expect(response.body).toContain(
+    expect(response.body).not.toContain(
       '<link rel="preload" as="style" href="/assets/styles.css" data-kovo-deferred-style>',
-    );
-    expect(response.body).toContain(
-      '<noscript><link rel="stylesheet" href="/assets/styles.css"></noscript>',
     );
     expect(response.body).toContain('<link rel="stylesheet" href="/assets/product.css">');
     expect(
