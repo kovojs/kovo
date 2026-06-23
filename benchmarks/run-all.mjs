@@ -18,7 +18,9 @@ const apps = [
     id: 'kovo',
     port: 4310,
     start: ['pnpm', ['run', 'start']],
-    versions: { kovo: await packageVersion(path.join(benchmarkRoot, 'kovo/package.json'), '@kovojs/server') },
+    versions: {
+      kovo: await packageVersion(path.join(benchmarkRoot, 'kovo/package.json'), '@kovojs/server'),
+    },
   },
   {
     build: ['pnpm', ['--dir', path.join(benchmarkRoot, 'nextjs'), 'run', 'build']],
@@ -97,7 +99,7 @@ function readArg(name) {
 
 async function dependencyVersions(packagePath, names) {
   const pkg = JSON.parse(await readFile(packagePath, 'utf8'));
-  const all = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+  const all = { ...pkg.dependencies, ...pkg.devDependencies };
   return Object.fromEntries(names.map((name) => [name, all[name] ?? 'n/a']));
 }
 

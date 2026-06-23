@@ -5,10 +5,10 @@ import { createFileRoute } from '@tanstack/react-router';
 
 const imageDir = path.join(process.cwd(), '../shared/images');
 
-export const Route = createFileRoute('/images/$name')({
+export const Route = (createFileRoute('/images/$name') as any)({
   server: {
     handlers: {
-      GET: async ({ request }) => {
+      GET: async ({ request }: { request: Request }) => {
         const pathname = new URL(request.url).pathname;
         const name = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
         if (!/^product-\d\d\.webp$/.test(name)) {

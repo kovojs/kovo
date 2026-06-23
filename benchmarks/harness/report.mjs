@@ -113,5 +113,8 @@ function format(value) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  await writeReport(process.argv[2] ?? '../results/results.json', process.argv[3] ?? '../results/report.md');
+  await writeReport(
+    process.argv[2] ?? '../results/results.json',
+    process.argv[3] ?? '../results/report.md',
+  );
 }

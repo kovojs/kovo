@@ -63,7 +63,7 @@ function flattenMetrics(value, prefix = '', output = {}) {
   return output;
 }
 
-export async function runScenarios({ app, conditionName, iterations, origin }) {
+export async function runScenarios({ app: _app, conditionName, iterations, origin }) {
   const browser = await chromium.launch({ headless: true });
   const condition = CONDITIONS[conditionName];
   if (!condition) throw new Error(`Unknown benchmark condition ${conditionName}.`);
@@ -74,10 +74,18 @@ export async function runScenarios({ app, conditionName, iterations, origin }) {
     const navigation = [];
 
     for (let index = 0; index < iterations; index += 1) {
-      coldLoad.push(await withPage(browser, condition, (page, tracker) => coldLoadScenario(page, tracker, origin)));
-      ttiProbe.push(await withPage(browser, condition, (page, tracker) => ttiScenario(page, tracker, origin)));
+      coldLoad.push(
+        await withPage(browser, condition, (page, tracker) =>
+          coldLoadScenario(page, tracker, origin),
+        ),
+      );
+      ttiProbe.push(
+        await withPage(browser, condition, (page, tracker) => ttiScenario(page, tracker, origin)),
+      );
       navigation.push(
-        await withPage(browser, condition, (page, tracker) => navigationScenario(page, tracker, origin)),
+        await withPage(browser, condition, (page, tracker) =>
+          navigationScenario(page, tracker, origin),
+        ),
       );
     }
 

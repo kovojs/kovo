@@ -14,7 +14,9 @@ export default function Page() {
     <main>
       <section className="hero">
         <h1>Field goods for everyday carry</h1>
-        <p>A 24-product commerce benchmark rendered with Next.js App Router and hydrated cart UI.</p>
+        <p>
+          A 24-product commerce benchmark rendered with Next.js App Router and hydrated cart UI.
+        </p>
       </section>
       <section className="grid" aria-label="Products">
         {products.map((product) => (

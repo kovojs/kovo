@@ -71,11 +71,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
       {children}
       {opened ? (
         <div className="modal-backdrop" data-cart-modal="">
-          <section className="cart-dialog" role="dialog" aria-modal="true" aria-labelledby="cart-title">
+          <section
+            className="cart-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cart-title"
+          >
             <header>
               <div>
                 <h2 id="cart-title">Review cart</h2>
-                <p>{value.count === 0 ? 'Your cart is ready for items.' : `${value.count} item(s) selected.`}</p>
+                <p>
+                  {value.count === 0
+                    ? 'Your cart is ready for items.'
+                    : `${value.count} item(s) selected.`}
+                </p>
               </div>
               <button className="secondary-button" type="button" onClick={() => setOpened(false)}>
                 Close
@@ -137,7 +146,12 @@ function useCart(): CartContextValue {
 export function CartButton() {
   const cart = useCart();
   return (
-    <button className="cart-button" type="button" aria-label={`Open cart with ${cart.count} items`} onClick={cart.open}>
+    <button
+      className="cart-button"
+      type="button"
+      aria-label={`Open cart with ${cart.count} items`}
+      onClick={cart.open}
+    >
       Cart ({cart.count})
     </button>
   );

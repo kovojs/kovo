@@ -8,80 +8,80 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as ProductSlugRouteImport } from './routes/product/$slug'
-import { Route as ImagesNameRouteImport } from './routes/images/$name'
+import { Route as rootRouteImport } from './routes/__root';
+import { Route as IndexRouteImport } from './routes/index';
+import { Route as ProductSlugRouteImport } from './routes/product/$slug';
+import { Route as ImagesNameRouteImport } from './routes/images/$name';
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ProductSlugRoute = ProductSlugRouteImport.update({
   id: '/product/$slug',
   path: '/product/$slug',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ImagesNameRoute = ImagesNameRouteImport.update({
   id: '/images/$name',
   path: '/images/$name',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/images/$name': typeof ImagesNameRoute
-  '/product/$slug': typeof ProductSlugRoute
+  '/': typeof IndexRoute;
+  '/images/$name': typeof ImagesNameRoute;
+  '/product/$slug': typeof ProductSlugRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/images/$name': typeof ImagesNameRoute
-  '/product/$slug': typeof ProductSlugRoute
+  '/': typeof IndexRoute;
+  '/images/$name': typeof ImagesNameRoute;
+  '/product/$slug': typeof ProductSlugRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/images/$name': typeof ImagesNameRoute
-  '/product/$slug': typeof ProductSlugRoute
+  __root__: typeof rootRouteImport;
+  '/': typeof IndexRoute;
+  '/images/$name': typeof ImagesNameRoute;
+  '/product/$slug': typeof ProductSlugRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/images/$name' | '/product/$slug'
-  fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/images/$name' | '/product/$slug'
-  id: '__root__' | '/' | '/images/$name' | '/product/$slug'
-  fileRoutesById: FileRoutesById
+  fileRoutesByFullPath: FileRoutesByFullPath;
+  fullPaths: '/' | '/images/$name' | '/product/$slug';
+  fileRoutesByTo: FileRoutesByTo;
+  to: '/' | '/images/$name' | '/product/$slug';
+  id: '__root__' | '/' | '/images/$name' | '/product/$slug';
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  ImagesNameRoute: typeof ImagesNameRoute
-  ProductSlugRoute: typeof ProductSlugRoute
+  IndexRoute: typeof IndexRoute;
+  ImagesNameRoute: typeof ImagesNameRoute;
+  ProductSlugRoute: typeof ProductSlugRoute;
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/';
+      path: '/';
+      fullPath: '/';
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/product/$slug': {
-      id: '/product/$slug'
-      path: '/product/$slug'
-      fullPath: '/product/$slug'
-      preLoaderRoute: typeof ProductSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/product/$slug';
+      path: '/product/$slug';
+      fullPath: '/product/$slug';
+      preLoaderRoute: typeof ProductSlugRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     '/images/$name': {
-      id: '/images/$name'
-      path: '/images/$name'
-      fullPath: '/images/$name'
-      preLoaderRoute: typeof ImagesNameRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+      id: '/images/$name';
+      path: '/images/$name';
+      fullPath: '/images/$name';
+      preLoaderRoute: typeof ImagesNameRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
@@ -89,16 +89,16 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ImagesNameRoute: ImagesNameRoute,
   ProductSlugRoute: ProductSlugRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { getRouter } from './router.tsx';
+import type { createStart } from '@tanstack/react-start';
 declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
+    ssr: true;
+    router: Awaited<ReturnType<typeof getRouter>>;
   }
 }

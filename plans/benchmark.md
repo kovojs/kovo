@@ -69,11 +69,11 @@ leak into the monorepo.
 
 ## Per-framework production build (best practices)
 
-| Framework | Authoring | Build | Serve |
-|---|---|---|---|
-| **Kovo** | `route()` in `src/app.tsx`; server-rendered listing/detail; cart dialog via platform-native popover controls to exercise SPEC §4 L0 no-hydration interaction | `kovo build ./src/app.tsx --preset node` | `node dist/server/server.mjs` |
-| **Next.js** (App Router, latest stable) | Server Components for listing/detail; `next/link` nav; `'use client'` cart dialog + cart store; `output:'standalone'` | `next build` | `next start` |
-| **TanStack Start** (latest stable) | file-based routes, SSR + streaming; `Link` nav; client cart dialog component | framework prod build | its node server entry |
+| Framework                               | Authoring                                                                                                                                                    | Build                                    | Serve                         |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------- | ----------------------------- |
+| **Kovo**                                | `route()` in `src/app.tsx`; server-rendered listing/detail; cart dialog via platform-native popover controls to exercise SPEC §4 L0 no-hydration interaction | `kovo build ./src/app.tsx --preset node` | `node dist/server/server.mjs` |
+| **Next.js** (App Router, latest stable) | Server Components for listing/detail; `next/link` nav; `'use client'` cart dialog + cart store; `output:'standalone'`                                        | `next build`                             | `next start`                  |
+| **TanStack Start** (latest stable)      | file-based routes, SSR + streaming; `Link` nav; client cart dialog component                                                                                 | framework prod build                     | its node server entry         |
 
 Reference Kovo files: `examples/commerce/src/app.tsx` (routes),
 `examples/commerce/src/components/cart-badge.tsx` (component+query),
@@ -109,23 +109,23 @@ Playwright (chromium, existing repo dep) + CDP. For each **app × condition**, r
 ## Checklist
 
 - [x] Scaffold `benchmarks/` tree, `shared/catalog.json`, WebP image assets,
-  harness skeleton, `run-all.mjs`; add `benchmarks/kovo` to `pnpm-workspace.yaml`.
+      harness skeleton, `run-all.mjs`; add `benchmarks/kovo` to `pnpm-workspace.yaml`.
   - Evidence: `pnpm-workspace.yaml`; `benchmarks/README.md`; `benchmarks/shared/catalog.json`; `benchmarks/run-all.mjs`.
 - [x] **Kovo app** — builds via `kovo build --preset node`, serves on a port,
-  renders all 3 pages, cart dialog opens + checkout form submits.
+      renders all 3 pages, cart dialog opens + checkout form submits.
   - Evidence: `pnpm --dir benchmarks/kovo run build`; `node benchmarks/run-all.mjs --skip-build` completed N=10 custom scenarios and Lighthouse.
 - [x] **Next.js app** — App Router, `output:'standalone'`, `next build`/`next
-  start`, 1:1 parity (same 24 products, same dialog/form, same nav).
+start`, 1:1 parity (same 24 products, same dialog/form, same nav).
   - Evidence: `pnpm --dir benchmarks/nextjs run build`; `benchmarks/results/report.md` includes Next.js custom and Lighthouse rows.
 - [x] **TanStack Start app** — SSR prod build + node server, 1:1 parity.
   - Evidence: `pnpm --dir benchmarks/tanstack run build`; `benchmarks/results/report.md` includes TanStack custom and Lighthouse rows.
 - [x] **Harness** — scenarios (cold load, TTI probe, navigation), CDP metric
-  collection, both throttle conditions, N=10 median/p75, validated vs first app.
+      collection, both throttle conditions, N=10 median/p75, validated vs first app.
   - Evidence: `node benchmarks/run-all.mjs --skip-build` produced 10 iterations per app/condition/scenario in `benchmarks/results/results.json`.
 - [x] **Lighthouse** — programmatic mobile+desktop pass per app, scores populate.
   - Evidence: `benchmarks/results/report.md` has 12 Lighthouse rows: 3 apps × 2 routes × 2 form factors.
 - [x] **Integrate + run** — build all three, full N across both conditions,
-  generate `results/report.md`, sanity-check (expect Kovo JS bytes ≪ others).
+      generate `results/report.md`, sanity-check (expect Kovo JS bytes ≪ others).
   - Evidence: `benchmarks/results/report.md` shows Kovo custom cold-load JS bytes 0 vs Next.js 152515 and TanStack 331500.
 - [x] **README** — exact build/run commands + methodology + fairness disclaimers.
   - Evidence: `benchmarks/README.md` documents install/build/run commands, methodology, and fairness notes.

@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { createApp, respond, route, stylesheet } from '@kovojs/server';
 
-import catalogJson from '../../shared/catalog.json' assert { type: 'json' };
+import catalogJson from '../../shared/catalog.json' with { type: 'json' };
 
 type Product = (typeof catalogJson)[number];
 
@@ -127,7 +127,7 @@ function ListingPage(): string {
       </section>
       <section class="grid" aria-label="Products">
         {catalog.map((product) => (
-          <ProductCard product={product} key={product.id} />
+          <ProductCard product={product} />
         ))}
       </section>
     </main>
