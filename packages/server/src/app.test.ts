@@ -449,7 +449,8 @@ describe('server createApp request shell', () => {
       createApp({
         endpoints: [
           endpoint('/upload', {
-            csrf: { exempt: true, justification: 'test machine endpoint' },
+            csrf: false,
+            csrfJustification: 'test machine endpoint',
             handler: endpointHandler,
             method: 'POST',
           }),

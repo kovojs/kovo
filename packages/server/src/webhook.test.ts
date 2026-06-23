@@ -4,9 +4,13 @@ import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
-import { createMemoryMutationReplayStore } from './replay.js';
 import { s, SchemaValidationError } from './schema.js';
-import { runWebhook, webhook } from './webhook.js';
+import {
+  runWebhook,
+  webhook,
+  type WebhookReplayStore,
+  type WebhookWireResponse,
+} from './webhook.js';
 
 function signedRequest(body: string, signature: string): Request {
   return new Request('https://example.test/webhooks/stripe', {
@@ -57,7 +61,7 @@ describe('server webhook primitive', () => {
   });
 
   it('runs verify -> loose parse -> replay reserve -> tx -> handler -> change record', async () => {
-    const replayStore = createMemoryMutationReplayStore();
+    const replayStore = createMemoryWebhookReplayStore();
     const invoice = domain('invoice');
     const verifier = hmacSignature({
       encoding: 'hex',
@@ -170,7 +174,7 @@ describe('server webhook primitive', () => {
   });
 
   it('rolls back recorded changes when the handler returns fail()', async () => {
-    const replayStore = createMemoryMutationReplayStore();
+    const replayStore = createMemoryWebhookReplayStore();
     const invoice = domain('invoice');
     const steps: string[] = [];
     const failingWebhook = webhook('billing', {
@@ -250,7 +254,7 @@ describe('server webhook primitive', () => {
   // A4 (SPEC §9.1:850): an unexpected handler exception must abort the reservation so
   // a provider retry re-runs the handler, not re-serve a cached 500.
   it('A4: does not commit a 500 to replay on unexpected exception; retry reruns the handler', async () => {
-    const replayStore = createMemoryMutationReplayStore();
+    const replayStore = createMemoryWebhookReplayStore();
     let callCount = 0;
     const flakyWebhook = webhook('flaky', {
       handler(input: { id: string }) {
@@ -371,7 +375,7 @@ describe('server webhook primitive', () => {
   // reserve/set, so a redelivered '' event replays the stored response and never
   // re-runs the handler.
   it('L10-3: an empty-string idem is active — fast-path lookup consulted, redelivery replays', async () => {
-    const memory = createMemoryMutationReplayStore();
+    const memory = createMemoryWebhookReplayStore();
     // Spy store: records the idem values the fast-path LOOKUP (`get`) is consulted
     // with, plus whether `reserve` was attempted. With the truthy `idem` gate at
     // webhook.ts:242, an '' idem skips the lookup entirely (latent double-execute
@@ -508,4 +512,64 @@ function signedRequestNamed(name: string, body: string, signature: string): Requ
     },
     method: 'POST',
   });
+}
+
+function createMemoryWebhookReplayStore(): WebhookReplayStore {
+  const responses = new Map<
+    string,
+    | {
+        pending: Promise<WebhookWireResponse>;
+        reject(reason?: unknown): void;
+        resolve(response: WebhookWireResponse): void;
+      }
+    | { response: WebhookWireResponse }
+  >();
+
+  return {
+    get(scope, idem) {
+      const record = responses.get(webhookReplayKey(scope, idem));
+      if (!record) return undefined;
+      if ('pending' in record) return record.pending;
+      return record.response;
+    },
+    reserve(scope, idem) {
+      const key = webhookReplayKey(scope, idem);
+      if (responses.has(key)) return undefined;
+
+      let resolvePending: (response: WebhookWireResponse) => void = () => undefined;
+      let rejectPending: (reason?: unknown) => void = () => undefined;
+      const pending = new Promise<WebhookWireResponse>((resolve, reject) => {
+        resolvePending = resolve;
+        rejectPending = reject;
+      });
+      pending.catch(() => undefined);
+      const record = {
+        pending,
+        reject: rejectPending,
+        resolve: resolvePending,
+      };
+      responses.set(key, record);
+
+      return {
+        abort() {
+          if (responses.get(key) === record) responses.delete(key);
+          rejectPending(new Error('Webhook replay reservation aborted'));
+        },
+        commit(response: WebhookWireResponse) {
+          responses.set(key, { response });
+          resolvePending(response);
+        },
+      };
+    },
+    set(scope, idem, response) {
+      const key = webhookReplayKey(scope, idem);
+      const existing = responses.get(key);
+      responses.set(key, { response });
+      if (existing && 'pending' in existing) existing.resolve(response);
+    },
+  };
+}
+
+function webhookReplayKey(scope: string, idem: string): string {
+  return `${scope}\0${idem}`;
 }

@@ -356,7 +356,7 @@ describe('server schemas', () => {
     expect(Object.hasOwn(record, '__proto__')).toBe(true);
     expect(record['__proto__']).toEqual(['attacker-a', 'attacker-b']);
     expect(record.constructor).toBe(undefined);
-    expect(record.toString).toBe(undefined);
+    expect(record['toString']).toBe(undefined);
   });
 
   it('does not misclassify prototype-chain keys as repeated FormData fields', () => {
@@ -368,7 +368,7 @@ describe('server schemas', () => {
     // Before the fix `record['constructor']` read the inherited function, so the first
     // append took the array branch and produced `[<fn>, 'first']`.
     expect(record.constructor).toBe('first');
-    expect(record.toString).toBe('only');
+    expect(record['toString']).toBe('only');
   });
 });
 

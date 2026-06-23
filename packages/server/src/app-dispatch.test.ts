@@ -93,10 +93,11 @@ describe('server app matched dispatch boundary', () => {
         csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
         endpoints: [updateEmail],
       });
-      const request = new Request('https://shop.example.test/account/email', {
-        body: new URLSearchParams({ email: 'ada@example.com' }),
-        method,
-      });
+      const requestInit: RequestInit = { method };
+      if (method !== 'GET' && method !== 'HEAD') {
+        requestInit.body = new URLSearchParams({ email: 'ada@example.com' });
+      }
+      const request = new Request('https://shop.example.test/account/email', requestInit);
 
       const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
 
