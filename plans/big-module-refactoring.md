@@ -54,6 +54,9 @@ Current command output after completed splits:
     `packages/drizzle/src/static/session-provenance.ts`.
     Evidence: `packages/drizzle/src/static/session-provenance.ts` is 398 LoC and
     `packages/drizzle/src/static.ts` is reduced to 10,609 LoC; `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts` passed 3 files / 83 tests.
+  - [x] Extract source-module table/import resolution to `packages/drizzle/src/static/tables.ts`.
+    Evidence: `packages/drizzle/src/static/tables.ts` is 774 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 9,883 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts` passed 4 files / 111 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
