@@ -10822,9 +10822,14 @@ function sessionAliasGuardDominatesUse(alias: SessionAlias, use: Node): boolean 
       guarded = true;
       continue;
     }
-    if (!guarded && statementContainsAliasIdentifier(statement, alias.name)) {
+    if (!statementContainsAliasIdentifier(statement, alias.name)) continue;
+    if (!guarded) {
       return false;
     }
+    // advanced-analyzer.md Layer 1: once a nullable private-scope alias is guarded,
+    // any other intervening use is an alias escape/opaque helper boundary. Keep the
+    // proof conditional rather than guessing that the guarded value is still stable.
+    return false;
   }
 
   return guarded;
@@ -10875,7 +10880,8 @@ function statementExits(statement: Node): boolean {
   if (!Node.isExpressionStatement(statement)) return false;
   const expression = unwrappedStaticExpressionNode(statement.getExpression());
   if (!Node.isCallExpression(expression)) return false;
-  const name = staticAccessName(expression.getExpression());
+  const callee = unwrappedStaticExpressionNode(expression.getExpression());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
   return name === 'fail' || name === 'redirect' || name === 'notFound';
 }
 
