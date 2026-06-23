@@ -4,16 +4,22 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
+import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+
 import {
   assertInlineKovoLoaderModuleArtifactParity,
   buildInlineKovoLoaderModuleSource,
   buildInlineKovoLoaderInstallerReadableSource,
   buildInlineKovoLoaderInstallerSource,
   emitInlineKovoLoaderModule,
+  inlineDelegatedEvents,
+  inlineFragmentTargetEscapeReadableSource,
   inlineKovoLoaderGzipByteBudget,
   inlineKovoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
+import { escapeCssString } from './fragment-targets.js';
 import { createInlineKovoLoaderSource, inlineKovoLoaderInstallerSource } from './inline-loader.js';
+import { defaultDelegatedEvents } from './loader.js';
 
 function createOversizedInlineLoaderSource(): string {
   let state = 0x12345678;
@@ -54,6 +60,31 @@ describe('inline loader build source', () => {
     expect(moduleSource).toContain('importModule: ImportHandlerModule,');
     expect(moduleSource).not.toContain('InlineImportHandlerModule');
     expect(moduleSource).not.toContain('eval');
+  });
+
+  it('generates the inline delegated event list from the modular loader source', () => {
+    // SPEC.md §4.4: the modular and inline loaders delegate the same event set.
+    expect(inlineDelegatedEvents).toEqual([...defaultDelegatedEvents]);
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      `const events = ${JSON.stringify([...defaultDelegatedEvents])};`,
+    );
+  });
+
+  it('generates inline fragment-target escaping from the modular helper', () => {
+    // SPEC.md §9.1: inline and modular fragment-target lookup must escape selectors identically.
+    expect(inlineFragmentTargetEscapeReadableSource).toContain('function escapeCssString(value)');
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      inlineFragmentTargetEscapeReadableSource,
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain('const sq = escapeCssString;');
+    expect(escapeCssString('target"bad\\id')).toBe('target\\"bad\\\\id');
+  });
+
+  it('generates the enhanced-navigation request header from the core protocol', () => {
+    // SPEC.md §4.4: enhanced navigation must negotiate the no-loader document variant.
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      `headers: { Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)} }`,
+    );
   });
 
   it('checks the shipped source literal against the executable installer artifact', () => {

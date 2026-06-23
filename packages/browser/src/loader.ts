@@ -70,7 +70,7 @@ export interface KovoLoader {
 // SPEC.md §4.4: delegate (capture phase) every on:* event the app may use. focus/blur
 // have no bubble phase but run a capture phase at ancestors, so capture delegation reaches
 // them; pointerenter/pointerleave are synthesized from pointerover/out in the lifecycle.
-const defaultDelegatedEvents = [
+export const defaultDelegatedEvents = [
   'click',
   'submit',
   'input',

@@ -4,9 +4,15 @@ import { gzipSync } from 'node:zlib';
 
 import ts from 'typescript';
 
+import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
+
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+const modularLoaderSourcePath = fileURLToPath(new URL('./loader.ts', import.meta.url));
+const fragmentTargetsSourcePath = fileURLToPath(
+  new URL('./fragment-targets.ts', import.meta.url),
+);
 const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );
@@ -19,6 +25,15 @@ const wireResponseScannerSourcePath = fileURLToPath(
 );
 
 const inlineHelperSpecs = {
+  fragmentTargetEscape: {
+    label: 'fragment target escape',
+    readableParityLabel: 'canonical fragment target escape helper closure',
+    minifiedParityLabel: 'canonical minified fragment target escape helper closure',
+    rootFunctionNames: ['escapeCssString'],
+    sourceFileName: 'fragment-targets.ts',
+    sourcePath: fragmentTargetsSourcePath,
+    sourcePaths: [fragmentTargetsSourcePath],
+  },
   responseApply: {
     label: 'response apply',
     readableParityLabel: 'canonical response apply helper closure',
@@ -45,6 +60,9 @@ export const inlineKovoLoaderGzipByteBudget = 8192;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
+export const inlineFragmentTargetEscapeReadableSource =
+  readInlineFragmentTargetEscapeReadableSource();
+export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
 
 export const inlineKovoLoaderInstallerReadableSource =
   buildInlineKovoLoaderInstallerReadableSource();
@@ -52,6 +70,8 @@ export const inlineKovoLoaderInstallerReadableSource =
 export function buildInlineKovoLoaderInstallerReadableSource(
   wireParserReadableSource = inlineWireParserReadableSource,
   responseApplyReadableSource = inlineResponseApplyReadableSource,
+  delegatedEvents: readonly string[] = inlineDelegatedEvents,
+  fragmentTargetEscapeReadableSource = inlineFragmentTargetEscapeReadableSource,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -60,11 +80,7 @@ function installInlineKovoLoader(im) {
   // focus/blur have no bubble phase but DO run a capture phase at ancestors, so
   // capture-phase delegation reaches them; pointerenter/pointerleave never run a
   // capture phase at ancestors, so they are synthesized below from pointerover/out.
-  const events = [
-    'click', 'submit', 'input', 'change', 'keydown', 'keyup',
-    'contextmenu', 'paste', 'cancel', 'beforetoggle', 'animationend', 'scroll', 'focus', 'blur',
-    'pointerdown', 'pointermove', 'pointerup',
-  ];
+  const events = ${JSON.stringify([...delegatedEvents])};
   const doc = document;
   let ic = 0;
   const ci = () =>
@@ -303,13 +319,8 @@ function installInlineKovoLoader(im) {
       .split(/[\s,]+/)
       .map((dep) => dep.trim())
       .filter(Boolean);
-  const sq = (value) =>
-    value.replace(/[\n\r\f"\\]/g, (char) => {
-      if (char === '\n') return '\\a ';
-      if (char === '\r') return '\\d ';
-      if (char === '\f') return '\\c ';
-      return '\\' + char;
-    });
+  ${fragmentTargetEscapeReadableSource}
+  const sq = escapeCssString;
   const hsaf = (value) => value && !/[\x00-\x1f\x7f\s;,#=]/.test(value);
   const hsc = (value) => hsaf(value) && !value.includes(':');
   const targetIdentity = (el) =>
@@ -424,7 +435,9 @@ function installInlineKovoLoader(im) {
     const navId = (ni += 1);
     try {
       const requestedUrl = new URL(href, location.href);
-      const response = await fetch(href, { headers: { Accept: 'text/html' } });
+      const response = await fetch(href, {
+        headers: { Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)} },
+      });
       if (navId !== ni) return;
       const finalUrl = new URL(response.url || href, location.href);
       if (!finalUrl.hash && requestedUrl.hash) finalUrl.hash = requestedUrl.hash;
@@ -871,6 +884,53 @@ function readInlineWireParserReadableSource(): string {
 
 function readInlineResponseApplyReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.responseApply);
+}
+
+function readInlineFragmentTargetEscapeReadableSource(): string {
+  return readInlineHelperReadableSource(inlineHelperSpecs.fragmentTargetEscape);
+}
+
+function readModularDefaultDelegatedEvents(
+  source = readFileSync(modularLoaderSourcePath, 'utf8'),
+): string[] {
+  const sourceFile = ts.createSourceFile(
+    'loader.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== 'defaultDelegatedEvents'
+      ) {
+        continue;
+      }
+      const initializer =
+        declaration.initializer && ts.isAsExpression(declaration.initializer)
+          ? declaration.initializer.expression
+          : declaration.initializer;
+      if (!initializer || !ts.isArrayLiteralExpression(initializer)) {
+        throw new Error(
+          'defaultDelegatedEvents must stay a literal string array for inline loader generation.',
+        );
+      }
+      return initializer.elements.map((element) => {
+        if (!ts.isStringLiteral(element)) {
+          throw new Error(
+            'defaultDelegatedEvents must contain only string literals for inline loader generation.',
+          );
+        }
+        return element.text;
+      });
+    }
+  }
+
+  throw new Error('Inline Kovo loader could not find defaultDelegatedEvents in loader.ts.');
 }
 
 export function extractInlineWireParserReadableSource(

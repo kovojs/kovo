@@ -84,6 +84,21 @@ describe('server app shell document assembly', () => {
     );
   });
 
+  it('omits the loader script and loader CSP hash for negotiated loader-free documents', () => {
+    const loaderHash = cspSha256(kovoLoaderSource);
+    const document = renderDocument({
+      body: '<main>Product</main>',
+      loader: 'omit',
+      queries: [{ key: 'product:p1', name: 'product', value: { id: 'p1' } }],
+    });
+
+    expect(document.html).not.toContain('installInlineKovoLoader');
+    expect(document.html).not.toContain(`<script data-kovo-csp-hash="${loaderHash}">`);
+    expect(document.csp.scripts).not.toContain(loaderHash);
+    expect(renderContentSecurityPolicy(document.csp)).not.toContain(loaderHash);
+    expect(document.html).toContain('kovo-query="product"');
+  });
+
   // F2 (bugs-part3 L2-early-hints-2): the document head path threads rendered query
   // values into the meta factory so `metaFromQuery(...)` resolves; an absent query
   // must drop only the derived tags rather than 500 the whole document.
