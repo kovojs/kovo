@@ -71,6 +71,10 @@ describe('diagnostic registry', () => {
       'KV419',
       'KV420',
       'KV421',
+      'KV422',
+      'KV423',
+      'KV424',
+      'KV425',
     ]);
   });
 
@@ -588,6 +592,42 @@ describe('diagnostic registry', () => {
       Fixes: emit exactly one mutation fact per mutation key, or rename one mutation so its key is unique across the app graph.
       SPEC §6.1 makes the mutation registry key-addressed and §9.5 dispatches a POST to exactly one keyed handler; duplicate mutation keys would otherwise silently last-write-wins the invalidation registry while first-match-wins server dispatch — like routes (KV228), components (KV237), fragment targets (KV238), view transitions (KV239), and query shapes (KV240), mutation keys must be unique.",
           "message": "Duplicate mutation key.",
+          "severity": "error",
+        },
+        "KV422": {
+          "code": "KV422",
+          "help": "Would lower to: a raw endpoint audit row with explicit method, purpose/reason, mount scope, response body posture, cache posture, and app-owned encoding/header-safety declarations.
+      Blocked reason: endpoint() is the raw HTTP escape hatch; without complete audit metadata, reviewers cannot tell why the route exists, what methods it accepts, or who owns output/header safety.
+      Fixes: add the missing endpoint metadata, give prefix mounts a mountJustification, and keep csrf:false justifications separate from the endpoint purpose.
+      SPEC §9.1 makes raw endpoint ingress registry-visible, and the source/sink inventory requires every raw endpoint to explain its trust and output posture.",
+          "message": "Raw endpoint declaration is missing required audit metadata.",
+          "severity": "error",
+        },
+        "KV423": {
+          "code": "KV423",
+          "help": "Would lower to: a framework-owned safe helper, typed trust API, or registered source/sink row for the dangerous output operation.
+      Blocked reason: app-authored direct writes to dangerous sinks such as raw HTML, URL/navigation, selectors, headers, files, dynamic import, eval, or process execution bypass Kovo contextual encoding and audit surfaces.
+      Fixes: route the value through the corresponding Kovo helper, use an explicit trustedHtml/trustedUrl-style escape hatch with provenance, or move app-owned raw protocol code behind an audited endpoint.
+      SPEC §4.8, §5.2 rule 10, and §9.1 require dangerous sinks to be safe-by-default or explicit in the source/sink inventory.",
+          "message": "App-authored dangerous sink is not registered or behind a safe Kovo surface.",
+          "severity": "error",
+        },
+        "KV424": {
+          "code": "KV424",
+          "help": "Would lower to: a source/sink registry entry, runtime chokepoint, diagnostic, or explicit repo-internal exclusion for each dangerous framework sink token found by drift detection.
+      Blocked reason: a new framework-owned sink appeared without being enrolled in the generated source/sink inventory, so future audits can miss a path from attacker-controlled input to output.
+      Fixes: add the sink to the shared registry with spec/test evidence, attach it to an existing safe chokepoint, or record a narrow exclusion proving it is build/test-only or outside request paths.
+      The source/sink plan requires drift detection for sink tokens such as innerHTML, Headers, Location, Set-Cookie, querySelector, import(), new Function, child_process, fs, and path resolution.",
+          "message": "Framework source/sink registry drift detected an unregistered sink.",
+          "severity": "error",
+        },
+        "KV425": {
+          "code": "KV425",
+          "help": "Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
+      Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain --trust.
+      Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
+      SPEC §4.8 and §9.1 allow trust escape hatches only when they are explicit and auditable.",
+          "message": "Trust escape hatch lacks auditable provenance.",
           "severity": "error",
         },
       }

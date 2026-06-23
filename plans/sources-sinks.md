@@ -129,7 +129,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - [x] Tests (`packages/server/src/endpoint.test.ts` + `tests/integration/fixtures/endpoint-raw-request/app.tsx`): bad signature → 401, good signature → 200, handler still reads the body, `customVerifier` predicate path, and fail-closed on a verifier throw.
     - Evidence: `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts` and `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts`.
   - Note: this makes the declared `verifier:`/`custom:` posture an enforced guarantee. The metadata/justification items below (required `method`, `reason`, `mountJustification`, omitted-auth diagnostic) remain valuable but are secondary to enforcement.
-- [ ] Allocate source/sink diagnostic codes after checking `diagnosticDefinitions`.
+- [x] Allocate source/sink diagnostic codes after checking `diagnosticDefinitions`.
+  - Evidence: `pnpm exec vitest run packages/core/src/diagnostics.test.ts`, `pnpm run check:api-surface`, and `git diff --check` verify KV422-KV425 are allocated in `diagnosticDefinitions`, the inline registry snapshot, SPEC §11.3, and the diagnostics guide without widening the public API baseline.
   - Do not reuse KV236/KV415/KV418/KV414 for unrelated classes; keep each code's question narrow.
 - [ ] Make raw `endpoint()` declarations always auditable.
   - Require an endpoint-level `reason`/`purpose` string for every `endpoint()` because it is the raw HTTP escape hatch. The audit row should print that reason even when auth and CSRF are otherwise safe.
@@ -180,6 +181,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm exec vitest run packages/server/src/webhook.test.ts` verified webhook raw-byte verification and name-only endpoint auth metadata still self-enforce without dispatcher double verification.
 - `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts` verified full request-handler bad signature → 401 and good signature → 200 with the handler still reading the raw body.
 - `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check` verified type/import boundaries, example typechecks, public API surface baseline, and whitespace.
+- `pnpm exec vitest run packages/core/src/diagnostics.test.ts` verified source/sink diagnostic allocation KV422-KV425 in `diagnosticDefinitions` and snapshots.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
 - `sed -n '1,260p' plans/fix-security.md` inspected prior non-SQL security remediation lanes.
