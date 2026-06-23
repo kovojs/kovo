@@ -214,14 +214,18 @@ refetch, and morph application.
 
 ## Verification Gates
 
-- [ ] **Focused browser package gate.**
-  - Evidence needed: `pnpm exec vitest run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/browser/src/loader.test.ts packages/browser/src/loader-lifecycle.test.ts packages/browser/src/mutation-submit.test.ts`.
-- [ ] **Browser DOM gate.**
-  - Evidence needed: `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts packages/browser/src/mutation-response-dom.browser.test.ts`.
-- [ ] **Server document/static-export gate.**
-  - Evidence needed: `pnpm exec vitest run packages/server/src/document.test.ts packages/server/src/static-export-handler-doc.test.ts packages/server/src/vite-static-export-options.test.ts`.
-- [ ] **Inline loader build gate.**
-  - Evidence needed: `pnpm --filter @kovojs/browser run check:inline-loader`.
+- [x] **Focused browser package gate.**
+  - Evidence: `pnpm exec vitest run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/browser/src/loader.test.ts packages/browser/src/loader-lifecycle.test.ts packages/browser/src/mutation-submit.test.ts`
+    passed on 2026-06-23.
+- [x] **Browser DOM gate.**
+  - Evidence: `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts packages/browser/src/mutation-response-dom.browser.test.ts`
+    passed on 2026-06-23.
+- [x] **Server document/static-export gate.**
+  - Evidence: `pnpm exec vitest run packages/core/src/document-protocol.test.ts packages/server/src/app.test.ts packages/server/src/document.test.ts packages/server/src/static-export-handler-doc.test.ts packages/server/src/vite-static-export-options.test.ts`
+    passed on 2026-06-23.
+- [x] **Inline loader build gate.**
+  - Evidence: `pnpm --filter @kovojs/browser run check:inline-loader` passed on
+    2026-06-23.
 - [ ] **Demo measurement gate.**
   - Evidence needed: a script or documented command against the Stack Overflow
     demo showing initial document loader bytes and route-to-route enhanced
