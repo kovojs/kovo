@@ -181,7 +181,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - [x] Add copyable rules for common app code.
   - Evidence: `site/content/guides/security.md` now lists rules forbidding unreviewed interpolation into HTML, URL, SQL, headers, cookies, filesystem paths, or raw endpoints and explicitly excludes CSV/TSV/spreadsheet export from Kovo's safe-by-default contract; `pnpm --dir site run content` passed.
   - Never interpolate request/DB/model data into HTML, URL, SQL, headers, cookies, filesystem paths, or raw endpoints without the corresponding Kovo safe helper or trust API; do not present CSV/TSV/spreadsheet export as a Kovo-supported safe-by-default pattern.
-- [ ] Audit examples/templates against the inventory.
+- [x] Audit examples/templates against the inventory.
+  - Evidence: `node packages/cli/src/bin.ts check sources-sinks` scanned `packages|examples|site|tests` and reported `unregistered=0 status=accounted`, covering starter templates, tutorial/site demos, examples, and package-hosted template code.
   - Starter templates, tutorial steps, reference apps, examples, site demos, and gallery code should have zero unregistered app-authored sinks.
 
 ## Phase 6: Verification and Acceptance
