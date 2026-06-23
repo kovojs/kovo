@@ -50,7 +50,8 @@ construction and lazy by default; the dynamic *shape* of the tree is data-driven
 - [x] Public API wired through `@kovojs/server` (`api/rendering.ts`) with TSDoc citing §4.10; no NEW
       `api-surface-baseline.json` violations. Evidence: api-surface gate exit 0, baseline unchanged.
 - [x] `SPEC.md` §4.10 added (normative) and consistent with §4.5/§4.8/§4.9.
-- [ ] Integrated to `main`: worktree `agent/render-tree` merged, scoped gates green.
+- [x] Integrated to `main`: `agent/render-tree` merged (merge commit `c0f0a322`); render-tree
+      tests re-run green on integrated `main` (13 passed).
 
 ## Deferred (follow-ups, not v1)
 
