@@ -1,5 +1,11 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import {
+  isDbAdapterLike,
+  isPreparedStatementExecutionMethod,
+  isSqlHandleLike,
+  isSqlHandleProperty,
+} from '@kovojs/core/internal/sql-safety';
+import {
   observeSqlEngineSideEffects,
   observeSqlStatementArgument,
   tableCounts,
@@ -314,46 +320,6 @@ function observablePreparedSqlMethod(
     observeSqlStatementArgument(statement, config, recorder);
     return value.call(target, ...args);
   };
-}
-
-function isPreparedStatementExecutionMethod(prop: PropertyKey): boolean {
-  return prop === 'all' || prop === 'get' || prop === 'run' || prop === 'iterate';
-}
-
-function isSqlHandleProperty(prop: PropertyKey): boolean {
-  return prop === 'pglite' || prop === 'sqlite' || prop === 'client' || prop === '$client';
-}
-
-function isDbAdapterLike(value: unknown): value is Record<PropertyKey, unknown> {
-  if (typeof value !== 'object' || value === null) return false;
-  const record = value as Record<PropertyKey, unknown>;
-
-  return (
-    isSqlHandleLike(value) ||
-    isSqlHandleLike(record.pglite) ||
-    isSqlHandleLike(record.sqlite) ||
-    isSqlHandleLike(record.client) ||
-    isSqlHandleLike(record.$client) ||
-    typeof record.read === 'function' ||
-    typeof record.write === 'function' ||
-    typeof record.sql === 'function' ||
-    (typeof record.exec === 'function' && typeof record.query === 'function') ||
-    typeof record.execute === 'function'
-  );
-}
-
-function isSqlHandleLike(value: unknown): value is object {
-  if (typeof value !== 'object' || value === null) return false;
-  const record = value as Record<PropertyKey, unknown>;
-  if (typeof record.prepare === 'function' && typeof record.exec === 'function') return true;
-  if (typeof record.execute === 'function') return true;
-  const handleMethodCount = [
-    typeof record.transaction === 'function',
-    typeof record.exec === 'function',
-    typeof record.query === 'function',
-  ].filter(Boolean).length;
-
-  return handleMethodCount >= 2;
 }
 
 /**

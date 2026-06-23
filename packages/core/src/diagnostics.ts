@@ -63,7 +63,8 @@ export type DiagnosticCode =
   | 'KV418'
   | 'KV419'
   | 'KV420'
-  | 'KV421';
+  | 'KV421'
+  | 'KV422';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -798,5 +799,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Duplicate mutation key.',
+  },
+  KV422: {
+    code: 'KV422',
+    help: [
+      'Would lower to: SQL text and SQL values crossing the managed DB seam as separate facts.',
+      'Blocked reason: executable SQL text was built from an unbranded raw string, an unsafe raw chunk, or an unchecked identifier/keyword fragment, so request data could become SQL syntax instead of a bound value.',
+      'Fixes: use Drizzle builders or Kovo sql`...` placeholders for scalar values, staticSql`...` for literal-only SQL text, sql.identifier(value, { allow }) or sql.allow(value, allowlist) for allowlisted identifiers/keywords, or trustedSql(..., { justification }) for the audited raw-SQL escape hatch.',
+      'SPEC §10.2/§10.3 and §11.2 require framework-managed DB handles to reject unbranded executable SQL text independently from KV406/KV410 read/write freshness declarations.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'SQL text injection risk.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

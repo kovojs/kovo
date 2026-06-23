@@ -1,4 +1,12 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
+import {
+  isDbAdapterLike,
+  isPreparedStatementExecutionMethod,
+  isSqlHandleLike,
+  isSqlHandleProperty,
+  validateManagedSqlStatement,
+  type SqlSafetyMode,
+} from '@kovojs/core/internal/sql-safety';
 import type { ServerErrorHandler } from './diagnostics.js';
 import { matchRoute, type RouteLike } from './match.js';
 import type { ServerResponseBase } from './response.js';
@@ -421,7 +429,11 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
 
   if (options.db) {
     const dbValue = await options.db(lifecycleRequest as LifecycleRequest<Request, SessionValue>);
-    lifecycleRequest = requestWithProperty(lifecycleRequest, 'db', dbValue);
+    lifecycleRequest = requestWithProperty(
+      lifecycleRequest,
+      'db',
+      wrapManagedDbForSqlSafety(dbValue, managedSqlSafetyMode()),
+    );
   }
 
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
@@ -458,6 +470,203 @@ export async function renderHttpGuardFailureResponse<Request>(
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
     status: 403,
   };
+}
+
+function managedSqlSafetyMode(): SqlSafetyMode {
+  const configured =
+    typeof process === 'object' && process !== null ? process.env.KOVO_SQL_GUARD : undefined;
+  if (configured === 'enforce' || configured === 'off' || configured === 'warn') return configured;
+  return process.env.NODE_ENV === 'production' ? 'warn' : 'enforce';
+}
+
+function wrapManagedDbForSqlSafety<DbValue>(db: DbValue, mode: SqlSafetyMode): DbValue {
+  if (mode === 'off' || !isDbAdapterLike(db)) return db;
+
+  const proxyCache = new WeakMap<object, object>();
+  const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
+  return wrapDbAdapter(db, mode, proxyCache, methodCache) as DbValue;
+}
+
+function wrapDbAdapter(
+  db: object,
+  mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): object {
+  const cached = proxyCache.get(db);
+  if (cached) return cached;
+
+  const proxy = new Proxy(db as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+
+      if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
+        return wrapSqlHandle(value, mode, proxyCache, methodCache);
+      }
+
+      if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedSqlMethod(target, value, mode),
+        );
+      }
+
+      if (
+        (prop === 'query' || prop === 'exec' || prop === 'execute') &&
+        typeof value === 'function' &&
+        (isDbAdapterLike(target) || isSqlHandleLike(target))
+      ) {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedSqlMethod(target, value, mode),
+        );
+      }
+
+      if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(target)) {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedPrepareMethod(target, value, mode, proxyCache, methodCache),
+        );
+      }
+
+      return typeof value === 'function'
+        ? cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target))
+        : value;
+    },
+  });
+
+  proxyCache.set(db, proxy);
+  return proxy;
+}
+
+function wrapSqlHandle(
+  handle: object,
+  mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): object {
+  const cached = proxyCache.get(handle);
+  if (cached) return cached;
+
+  const proxy = new Proxy(handle as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+
+      if (prop === 'transaction' && typeof value === 'function') {
+        return cachedSqlSafetyMethod(
+          target,
+          prop,
+          value,
+          methodCache,
+          () =>
+            (callback: (tx: object) => unknown, ...args: unknown[]) =>
+              value.call(
+                target,
+                (tx: object) => callback(wrapSqlHandle(tx, mode, proxyCache, methodCache)),
+                ...args,
+              ),
+        );
+      }
+
+      if (
+        (prop === 'query' || prop === 'exec' || prop === 'execute') &&
+        typeof value === 'function'
+      ) {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedSqlMethod(target, value, mode),
+        );
+      }
+
+      if (prop === 'prepare' && typeof value === 'function') {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedPrepareMethod(target, value, mode, proxyCache, methodCache),
+        );
+      }
+
+      return typeof value === 'function'
+        ? cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target))
+        : value;
+    },
+  });
+
+  proxyCache.set(handle, proxy);
+  return proxy;
+}
+
+function guardedSqlMethod(target: object, value: Function, mode: SqlSafetyMode): Function {
+  return (statement: unknown, ...args: unknown[]) => {
+    assertManagedSqlStatement(statement, mode);
+    return value.call(target, statement, ...args);
+  };
+}
+
+function guardedPrepareMethod(
+  target: object,
+  value: Function,
+  mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): Function {
+  return (statement: unknown, ...args: unknown[]) => {
+    assertManagedSqlStatement(statement, mode);
+    const prepared = value.call(target, statement, ...args);
+    return typeof prepared === 'object' && prepared !== null
+      ? wrapPreparedSqlStatement(prepared, mode, proxyCache, methodCache)
+      : prepared;
+  };
+}
+
+function wrapPreparedSqlStatement(
+  statementHandle: object,
+  mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): object {
+  const cached = proxyCache.get(statementHandle);
+  if (cached) return cached;
+
+  const proxy = new Proxy(statementHandle as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target));
+      }
+
+      return typeof value === 'function'
+        ? cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target))
+        : value;
+    },
+  });
+
+  proxyCache.set(statementHandle, proxy);
+  return proxy;
+}
+
+function assertManagedSqlStatement(statement: unknown, mode: SqlSafetyMode): void {
+  const validation = validateManagedSqlStatement(statement);
+  if (validation.ok) return;
+  if (mode === 'warn') {
+    console.warn(validation.message);
+    return;
+  }
+  throw new Error(validation.message);
+}
+
+function cachedSqlSafetyMethod(
+  target: object,
+  prop: PropertyKey,
+  value: Function,
+  cache: WeakMap<object, Map<PropertyKey, Function>>,
+  factory: () => Function,
+): Function {
+  let targetCache = cache.get(target);
+  if (!targetCache) {
+    targetCache = new Map();
+    cache.set(target, targetCache);
+  }
+  const cached = targetCache.get(prop);
+  if (cached) return cached;
+
+  const next = factory();
+  targetCache.set(prop, next);
+  return next;
 }
 
 /**

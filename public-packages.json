@@ -19,6 +19,7 @@
           "./internal/query-delta",
           "./internal/render-plan-token",
           "./internal/security-url",
+          "./internal/sql-safety",
           "./internal/component-render",
           "./internal/event",
           "./internal/storage"
