@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Pointer icon (Lucide). https://lucide.dev/icons/pointer */
-export function Pointer(props: IconProps = {}): string {
+export function Pointer(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M22 14a8 8 0 0 1-8 8"></path>

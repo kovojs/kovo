@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chevrons Right icon (Lucide). https://lucide.dev/icons/chevrons-right */
-export function ChevronsRight(props: IconProps = {}): string {
+export function ChevronsRight(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m6 17 5-5-5-5"></path>

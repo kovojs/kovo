@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Corner Up Right icon (Lucide). https://lucide.dev/icons/corner-up-right */
-export function CornerUpRight(props: IconProps = {}): string {
+export function CornerUpRight(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 14 5-5-5-5"></path>

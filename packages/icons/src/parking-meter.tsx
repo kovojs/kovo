@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Parking Meter icon (Lucide). https://lucide.dev/icons/parking-meter */
-export function ParkingMeter(props: IconProps = {}): string {
+export function ParkingMeter(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 15h2"></path>

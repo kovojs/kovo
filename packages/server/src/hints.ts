@@ -51,8 +51,8 @@ export interface StylesheetAsset {
   criticalCss?: string;
   cspHash?: string;
   /**
-   * `true` defers the linked stylesheet behind a preload plus no-JS fallback. Critical CSS assets
-   * do this by default; set `false` on a critical CSS asset to keep the full stylesheet blocking.
+   * `true` defers the linked stylesheet behind a preload plus no-JS fallback. By default the
+   * stylesheet remains render-blocking even when critical CSS is inlined.
    */
   deferFull?: boolean;
   href: string;
@@ -75,8 +75,8 @@ export interface StylesheetDeclarationOptions {
   /** Optional CSP hash for the inlined critical CSS. */
   cspHash?: string;
   /**
-   * `true` defers the linked stylesheet behind a preload plus no-JS fallback. Critical CSS assets
-   * do this by default; set `false` on a critical CSS asset to keep the full stylesheet blocking.
+   * `true` defers the linked stylesheet behind a preload plus no-JS fallback. By default the
+   * stylesheet remains render-blocking even when critical CSS is inlined.
    */
   deferFull?: boolean;
   /** Public stylesheet href; local sources derive `/assets/<file>` when omitted. */
@@ -278,9 +278,9 @@ function renderPageStylesheetHint(asset: StylesheetAsset): InlineHtmlWithCsp {
   const cssText = escapeStyleText(asset.criticalCss);
   const hash = asset.cspHash ?? cspSha256(cssText);
   const fullStylesheet =
-    asset.deferFull === false
-      ? link
-      : `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`;
+    asset.deferFull === true
+      ? `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`
+      : link;
 
   return {
     csp: { scripts: [], styles: [hash] },

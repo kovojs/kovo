@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** User Search icon (Lucide). https://lucide.dev/icons/user-search */
-export function UserSearch(props: IconProps = {}): string {
+export function UserSearch(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="10" cy="7" r="4"></circle>

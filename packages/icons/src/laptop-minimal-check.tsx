@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Laptop Minimal Check icon (Lucide). https://lucide.dev/icons/laptop-minimal-check */
-export function LaptopMinimalCheck(props: IconProps = {}): string {
+export function LaptopMinimalCheck(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 20h20"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chart Bar Big icon (Lucide). https://lucide.dev/icons/chart-bar-big */
-export function ChartBarBig(props: IconProps = {}): string {
+export function ChartBarBig(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>

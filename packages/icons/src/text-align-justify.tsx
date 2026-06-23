@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Text Align Justify icon (Lucide). https://lucide.dev/icons/text-align-justify */
-export function TextAlignJustify(props: IconProps = {}): string {
+export function TextAlignJustify(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 5h18"></path>

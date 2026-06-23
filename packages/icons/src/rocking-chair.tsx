@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Rocking Chair icon (Lucide). https://lucide.dev/icons/rocking-chair */
-export function RockingChair(props: IconProps = {}): string {
+export function RockingChair(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 13 3.708 7.416"></path>

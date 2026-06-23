@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Ham icon (Lucide). https://lucide.dev/icons/ham */
-export function Ham(props: IconProps = {}): string {
+export function Ham(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.144 21.144A7.274 10.445 45 1 0 2.856 10.856"></path>

@@ -215,13 +215,12 @@ describe('page hints', () => {
       },
       html: [
         '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
-        '<link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style>',
-        '<noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
+        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
       ].join(''),
     });
   });
 
-  it('defers full stylesheet delivery by default when critical CSS is inlined', () => {
+  it('keeps full stylesheet delivery render-blocking by default when critical CSS is inlined', () => {
     expect(
       renderPageHints({
         stylesheets: [
@@ -232,11 +231,11 @@ describe('page hints', () => {
         ],
       }).html,
     ).toContain(
-      '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style><link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style><noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
+      '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style><link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
     );
   });
 
-  it('can opt critical stylesheets back into render-blocking full stylesheet delivery', () => {
+  it('can explicitly keep critical stylesheets render-blocking', () => {
     expect(
       renderPageHints({
         stylesheets: [
@@ -295,8 +294,7 @@ describe('page hints', () => {
       },
       html: [
         '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style>',
-        '<link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style>',
-        '<noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
+        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
         '<link rel="stylesheet" href="/assets/components/cart/cart-drawer.css">',
       ].join(''),
     });

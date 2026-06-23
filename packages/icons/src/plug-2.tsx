@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Plug 2 icon (Lucide). https://lucide.dev/icons/plug-2 */
-export function Plug2(props: IconProps = {}): string {
+export function Plug2(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M9 2v6"></path>

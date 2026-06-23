@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** At Sign icon (Lucide). https://lucide.dev/icons/at-sign */
-export function AtSign(props: IconProps = {}): string {
+export function AtSign(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="12" r="4"></circle>

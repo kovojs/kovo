@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Percent icon (Lucide). https://lucide.dev/icons/percent */
-export function Percent(props: IconProps = {}): string {
+export function Percent(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="19" x2="5" y1="5" y2="19"></line>

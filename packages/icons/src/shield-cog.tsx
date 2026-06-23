@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Shield Cog icon (Lucide). https://lucide.dev/icons/shield-cog */
-export function ShieldCog(props: IconProps = {}): string {
+export function ShieldCog(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10.929 14.467-.383.924"></path>

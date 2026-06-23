@@ -27,7 +27,7 @@ describe('@kovojs/test query verifier', () => {
     );
   });
 
-  it('passes non-string query arguments through before SQL verification', () => {
+  it('observes non-string query arguments without replacing adapter arguments', () => {
     const verifier = createDbVerifier({}, { domainByTable: { cart_items: 'cart' } });
     const calls: unknown[] = [];
     const db = verifier.wrap({
@@ -40,7 +40,17 @@ describe('@kovojs/test query verifier', () => {
 
     expect(db.query(queryObject)).toEqual(['ok']);
     expect(calls).toEqual([queryObject]);
-    expect(verifier.observed).toEqual([]);
+    expect(verifier.observed).toEqual([
+      {
+        branch: undefined,
+        domain: 'cart',
+        kind: 'read',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: 'select * from cart_items',
+        table: 'cart_items',
+      },
+    ]);
   });
 
   it('observes structured exec and sql statement objects without replacing adapter arguments', () => {

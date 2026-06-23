@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Crop icon (Lucide). https://lucide.dev/icons/crop */
-export function Crop(props: IconProps = {}): string {
+export function Crop(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M6 2v14a2 2 0 0 0 2 2h14"></path>

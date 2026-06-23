@@ -10,6 +10,7 @@ import { connect as http2Connect, createServer as createHttp2Server } from 'node
 import type { AddressInfo, Socket } from 'node:net';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
 import { domain } from './domain.js';
@@ -321,7 +322,7 @@ describe('server node adapter', () => {
       routes: [
         route('/cart', {
           modulepreloads: [],
-          page: () => `<main>Cart ${db.count}</main>`,
+          page: () => trustedHtml(`<main>Cart ${db.count}</main>`),
         }),
       ],
     });

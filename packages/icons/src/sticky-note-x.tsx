@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Sticky Note X icon (Lucide). https://lucide.dev/icons/sticky-note-x */
-export function StickyNoteX(props: IconProps = {}): string {
+export function StickyNoteX(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 3v5a1 1 0 0 0 1 1h5"></path>

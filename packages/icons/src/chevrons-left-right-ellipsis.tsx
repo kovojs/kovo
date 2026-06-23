@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chevrons Left Right Ellipsis icon (Lucide). https://lucide.dev/icons/chevrons-left-right-ellipsis */
-export function ChevronsLeftRightEllipsis(props: IconProps = {}): string {
+export function ChevronsLeftRightEllipsis(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 12h.01"></path>

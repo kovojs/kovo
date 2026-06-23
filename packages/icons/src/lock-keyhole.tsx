@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Lock Keyhole icon (Lucide). https://lucide.dev/icons/lock-keyhole */
-export function LockKeyhole(props: IconProps = {}): string {
+export function LockKeyhole(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="16" r="1"></circle>

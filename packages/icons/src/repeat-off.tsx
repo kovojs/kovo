@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Repeat Off icon (Lucide). https://lucide.dev/icons/repeat-off */
-export function RepeatOff(props: IconProps = {}): string {
+export function RepeatOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11.656 6H21l-4-4"></path>

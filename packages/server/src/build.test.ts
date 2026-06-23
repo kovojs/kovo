@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as packageBuildApi from '@kovojs/server/build';
 import { createApp } from './app.js';
+import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { cloudflare, node, vercel } from './build.js';
 import { stylesheet } from './hints.js';
@@ -54,7 +55,9 @@ describe('server build-time deployment API', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart <button on:click="/c/__v/cart-v1/cart.client.js#Cart$click">Click</button></main>';
+                return renderedHtml(
+                  '<main>Cart <button on:click="/c/__v/cart-v1/cart.client.js#Cart$click">Click</button></main>',
+                );
               },
             }),
           ],
@@ -187,7 +190,7 @@ describe('server build-time deployment API', () => {
           routes: [
             route('/', {
               page() {
-                return '<main class="route-shell">Home</main>';
+                return renderedHtml('<main class="route-shell">Home</main>');
               },
               stylesheets: [routeStylesheet],
             }),
@@ -255,7 +258,7 @@ describe('server build-time deployment API', () => {
           routes: [
             route('/', {
               page() {
-                return '<main>Home</main>';
+                return renderedHtml('<main>Home</main>');
               },
             }),
           ],
@@ -310,7 +313,7 @@ describe('server build-time deployment API', () => {
           routes: [
             route('/', {
               page() {
-                return '<main>Home</main>';
+                return renderedHtml('<main>Home</main>');
               },
             }),
           ],
@@ -345,7 +348,7 @@ describe('server build-time deployment API', () => {
       routes: [
         route('/app', {
           page() {
-            return '<main>App</main>';
+            return renderedHtml('<main>App</main>');
           },
         }),
       ],
@@ -429,7 +432,7 @@ describe('server build-time deployment API', () => {
             route('/hello', {
               guard: () => true,
               page() {
-                return '<main>Hello</main>';
+                return renderedHtml('<main>Hello</main>');
               },
             }),
           ],
@@ -526,7 +529,7 @@ export default async function handler(request) {
             route('/', {
               guard: () => true,
               page() {
-                return '<main>Home</main>';
+                return renderedHtml('<main>Home</main>');
               },
             }),
           ],
@@ -580,7 +583,7 @@ export default async function handler(request) {
             route('/hello', {
               guard: () => true,
               page() {
-                return '<main>Hello</main>';
+                return renderedHtml('<main>Hello</main>');
               },
             }),
           ],
@@ -698,7 +701,7 @@ export default async function handler(request) {
           routes: [
             route('/', {
               page() {
-                return '<main>Static Home</main>';
+                return renderedHtml('<main>Static Home</main>');
               },
             }),
           ],
@@ -784,13 +787,13 @@ export default async function handler(request) {
           routes: [
             route('/static', {
               page() {
-                return '<main>Static Route</main>';
+                return renderedHtml('<main>Static Route</main>');
               },
             }),
             route('/dynamic', {
               guard: () => true,
               page() {
-                return '<main>Dynamic Route</main>';
+                return renderedHtml('<main>Dynamic Route</main>');
               },
             }),
           ],
@@ -976,7 +979,7 @@ export default async function handler(request) {
             route('/hello', {
               guard: () => true,
               page() {
-                return '<main>Hello</main>';
+                return renderedHtml('<main>Hello</main>');
               },
             }),
           ],
@@ -1085,7 +1088,7 @@ export default async function handler(request) {
           routes: [
             route('/db', {
               page() {
-                return '<main>DB</main>';
+                return renderedHtml('<main>DB</main>');
               },
             }),
           ],
@@ -1093,6 +1096,7 @@ export default async function handler(request) {
         outDir: join(root, '.kovo'),
         serverHandlerSource: `
 import { spawnSync } from 'node:child_process';
+import { renderedHtml } from './html.js';
 
 export default async function handler() {
   spawnSync('true');

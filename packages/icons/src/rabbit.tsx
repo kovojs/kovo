@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Rabbit icon (Lucide). https://lucide.dev/icons/rabbit */
-export function Rabbit(props: IconProps = {}): string {
+export function Rabbit(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13 16a3 3 0 0 1 2.24 5"></path>

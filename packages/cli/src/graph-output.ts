@@ -416,6 +416,9 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     lines.push(`invalidates: ${list(mutation.invalidates)}`);
     lines.push(`manual-invalidates: ${list(mutation.manualInvalidates)}`);
     lines.push(`updates: ${listMutationUpdates(mutationUpdates(mutation, graph))}`);
+    for (const fact of sqlSafetyFactsForTarget(graph, 'mutation', mutation.key)) {
+      lines.push(sqlSafetyLine(fact));
+    }
 
     if (options.optimistic) {
       const coverages = optimisticCoverageForMutation(mutation, graph);
@@ -456,6 +459,9 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     lines.push(`consumers: ${list(queryConsumers(query.query, graph))}`);
     lines.push(`invalidated-by: ${list(invalidatedBy(query, graph))}`);
     lines.push(`domain-writes: ${list(domainWritesFor(query, graph))}`);
+    for (const fact of sqlSafetyFactsForTarget(graph, 'query', query.query)) {
+      lines.push(sqlSafetyLine(fact));
+    }
     return ok(lines);
   }
 
@@ -997,8 +1003,8 @@ function staticDiagnosticLine(diagnostic: CoreGraph.StaticDiagnosticFact): strin
 function unregisteredSinkLine(sink: CoreGraph.UnregisteredSinkFact): string {
   const source = sink.source ? ` source=${sink.source}` : '';
   return [
-    `ERROR KV423 ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
-    diagnosticDefinitionText('KV423', { includeHelp: true }),
+    `ERROR KV424 ${sink.site} sink=${sink.sink}${source} safe=${sink.safePath}`,
+    diagnosticDefinitionText('KV424', { includeHelp: true }),
   ].join(' ');
 }
 
@@ -1017,6 +1023,25 @@ function notFound(options: KovoTargetExplainOptions): KovoCheckResult {
 
 function list(values: readonly string[] | undefined): string {
   return values && values.length > 0 ? values.join(',') : '-';
+}
+
+function sqlSafetyFactsForTarget(
+  graph: CoreGraph.KovoExplainInput,
+  targetKind: CoreGraph.SqlSafetyExplainFact['targetKind'],
+  target: string,
+): CoreGraph.SqlSafetyExplainFact[] {
+  return [...(graph.sqlSafety ?? [])]
+    .filter((fact) => fact.targetKind === targetKind && fact.target === target)
+    .sort((left, right) => left.site.localeCompare(right.site));
+}
+
+function sqlSafetyLine(fact: CoreGraph.SqlSafetyExplainFact): string {
+  return [
+    `SQL ${fact.site}`,
+    `text=${fact.text}`,
+    `declarations=${list(fact.declarations)}`,
+    `justification=${fact.justificationSite ?? '-'}`,
+  ].join(' ');
 }
 
 function findComponentExplain(

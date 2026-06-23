@@ -554,7 +554,7 @@ describe('kovo check', () => {
     `);
   });
 
-  it('fails KV423 for graph-reported app-authored dangerous sinks', () => {
+  it('fails KV424 for graph-reported app-authored dangerous sinks', () => {
     const result = kovoCheck({
       unregisteredSinks: [
         {
@@ -568,7 +568,7 @@ describe('kovo check', () => {
 
     expect(result.exitCode).toBe(1);
     expect(result.output).toContain(
-      'ERROR KV423 app/promo.tsx:12 sink=innerHTML source=cms.body safe=trustedHtml(...) with provenance or a component text binding',
+      'ERROR KV424 app/promo.tsx:12 sink=innerHTML source=cms.body safe=trustedHtml(...) with provenance or a component text binding',
     );
     expect(result.output).toContain(
       'App-authored dangerous sink is not registered or behind a safe Kovo surface.',
@@ -576,12 +576,12 @@ describe('kovo check', () => {
     expect(result.output).toContain('Fixes: route the value through the corresponding Kovo helper');
   });
 
-  it('fails generic KV423 static diagnostics from compiler source spans', () => {
+  it('fails generic KV424 static diagnostics from compiler source spans', () => {
     expect(
       kovoCheck({
         diagnostics: [
           {
-            code: 'KV423',
+            code: 'KV424',
             site: 'app/export.ts',
             start: { column: 5, line: 8 },
           },
@@ -590,7 +590,7 @@ describe('kovo check', () => {
     ).toMatchObject({
       exitCode: 1,
       output: expect.stringContaining(
-        'ERROR KV423 app/export.ts:8:5 App-authored dangerous sink is not registered or behind a safe Kovo surface.',
+        'ERROR KV424 app/export.ts:8:5 App-authored dangerous sink is not registered or behind a safe Kovo surface.',
       ),
     });
   });

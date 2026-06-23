@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
@@ -11,10 +12,10 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/intro/', {
-              page: () => '<main>Intro</main>',
+              page: () => trustedHtml('<main>Intro</main>'),
             }),
             route('/products/:id', {
-              page: () => '<main>Product</main>',
+              page: () => trustedHtml('<main>Product</main>'),
               staticPaths: ['/products/p1/', '/products/p2'],
             }),
           ],
@@ -37,13 +38,13 @@ describe('server static export route plan', () => {
           routes: [
             route('/admin', {
               guard: () => true,
-              page: () => '<main>Admin</main>',
+              page: () => trustedHtml('<main>Admin</main>'),
             }),
             route('/products/:id', {
-              page: () => '<main>Product</main>',
+              page: () => trustedHtml('<main>Product</main>'),
             }),
             route('/orders/:id', {
-              page: () => '<main>Order</main>',
+              page: () => trustedHtml('<main>Order</main>'),
               staticPaths: ['/orders/:id', '/cart'],
             }),
           ],
@@ -84,17 +85,17 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/intro', {
-              page: () => '<main>Intro</main>',
+              page: () => trustedHtml('<main>Intro</main>'),
             }),
             route('/docs/intro/', {
-              page: () => '<main>Duplicate intro</main>',
+              page: () => trustedHtml('<main>Duplicate intro</main>'),
             }),
             route('/products/:id', {
-              page: () => '<main>Product</main>',
+              page: () => trustedHtml('<main>Product</main>'),
               staticPaths: ['/products/p1', '/products/p1/'],
             }),
             route('/docs/:slug', {
-              page: () => '<main>Docs</main>',
+              page: () => trustedHtml('<main>Docs</main>'),
               staticPaths: ['/docs/intro'],
             }),
           ],
@@ -137,10 +138,10 @@ describe('server static export route plan', () => {
         createApp({
           routes: [
             route('/docs/%2e%2e', {
-              page: () => '<main>Unsafe docs</main>',
+              page: () => trustedHtml('<main>Unsafe docs</main>'),
             }),
             route('/products/:id', {
-              page: () => '<main>Product</main>',
+              page: () => trustedHtml('<main>Product</main>'),
               staticPaths: ['/products/%2f', '/products/%E0%A4%A'],
             }),
           ],

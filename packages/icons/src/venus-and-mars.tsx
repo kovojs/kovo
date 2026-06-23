@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Venus And Mars icon (Lucide). https://lucide.dev/icons/venus-and-mars */
-export function VenusAndMars(props: IconProps = {}): string {
+export function VenusAndMars(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 20h4"></path>

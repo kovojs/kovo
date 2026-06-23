@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Server icon (Lucide). https://lucide.dev/icons/server */
-export function Server(props: IconProps = {}): string {
+export function Server(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="20" height="8" x="2" y="2" rx="2" ry="2"></rect>

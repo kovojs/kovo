@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Heart X icon (Lucide). https://lucide.dev/icons/heart-x */
-export function HeartX(props: IconProps = {}): string {
+export function HeartX(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15.5 12.5 5 5"></path>

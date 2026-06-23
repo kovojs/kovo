@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from './app.js';
+import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { staticExportManifest } from './static-export-result.js';
 import {
@@ -64,7 +65,7 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main class="cart">Cart</main>';
+                return renderedHtml('<main class="cart">Cart</main>');
               },
             }),
           ],
@@ -209,7 +210,7 @@ describe('server app shell Vite build seam', () => {
             route('/admin', {
               guard: () => true,
               page() {
-                return '<main>Admin</main>';
+                return renderedHtml('<main>Admin</main>');
               },
             }),
           ],
@@ -260,11 +261,13 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/cart', {
               page() {
-                return [
-                  '<main>Cart',
-                  '<button on:click="/c/cart.client.js?v=cart-v1#Cart$add">Add</button>',
-                  '</main>',
-                ].join('');
+                return renderedHtml(
+                  [
+                    '<main>Cart',
+                    '<button on:click="/c/cart.client.js?v=cart-v1#Cart$add">Add</button>',
+                    '</main>',
+                  ].join(''),
+                );
               },
             }),
           ],
@@ -368,11 +371,13 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/shop', {
               page() {
-                return [
-                  '<main class="shop">Shop',
-                  '<button on:click="/c/shop.client.js?v=shopclient#Shop$add">Add</button>',
-                  '</main>',
-                ].join('');
+                return renderedHtml(
+                  [
+                    '<main class="shop">Shop',
+                    '<button on:click="/c/shop.client.js?v=shopclient#Shop$add">Add</button>',
+                    '</main>',
+                  ].join(''),
+                );
               },
             }),
           ],
@@ -471,7 +476,7 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main class="cart">Cart</main>';
+                return renderedHtml('<main class="cart">Cart</main>');
               },
             }),
           ],
@@ -512,7 +517,7 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart</main>';
+                return renderedHtml('<main>Cart</main>');
               },
             }),
           ],
@@ -584,7 +589,7 @@ describe('server app shell Vite build seam', () => {
             route('/products/:id', {
               page(context) {
                 const params = context.params as { id: string };
-                return `<main class="product">Product ${params.id}</main>`;
+                return renderedHtml(`<main class="product">Product ${params.id}</main>`);
               },
               staticPaths: ['/products/p1', '/products/p2'],
             }),
@@ -634,7 +639,7 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart</main>';
+                return renderedHtml('<main>Cart</main>');
               },
             }),
           ],
@@ -692,7 +697,7 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart</main>';
+                return renderedHtml('<main>Cart</main>');
               },
             }),
           ],
@@ -758,7 +763,7 @@ describe('server app shell Vite build seam', () => {
           routes: [
             route('/catalog', {
               page() {
-                return '<main class="catalog">Catalog</main>';
+                return renderedHtml('<main class="catalog">Catalog</main>');
               },
             }),
           ],
@@ -831,7 +836,7 @@ describe('server app shell Vite build seam', () => {
           route('/docs/intro', {
             modulepreloads: ['/c/docs.client.js?v=docs-v1'],
             page() {
-              return '<main class="docs">Intro</main>';
+              return renderedHtml('<main class="docs">Intro</main>');
             },
           }),
         ],

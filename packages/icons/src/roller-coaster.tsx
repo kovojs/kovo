@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Roller Coaster icon (Lucide). https://lucide.dev/icons/roller-coaster */
-export function RollerCoaster(props: IconProps = {}): string {
+export function RollerCoaster(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M6 19V5"></path>

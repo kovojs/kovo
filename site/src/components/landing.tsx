@@ -403,6 +403,115 @@ const heroStyles = style.create(
   { namespace: 'site-hero', source: 'site/src/components/landing.tsx' },
 );
 
+// Security hero (Bobby Tables SQL injection). Shares the hero unit / two-act
+// header / verdict and several hero-* keyframes; only the form, table, and the
+// security-tinted verdict are new. Base styles render the safe end-state.
+const secStyles = style.create(
+  {
+    formBlock: { padding: '1.1rem 1.1rem 0.6rem' },
+    formLabel: {
+      color: 'var(--faint)',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.6rem',
+      letterSpacing: '0.16em',
+      margin: '0 0 0.5rem',
+      textTransform: 'uppercase',
+    },
+    field: {
+      alignItems: 'center',
+      background: 'var(--card)',
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.82rem',
+      minHeight: '2.4rem',
+      padding: '0.55rem 0.7rem',
+      animation: 'sec-field 15s linear infinite',
+    },
+    typed: {
+      color: 'var(--stale)',
+      opacity: 1,
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      animation: 'sec-typed 15s linear infinite',
+    },
+    tableBlock: { padding: '0.6rem 1.1rem 1.1rem' },
+    tlabel: {
+      color: 'var(--faint)',
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.6rem',
+      justifyContent: 'space-between',
+      letterSpacing: '0.16em',
+      margin: '0 0 0.5rem',
+      textTransform: 'uppercase',
+    },
+    tstate: { display: 'inline-block', minWidth: '8rem', position: 'relative', textAlign: 'right' },
+    tsline: { position: 'absolute', right: 0, top: 0, whiteSpace: 'nowrap' },
+    tsBad: { color: 'var(--stale)' },
+    tsAccent: { color: 'var(--accent)' },
+    tsGood: { color: 'var(--synced)' },
+    table: {
+      borderColor: 'var(--edge)',
+      borderStyle: 'solid',
+      borderWidth: 1,
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.78rem',
+      animation: 'sec-table 15s linear infinite',
+    },
+    thead: {
+      borderBottomColor: 'var(--edge-soft)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: 'var(--faint)',
+      display: 'flex',
+      justifyContent: 'space-between',
+      padding: '0.4rem 0.7rem',
+    },
+    trow: {
+      borderBottomColor: 'var(--edge-soft)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      display: 'flex',
+      justifyContent: 'space-between',
+      padding: '0.4rem 0.7rem',
+      animation: 'sec-rows 15s linear infinite',
+    },
+    trowLast: { borderBottomWidth: 0 },
+    verdict: {
+      alignItems: 'flex-start',
+      background: 'var(--synced-bg)',
+      borderTopColor: 'var(--edge)',
+      borderTopStyle: 'solid',
+      borderTopWidth: 1,
+      display: 'flex',
+      fontFamily: 'var(--font-mono)',
+      fontSize: '0.76rem',
+      gap: '0.7rem',
+      lineHeight: 1.5,
+      minHeight: '4.6rem',
+      padding: '0.85rem 0.95rem',
+      animation: 'sec-vtint 15s linear infinite',
+    },
+    vMark: {
+      background: 'var(--synced)',
+      color: '#fff',
+      flexGrow: 0,
+      flexShrink: 0,
+      fontWeight: 700,
+      height: '1.35rem',
+      marginTop: '0.05rem',
+      position: 'relative',
+      width: '1.35rem',
+      animation: 'sec-vmark 15s linear infinite',
+    },
+  },
+  { namespace: 'site-sec', source: 'site/src/components/landing.tsx' },
+);
+
 export interface LandingPageProps {
   clients: ClientHrefs;
 }
@@ -412,8 +521,8 @@ export function LandingRoutePage({ clients }: LandingPageProps): string {
     <div style={landingStyles.root}>
       {SiteHeader.definition.render({ activePath: '/', clients })}
       <div style={landingStyles.wrap}>
-        <Hero clients={clients} />
-        <AutoInvalidate />
+        <SecurityHero clients={clients} />
+        <StaleUiSection />
         <InstantLoad />
         <Credibility />
       </div>
@@ -422,22 +531,19 @@ export function LandingRoutePage({ clients }: LandingPageProps): string {
   );
 }
 
-function Hero({ clients }: { clients: ClientHrefs }): string {
+function SecurityHero({ clients }: { clients: ClientHrefs }): string {
   return (
     <section style={heroStyles.hero}>
       <div>
         <h1 style={heroStyles.h1}>
-          Builds like <em style={heroStyles.alt}>React</em>.<br />
-          Runs like <em style={heroStyles.alt}>HTML</em>.
+          The <em style={heroStyles.alt}>secure</em> web framework.
         </h1>
-        <p style={heroStyles.lede}>
-          React's developer experience, with HTML's oldest guarantee: a page that's never out of
-          sync with itself -- proven at build time.
-        </p>
+        <p style={heroStyles.lede}>Make security holes a build error -- not a 2AM incident.</p>
         <p style={heroStyles.sub}>
-          Pages are real HTML, interactive at first paint. Every view of your data stays in sync
-          from the database to the DOM, so a stale UI is a{' '}
-          <b style={heroStyles.strong}>compile error</b> your agent fixes before it ships.
+          The Kovo compiler catches the most common security vulnerabilities --{' '}
+          <b style={heroStyles.strong}>SQL injection</b>, <b style={heroStyles.strong}>XSS</b>,{' '}
+          <b style={heroStyles.strong}>CSRF</b>, <b style={heroStyles.strong}>IDOR</b> -- as soon as
+          your coding agent writes them.
         </p>
         <div style={heroStyles.cta}>
           <div style={landingStyles.cmd}>
@@ -458,9 +564,215 @@ function Hero({ clients }: { clients: ClientHrefs }): string {
         </div>
       </div>
       <div data-anim="hero" style={heroStyles.unit}>
-        <HeroActs />
-        <HeroShop />
-        <HeroVerdict />
+        <SecActs />
+        <SecForm />
+        <SecTable />
+        <SecVerdict />
+      </div>
+    </section>
+  );
+}
+
+function SecActs(): string {
+  return (
+    <div style={heroStyles.acts}>
+      <div style={heroStyles.actA}>
+        <span style={heroStyles.actLabA}>Every other framework</span>
+        <div style={heroStyles.beats}>
+          <span style={heroStyles.beat}>attacker submits</span>
+          <span style={heroStyles.beat}>SQL runs</span>
+          <span style={heroStyles.beat}>dropped &#10007;</span>
+        </div>
+      </div>
+      <div style={heroStyles.seam}>
+        kovo
+        <br />
+        check
+      </div>
+      <div style={heroStyles.actB}>
+        <span style={heroStyles.actLabB}>
+          <span style={heroStyles.diamond}></span>What Kovo adds
+        </span>
+        <div style={heroStyles.beats}>
+          <span style={heroStyles.beat}>caught at build</span>
+          <span style={heroStyles.beat}>harmless &#10003;</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SecForm(): string {
+  return (
+    <div style={secStyles.formBlock}>
+      <p style={secStyles.formLabel}>Sign up &middot; name</p>
+      <div style={secStyles.field}>
+        <span style={secStyles.typed}>Robert&apos;); DROP TABLE users;--</span>
+      </div>
+    </div>
+  );
+}
+
+function SecTable(): string {
+  return (
+    <div style={secStyles.tableBlock}>
+      <p style={secStyles.tlabel}>
+        <span>users</span>
+        <span style={secStyles.tstate}>
+          <span style={[secStyles.tsline, heroStyles.vg0]}>3 rows</span>
+          <span style={[secStyles.tsline, heroStyles.vg1]}>3 rows</span>
+          <span style={[secStyles.tsline, heroStyles.vg2, secStyles.tsBad]}>&#10007; dropped</span>
+          <span style={[secStyles.tsline, heroStyles.vg3, secStyles.tsAccent]}>
+            caught at build
+          </span>
+          <span style={[secStyles.tsline, heroStyles.vg4, secStyles.tsGood]}>&#10003; intact</span>
+        </span>
+      </p>
+      <div style={secStyles.table}>
+        <div style={secStyles.thead}>
+          <span>id</span>
+          <span>name</span>
+        </div>
+        <div style={secStyles.trow}>
+          <span>1</span>
+          <span>ada</span>
+        </div>
+        <div style={secStyles.trow}>
+          <span>2</span>
+          <span>grace</span>
+        </div>
+        <div style={[secStyles.trow, secStyles.trowLast]}>
+          <span>3</span>
+          <span>linus</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SecVerdict(): string {
+  return (
+    <div style={secStyles.verdict}>
+      <span style={secStyles.vMark}>
+        <span style={[heroStyles.vGlyph, heroStyles.vg0]}>&middot;</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg1]}>&middot;</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg2]}>&#10007;</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg3]}>!</span>
+        <span style={[heroStyles.vGlyph, heroStyles.vg4]}>&#10003;</span>
+      </span>
+      <span style={heroStyles.vBody}>
+        <span style={[heroStyles.vLine, heroStyles.vg0]}>
+          Three users. A sign-up form that stores your name.
+        </span>
+        <span style={[heroStyles.vLine, heroStyles.vg1]}>
+          An attacker submits a name that is really SQL.
+        </span>
+        <span style={[heroStyles.vLine, heroStyles.vg2, secStyles.tsBad]}>
+          &#10007; the string executes -- <b>DROP TABLE users.</b> Everyone is gone.
+        </span>
+        <span style={[heroStyles.vLine, heroStyles.vg3]}>
+          &#10007; KV431 -- a build error in Kovo. The query never shipped.
+          <span style={heroStyles.vFix}>
+            -&gt; parameterized: where(eq(users.name, input.name))
+          </span>
+        </span>
+        <span style={[heroStyles.vLine, heroStyles.vg4, secStyles.tsGood]}>
+          &#10003; the input is bound as a value -- stored as a name, no SQL run.
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function StaleUiSection(): string {
+  return (
+    <section style={pageStyles.section}>
+      <div style={[pageStyles.instGrid, pageStyles.alignStart]}>
+        <div>
+          <p style={pageStyles.eyebrow}>No stale UI</p>
+          <h2 style={pageStyles.title}>Your UI can&apos;t disagree with itself.</h2>
+          <p style={pageStyles.lead}>
+            Add to cart, and every view of the cart agrees by construction. Kovo owns the path from
+            the database to the DOM, so a view that could drift out of date is a compile error, not
+            a bug your users find later.
+          </p>
+          <p style={pageStyles.lead}>
+            And nothing is wired by hand: declare what a view reads, and the compiler invalidates
+            exactly the views a mutation touches -- no cache tags, no{' '}
+            <span style={pageStyles.leadCode}>invalidateQueries</span>, no{' '}
+            <span style={pageStyles.leadCode}>useEffect</span>.
+          </p>
+        </div>
+        <div data-anim="hero" style={heroStyles.unit}>
+          <HeroActs />
+          <HeroShop />
+          <HeroVerdict />
+        </div>
+      </div>
+      <div style={pageStyles.aiUnit}>
+        <input type="radio" name="ai-tab" id="ai-other" checked style={pageStyles.radioTab} />
+        <input type="radio" name="ai-tab" id="ai-kovo" style={pageStyles.radioTab} />
+        <div style={pageStyles.aiTabs}>
+          <label for="ai-other" data-aitab="other" style={pageStyles.aiTab}>
+            <span style={pageStyles.markBad}>&#10007;</span> Other frameworks
+          </label>
+          <label for="ai-kovo" data-aitab="kovo" style={[pageStyles.aiTab, pageStyles.aiTabDiv]}>
+            <span style={pageStyles.markAccent}>&#10003;</span> In Kovo
+          </label>
+        </div>
+        <div style={pageStyles.aiCol} data-aicol="other">
+          <div style={[pageStyles.aiHead, pageStyles.aiHeadBad]}>
+            <span style={pageStyles.aiHeadLabel}>&#10007; Other frameworks</span>
+            <span style={pageStyles.aiHeadFile}>cart.ts</span>
+          </div>
+          <pre style={[pageStyles.code, pageStyles.grow]}>
+            <span style={pageStyles.cKw}>async function</span> addToCart(item) {'{'}
+            {'\n  '}
+            <span style={pageStyles.cKw}>await</span> db.cart.add(item)
+            {'\n\n  '}
+            <span style={pageStyles.cDim}>// remember every view that reads cart:</span>
+            {'\n  '}
+            <span style={pageStyles.cFn}>invalidate</span>(
+            <span style={pageStyles.cStr}>&apos;cart&apos;</span>){'\n  '}
+            <span style={pageStyles.cFn}>invalidate</span>(
+            <span style={pageStyles.cStr}>&apos;cart-badge&apos;</span>){'\n  '}
+            <span style={pageStyles.cFn}>invalidate</span>(
+            <span style={pageStyles.cStr}>&apos;free-shipping&apos;</span>){'\n  '}
+            <span style={pageStyles.bad}>// miss one and it silently goes stale.</span>
+            {'\n'}
+            {'}'}
+          </pre>
+          <div style={pageStyles.aiVerdict}>
+            Forget one <span style={pageStyles.mono}>invalidate(...)</span> and you ship the{' '}
+            <span style={pageStyles.bad}>stale bug</span> -- the badge that disagrees with the cart.
+          </div>
+        </div>
+        <div style={[pageStyles.aiCol, pageStyles.aiColRight]} data-aicol="kovo">
+          <div style={[pageStyles.aiHead, pageStyles.aiHeadGood]}>
+            <span style={pageStyles.aiHeadLabel}>&#10003; In Kovo</span>
+            <span style={pageStyles.aiHeadFile}>cart.ts</span>
+          </div>
+          <pre style={[pageStyles.code, pageStyles.grow]}>
+            <span style={pageStyles.cDim}>// a view reads what it needs:</span>
+            {'\n'}
+            <span style={pageStyles.cKw}>const</span> total ={' '}
+            <span style={pageStyles.cBind}>cart.total</span>
+            {'\n\n'}
+            <span style={pageStyles.cDim}>// the mutation only writes:</span>
+            {'\n'}
+            <span style={pageStyles.cFn}>mutation</span>(
+            <span style={pageStyles.cStr}>&apos;cart/add&apos;</span>, (item) =&gt;
+            {'\n  '}db.cart.add(item))
+            {'\n\n'}
+            <span style={pageStyles.good}>// every view that reads cart refreshes.</span>
+            {'\n'}
+            <span style={pageStyles.cDim}>// nothing to invalidate. checked at build.</span>
+          </pre>
+          <div style={pageStyles.aiVerdict}>
+            The read set <span style={pageStyles.good}>is</span> the invalidation set. Add a view
+            and it is already wired -- diffable in CI.
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -635,6 +947,7 @@ const pageStyles = style.create(
       margin: '1rem 0 0',
       maxWidth: '46rem',
     },
+    alignStart: { alignItems: 'start' },
     leadCode: { color: 'var(--ink)', fontFamily: 'var(--font-mono)', fontSize: '0.85em' },
     aiUnit: {
       background: 'var(--card)',
@@ -905,88 +1218,6 @@ const pageStyles = style.create(
   },
   { namespace: 'site-page', source: 'site/src/components/landing.tsx' },
 );
-
-function AutoInvalidate(): string {
-  return (
-    <section style={pageStyles.section}>
-      <p style={pageStyles.eyebrow}>How freshness works</p>
-      <h2 style={pageStyles.title}>
-        Add something to your UI. It&apos;ll automatically get fresh data.
-      </h2>
-      <p style={pageStyles.lead}>
-        Other frameworks make you remember which caches to clear after every write. Kovo infers it
-        from what each view reads: declare the data, and the compiler keeps every view that uses it
-        fresh. No cache tags, no <span style={pageStyles.leadCode}>invalidateQueries</span>, no{' '}
-        <span style={pageStyles.leadCode}>useEffect</span>.
-      </p>
-      <div style={pageStyles.aiUnit}>
-        <input type="radio" name="ai-tab" id="ai-other" checked style={pageStyles.radioTab} />
-        <input type="radio" name="ai-tab" id="ai-kovo" style={pageStyles.radioTab} />
-        <div style={pageStyles.aiTabs}>
-          <label for="ai-other" data-aitab="other" style={pageStyles.aiTab}>
-            <span style={pageStyles.markBad}>&#10007;</span> Other frameworks
-          </label>
-          <label for="ai-kovo" data-aitab="kovo" style={[pageStyles.aiTab, pageStyles.aiTabDiv]}>
-            <span style={pageStyles.markAccent}>&#10003;</span> In Kovo
-          </label>
-        </div>
-        <div style={pageStyles.aiCol} data-aicol="other">
-          <div style={[pageStyles.aiHead, pageStyles.aiHeadBad]}>
-            <span style={pageStyles.aiHeadLabel}>&#10007; Other frameworks</span>
-            <span style={pageStyles.aiHeadFile}>cart.ts</span>
-          </div>
-          <pre style={[pageStyles.code, pageStyles.grow]}>
-            <span style={pageStyles.cKw}>async function</span> addToCart(item) {'{'}
-            {'\n  '}
-            <span style={pageStyles.cKw}>await</span> db.cart.add(item)
-            {'\n\n  '}
-            <span style={pageStyles.cDim}>// remember every view that reads cart:</span>
-            {'\n  '}
-            <span style={pageStyles.cFn}>invalidate</span>(
-            <span style={pageStyles.cStr}>&apos;cart&apos;</span>){'\n  '}
-            <span style={pageStyles.cFn}>invalidate</span>(
-            <span style={pageStyles.cStr}>&apos;cart-badge&apos;</span>){'\n  '}
-            <span style={pageStyles.cFn}>invalidate</span>(
-            <span style={pageStyles.cStr}>&apos;free-shipping&apos;</span>){'\n  '}
-            <span style={pageStyles.bad}>// miss one and it silently goes stale.</span>
-            {'\n'}
-            {'}'}
-          </pre>
-          <div style={pageStyles.aiVerdict}>
-            Forget one <span style={pageStyles.mono}>invalidate(...)</span> and you ship the{' '}
-            <span style={pageStyles.bad}>stale bug</span> -- the badge that disagrees with the cart.
-          </div>
-        </div>
-        <div style={[pageStyles.aiCol, pageStyles.aiColRight]} data-aicol="kovo">
-          <div style={[pageStyles.aiHead, pageStyles.aiHeadGood]}>
-            <span style={pageStyles.aiHeadLabel}>&#10003; In Kovo</span>
-            <span style={pageStyles.aiHeadFile}>cart.ts</span>
-          </div>
-          <pre style={[pageStyles.code, pageStyles.grow]}>
-            <span style={pageStyles.cDim}>// a view reads what it needs:</span>
-            {'\n'}
-            <span style={pageStyles.cKw}>const</span> total ={' '}
-            <span style={pageStyles.cBind}>cart.total</span>
-            {'\n\n'}
-            <span style={pageStyles.cDim}>// the mutation only writes:</span>
-            {'\n'}
-            <span style={pageStyles.cFn}>mutation</span>(
-            <span style={pageStyles.cStr}>&apos;cart/add&apos;</span>, (item) =&gt;
-            {'\n  '}db.cart.add(item))
-            {'\n\n'}
-            <span style={pageStyles.good}>// every view that reads cart refreshes.</span>
-            {'\n'}
-            <span style={pageStyles.cDim}>// nothing to invalidate. checked at build.</span>
-          </pre>
-          <div style={pageStyles.aiVerdict}>
-            The read set <span style={pageStyles.good}>is</span> the invalidation set. Add a view
-            and it is already wired -- diffable in CI.
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function InstantLoad(): string {
   return (

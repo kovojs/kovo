@@ -96,13 +96,28 @@ export interface RouteBoundaryContext<Request> {
   status: 403 | 404 | 500;
 }
 
+/** Non-string page body value accepted from public route `page` callbacks (SPEC §4.1, §9.1). */
+export type RoutePageResult =
+  | boolean
+  | null
+  | number
+  | readonly RoutePageResult[]
+  | undefined
+  | object;
+
+/** Non-string chrome value accepted from public `layout().render` callbacks (SPEC §4.1, §9.5). */
+export type LayoutRenderResult = RoutePageResult;
+
 /** Render a route/layout segment boundary for expected route failures or errors. */
-export type RouteBoundaryRenderer<Request, Page = unknown> = (
+export type RouteBoundaryRenderer<Request, Page extends RoutePageResult = RoutePageResult> = (
   context: RouteBoundaryContext<Request>,
 ) => Page | Promise<Page>;
 
 /** Per-segment boundaries that override app-level error shells for matching route failures. */
-export interface RouteBoundaries<Request = unknown, Page = unknown> {
+export interface RouteBoundaries<
+  Request = unknown,
+  Page extends RoutePageResult = RoutePageResult,
+> {
   error?: RouteBoundaryRenderer<Request, Page>;
   notFound?: RouteBoundaryRenderer<Request, Page>;
   unauthorized?: RouteBoundaryRenderer<Request, Page>;
@@ -112,11 +127,11 @@ export interface RouteBoundaries<Request = unknown, Page = unknown> {
 export interface LayoutDefinition<
   Request = unknown,
   Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
-  Page = unknown,
+  Page extends LayoutRenderResult = LayoutRenderResult,
 > extends PageHintOptions {
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request>;
-  parent?: LayoutDeclaration<Request, any, unknown>;
+  parent?: LayoutDeclaration<Request, any, LayoutRenderResult>;
   queries?: Queries;
   render?: (
     queries: LayoutQueryResults<Queries>,
@@ -129,12 +144,15 @@ export interface LayoutDefinition<
 export interface LayoutDeclaration<
   Request = unknown,
   Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
-  Page = unknown,
+  Page extends LayoutRenderResult = LayoutRenderResult,
 > extends LayoutDefinition<Request, Queries, Page> {}
 
 /** App-scoped layout factory whose guards and render slots see the configured request shape. */
 export interface LayoutFactory<Request = unknown> {
-  <const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>, Page = unknown>(
+  <
+    const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
+    Page extends LayoutRenderResult = LayoutRenderResult,
+  >(
     definition: LayoutDefinition<Request, Queries, Page>,
   ): LayoutDeclaration<Request, Queries, Page>;
 }
@@ -156,7 +174,7 @@ export interface RouteDefinition<
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
   SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
   Request = unknown,
-  Page = unknown,
+  Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
 > extends PageHintOptions {
   boundaries?: RouteBoundaries<Request, Page>;
@@ -183,7 +201,7 @@ export interface RouteDeclaration<
   ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
   SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
   Request = unknown,
-  Page = unknown,
+  Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
 > extends RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest> {
   path: Path;
@@ -203,7 +221,7 @@ export interface RouteRequestInput {
 export function layout<
   Request = unknown,
   const Queries extends LayoutQueryMap<Request> = LayoutQueryMap<Request>,
-  Page = unknown,
+  Page extends LayoutRenderResult = LayoutRenderResult,
 >(definition: LayoutDefinition<Request, Queries, Page>): LayoutDeclaration<Request, Queries, Page> {
   const declaration = { ...definition };
   const deps = Object.values(definition.queries ?? {}).map(
@@ -225,7 +243,7 @@ export interface RouteFactory<Request = unknown> {
     const Path extends string,
     const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
     const SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
-    Page = unknown,
+    Page extends RoutePageResult = RoutePageResult,
   >(
     path: Path,
     definition?: RouteDefinition<Path, ParamsSchema, SearchSchema, Request, Page, Request>,
@@ -262,7 +280,7 @@ export function route<
   const ParamsSchema extends MaybeSchema<Record<string, string>> = undefined,
   const SearchSchema extends MaybeSchema<Record<string, JsonValue>> = undefined,
   Request = unknown,
-  Page = unknown,
+  Page extends RoutePageResult = RoutePageResult,
   GuardedRequest extends Request = Request,
 >(
   path: Path,
@@ -323,7 +341,7 @@ export function parseRouteRequest<
   ParamsSchema extends MaybeSchema<Record<string, string>>,
   SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
   Request,
-  Page,
+  Page extends RoutePageResult,
 >(
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page>,
   input: RouteRequestInput = {},
@@ -378,14 +396,14 @@ export async function runRoutePage<
   ParamsSchema extends MaybeSchema<Record<string, string>>,
   SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
   Request,
-  Page,
+  Page extends RoutePageResult,
   GuardedRequest extends Request = Request,
 >(
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
   input: RouteRequestInput,
   request: Request,
   options: RequestLifecycleOptions<Request> = {},
-): Promise<RoutePageResult<Page>> {
+): Promise<RoutePageRunResult<Page>> {
   const result = await runRoutePageInternal(definition, input, request, options);
   if (result.ok) return result;
   return stripRouteBoundaryFailure(result);
@@ -396,7 +414,7 @@ async function runRoutePageInternal<
   ParamsSchema extends MaybeSchema<Record<string, string>>,
   SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
   Request,
-  Page,
+  Page extends RoutePageResult,
   GuardedRequest extends Request = Request,
 >(
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
@@ -716,16 +734,18 @@ function unescapeAttribute(value: string): string {
 }
 
 /** @internal */
-export type RoutePageResult<Page> = RoutePageSuccess<Page> | RoutePageFailure;
+export type RoutePageRunResult<Page extends RoutePageResult> =
+  | RoutePageFailure
+  | RoutePageRunSuccess<Page>;
 
 /** @internal */
-export type RoutePageSuccess<Page> =
+export type RoutePageRunSuccess<Page extends RoutePageResult> =
   | RoutePageRenderSuccess<Page>
   | RoutePageOutcomeSuccess
   | RoutePageRedirectSuccess;
 
 /** @internal */
-export interface RoutePageRenderSuccess<Page> {
+export interface RoutePageRenderSuccess<Page extends RoutePageResult> {
   ok: true;
   value: Page;
 }
@@ -761,7 +781,9 @@ interface ResolvedRouteBoundary {
   render: RouteBoundaryRenderer<any, any>;
 }
 
-type RoutePageInternalResult<Page> = RoutePageSuccess<Page> | RoutePageInternalFailure;
+type RoutePageInternalResult<Page extends RoutePageResult> =
+  | RoutePageRunSuccess<Page>
+  | RoutePageInternalFailure;
 
 interface RoutePageInternalFailure extends RoutePageFailure {
   boundary?: ResolvedRouteBoundary;
@@ -792,7 +814,7 @@ function withRouteBoundaryFailure(
   };
 }
 
-function routeBoundaryFor<Request, Page>(
+function routeBoundaryFor<Request, Page extends RoutePageResult>(
   kind: RouteBoundaryKind,
   routeDefinition: RouteDeclaration<any, any, any, Request, Page, any> | undefined,
   layouts: readonly LayoutDeclaration<any, any, any>[],
@@ -844,7 +866,7 @@ export async function renderRoutePageResponse<
   ParamsSchema extends MaybeSchema<Record<string, string>>,
   SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
   Request,
-  Page,
+  Page extends RoutePageResult,
   GuardedRequest extends Request = Request,
 >(
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
@@ -1016,7 +1038,7 @@ function routeCurrentUrl<
   ParamsSchema extends MaybeSchema<Record<string, string>>,
   SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
   Request,
-  Page,
+  Page extends RoutePageResult,
 >(
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page>,
   input: RouteRequestInput,

@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { guards } from './guards.js';
@@ -10,6 +11,7 @@ import { respond } from './response.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
 import { StaticExportError } from './static-export-diagnostics.js';
+import { renderedHtml } from './html.js';
 
 describe('server static export', () => {
   it('rejects raw request handlers before static export replay or writes', async () => {
@@ -46,7 +48,7 @@ describe('server static export', () => {
           route('/', {
             page: () => {
               rendered = true;
-              return '<main>Home</main>';
+              return renderedHtml('<main>Home</main>');
             },
           }),
         ],
@@ -83,7 +85,7 @@ describe('server static export', () => {
         route('/', {
           page: () => {
             rendered = true;
-            return '<main>Home</main>';
+            return renderedHtml('<main>Home</main>');
           },
         }),
       ],
@@ -117,7 +119,7 @@ describe('server static export', () => {
           route('/', {
             page: () => {
               rendered = true;
-              return '<main>Home</main>';
+              return renderedHtml('<main>Home</main>');
             },
           }),
         ],
@@ -152,11 +154,11 @@ describe('server static export', () => {
         route('/docs/intro', {
           page: () => {
             replayed = true;
-            return '<main>Intro</main>';
+            return renderedHtml('<main>Intro</main>');
           },
         }),
         route('/docs/intro/', {
-          page: () => '<main>Duplicate intro</main>',
+          page: () => trustedHtml('<main>Duplicate intro</main>'),
         }),
       ],
     });
@@ -181,7 +183,7 @@ describe('server static export', () => {
       routes: [
         route('/account', {
           guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
-          page: () => '<main>Account</main>',
+          page: () => trustedHtml('<main>Account</main>'),
         }),
       ],
     });
@@ -198,7 +200,7 @@ describe('server static export', () => {
     });
 
     const sessionApp = createApp({
-      routes: [route('/profile', { page: () => '<main>Profile</main>' })],
+      routes: [route('/profile', { page: () => trustedHtml('<main>Profile</main>') })],
       sessionProvider: () => ({ user: { id: 'u1' } }),
     });
 
@@ -222,7 +224,7 @@ describe('server static export', () => {
           route('/products/:id', {
             page(context) {
               const params = context.params as { id: string };
-              return `<main data-product="${params.id}">Product ${params.id}</main>`;
+              return renderedHtml(`<main data-product="${params.id}">Product ${params.id}</main>`);
             },
             staticPaths: ['/products/p1', '/products/p2/'],
           }),
@@ -253,7 +255,7 @@ describe('server static export', () => {
       const app = createApp({
         routes: [
           route('/products/:id', {
-            page: () => '<main>Product</main>',
+            page: () => trustedHtml('<main>Product</main>'),
             staticPaths: [
               'products/p1',
               '/products/:id',
@@ -304,7 +306,7 @@ describe('server static export', () => {
           route('/products/:id', {
             page: () => {
               rendered = true;
-              return '<main>Product</main>';
+              return renderedHtml('<main>Product</main>');
             },
             staticPaths: ['/products/%2f'],
           }),
@@ -332,7 +334,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
-          page: () => '<main>Product</main>',
+          page: () => trustedHtml('<main>Product</main>'),
         }),
       ],
     });
@@ -366,7 +368,7 @@ describe('server static export', () => {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => '<main>Home</main>',
+          page: () => trustedHtml('<main>Home</main>'),
         }),
         route('/downloads/orders.pdf', {
           page: () =>

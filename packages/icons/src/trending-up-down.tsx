@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Trending Up Down icon (Lucide). https://lucide.dev/icons/trending-up-down */
-export function TrendingUpDown(props: IconProps = {}): string {
+export function TrendingUpDown(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14.828 14.828 21 21"></path>

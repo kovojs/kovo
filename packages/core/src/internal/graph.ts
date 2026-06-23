@@ -30,6 +30,7 @@ export type {
   ScopeAuditFact,
   SemanticLint,
   SourcePosition,
+  SqlSafetyExplainFact,
   StaticDiagnosticFact,
   TouchGraph,
   TouchGraphEntry,

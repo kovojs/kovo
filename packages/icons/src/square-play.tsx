@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Square Play icon (Lucide). https://lucide.dev/icons/square-play */
-export function SquarePlay(props: IconProps = {}): string {
+export function SquarePlay(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect x="3" y="3" width="18" height="18" rx="2"></rect>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Between Vertical End icon (Lucide). https://lucide.dev/icons/between-vertical-end */
-export function BetweenVerticalEnd(props: IconProps = {}): string {
+export function BetweenVerticalEnd(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="7" height="13" x="3" y="3" rx="1"></rect>

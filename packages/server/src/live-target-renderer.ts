@@ -13,6 +13,7 @@ import {
 } from './component-render.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
+import { renderServerRenderable } from './renderable.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
 import type { ErrorBoundaryRenderer } from './mutation-wire.js';
@@ -117,11 +118,8 @@ function componentLiveTargetErrorBoundary<
 }
 
 function renderBoundaryFallback(fallback: ComponentRenderResult): string {
-  if (fallback === null || fallback === undefined || typeof fallback === 'boolean') return '';
-  if (typeof fallback === 'string') return fallback;
-  if (typeof fallback === 'number') return `${fallback}`;
-  if (Array.isArray(fallback)) return fallback.map(renderBoundaryFallback).join('');
-  return '';
+  const rendered = renderServerRenderable(fallback as Parameters<typeof renderServerRenderable>[0]);
+  return typeof rendered === 'string' ? rendered : '';
 }
 
 function componentLiveTargetQueryBindings<Request>(

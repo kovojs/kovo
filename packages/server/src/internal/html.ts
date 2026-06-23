@@ -3,7 +3,9 @@ export {
   escapeHtml,
   escapeScriptJson,
   escapeText,
+  renderedHtml,
   safeUrlAttribute,
+  type RenderedHtml,
 } from '../html.js';
 export {
   componentMutationFailureSlots,

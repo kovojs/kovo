@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Rocket icon (Lucide). https://lucide.dev/icons/rocket */
-export function Rocket(props: IconProps = {}): string {
+export function Rocket(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>

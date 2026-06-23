@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Play Off icon (Lucide). https://lucide.dev/icons/play-off */
-export function PlayOff(props: IconProps = {}): string {
+export function PlayOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10.215 4.56 9.79 5.71a2 2 0 0 1 .003 3.458l-.393.23"></path>

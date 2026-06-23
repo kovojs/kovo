@@ -11,6 +11,7 @@ import {
   kovoAppShellVitePlugin,
   type KovoAppShellViteMiddleware,
 } from './internal/app-shell-vite.js';
+import { renderedHtml } from './html.js';
 
 describe('server app shell Vite diagnostics', () => {
   it('gates page-route diagnostics red and green through the dev middleware ledger', async () => {
@@ -18,7 +19,7 @@ describe('server app shell Vite diagnostics', () => {
     const cartRoute = route('/cart', {
       modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
       page() {
-        return '<main>Cart</main>';
+        return renderedHtml('<main>Cart</main>');
       },
     });
     const plugin = kovoAppShellVitePlugin(createApp({ routes: [cartRoute] }), {

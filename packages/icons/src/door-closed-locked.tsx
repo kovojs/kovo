@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Door Closed Locked icon (Lucide). https://lucide.dev/icons/door-closed-locked */
-export function DoorClosedLocked(props: IconProps = {}): string {
+export function DoorClosedLocked(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 12h.01"></path>

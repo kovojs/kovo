@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Send To Back icon (Lucide). https://lucide.dev/icons/send-to-back */
-export function SendToBack(props: IconProps = {}): string {
+export function SendToBack(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect x="14" y="14" width="8" height="8" rx="2"></rect>

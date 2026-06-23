@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
 import { route } from './route.js';
@@ -26,7 +27,7 @@ describe('server static export', () => {
       routes: [
         route('/about', {
           meta: { title: 'About' },
-          page: () => '<main>About Kovo</main>',
+          page: () => trustedHtml('<main>About Kovo</main>'),
         }),
       ],
     });
@@ -57,7 +58,7 @@ describe('server static export', () => {
       },
       routes: [
         route('/', {
-          page: () => 'from-page',
+          page: () => trustedHtml('from-page'),
         }),
       ],
     });
@@ -88,10 +89,10 @@ describe('server static export', () => {
         },
         routes: [
           route('/', {
-            page: () => 'home',
+            page: () => trustedHtml('home'),
           }),
           route('/docs/intro', {
-            page: () => 'intro',
+            page: () => trustedHtml('intro'),
           }),
         ],
       });

@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { route } from './route.js';
@@ -90,7 +91,7 @@ describe('server static export diagnostic boundary', () => {
             },
           }),
           route('/products/new', {
-            page: () => '<main>New</main>',
+            page: () => trustedHtml('<main>New</main>'),
           }),
         ],
       });
@@ -115,7 +116,7 @@ describe('server static export diagnostic boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => '<main>Home</main>',
+          page: () => trustedHtml('<main>Home</main>'),
         }),
       ],
     });

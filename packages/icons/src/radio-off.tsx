@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Radio Off icon (Lucide). https://lucide.dev/icons/radio-off */
-export function RadioOff(props: IconProps = {}): string {
+export function RadioOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.414 13.414a2 2 0 1 1-2.828-2.828"></path>

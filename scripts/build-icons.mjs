@@ -97,10 +97,10 @@ function iconSource(name, nodes) {
   // synchronous render output (e.g. @kovojs/ui composes via `render(...) + ...`).
   return (
     `/** @jsxImportSource @kovojs/server */\n` +
-    `import { iconRootAttrs, type IconProps } from './icon-base.js';\n` +
+    `import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';\n` +
     `\n` +
     `/** ${toTitle(name)} icon (Lucide). https://lucide.dev/icons/${name} */\n` +
-    `export function ${symbol}(props: IconProps = {}): string {\n` +
+    `export function ${symbol}(props: IconProps = {}): IconRenderResult {\n` +
     `  return (\n` +
     `${svg}\n` +
     `  );\n` +
@@ -141,8 +141,9 @@ function writeJson(filePath, value) {
   writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
-function manifestEntry(publicSubpaths) {
+function manifestEntry(publicSubpaths, existing = {}) {
   return {
+    ...existing,
     name: '@kovojs/icons',
     dir: 'icons',
     visibility: 'public',
@@ -152,7 +153,8 @@ function manifestEntry(publicSubpaths) {
 }
 
 function upsertManifest(manifest, publicSubpaths) {
-  const entry = manifestEntry(publicSubpaths);
+  const existing = manifest.packages.find((pkg) => pkg.dir === 'icons');
+  const entry = manifestEntry(publicSubpaths, existing);
   const packages = manifest.packages.filter((pkg) => pkg.dir !== 'icons');
   let index = packages.findIndex((pkg) => pkg.dir > 'icons');
   if (index === -1) index = packages.length;

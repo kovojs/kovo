@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chart Scatter icon (Lucide). https://lucide.dev/icons/chart-scatter */
-export function ChartScatter(props: IconProps = {}): string {
+export function ChartScatter(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Turkish Lira icon (Lucide). https://lucide.dev/icons/turkish-lira */
-export function TurkishLira(props: IconProps = {}): string {
+export function TurkishLira(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 4 5 9"></path>

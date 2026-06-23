@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Square Dashed Top Solid icon (Lucide). https://lucide.dev/icons/square-dashed-top-solid */
-export function SquareDashedTopSolid(props: IconProps = {}): string {
+export function SquareDashedTopSolid(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 21h1"></path>

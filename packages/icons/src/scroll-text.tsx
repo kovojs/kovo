@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Scroll Text icon (Lucide). https://lucide.dev/icons/scroll-text */
-export function ScrollText(props: IconProps = {}): string {
+export function ScrollText(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 12h-5"></path>

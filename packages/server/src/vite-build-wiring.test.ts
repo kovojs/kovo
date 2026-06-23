@@ -14,13 +14,14 @@ import {
 import type { KovoAppShellViteBuildOutput } from './vite-build-output.js';
 import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import { writeKovoAppShellViteBuildOutput } from './vite-build-output.js';
+import { renderedHtml } from './html.js';
 
 describe('server app shell Vite plugin', () => {
   it('wires build manifest hints and compiled client modules through the app shell', async () => {
     const cartRoute = route('/cart', {
       modulepreloads: ['/c/manual.client.js?v=manual'],
       page() {
-        return '<main><cart-badge>1</cart-badge></main>';
+        return renderedHtml('<main><cart-badge>1</cart-badge></main>');
       },
       stylesheets: ['/assets/manual.css'],
     });
@@ -98,7 +99,7 @@ describe('server app shell Vite plugin', () => {
   it('wires a route-entry map through the Vite build helper before route hints are applied', async () => {
     const accountRoute = route('/account', {
       page() {
-        return '<main>Account</main>';
+        return renderedHtml('<main>Account</main>');
       },
     });
     const build = createKovoAppShellViteBuild({

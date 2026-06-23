@@ -1,4 +1,5 @@
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
+import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
 /**
  * @internal HTML-coercion helper the compiler injects into emitted server modules
@@ -68,6 +69,10 @@ export function isRenderedHtml(value: unknown): value is RenderedHtml {
 export function renderHtmlValue(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (isRenderedHtml(value)) return value.html;
+  if (typeof value === 'object') {
+    const trustedHtml = kovoTrustedHtmlContent(value);
+    if (trustedHtml !== '') return trustedHtml;
+  }
   if (typeof value === 'string') return escapeTextWithRenderedHtml(value);
   if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
     return escapeText(value);

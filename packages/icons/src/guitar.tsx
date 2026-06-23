@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Guitar icon (Lucide). https://lucide.dev/icons/guitar */
-export function Guitar(props: IconProps = {}): string {
+export function Guitar(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m11.9 12.1 4.514-4.514"></path>

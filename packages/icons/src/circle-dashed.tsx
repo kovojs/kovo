@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Circle Dashed icon (Lucide). https://lucide.dev/icons/circle-dashed */
-export function CircleDashed(props: IconProps = {}): string {
+export function CircleDashed(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.1 2.182a10 10 0 0 1 3.8 0"></path>

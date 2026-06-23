@@ -15,6 +15,7 @@ import {
   kovoAppShellViteManifestFileDryRunStaticExportOptions,
   kovoAppShellViteManifestFileWriteStaticExportOptions,
 } from './vite-static-export-options.js';
+import { renderedHtml } from './html.js';
 
 describe('server app shell Vite static export options boundary', () => {
   it('normalizes build static-export options without changing the replay contract', async () => {
@@ -27,7 +28,7 @@ describe('server app shell Vite static export options boundary', () => {
           routes: [
             route('/shop', {
               page() {
-                return '<main>Shop</main>';
+                return renderedHtml('<main>Shop</main>');
               },
             }),
           ],
@@ -112,7 +113,7 @@ describe('server app shell Vite static export options boundary', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart</main>';
+                return renderedHtml('<main>Cart</main>');
               },
             }),
           ],
@@ -179,7 +180,7 @@ describe('server app shell Vite static export options boundary', () => {
         routes: [
           route('/docs', {
             page() {
-              return '<main>Docs</main>';
+              return renderedHtml('<main>Docs</main>');
             },
           }),
         ],
@@ -249,7 +250,7 @@ describe('server app shell Vite static export options boundary', () => {
         routes: [
           route('/preview', {
             page() {
-              return '<main>Preview</main>';
+              return renderedHtml('<main>Preview</main>');
             },
           }),
         ],
@@ -316,7 +317,7 @@ describe('server app shell Vite static export options boundary', () => {
           routes: [
             route('/plugin', {
               page() {
-                return '<main>Plugin</main>';
+                return renderedHtml('<main>Plugin</main>');
               },
             }),
           ],

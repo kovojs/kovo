@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Waypoints icon (Lucide). https://lucide.dev/icons/waypoints */
-export function Waypoints(props: IconProps = {}): string {
+export function Waypoints(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10.586 5.414-5.172 5.172"></path>

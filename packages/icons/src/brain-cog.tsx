@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Brain Cog icon (Lucide). https://lucide.dev/icons/brain-cog */
-export function BrainCog(props: IconProps = {}): string {
+export function BrainCog(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10.852 14.772-.383.923"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Gpu icon (Lucide). https://lucide.dev/icons/gpu */
-export function Gpu(props: IconProps = {}): string {
+export function Gpu(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 17h18a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H2"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Circle Arrow Out Up Right icon (Lucide). https://lucide.dev/icons/circle-arrow-out-up-right */
-export function CircleArrowOutUpRight(props: IconProps = {}): string {
+export function CircleArrowOutUpRight(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M22 12A10 10 0 1 1 12 2"></path>

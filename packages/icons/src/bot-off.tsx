@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Bot Off icon (Lucide). https://lucide.dev/icons/bot-off */
-export function BotOff(props: IconProps = {}): string {
+export function BotOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.67 8H18a2 2 0 0 1 2 2v4.33"></path>

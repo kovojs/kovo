@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Git Branch Plus icon (Lucide). https://lucide.dev/icons/git-branch-plus */
-export function GitBranchPlus(props: IconProps = {}): string {
+export function GitBranchPlus(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M6 3v12"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Flip Vertical 2 icon (Lucide). https://lucide.dev/icons/flip-vertical-2 */
-export function FlipVertical2(props: IconProps = {}): string {
+export function FlipVertical2(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m17 3-5 5-5-5h10"></path>

@@ -5,6 +5,7 @@
   "type": "module",
   "dependencies": {
     "@kovojs/better-auth": "workspace:*",
+    "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*"
   },

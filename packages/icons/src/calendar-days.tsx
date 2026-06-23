@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Calendar Days icon (Lucide). https://lucide.dev/icons/calendar-days */
-export function CalendarDays(props: IconProps = {}): string {
+export function CalendarDays(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M8 2v4"></path>

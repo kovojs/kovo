@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import type { RequestHandler } from './app-types.js';
@@ -56,7 +57,7 @@ describe('server static export synthetic request boundary', () => {
       app: createApp({
         routes: [
           route('/context', {
-            page: () => '<main>context shell</main>',
+            page: () => trustedHtml('<main>context shell</main>'),
           }),
         ],
       }),
@@ -76,7 +77,7 @@ describe('server static export synthetic request boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => '<main>Home</main>',
+          page: () => trustedHtml('<main>Home</main>'),
         }),
       ],
     });

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Earth icon (Lucide). https://lucide.dev/icons/earth */
-export function Earth(props: IconProps = {}): string {
+export function Earth(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M21.54 15H17a2 2 0 0 0-2 2v4.54"></path>

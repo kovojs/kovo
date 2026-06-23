@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Power Off icon (Lucide). https://lucide.dev/icons/power-off */
-export function PowerOff(props: IconProps = {}): string {
+export function PowerOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18.36 6.64A9 9 0 0 1 20.77 15"></path>

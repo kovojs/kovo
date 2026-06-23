@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Accessibility icon (Lucide). https://lucide.dev/icons/accessibility */
-export function Accessibility(props: IconProps = {}): string {
+export function Accessibility(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="16" cy="4" r="1"></circle>

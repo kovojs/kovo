@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Text Wrap icon (Lucide). https://lucide.dev/icons/text-wrap */
-export function TextWrap(props: IconProps = {}): string {
+export function TextWrap(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 16-3 3 3 3"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Frame icon (Lucide). https://lucide.dev/icons/frame */
-export function Frame(props: IconProps = {}): string {
+export function Frame(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="22" x2="2" y1="6" y2="6"></line>

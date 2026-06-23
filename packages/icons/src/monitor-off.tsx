@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Monitor Off icon (Lucide). https://lucide.dev/icons/monitor-off */
-export function MonitorOff(props: IconProps = {}): string {
+export function MonitorOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 17v4"></path>

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { respond } from './response.js';
 import { route } from './route.js';
 import { replayStaticExportApp } from './static-export-replay.js';
+import { renderedHtml } from './html.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 
@@ -19,7 +21,8 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/', {
-          page: () => `<main><button on:click="${href}#Cart$open">Open</button></main>`,
+          page: () =>
+            trustedHtml(`<main><button on:click="${href}#Cart$open">Open</button></main>`),
         }),
         route('/downloads/orders.pdf', {
           page: () =>
@@ -84,7 +87,7 @@ describe('server static export app replay boundary', () => {
         route('/products/:id', {
           page(context) {
             const params = context.params as { id: string };
-            return `<main data-product="${params.id}">Product ${params.id}</main>`;
+            return renderedHtml(`<main data-product="${params.id}">Product ${params.id}</main>`);
           },
           staticPaths: ['/products/p1', '/products/%2f'],
         }),
@@ -119,7 +122,7 @@ describe('server static export app replay boundary', () => {
                 filename: 'orders.pdf',
               });
             }
-            return `<main data-product="${params.id}">Product ${params.id}</main>`;
+            return renderedHtml(`<main data-product="${params.id}">Product ${params.id}</main>`);
           },
           staticPaths: ['/products/p1', '/products/download'],
         }),
@@ -145,7 +148,7 @@ describe('server static export app replay boundary', () => {
     const app = createApp({
       routes: [
         route('/products/:id', {
-          page: () => '<main>Product</main>',
+          page: () => trustedHtml('<main>Product</main>'),
         }),
       ],
     });
@@ -171,7 +174,7 @@ describe('server static export app replay boundary', () => {
           },
         }),
         route('/products/new', {
-          page: () => '<main>New</main>',
+          page: () => trustedHtml('<main>New</main>'),
         }),
       ],
     });

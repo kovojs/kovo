@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Drafting Compass icon (Lucide). https://lucide.dev/icons/drafting-compass */
-export function DraftingCompass(props: IconProps = {}): string {
+export function DraftingCompass(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12.99 6.74 1.93 3.44"></path>

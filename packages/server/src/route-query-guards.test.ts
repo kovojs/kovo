@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { domain } from './domain.js';
 import { guards, session } from './guards.js';
+import { renderedHtml } from './html.js';
 import { query, renderQueryEndpointResponse } from './query.js';
 import { renderRoutePageResponse, route } from './route.js';
 import { s } from './schema.js';
@@ -36,7 +38,7 @@ describe('route and query guard responses', () => {
       },
       page(_context, request: AppRequest) {
         events.push(`page:${request.session?.user.id ?? 'anonymous'}`);
-        return request.session?.user.id ?? 'anonymous';
+        return renderedHtml(request.session?.user.id ?? 'anonymous');
       },
     });
     const accountQuery = query('account', {
@@ -154,12 +156,12 @@ describe('route and query guard responses', () => {
       onUnauthenticated({ next }) {
         return { location: `/signin?continue=${encodeURIComponent(next)}`, status: 303 };
       },
-      page: () => 'account',
+      page: () => trustedHtml('account'),
       search: s.object({ tab: s.string() }),
     });
     const adminRoute = route('/admin', {
       guard: guards.role<AppRequest>('admin'),
-      page: () => 'admin',
+      page: () => trustedHtml('admin'),
     });
     const accountQuery = query('account', {
       guard: guards.authed<AppRequest>(),

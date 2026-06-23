@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Book Lock icon (Lucide). https://lucide.dev/icons/book-lock */
-export function BookLock(props: IconProps = {}): string {
+export function BookLock(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 6V4a2 2 0 1 0-4 0v2"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Mouse Pointer icon (Lucide). https://lucide.dev/icons/mouse-pointer */
-export function MousePointer(props: IconProps = {}): string {
+export function MousePointer(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12.586 12.586 19 19"></path>

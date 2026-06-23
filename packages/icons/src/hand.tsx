@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Hand icon (Lucide). https://lucide.dev/icons/hand */
-export function Hand(props: IconProps = {}): string {
+export function Hand(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"></path>

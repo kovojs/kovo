@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Separator Vertical icon (Lucide). https://lucide.dev/icons/separator-vertical */
-export function SeparatorVertical(props: IconProps = {}): string {
+export function SeparatorVertical(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 3v18"></path>

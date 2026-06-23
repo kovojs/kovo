@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Clipboard Clock icon (Lucide). https://lucide.dev/icons/clipboard-clock */
-export function ClipboardClock(props: IconProps = {}): string {
+export function ClipboardClock(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 14v2.2l1.6 1"></path>

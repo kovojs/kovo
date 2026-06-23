@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Move Right icon (Lucide). https://lucide.dev/icons/move-right */
-export function MoveRight(props: IconProps = {}): string {
+export function MoveRight(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 8L22 12L18 16"></path>

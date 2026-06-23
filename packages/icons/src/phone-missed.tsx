@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Phone Missed icon (Lucide). https://lucide.dev/icons/phone-missed */
-export function PhoneMissed(props: IconProps = {}): string {
+export function PhoneMissed(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 2 6 6"></path>

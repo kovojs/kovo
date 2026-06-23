@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Grape icon (Lucide). https://lucide.dev/icons/grape */
-export function Grape(props: IconProps = {}): string {
+export function Grape(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M22 5V2l-5.89 5.89"></path>

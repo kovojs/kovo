@@ -316,6 +316,9 @@ importers:
       '@kovojs/better-auth':
         specifier: workspace:*
         version: link:../../packages/better-auth
+      '@kovojs/browser':
+        specifier: workspace:*
+        version: link:../../packages/browser
       '@kovojs/core':
         specifier: workspace:*
         version: link:../../packages/core

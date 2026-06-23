@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chart Network icon (Lucide). https://lucide.dev/icons/chart-network */
-export function ChartNetwork(props: IconProps = {}): string {
+export function ChartNetwork(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m13.11 7.664 1.78 2.672"></path>

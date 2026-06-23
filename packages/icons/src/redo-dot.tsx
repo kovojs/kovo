@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Redo Dot icon (Lucide). https://lucide.dev/icons/redo-dot */
-export function RedoDot(props: IconProps = {}): string {
+export function RedoDot(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="17" r="1"></circle>

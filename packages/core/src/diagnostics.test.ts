@@ -75,6 +75,7 @@ describe('diagnostic registry', () => {
       'KV423',
       'KV424',
       'KV425',
+      'KV426',
     ]);
   });
 
@@ -596,6 +597,15 @@ describe('diagnostic registry', () => {
         },
         "KV422": {
           "code": "KV422",
+          "help": "Would lower to: SQL text and SQL values crossing the managed DB seam as separate facts.
+      Blocked reason: executable SQL text was built from an unbranded raw string, an unsafe raw chunk, or an unchecked identifier/keyword fragment, so request data could become SQL syntax instead of a bound value.
+      Fixes: use Drizzle builders or Kovo sql\`...\` placeholders for scalar values, staticSql\`...\` for literal-only SQL text, sql.identifier(value, { allow }) or sql.allow(value, allowlist) for allowlisted identifiers/keywords, or trustedSql(..., { justification }) for the audited raw-SQL escape hatch.
+      SPEC §10.2/§10.3 and §11.2 require framework-managed DB handles to reject unbranded executable SQL text independently from KV406/KV410 read/write freshness declarations.",
+          "message": "SQL text injection risk.",
+          "severity": "error",
+        },
+        "KV423": {
+          "code": "KV423",
           "help": "Would lower to: a raw endpoint audit row with explicit method, purpose/reason, mount scope, response body posture, cache posture, and app-owned encoding/header-safety declarations.
       Blocked reason: endpoint() is the raw HTTP escape hatch; without complete audit metadata, reviewers cannot tell why the route exists, what methods it accepts, or who owns output/header safety.
       Fixes: add the missing endpoint metadata, give prefix mounts a mountJustification, and keep csrf:false justifications separate from the endpoint purpose.
@@ -603,8 +613,8 @@ describe('diagnostic registry', () => {
           "message": "Raw endpoint declaration is missing required audit metadata.",
           "severity": "error",
         },
-        "KV423": {
-          "code": "KV423",
+        "KV424": {
+          "code": "KV424",
           "help": "Would lower to: a framework-owned safe helper, typed trust API, or registered source/sink row for the dangerous output operation.
       Blocked reason: app-authored direct writes to dangerous sinks such as raw HTML, URL/navigation, selectors, headers, files, dynamic import, eval, or process execution bypass Kovo contextual encoding and audit surfaces.
       Fixes: route the value through the corresponding Kovo helper, use an explicit trustedHtml/trustedUrl-style escape hatch with provenance, or move app-owned raw protocol code behind an audited endpoint.
@@ -612,8 +622,8 @@ describe('diagnostic registry', () => {
           "message": "App-authored dangerous sink is not registered or behind a safe Kovo surface.",
           "severity": "error",
         },
-        "KV424": {
-          "code": "KV424",
+        "KV425": {
+          "code": "KV425",
           "help": "Would lower to: a source/sink registry entry, runtime chokepoint, diagnostic, or explicit repo-internal exclusion for each dangerous framework sink token found by drift detection.
       Blocked reason: a new framework-owned sink appeared without being enrolled in the generated source/sink inventory, so future audits can miss a path from attacker-controlled input to output.
       Fixes: add the sink to the shared registry with spec/test evidence, attach it to an existing safe chokepoint, or record a narrow exclusion proving it is build/test-only or outside request paths.
@@ -621,8 +631,8 @@ describe('diagnostic registry', () => {
           "message": "Framework source/sink registry drift detected an unregistered sink.",
           "severity": "error",
         },
-        "KV425": {
-          "code": "KV425",
+        "KV426": {
+          "code": "KV426",
           "help": "Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
       Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain --trust.
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.

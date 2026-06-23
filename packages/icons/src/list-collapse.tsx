@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** List Collapse icon (Lucide). https://lucide.dev/icons/list-collapse */
-export function ListCollapse(props: IconProps = {}): string {
+export function ListCollapse(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 5h11"></path>

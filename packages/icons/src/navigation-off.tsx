@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Navigation Off icon (Lucide). https://lucide.dev/icons/navigation-off */
-export function NavigationOff(props: IconProps = {}): string {
+export function NavigationOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M8.43 8.43 3 11l8 2 2 8 2.57-5.43"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Sliders Horizontal icon (Lucide). https://lucide.dev/icons/sliders-horizontal */
-export function SlidersHorizontal(props: IconProps = {}): string {
+export function SlidersHorizontal(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10 5H3"></path>

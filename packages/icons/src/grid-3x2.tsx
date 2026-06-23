@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Grid 3x2 icon (Lucide). https://lucide.dev/icons/grid-3x2 */
-export function Grid3x2(props: IconProps = {}): string {
+export function Grid3x2(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 3v18"></path>

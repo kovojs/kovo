@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** User Round Check icon (Lucide). https://lucide.dev/icons/user-round-check */
-export function UserRoundCheck(props: IconProps = {}): string {
+export function UserRoundCheck(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 21a8 8 0 0 1 13.292-6"></path>

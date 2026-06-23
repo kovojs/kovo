@@ -23,12 +23,10 @@ describe('site route stylesheet hints', () => {
     expect(new TextEncoder().encode(criticalCss).byteLength).toBeLessThan(40_000);
   });
 
-  it('preloads the global app stylesheet after critical theme CSS', () => {
+  it('keeps the global app stylesheet render-blocking after critical theme CSS', () => {
     const hints = renderPageHints({ stylesheets: siteStylesheets });
 
-    expect(hints.html).toContain(
-      '<link rel="preload" as="style" href="/assets/site.css" data-kovo-deferred-style>',
-    );
-    expect(hints.html).toContain('<noscript><link rel="stylesheet" href="/assets/site.css">');
+    expect(hints.html).toContain('<link rel="stylesheet" href="/assets/site.css">');
+    expect(hints.html).not.toContain('data-kovo-deferred-style');
   });
 });

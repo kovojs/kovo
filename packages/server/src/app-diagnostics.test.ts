@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { guards } from './guards.js';
@@ -13,15 +14,15 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
         route('/admin', {
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
-          page: () => '<main>admin</main>',
+          page: () => trustedHtml('<main>admin</main>'),
         }),
         // public + moderate is fine (idempotent, not session-dependent)
-        route('/public', { prefetch: 'moderate', page: () => '<main>public</main>' }),
+        route('/public', { prefetch: 'moderate', page: () => trustedHtml('<main>public</main>') }),
         // guarded + conservative is fine (no prerender)
         route('/account', {
           guard: guards.authed<SessionShape>(),
           prefetch: 'conservative',
-          page: () => '<main>account</main>',
+          page: () => trustedHtml('<main>account</main>'),
         }),
       ],
     });
@@ -34,7 +35,9 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
 
   it('produces no KV419 when no route mixes a guard with prefetch:"moderate"', () => {
     const app = createApp({
-      routes: [route('/', { prefetch: 'conservative', page: () => '<main>home</main>' })],
+      routes: [
+        route('/', { prefetch: 'conservative', page: () => trustedHtml('<main>home</main>') }),
+      ],
     });
     expect(app.diagnostics.filter((diagnostic) => diagnostic.code === 'KV419')).toHaveLength(0);
   });
@@ -47,7 +50,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
           prefetchJustification: 'Route is read-only; render is safe for credentialed prerender.',
-          page: () => '<main>admin</main>',
+          page: () => trustedHtml('<main>admin</main>'),
         }),
       ],
     });
@@ -61,7 +64,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
         route('/dashboard', {
           guard: guards.authed<SessionShape>(),
           prefetch: 'moderate',
-          page: () => '<main>dashboard</main>',
+          page: () => trustedHtml('<main>dashboard</main>'),
         }),
       ],
     });
@@ -79,7 +82,7 @@ describe('app diagnostics — prefetch guard gate (bugs-1 F36 / KV419)', () => {
         // No guard, but in a real app this page might read session data internally.
         route('/feed', {
           prefetch: 'moderate',
-          page: () => '<main>public feed</main>',
+          page: () => trustedHtml('<main>public feed</main>'),
         }),
       ],
     });

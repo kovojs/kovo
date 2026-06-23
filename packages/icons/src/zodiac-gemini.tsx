@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Zodiac Gemini icon (Lucide). https://lucide.dev/icons/zodiac-gemini */
-export function ZodiacGemini(props: IconProps = {}): string {
+export function ZodiacGemini(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 4.525v14.948"></path>

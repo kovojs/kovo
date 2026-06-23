@@ -23,6 +23,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, route } from '@kovojs/server';
+import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
 import { mainAsync } from './index.js';
@@ -182,12 +183,7 @@ describe('kovo build', () => {
       expect(readFileSync(routeCss.filePath, 'utf8')).toContain('auto-css-card');
       const routeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
       expect(routeDocument).toContain(`data-kovo-critical-href="${routeCss.href}"`);
-      expect(routeDocument).toContain(
-        `<link rel="preload" as="style" href="${routeCss.href}" data-kovo-deferred-style>`,
-      );
-      expect(routeDocument).toContain(
-        `<noscript><link rel="stylesheet" href="${routeCss.href}"></noscript>`,
-      );
+      expect(routeDocument).toContain(`<link rel="stylesheet" href="${routeCss.href}">`);
       const viteStylesheetPath = builtAssetPath(outDir, (assetPath) => assetPath.endsWith('.css'));
       expect(readFileSync(join(outDir, '.kovo/client', viteStylesheetPath), 'utf8')).toContain(
         'main{color:#639}',
@@ -259,18 +255,8 @@ describe('kovo build', () => {
       expect(homeDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
       expect(homeDocument).toContain(`data-kovo-critical-href="${homeCss.href}"`);
       expect(homeDocument).not.toContain(`data-kovo-critical-href="${loginCss.href}"`);
-      expect(homeDocument).toContain(
-        `<link rel="preload" as="style" href="${baseCss.href}" data-kovo-deferred-style>`,
-      );
-      expect(homeDocument).toContain(
-        `<link rel="preload" as="style" href="${homeCss.href}" data-kovo-deferred-style>`,
-      );
-      expect(homeDocument).toContain(
-        `<noscript><link rel="stylesheet" href="${baseCss.href}"></noscript>`,
-      );
-      expect(homeDocument).toContain(
-        `<noscript><link rel="stylesheet" href="${homeCss.href}"></noscript>`,
-      );
+      expect(homeDocument).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
+      expect(homeDocument).toContain(`<link rel="stylesheet" href="${homeCss.href}">`);
       expect(inlinedCriticalCssBytes(homeDocument)).toBe(homeRouteCriticalCssBytes);
       const loginDocument = readFileSync(join(outDir, '.kovo/static/login/index.html'), 'utf8');
       expect(loginDocument).toContain(baseCss.href);
@@ -279,18 +265,8 @@ describe('kovo build', () => {
       expect(loginDocument).toContain(`data-kovo-critical-href="${baseCss.href}"`);
       expect(loginDocument).toContain(`data-kovo-critical-href="${loginCss.href}"`);
       expect(loginDocument).not.toContain(`data-kovo-critical-href="${homeCss.href}"`);
-      expect(loginDocument).toContain(
-        `<link rel="preload" as="style" href="${baseCss.href}" data-kovo-deferred-style>`,
-      );
-      expect(loginDocument).toContain(
-        `<link rel="preload" as="style" href="${loginCss.href}" data-kovo-deferred-style>`,
-      );
-      expect(loginDocument).toContain(
-        `<noscript><link rel="stylesheet" href="${baseCss.href}"></noscript>`,
-      );
-      expect(loginDocument).toContain(
-        `<noscript><link rel="stylesheet" href="${loginCss.href}"></noscript>`,
-      );
+      expect(loginDocument).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
+      expect(loginDocument).toContain(`<link rel="stylesheet" href="${loginCss.href}">`);
       expect(inlinedCriticalCssBytes(loginDocument)).toBe(loginRouteCriticalCssBytes);
     } finally {
       stdout.mockRestore();
@@ -939,6 +915,8 @@ import {
   s,
 } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 const cart = domain('cart');
 const db = { count: 0 };
 const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -970,7 +948,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
-      page: () => '<main>Cart ' + db.count + '</main>',
+      page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
 });
@@ -987,6 +965,8 @@ import {
   route,
   s,
 } from '@kovojs/server';
+
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
 
 const cart = domain('cart');
 const db = { count: 0 };
@@ -1012,7 +992,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
-      page: () => '<main>Cart ' + db.count + '</main>',
+      page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
 });
@@ -1046,10 +1026,12 @@ function staticAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 export default createApp({
   routes: [
     route('/', {
-      page: () => '<main>Static Home</main>',
+      page: () => trustedHtml('<main>Static Home</main>'),
     }),
   ],
 });
@@ -1125,6 +1107,8 @@ import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 const home = domain('home');
 const homeQuery = query('home', {
   load: () => ({ ok: true }),
@@ -1147,7 +1131,7 @@ export default createApp({
     {
       component: 'home-panel/home-panel',
       queries: ['home'],
-      render: () => '<home-panel>HomePanel</home-panel>',
+      render: () => trustedHtml('<home-panel>HomePanel</home-panel>'),
     },
   ],
   mutations: [touchHome],
@@ -1169,10 +1153,12 @@ function databaseEnvAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 export default createApp({
   routes: [
     route('/db', {
-      page: () => '<main>' + (process.env.DATABASE_URL ?? 'missing') + '</main>',
+      page: () => trustedHtml('<main>') + (process.env.DATABASE_URL ?? 'missing') + '</main>',
     }),
   ],
 });
@@ -1411,10 +1397,10 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
         default: createApp({
           routes: [
             route('/', {
-              page: () => '<main>Home</main>',
+              page: () => renderedHtml('<main>Home</main>'),
             }),
             route('/login', {
-              page: () => '<main>Login</main>',
+              page: () => renderedHtml('<main>Login</main>'),
             }),
           ],
         }),
@@ -1519,6 +1505,8 @@ function typescriptAppModuleSource(): string {
   return `
 import { createApp, domain, query, route } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 const db: { count: number } = { count: 4 };
 const typed = domain('typed');
 const typedQuery = query('typed', {
@@ -1530,7 +1518,7 @@ export default createApp({
   queries: [typedQuery],
   routes: [
     route('/typed', {
-      page: () => '<main>Typed Cart ' + db.count + '</main>',
+      page: () => trustedHtml('<main>Typed Cart ') + db.count + '</main>',
     }),
   ],
 });

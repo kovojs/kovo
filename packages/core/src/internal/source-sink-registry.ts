@@ -186,7 +186,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
   {
     consumers: ['endpoint-dispatcher', 'webhook-verifier', 'csrf-gate', 'replay-store'],
     context: 'endpoint.webhook.raw-request',
-    diagnostic: 'KV418|KV422',
+    diagnostic: 'KV418|KV423',
     escapeHatch: 'endpoint({csrf:false,reason})|webhook({verify:none,reason})',
     firstParser: 'endpoint-dispatcher-raw-request+webhook-verify-before-parse',
     guard: 'csrf-or-machine-verifier+raw-bytes-before-parse',
@@ -254,7 +254,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
   {
     consumers: ['drizzle-source-sink-plan', 'query-shape-observer'],
     context: 'sql.executable-text',
-    diagnostic: 'KV406|KV410',
+    diagnostic: 'KV406|KV410|KV422',
     escapeHatch: 'sql<T>+reads|raw-sql-tables+touches',
     firstParser: 'static-drizzle-extractor+runtime-statement-parser',
     guard: 'static-drizzle-analysis+runtime-statement-parser',
