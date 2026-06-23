@@ -398,6 +398,98 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     expect(source).not.toContain('$input.tenant');
   });
 
+  it('keeps private scope out of generated browser-visible leak surfaces', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'ticket.leak-check.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const tickets = pgTable("tickets", {',
+          '  tenantId: text("tenant_id").notNull(),',
+          '  id: text("id").notNull(),',
+          '  status: text("status").notNull(),',
+          '}, kovo({ domain: "ticket", key: "tenantId,id" }));',
+          '',
+          'function currentTenantId(context: { request?: { session?: { tenantId?: string } | null } }) {',
+          '  if (!context.request?.session?.tenantId) throw new Error("tenant required");',
+          '  return context.request.session.tenantId;',
+          '}',
+          'kovoAnalyzerSummary(currentTenantId, { returns: { kind: "tenant", path: "id" } });',
+          '',
+          'export const openTickets = query("openTickets", {',
+          '  async load(_input: {}, db: PgDatabase<any, any, any>, context: { request?: { session?: { tenantId?: string } | null } }) {',
+          '    const tenantId = currentTenantId(context);',
+          '    return {',
+          '      items: await db.select({ id: tickets.id, status: tickets.status }).from(tickets).where(and(eq(tickets.tenantId, tenantId), eq(tickets.status, "open"))),',
+          '    };',
+          '  },',
+          '});',
+          '',
+          'export async function closeTicket(db: PgDatabase<any, any, any>, context: { request?: { session?: { tenantId?: string } | null } }, targetId: string) {',
+          '  const tenantId = currentTenantId(context);',
+          '  await db.update(tickets).set({ status: "closed" }).where(and(eq(tickets.tenantId, tenantId), eq(tickets.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const queryFact = extractQueryFactsFromProject({ files }).find(
+      (candidate) => candidate.query === 'openTickets',
+    );
+    if (!queryFact) throw new Error('expected openTickets query fact');
+    expect(queryFact.instanceKey).toBeUndefined();
+
+    const shape = extractAlgebraicShapesFromProject({ files }).find(
+      (candidate) => candidate.query === 'openTickets',
+    );
+    if (!shape) throw new Error('expected openTickets algebraic shape');
+
+    const effect = extractSymbolicEffectsFromProject({ files }).find(
+      (candidate) => candidate.writeKey === 'closeTicket',
+    );
+    if (!effect) throw new Error('expected closeTicket symbolic effect');
+
+    const result = deriveOptimistic([effect.effect], shape);
+    if (result.kind !== 'derived') throw new Error(`expected derived, got ${result.kind}`);
+
+    const loweredBrowserCode = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'ticketCloseDerivedOptimistic',
+      entries: [{ program: result.program, query: 'openTickets' }],
+      formImport: { name: 'closeTicketForm', path: '../../app.js' },
+    });
+    const publicQueryKey = queryFact.instanceKey ?? queryFact.query;
+    const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
+      (match) => match[1] ?? '',
+    );
+
+    expect(result.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+        op: 'remove-row',
+        path: 'items',
+      },
+    ]);
+    expect(transformInputs).toEqual(['targetId']);
+    expectNoPrivateScopeLeak({
+      'Kovo-Targets': `ticket-panel=${publicQueryKey}`,
+      'browser-visible query instance key': publicQueryKey,
+      'generated optimistic module exports':
+        loweredBrowserCode.match(/export const \w+/)?.[0] ?? loweredBrowserCode,
+      'generated transform inputs': transformInputs.join(','),
+      'kovo-deps': publicQueryKey,
+      'lowered browser code': loweredBrowserCode,
+    });
+  });
+
   it('derives composite natural-key cart updates with same-scope aggregate witnesses', () => {
     const files = [
       pgDatabaseTypes([
@@ -879,3 +971,24 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     expect(source).not.toContain('$input.session');
   });
 });
+
+function expectNoPrivateScopeLeak(surfaces: Record<string, string>): void {
+  const forbidden = [
+    '$input.guard',
+    '$input.session',
+    '$input.tenant',
+    'guard:',
+    'session:',
+    'sessionId',
+    'tenant:',
+    'tenantId',
+  ];
+
+  for (const [surface, value] of Object.entries(surfaces)) {
+    for (const token of forbidden) {
+      if (value.includes(token)) {
+        throw new Error(`${surface} leaked private scope token ${JSON.stringify(token)}: ${value}`);
+      }
+    }
+  }
+}
