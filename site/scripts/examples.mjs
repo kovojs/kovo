@@ -96,7 +96,7 @@ export const EXAMPLES = [
  * agent-layer section (site/src/aux.ts buildGalleryLlmsSection, sourced from
  * examples/gallery/src/component-catalog.ts), so it is not listed here.
  *
- * @type {Array<{ name: string, title: string, blurb: string, dir: string, sources: Array<string | { name?: string, path: string }> }>}
+ * @type {Array<{ name: string, title: string, blurb: string, dir: string, url?: string, sources: Array<string | { name?: string, path: string }> }>}
  */
 export const LLMS_ONLY_EXAMPLES = [
   {
@@ -105,6 +105,7 @@ export const LLMS_ONLY_EXAMPLES = [
     blurb:
       "A devtool that visualizes a Kovo app's dataflow graph — select any node and trace the queries in and mutations out — and serves the same graph cards to agents over MCP. It is itself a Kovo app, dogfooding the framework on its own tooling (SPEC §5.3: agents consume the same artifact humans read).",
     dir: 'examples/devtool',
+    url: '/examples/devtool.md',
     sources: [
       'src/app-shell.ts',
       { path: 'packages/devtool/src/graph-model.mjs' },
@@ -119,6 +120,7 @@ export const LLMS_ONLY_EXAMPLES = [
     blurb:
       'A minimal reference app showing Kovo authentication and authorization: better-auth session providers, sign-in/sign-out mutations with CSRF protection, role and authed guards on routes, and the explain graph the compiler proves scope audits against.',
     dir: 'examples/reference',
+    url: '/examples/reference.md',
     sources: ['src/app.ts', 'src/app-shell.ts'],
   },
 ];
@@ -161,7 +163,7 @@ export async function buildExamplesLlmsSection({ repoRootPath }) {
       title: manifest.title,
       description: manifest.blurb,
       mirror: `/examples/${manifest.name}.md`,
-      url: `/examples/${manifest.name}/`,
+      url: manifest.url ?? `/examples/${manifest.name}/`,
       markdown: body,
       source: body,
     });

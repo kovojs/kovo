@@ -30,7 +30,7 @@ const artifactPath = resolve(siteRoot, 'src/generated/app.kovo-route.tsx');
 const sourceFileName = 'site/src/generated/app.routes.tsx';
 const artifactFileName = 'site/src/generated/app.kovo-route.tsx';
 
-export async function emitSiteRoutes({ check = false, skipPipeline = false } = {}) {
+export async function emitSiteRoutes({ skipPipeline = false } = {}) {
   if (!skipPipeline) await runContentPipeline();
 
   const routeData = await loadRouteData();
@@ -43,22 +43,9 @@ export async function emitSiteRoutes({ check = false, skipPipeline = false } = {
     `${sourceFileName} did not compile every docs-site route page`,
   );
 
-  if (check) {
-    assert.equal(
-      readFileSync(sourcePath, 'utf8'),
-      source,
-      'generated app.routes.tsx is stale; run `pnpm --filter @kovojs/site run emit-routes`',
-    );
-    assert.equal(
-      readFileSync(artifactPath, 'utf8'),
-      compiled.artifact,
-      'generated app.kovo-route.tsx is stale; run `pnpm --filter @kovojs/site run emit-routes`',
-    );
-  } else {
-    mkdirSync(dirname(sourcePath), { recursive: true });
-    writeFileSync(sourcePath, source);
-    writeFileSync(artifactPath, compiled.artifact);
-  }
+  mkdirSync(dirname(sourcePath), { recursive: true });
+  writeFileSync(sourcePath, source);
+  writeFileSync(artifactPath, compiled.artifact);
 
   return {
     artifactPath,
@@ -223,10 +210,6 @@ function parseCliOptions(args) {
   const options = {};
   for (const arg of args) {
     if (arg === '--') continue;
-    if (arg === '--check') {
-      options.check = true;
-      continue;
-    }
     if (arg === '--skip-pipeline') {
       options.skipPipeline = true;
       continue;

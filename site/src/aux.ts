@@ -34,10 +34,24 @@ export async function emitAuxOutputs(outDir: string): Promise<void> {
   // apps (otherwise a bespoke human-only route family invisible to llms.txt).
   const examplesSection = await buildExamplesLlmsSection({ repoRootPath });
   // Components before Examples to match the human sidebar order (content.ts navGroups).
-  const sections = [...content.sections, buildGalleryLlmsSection(SITE_ORIGIN), examplesSection];
+  const gallerySection = buildGalleryLlmsSection(SITE_ORIGIN);
+  const syntheticSections = [gallerySection, examplesSection];
+  const sections = [...content.sections, ...syntheticSections];
 
   // Search index.
-  await writeFile(path.join(outDir, 'search-index.json'), JSON.stringify(content.search), 'utf8');
+  const syntheticSearch = syntheticSections.flatMap((section) =>
+    section.pages.map((page) => ({
+      section: section.title,
+      text: `${page.description ?? ''} ${page.markdown ?? page.source ?? ''}`.slice(0, 6000),
+      title: page.title,
+      url: page.url,
+    })),
+  );
+  await writeFile(
+    path.join(outDir, 'search-index.json'),
+    JSON.stringify([...content.search, ...syntheticSearch]),
+    'utf8',
+  );
 
   // Raw markdown mirrors (the agent surface llms.txt links to).
   for (const section of sections) {

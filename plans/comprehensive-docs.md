@@ -78,7 +78,7 @@ commands that prove the claim.
     `kovo add` semantics.
   - Done evidence: updated stability page and link check.
 
-- [ ] **Promote or explicitly route important root `docs/` material into the public site corpus.**
+- [x] **Promote or explicitly route important root `docs/` material into the public site corpus.**
   - Evidence: `site/src/content.ts:129` loads only `site/content/*`, `site/gen/api`, and
     `site/gen/reference`; root docs such as `docs/data-layer-dialects.md`,
     `docs/static-export.md`, `docs/integration-testing.md`, and
@@ -86,7 +86,9 @@ commands that prove the claim.
     docs as related material.
   - Deliverable: add a curated "Evidence / Design Notes" site collection or explicitly link and
     classify root docs as non-site reference material.
-  - Done evidence: site route/content changes, generated mirrors/llms coverage, and link check.
+  - Done evidence: `site/content/evidence/*.md` adds the public collection; `site/src/content.ts`
+    registers the section; `pnpm --filter @kovojs/site run build` emitted `/evidence/*` pages and
+    mirrors; `pnpm --filter @kovojs/site run check:links` passed.
 
 ## P1 - Advanced App Authoring Guides
 
@@ -210,22 +212,27 @@ commands that prove the claim.
 
 ## P2 - Site Architecture And Discoverability
 
-- [ ] **Fix llms canonical URLs for agent-only examples or make those pages real.**
+- [x] **Fix llms canonical URLs for agent-only examples or make those pages real.**
   - Evidence: `LLMS_ONLY_EXAMPLES` excludes devtool/reference from human `/examples/` routes at
     `site/scripts/examples.mjs:88`, but `buildExamplesLlmsSection` still assigns `/examples/<name>/`
     URLs at `site/scripts/examples.mjs:160`. The human route builder only loops over `EXAMPLES` in
     `site/src/examples.ts:47`.
   - Deliverable: add real `/examples/devtool/` and `/examples/reference/` pages, or point llms
     canonical URLs at real mirrors/repo URLs; extend link checks to validate `llms-full.txt` URL lines.
-  - Done evidence: route/link changes and failing-before/passing-after link check.
+  - Done evidence: `site/scripts/examples.mjs` points devtool/reference canonical URLs at
+    `/examples/devtool.md` and `/examples/reference.md`; `site/scripts/check-links.mjs` validates
+    `llms-full.txt` URL lines; `pnpm --filter @kovojs/site run check:links` passed.
 
-- [ ] **Include Components and Examples detail pages in site search.**
+- [x] **Include Components and Examples detail pages in site search.**
   - Evidence: `site/src/content.ts` populates `content.search` only from fixed markdown/generated
     sections plus spec, while components/examples are appended later by `site/src/app-data.ts:66` and
     `site/src/app-data.ts:77`; `site/src/aux.ts:39` writes only `content.search`.
   - Deliverable: add search entries for `/components/<name>/`, `/examples/<name>/`, and new
     reference/devtool pages, with smoke queries for `accordion`, `commerce`, and auth reference terms.
-  - Done evidence: generated `search-index.json` checks or tests plus site smoke.
+  - Done evidence: `site/src/aux.ts` adds synthetic Components/Examples pages to
+    `search-index.json`; after `pnpm --filter @kovojs/site run build`, a focused node probe found
+    `Accordion`, `Commerce`, `Dataflow Devtools`, and `Data-layer dialects` in the generated search
+    index.
 
 - [ ] **Surface SQLite dialect support in the site data-layer docs.**
   - Evidence: `plans/sqlite-support.md:131` marks docs done via `docs/data-layer-dialects.md`, but the
@@ -268,12 +275,14 @@ commands that prove the claim.
     "Advanced app flow diagnostics" section linked from Security, Routing, Mutations, and Deployment.
   - Done evidence: docs changes, generated diagnostics check, and link check.
 
-- [ ] **Wire or retire the site route artifact stale check.**
+- [x] **Wire or retire the site route artifact stale check.**
   - Evidence: `site/scripts/emit-routes.mjs:46` supports `--check`, but `site/package.json:15` exposes
     only `emit-routes`, and Pages CI does not run `emit-routes --check`.
   - Deliverable: add a check script/CI gate if route artifacts are intended to be committed, or remove
     the dead stale-check path.
-  - Done evidence: package/workflow change plus focused site route check.
+  - Done evidence: `site/src/generated/` is gitignored, so the dead `--check` branch was removed from
+    `site/scripts/emit-routes.mjs`; `pnpm --filter @kovojs/site run emit-routes` passed and generated
+    `site-routes/v1 pages=104`.
 
 ## Latest Verification
 
@@ -286,3 +295,9 @@ commands that prove the claim.
   - Four read-only sub-agent audits completed: public API coverage, app-authoring flows,
     examples/advanced patterns, and docs-site structure.
   - No documentation implementation checks were run because this session created the plan only.
+- 2026-06-23 site-pipeline slice:
+  - `pnpm exec vp check --fix site/src/aux.ts site/src/content.ts site/scripts/examples.mjs site/scripts/check-links.mjs site/scripts/emit-routes.mjs site/content/evidence/*.md`.
+  - `pnpm --filter @kovojs/site run content`.
+  - `pnpm --filter @kovojs/site run emit-routes`.
+  - `pnpm --filter @kovojs/site run build`.
+  - `pnpm --filter @kovojs/site run check:links`.

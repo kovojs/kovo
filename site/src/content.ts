@@ -130,6 +130,7 @@ const SECTIONS = [
   { dir: 'content/docs', key: 'docs', title: 'Getting Started' },
   { dir: 'content/tutorial', key: 'tutorial', title: 'Tutorial' },
   { dir: 'content/guides', key: 'guides', title: 'Guides' },
+  { dir: 'content/evidence', key: 'evidence', title: 'Evidence & Design Notes' },
   { dir: 'gen/api', key: 'api', title: 'API Reference' },
   { dir: 'gen/reference', key: 'reference', title: 'Reference' },
 ] as const;
@@ -141,6 +142,8 @@ export const SECTION_INTROS: Record<string, string> = {
   docs: 'Install Kovo, absorb the mental model, and find your way around a project.',
   examples:
     'Complete Kovo apps you can run in the browser, embedded beside the authored source that renders them.',
+  evidence:
+    'Curated design notes and verification references promoted from the repository docs corpus.',
   guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',
   reference:
     'Everything generated from the framework itself — the per-package API reference, the diagnostics catalog, and the normative specification.',
