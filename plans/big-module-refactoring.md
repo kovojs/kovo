@@ -167,7 +167,10 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
     assertions, scenario list.
   - Verification: `pnpm run check:kovo`.
 
-- [ ] **Split `examples/gallery/src/demo-fixtures.tsx` by primitive or demo family.**
+- [x] **Split `examples/gallery/src/demo-fixtures.tsx` by primitive or demo family.**
+  - Evidence: moved controls/form/demo tail fixtures to
+    `examples/gallery/src/demo-fixtures-controls.tsx`; `demo-fixtures.tsx` is now 1,861 LoC and
+    `demo-fixtures-controls.tsx` is 1,059 LoC; `pnpm exec vitest --run examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/component-catalog.test.ts` passed 2 files / 37 tests.
   - Candidate modules: controls, disclosure/dialog/menu, list/table, forms, routing/navigation,
     streaming/async demos.
   - Preserve gallery route IDs and snapshot names unless a snapshot refresh is intentionally included.
