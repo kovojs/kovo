@@ -44,6 +44,13 @@ refetch, and morph application.
     by `pnpm --filter @kovojs/browser run check:inline-loader`,
     `pnpm exec vitest run packages/server/src/app.test.ts packages/server/src/document.test.ts packages/server/src/static-export-handler-doc.test.ts packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader-navigation.test.ts`,
     and `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-navigation.browser.test.ts`.
+- [x] **Delegated event list now has one modular source of truth.**
+  - Evidence: [packages/browser/src/loader.ts](/Users/mini/kovo/packages/browser/src/loader.ts:73)
+    exports `defaultDelegatedEvents`; [packages/browser/src/inline-loader-build.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.ts:48)
+    reads that literal declaration for inline generation and fails closed if it
+    stops being a string-literal array. Verified by
+    `pnpm --filter @kovojs/browser run check:inline-loader` and
+    `pnpm exec vitest run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts packages/browser/src/inline-loader.test.ts packages/browser/src/index.test.ts packages/browser/src/loader.test.ts`.
 
 ## Problems
 
@@ -100,8 +107,11 @@ refetch, and morph application.
     read/write, fragment target lookup, target/dependency header collection,
     native indeterminate checkbox initialization, and execution trigger once
     marking.
-  - Evidence needed: parity tests proving the inline artifact contains the
-    extracted modular helper closures and behavior matches existing inline tests.
+  - Evidence: delegated event list converged first; the inline generator now
+    reads [packages/browser/src/loader.ts](/Users/mini/kovo/packages/browser/src/loader.ts:73)
+    and [packages/browser/src/inline-loader-build.test.ts](/Users/mini/kovo/packages/browser/src/inline-loader-build.test.ts:62)
+    pins parity. Remaining evidence needed: converge additional helpers from
+    the candidate list and prove each with inline artifact parity tests.
 - [ ] **Phase 4: split enhanced navigation into a modular source helper with an inline build target.**
   - Move navigation eligibility, fetch options, build-token validation,
     segment-key comparison, scroll/focus restoration, and fallback rules into a

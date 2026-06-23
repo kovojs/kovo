@@ -10,10 +10,12 @@ import {
   buildInlineKovoLoaderInstallerReadableSource,
   buildInlineKovoLoaderInstallerSource,
   emitInlineKovoLoaderModule,
+  inlineDelegatedEvents,
   inlineKovoLoaderGzipByteBudget,
   inlineKovoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
 import { createInlineKovoLoaderSource, inlineKovoLoaderInstallerSource } from './inline-loader.js';
+import { defaultDelegatedEvents } from './loader.js';
 
 function createOversizedInlineLoaderSource(): string {
   let state = 0x12345678;
@@ -54,6 +56,14 @@ describe('inline loader build source', () => {
     expect(moduleSource).toContain('importModule: ImportHandlerModule,');
     expect(moduleSource).not.toContain('InlineImportHandlerModule');
     expect(moduleSource).not.toContain('eval');
+  });
+
+  it('generates the inline delegated event list from the modular loader source', () => {
+    // SPEC.md §4.4: the modular and inline loaders delegate the same event set.
+    expect(inlineDelegatedEvents).toEqual([...defaultDelegatedEvents]);
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      `const events = ${JSON.stringify([...defaultDelegatedEvents])};`,
+    );
   });
 
   it('checks the shipped source literal against the executable installer artifact', () => {

@@ -7,6 +7,7 @@ import ts from 'typescript';
 import { minifyInlineJavaScriptSource } from './inline-js-minifier.ts';
 
 const inlineKovoLoaderModulePath = fileURLToPath(new URL('./inline-loader.ts', import.meta.url));
+const modularLoaderSourcePath = fileURLToPath(new URL('./loader.ts', import.meta.url));
 const inlineResponseApplySourcePath = fileURLToPath(
   new URL('./inline-response-apply.ts', import.meta.url),
 );
@@ -45,6 +46,7 @@ export const inlineKovoLoaderGzipByteBudget = 8192;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
+export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
 
 export const inlineKovoLoaderInstallerReadableSource =
   buildInlineKovoLoaderInstallerReadableSource();
@@ -52,6 +54,7 @@ export const inlineKovoLoaderInstallerReadableSource =
 export function buildInlineKovoLoaderInstallerReadableSource(
   wireParserReadableSource = inlineWireParserReadableSource,
   responseApplyReadableSource = inlineResponseApplyReadableSource,
+  delegatedEvents: readonly string[] = inlineDelegatedEvents,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -60,11 +63,7 @@ function installInlineKovoLoader(im) {
   // focus/blur have no bubble phase but DO run a capture phase at ancestors, so
   // capture-phase delegation reaches them; pointerenter/pointerleave never run a
   // capture phase at ancestors, so they are synthesized below from pointerover/out.
-  const events = [
-    'click', 'submit', 'input', 'change', 'keydown', 'keyup',
-    'contextmenu', 'paste', 'cancel', 'beforetoggle', 'animationend', 'scroll', 'focus', 'blur',
-    'pointerdown', 'pointermove', 'pointerup',
-  ];
+  const events = ${JSON.stringify([...delegatedEvents])};
   const doc = document;
   let ic = 0;
   const ci = () =>
@@ -873,6 +872,49 @@ function readInlineWireParserReadableSource(): string {
 
 function readInlineResponseApplyReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.responseApply);
+}
+
+function readModularDefaultDelegatedEvents(
+  source = readFileSync(modularLoaderSourcePath, 'utf8'),
+): string[] {
+  const sourceFile = ts.createSourceFile(
+    'loader.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== 'defaultDelegatedEvents'
+      ) {
+        continue;
+      }
+      const initializer =
+        declaration.initializer && ts.isAsExpression(declaration.initializer)
+          ? declaration.initializer.expression
+          : declaration.initializer;
+      if (!initializer || !ts.isArrayLiteralExpression(initializer)) {
+        throw new Error(
+          'defaultDelegatedEvents must stay a literal string array for inline loader generation.',
+        );
+      }
+      return initializer.elements.map((element) => {
+        if (!ts.isStringLiteral(element)) {
+          throw new Error(
+            'defaultDelegatedEvents must contain only string literals for inline loader generation.',
+          );
+        }
+        return element.text;
+      });
+    }
+  }
+
+  throw new Error('Inline Kovo loader could not find defaultDelegatedEvents in loader.ts.');
 }
 
 export function extractInlineWireParserReadableSource(
