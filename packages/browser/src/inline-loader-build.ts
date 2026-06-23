@@ -1058,11 +1058,15 @@ export function buildInlineKovoLoaderModuleSource(
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(
       installerSource,
     )};`,
+    '/** @internal Bootstrap source used by document shells before the deferred runtime module loads. */',
     `export const inlineKovoLoaderBootstrapInstallerSource = ${inlineJavaScriptTemplateLiteral(
       stubInstallerSource,
     )};`,
+    '/** @internal Deferred runtime module path emitted by server document rendering. */',
     "export const kovoDeferredRuntimeModulePath = '/c/kovo-runtime.client.js';",
+    '/** @internal Content version for the deferred runtime module emitted by server document rendering. */',
     `export const kovoDeferredRuntimeModuleVersion = '${runtimeModuleVersion}';`,
+    '/** @internal Deferred runtime module source emitted by server document rendering. */',
     `export const kovoDeferredRuntimeModuleSource = ${inlineJavaScriptTemplateLiteral(
       runtimeModuleSource,
     )};`,

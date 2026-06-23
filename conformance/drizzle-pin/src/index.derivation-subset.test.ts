@@ -387,7 +387,16 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         },
       });
       expect(shape.rowsByTable).toEqual({
-        items: { columns: ['id', 'stock'], rowsPath: 'items' },
+        items: {
+          columns: ['id', 'stock'],
+          rowsPath: 'items',
+          rowset: {
+            filters: [],
+            key: 'id',
+            orderBy: [{ column: 'id', direction: 'asc' }],
+            table: 'items',
+          },
+        },
       });
     });
 

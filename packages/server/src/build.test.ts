@@ -1105,12 +1105,6 @@ export default async function handler() {
         cloudflare().inspect!(build, { declaredEnv: ['DATABASE_URL'] }),
       ).resolves.toEqual([
         {
-          code: 'client-module-retention',
-          message:
-            'The cloudflare preset emits immutable /c/* client modules. Keep old versioned /c/ artifacts published until documents that reference them expire; never purge or rewrite them during deploys.',
-          severity: 'warning',
-        },
-        {
           code: 'cloudflare-tcp-database',
           message:
             'The cloudflare preset emits a Worker with nodejs_compat. TCP database drivers behind DATABASE_URL need Hyperdrive, Cloudflare Containers, or an HTTP database driver before deploy.',

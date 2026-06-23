@@ -5,17 +5,17 @@ import type { StylesheetAsset } from './hints.js';
 import type { ServerResponseBase } from './response.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 
-/** @internal */
+/** A query refresh payload carried by a deferred route-region stream. */
 export interface DeferredQueryChunk {
   key?: string;
   name: string;
   value: unknown;
 }
 
-/** @internal */
+/** Priority ordering for deferred route-region stream chunks. */
 export type DeferredPriority = 'high' | 'normal' | 'low' | 'visible' | number;
 
-/** @internal */
+/** A fragment payload carried by a deferred route-region stream. */
 export interface DeferredFragmentChunk {
   html: string;
   mode?: 'append' | 'replace';
@@ -32,7 +32,7 @@ export interface DeferredStreamOptions {
   shell: string;
 }
 
-/** @internal */
+/** One deferred route-region stream chunk. */
 export interface DeferredStreamChunk {
   fragments: readonly DeferredFragmentChunk[];
   priority?: DeferredPriority;

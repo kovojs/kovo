@@ -145,8 +145,24 @@ describe('server static export client module replay boundary', () => {
         path: '/c/menu.client.js',
         status: 200,
       },
+      {
+        body: expect.stringMatching(
+          /^export const modulePath = "\/c\/__v\/[^/]+\/kovo-runtime\.client\.js";$/,
+        ),
+        headers: {
+          'content-type': 'application/javascript; charset=utf-8',
+          'x-static-module': expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+        },
+        href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+        path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+        status: 200,
+      },
     ]);
-    expect(seen).toEqual(['/c/cart.client.js?v=cart-1#Cart$add', '/c/menu.client.js?v=menu-1']);
+    expect(seen).toEqual([
+      '/c/cart.client.js?v=cart-1#Cart$add',
+      '/c/menu.client.js?v=menu-1',
+      expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+    ]);
   });
 
   it('ignores non-module /c/ references while replaying declared client modules', async () => {
@@ -203,8 +219,21 @@ describe('server static export client module replay boundary', () => {
         path: '/c/menu.client.js',
         status: 200,
       },
+      {
+        body: expect.stringMatching(
+          /^export const modulePath = "\/c\/__v\/[^/]+\/kovo-runtime\.client\.js";$/,
+        ),
+        headers: { 'content-type': 'text/javascript; charset=utf-8' },
+        href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+        path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+        status: 200,
+      },
     ]);
-    expect(seen).toEqual(['/c/cart.client.js?v=cart-1#Cart$add', '/c/menu.client.js?v=menu-1']);
+    expect(seen).toEqual([
+      '/c/cart.client.js?v=cart-1#Cart$add',
+      '/c/menu.client.js?v=menu-1',
+      expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+    ]);
   });
 
   it('raises KV229 when a referenced client module replays to non-JavaScript', async () => {

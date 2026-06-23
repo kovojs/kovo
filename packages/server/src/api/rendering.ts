@@ -7,6 +7,12 @@ export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export { defer } from '../deferred-region.js';
 export type { DeferredRegionOptions, RegionPriority } from '../deferred-region.js';
+export type {
+  DeferredFragmentChunk,
+  DeferredPriority,
+  DeferredQueryChunk,
+  DeferredStreamChunk,
+} from '../deferred-stream.js';
 export type { DocumentParts, DocumentTemplate, DocumentTemplateContext } from '../document-core.js';
 export { stylesheet } from '../hints.js';
 export type {

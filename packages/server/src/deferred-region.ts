@@ -3,8 +3,6 @@ import type { DeferredPriority, DeferredStreamChunk } from './deferred-stream.js
 import type { StylesheetAsset } from './hints.js';
 import { currentJsxFrameworkContext, type DeferredRegionCollector } from './jsx-context.js';
 
-type MaybePromise<Value> = Promise<Value> | Value;
-
 /** Priority for a server-rendered region inside the initial route document (SPEC §8). */
 export type RegionPriority = 'after-paint' | 'critical' | 'visible';
 
@@ -17,7 +15,7 @@ export interface DeferredRegionOptions {
   /** Region priority. `critical` renders immediately; deferred regions stream after the shell. */
   priority?: RegionPriority;
   /** Render the real region HTML from server truth. */
-  render: () => MaybePromise<string>;
+  render: () => Promise<string> | string;
   /** Stylesheets required by the deferred region when it is inserted. */
   stylesheets?: readonly (string | StylesheetAsset)[];
 }
@@ -33,7 +31,7 @@ export interface DeferredRegionOptions {
  * region immediately so refreshes remain complete and no region silently
  * disappears.
  */
-export function defer(options: DeferredRegionOptions): MaybePromise<string> {
+export function defer(options: DeferredRegionOptions): Promise<string> | string {
   const priority = options.priority ?? 'critical';
   if (priority === 'critical') return options.render();
 

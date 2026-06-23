@@ -1,6 +1,11 @@
 import { copyFile, cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import {
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleVersion,
+} from '@kovojs/browser/internal/inline-loader';
+
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
 
@@ -311,7 +316,10 @@ function clientModuleRetentionDiagnostics(
   build: KovoNeutralBuild,
   presetName: string,
 ): PresetDiagnostic[] {
-  if (build.clientModules.length === 0) return [];
+  const retainedClientModules = build.clientModules.filter(
+    (module) => !isFrameworkRuntimeClientModule(module),
+  );
+  if (retainedClientModules.length === 0) return [];
 
   return [
     {
@@ -320,6 +328,15 @@ function clientModuleRetentionDiagnostics(
       severity: 'error',
     },
   ];
+}
+
+function isFrameworkRuntimeClientModule(
+  module: KovoNeutralBuild['clientModules'][number],
+): boolean {
+  return (
+    module.path.endsWith(kovoDeferredRuntimeModulePath.replace(/^\/c\//, '/')) &&
+    module.version === kovoDeferredRuntimeModuleVersion
+  );
 }
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {

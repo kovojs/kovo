@@ -164,6 +164,10 @@ export {
 export type {
   AuthenticatedRequest,
   CookieOptions,
+  DeferredFragmentChunk,
+  DeferredPriority,
+  DeferredQueryChunk,
+  DeferredStreamChunk,
   DiagnosticCode,
   Endpoint,
   EndpointAuthDeclaration,

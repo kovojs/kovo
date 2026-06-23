@@ -35,6 +35,12 @@ export type {
   UnauthenticatedHandler,
 } from '../guards.js';
 export type {
+  DeferredFragmentChunk,
+  DeferredPriority,
+  DeferredQueryChunk,
+  DeferredStreamChunk,
+} from '../deferred-stream.js';
+export type {
   MutationResponseHeaderValue,
   MutationResponseHeaders,
   NotFound,

@@ -11,7 +11,12 @@ const {
   toNodeHandler,
 } = await import('../dist/server/src/index.mjs');
 const { renderPageHints } = await import('../dist/server/src/internal/html.mjs');
-const { kovoLoaderSource } = await import('../dist/browser/src/internal/inline-loader.mjs');
+const {
+  createInlineKovoLoaderSource,
+  kovoDeferredRuntimeModulePath,
+  kovoDeferredRuntimeModuleSource,
+  kovoDeferredRuntimeModuleVersion,
+} = await import('../dist/browser/src/internal/inline-loader.mjs');
 
 export const p10PerfAcceptance = {
   browser: 'chromium',
@@ -25,6 +30,15 @@ export const p10PerfAcceptance = {
 };
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
+const runtimeHref = clientModules.put({
+  path: kovoDeferredRuntimeModulePath,
+  source: kovoDeferredRuntimeModuleSource,
+  version: kovoDeferredRuntimeModuleVersion,
+});
+const kovoLoaderSource = createInlineKovoLoaderSource(
+  JSON.stringify(runtimeHref),
+  '(url)=>import(url)',
+);
 const handlerHref = clientModules.put({
   path: '/c/handler.js',
   source: `
