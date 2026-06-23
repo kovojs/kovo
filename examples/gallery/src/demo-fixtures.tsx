@@ -2417,7 +2417,9 @@ export function SkeletonDemo(): string {
       </p>
       <div data-ui-demo="skeleton">
         <div style={{ alignItems: 'center', columnGap: 12, display: 'flex' }}>
-          {Skeleton.definition.render({ style: [null, { borderRadius: '50%', height: 48, width: 48 }] })}
+          {Skeleton.definition.render({
+            style: [null, { borderRadius: '50%', height: 48, width: 48 }],
+          })}
           <div style={{ display: 'grid', rowGap: 8 }}>
             {Skeleton.definition.render({ style: [null, { height: 16, width: 220 }] })}
             {Skeleton.definition.render({ style: [null, { height: 16, width: 160 }] })}
