@@ -25,7 +25,27 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - run: vp check
+      - run: vp exec pnpm run check
+
+  api-surface:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 24
+      - run: vp install
+      - id: compiler-cache-key
+        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .kovo/cache
+            **/.kovo/cache
+          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - run: vp exec pnpm run check:api-surface
 
   test:
     runs-on: ubuntu-latest
@@ -73,6 +93,7 @@ jobs:
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run browser
+      - run: vp exec pnpm --filter @kovojs/example-gallery run test:browser
 
   integration:
     runs-on: ubuntu-latest
@@ -114,6 +135,26 @@ jobs:
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp run build
+
+  publish-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version: 24
+      - run: vp install
+      - id: compiler-cache-key
+        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .kovo/cache
+            **/.kovo/cache
+          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - run: vp exec pnpm run check:publish
 
   p10-perf:
     runs-on: ubuntu-latest
@@ -202,10 +243,12 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - format
+      - api-surface
       - test
       - browser
       - integration
       - build
+      - publish-check
       - p10-perf
       - compiler-perf
       - conformance

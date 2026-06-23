@@ -164,7 +164,7 @@ so this audit's remaining overlay item is scoped to Dialog/Drawer/Sheet.
   - **Testing gap:** Add a browser test that uses real keyboard input, asserts focus moves to Details,
     then Enter activates the Details panel.
 
-- [ ] **Repair the public Commerce example primary add-to-cart workflow.**
+- [x] **Repair the public Commerce example primary add-to-cart workflow.**
   - **Severity:** High public-example/product bug.
   - **Evidence:** Public Playwright reproduction against
     `https://kovo-commerce-sfqtuclaza-uc.a.run.app/`: the page renders `Qty` with a visible default
@@ -177,8 +177,12 @@ so this audit's remaining overlay item is scoped to Dialog/Drawer/Sheet.
   - **Testing gap:** Add a public-demo/browser smoke that signs in or mints the expected anonymous
     CSRF/session state, clicks the rendered Add to cart button, and asserts cart badge/order/product
     grid convergence instead of accepting CSRF 422 as the end state.
+  - **Verification:** `pnpm exec vitest --run tests/commerce-realistic.e2e.test.ts` passed after
+    `examples/commerce/src/components/product-grid.tsx` switched anonymous shoppers to a sign-in
+    prompt and the browser smoke signed in through the real auth/CSRF stack before clicking the
+    rendered Add to cart button.
 
-- [ ] **Fix the Commerce example's broken `More` pagination link or remove it from public output.**
+- [x] **Fix the Commerce example's broken `More` pagination link or remove it from public output.**
   - **Severity:** High public-example navigation bug.
   - **Evidence:** `ProductGrid` emits `<a href="/products?after=${cursor}">More</a>`
     (`examples/commerce/src/components/product-grid.tsx:134`), but the app declares only `/`, `/cart`,
@@ -188,6 +192,9 @@ so this audit's remaining overlay item is scoped to Dialog/Drawer/Sheet.
     instead of paginating products.
   - **Testing gap:** Add a commerce link smoke that renders the public page and follows every visible
     in-app anchor, failing on non-200 targets.
+  - **Verification:** `pnpm exec vitest --run examples/commerce/src/app.add-to-cart.test.ts
+    tests/commerce-realistic.e2e.test.ts` passed with assertions that `/products?after=` no longer
+    appears in anonymous or authenticated Commerce output.
 
 - [ ] **Add live health checks for deployed example iframes, especially Stack Overflow.**
   - **Severity:** High public-example availability gap.
@@ -201,7 +208,7 @@ so this audit's remaining overlay item is scoped to Dialog/Drawer/Sheet.
 
 ## Critical Testing Gaps
 
-- [ ] **Make CI run the omitted root acceptance gates.**
+- [x] **Make CI run the omitted root acceptance gates.**
   - **Severity:** Critical release-gate gap.
   - **Evidence:** Root `acceptance` includes `check`, `check:api-surface`, `test`, `test:browser`,
     `test:integration`, `check:build`, `check:publish`, perf, conformance, and `check:kovo`
@@ -212,8 +219,12 @@ so this audit's remaining overlay item is scoped to Dialog/Drawer/Sheet.
     `vp run typecheck-examples`, `check:api-surface`, or `check:publish`.
   - **Action:** Add a CI job that runs the omitted script gates through `vp exec pnpm`, or align CI
     with root `acceptance` where runtime permits. Follow `rules/github-workflows.md`.
+  - **Verification:** `node --test tests/kovo-check.node.mjs --test-name-pattern "root acceptance
+    and CI cover the omitted release gates plus gallery browser coverage"` passed after
+    `.github/workflows/ci.yml` switched the root check shard to `vp exec pnpm run check` and added
+    explicit `check:api-surface` and `check:publish` CI coverage.
 
-- [ ] **Include TSX sources in the `typecheck-examples` task cache key.**
+- [x] **Include TSX sources in the `typecheck-examples` task cache key.**
   - **Severity:** High cache correctness gap.
   - **Evidence:** `typecheck-examples` runs `tsc` on Commerce, Stack Overflow, CRM, and Reference
     (`vite.config.ts:132`), but its task inputs include only `src/**/*.ts` for the example apps
@@ -223,8 +234,11 @@ so this audit's remaining overlay item is scoped to Dialog/Drawer/Sheet.
     rerunning the command that would catch invalid app/component code.
   - **Action:** Add `src/**/*.tsx` inputs for TSX-bearing examples and a meta-test comparing task
     inputs against each command's `tsconfig.json` include extensions.
+  - **Verification:** `node --test tests/kovo-check.node.mjs --test-name-pattern "typecheck-examples
+    watches every tsx-bearing example source tree"` passed after `vite.config.ts` added TSX inputs
+    for Commerce, Stack Overflow, and CRM.
 
-- [ ] **Run the gallery browser suite from root CI/acceptance.**
+- [x] **Run the gallery browser suite from root CI/acceptance.**
   - **Severity:** High UI regression gate gap.
   - **Evidence:** Root browser acceptance includes only `packages/browser/src/**/*.browser.test.ts`
     (`tests/browser-acceptance.mjs:4`; `vitest.browser.config.ts:16`). Root Vitest excludes browser
@@ -236,6 +250,11 @@ so this audit's remaining overlay item is scoped to Dialog/Drawer/Sheet.
   - **Action:** Add CI and root acceptance coverage for
     `pnpm --filter @kovojs/example-gallery run test:browser`, or add an explicit meta-test that
     fails when browser suites exist outside root acceptance without a CI/package gate.
+  - **Verification:** `node --test tests/kovo-check.node.mjs --test-name-pattern "framework-owned
+    browser suite is wired into acceptance|root acceptance and CI cover the omitted release gates
+    plus gallery browser coverage"` passed after `package.json` added `test:gallery-browser` to
+    root `acceptance` and `.github/workflows/ci.yml` ran the gallery browser suite in the browser
+    shard.
 
 ## Commands Run
 

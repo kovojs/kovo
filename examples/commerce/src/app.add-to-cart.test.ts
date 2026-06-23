@@ -14,9 +14,9 @@ import { renderAddToCartForm } from './components/product-grid.js';
 import { createCommerceScenarioClient } from './app-test-helpers.js';
 
 describe('commerce example', () => {
-  it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', async () => {
+  it('renders add-to-cart forms only for authenticated shoppers', async () => {
     const client = createCommerceScenarioClient();
-    const form = renderAddToCartForm({ id: 'p1', stock: 5 });
+    const form = renderAddToCartForm({ id: 'p1', stock: 5 }, true);
     const response = await client.get('/cart');
     const html = await response.text();
     const [addForm] = htmlFormFacts(form);
@@ -36,7 +36,17 @@ describe('commerce example', () => {
       attrs: { max: '5', min: '1', type: 'number' },
       value: '1',
     });
-    expect(htmlFormFacts(html).some((pageForm) => pageForm.action === '/_m/cart/add')).toBe(true);
+    expect(htmlFormFacts(html).some((pageForm) => pageForm.action === '/_m/cart/add')).toBe(false);
+    expect(html).toContain('/login?next=%2Fcart');
+
+    const login = await client.signIn({ remoteAddress: '203.0.113.69' });
+    expect(login.status).toBe(303);
+
+    const authedPage = await client.get('/cart');
+    const authedHtml = await authedPage.text();
+    expect(htmlFormFacts(authedHtml).some((pageForm) => pageForm.action === '/_m/cart/add')).toBe(
+      true,
+    );
   });
 
   it('handles no-JS addToCart success as POST-redirect-GET', async () => {
@@ -83,6 +93,24 @@ describe('commerce example', () => {
     expect(body).toContain('<kovo-query name="orderHistory"');
     expect(body).toContain('"stock":1');
     expect(transactions).toBe(2);
+  });
+
+  it('removes the broken public More link from commerce output', async () => {
+    const client = createCommerceScenarioClient();
+    const firstPage = await client.get('/cart');
+    const firstHtml = await firstPage.text();
+    expect(firstPage.status, firstHtml).toBe(200);
+    expect(firstHtml).not.toContain('href="/products?after=');
+    expect(firstHtml).not.toContain('>More<');
+
+    const login = await client.signIn({ remoteAddress: '203.0.113.72' });
+    expect(login.status).toBe(303);
+
+    const authedPage = await client.get('/cart');
+    const authedHtml = await authedPage.text();
+    expect(authedPage.status, authedHtml).toBe(200);
+    expect(authedHtml).not.toContain('href="/products?after=');
+    expect(authedHtml).not.toContain('>More<');
   });
 
   it('handles no-JS addToCart failures as a full 422 page with the form rerendered', async () => {

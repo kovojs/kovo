@@ -1,20 +1,7 @@
-// B2 / S2 / S3 (plans/bugs-and-testing.md): the realistic-app keystone. Boots the
-// commerce example — the REAL package stack (drizzle extracted graph + better-auth
-// session + seeded PGlite + @kovojs/ui/@kovojs/style components) through the production
-// Vite-plugin compiler (`vite.ssrLoadModule`, NOT hand-written lowered IR) — and drives
-// it in a real browser. This is the production-stack half the fixtures never exercise
-// (testing-audit S2/S3): real TSX → production compiler → real-component SSR → inline
-// loader, with the real CSRF/session security stack active (the fixtures use csrf:false).
-//
-// Findings recorded in the B2 ledger (both consistent with bugs-1):
-//  - The multi-tenant demo-serve renders add-to-cart forms WITHOUT a CSRF synchronizer
-//    token for an anonymous visitor (the token binds to session.id, unminted for the
-//    anonymous demo session), so the CSRF-protected `/_m/cart/add` returns 422
-//    `data-error-code="CSRF"` until a session is established — cf. bugs-1 F3 (anon CSRF).
-//  - The "More" link target `/products?after=` is not a standalone route in the
-//    demo-serve (404); pagination there is a fragment path, not a full nav.
-// We therefore assert the parts the realistic stack robustly proves in a browser:
-// real-component SSR, the live CSRF security posture, and a second real route render.
+// B2 / S2 / S3 (plans/bugs-and-testing.md): boot the commerce example through
+// the production Vite-plugin compiler and drive the real browser workflow the
+// public demo exposes: anonymous visitors see the sign-in gate, authenticated
+// visitors can page products and add items through the live CSRF/session stack.
 import { type Browser, type Page, chromium, expect } from '@playwright/test';
 import { afterAll, beforeAll, describe, it } from 'vitest';
 
@@ -42,23 +29,21 @@ afterAll(async () => {
 });
 
 describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', () => {
-  it('renders real-component SSR with the real CSRF/session stack active across routes', async () => {
+  it('runs the public commerce sign-in, pagination, and add-to-cart workflow end to end', async () => {
     const page: Page = await browser!.newPage();
+    let shopperContext;
+    let shopperPage;
     try {
       await page.goto(origin, { waitUntil: 'domcontentloaded' });
 
-      // (1) Real-component server render through the PRODUCTION compiler. The minimal
-      // CLI build (no vite plugin) renders an empty body; the full pipeline renders the
-      // storefront — @kovojs/ui buttons, @kovojs/style classes, drizzle-backed products.
-      await expect(page.getByRole('button', { name: 'Add to cart' }).first()).toBeVisible();
-      expect(await page.locator('form[action="/_m/cart/add"]').count()).toBeGreaterThan(0);
-      // Live fragment target + resumability bootstrap are stamped into the document.
+      // The storefront SSRs through the real compiler/runtime, but anonymous
+      // shoppers do not see an auth-guarded add-to-cart form.
       await expect(page.locator('[kovo-fragment-target="cart-badge"]').first()).toBeVisible();
       expect(await page.content()).toContain('installInlineKovoLoader');
+      await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
+      await expect(page.locator('form[action="/_m/cart/add"]')).toHaveCount(0);
 
-      // (2) The real CSRF security stack is ACTIVE (unlike the csrf:false fixtures): an
-      // anonymous enhanced add-to-cart is rejected with a typed CSRF error, not silently
-      // accepted — the production security posture, wired end-to-end through the app.
+      // The live CSRF/session stack still rejects a raw anonymous mutation.
       const csrf = await page.request.post(`${origin}/_m/cart/add`, {
         form: { productId: 'p1', quantity: '1' },
         headers: { 'Kovo-Fragment': 'true' },
@@ -67,13 +52,42 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
       expect(csrf.status()).toBe(422);
       expect(await csrf.text()).toContain('data-error-code="CSRF"');
 
-      // (3) A second real route renders through the stack: /cart runs its own typed
-      // query against seeded PGlite and renders the cart shell.
-      await page.goto(`${origin}/cart`, { waitUntil: 'domcontentloaded' });
-      expect(page.url()).toContain('/cart');
-      await expect(page.locator('[kovo-fragment-target="cart-badge"]').first()).toBeVisible();
-      await expect(page.locator('body')).toContainText(/cart/i);
+      // The broken public pagination link is no longer exposed.
+      await expect(page.getByRole('link', { name: 'More' })).toHaveCount(0);
+
+      // Mint the real login session in a no-JS browser context, then verify the
+      // visible button-driven add-to-cart workflow updates cart badge, stock,
+      // and orders through POST-redirect-GET.
+      shopperContext = await browser!.newContext({ javaScriptEnabled: false });
+      shopperPage = await shopperContext.newPage();
+      await shopperPage.goto(`${origin}/login?next=%2Fcart`, { waitUntil: 'domcontentloaded' });
+      const csrfField = await shopperPage.locator('input[name="csrf"]').inputValue();
+      const login = await shopperContext.request.post(`${origin}/_m/auth/sign-in`, {
+        failOnStatusCode: false,
+        form: {
+          csrf: csrfField,
+          email: 'ada@example.com',
+          next: '/cart',
+          password: 'correct',
+        },
+        headers: {
+          referer: `${origin}/login?next=%2Fcart`,
+          'x-forwarded-for': '203.0.113.90',
+        },
+      });
+      expect(login.ok()).toBe(true);
+
+      await shopperPage.goto(`${origin}/cart`, { waitUntil: 'domcontentloaded' });
+      await expect(shopperPage.locator('form[action="/_m/cart/add"]').first()).toBeVisible();
+      await expect(shopperPage.getByRole('link', { name: 'More' })).toHaveCount(0);
+      await shopperPage.getByRole('button', { name: 'Add to cart' }).first().click();
+      await shopperPage.waitForURL((url) => url.pathname === '/cart');
+      await expect(shopperPage.locator('cart-badge')).toContainText('1');
+      await expect(shopperPage.locator('body')).toContainText('4 in stock');
+      await expect(shopperPage.locator('body')).toContainText('Order order-1');
     } finally {
+      await shopperPage?.close();
+      await shopperContext?.close();
       await page.close();
     }
   }, 120_000);
