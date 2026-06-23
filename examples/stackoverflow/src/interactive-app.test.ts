@@ -13,7 +13,7 @@ import { csrfToken } from '@kovojs/server';
 
 import { buildSoInteractiveApp } from './interactive-app.js';
 import { soCsrf } from './mutations.js';
-import { answers, questions } from './schema.js';
+import { answers, questions, votes } from './schema.js';
 
 const questionListTarget = 'question-list-region';
 const questionListComponent = 'components/question-list/question-list-region';
@@ -93,6 +93,17 @@ function decodeHtmlAttribute(value: string): string {
     .replaceAll('&gt;', '>')
     .replaceAll('&lt;', '<')
     .replaceAll('&amp;', '&');
+}
+
+function decodeHtmlText(value: string): string {
+  return decodeHtmlAttribute(value);
+}
+
+function readKovoQuery<T>(html: string, name: string): T {
+  const pattern = new RegExp(`<kovo-query\\s+name="${name}"[^>]*>([\\s\\S]*?)<\\/kovo-query>`);
+  const match = pattern.exec(html);
+  if (!match) throw new Error(`expected <kovo-query name="${name}"> in response`);
+  return JSON.parse(decodeHtmlText(match[1] ?? '')) as T;
 }
 
 function materializeStackOverflowCssFixture(): {
@@ -289,12 +300,16 @@ describe('stackoverflow interactive app', () => {
     }
   });
 
-  it('voteUp persists to PGlite and the fragment wire reflects the new score', async () => {
+  it('voteUp response reconciles derived optimism to committed PGlite query truth', async () => {
     const { db, handler } = await buildSoInteractiveApp();
 
     const [first] = await db.select().from(questions).orderBy(asc(questions.id)).limit(1);
     if (!first) throw new Error('seed produced no questions');
     const before = first.score;
+    const beforeVoteTotal = (await db.select().from(votes)).reduce(
+      (total, row) => total + row.value,
+      0,
+    );
 
     const response = await handler(
       new Request('http://example.test/_m/voteUp', {
@@ -313,15 +328,38 @@ describe('stackoverflow interactive app', () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe(
+      'text/vnd.kovo.fragment+html; charset=utf-8',
+    );
     const html = await response.text();
-    expect(html).toContain('<kovo-query name="questionList"');
-    expect(html).toContain('<kovo-query name="questionScore"');
+    const questionList = readKovoQuery<{
+      items: readonly { id: string; score: number; sessionId?: string }[];
+    }>(html, 'questionList');
+    const questionScore = readKovoQuery<{ score: number }>(html, 'questionScore');
+    const responseQuestion = questionList.items.find((item) => item.id === first.id);
+    if (!responseQuestion) throw new Error(`response omitted voted question ${first.id}`);
 
     // The real row was updated.
     const [after] = await db.select().from(questions).where(eq(questions.id, first.id)).limit(1);
     expect(after?.score).toBe(before + 1);
+    const afterVoteTotal = (await db.select().from(votes)).reduce(
+      (total, row) => total + row.value,
+      0,
+    );
+    expect(afterVoteTotal).toBe(beforeVoteTotal + 1);
 
-    // And the fragment HTML carries the incremented score (server truth).
+    // The response query chunks are the server-truth reconcile payload for the
+    // derived exact-row optimistic transition: score and aggregate both settle to
+    // the committed PGlite values without shipping private session scope.
+    expect(responseQuestion.score).toBe(before + 1);
+    expect(responseQuestion.sessionId).toBeUndefined();
+    expect(questionScore.score).toBe(afterVoteTotal);
+    expect(questionScore.score).toBe(beforeVoteTotal + 1);
+    expect(html).not.toContain('demo-session');
+    expect(html).not.toContain('sessionId');
+    expect(html).not.toContain('session_id');
+
+    // And the fragment HTML carries the incremented score for DOM morphing.
     expect(html).toContain(String(before + 1));
   });
 

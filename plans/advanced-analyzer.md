@@ -420,8 +420,11 @@ from table-level fallback to scoped or exact optimism.
   - [x] Derived advanced-analyzer patch programs commute with lowered browser transforms over scoped
         composite keys, filtered rowset exits, and aggregate recount/resum cases.
     - Evidence: `pnpm exec vitest --run packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts` covers derived scoped `sessionId,id` row updates, tenant filtered-list exits, and scoped natural-key aggregate update/delete programs by comparing lowered codegen output to `applyPatchProgram`.
-  - Add HTTP-level integration tests against PGlite for mutation response fragments and optimistic
-    reconcile behavior.
+  - [x] HTTP-level PGlite mutation responses reconcile derived optimism to committed query truth.
+    - Evidence: `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts` covers
+      Stack Overflow `voteUp` over shared PGlite by parsing `questionList` and `questionScore`
+      response query chunks, comparing them to the expected exact-row optimistic transition and
+      committed PGlite vote totals, and asserting private session scope is not shipped in the wire.
   - Evidence when complete: property suite plus focused integration tests pass under the root gate.
 
 ## Risks & Guardrails
