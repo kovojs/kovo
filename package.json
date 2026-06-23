@@ -12,7 +12,7 @@
   "type": "module",
   "scripts": {
     "acceptance": "pnpm run check && pnpm run check:api-surface && pnpm run test && pnpm run test:browser && pnpm run test:gallery-browser && pnpm run test:integration && pnpm run check:build && pnpm run check:publish && pnpm run test:p10-perf && pnpm run test:compiler-perf && pnpm run test:conformance && pnpm run check:kovo",
-    "check": "pnpm run check:inline-loader && pnpm run check:imports && pnpm run check:no-committed-generated && vp check && vp run typecheck-examples",
+    "check": "pnpm run check:inline-loader && pnpm run check:imports && pnpm run check:no-committed-generated && pnpm run check:vp && vp run typecheck-examples",
     "check:api-surface": "node scripts/api-surface-gate.mjs",
     "check:build": "pnpm run check:inline-loader && vp run build",
     "check:exports": "node scripts/exported-symbols.mjs --duplicates --check",
@@ -20,6 +20,7 @@
     "check:publish": "node scripts/build-publish.mjs",
     "check:kovo": "vp run kovo-check",
     "check:no-committed-generated": "node scripts/no-committed-generated.mjs",
+    "check:vp": "vp check >/tmp/kovo-vp-check.log 2>&1 || { code=$?; cat /tmp/kovo-vp-check.log; exit $code; }",
     "check:inline-loader": "pnpm --filter @kovojs/browser run check:inline-loader",
     "bump": "node scripts/bump.mjs",
     "docs:serve": "pnpm run check:build && pnpm --filter @kovojs/site run build && HOST=0.0.0.0 node site/scripts/serve.mjs",
