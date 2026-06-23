@@ -142,7 +142,9 @@ describe('@kovojs/ui Select StyleX slots', () => {
       }),
     };
 
-    expect(rendered.content).toContain('data-style-src="select.tsx#content; app-select.tsx#content"');
+    expect(rendered.content).toContain(
+      'data-style-src="select.tsx#content; app-select.tsx#content"',
+    );
     expect(rendered.hiddenInput).toContain(
       'data-style-src="select.tsx#hiddenInput; app-select.tsx#hiddenInput"',
     );
