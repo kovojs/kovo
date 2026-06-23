@@ -1,4 +1,4 @@
 interface:
-  display_name: "Implement Plan"
-  short_description: "Complete a Kovo plan in a worktree"
-  default_prompt: "Use $implement-plan to complete plans/example.md in a new git worktree, verify it, merge it back to main, and summarize the result."
+  display_name: 'Implement Plan'
+  short_description: 'Complete a Kovo plan in a worktree'
+  default_prompt: 'Use $implement-plan to complete plans/example.md in a new git worktree, verify it, merge it back to main, and summarize the result.'

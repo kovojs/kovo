@@ -14,20 +14,17 @@ describe('Defer JSX primitive', () => {
     const collector = createDeferredRegionChunkCollector();
 
     const placeholder = await html(
-      runWithJsxRequestContext(
-        {},
-        { deferredRegions: collector },
-        () =>
-          Defer({
-            fallback: jsx('section', {
-              'aria-busy': true,
-              children: 'Loading <reviews>',
-            }),
-            priority: 'after-paint',
-            render: () => jsx('section', { children: 'Ready <reviews>' }),
-            stylesheets: ['/reviews.css'],
-            target: 'reviews:p1',
+      runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+        Defer({
+          fallback: jsx('section', {
+            'aria-busy': true,
+            children: 'Loading <reviews>',
           }),
+          priority: 'after-paint',
+          render: () => jsx('section', { children: 'Ready <reviews>' }),
+          stylesheets: ['/reviews.css'],
+          target: 'reviews:p1',
+        }),
       ),
     );
 
@@ -53,16 +50,13 @@ describe('Defer JSX primitive', () => {
     const collector = createDeferredRegionChunkCollector();
 
     const placeholder = await html(
-      runWithJsxRequestContext(
-        {},
-        { deferredRegions: collector },
-        () =>
-          Defer({
-            fallback: ['Loading ', '<b>raw</b>', trustedHtml('<i>trusted</i>')],
-            priority: 'visible',
-            render: () => '<strong>raw region</strong>',
-            target: 'rail&details',
-          }),
+      runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+        Defer({
+          fallback: ['Loading ', '<b>raw</b>', trustedHtml('<i>trusted</i>')],
+          priority: 'visible',
+          render: () => '<strong>raw region</strong>',
+          target: 'rail&details',
+        }),
       ),
     );
 
@@ -87,15 +81,12 @@ describe('Defer JSX primitive', () => {
     const collector = createDeferredRegionChunkCollector();
 
     await html(
-      runWithJsxRequestContext(
-        {},
-        { deferredRegions: collector },
-        () =>
-          Defer({
-            priority: 'after-paint',
-            render: () => jsx('strong', { children: 'Ready' }),
-            target: 'answers',
-          }),
+      runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+        Defer({
+          priority: 'after-paint',
+          render: () => jsx('strong', { children: 'Ready' }),
+          target: 'answers',
+        }),
       ),
     );
 
@@ -107,14 +98,11 @@ describe('Defer JSX primitive', () => {
 
     await expect(
       html(
-        runWithJsxRequestContext(
-          {},
-          { deferredRegions: collector },
-          () =>
-            Defer({
-              render: () => jsx('main', { children: 'Critical' }),
-              target: 'critical',
-            }),
+        runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+          Defer({
+            render: () => jsx('main', { children: 'Critical' }),
+            target: 'critical',
+          }),
         ),
       ),
     ).resolves.toBe('<main>Critical</main>');

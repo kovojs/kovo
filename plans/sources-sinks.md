@@ -115,6 +115,14 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Phase 3: Diagnostics and Static Gates
 
+- [ ] Make `endpoint()` `auth` executable, not just declared — close the highest-severity endpoint gap (rank this above the audit/metadata items below: a complete audit table over unenforced declarations is the more dangerous state).
+  - Gap: `dispatchMatchedAppRequest` (`packages/server/src/app-dispatch.ts:79-85`) runs CSRF then `runEndpoint`; it never resolves or runs the declared verifier, so `auth: { kind: 'verifier', name }` passes the audit while the handler runs fully unauthenticated. `webhook()` is the only enforced path (`packages/server/src/webhook.ts:245-257` verifies fail-closed before parse). There is no verifier registry — `webhook()` embeds its verifier object inline — so executable endpoint auth must carry the verifier on the declaration, not a name to resolve.
+  - [ ] Extend `EndpointAuthDeclaration` (`packages/server/src/endpoint.ts:14-17`): add an optional `verify?: WebhookVerifier` to the `verifier`/`custom` variants, reusing the core kit (`packages/core/src/verifier.ts`: `hmacSignature`/`standardWebhooks`/`customVerifier`). No new public types; inherits constant-time compare, timestamp tolerance, rotated secrets/multi-sig. `verify` stays optional so name-only declarations and webhook's own metadata are unaffected.
+  - [ ] Add `runEndpointAuth(endpoint, request)` to `endpoint.ts` (mirrors `runEndpoint`/`endpointMatches`): clone the request, verify over raw wire bytes `{ headers, payload }`, fail-closed (catch → `401`); `kind: 'none'` or absent `verify` → skip. Call it before `validateEndpointCsrf` in `app-dispatch.ts`.
+  - [ ] Keep `webhookAuth()` (`packages/server/src/webhook.ts:395-411`) emitting name-only declarations so `webhook()` self-enforces in its own lifecycle and the dispatcher skips it (no double verification).
+  - [ ] Add a normative note to SPEC §9.1 (`SPEC.md:898`): an endpoint `auth` declaration MAY carry an executable verifier that the dispatcher enforces fail-closed over wire bytes before the handler runs, the same signature-before-parse guarantee `webhook()` makes.
+  - [ ] Tests (`packages/server/src/endpoint.test.ts` + `tests/integration/fixtures/endpoint-raw-request/app.tsx`): bad signature → 401, good signature → 200, handler still reads the body, `customVerifier` predicate path, and fail-closed on a verifier throw.
+  - Note: this makes the declared `verifier:`/`custom:` posture an enforced guarantee. The metadata/justification items below (required `method`, `reason`, `mountJustification`, omitted-auth diagnostic) remain valuable but are secondary to enforcement.
 - [ ] Allocate source/sink diagnostic codes after checking `diagnosticDefinitions`.
   - Do not reuse KV236/KV415/KV418/KV414 for unrelated classes; keep each code's question narrow.
 - [ ] Make raw `endpoint()` declarations always auditable.

@@ -10,7 +10,7 @@ helper.
 - [x] Runtime lowering uses a shared helper for public `Defer` and internal `defer()`.
   - Evidence: [packages/server/src/deferred-region.ts](/Users/mini/kovo-agent-defer-jsx/packages/server/src/deferred-region.ts)
     defines `Defer`, `lowerDeferredRegion`, and the `@internal` `defer()` helper; `pnpm exec vitest
-    --run --dir packages/server/src deferred-region.test.ts jsx-runtime.test.ts` passed.
+--run --dir packages/server/src deferred-region.test.ts jsx-runtime.test.ts` passed.
 - [x] `Defer` renders fallback and region output through normal server JSX/text escaping.
   - Evidence: [packages/server/src/renderable.ts](/Users/mini/kovo-agent-defer-jsx/packages/server/src/renderable.ts)
     centralizes server renderable rendering; `packages/server/src/deferred-region.test.ts` covers
@@ -19,7 +19,7 @@ helper.
 - [x] Deferred `after-paint` and `visible` regions emit branded framework-owned placeholders and
       collect fragment chunks with `stylesheets`.
   - Evidence: `pnpm exec vitest --run --dir packages/server/src deferred-region.test.ts
-    jsx-runtime.test.ts` passed for placeholder, target escaping, chunk priority, chunk HTML, and
+jsx-runtime.test.ts` passed for placeholder, target escaping, chunk priority, chunk HTML, and
     stylesheet assertions.
 - [x] `critical`, omitted priority, and no collector context render immediately without deferred
       chunks.
@@ -29,7 +29,7 @@ helper.
   - Evidence: [packages/server/src/api/rendering.ts](/Users/mini/kovo-agent-defer-jsx/packages/server/src/api/rendering.ts)
     and [packages/server/src/index.ts](/Users/mini/kovo-agent-defer-jsx/packages/server/src/index.ts)
     export the public primitive/types; `pnpm exec vitest --run --dir packages/server/src/api
-    app.test.ts` passed; `pnpm run check:api-surface` passed.
+app.test.ts` passed; `pnpm run check:api-surface` passed.
 - [x] `SPEC.md` documents `<Defer>` as the public deferred-region API and reserves `defer()` for
       internal lowering.
   - Evidence: [SPEC.md](/Users/mini/kovo-agent-defer-jsx/SPEC.md) §8 names `Defer`, framework-owned
@@ -38,8 +38,8 @@ helper.
       `<Defer />`.
   - Evidence: [packages/compiler/src/validate/defer-jsx.ts](/Users/mini/kovo-agent-defer-jsx/packages/compiler/src/validate/defer-jsx.ts)
     is registered in the compiler validation pipeline; `pnpm exec vitest --run --dir
-    packages/compiler/src diagnostic-coverage-matrix.test.ts compile-component.test.ts
-    route-pages.test.ts` passed.
+packages/compiler/src diagnostic-coverage-matrix.test.ts compile-component.test.ts
+route-pages.test.ts` passed.
 - [x] Diagnostics schema and coverage include `KV244`.
   - Evidence: [packages/core/src/diagnostics.ts](/Users/mini/kovo-agent-defer-jsx/packages/core/src/diagnostics.ts)
     defines `KV244`; `pnpm exec vitest --run --dir packages/core/src diagnostics.test.ts` passed.
@@ -51,8 +51,8 @@ helper.
     passed after regenerating example graph files.
 - [x] Browser-visible stream apply and server after-paint/visible stream assembly still pass.
   - Evidence: `pnpm exec vitest --run --config vitest.browser.config.ts
-    packages/browser/src/apply-deferred-stream.browser.test.ts` passed; `pnpm exec vitest --run --dir
-    packages/server/src deferred-stream.test.ts app-document.test.ts` passed.
+packages/browser/src/apply-deferred-stream.browser.test.ts` passed; `pnpm exec vitest --run --dir
+packages/server/src deferred-stream.test.ts app-document.test.ts` passed.
 
 ## Closed Decisions
 
