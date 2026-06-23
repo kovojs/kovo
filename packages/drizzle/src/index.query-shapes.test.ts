@@ -188,6 +188,53 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('derives public instance keys from guarded session-scoped composite query predicates', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        ]),
+        {
+          fileName: 'question.queries.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const questions = pgTable("questions", {',
+            '  sessionId: text("session_id").notNull(),',
+            '  id: text("id").notNull(),',
+            '  title: text("title").notNull(),',
+            '}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'export const questionDetail = query("questionDetail", {',
+            '  load(input: { id: string }, db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }) {',
+            '    const sessionId = context.request?.session?.id;',
+            '    if (!sessionId) throw new Error("auth required");',
+            '    return db.select({ title: questions.title }).from(questions).where(and(eq(questions.sessionId, sessionId), eq(questions.id, input.id)));',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        instanceKey: {
+          domain: 'question',
+          key: 'arg:id',
+        },
+        query: 'questionDetail',
+        reads: ['question'],
+        sessionAnchoredReads: ['question'],
+        shape: {
+          title: 'string',
+        },
+        site: 'question.queries.ts:10',
+      },
+    ]);
+  });
+
   it('resolves namespace-imported project query projection shapes from table symbols', () => {
     const facts = extractQueryFactsFromProject({
       files: [

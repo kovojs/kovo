@@ -1651,6 +1651,7 @@ function extractProjectDrizzleWriteCalls(
   paramSymbolKeys: ReadonlySet<string>,
 ): ExtractedWriteCall[] {
   const calls: ExtractedWriteCall[] = [];
+  const sessionContext = sessionProvenanceContextForNodes(body.getSourceFile(), [body]);
 
   for (const call of touchBodyCallExpressions(body)) {
     if (!isDrizzleWriteCall(call)) continue;
@@ -1680,12 +1681,17 @@ function extractProjectDrizzleWriteCalls(
 
     calls.push({
       index: 0,
-      instanceKeyComparisons: writeInstanceKeyComparisons(chain, resolveWriteTableIdentifier),
+      instanceKeyComparisons: writeInstanceKeyComparisons(
+        chain,
+        resolveWriteTableIdentifier,
+        sessionContext,
+      ),
       operation,
       predicateFacts: extractPredicateFactsFromWriteChain(
         chain,
         resolveWriteTableIdentifier,
         paramSymbolKeys,
+        sessionContext,
       ),
       readSources: extractReadSourcesFromWriteChain(
         chain,
@@ -3473,11 +3479,22 @@ interface QueryInstanceKeyComparison {
 
 interface QueryInstanceKeyOperand {
   inputKey?: string;
-  sessionKey?: boolean;
+  sessionKey?: string;
   tableKey?: {
     key: string;
     tableIdentifier: string;
   };
+}
+
+interface SessionAlias {
+  declaration: Node;
+  name: string;
+  path: string;
+}
+
+interface SessionProvenanceContext {
+  aliases: ReadonlyMap<string, SessionAlias>;
+  helpers: ReadonlyMap<string, string>;
 }
 
 interface ExtractedWriteCall {
@@ -5774,12 +5791,7 @@ function queryInstanceKey(
 ): Pick<QueryFact, 'instanceKey'> | null {
   // SPEC §10-§11: query keys must come from real predicates, not comment/string text.
   // Only `and(...)`/top-level conjuncts (not `or(...)` branches) discharge a unique key.
-  for (const comparison of comparisons.instanceKey) {
-    const instanceKey = queryInstanceKeyFromEqOperands(comparison.left, comparison.right, tables);
-    if (instanceKey) return instanceKey;
-  }
-
-  return null;
+  return compositeQueryInstanceKey(comparisons.instanceKey, tables);
 }
 
 /**
@@ -5927,6 +5939,10 @@ function queryInstanceKeyComparisons(
 ): QueryInstanceKeyComparisons {
   const instanceKey: QueryInstanceKeyComparison[] = [];
   const argCandidates: QueryInstanceKeyComparison[] = [];
+  const sessionContext = sessionProvenanceContextForNodes(
+    body.getSourceFile(),
+    queryCallbackBodies(body, queryReceiverMode(receiverReferences)),
+  );
 
   for (const predicate of queryBodyCallExpressions(
     body,
@@ -5939,8 +5955,8 @@ function queryInstanceKeyComparisons(
     },
   )) {
     const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
-      left: queryInstanceKeyOperand(left, readTableIdentifier),
-      right: queryInstanceKeyOperand(right, readTableIdentifier),
+      left: queryInstanceKeyOperand(left, readTableIdentifier, sessionContext),
+      right: queryInstanceKeyOperand(right, readTableIdentifier, sessionContext),
     });
 
     // A2: `and(...)`/top-level `eq` conjuncts may discharge a unique instance key.
@@ -5985,11 +6001,12 @@ function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
 function queryInstanceKeyOperand(
   expression: Node,
   readTableIdentifier?: (node: Node) => string | undefined,
+  sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): QueryInstanceKeyOperand {
   return {
     ...queryTableKeyOperand(expression, readTableIdentifier),
     ...queryInputKeyOperand(expression),
-    ...querySessionKeyOperand(expression),
+    ...querySessionKeyOperand(expression, sessionContext),
   };
 }
 
@@ -6002,11 +6019,12 @@ function queryInstanceKeyOperand(
  * operand (a call, etc.) is NOT session-anchored — the scope classifier then
  * fails closed.
  */
-function querySessionKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'sessionKey'> {
-  const segments = staticAccessSegments(expression);
-  if (!segments) return {};
-  if (Node.isIdentifier(segments.root) && segments.root.getText() === 'input') return {};
-  return segments.path.includes('session') ? { sessionKey: true } : {};
+function querySessionKeyOperand(
+  expression: Node,
+  sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
+): Pick<QueryInstanceKeyOperand, 'sessionKey'> {
+  const sessionPath = sessionPathForExpression(expression, sessionContext);
+  return sessionPath !== undefined ? { sessionKey: sessionPath } : {};
 }
 
 function queryTableKeyOperand(
@@ -6036,38 +6054,58 @@ function queryInputKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, '
   return key ? { inputKey: `arg:${key}` } : {};
 }
 
-function queryInstanceKeyFromEqOperands(
-  left: QueryInstanceKeyOperand,
-  right: QueryInstanceKeyOperand,
+function compositeQueryInstanceKey(
+  comparisons: readonly QueryInstanceKeyComparison[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Pick<QueryFact, 'instanceKey'> | null {
-  const candidates = [
-    { inputKey: right.inputKey, tableKey: left.tableKey },
-    { inputKey: left.inputKey, tableKey: right.tableKey },
-  ];
+  for (const [tableIdentifier, tableEntries] of tables) {
+    for (const table of tableEntries) {
+      if (!isDomainExtractedTableAnnotation(table.annotation)) continue;
+      if (typeof table.annotation.key !== 'string') continue;
 
-  for (const candidate of candidates) {
-    if (!candidate.inputKey || !candidate.tableKey) continue;
-    const tableKey = resolvedQueryTableKey(candidate.tableKey, tables);
-    if (!tableKey) continue;
+      const keyColumns = tableKeyColumns(table.annotation.key);
+      const valuesByColumn = new Map<string, string>();
+      for (const comparison of comparisons) {
+        const candidate = valueKeyForTableColumnComparison(comparison, tableIdentifier);
+        if (!candidate || !keyColumns.includes(candidate.column)) continue;
+        valuesByColumn.set(candidate.column, candidate.valueKey);
+      }
+      if (!keyColumns.every((column) => valuesByColumn.has(column))) continue;
 
-    return { instanceKey: { domain: tableKey.domain, key: candidate.inputKey } };
+      const publicKeys = keyColumns
+        .map((column) => valuesByColumn.get(column))
+        .filter((valueKey): valueKey is string => valueKey !== undefined)
+        .filter((valueKey) => !isPrivateScopeKey(valueKey));
+      if (publicKeys.length === 0) continue;
+
+      return { instanceKey: { domain: table.annotation.domain, key: publicKeys.join(',') } };
+    }
   }
 
   return null;
 }
 
-function resolvedQueryTableKey(
-  key: { key: string; tableIdentifier: string },
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
-): { domain: string } | null {
-  for (const table of tables.get(key.tableIdentifier) ?? []) {
-    if (isDomainExtractedTableAnnotation(table.annotation) && table.annotation.key === key.key) {
-      return { domain: table.annotation.domain };
-    }
+function valueKeyForTableColumnComparison(
+  comparison: QueryInstanceKeyComparison,
+  tableIdentifier: string,
+): { column: string; valueKey: string } | null {
+  const candidates = [
+    { tableKey: comparison.left.tableKey, value: comparison.right },
+    { tableKey: comparison.right.tableKey, value: comparison.left },
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate.tableKey || candidate.tableKey.tableIdentifier !== tableIdentifier) continue;
+    const valueKey = candidate.value.inputKey ?? sessionValueKey(candidate.value.sessionKey);
+    if (!valueKey) continue;
+    return { column: candidate.tableKey.key, valueKey };
   }
 
   return null;
+}
+
+function sessionValueKey(sessionPath: string | undefined): string | undefined {
+  return sessionPath === undefined ? undefined : `session:${sessionPath}`;
 }
 
 function directSummaryForFunction(
@@ -10071,10 +10109,17 @@ function predicateSummaryFromFacts(
     argumentKeys.length === keyColumns.length &&
     argumentKeys.every((argumentKey): argumentKey is string => argumentKey !== undefined)
   ) {
-    return { key: argumentKeys.join(',') };
+    const publicArgumentKeys = argumentKeys.filter(
+      (argumentKey) => !isPrivateScopeKey(argumentKey),
+    );
+    return publicArgumentKeys.length > 0 ? { key: publicArgumentKeys.join(',') } : {};
   }
 
   return keyFacts.some((fact) => fact?.predicate === 'non-eq') ? { predicate: 'non-eq' } : {};
+}
+
+function isPrivateScopeKey(key: string): boolean {
+  return key.startsWith('session:') || key.startsWith('guard:');
 }
 
 function tableKeyColumns(key: string): string[] {
@@ -10088,6 +10133,7 @@ function extractPredicateFactsFromWriteChain(
   chain: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string> = new Set(),
+  sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): ExtractedPredicateFact[] {
   const facts: ExtractedPredicateFact[] = [];
   const calls = [
@@ -10098,7 +10144,12 @@ function extractPredicateFactsFromWriteChain(
   const predicate = whereCall?.getArguments()[0];
   if (!predicate) return facts;
 
-  const parameterizedKeys = extractParameterizedKeys(predicate, resolveIdentifier, paramSymbolKeys);
+  const parameterizedKeys = extractParameterizedKeys(
+    predicate,
+    resolveIdentifier,
+    paramSymbolKeys,
+    sessionContext,
+  );
   facts.push(...parameterizedKeys);
 
   if (!eqPredicateConjuncts(predicate)) {
@@ -10122,6 +10173,7 @@ function extractPredicateFactsFromWriteChain(
 function writeInstanceKeyComparisons(
   chain: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
+  sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): QueryInstanceKeyComparisons {
   const calls = [
     ...(Node.isCallExpression(chain) ? [chain] : []),
@@ -10132,8 +10184,8 @@ function writeInstanceKeyComparisons(
   if (!predicate) return { argCandidates: [], instanceKey: [] };
 
   const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
-    left: queryInstanceKeyOperand(left, resolveIdentifier),
-    right: queryInstanceKeyOperand(right, resolveIdentifier),
+    left: queryInstanceKeyOperand(left, resolveIdentifier, sessionContext),
+    right: queryInstanceKeyOperand(right, resolveIdentifier, sessionContext),
   });
 
   return {
@@ -10146,6 +10198,7 @@ function extractParameterizedKeys(
   predicate: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string> = new Set(),
+  sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): ExtractedPredicateFact[] {
   const conjuncts = eqPredicateConjuncts(predicate);
   if (!conjuncts) return [];
@@ -10153,7 +10206,7 @@ function extractParameterizedKeys(
   const facts: ExtractedPredicateFact[] = [];
   for (const { left, right } of conjuncts) {
     const leftKey = tableKeyReference(left, resolveIdentifier);
-    const rightArgument = argumentKey(right, paramSymbolKeys);
+    const rightArgument = argumentKey(right, paramSymbolKeys, sessionContext);
     if (leftKey) {
       facts.push(
         rightArgument
@@ -10164,7 +10217,7 @@ function extractParameterizedKeys(
     }
 
     const rightKey = tableKeyReference(right, resolveIdentifier);
-    const leftArgument = argumentKey(left, paramSymbolKeys);
+    const leftArgument = argumentKey(left, paramSymbolKeys, sessionContext);
     if (rightKey) {
       facts.push(
         leftArgument
@@ -10253,8 +10306,15 @@ function dedupePredicateFacts(facts: readonly ExtractedPredicateFact[]): Extract
   return deduped;
 }
 
-function argumentKey(expression: Node, paramSymbolKeys: ReadonlySet<string>): string | undefined {
+function argumentKey(
+  expression: Node,
+  paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
+): string | undefined {
   const node = unwrappedStaticExpressionNode(expression);
+  const sessionPath = sessionPathForExpression(node, sessionContext);
+  if (sessionPath !== undefined) return `session:${sessionPath}`;
+
   if (Node.isIdentifier(node)) {
     const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
     return symbolKey && paramSymbolKeys.has(symbolKey) ? `arg:${node.getText()}` : undefined;
@@ -10267,6 +10327,252 @@ function argumentKey(expression: Node, paramSymbolKeys: ReadonlySet<string>): st
   if (!symbolKey || !paramSymbolKeys.has(symbolKey)) return undefined;
 
   return `arg:${node.getName()}`;
+}
+
+function emptySessionProvenanceContext(): SessionProvenanceContext {
+  return { aliases: new Map(), helpers: new Map() };
+}
+
+function sessionProvenanceContextForNodes(
+  sourceFile: SourceFile,
+  bodies: readonly Node[],
+): SessionProvenanceContext {
+  void sourceFile;
+  // advanced-analyzer.md Layer 1: helper provenance must come from explicit typed
+  // analyzer summaries, not arbitrary helper source-body inference. No summary
+  // registry exists yet, so unsummarized helpers remain opaque.
+  const helpers = new Map<string, string>();
+  const aliases = new Map<string, SessionAlias>();
+  const context: SessionProvenanceContext = { aliases, helpers };
+
+  for (const body of bodies) {
+    for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      addSessionAliasesForVariableDeclaration(declaration, context, aliases);
+    }
+  }
+
+  return context;
+}
+
+function addSessionAliasesForVariableDeclaration(
+  declaration: VariableDeclaration,
+  context: SessionProvenanceContext,
+  aliases: Map<string, SessionAlias>,
+): void {
+  const initializer = declaration.getInitializer();
+  if (!initializer) return;
+
+  const nameNode = declaration.getNameNode();
+  if (Node.isIdentifier(nameNode)) {
+    const sessionPath = sessionPathForExpression(initializer, context);
+    const key = resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol());
+    if (sessionPath !== undefined && key) {
+      aliases.set(key, { declaration, name: nameNode.getText(), path: sessionPath });
+    } else if (sessionPath !== undefined) {
+      aliases.set(`name:${nameNode.getText()}`, {
+        declaration,
+        name: nameNode.getText(),
+        path: sessionPath,
+      });
+    }
+    return;
+  }
+
+  if (!Node.isObjectBindingPattern(nameNode)) return;
+  const basePath = sessionPathForExpression(initializer, context);
+  if (basePath === undefined) return;
+
+  for (const element of nameNode.getElements()) {
+    const binding = element.getNameNode();
+    if (!Node.isIdentifier(binding)) continue;
+    const propertyName = element.getPropertyNameNode();
+    const segment = propertyName ? propertyNameText(propertyName) : binding.getText();
+    if (!segment) continue;
+    const key = resolvedSymbolKey(symbolForIdentifierReference(binding) ?? binding.getSymbol());
+    if (key) {
+      aliases.set(key, {
+        declaration: element,
+        name: binding.getText(),
+        path: joinSessionPath(basePath, segment),
+      });
+    } else {
+      aliases.set(`name:${binding.getText()}`, {
+        declaration: element,
+        name: binding.getText(),
+        path: joinSessionPath(basePath, segment),
+      });
+    }
+  }
+}
+
+function sessionPathForExpression(
+  node: Node,
+  context: SessionProvenanceContext,
+  depth = 0,
+): string | undefined {
+  if (depth > 4) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+
+  const direct = directSessionPathForExpression(expression);
+  if (direct !== undefined) return direct;
+
+  if (Node.isIdentifier(expression)) {
+    const key = resolvedSymbolKey(
+      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
+    );
+    const alias =
+      (key ? context.aliases.get(key) : undefined) ??
+      [...context.aliases.values()].find((candidate) => candidate.name === expression.getText());
+    return alias && sessionAliasGuardDominatesUse(alias, expression) ? alias.path : undefined;
+  }
+
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const base = sessionPathForExpression(expression.getExpression(), context, depth + 1);
+    const name = staticAccessName(expression);
+    return base !== undefined && name ? joinSessionPath(base, name) : undefined;
+  }
+
+  if (Node.isCallExpression(expression)) {
+    const callee = unwrappedStaticExpressionNode(expression.getExpression());
+    if (Node.isIdentifier(callee)) {
+      const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
+      if (key) return context.helpers.get(key);
+    }
+  }
+
+  return undefined;
+}
+
+function directSessionPathForExpression(node: Node): string | undefined {
+  const segments = staticAccessSegments(node);
+  if (!segments) return undefined;
+  const sessionIndex = segments.path.indexOf('session');
+  if (sessionIndex < 0) return undefined;
+  const path = segments.path.slice(sessionIndex + 1).join('.');
+  return path;
+}
+
+function joinSessionPath(base: string, segment: string): string {
+  return base.length === 0 ? segment : `${base}.${segment}`;
+}
+
+function sessionAliasGuardDominatesUse(alias: SessionAlias, use: Node): boolean {
+  const declared = blockStatementAncestor(alias.declaration);
+  const used = blockStatementAncestor(use);
+  if (!declared || !used || !sameSourceNode(declared.block, used.block)) {
+    return false;
+  }
+
+  const statements = declared.block.getStatements();
+  const declarationIndex = statements.findIndex((statement) =>
+    sameSourceNode(statement, declared.statement),
+  );
+  const useIndex = statements.findIndex((statement) => sameSourceNode(statement, used.statement));
+  if (declarationIndex < 0 || useIndex <= declarationIndex) {
+    return false;
+  }
+
+  let guarded = false;
+  for (const statement of statements.slice(declarationIndex + 1, useIndex)) {
+    if (statementReassignsAlias(statement, alias.name)) return false;
+    if (isAcceptedSessionGuard(statement, alias.name)) {
+      guarded = true;
+      continue;
+    }
+    if (!guarded && statementContainsAliasIdentifier(statement, alias.name)) {
+      return false;
+    }
+  }
+
+  return guarded;
+}
+
+function blockStatementAncestor(
+  node: Node,
+): { block: Node & { getStatements(): Node[] }; statement: Node } | undefined {
+  let current: Node | undefined = node;
+  while (current) {
+    const parent = current.getParent();
+    if (parent && Node.isBlock(parent)) {
+      return { block: parent as Node & { getStatements(): Node[] }, statement: current };
+    }
+    current = parent;
+  }
+  return undefined;
+}
+
+function sameSourceNode(left: Node, right: Node): boolean {
+  return (
+    left.getSourceFile().getFilePath() === right.getSourceFile().getFilePath() &&
+    left.getStart() === right.getStart() &&
+    left.getEnd() === right.getEnd()
+  );
+}
+
+function isAcceptedSessionGuard(statement: Node, aliasName: string): boolean {
+  if (!Node.isIfStatement(statement)) return false;
+  if (!isFalsyIdentifierCheck(statement.getExpression(), aliasName)) return false;
+  return statementExits(statement.getThenStatement());
+}
+
+function isFalsyIdentifierCheck(expression: Node, aliasName: string): boolean {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isPrefixUnaryExpression(node)) return false;
+  if (node.getOperatorToken() !== SyntaxKind.ExclamationToken) return false;
+  const operand = unwrappedStaticExpressionNode(node.getOperand());
+  return Node.isIdentifier(operand) && operand.getText() === aliasName;
+}
+
+function statementExits(statement: Node): boolean {
+  if (Node.isReturnStatement(statement) || Node.isThrowStatement(statement)) return true;
+  if (Node.isBlock(statement)) {
+    const [first] = statement.getStatements();
+    return first ? statementExits(first) : false;
+  }
+  if (!Node.isExpressionStatement(statement)) return false;
+  const expression = unwrappedStaticExpressionNode(statement.getExpression());
+  if (!Node.isCallExpression(expression)) return false;
+  const name = staticAccessName(expression.getExpression());
+  return name === 'fail' || name === 'redirect' || name === 'notFound';
+}
+
+function statementReassignsAlias(statement: Node, aliasName: string): boolean {
+  const expressions = statement.getDescendantsOfKind(SyntaxKind.BinaryExpression);
+  for (const expression of expressions) {
+    const operatorKind = expression.getOperatorToken().getKind();
+    if (
+      operatorKind !== SyntaxKind.EqualsToken &&
+      operatorKind !== SyntaxKind.PlusEqualsToken &&
+      operatorKind !== SyntaxKind.MinusEqualsToken &&
+      operatorKind !== SyntaxKind.AsteriskEqualsToken &&
+      operatorKind !== SyntaxKind.SlashEqualsToken
+    ) {
+      continue;
+    }
+    const left = unwrappedStaticExpressionNode(expression.getLeft());
+    if (Node.isIdentifier(left) && left.getText() === aliasName) return true;
+  }
+
+  for (const expression of statement.getDescendantsOfKind(SyntaxKind.PrefixUnaryExpression)) {
+    const operator = expression.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    const operand = unwrappedStaticExpressionNode(expression.getOperand());
+    if (Node.isIdentifier(operand) && operand.getText() === aliasName) return true;
+  }
+  for (const expression of statement.getDescendantsOfKind(SyntaxKind.PostfixUnaryExpression)) {
+    const operator = expression.getOperatorToken();
+    if (operator !== SyntaxKind.PlusPlusToken && operator !== SyntaxKind.MinusMinusToken) continue;
+    const operand = unwrappedStaticExpressionNode(expression.getOperand());
+    if (Node.isIdentifier(operand) && operand.getText() === aliasName) return true;
+  }
+
+  return false;
+}
+
+function statementContainsAliasIdentifier(statement: Node, aliasName: string): boolean {
+  return statement
+    .getDescendantsOfKind(SyntaxKind.Identifier)
+    .some((identifier) => identifier.getText() === aliasName);
 }
 
 function appendTableEntries<Table>(
@@ -10378,12 +10684,14 @@ export function extractSymbolicEffectsFromProject(
       for (const callback of deriveWriteCallbacks(sourceFile)) {
         const receivers = projectDrizzleReceivers(callback.fn);
         const paramSymbolKeys = callbackParameterSymbolKeys(callback.fn);
+        const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
         for (const call of touchBodyCallExpressions(callback.body)) {
           const fact = symbolicEffectForWriteCall(call, {
             file,
             paramSymbolKeys,
             receivers,
             resolveTable,
+            sessionContext,
             ...(callback.key ? { writeKey: callback.key } : {}),
           });
           if (fact) facts.push(fact);
@@ -10443,6 +10751,7 @@ interface WriteCallContext {
   paramSymbolKeys: ReadonlySet<string>;
   receivers: ProjectDrizzleReceivers;
   resolveTable: (node: Node) => string | undefined;
+  sessionContext: SessionProvenanceContext;
   writeKey?: string;
 }
 
@@ -10473,16 +10782,21 @@ function symbolicEffectForWriteCall(
     return base && context.resolveTable(base) === table ? column : undefined;
   };
   const toValue = (node: Node): SymbolicValue =>
-    symbolicValueFromExpression(node, context.paramSymbolKeys);
+    symbolicValueFromExpression(node, context.paramSymbolKeys, context.sessionContext);
   const toSetValue = (node: Node): SymbolicValue =>
-    symbolicValueFromExpression(node, context.paramSymbolKeys, selfColumn);
+    symbolicValueFromExpression(node, context.paramSymbolKeys, context.sessionContext, selfColumn);
   const writeKeyEntry = context.writeKey ? { writeKey: context.writeKey } : {};
 
   if (operation === 'insert') {
     const values = chainValuesObject(chain, 'values', toValue);
     const conflict = chainOnConflictSets(chain, toSetValue);
     if (conflict) {
-      const match = chainMatch(chain, context.resolveTable, context.paramSymbolKeys);
+      const match = chainMatch(
+        chain,
+        context.resolveTable,
+        context.paramSymbolKeys,
+        context.sessionContext,
+      );
       return {
         effect: { match, op: 'upsert', sets: conflict, table, values },
         site,
@@ -10494,12 +10808,22 @@ function symbolicEffectForWriteCall(
 
   if (operation === 'update') {
     const sets = chainValuesObject(chain, 'set', toSetValue);
-    const match = chainMatch(chain, context.resolveTable, context.paramSymbolKeys);
+    const match = chainMatch(
+      chain,
+      context.resolveTable,
+      context.paramSymbolKeys,
+      context.sessionContext,
+    );
     return { effect: { match, op: 'update', sets, table }, site, ...writeKeyEntry };
   }
 
   if (operation === 'delete') {
-    const match = chainMatch(chain, context.resolveTable, context.paramSymbolKeys);
+    const match = chainMatch(
+      chain,
+      context.resolveTable,
+      context.paramSymbolKeys,
+      context.sessionContext,
+    );
     return { effect: { match, op: 'delete', table }, site, ...writeKeyEntry };
   }
 
@@ -10575,12 +10899,18 @@ function chainMatch(
   chain: Node,
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext,
 ): SymbolicMatch {
   const whereCall = chainCallByName(chain, 'where');
   const predicate = whereCall?.getArguments()[0];
   if (!predicate) return { eq: [], kind: 'keys' };
 
-  const eqMatches = keyEqMatchesFromPredicate(predicate, resolveTable, paramSymbolKeys);
+  const eqMatches = keyEqMatchesFromPredicate(
+    predicate,
+    resolveTable,
+    paramSymbolKeys,
+    sessionContext,
+  );
   if (eqMatches) return { eq: eqMatches, kind: 'keys' };
   return { expr: predicate.getText(), kind: 'opaque' };
 }
@@ -10593,6 +10923,7 @@ function keyEqMatchesFromPredicate(
   predicate: Node,
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext,
 ): { column: string; value: SymbolicValue }[] | null {
   const conjuncts = eqPredicateConjuncts(predicate);
   if (!conjuncts) return null;
@@ -10605,7 +10936,7 @@ function keyEqMatchesFromPredicate(
     const valueNode = leftColumn ? right : left;
     if (!column || !valueNode) return null;
 
-    const value = symbolicValueFromExpression(valueNode, paramSymbolKeys);
+    const value = symbolicValueFromExpression(valueNode, paramSymbolKeys, sessionContext);
     if (value.kind === 'opaque') return null;
     matches.push({ column, value });
   }
@@ -10641,6 +10972,7 @@ type SelfColumnResolver = (node: Node) => string | undefined;
 function symbolicValueFromExpression(
   node: Node,
   paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
   selfColumn?: SelfColumnResolver,
 ): SymbolicValue {
   const expression = unwrappedStaticExpressionNode(node);
@@ -10657,8 +10989,18 @@ function symbolicValueFromExpression(
   if (Node.isBinaryExpression(expression)) {
     const op = arithOperator(expression.getOperatorToken().getText());
     if (op) {
-      const left = symbolicValueFromExpression(expression.getLeft(), paramSymbolKeys, selfColumn);
-      const right = symbolicValueFromExpression(expression.getRight(), paramSymbolKeys, selfColumn);
+      const left = symbolicValueFromExpression(
+        expression.getLeft(),
+        paramSymbolKeys,
+        sessionContext,
+        selfColumn,
+      );
+      const right = symbolicValueFromExpression(
+        expression.getRight(),
+        paramSymbolKeys,
+        sessionContext,
+        selfColumn,
+      );
       if (left.kind !== 'opaque' && right.kind !== 'opaque') {
         return { kind: 'arith', left, op, right };
       }
@@ -10670,9 +11012,12 @@ function symbolicValueFromExpression(
   const paramPath = paramPathForExpression(expression, paramSymbolKeys);
   if (paramPath) return { kind: 'param', path: paramPath };
 
+  const sessionPath = sessionPathForExpression(expression, sessionContext);
+  if (sessionPath !== undefined) return { kind: 'session', path: sessionPath };
+
   // Runtime-valid column arithmetic: `sql`${t.col} - ${quantity}`` (the way real
   // drizzle expresses a self-referential SET, since JS `-` on a column is invalid).
-  const sqlArith = sqlTemplateArith(expression, paramSymbolKeys, selfColumn);
+  const sqlArith = sqlTemplateArith(expression, paramSymbolKeys, sessionContext, selfColumn);
   if (sqlArith) return sqlArith;
 
   return { kind: 'opaque', expr: expression.getText() };
@@ -10682,6 +11027,7 @@ function symbolicValueFromExpression(
 function sqlTemplateArith(
   node: Node,
   paramSymbolKeys: ReadonlySet<string>,
+  sessionContext: SessionProvenanceContext,
   selfColumn?: SelfColumnResolver,
 ): SymbolicValue | undefined {
   if (!Node.isTaggedTemplateExpression(node)) return undefined;
@@ -10699,8 +11045,18 @@ function sqlTemplateArith(
 
   const op = arithOperator(first.getLiteral().getLiteralText().trim());
   if (!op) return undefined;
-  const left = symbolicValueFromExpression(first.getExpression(), paramSymbolKeys, selfColumn);
-  const right = symbolicValueFromExpression(second.getExpression(), paramSymbolKeys, selfColumn);
+  const left = symbolicValueFromExpression(
+    first.getExpression(),
+    paramSymbolKeys,
+    sessionContext,
+    selfColumn,
+  );
+  const right = symbolicValueFromExpression(
+    second.getExpression(),
+    paramSymbolKeys,
+    sessionContext,
+    selfColumn,
+  );
   if (left.kind === 'opaque' || right.kind === 'opaque') return undefined;
   return { kind: 'arith', left, op, right };
 }
@@ -10808,6 +11164,7 @@ interface QueryShapeContextForTable {
   keyByTable: (table: string) => string | null;
   paramSymbolKeys: ReadonlySet<string>;
   resolveTable: (node: Node) => string | undefined;
+  sessionContext: SessionProvenanceContext;
 }
 
 /**
@@ -10855,6 +11212,7 @@ export function extractAlgebraicShapesFromProject(
         keyByTable: (table) => keyByRealTable.get(table) ?? null,
         paramSymbolKeys: new Set(),
         resolveTable,
+        sessionContext: emptySessionProvenanceContext(),
       };
 
       for (const { name, body, fn } of deriveQueryLoaders(sourceFile)) {
@@ -10903,6 +11261,7 @@ function algebraicShapeForLoader(
   const loaderContext: QueryShapeContextForTable = {
     ...context,
     paramSymbolKeys: callbackParameterSymbolKeys(fn),
+    sessionContext: sessionProvenanceContextForNodes(body.getSourceFile(), [functionBody(fn)]),
   };
   const returned = loaderReturnExpression(fn);
   if (!returned) return undefined;
@@ -11155,7 +11514,7 @@ function filtersFromPredicate(
   if (name === 'eq') {
     const valueNode = selectColumnReference(left, table, context.resolveTable) ? right : left;
     const value = valueNode
-      ? symbolicValueFromExpression(valueNode, context.paramSymbolKeys)
+      ? symbolicValueFromExpression(valueNode, context.paramSymbolKeys, context.sessionContext)
       : undefined;
     return value && value.kind !== 'opaque'
       ? [{ column, op: 'eq', value }]

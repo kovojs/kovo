@@ -213,6 +213,10 @@ function lowerValue(value: SymbolicValue, rowVar?: string): string {
       return `$input.${value.path}`;
     case 'placeholder':
       return value.placeholder === 'now' ? 'now()' : 'tempId()';
+    case 'session':
+      // SPEC.md §10.2 / advanced-analyzer: private session scope is proof-only.
+      // The deriver must eliminate it from browser-visible row matches before codegen.
+      throw new Error(`derive-codegen: session value (${value.path}) is not lowerable`);
   }
 }
 

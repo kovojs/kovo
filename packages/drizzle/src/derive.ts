@@ -148,7 +148,7 @@ function deriveAgg(
     });
   }
 
-  const match = matchToRowMatches(effect.match);
+  const match = matchToRowMatches(effect.match, field.rowset);
   if (match.reason) return fail(match.reason);
 
   // C5: A `keys`-kind match whose columns don't cover the declared rowKey is a
@@ -157,8 +157,11 @@ function deriveAgg(
   // (SPEC.md §10.5 "eq(t.col,value) only when cols provably cover the table key")
   if (field.rowKey) {
     const keyColumns = field.rowKey.split(',').map((c) => c.trim());
-    const matchColumns = new Set(match.value.map((m) => m.column));
-    const coversKey = keyColumns.every((kc) => matchColumns.has(kc));
+    const coveredColumns = new Set([
+      ...match.value.map((m) => m.column),
+      ...privateScopeCoveredColumns(effect.match, field.rowset),
+    ]);
+    const coversKey = keyColumns.every((kc) => coveredColumns.has(kc));
     if (!coversKey) {
       return fail({ code: 'non-key-match', expr: `non-key eq on ${field.rowset.table}` });
     }
@@ -344,13 +347,13 @@ function insertSatisfiesAllFilters(
 function deriveScalar(
   path: string,
   column: string,
-  _rowset: Rowset,
+  rowset: Rowset,
   effect: SymbolicEffect,
 ): FieldDerivation {
   if (effect.op === 'delete')
     return fail({ code: 'unsupported', detail: 'DELETE of a scalar row' });
   if (effect.op === 'insert') return ok(); // a new row does not change an existing keyed scalar
-  const match = matchToRowMatches(effect.match);
+  const match = matchToRowMatches(effect.match, rowset);
   if (match.reason) return fail(match.reason);
 
   const next = effect.sets[column];
@@ -440,14 +443,44 @@ function placeholderForColumn(type: 'boolean' | 'number' | 'string' | undefined)
   return { kind: 'placeholder', placeholder: 'tempId' };
 }
 
-function matchToRowMatches(match: SymbolicMatch): {
+function matchToRowMatches(
+  match: SymbolicMatch,
+  rowset?: Rowset,
+): {
   reason?: PuntReason;
   value: { column: string; value: SymbolicValue }[];
 } {
   if (match.kind === 'opaque')
     return { reason: { code: 'non-key-match', expr: match.expr }, value: [] };
-  const value = match.eq.map((entry) => ({ column: entry.column, value: entry.value }));
+  const value = match.eq
+    .filter((entry) => !rowset || !rowsetProvesPrivateScope(rowset, entry))
+    .map((entry) => ({ column: entry.column, value: entry.value }));
   return { value };
+}
+
+function privateScopeCoveredColumns(match: SymbolicMatch, rowset: Rowset): string[] {
+  if (match.kind === 'opaque') return [];
+  return match.eq
+    .filter((entry) => rowsetProvesPrivateScope(rowset, entry))
+    .map((entry) => entry.column);
+}
+
+function rowsetProvesPrivateScope(
+  rowset: Rowset,
+  match: { column: string; value: SymbolicValue },
+): boolean {
+  if (!isPrivateScopeValue(match.value)) return false;
+  return rowset.filters.some(
+    (filter) =>
+      filter.op === 'eq' &&
+      filter.column === match.column &&
+      filter.value !== undefined &&
+      symbolicValuesEqual(filter.value, match.value),
+  );
+}
+
+function isPrivateScopeValue(value: SymbolicValue): boolean {
+  return value.kind === 'session';
 }
 
 function predSatisfiedByInsert(
@@ -455,10 +488,42 @@ function predSatisfiedByInsert(
   values: Readonly<Record<string, SymbolicValue>>,
 ): 'opaque' | boolean {
   if (!pred) return true;
-  if (pred.op !== 'eq' || pred.value?.kind !== 'const') return 'opaque';
+  if (pred.op !== 'eq' || pred.value === undefined) return 'opaque';
   const inserted = values[pred.column];
-  if (!inserted || inserted.kind !== 'const') return 'opaque';
-  return inserted.value === pred.value.value;
+  if (!inserted) return 'opaque';
+  return symbolicValuesEqual(inserted, pred.value)
+    ? true
+    : constValuesContradict(inserted, pred.value);
+}
+
+function symbolicValuesEqual(left: SymbolicValue, right: SymbolicValue): boolean {
+  if (left.kind !== right.kind) return false;
+  switch (left.kind) {
+    case 'arith':
+      return (
+        right.kind === 'arith' &&
+        left.op === right.op &&
+        symbolicValuesEqual(left.left, right.left) &&
+        symbolicValuesEqual(left.right, right.right)
+      );
+    case 'col':
+      return right.kind === 'col' && left.column === right.column && left.table === right.table;
+    case 'const':
+      return right.kind === 'const' && left.value === right.value;
+    case 'opaque':
+      return right.kind === 'opaque' && left.expr === right.expr;
+    case 'param':
+      return right.kind === 'param' && left.path === right.path;
+    case 'placeholder':
+      return right.kind === 'placeholder' && left.placeholder === right.placeholder;
+    case 'session':
+      return right.kind === 'session' && left.path === right.path;
+  }
+}
+
+function constValuesContradict(left: SymbolicValue, right: SymbolicValue): 'opaque' | false {
+  if (left.kind !== 'const' || right.kind !== 'const') return 'opaque';
+  return left.value !== right.value ? false : 'opaque';
 }
 
 function substituteRowColumns(
@@ -479,6 +544,7 @@ function substituteRowColumns(
     }
     case 'const':
     case 'param':
+    case 'session':
       return value;
     default:
       return undefined;

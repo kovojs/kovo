@@ -27,6 +27,12 @@ The target is not “derive everything.” The target is a richer proof engine t
 real-world predicates precisely, explain why a proof did or did not hold, and preserve the existing
 fail-closed posture when it cannot prove safety.
 
+This roadmap is intentionally framework-general. The Stack Overflow shared-db demo is the motivating
+fixture, not a special case: any implementation that recognizes only that source shape, helper name,
+table name, or file layout is incomplete. Proofs must be expressed through typed provenance, PNF, row
+identity, row membership, and private-scope erasure rules that apply equally to session, tenant,
+guard-owned, and natural-key applications.
+
 ## Design Goals
 
 - [ ] **Represent request/session/guard provenance as first-class symbolic values.**
@@ -35,6 +41,12 @@ fail-closed posture when it cannot prove safety.
     table-level notices.
   - Desired proof: `eq(t.sessionId, request.session.id)` is a stable per-request scope predicate,
     not an opaque predicate, and can participate in composite-key coverage.
+  - Nullable request/session values are traceable only after a dominating guard proves control cannot
+    continue without the value. Accepted exits are `if (!x) throw`, `if (!x) return`, framework
+    `fail(...)`, redirect/notFound-style exits, and equivalent typed no-return exits.
+  - The guard must dominate the Drizzle predicate/write use. Use before guard, reassignment, mutation,
+    alias escape, capture into an opaque callback, or an async helper boundary makes the value
+    conditional/opaque for that use.
 
 - [ ] **Normalize predicates into a typed predicate algebra before invalidation or optimism.**
   - The analyzer should lower Drizzle predicates into `and` / `or` / `not` / `eq` / range /
@@ -47,6 +59,17 @@ fail-closed posture when it cannot prove safety.
   - Row membership answers: “does this write affect the query's filtered rowset?”
   - This avoids conflating a session/tenant scope predicate with a non-key filter and lets composite
     keys, partial indexes, and filtered lists get precise but conservative behavior.
+  - `exact-row` requires every declared row-key column to be covered by traceable equality predicates.
+  - `scoped-rowset` proves only private scope such as session/tenant/guard ownership; it is not a
+    single-row proof and must not be used to emit a single-row optimistic patch.
+  - Membership filters may derive exits only when the transition is decidable from write values plus
+    shipped query data; entry remains a named punt unless the full row can be constructed soundly.
+
+- [ ] **Forbid private-scope leakage by construction.**
+  - `session(...)`, `tenant(...)`, and `guard(...)` values may participate in server-side proof only.
+  - They must never appear in browser-visible query instance keys, `kovo-deps`, `Kovo-Targets`,
+    generated optimistic module exports, generated transform inputs, or lowered browser code.
+  - Leak checks are required fixtures, not manual review notes.
 
 - [ ] **Keep failures named and useful.**
   - `KV409` should remain a non-blocking table-level degradation notice for valid but imprecise
@@ -70,13 +93,20 @@ fail-closed posture when it cannot prove safety.
 - [ ] **Track value equality classes within one mutation handler.**
   - If `const sessionId = request.session?.id; if (!sessionId) throw ...`, subsequent
     `sessionId` comparisons should be equivalent to `session.id`.
+  - Equality-class promotion requires a dominating guard when the source is nullable. Reassignment,
+    mutation, alias escape, capture into an opaque callback, or use before the guard invalidates the
+    equality class for the affected use.
   - If `const tenantId = await lookupTenant(request.session.id)`, keep it opaque unless the helper
     has an analyzer summary.
 
 - [ ] **Add summarized pure helper support for provenance.**
   - Summaries should be explicit and typed, not inferred from arbitrary source strings.
-  - Initial scope: same-package helpers that return a property of input/session, simple object
+  - Same-package helpers are allowed only when they match a declared analyzer summary or a small typed
+    summary form maintained by the analyzer. Arbitrary helper source text must not be mined for proof.
+  - Initial typed summary scope: helpers that return a property of input/session, simple object
     projectors, and guard combinators such as `owns(...)`.
+  - Unsummarized helpers that return tenant/session/request/guard values must produce a named punt or
+    table-level degradation such as `unsummarized-helper`, not a guessed proof.
 
 ### Layer 2: Predicate Normal Form
 
@@ -86,6 +116,12 @@ fail-closed posture when it cannot prove safety.
   - Preserve table aliases and Drizzle alias resolution.
   - Record every unsupported node as a local opaque child, not as a collapse of the whole predicate
     unless precision would become unsound.
+  - Analyzer decisions after parsing must consume typed PNF/provenance facts, never `getText()`,
+    source snippets, regexes, or string slicing except for diagnostic rendering
+    (`rules/compiler-hard-rules.md` rule 9).
+  - Unsupported predicate children should remain local opaque nodes when the surrounding proof stays
+    sound. If uncertainty affects row identity or membership, degrade the relevant proof level rather
+    than preserving a stronger classification.
 
 - [ ] **Classify predicate proof levels.**
   - `exact-row`: predicates cover every declared row-key column with traceable symbolic values.
@@ -112,6 +148,9 @@ fail-closed posture when it cannot prove safety.
   - Query instance keys stay client-visible only for declared args (`SPEC.md` §10.2).
   - Private session/tenant scope participates in proof but should not be exposed in browser
     instance keys or `Kovo-Targets`.
+  - This is an erasure invariant over all emitted/browser-visible surfaces: query keys, `kovo-deps`,
+    `Kovo-Targets`, generated optimistic module exports, generated transform inputs, and lowered
+    browser code.
 
 - [ ] **Handle common filtered-list transitions.**
   - `UPDATE status = 'closed' WHERE sessionId = session.id AND id = input.id` against
@@ -172,6 +211,16 @@ fail-closed posture when it cannot prove safety.
   - Expected: `observed ⊆ static` still holds; no production behavior relies solely on runtime
     observation for an unexercised branch.
 
+- [ ] **Negative proof fixtures.**
+  - Unguarded nullable session/request access must be conditional/opaque and cannot prove row identity.
+  - Guarded aliases that are later reassigned or mutated must lose the original scope proof.
+  - Unsummarized helpers returning a tenant/session id must produce `unsummarized-helper` or an
+    equivalent named degradation.
+  - Partial composite keys must not classify as `exact-row`.
+  - Mixed derivable/opaque disjunctions must degrade or punt as a whole with a named reason.
+  - Private-scope leakage in generated keys, targets, optimistic exports, transform inputs, or lowered
+    browser code must fail a leak-check fixture.
+
 ## Implementation Sequence
 
 - [ ] **Phase 0: Baseline current behavior.**
@@ -184,18 +233,24 @@ fail-closed posture when it cannot prove safety.
   - Extend core derivation types and Drizzle static extraction to represent session/request-derived
     values.
   - Add alias/destructure/narrowing tests for session values.
+  - Add dominance tests for nullable values: accepted exits, use before guard, reassignment, mutation,
+    alias escape, and async-helper opacity.
   - Evidence when complete: extractor facts show `session:id` or equivalent structured provenance
     instead of opaque values.
 
 - [ ] **Phase 2: Predicate Normal Form.**
   - Replace ad hoc predicate matching with PNF for write matches and query rowset filters.
   - Preserve existing behavior for simple `eq(id, input.id)` and direct non-eq KV409 cases.
+  - Add local opaque-child tests and mixed-disjunction negative tests so row identity/membership
+    degrade only at the affected proof level.
   - Evidence when complete: old predicate tests stay green; new composite/session predicates
     classify as `exact-row`.
 
 - [ ] **Phase 3: Scope alignment between writes and queries.**
   - Carry private query scope through algebraic shapes and compare it against write scope.
   - Ensure private scope never becomes a browser-visible query instance key.
+  - Add leak-check fixtures for `kovo-deps`, `Kovo-Targets`, generated optimistic exports,
+    transform inputs, and lowered browser code.
   - Evidence when complete: tenant/session fixture proves precise invalidation without target-key
     leakage.
 
@@ -228,6 +283,8 @@ fail-closed posture when it cannot prove safety.
 
 - [ ] **Do not expose private scope in client keys.**
   - Session and tenant predicates are proof inputs; they are not automatically query args.
+  - Treat every browser-visible private-scope occurrence as a failing leak, even if the value would be
+    redundant with server-side authorization.
 
 - [ ] **Do not weaken KV406.**
   - Interprocedural and raw-SQL opacity still requires explicit declarations and runtime
@@ -236,6 +293,8 @@ fail-closed posture when it cannot prove safety.
 - [ ] **Do not introduce source-text heuristics.**
   - The parser may capture spans for diagnostics, but analyzer decisions must be made from typed
     facts and symbols.
+  - Helper provenance summaries are typed analyzer inputs; arbitrary helper source-body inference is
+    not an acceptable substitute.
 
 ## Definition of Done
 

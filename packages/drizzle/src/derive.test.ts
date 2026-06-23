@@ -89,6 +89,70 @@ describe('deriveOptimistic — §10.5 Stage-3 rules (positive)', () => {
     });
   });
 
+  it('UPDATE × AGG uses private session scope for composite-key proof without emitting it', () => {
+    const rowset = {
+      filters: [
+        { column: 'sessionId', op: 'eq' as const, value: { kind: 'session' as const, path: 'id' } },
+      ],
+      key: 'sessionId,id',
+      orderBy: [{ column: 'id', direction: 'asc' as const }],
+      table: 'questions',
+    };
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['id', 'score'],
+          rowKey: 'sessionId,id',
+          rowset,
+        },
+      },
+      query: 'questionList',
+    };
+    const effect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+          { column: 'id', value: { kind: 'param', path: 'targetId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: {
+        score: {
+          kind: 'arith',
+          left: { kind: 'col', column: 'score' },
+          op: '+',
+          right: { kind: 'const', value: 1 },
+        },
+      },
+      table: 'questions',
+    };
+
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'derived',
+      program: {
+        ops: [
+          {
+            guard: 'find-or-noop',
+            match: [{ column: 'id', value: { kind: 'param', path: 'targetId' } }],
+            op: 'update-row',
+            path: 'items',
+            sets: {
+              score: {
+                kind: 'arith',
+                left: { kind: 'col', column: 'score' },
+                op: '+',
+                right: { kind: 'const', value: 1 },
+              },
+            },
+          },
+        ],
+        query: 'questionList',
+      },
+    });
+  });
+
   it('DELETE × (AGG + COUNT) removes the row then recounts from the shipped rows', () => {
     const rowset = { filters: [], key: 'id', orderBy: [], table: 'todos' };
     const shape: AlgebraicQueryShape = {
