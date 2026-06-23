@@ -402,7 +402,7 @@ from table-level fallback to scoped or exact optimism.
     pattern extracting public keys instead of `KV409`, and `node examples/stackoverflow/scripts/emit-graph.mjs --check`
     verifies generated `voteUp` optimism derives `questionList` and `questionScore`.
 
-- [ ] **Phase 5: Explain and diagnostic polish.**
+- [x] **Phase 5: Explain and diagnostic polish.**
   - `kovo explain --optimistic` and `kovo check` should print proof levels, private scope, and named
     punts.
   - Update KV409 wording if needed to distinguish “valid table-level fallback” from “untraceable
@@ -413,10 +413,10 @@ from table-level fallback to scoped or exact optimism.
   - [x] `kovo check` renders the same proof levels/private scope without depending on source-text
         snippets.
     - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/conformance-fixtures/src/kovo-check-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts` covers `kovo check optimistic` `OPTIMISTIC-PROOF` rows for `exact-row`, `scoped-rowset`, `table-level`, and `opaque`, including private scope and named punt reasons.
-  - Evidence when complete: snapshot tests cover exact-row, scoped-rowset, table-level, and opaque
-    outputs.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/conformance-fixtures/src/kovo-check-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts`
+    covers exact-row, scoped-rowset, table-level, opaque, private-scope, and named punt output.
 
-- [ ] **Phase 6: Property and integration verification.**
+- [x] **Phase 6: Property and integration verification.**
   - Expand commuting-diagram property tests over scoped composite keys, filtered rowsets, and
     aggregates.
   - [x] Derived advanced-analyzer patch programs commute with lowered browser transforms over scoped
@@ -427,7 +427,8 @@ from table-level fallback to scoped or exact optimism.
       Stack Overflow `voteUp` over shared PGlite by parsing `questionList` and `questionScore`
       response query chunks, comparing them to the expected exact-row optimistic transition and
       committed PGlite vote totals, and asserting private session scope is not shipped in the wire.
-  - Evidence when complete: property suite plus focused integration tests pass under the root gate.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts examples/stackoverflow/src/kovo-graph.test.ts examples/stackoverflow/src/interactive-app.test.ts packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts`
+    passes the scoped predicate, graph, property/codegen, and HTTP integration proof set.
 
 ## Risks & Guardrails
 
@@ -463,14 +464,24 @@ from table-level fallback to scoped or exact optimism.
   - Evidence: `node examples/stackoverflow/scripts/emit-graph.mjs --check` verifies the real Stack
     Overflow `voteUp` generated optimistic module derives `questionList` and `questionScore` from
     the scoped `sessionId,id` update shape.
-- [ ] Punts remain named, stable, and visible in `kovo explain --optimistic`.
-- [ ] Runtime cross-checks still enforce `observed ⊆ static ∪ declared`.
-- [ ] No private session/tenant/guard key material appears in browser-visible query instance keys,
+- [x] Punts remain named, stable, and visible in `kovo explain --optimistic`.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/conformance-fixtures/src/kovo-check-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts`
+    covers `OPTIMISTIC-PROOF` rows and named punt reasons in explain/check/conformance outputs.
+- [x] Runtime cross-checks still enforce `observed ⊆ static ∪ declared`.
+  - Evidence: `pnpm exec vitest --run packages/test/src/advanced-analyzer-runtime.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts`
+    includes the PGlite runtime cross-check and static proof suites.
+- [x] No private session/tenant/guard key material appears in browser-visible query instance keys,
       `kovo-deps`, `Kovo-Targets`, generated optimistic module exports, generated transform inputs,
       or lowered browser code.
-- [ ] Nullable private-scope proofs require a dominating accepted exit guard and degrade on
+  - Evidence: same command covers scoped-pipeline leak fixtures for query keys, `kovo-deps`,
+    `Kovo-Targets`, generated optimistic exports, transform inputs, and lowered browser code.
+- [x] Nullable private-scope proofs require a dominating accepted exit guard and degrade on
       reassignment, mutation, alias escape, async-helper opacity, unsummarized helpers, or use before
       guard.
-- [ ] Row identity, scoped rowset, and membership proofs remain separate: partial composite keys and
+  - Evidence: same command covers nullable guard dominance, use-before-guard, reassignment, mutation,
+    alias escape, async-helper opacity, and unsummarized-helper degradation.
+- [x] Row identity, scoped rowset, and membership proofs remain separate: partial composite keys and
       scoped-rowset-only proofs cannot emit single-row patches, and membership exits require a
       decidable transition from write values plus shipped query data.
+  - Evidence: same command covers partial composite-key `partial-key` punts, scoped-rowset/private
+    scope erasure, and filtered membership exit versus `membership-entry` degradation.
