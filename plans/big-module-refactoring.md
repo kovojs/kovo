@@ -57,6 +57,10 @@ Current command output after completed splits:
   - [x] Extract source-module table/import resolution to `packages/drizzle/src/static/tables.ts`.
     Evidence: `packages/drizzle/src/static/tables.ts` is 774 LoC and
     `packages/drizzle/src/static.ts` is reduced to 9,883 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts` passed 4 files / 111 tests; `git diff --check` passed.
+  - [x] Extract domain action and write-callback resolution to
+    `packages/drizzle/src/static/domain-writes.ts`.
+    Evidence: `packages/drizzle/src/static/domain-writes.ts` is 745 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 9,180 LoC; `pnpm exec vitest --run packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.write-callbacks-aliases.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts` passed 4 files / 70 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
