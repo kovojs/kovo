@@ -236,6 +236,12 @@ guard-owned, and natural-key applications.
   - Add alias/destructure/narrowing tests for session values.
   - Add dominance tests for nullable values: accepted exits, use before guard, reassignment, mutation,
     alias escape, and async-helper opacity.
+  - [x] Nullable private-scope alias guards enforce dominance for accepted exits and intervening
+        alias opacity.
+    - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts`
+      covers `throw`/`return`/`fail(...)` guard exits, unguarded/use-before-guard aliases,
+      reassignment and compound mutation, alias escape, async-helper opacity, declared helper
+      summaries, unsummarized-helper degradation, and private-key erasure from touch keys.
   - Evidence when complete: extractor facts show `session:id` or equivalent structured provenance
     instead of opaque values.
 
