@@ -444,6 +444,113 @@ html.dark {
   }
 }
 
+/* ── Security hero (Bobby Tables SQL injection), same 15s clock and beats as the
+   stale-UI hero. Reuses hero-unit / hero-acta / hero-actb / hero-v0..v4. ── */
+@keyframes sec-typed {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  15%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes sec-field {
+  0%,
+  12% {
+    border-color: var(--edge);
+  }
+  14%,
+  47% {
+    border-color: var(--stale);
+  }
+  49%,
+  72% {
+    border-color: var(--accent);
+  }
+  74%,
+  95% {
+    border-color: var(--synced);
+  }
+  96%,
+  100% {
+    border-color: var(--edge);
+  }
+}
+@keyframes sec-rows {
+  0%,
+  25% {
+    opacity: 1;
+  }
+  27%,
+  47% {
+    opacity: 0;
+  }
+  49%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes sec-table {
+  0%,
+  25% {
+    border-color: var(--edge);
+  }
+  26%,
+  47% {
+    border-color: var(--stale);
+  }
+  48%,
+  72% {
+    border-color: var(--accent);
+  }
+  73%,
+  95% {
+    border-color: var(--synced);
+  }
+  96%,
+  100% {
+    border-color: var(--edge);
+  }
+}
+@keyframes sec-vtint {
+  0%,
+  24% {
+    background: var(--card);
+  }
+  27%,
+  46% {
+    background: var(--stale-bg);
+  }
+  50%,
+  70% {
+    background: color-mix(in srgb, var(--accent) 7%, var(--card));
+  }
+  74%,
+  100% {
+    background: var(--synced-bg);
+  }
+}
+@keyframes sec-vmark {
+  0%,
+  24% {
+    background: var(--faint);
+  }
+  27%,
+  46% {
+    background: var(--stale);
+  }
+  50%,
+  70% {
+    background: var(--accent);
+  }
+  74%,
+  100% {
+    background: var(--synced);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   [data-anim='hero'] * {
     animation: none !important;
