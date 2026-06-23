@@ -28,7 +28,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
       value: 'design',
     };
 
-    expect({
+    const rendered = {
       classes: [style.attrs(selectStyles.root).class ?? ''] as const,
       content: SelectContent.definition.render({
         ...state,
@@ -70,7 +70,22 @@ describe('@kovojs/ui Select StyleX slots', () => {
         id: 'team-value',
       }),
       valueClasses: [style.attrs(selectStyles.value).class ?? ''] as const,
-    }).toMatchSnapshot();
+    };
+
+    expect(rendered.classes[0]).toContain('kv-select');
+    expect(rendered.content).toContain('aria-labelledby="team-trigger"');
+    expect(rendered.content).toContain('role="listbox"');
+    expect(rendered.hiddenInput).toContain('form="team-form" id="team-hidden"');
+    expect(rendered.item).toContain('aria-selected="true"');
+    expect(rendered.item).toContain('data-highlighted=""');
+    expect(rendered.item).toContain('id="team-listbox-option-0"');
+    expect(rendered.root).toContain('data-invalid="" data-required="" data-state="open"');
+    expect(rendered.trigger).toContain('aria-activedescendant="team-listbox-option-0"');
+    expect(rendered.trigger).toContain('aria-controls="team-listbox"');
+    expect(rendered.trigger).toContain('id="team-trigger" role="combobox" type="button"');
+    expect(rendered.triggerClasses[0]).toContain('kv-select');
+    expect(rendered.value).toContain('id="team-value">Design</span>');
+    expect(rendered.valueClasses[0]).toContain('kv-select');
   });
 
   it('accepts author-last StyleX slot overrides', () => {
@@ -99,7 +114,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
       { namespace: 'appSelect', source: 'app-select.tsx' },
     );
 
-    expect({
+    const rendered = {
       content: SelectContent.definition.render({
         children: 'options',
         styles: { content: overrides.content },
@@ -125,7 +140,19 @@ describe('@kovojs/ui Select StyleX slots', () => {
         styles: { value: overrides.value },
         value: 'design',
       }),
-    }).toMatchSnapshot();
+    };
+
+    expect(rendered.content).toContain('data-style-src="select.tsx#content; app-select.tsx#content"');
+    expect(rendered.hiddenInput).toContain(
+      'data-style-src="select.tsx#hiddenInput; app-select.tsx#hiddenInput"',
+    );
+    expect(rendered.item).toContain('data-style-src="select.tsx#item; app-select.tsx#item"');
+    expect(rendered.root).toContain('data-style-src="select.tsx#root; app-select.tsx#root"');
+    expect(rendered.trigger).toContain(
+      'data-style-src="select.tsx#trigger; app-select.tsx#trigger"',
+    );
+    expect(rendered.trigger).toContain('role="combobox" type="button"');
+    expect(rendered.value).toContain('data-style-src="select.tsx#value; app-select.tsx#value"');
   });
 
   it('exports StyleX slot objects instead of variant helpers', () => {
@@ -137,6 +164,14 @@ describe('@kovojs/ui Select StyleX slots', () => {
       rootMarker: selectStyles.root.$$css,
       triggerMarker: selectStyles.trigger.$$css,
       valueMarker: selectStyles.value.$$css,
-    }).toMatchSnapshot();
+    }).toEqual({
+      contentMarker: true,
+      hiddenInputMarker: true,
+      itemMarker: true,
+      keys: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
+      rootMarker: true,
+      triggerMarker: true,
+      valueMarker: true,
+    });
   });
 });

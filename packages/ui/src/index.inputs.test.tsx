@@ -147,7 +147,7 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(trigger).toContain('aria-expanded="false"');
     expect(trigger).toContain('aria-haspopup="listbox"');
     expect(trigger).toContain('aria-invalid="true"');
-    expect(trigger).toContain('id="plan" type="button"');
+    expect(trigger).toContain('id="plan" role="combobox" type="button"');
     expect(trigger).toContain('role="listbox"');
     expect(trigger).toContain('aria-selected="true"');
     expect(trigger).toContain(
