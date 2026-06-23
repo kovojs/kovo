@@ -13,7 +13,7 @@ blessed adapter shipped Postgres-only).
 
 - `SPEC.md` §11.1 (line 1206) already states the static pass keys on **"receiver's TYPE originates in
   drizzle-orm — type identity, not variable names"**, and names `pgTable` only as the "90%+" example
-  (lines 1201, 1209). The normative property is dialect-agnostic; today's *implementation* hardcodes
+  (lines 1201, 1209). The normative property is dialect-agnostic; today's _implementation_ hardcodes
   Postgres.
 - `rules/data-layer-policy.md` already frames Kovo core as "a capability interface, not a portability
   promise" with `@kovojs/drizzle` as a "pinned, conformance-tested subset of Drizzle's surface." Adding
@@ -21,9 +21,9 @@ blessed adapter shipped Postgres-only).
 - The one normative Postgres mention that must be revisited is `SPEC.md` §11.2 (line 1254): runtime
   cross-check parses observed SQL with **`pgsql-ast-parser`**. SQLite needs either a compatible parser
   path or a documented dialect-aware parser seam (see Stage D + Risks).
-- `packages/drizzle/src/static.ts:2461-2463` already carries the marker: *"project receiver proof is
+- `packages/drizzle/src/static.ts:2461-2463` already carries the marker: _"project receiver proof is
   restricted to known Postgres Drizzle database types. SQLite/MySQL conformance is deferred to late
-  hardening."* This plan is that hardening for SQLite.
+  hardening."_ This plan is that hardening for SQLite.
 
 ## Decisions (defaults — adjustable)
 
@@ -61,7 +61,7 @@ recognize the SQLite equivalents (`drizzle-orm/sqlite-core`) so extraction, colu
 detection work for SQLite tables.
 
 - [ ] **Module-specifier checks accept `drizzle-orm/sqlite-core`.** `static.ts:3285, 3294, 3326, 3340,
-      3348` (and the namespace-import / import-specifier / export-specifier resolvers around
+3348` (and the namespace-import / import-specifier / export-specifier resolvers around
       `isDrizzlePgCoreNamespaceMember` and `projectPgCoreIdentifierExportName`) currently equal-check
       `'drizzle-orm/pg-core'`. Replace with a dialect-core matcher (`pg-core` | `sqlite-core`).
 - [ ] **Column-builder classification is dialect-aware.** `static.ts:97-99` + `3091-3093` classify
