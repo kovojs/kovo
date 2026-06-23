@@ -77,6 +77,29 @@ jobs:
       - run: vp exec playwright install --with-deps chromium
       - run: vp exec vitest --run --shard=${{ matrix.shard }}/${{ matrix.total }}
 
+  sql-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 24
+      - run: vp install
+      - run: vp exec pnpm rebuild better-sqlite3
+      - run: |
+          vp exec vitest --run \
+            packages/core/src/sql-safety.test.ts \
+            packages/server/src/guards.test.ts \
+            packages/test/src/query-verifier.test.ts \
+            packages/test/src/verifier-sql.test.ts \
+            packages/drizzle/src/sql-safety-static.test.ts \
+            packages/cli/src/index.kovo-compile.test.ts \
+            packages/drizzle/src/runtime-surface.test.ts \
+            packages/core/src/diagnostics.test.ts \
+            packages/test/src/pglite-harness.test.ts \
+            packages/test/src/sqlite-harness.test.ts
+      - run: git diff --check
+
   browser:
     runs-on: ubuntu-latest
     steps:
@@ -250,6 +273,7 @@ jobs:
       - format
       - api-surface
       - test
+      - sql-safety
       - browser
       - integration
       - build

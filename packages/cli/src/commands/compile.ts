@@ -1154,6 +1154,7 @@ interface DrizzleStaticCommandInput {
     | 'algebraicShapes'
     | 'materializedViewRefreshFacts'
     | 'queryFacts'
+    | 'sqlSafetyDiagnostics'
     | 'symbolicEffects'
     | 'touchGraph'
   )[];
@@ -1175,6 +1176,7 @@ async function runCompileDrizzleStaticCommand(
   options: CompileDrizzleStaticCommandOptions,
 ): Promise<CliCommandResult> {
   const {
+    analyzeSqlSafetyFromProject,
     deriveInvalidationRegistry,
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
@@ -1200,6 +1202,7 @@ async function runCompileDrizzleStaticCommand(
         'materializedViewRefreshFacts',
         'ownerAudit',
         'queryFacts',
+        'sqlSafetyDiagnostics',
         'symbolicEffects',
         'touchGraph',
       ],
@@ -1221,6 +1224,9 @@ async function runCompileDrizzleStaticCommand(
       const queryFacts = extractQueryFactsFromProject({ files });
       output.queryFacts = queryFacts;
       output.queryDomains = queryDomainsFromStaticFacts(queryFacts);
+    }
+    if (extract.has('sqlSafetyDiagnostics')) {
+      output.sqlSafetyDiagnostics = analyzeSqlSafetyFromProject({ files });
     }
     if (extract.has('symbolicEffects'))
       output.symbolicEffects = extractSymbolicEffectsFromProject({ files });

@@ -97,6 +97,10 @@ get **KV403** (a warning — over-invalidation is wasteful but correct); touch a
 declare and you get **KV402** (an error — that's the silent-stale-UI bug this whole layer exists to
 kill). See [testing](/guides/testing/) for running the verifier.
 
+Copyable rule: **never interpolate request, form, or query data into SQL text**. Use Drizzle
+builders or `sql\`\`` placeholders so scalar values bind as parameters, and use typed allowlists or
+schema facts for identifiers and sort directions.
+
 ## The raw-db access ban (KV330)
 
 `KV330` is the lint that keeps the touch graph trustworthy. If handlers could call `db.insert(...)`

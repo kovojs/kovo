@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { validateManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
+import { sql, staticSql, trustedSql } from './runtime.js';
 
 interface DrizzlePackageJson {
   dependencies?: Record<string, string>;
@@ -36,6 +38,33 @@ function drizzleCompatibilityBarrelSource(): string {
 }
 
 describe('@kovojs/drizzle runtime surface', () => {
+  it('brands Kovo SQL values accepted by managed DB guards', () => {
+    const productId = 'p1';
+    const statement = sql`select * from products where id = ${productId}`;
+    const staticStatement = staticSql`select * from products`;
+    const identifier = sql.identifier('products', { allow: ['products'] });
+    const direction = sql.allow('desc', ['asc', 'desc']);
+    const joined = sql.join([identifier, direction], sql.raw(' '));
+
+    expect(validateManagedSqlStatement(statement)).toEqual({ ok: true });
+    expect(validateManagedSqlStatement(staticStatement)).toEqual({ ok: true });
+    expect(validateManagedSqlStatement(identifier)).toEqual({ ok: true });
+    expect(validateManagedSqlStatement(direction)).toEqual({ ok: true });
+    expect(validateManagedSqlStatement(joined)).toMatchObject({ ok: false });
+    expect(
+      validateManagedSqlStatement(trustedSql(joined, { justification: 'audited order clause' })),
+    ).toEqual({
+      ok: true,
+    });
+  });
+
+  it('validates dynamic SQL identifiers and allowlisted keyword fragments', () => {
+    expect(() => sql.identifier('products; drop table users')).toThrow(/KV422/);
+    expect(() => sql.identifier('users', { allow: ['products'] })).toThrow(/KV422/);
+    expect(() => sql.allow('drop table users', ['asc', 'desc'])).toThrow(/KV422/);
+    expect(() => staticSql`select ${'dynamic' as never}`).toThrow(/staticSql/);
+  });
+
   it('keeps the runtime annotation entrypoint separate from static extraction', async () => {
     const runtime = await import('@kovojs/drizzle');
     const staticExtraction = await import('@kovojs/drizzle/internal/static');

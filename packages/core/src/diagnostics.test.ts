@@ -71,6 +71,7 @@ describe('diagnostic registry', () => {
       'KV419',
       'KV420',
       'KV421',
+      'KV422',
     ]);
   });
 
@@ -588,6 +589,15 @@ describe('diagnostic registry', () => {
       Fixes: emit exactly one mutation fact per mutation key, or rename one mutation so its key is unique across the app graph.
       SPEC §6.1 makes the mutation registry key-addressed and §9.5 dispatches a POST to exactly one keyed handler; duplicate mutation keys would otherwise silently last-write-wins the invalidation registry while first-match-wins server dispatch — like routes (KV228), components (KV237), fragment targets (KV238), view transitions (KV239), and query shapes (KV240), mutation keys must be unique.",
           "message": "Duplicate mutation key.",
+          "severity": "error",
+        },
+        "KV422": {
+          "code": "KV422",
+          "help": "Would lower to: SQL text and SQL values crossing the managed DB seam as separate facts.
+      Blocked reason: executable SQL text was built from an unbranded raw string, an unsafe raw chunk, or an unchecked identifier/keyword fragment, so request data could become SQL syntax instead of a bound value.
+      Fixes: use Drizzle builders or Kovo sql\`...\` placeholders for scalar values, staticSql\`...\` for literal-only SQL text, sql.identifier(value, { allow }) or sql.allow(value, allowlist) for allowlisted identifiers/keywords, or trustedSql(..., { justification }) for the audited raw-SQL escape hatch.
+      SPEC §10.2/§10.3 and §11.2 require framework-managed DB handles to reject unbranded executable SQL text independently from KV406/KV410 read/write freshness declarations.",
+          "message": "SQL text injection risk.",
           "severity": "error",
         },
       }

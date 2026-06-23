@@ -365,6 +365,287 @@ function ownerDomainsFromTables(
   return facts.flatMap((fact) => [...(fact.diagnostics ?? [])]);
 }
 
+type SqlTextSafety = 'literal' | 'safe' | 'tainted' | 'unknown';
+
+/** @internal */
+export function analyzeSqlSafetyFromProject(
+  options: TouchGraphProjectOptions,
+): TouchGraphDiagnostic[] {
+  const extraction = createProjectExtraction(options);
+  try {
+    const contextFiles = projectContextFiles(extraction);
+    const diagnostics = contextFiles.flatMap((file, index) => {
+      const sourceFile = extraction.sourceFiles[index];
+      return sourceFile ? sqlSafetyDiagnosticsForSourceFile(file, sourceFile) : [];
+    });
+    return diagnostics.sort((left, right) => left.site.localeCompare(right.site));
+  } finally {
+    extraction.dispose();
+  }
+}
+
+function sqlSafetyDiagnosticsForSourceFile(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  const scopes = new Map<Node, Map<string, SqlTextSafety>>();
+  const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
+
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+    const scope = nearestSqlSafetyScope(declaration);
+    let bindings = scopes.get(scope);
+    if (!bindings) {
+      bindings = new Map();
+      scopes.set(scope, bindings);
+    }
+    bindings.set(name.getText(), sqlTextSafety(declaration.getInitializer(), scopes));
+  }
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const rawHelperDiagnostic = sqlRawHelperDiagnostic(
+      file,
+      call,
+      scopes,
+      nativeDrizzleSqlReceivers,
+    );
+    if (rawHelperDiagnostic) diagnostics.push(rawHelperDiagnostic);
+
+    const sinkName = sqlSinkName(call);
+    if (!sinkName) continue;
+    const [statement] = call.getArguments();
+    const safety = sqlTextSafety(statement, scopes);
+    if (safety === 'safe') continue;
+
+    diagnostics.push({
+      code: 'KV422',
+      message: `${diagnosticDefinitions.KV422.message} ${sinkName}() receives ${sqlSafetyDescription(safety)} SQL text; use Kovo sql\`...\`, staticSql\`...\`, a separated parameter carrier, or trustedSql(...).`,
+      severity: diagnosticDefinitions.KV422.severity,
+      site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+    });
+  }
+
+  return diagnostics;
+}
+
+function sqlRawHelperDiagnostic(
+  file: SourceFileInput,
+  call: CallExpression,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+  nativeDrizzleSqlReceivers: ReadonlySet<string>,
+): TouchGraphDiagnostic | null {
+  const expression = call.getExpression();
+  if (!Node.isPropertyAccessExpression(expression)) return null;
+  const receiver = expression.getExpression();
+
+  const method = expression.getName();
+  if (method !== 'raw' && method !== 'identifier') return null;
+  const [first, second] = call.getArguments();
+  if (nativeDrizzleSqlReceivers.has(receiver.getText())) {
+    return {
+      code: 'KV422',
+      message: `${diagnosticDefinitions.KV422.message} Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
+      severity: diagnosticDefinitions.KV422.severity,
+      site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+    };
+  }
+
+  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'sql') return null;
+  if (method === 'identifier' && sqlIdentifierHasAllow(second)) return null;
+
+  const safety = sqlTextSafety(first, scopes);
+  if (safety === 'literal') return null;
+
+  return {
+    code: 'KV422',
+    message: `${diagnosticDefinitions.KV422.message} sql.${method}(...) receives ${sqlSafetyDescription(safety)} text; use sql.identifier(value, { allow }) for identifiers or trustedSql(...) for audited raw SQL.`,
+    severity: diagnosticDefinitions.KV422.severity,
+    site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+  };
+}
+
+function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
+  const receivers = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== 'drizzle-orm') continue;
+    for (const named of declaration.getNamedImports()) {
+      if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) receivers.add(`${namespace.getText()}.sql`);
+  }
+  return receivers;
+}
+
+function sqlSinkName(call: CallExpression): string | null {
+  const expression = call.getExpression();
+  if (Node.isPropertyAccessExpression(expression)) {
+    const name = expression.getName();
+    return name === 'execute' || name === 'query' || name === 'exec' || name === 'prepare'
+      ? name
+      : null;
+  }
+
+  if (Node.isElementAccessExpression(expression)) {
+    const argument = expression.getArgumentExpression();
+    if (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument)) {
+      const name = argument.getLiteralText();
+      return name === 'execute' || name === 'query' || name === 'exec' || name === 'prepare'
+        ? name
+        : null;
+    }
+    return '<computed-sql-method>';
+  }
+
+  return null;
+}
+
+function sqlTextSafety(
+  expression: Node | undefined,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety {
+  if (!expression) return 'unknown';
+  if (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)) {
+    return 'literal';
+  }
+  if (Node.isTaggedTemplateExpression(expression)) {
+    const tag = expression.getTag();
+    return tag.getText() === 'sql' || tag.getText() === 'staticSql' ? 'safe' : 'unknown';
+  }
+  if (Node.isTemplateExpression(expression)) return 'tainted';
+  if (Node.isCallExpression(expression)) {
+    const callExpression = expression.getExpression();
+    if (Node.isIdentifier(callExpression) && callExpression.getText() === 'trustedSql')
+      return 'safe';
+    if (Node.isPropertyAccessExpression(callExpression)) {
+      const receiver = callExpression.getExpression();
+      if (Node.isIdentifier(receiver) && receiver.getText() === 'sql') {
+        const method = callExpression.getName();
+        if (method === 'identifier') {
+          return sqlIdentifierHasAllow(expression.getArguments()[1]) ? 'safe' : 'unknown';
+        }
+        if (method === 'allow') {
+          return Node.isArrayLiteralExpression(expression.getArguments()[1]) ? 'safe' : 'unknown';
+        }
+        if (method === 'join') return 'safe';
+        if (method === 'raw') return 'unknown';
+      }
+    }
+    if (objectCarrierSafety(expression) === 'safe') return 'safe';
+    return 'unknown';
+  }
+  if (Node.isObjectLiteralExpression(expression)) return objectCarrierSafety(expression);
+  if (Node.isIdentifier(expression)) {
+    return bindingSafety(expression, scopes) ?? 'unknown';
+  }
+  if (Node.isPropertyAccessExpression(expression)) {
+    return requestSourceExpression(expression) ? 'tainted' : 'unknown';
+  }
+  if (Node.isElementAccessExpression(expression)) {
+    return requestSourceExpression(expression) ? 'tainted' : 'unknown';
+  }
+  if (Node.isBinaryExpression(expression)) {
+    const operator = expression.getOperatorToken().getKind();
+    if (operator !== SyntaxKind.PlusToken) return 'unknown';
+    return joinSqlTextSafety(
+      sqlTextSafety(expression.getLeft(), scopes),
+      sqlTextSafety(expression.getRight(), scopes),
+    );
+  }
+  if (Node.isArrayLiteralExpression(expression)) {
+    return expression.getElements().some((item) => sqlTextSafety(item, scopes) !== 'literal')
+      ? 'unknown'
+      : 'literal';
+  }
+  return requestSourceExpression(expression) ? 'tainted' : 'unknown';
+}
+
+function objectCarrierSafety(expression: Node): SqlTextSafety {
+  if (!Node.isObjectLiteralExpression(expression)) return 'unknown';
+  const hasText =
+    objectHasLiteralProperty(expression, 'text') || objectHasLiteralProperty(expression, 'sql');
+  const hasParams =
+    objectHasProperty(expression, 'values') ||
+    objectHasProperty(expression, 'params') ||
+    objectHasProperty(expression, 'args');
+  return hasText && hasParams ? 'safe' : 'unknown';
+}
+
+function objectHasLiteralProperty(
+  expression: ObjectLiteralExpression,
+  propertyName: string,
+): boolean {
+  const property = expression.getProperty(propertyName);
+  if (!Node.isPropertyAssignment(property)) return false;
+  const initializer = property.getInitializer();
+  return (
+    !!initializer &&
+    (Node.isStringLiteral(initializer) || Node.isNoSubstitutionTemplateLiteral(initializer))
+  );
+}
+
+function sqlIdentifierHasAllow(expression: Node | undefined): boolean {
+  if (!expression || !Node.isObjectLiteralExpression(expression)) return false;
+  const allow = expression.getProperty('allow');
+  if (!Node.isPropertyAssignment(allow)) return false;
+  const initializer = allow.getInitializer();
+  return !!initializer && Node.isArrayLiteralExpression(initializer);
+}
+
+function joinSqlTextSafety(left: SqlTextSafety, right: SqlTextSafety): SqlTextSafety {
+  if (left === 'tainted' || right === 'tainted') return 'tainted';
+  if (left === 'unknown' || right === 'unknown') return 'unknown';
+  if (left === 'safe' || right === 'safe') return 'unknown';
+  return 'literal';
+}
+
+function bindingSafety(
+  identifier: Node,
+  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+): SqlTextSafety | undefined {
+  let scope: Node | undefined = nearestSqlSafetyScope(identifier);
+  const name = identifier.getText();
+  while (scope) {
+    const binding = scopes.get(scope)?.get(name);
+    if (binding) return binding;
+    scope = nearestSqlSafetyScope(scope.getParent());
+  }
+  return undefined;
+}
+
+function nearestSqlSafetyScope(node: Node | undefined): Node {
+  let current = node;
+  while (current) {
+    if (
+      Node.isFunctionDeclaration(current) ||
+      Node.isFunctionExpression(current) ||
+      Node.isArrowFunction(current) ||
+      Node.isSourceFile(current)
+    ) {
+      return current;
+    }
+    current = current.getParent();
+  }
+  return node?.getSourceFile() ?? (undefined as never);
+}
+
+function requestSourceExpression(expression: Node): boolean {
+  const text = expression.getText();
+  return (
+    /\b(input|form|headers|cookies)\b/.test(text) ||
+    /\breq\.(search|params|headers|cookies)\b/.test(text)
+  );
+}
+
+function sqlSafetyDescription(safety: SqlTextSafety): string {
+  if (safety === 'literal') return 'unbranded literal';
+  if (safety === 'tainted') return 'request-derived';
+  if (safety === 'unknown') return 'unknown-provenance';
+  return 'safe';
+}
+
 // SPEC.md §11.1 (v1 scope): touch-graph facts require project-mode ts-morph type proof.
 // The source-mode entry points and their name/shape heuristics were removed in
 // v1-cleanup item 4; callers must supply a project SourceModuleContext and

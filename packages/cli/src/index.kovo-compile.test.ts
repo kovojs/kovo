@@ -613,6 +613,66 @@ export const addToCart = mutation('cart/add', {
     }
   });
 
+  it('writes SQL safety diagnostics through the Drizzle static CLI facade', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-static-sql-safety-'));
+    const inputPath = join(root, 'static.json');
+    const outPath = join(root, 'static-facts.json');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      writeFileSync(
+        inputPath,
+        JSON.stringify(
+          {
+            extract: ['sqlSafetyDiagnostics'],
+            files: [
+              {
+                fileName: 'products.ts',
+                source: [
+                  'import { sql } from "@kovojs/drizzle";',
+                  'export async function load(input: { id: string }, req: { search: { q: string } }, db: any) {',
+                  '  await db.execute("select * from products where id = \'" + input.id + "\'");',
+                  '  await db.query(`select * from products where q = ${req.search.q}`);',
+                  '  await db.exec(sql.raw(input.id));',
+                  '  await db.prepare("select * from products where q like \'%" + req.search.q + "%\'");',
+                  '  await db.execute(sql`select * from products where id = ${input.id}`);',
+                  '}',
+                ].join('\n'),
+              },
+            ],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync(['compile', 'drizzle-static', inputPath, '--out', outPath]),
+      ).resolves.toBe(0);
+
+      expect(stderr).not.toHaveBeenCalled();
+      const facts = JSON.parse(readFileSync(outPath, 'utf8'));
+      expect(facts.sqlSafetyDiagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ code: 'KV422', site: 'products.ts:3' }),
+          expect.objectContaining({ code: 'KV422', site: 'products.ts:4' }),
+          expect.objectContaining({ code: 'KV422', site: 'products.ts:5' }),
+          expect.objectContaining({ code: 'KV422', site: 'products.ts:6' }),
+        ]),
+      );
+      expect(facts.sqlSafetyDiagnostics).toHaveLength(5);
+      expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
+        `WRITE drizzle-static path=${JSON.stringify(outPath)}`,
+      );
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('writes Drizzle optimistic codegen through the CLI facade', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-compile-drizzle-optimistic-'));
     const inputPath = join(root, 'optimistic.json');
