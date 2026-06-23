@@ -63,7 +63,7 @@ import {
   unwrappedTsExpression,
 } from '../static.js';
 
-export interface QueryShapeSelection {
+/** @internal */ export interface QueryShapeSelection {
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasTablelessScalar: boolean;
   opaquePaths: readonly string[];
@@ -72,7 +72,7 @@ export interface QueryShapeSelection {
   unresolvedPaths: readonly string[];
 }
 
-export function selectShapeFromQueryBody(
+/** @internal */ export function selectShapeFromQueryBody(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
@@ -111,7 +111,7 @@ export function selectShapeFromQueryBody(
     : selection;
 }
 
-export function queryBodyHasTimeVolatileWhere(
+/** @internal */ export function queryBodyHasTimeVolatileWhere(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   mode: 'project' | 'source',
@@ -125,7 +125,7 @@ export function queryBodyHasTimeVolatileWhere(
   }).some(Boolean);
 }
 
-export function volatileTimeShape(shape: QueryShape): QueryShape {
+/** @internal */ export function volatileTimeShape(shape: QueryShape): QueryShape {
   if (
     typeof shape === 'object' &&
     shape !== null &&
@@ -138,16 +138,16 @@ export function volatileTimeShape(shape: QueryShape): QueryShape {
   return { kind: 'volatile-time', shape };
 }
 
-export function selectProjectionArgument(call: CallExpression): Node | undefined {
+/** @internal */ export function selectProjectionArgument(call: CallExpression): Node | undefined {
   const args = call.getArguments();
   return staticAccessName(call.getExpression()) === 'selectDistinctOn' ? args[1] : args[0];
 }
 
-export function selectCallDisplayName(call: CallExpression): string {
+/** @internal */ export function selectCallDisplayName(call: CallExpression): string {
   return `db.${staticAccessName(call.getExpression()) ?? 'select'}()`;
 }
 
-export function selectCallFromQueryBody(
+/** @internal */ export function selectCallFromQueryBody(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   mode: 'project' | 'source' = 'source',
@@ -165,11 +165,11 @@ export function selectCallFromQueryBody(
   );
 }
 
-export function isSelectQueryCallName(name: string | undefined): boolean {
+/** @internal */ export function isSelectQueryCallName(name: string | undefined): boolean {
   return name !== undefined && DRIZZLE_SELECT_QUERY_METHODS.has(name);
 }
 
-export function queryCallbackReceiverReferences(
+/** @internal */ export function queryCallbackReceiverReferences(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source',
 ): QueryReceiverReferences {
@@ -192,7 +192,7 @@ export function queryCallbackReceiverReferences(
   return references;
 }
 
-export function appendQueryReceiverParameterReferences(
+/** @internal */ export function appendQueryReceiverParameterReferences(
   parameter: ParameterDeclaration,
   name: Node,
   mode: 'project' | 'source',
@@ -209,7 +209,7 @@ export function appendQueryReceiverParameterReferences(
   appendUntypedQueryReceiverBinding(name, names, symbolKeys);
 }
 
-export function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
+/** @internal */ export function queryCallbackParameterNodes(callback: Node): ParameterDeclaration[] {
   if (
     Node.isArrowFunction(callback) ||
     Node.isFunctionDeclaration(callback) ||
@@ -222,7 +222,7 @@ export function queryCallbackParameterNodes(callback: Node): ParameterDeclaratio
   return [];
 }
 
-export function appendQueryTransactionReceiverAliases(
+/** @internal */ export function appendQueryTransactionReceiverAliases(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences & { names: Set<string>; symbolKeys: Set<string> },
 ): void {
@@ -266,7 +266,7 @@ export function appendQueryTransactionReceiverAliases(
   }
 }
 
-export function isQueryReceiverIdentifier(
+/** @internal */ export function isQueryReceiverIdentifier(
   node: Node | undefined,
   receiverReferences: QueryReceiverReferences,
 ): boolean {
@@ -286,7 +286,7 @@ export function isQueryReceiverIdentifier(
   return receiverReferences.names.has(node.getText());
 }
 
-export function relationalQueryDiagnostics(
+/** @internal */ export function relationalQueryDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
@@ -302,7 +302,7 @@ export function relationalQueryDiagnostics(
   ];
 }
 
-export function unclassifiedQueryReceiverDiagnostics(
+/** @internal */ export function unclassifiedQueryReceiverDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
@@ -333,7 +333,7 @@ export function unclassifiedQueryReceiverDiagnostics(
   });
 }
 
-export function projectQueryReceiverContainerDiagnostics(
+/** @internal */ export function projectQueryReceiverContainerDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
@@ -363,7 +363,7 @@ export function projectQueryReceiverContainerDiagnostics(
   });
 }
 
-export function externalQueryHelperDiagnostics(
+/** @internal */ export function externalQueryHelperDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   localFunctionKeys: ReadonlySet<string>,
@@ -410,7 +410,7 @@ export function externalQueryHelperDiagnostics(
   );
 }
 
-export function queryLocalHelperCalls(
+/** @internal */ export function queryLocalHelperCalls(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   localFunctionsByKey: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>,
@@ -447,7 +447,7 @@ export function queryLocalHelperCalls(
   return [...new Set(calls)];
 }
 
-export function opaqueLocalQueryHelperDiagnostics(
+/** @internal */ export function opaqueLocalQueryHelperDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   localFunctionsByKey: ReadonlyMap<string, readonly ReceiverParameterRequirement[]>,
@@ -499,7 +499,7 @@ export function opaqueLocalQueryHelperDiagnostics(
   );
 }
 
-export function receiverMethodAliasQueryDiagnostics(
+/** @internal */ export function receiverMethodAliasQueryDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): TouchGraphDiagnostic[] {
@@ -519,7 +519,7 @@ export function receiverMethodAliasQueryDiagnostics(
 // project mode could not type-prove. `receiverReferences` here are the unproven destructured
 // bindings (see unprovenDestructuredReceiverReferences); this never produces a positive
 // read/write fact, it only flags an un-analyzable Drizzle receiver surface.
-export function sourceDestructuredQueryReceiverDiagnostics(
+/** @internal */ export function sourceDestructuredQueryReceiverDiagnostics(
   body: ObjectLiteralExpression,
   localFunctionKeys: ReadonlySet<string>,
   receiverReferences: QueryReceiverReferences,
@@ -538,7 +538,7 @@ export function sourceDestructuredQueryReceiverDiagnostics(
   );
 }
 
-export function queryExecutableCallExpressions(
+/** @internal */ export function queryExecutableCallExpressions(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source' = 'source',
 ): CallExpression[] {
@@ -547,31 +547,31 @@ export function queryExecutableCallExpressions(
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
 }
 
-export function queryCallbackBodies(
+/** @internal */ export function queryCallbackBodies(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source' = 'source',
 ): Node[] {
   return queryLoadCallbackFunctions(body, mode).map(functionBody);
 }
 
-export function queryLoadCallbackFunctions(
+/** @internal */ export function queryLoadCallbackFunctions(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source' = 'source',
 ): Node[] {
   return queryLoadCallbackResolution(body, mode).callbacks;
 }
 
-export interface QueryLoadCallbackResolution {
+/** @internal */ export interface QueryLoadCallbackResolution {
   callbacks: Node[];
   unresolvedNodes: Node[];
 }
 
-export interface QueryBodyObjectResolution {
+/** @internal */ export interface QueryBodyObjectResolution {
   body?: ObjectLiteralExpression;
   unresolved: boolean;
 }
 
-export function queryBodyObjectLiteral(
+/** @internal */ export function queryBodyObjectLiteral(
   argument: Node | undefined,
   mode: 'project' | 'source',
 ): QueryBodyObjectResolution {
@@ -579,7 +579,7 @@ export function queryBodyObjectLiteral(
   return queryBodyObjectLiteralFromNode(argument, new Set(), mode) ?? { unresolved: true };
 }
 
-export function queryBodyObjectLiteralFromNode(
+/** @internal */ export function queryBodyObjectLiteralFromNode(
   node: Node,
   seen: Set<string>,
   mode: 'project' | 'source',
@@ -643,7 +643,7 @@ export function queryBodyObjectLiteralFromNode(
   return { unresolved: true };
 }
 
-export function queryBodyObjectLiteralFromDeclaration(
+/** @internal */ export function queryBodyObjectLiteralFromDeclaration(
   declaration: Node,
   seen: Set<string>,
   mode: 'project' | 'source',
@@ -690,12 +690,12 @@ export function queryBodyObjectLiteralFromDeclaration(
   return undefined;
 }
 
-export type QueryLoadSpreadResolution =
+/** @internal */ export type QueryLoadSpreadResolution =
   | { kind: 'found'; callbacks: Node[]; unresolved: boolean }
   | { kind: 'none' }
   | { kind: 'unresolved' };
 
-export function queryLoadCallbackResolution(
+/** @internal */ export function queryLoadCallbackResolution(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source' = 'source',
 ): QueryLoadCallbackResolution {
@@ -741,7 +741,7 @@ export function queryLoadCallbackResolution(
   };
 }
 
-export function queryLoadCallbackFromSpread(
+/** @internal */ export function queryLoadCallbackFromSpread(
   property: Node,
   mode: 'project' | 'source',
 ): QueryLoadSpreadResolution {
@@ -755,7 +755,7 @@ export function queryLoadCallbackFromSpread(
   );
 }
 
-export function queryLoadCallbackFromSpreadExpression(
+/** @internal */ export function queryLoadCallbackFromSpreadExpression(
   expression: Node,
   location: Node,
   mode: 'project' | 'source',
@@ -811,7 +811,7 @@ export function queryLoadCallbackFromSpreadExpression(
   return { kind: 'unresolved' };
 }
 
-export function queryCallbackPropertyIsLoad(node: Node): boolean {
+/** @internal */ export function queryCallbackPropertyIsLoad(node: Node): boolean {
   if (
     !Node.isGetAccessorDeclaration(node) &&
     !Node.isMethodDeclaration(node) &&
@@ -823,7 +823,7 @@ export function queryCallbackPropertyIsLoad(node: Node): boolean {
   return propertyNameText(node.getNameNode(), true) === 'load';
 }
 
-export function queryCallbackPropertyMayHideLoad(node: Node, mode: 'project' | 'source'): boolean {
+/** @internal */ export function queryCallbackPropertyMayHideLoad(node: Node, mode: 'project' | 'source'): boolean {
   if (
     !Node.isGetAccessorDeclaration(node) &&
     !Node.isMethodDeclaration(node) &&
@@ -848,7 +848,7 @@ export function queryCallbackPropertyMayHideLoad(node: Node, mode: 'project' | '
   return referencedQueryCallbackFunction(expression) !== undefined;
 }
 
-export function queryCallbackPropertyResolution(
+/** @internal */ export function queryCallbackPropertyResolution(
   node: Node,
   mode: 'project' | 'source',
 ): QueryLoadSpreadResolution {
@@ -883,7 +883,7 @@ export function queryCallbackPropertyResolution(
   return queryCallbackExpressionResolution(unwrappedStaticExpressionNode(initializer), mode);
 }
 
-export function queryCallbackExpressionResolution(
+/** @internal */ export function queryCallbackExpressionResolution(
   expression: Node,
   mode: 'project' | 'source',
 ): QueryLoadSpreadResolution {
@@ -918,7 +918,7 @@ export function queryCallbackExpressionResolution(
     : { kind: 'unresolved' };
 }
 
-export function unresolvedQueryCallbackDiagnostics(
+/** @internal */ export function unresolvedQueryCallbackDiagnostics(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source',
 ): TouchGraphDiagnostic[] {
@@ -932,7 +932,7 @@ export function unresolvedQueryCallbackDiagnostics(
   return diagnostics;
 }
 
-export function unresolvedQueryLoadCallbackDiagnostic(): TouchGraphDiagnostic {
+/** @internal */ export function unresolvedQueryLoadCallbackDiagnostic(): TouchGraphDiagnostic {
   return {
     code: 'KV406',
     message: `${diagnosticDefinitions.KV406.message} Query load callback could not be statically resolved.`,
@@ -941,11 +941,11 @@ export function unresolvedQueryLoadCallbackDiagnostic(): TouchGraphDiagnostic {
   };
 }
 
-export function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
+/** @internal */ export function referencedQueryCallbackFunction(identifier: Node): Node | undefined {
   return callbackFunctionFromReference(identifier, new Set());
 }
 
-export function callbackFunctionFromDeclaration(
+/** @internal */ export function callbackFunctionFromDeclaration(
   declaration: Node,
   seen: Set<string> = new Set(),
 ): Node | undefined {
@@ -990,7 +990,7 @@ export function callbackFunctionFromDeclaration(
   return undefined;
 }
 
-export function callbackFunctionFromVariable(
+/** @internal */ export function callbackFunctionFromVariable(
   declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
   seen: Set<string>,
 ): Node | undefined {
@@ -1002,7 +1002,7 @@ export function callbackFunctionFromVariable(
   return callbackFunctionFromReference(expression, seen);
 }
 
-export function callbackFunctionFromPropertyDeclaration(
+/** @internal */ export function callbackFunctionFromPropertyDeclaration(
   declaration: Node,
   seen: Set<string>,
 ): Node | undefined {
@@ -1016,7 +1016,7 @@ export function callbackFunctionFromPropertyDeclaration(
   return callbackFunctionFromReference(expression, seen);
 }
 
-export function callbackFunctionFromGetAccessorDeclaration(
+/** @internal */ export function callbackFunctionFromGetAccessorDeclaration(
   declaration: Node,
   seen: Set<string>,
 ): Node | undefined {
@@ -1030,7 +1030,7 @@ export function callbackFunctionFromGetAccessorDeclaration(
   return callbackFunctionFromReference(returned, seen);
 }
 
-export function callbackFunctionFromBindingElement(
+/** @internal */ export function callbackFunctionFromBindingElement(
   declaration: BindingElement,
   seen: Set<string>,
 ): Node | undefined {
@@ -1059,7 +1059,7 @@ export function callbackFunctionFromBindingElement(
   return undefined;
 }
 
-export function staticBindingElementReference(
+/** @internal */ export function staticBindingElementReference(
   declaration: BindingElement,
 ): { initializer: Node; literalReference?: Node; path: string[] } | undefined {
   if (isRestBindingElement(declaration)) return undefined;
@@ -1079,7 +1079,7 @@ export function staticBindingElementReference(
   return literalReference ? { initializer, literalReference, path } : { initializer, path };
 }
 
-export function bindingElementStaticPath(declaration: BindingElement): string[] {
+/** @internal */ export function bindingElementStaticPath(declaration: BindingElement): string[] {
   const path: string[] = [];
   let current: Node | undefined = declaration;
 
@@ -1117,7 +1117,7 @@ export function bindingElementStaticPath(declaration: BindingElement): string[] 
   return path;
 }
 
-export function callbackReferenceFromStaticLiteralPath(
+/** @internal */ export function callbackReferenceFromStaticLiteralPath(
   root: Node,
   path: readonly string[],
 ): Node | undefined {
@@ -1143,7 +1143,7 @@ export function callbackReferenceFromStaticLiteralPath(
   return current ? unwrappedStaticExpressionNode(current) : undefined;
 }
 
-export function staticLiteralContainerExpression(
+/** @internal */ export function staticLiteralContainerExpression(
   node: Node,
   seen: Set<string> = new Set(),
 ): Node | undefined {
@@ -1167,7 +1167,7 @@ export function staticLiteralContainerExpression(
   return undefined;
 }
 
-export function staticLiteralReferenceFromExpression(
+/** @internal */ export function staticLiteralReferenceFromExpression(
   node: Node,
   seen: Set<string> = new Set(),
 ): Node | undefined {
@@ -1189,7 +1189,7 @@ export function staticLiteralReferenceFromExpression(
   return undefined;
 }
 
-export function staticAccessSegments(node: Node): { path: string[]; root: Node } | undefined {
+/** @internal */ export function staticAccessSegments(node: Node): { path: string[]; root: Node } | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isIdentifier(expression) || Node.isThisExpression(expression)) {
     return { path: [], root: expression };
@@ -1205,7 +1205,7 @@ export function staticAccessSegments(node: Node): { path: string[]; root: Node }
   return { path: [...owner.path, member], root: owner.root };
 }
 
-export function staticLiteralContainerInitializer(declaration: Node): Node | undefined {
+/** @internal */ export function staticLiteralContainerInitializer(declaration: Node): Node | undefined {
   if (
     Node.isVariableDeclaration(declaration) ||
     Node.isPropertyAssignment(declaration) ||
@@ -1226,7 +1226,7 @@ export function staticLiteralContainerInitializer(declaration: Node): Node | und
   return undefined;
 }
 
-export function staticObjectFactoryReturnExpression(node: Node, seen: Set<string>): Node | undefined {
+/** @internal */ export function staticObjectFactoryReturnExpression(node: Node, seen: Set<string>): Node | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isCallExpression(expression)) return undefined;
   if (expression.getArguments().length > 0) return undefined;
@@ -1248,7 +1248,7 @@ export function staticObjectFactoryReturnExpression(node: Node, seen: Set<string
   return undefined;
 }
 
-export function factoryHasNoParameters(callback: Node): boolean {
+/** @internal */ export function factoryHasNoParameters(callback: Node): boolean {
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
@@ -1261,7 +1261,7 @@ export function factoryHasNoParameters(callback: Node): boolean {
   return callback.getParameters().length === 0;
 }
 
-export function functionLikeStaticReturnExpression(callback: Node): Node | undefined {
+/** @internal */ export function functionLikeStaticReturnExpression(callback: Node): Node | undefined {
   if (Node.isArrowFunction(callback)) {
     if (callback.getParameters().length > 0) return undefined;
     const body = callback.getBody();
@@ -1281,7 +1281,7 @@ export function functionLikeStaticReturnExpression(callback: Node): Node | undef
   return body && Node.isBlock(body) ? staticFactoryBlockReturnExpression(body) : undefined;
 }
 
-export function staticFactoryBlockReturnExpression(body: Node): Node | undefined {
+/** @internal */ export function staticFactoryBlockReturnExpression(body: Node): Node | undefined {
   if (!Node.isBlock(body)) return undefined;
 
   const statements = body.getStatements();
@@ -1297,7 +1297,7 @@ export function staticFactoryBlockReturnExpression(body: Node): Node | undefined
   return statement.getExpression();
 }
 
-export function objectLiteralStaticPropertyReference(
+/** @internal */ export function objectLiteralStaticPropertyReference(
   object: ObjectLiteralExpression,
   name: string,
 ): Node | undefined {
@@ -1313,7 +1313,7 @@ export function objectLiteralStaticPropertyReference(
   return undefined;
 }
 
-export function symbolForStaticTypePath(
+/** @internal */ export function symbolForStaticTypePath(
   root: Node,
   path: readonly string[],
   location: Node,
@@ -1330,7 +1330,7 @@ export function symbolForStaticTypePath(
   return aliasedSymbol(symbol);
 }
 
-export function callbackFunctionFromProperty(declaration: Node, seen: Set<string>): Node | undefined {
+/** @internal */ export function callbackFunctionFromProperty(declaration: Node, seen: Set<string>): Node | undefined {
   if (!Node.isPropertyAssignment(declaration)) return undefined;
 
   const initializer = declaration.getInitializer();
@@ -1341,7 +1341,7 @@ export function callbackFunctionFromProperty(declaration: Node, seen: Set<string
   return callbackFunctionFromReference(expression, seen);
 }
 
-export function callbackFunctionFromReference(identifier: Node, seen: Set<string>): Node | undefined {
+/** @internal */ export function callbackFunctionFromReference(identifier: Node, seen: Set<string>): Node | undefined {
   const boundTarget = boundCallbackTarget(identifier);
   if (boundTarget) {
     const target = unwrappedStaticExpressionNode(boundTarget);
@@ -1358,7 +1358,7 @@ export function callbackFunctionFromReference(identifier: Node, seen: Set<string
   return undefined;
 }
 
-export function symbolForCallbackReference(node: Node): MorphSymbol | undefined {
+/** @internal */ export function symbolForCallbackReference(node: Node): MorphSymbol | undefined {
   if (Node.isIdentifier(node)) return aliasedSymbol(symbolForIdentifierReference(node));
   if (Node.isPropertyAccessExpression(node)) {
     return aliasedSymbol(symbolForStaticMemberReference(node) ?? node.getNameNode().getSymbol());
@@ -1369,7 +1369,7 @@ export function symbolForCallbackReference(node: Node): MorphSymbol | undefined 
   return undefined;
 }
 
-export function boundCallbackTarget(node: Node): Node | undefined {
+/** @internal */ export function boundCallbackTarget(node: Node): Node | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isCallExpression(expression)) return undefined;
 
@@ -1385,7 +1385,7 @@ export function boundCallbackTarget(node: Node): Node | undefined {
   return callee.getExpression();
 }
 
-export function symbolForStaticMemberReference(node: Node): MorphSymbol | undefined {
+/** @internal */ export function symbolForStaticMemberReference(node: Node): MorphSymbol | undefined {
   // SPEC §10.2/§11.1: static callback containers are resolved from ts-morph member facts before
   // local object compatibility walking, so namespace imports and re-export barrels remain exact.
   const member = staticAccessName(node);
@@ -1395,11 +1395,11 @@ export function symbolForStaticMemberReference(node: Node): MorphSymbol | undefi
   return receiver.getType().getProperty(member);
 }
 
-export function aliasedSymbol(symbol: MorphSymbol | undefined): MorphSymbol | undefined {
+/** @internal */ export function aliasedSymbol(symbol: MorphSymbol | undefined): MorphSymbol | undefined {
   return symbol?.getAliasedSymbol() ?? symbol;
 }
 
-export function queryHelperReceiverArgumentName(
+/** @internal */ export function queryHelperReceiverArgumentName(
   call: CallExpression,
   receiverReferences: QueryReceiverReferences,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
@@ -1418,7 +1418,7 @@ export function queryHelperReceiverArgumentName(
   return undefined;
 }
 
-export function queryHelperArgumentReceiverName(
+/** @internal */ export function queryHelperArgumentReceiverName(
   argument: Node,
   receiverReferences: QueryReceiverReferences,
   carrierSymbolKeys: ReadonlySet<string>,
@@ -1433,7 +1433,7 @@ export function queryHelperArgumentReceiverName(
   return receiver ? receiver.getText() : undefined;
 }
 
-export function queryReceiverAliasReferencesForCall(
+/** @internal */ export function queryReceiverAliasReferencesForCall(
   body: ObjectLiteralExpression,
   call: CallExpression,
   receiverReferences: QueryReceiverReferences,
@@ -1446,7 +1446,7 @@ export function queryReceiverAliasReferencesForCall(
     : undefined;
 }
 
-export function queryCallbackBodyForNode(
+/** @internal */ export function queryCallbackBodyForNode(
   body: ObjectLiteralExpression,
   node: Node,
   mode: 'project' | 'source',
@@ -1460,7 +1460,7 @@ export function queryCallbackBodyForNode(
   return undefined;
 }
 
-export function appendUntypedQueryReceiverBinding(
+/** @internal */ export function appendUntypedQueryReceiverBinding(
   name: Node,
   names: Set<string>,
   symbolKeys: Set<string>,
@@ -1477,7 +1477,7 @@ export function appendUntypedQueryReceiverBinding(
 // SPEC §11.1 (v1 scope): collect destructured loader receiver bindings (e.g. `{ db: reader }`).
 // These are name/property heuristics that never prove a receiver; they only seed the fail-closed
 // KV406 detector below for receivers project mode could not prove via TypeScript symbols.
-export function sourceQueryDestructuredReceiverNames(
+/** @internal */ export function sourceQueryDestructuredReceiverNames(
   body: ObjectLiteralExpression,
 ): QueryReceiverReferences {
   const names = new Set<string>();
@@ -1495,7 +1495,7 @@ export function sourceQueryDestructuredReceiverNames(
 // SPEC §11.1 (v1 scope): keep only the destructured receiver bindings that project mode did NOT
 // type-prove. A genuinely-typed destructured receiver (e.g. `{ db }: Context` where Context.db is
 // a Drizzle database) is already in the proven receiverReferences and must not also fail closed.
-export function unprovenDestructuredReceiverReferences(
+/** @internal */ export function unprovenDestructuredReceiverReferences(
   candidates: QueryReceiverReferences,
   proven: QueryReceiverReferences,
 ): QueryReceiverReferences {
@@ -1513,7 +1513,7 @@ export function unprovenDestructuredReceiverReferences(
   return { names, symbolKeys };
 }
 
-export function appendQueryReceiverIdentifierBinding(
+/** @internal */ export function appendQueryReceiverIdentifierBinding(
   name: Node,
   names: Set<string>,
   symbolKeys: Set<string>,
@@ -1524,13 +1524,13 @@ export function appendQueryReceiverIdentifierBinding(
   if (symbolKey) symbolKeys.add(symbolKey);
 }
 
-export interface QueryShapeContext {
+/** @internal */ export interface QueryShapeContext {
   columnShapes: Readonly<Record<string, QueryShape>>;
   nullableTables: ReadonlySet<string>;
   prefix?: string;
 }
 
-export function queryShapeFromObjectLiteralNode(
+/** @internal */ export function queryShapeFromObjectLiteralNode(
   object: ts.ObjectLiteralExpression,
   context: QueryShapeContext,
 ): QueryShapeSelection {
@@ -1585,14 +1585,14 @@ export function queryShapeFromObjectLiteralNode(
   return { hasTablelessScalar, opaquePaths, shape, scalarTables, unresolvedPaths };
 }
 
-export function projectionPropertyName(name: ts.PropertyName): string | undefined {
+/** @internal */ export function projectionPropertyName(name: ts.PropertyName): string | undefined {
   if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
     return name.text;
   }
   return undefined;
 }
 
-export function nullableNestedShape(
+/** @internal */ export function nullableNestedShape(
   nested: QueryShapeSelection,
   nullableTables: ReadonlySet<string>,
 ): QueryShape | undefined {
@@ -1603,7 +1603,7 @@ export function nullableNestedShape(
   return table && nullableTables.has(table) ? nullableShape(nested.shape) : undefined;
 }
 
-export function scalarQueryShape(
+/** @internal */ export function scalarQueryShape(
   expression: ts.Expression,
   columnShapes: Readonly<Record<string, QueryShape>> = {},
   nullableTables: ReadonlySet<string> = new Set(),
@@ -1620,7 +1620,7 @@ export function scalarQueryShape(
   return null;
 }
 
-export function nullableShape(shape: QueryShape): QueryShape {
+/** @internal */ export function nullableShape(shape: QueryShape): QueryShape {
   if (
     typeof shape === 'object' &&
     shape !== null &&
@@ -1633,7 +1633,7 @@ export function nullableShape(shape: QueryShape): QueryShape {
   return { kind: 'nullable', shape };
 }
 
-export function nullableJoinTables(
+/** @internal */ export function nullableJoinTables(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   mode: 'project' | 'source' = 'source',
@@ -1680,7 +1680,7 @@ export function nullableJoinTables(
   return tables;
 }
 
-export function tableExpressionBase(expression: ts.Expression): string {
+/** @internal */ export function tableExpressionBase(expression: ts.Expression): string {
   const columnPath = staticTsExpressionPath(expression);
   if (!columnPath) return '';
 
@@ -1688,12 +1688,12 @@ export function tableExpressionBase(expression: ts.Expression): string {
   return columnStart > 0 ? columnPath.slice(0, columnStart) : '';
 }
 
-export function scalarProjectionTable(expression: ts.Expression): string | undefined {
+/** @internal */ export function scalarProjectionTable(expression: ts.Expression): string | undefined {
   const table = tableExpressionBase(expression);
   return table || undefined;
 }
 
-export function isOpaqueProjection(expression: ts.Expression): boolean {
+/** @internal */ export function isOpaqueProjection(expression: ts.Expression): boolean {
   const node = unwrappedTsExpression(expression);
   if (ts.isTaggedTemplateExpression(node)) return staticTsExpressionPath(node.tag) === 'sql';
   if (!ts.isCallExpression(node)) return false;
@@ -1702,7 +1702,7 @@ export function isOpaqueProjection(expression: ts.Expression): boolean {
   return callee === 'sql' || callee === 'raw' || callee?.startsWith('sql.') === true;
 }
 
-export function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
+/** @internal */ export function typedSqlProjectionShape(expression: ts.Expression): QueryShape | null {
   const node = unwrappedTsExpression(expression);
   const typeArguments = ts.isTaggedTemplateExpression(node)
     ? node.typeArguments
@@ -1730,15 +1730,15 @@ export function typedSqlProjectionShape(expression: ts.Expression): QueryShape |
   return shape;
 }
 
-export function isTimeVolatileSqlProjection(expression: ts.Expression): boolean {
+/** @internal */ export function isTimeVolatileSqlProjection(expression: ts.Expression): boolean {
   return isTimeVolatileSource(unwrappedTsExpression(expression).getText());
 }
 
-export function isTimeVolatileExpression(expression: Node): boolean {
+/** @internal */ export function isTimeVolatileExpression(expression: Node): boolean {
   return isTimeVolatileSource(unwrappedStaticExpressionNode(expression).getText());
 }
 
-export function isTimeVolatileSource(sourceText: string): boolean {
+/** @internal */ export function isTimeVolatileSource(sourceText: string): boolean {
   const source = sourceText.toLowerCase();
   return (
     /\bnow\s*\(/.test(source) ||
@@ -1747,7 +1747,7 @@ export function isTimeVolatileSource(sourceText: string): boolean {
   );
 }
 
-export function staticTsExpressionPath(expression: ts.Expression): string | undefined {
+/** @internal */ export function staticTsExpressionPath(expression: ts.Expression): string | undefined {
   const node = unwrappedTsExpression(expression);
   if (ts.isIdentifier(node)) return node.text;
   if (ts.isPropertyAccessExpression(node)) {
@@ -1762,7 +1762,7 @@ export function staticTsExpressionPath(expression: ts.Expression): string | unde
   return undefined;
 }
 
-export function staticTsElementAccessName(expression: ts.Expression | undefined): string | undefined {
+/** @internal */ export function staticTsElementAccessName(expression: ts.Expression | undefined): string | undefined {
   if (!expression) return undefined;
 
   const node = unwrappedTsExpression(expression);
@@ -1776,7 +1776,7 @@ export function staticTsElementAccessName(expression: ts.Expression | undefined)
   return undefined;
 }
 
-export function opaqueProjectionDiagnostics(
+/** @internal */ export function opaqueProjectionDiagnostics(
   query: string,
   opaquePaths: readonly string[],
   line: string,
@@ -1794,7 +1794,7 @@ export function opaqueProjectionDiagnostics(
   }));
 }
 
-export function unresolvedProjectionDiagnostics(
+/** @internal */ export function unresolvedProjectionDiagnostics(
   query: string,
   unresolvedPaths: readonly string[],
   site: string,

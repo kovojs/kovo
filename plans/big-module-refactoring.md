@@ -25,6 +25,14 @@ Command used: `git ls-files | while IFS= read -r file; do [ -f "$file" ] || cont
 Current command output after completed splits:
 `git ls-files | while IFS= read -r file; do [ -f "$file" ] || continue; case "$file" in *.png|*.jpg|*.jpeg|*.gif|*.webp|*.woff2|*.svg|*.snap) continue ;; esac; wc -l "$file"; done | awk '$1 > 2000 { print $1, $2 }' | sort -nr`
 
+```text
+8719 packages/icons/package.json
+4604 pnpm-lock.yaml
+4193 benchmarks/results/results.json
+3216 api-surface-baseline.json
+2149 public-packages.json
+```
+
 ## Refactoring Rules
 
 - [ ] Keep every extraction behavior-neutral unless the specific item says otherwise. The first
@@ -44,7 +52,7 @@ Current command output after completed splits:
 
 ## P0 Source Splits
 
-- [ ] **Split `packages/drizzle/src/static.ts` into static-analysis concern modules.**
+- [x] **Split `packages/drizzle/src/static.ts` into static-analysis concern modules.**
   - [x] Extract SPEC §10.5 symbolic-effect and algebraic query-shape extraction to
     `packages/drizzle/src/static/derivation.ts`, with `static.ts` preserving the existing
     `./internal/static` export surface.
@@ -97,6 +105,11 @@ Current command output after completed splits:
   - Keep `packages/drizzle/package.json` exports unchanged.
   - Verification: `pnpm run test -- packages/drizzle/src`, `pnpm run test:conformance`,
     `pnpm run check:api-surface`, `pnpm run check:imports`.
+    Evidence: `wc -l packages/drizzle/src/static.ts packages/drizzle/src/static/*.ts` reports
+    `static.ts` at 1,979 LoC and every extracted static module below 2,000 LoC; `pnpm exec vitest
+    --run packages/drizzle/src` passed 18 files / 309 tests; `pnpm run check:imports` passed;
+    `pnpm run check:api-surface` passed at baseline 1338/1840; `pnpm run test:conformance`
+    passed all five conformance packages; `git diff --check` passed.
 
 - [ ] **Split `packages/server/src/mutation.ts` around the mutation response pipeline.**
   - [x] Extract public definition/form/type surface to `packages/server/src/mutation/definition.ts`.
@@ -255,8 +268,12 @@ Current command output after completed splits:
   Drizzle static extraction.
   - Evidence: server mutation and structural JSX split items above are both under 2,000 LoC and have
     focused test/API/import evidence recorded under their checkboxes.
-- [ ] Tackle `packages/drizzle/src/static.ts` in multiple worktree-backed slices after the proof-of-pattern
+- [x] Tackle `packages/drizzle/src/static.ts` in multiple worktree-backed slices after the proof-of-pattern
   lands; avoid one giant move commit.
+  - Evidence: Drizzle static extraction landed as multiple scoped commits ending with
+    `refactor(drizzle): split query summary analysis`; the completed Drizzle P0 checkbox above records
+    the current line-count, package test, conformance, import-boundary, API-surface, and diff-check
+    verification.
 - [x] Run independent P1/P2 test-file splits in parallel worktrees only after the relevant source split is
   not actively changing the same ownership area.
   - Evidence: conformance receiver handoffs, `tests/kovo-check.node.mjs`, gallery fixtures, and the

@@ -14,11 +14,11 @@ import {
   type SessionProvenanceContext,
 } from '../static.js';
 
-export function emptySessionProvenanceContext(): SessionProvenanceContext {
+/** @internal */ export function emptySessionProvenanceContext(): SessionProvenanceContext {
   return { aliases: new Map(), helpers: new Map(), opaqueAliases: new Map() };
 }
 
-export function sessionProvenanceContextForNodes(
+/** @internal */ export function sessionProvenanceContextForNodes(
   sourceFile: SourceFile,
   bodies: readonly Node[],
 ): SessionProvenanceContext {
@@ -189,7 +189,7 @@ function addSessionAliasesForVariableDeclaration(
   }
 }
 
-export function privateScopeForExpression(
+/** @internal */ export function privateScopeForExpression(
   node: Node,
   context: SessionProvenanceContext,
   depth = 0,
@@ -240,7 +240,7 @@ export function privateScopeForExpression(
   return undefined;
 }
 
-export function opaqueAliasReasonForExpression(
+/** @internal */ export function opaqueAliasReasonForExpression(
   node: Node,
   context: SessionProvenanceContext,
 ): string | undefined {
@@ -269,7 +269,7 @@ function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | u
   return undefined;
 }
 
-export function privateScopeKey(provenance: PrivateScopeProvenance): string {
+/** @internal */ export function privateScopeKey(provenance: PrivateScopeProvenance): string {
   return `${provenance.kind}:${provenance.path}`;
 }
 

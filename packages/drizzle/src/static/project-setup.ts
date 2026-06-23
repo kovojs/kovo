@@ -50,7 +50,7 @@ import {
   unwrappedFunctionExpression,
 } from '../static.js';
 
-export interface ProjectExtraction {
+/** @internal */ export interface ProjectExtraction {
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>;
   conditionalTableTargetsBySyntheticName: ReadonlyMap<string, readonly string[]>;
   dispose: () => void;
@@ -60,7 +60,7 @@ export interface ProjectExtraction {
   unmodeledRelationNamesBySymbol: ReadonlyMap<string, string>;
 }
 
-export function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtraction {
+/** @internal */ export function createProjectExtraction(options: TouchGraphProjectOptions): ProjectExtraction {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -102,14 +102,14 @@ export function createProjectExtraction(options: TouchGraphProjectOptions): Proj
   };
 }
 
-export function projectSourceFileName(fileName: string): string {
+/** @internal */ export function projectSourceFileName(fileName: string): string {
   // SPEC §11.1: project-mode receiver proof depends on TypeScript resolving Drizzle package
   // symbols. Anchor virtual source files under this package so root-launched and package-launched
   // Vitest runs resolve the same peer/dev dependency graph.
   return isAbsolute(fileName) ? fileName : join(DRIZZLE_STATIC_PROJECT_ROOT, fileName);
 }
 
-export function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {
+/** @internal */ export function projectContextFiles(extraction: ProjectExtraction): SourceFileInput[] {
   return extraction.files.map((file, index) => {
     const sourceFile = extraction.sourceFiles[index];
     if (!sourceFile) throw new Error(`Missing source file for ${file.fileName}`);
@@ -126,7 +126,7 @@ export function projectContextFiles(extraction: ProjectExtraction): SourceFileIn
   });
 }
 
-export function projectFunctionExtractionsByFileName(
+/** @internal */ export function projectFunctionExtractionsByFileName(
   extraction: ProjectExtraction,
 ): Map<string, Map<string, ExtractedFunction>> {
   const extractionsByFile = new Map<string, Map<string, ExtractedFunction>>();

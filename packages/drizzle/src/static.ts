@@ -35,7 +35,7 @@ import {
   type Type as MorphType,
 } from 'ts-morph';
 /** @internal */
-export type {
+/** @internal */ export type {
   DomainRegistryInput,
   ReadSummaryInput,
   TouchGraphDiagnostic,
@@ -66,7 +66,7 @@ import {
   type KovoViewAnnotation,
 } from './drizzle-surface.js';
 /** @internal */
-export type {
+/** @internal */ export type {
   InferredMutationTouchSite,
   InvalidationQueryInput,
   InvalidationRegistry,
@@ -82,7 +82,7 @@ export {
   serializeMutationTouchRegistry,
 } from './invalidation.js';
 
-export const IGNORED_LOCAL_CALL_NAMES = new Set([
+/** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',
   'for',
   'function',
@@ -94,11 +94,11 @@ export const IGNORED_LOCAL_CALL_NAMES = new Set([
   'switch',
   'while',
 ]);
-export const KV411_MESSAGE = 'Query read set includes an exempt table';
-export const UNRESOLVED_READ_SOURCE_EXPRESSION = '__kovoUnresolvedReadSource';
-export const BOOLEAN_COLUMN_BUILDERS = new Set(['boolean']);
-export const JSON_COLUMN_BUILDERS = new Set(['json', 'jsonb']);
-export const NUMBER_COLUMN_BUILDERS = new Set([
+/** @internal */ export const KV411_MESSAGE = 'Query read set includes an exempt table';
+/** @internal */ export const UNRESOLVED_READ_SOURCE_EXPRESSION = '__kovoUnresolvedReadSource';
+/** @internal */ export const BOOLEAN_COLUMN_BUILDERS = new Set(['boolean']);
+/** @internal */ export const JSON_COLUMN_BUILDERS = new Set(['json', 'jsonb']);
+/** @internal */ export const NUMBER_COLUMN_BUILDERS = new Set([
   'bigint',
   'doublePrecision',
   'integer',
@@ -109,15 +109,15 @@ export const NUMBER_COLUMN_BUILDERS = new Set([
   'bigserial',
   'smallserial',
 ]);
-export const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set(['$count', 'execute']);
-export const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
-export const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set(['drizzle-orm/pg-core', 'drizzle-orm/sqlite-core']);
-export const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set([
+/** @internal */ export const UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS = new Set(['$count', 'execute']);
+/** @internal */ export const DRIZZLE_SELECT_QUERY_METHODS = new Set(['select', 'selectDistinct', 'selectDistinctOn']);
+/** @internal */ export const DRIZZLE_CORE_MODULE_SPECIFIERS = new Set(['drizzle-orm/pg-core', 'drizzle-orm/sqlite-core']);
+/** @internal */ export const DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES = new Set([
   'pgMaterializedView',
   'pgView',
   'sqliteView',
 ]);
-export const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
+/** @internal */ export const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   ...DRIZZLE_SELECT_QUERY_METHODS,
   'delete',
   'insert',
@@ -126,12 +126,12 @@ export const CLASSIFIED_DRIZZLE_RECEIVER_METHODS = new Set([
   'update',
   'with',
 ]);
-export const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
-export const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
-export const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
-export const UNMODELED_RELATION_EXPRESSION_PREFIX = '__kovoUnmodeledRelation';
-export const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
-export const TOUCH_BODY_ITERATION_CALLBACK_METHODS = new Set([
+/** @internal */ export const COMPUTED_DRIZZLE_RECEIVER_METHOD = '<computed>';
+/** @internal */ export const UNRESOLVED_DOMAIN_WRITE_COMPUTED_MEMBER = '<computed>';
+/** @internal */ export const UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER = '<spread>';
+/** @internal */ export const UNMODELED_RELATION_EXPRESSION_PREFIX = '__kovoUnmodeledRelation';
+/** @internal */ export const DRIZZLE_STATIC_PROJECT_ROOT = dirname(fileURLToPath(import.meta.url));
+/** @internal */ export const TOUCH_BODY_ITERATION_CALLBACK_METHODS = new Set([
   'filter',
   'flatMap',
   'forEach',
@@ -140,7 +140,7 @@ export const TOUCH_BODY_ITERATION_CALLBACK_METHODS = new Set([
 ]);
 
 /** @internal */
-export type QueryShape =
+/** @internal */ export type QueryShape =
   | 'array'
   | 'boolean'
   | 'number'
@@ -153,13 +153,13 @@ export type QueryShape =
     };
 
 /** @internal */
-export interface QueryShapeWrapper {
+/** @internal */ export interface QueryShapeWrapper {
   kind: 'nullable' | 'optional' | 'volatile-time';
   shape: QueryShape;
 }
 
 /** @internal */
-export interface QueryFact {
+/** @internal */ export interface QueryFact {
   /**
    * Owner-annotated domains this query selects through a client-visible `input.*`
    * arg compared against ANY column of the domain's table (SPEC §10.3, KV414, A3) —
@@ -191,7 +191,7 @@ export interface QueryFact {
  * skipping it avoids false-positiving a safe app without needing inter-procedural
  * session data-flow tracing.
  */
-export function scopeAuditsFromQueryFacts(
+/** @internal */ export function scopeAuditsFromQueryFacts(
   facts: readonly QueryFact[],
   ownerDomains: Iterable<string>,
 ): ScopeAuditFact[] {
@@ -230,7 +230,7 @@ export function scopeAuditsFromQueryFacts(
  *
  * @internal
  */
-export interface WriteScopeFact {
+/** @internal */ export interface WriteScopeFact {
   /** Owner-table domains keyed by a client-visible `input.*` arg (any column) → `args`/IDOR. */
   argScopedWrites: readonly string[];
   /** The mutation/handler name that owns this write (for `owns()` discharge in `kovo check`). */
@@ -252,7 +252,7 @@ export interface WriteScopeFact {
  *
  * @internal
  */
-export function scopeAuditsFromWriteFacts(
+/** @internal */ export function scopeAuditsFromWriteFacts(
   facts: readonly WriteScopeFact[],
   ownerDomains: Iterable<string>,
 ): ScopeAuditFact[] {
@@ -300,19 +300,19 @@ function ownerDomainsFromTables(
 }
 
 /** @internal */
-export interface SourceFileInput {
+/** @internal */ export interface SourceFileInput {
   columnShapes?: Readonly<Record<string, QueryShape>>;
   fileName: string;
   source: string;
 }
 
 /** @internal */
-export interface TouchGraphProjectOptions {
+/** @internal */ export interface TouchGraphProjectOptions {
   compilerOptions?: CompilerOptions;
   files: readonly SourceFileInput[];
 }
 
-export type ExtractedTableAnnotation =
+/** @internal */ export type ExtractedTableAnnotation =
   | (KovoTableAnnotation & { name: string })
   | (KovoDomainTableAnnotation & {
       name: string;
@@ -325,7 +325,7 @@ export type ExtractedTableAnnotation =
     };
 
 /** @internal */
-export interface MaterializedViewRefreshFact {
+/** @internal */ export interface MaterializedViewRefreshFact {
   domain: string;
   mutation: string;
   optimisticStatus: 'await-fragment';
@@ -334,14 +334,14 @@ export interface MaterializedViewRefreshFact {
   view: string;
 }
 
-export interface ExtractedTable {
+/** @internal */ export interface ExtractedTable {
   annotation: ExtractedTableAnnotation;
   columns: Readonly<Record<string, QueryShape>>;
   exported: boolean;
   foreignKeys?: readonly ExtractedForeignKey[];
 }
 
-export interface ExtractedForeignKey {
+/** @internal */ export interface ExtractedForeignKey {
   column: string;
   onDelete?: string;
   onUpdate?: string;
@@ -349,7 +349,7 @@ export interface ExtractedForeignKey {
 }
 
 /** @internal */
-export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGraphDiagnostic[] {
+/** @internal */ export function diagnosticsForQueryFacts(facts: readonly QueryFact[]): TouchGraphDiagnostic[] {
   return facts.flatMap((fact) => [...(fact.diagnostics ?? [])]);
 }
 
@@ -437,7 +437,7 @@ function extractTouchGraphFromPreparedFiles(
 }
 
 /** @internal */
-export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
+/** @internal */ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions): TouchGraph {
   const extraction = createProjectExtraction(options);
   try {
     const sourceContext = projectSourceModuleContext(extraction);
@@ -455,7 +455,7 @@ export function extractTouchGraphFromProject(options: TouchGraphProjectOptions):
 }
 
 /** @internal */
-export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
+/** @internal */ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions): QueryFact[] {
   const extraction = createProjectExtraction(options);
   try {
     const sourceContext = projectSourceModuleContext(extraction);
@@ -505,7 +505,7 @@ export function extractQueryFactsFromProject(options: TouchGraphProjectOptions):
  *
  * @internal
  */
-export function extractOwnerAuditFromProject(options: TouchGraphProjectOptions): {
+/** @internal */ export function extractOwnerAuditFromProject(options: TouchGraphProjectOptions): {
   ownerDomains: { domain: string; owner: string }[];
   scopeAudits: ScopeAuditFact[];
 } {
@@ -529,7 +529,7 @@ export function extractOwnerAuditFromProject(options: TouchGraphProjectOptions):
  *
  * @internal
  */
-export function extractWriteScopeFactsFromProject(
+/** @internal */ export function extractWriteScopeFactsFromProject(
   options: TouchGraphProjectOptions,
 ): WriteScopeFact[] {
   const extraction = createProjectExtraction(options);
@@ -602,7 +602,7 @@ function ownerDomainsFromProject(
 }
 
 /** @internal */
-export function extractMaterializedViewRefreshFactsFromProject(
+/** @internal */ export function extractMaterializedViewRefreshFactsFromProject(
   options: TouchGraphProjectOptions,
 ): MaterializedViewRefreshFact[] {
   const extraction = createProjectExtraction(options);
@@ -770,7 +770,7 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
   return diagnostics;
 }
 
-export interface ExtractedFunction {
+/** @internal */ export interface ExtractedFunction {
   bodyStart: number;
   key: string;
   localCalls: readonly string[];
@@ -783,13 +783,13 @@ export interface ExtractedFunction {
   writeCalls: readonly ExtractedWriteCall[];
 }
 
-export interface ReceiverParameterRequirement {
+/** @internal */ export interface ReceiverParameterRequirement {
   index: number;
   names: readonly string[];
   symbolKeys: readonly string[];
 }
 
-export interface ExtractedQueryDefinition {
+/** @internal */ export interface ExtractedQueryDefinition {
   declaredReadExpressions: readonly string[];
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasOutputSchema: boolean;
@@ -804,12 +804,12 @@ export interface ExtractedQueryDefinition {
   unresolvedPaths: readonly string[];
 }
 
-export interface QueryInstanceKeyComparison {
+/** @internal */ export interface QueryInstanceKeyComparison {
   left: QueryInstanceKeyOperand;
   right: QueryInstanceKeyOperand;
 }
 
-export interface QueryInstanceKeyOperand {
+/** @internal */ export interface QueryInstanceKeyOperand {
   inputKey?: string;
   privateKey?: string;
   sessionKey?: string;
@@ -819,15 +819,15 @@ export interface QueryInstanceKeyOperand {
   };
 }
 
-export type PrivateScopeKind = 'guard' | 'session' | 'tenant';
+/** @internal */ export type PrivateScopeKind = 'guard' | 'session' | 'tenant';
 
-export interface PrivateScopeProvenance {
+/** @internal */ export interface PrivateScopeProvenance {
   kind: PrivateScopeKind;
   path: string;
   requiresGuard?: boolean;
 }
 
-export interface SessionAlias {
+/** @internal */ export interface SessionAlias {
   declaration: Node;
   kind: PrivateScopeKind;
   name: string;
@@ -835,13 +835,13 @@ export interface SessionAlias {
   requiresGuard: boolean;
 }
 
-export interface SessionProvenanceContext {
+/** @internal */ export interface SessionProvenanceContext {
   aliases: ReadonlyMap<string, SessionAlias>;
   helpers: ReadonlyMap<string, PrivateScopeProvenance>;
   opaqueAliases: Map<string, string>;
 }
 
-export interface ExtractedWriteCall {
+/** @internal */ export interface ExtractedWriteCall {
   index: number;
   /**
    * The write `where()` predicate operand comparisons, classified the same way as
@@ -857,31 +857,31 @@ export interface ExtractedWriteCall {
   tableExpression: string;
 }
 
-export interface ExtractedReadSource {
+/** @internal */ export interface ExtractedReadSource {
   operation: 'delete-predicate' | 'insert-select' | 'update-from' | 'update-predicate';
   tableExpression: string;
 }
 
-export interface ExtractedReadCall {
+/** @internal */ export interface ExtractedReadCall {
   index: number;
   operation: 'relational-query' | 'select';
   site?: string;
   tableExpression: string;
 }
 
-export interface ExtractedPredicateSummary {
+/** @internal */ export interface ExtractedPredicateSummary {
   key?: string;
   predicate?: 'non-eq';
 }
 
-export interface ExtractedPredicateFact {
+/** @internal */ export interface ExtractedPredicateFact {
   argumentKey?: string;
   key: string;
   predicate?: 'non-eq';
   tableIdentifier: string;
 }
 
-export interface FunctionTouchSummary {
+/** @internal */ export interface FunctionTouchSummary {
   rawTables?: string[];
   reads: ReadSummaryInput[];
   unresolved: UnresolvedSummaryInput[];
@@ -1069,7 +1069,7 @@ function extractQueryDefinitionsFromSourceFile(
   return definitions;
 }
 
-export function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
+/** @internal */ export function tableAnnotation(initializer: Node): ExtractedTableAnnotation | null {
   if (!Node.isCallExpression(initializer)) return null;
   const annotationCall = initializer.getArguments().find(isKovoAnnotationCall);
   if (!annotationCall) {
@@ -1100,7 +1100,7 @@ export function tableAnnotation(initializer: Node): ExtractedTableAnnotation | n
   };
 }
 
-export function declaredRelationTableForInitializer(
+/** @internal */ export function declaredRelationTableForInitializer(
   initializer: Node | undefined,
   relation: UnmodeledRelationFact,
 ): ExtractedTable | null {
@@ -1142,25 +1142,25 @@ function defaultDomainForTableName(tableName: string): string {
   return tableName.length > 1 && tableName.endsWith('s') ? tableName.slice(0, -1) : tableName;
 }
 
-export function isDomainExtractedTableAnnotation(
+/** @internal */ export function isDomainExtractedTableAnnotation(
   annotation: ExtractedTableAnnotation,
 ): annotation is KovoDomainTableAnnotation & { name: string } {
   return 'domain' in annotation;
 }
 
-export function isExemptExtractedTableAnnotation(
+/** @internal */ export function isExemptExtractedTableAnnotation(
   annotation: ExtractedTableAnnotation,
 ): annotation is { exempt: true; name: string } {
   return 'exempt' in annotation && annotation.exempt === true;
 }
 
-export function isUnmappedTableAnnotation(
+/** @internal */ export function isUnmappedTableAnnotation(
   annotation: ExtractedTableAnnotation,
 ): annotation is { name: string; unmapped: true } {
   return 'unmapped' in annotation && annotation.unmapped === true;
 }
 
-export function stringPropertyFromObject(object: Node, name: string): string | undefined {
+/** @internal */ export function stringPropertyFromObject(object: Node, name: string): string | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
 
   for (const property of object.getProperties()) {
@@ -1174,7 +1174,7 @@ export function stringPropertyFromObject(object: Node, name: string): string | u
   return undefined;
 }
 
-export function stringArrayPropertyFromObject(object: Node, name: string): string[] {
+/** @internal */ export function stringArrayPropertyFromObject(object: Node, name: string): string[] {
   if (!Node.isObjectLiteralExpression(object)) return [];
 
   for (const property of object.getProperties()) {
@@ -1296,7 +1296,7 @@ function fanAnnotationsFromObject(object: Node): KovoFanAnnotation[] {
   });
 }
 
-export function unwrappedTsExpression(expression: ts.Expression): ts.Expression {
+/** @internal */ export function unwrappedTsExpression(expression: ts.Expression): ts.Expression {
   if (ts.isParenthesizedExpression(expression)) return unwrappedTsExpression(expression.expression);
   if (ts.isAsExpression(expression)) return unwrappedTsExpression(expression.expression);
   if (ts.isSatisfiesExpression(expression)) return unwrappedTsExpression(expression.expression);
@@ -1907,7 +1907,7 @@ export {
   sourceReceiverAliasReferencesForBody,
   symbolForIdentifierReference,
 } from './static/receiver-surface.js';
-export function functionBody(callback: Node): Node {
+/** @internal */ export function functionBody(callback: Node): Node {
   if (
     Node.isArrowFunction(callback) ||
     Node.isFunctionDeclaration(callback) ||
@@ -1921,7 +1921,7 @@ export function functionBody(callback: Node): Node {
   throw new Error('Expected a write callback function');
 }
 
-export function appendTableEntries<Table>(
+/** @internal */ export function appendTableEntries<Table>(
   tables: Map<string, Table[]>,
   identifier: string,
   entries: readonly Table[],
@@ -1941,18 +1941,18 @@ export function appendTableEntries<Table>(
   tables.set(identifier, next);
 }
 
-export function lineForIndex(source: string, index: number): number {
+/** @internal */ export function lineForIndex(source: string, index: number): number {
   return source.slice(0, index).split('\n').length;
 }
 
 
-export function unsummarizedHelperReason(call: CallExpression): string {
+/** @internal */ export function unsummarizedHelperReason(call: CallExpression): string {
   const callee = unwrappedStaticExpressionNode(call.getExpression());
   const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
   return name ? `unsummarized-helper:${name}` : 'unsummarized-helper';
 }
 
-export function callbackParameterSymbolKeys(fn: Node): Set<string> {
+/** @internal */ export function callbackParameterSymbolKeys(fn: Node): Set<string> {
   const keys = new Set<string>();
   for (const parameter of queryCallbackParameterNodes(fn)) {
     if (isDrizzleDatabaseTypeAnnotation(parameter)) continue;
@@ -1976,4 +1976,4 @@ export {
   extractSymbolicEffectsFromProject,
 } from './static/derivation.js';
 /** @internal */
-export type { SymbolicEffectFact } from './static/derivation.js';
+/** @internal */ export type { SymbolicEffectFact } from './static/derivation.js';

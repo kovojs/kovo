@@ -88,7 +88,7 @@ import {
 // ───────────────────────────────────────────────────────────────────────────
 
 /** @internal One extracted Stage-1 effect with its source site and resolvable write key (domain.action). */
-export interface SymbolicEffectFact {
+/** @internal */ export interface SymbolicEffectFact {
   effect: SymbolicEffect;
   site: string;
   /** The `domain.action` / function key when the write site is a resolvable handler. */
@@ -131,7 +131,7 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
  * punt fires (never a crash).
  */
 /** @internal */
-export function extractSymbolicEffectsFromProject(
+/** @internal */ export function extractSymbolicEffectsFromProject(
   options: TouchGraphProjectOptions,
 ): SymbolicEffectFact[] {
   const extraction = createDeriveExtraction(options);
@@ -740,7 +740,7 @@ interface QueryShapeContextForTable {
  * `opaque` carrying the matching §10.5 `PuntReason`.
  */
 /** @internal */
-export function extractAlgebraicShapesFromProject(
+/** @internal */ export function extractAlgebraicShapesFromProject(
   options: TouchGraphProjectOptions,
 ): AlgebraicQueryShape[] {
   const extraction = createDeriveExtraction(options);

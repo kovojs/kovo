@@ -54,7 +54,7 @@ import {
 import { projectSourceModuleContext, type SourceModuleContext } from './tables.js';
 import { receiverParameterDeclaration } from './receiver-surface.js';
 
-export function sourceColumnShapesForTables(
+/** @internal */ export function sourceColumnShapesForTables(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Readonly<Record<string, QueryShape>> {
   const scoped: Record<string, QueryShape> = {};
@@ -71,7 +71,7 @@ export function sourceColumnShapesForTables(
   return scoped;
 }
 
-export function projectRelationalTableNamesByProperty(
+/** @internal */ export function projectRelationalTableNamesByProperty(
   sourceFile: SourceFile,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): ReadonlyMap<string, string> {
@@ -121,7 +121,7 @@ export function projectRelationalTableNamesByProperty(
   return names;
 }
 
-export function isDrizzleWriteCall(call: CallExpression): boolean {
+/** @internal */ export function isDrizzleWriteCall(call: CallExpression): boolean {
   const expression = call.getExpression();
   const name = staticAccessName(expression);
   return (
@@ -132,7 +132,7 @@ export function isDrizzleWriteCall(call: CallExpression): boolean {
   );
 }
 
-export function isDrizzleReceiver(receiver: Node): boolean {
+/** @internal */ export function isDrizzleReceiver(receiver: Node): boolean {
   const type = receiver.getType();
   if (isDrizzleDatabaseType(type)) {
     return true;
@@ -146,13 +146,13 @@ export function isDrizzleReceiver(receiver: Node): boolean {
   return false;
 }
 
-export function isDrizzleDatabaseTypeAnnotation(receiver: Node): boolean {
+/** @internal */ export function isDrizzleDatabaseTypeAnnotation(receiver: Node): boolean {
   const parameter = receiverParameterDeclaration(receiver);
   const typeNode = parameter?.getTypeNode();
   return typeNode ? isDrizzleDatabaseTypeNode(typeNode) : false;
 }
 
-export function isDrizzleDatabaseType(type: MorphType): boolean {
+/** @internal */ export function isDrizzleDatabaseType(type: MorphType): boolean {
   // SPEC §11.1: project receiver proof comes from ts-morph type identity. Avoid source-text
   // membership checks that can promote arbitrary aliases like `NotPgDatabase`.
   return (
@@ -163,7 +163,7 @@ export function isDrizzleDatabaseType(type: MorphType): boolean {
   );
 }
 
-export function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] {
+/** @internal */ export function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): string[] {
   const key =
     type.getAliasSymbol()?.getFullyQualifiedName() ??
     type.getSymbol()?.getFullyQualifiedName() ??
@@ -186,7 +186,7 @@ export function drizzleDatabaseTypeNames(type: MorphType, seen: Set<string>): st
   return [...names];
 }
 
-export function drizzleDatabaseTypeDeclarations(type: MorphType, seen: Set<string>): Node[] {
+/** @internal */ export function drizzleDatabaseTypeDeclarations(type: MorphType, seen: Set<string>): Node[] {
   const key =
     type.getAliasSymbol()?.getFullyQualifiedName() ??
     type.getSymbol()?.getFullyQualifiedName() ??
@@ -202,7 +202,7 @@ export function drizzleDatabaseTypeDeclarations(type: MorphType, seen: Set<strin
   ];
 }
 
-export function isDrizzleDatabaseTypeNode(typeNode: Node): boolean {
+/** @internal */ export function isDrizzleDatabaseTypeNode(typeNode: Node): boolean {
   if (typeNode.getKind() !== SyntaxKind.TypeReference) return false;
   if (isDrizzleDatabaseType(typeNode.getType())) return true;
 
@@ -214,7 +214,7 @@ export function isDrizzleDatabaseTypeNode(typeNode: Node): boolean {
   return symbol.getDeclarations().some((declaration) => isDrizzleOrmDeclaration(declaration));
 }
 
-export function projectTableNamesBySymbol(
+/** @internal */ export function projectTableNamesBySymbol(
   sourceFiles: readonly SourceFile[],
 ): ReadonlyMap<string, string> {
   const namesBySymbol = new Map<string, string>();
@@ -237,13 +237,13 @@ export function projectTableNamesBySymbol(
   return namesBySymbol;
 }
 
-export interface UnmodeledRelationFact {
+/** @internal */ export interface UnmodeledRelationFact {
   expression: string;
   kind: 'materialized-view' | 'view';
   name: string;
 }
 
-export function projectUnmodeledRelationNamesBySymbol(
+/** @internal */ export function projectUnmodeledRelationNamesBySymbol(
   sourceFiles: readonly SourceFile[],
 ): ReadonlyMap<string, string> {
   const namesBySymbol = new Map<string, string>();
@@ -264,7 +264,7 @@ export function projectUnmodeledRelationNamesBySymbol(
   return namesBySymbol;
 }
 
-export function projectUnmodeledRelationNameForNode(
+/** @internal */ export function projectUnmodeledRelationNameForNode(
   node: Node,
   relationNamesBySymbol: ReadonlyMap<string, string>,
 ): string | undefined {
@@ -283,7 +283,7 @@ export function projectUnmodeledRelationNameForNode(
   return projectUnmodeledRelationNameForSymbol(node, relationNamesBySymbol);
 }
 
-export function projectUnmodeledRelationNameForSymbol(
+/** @internal */ export function projectUnmodeledRelationNameForSymbol(
   node: Node,
   relationNamesBySymbol: ReadonlyMap<string, string>,
 ): string | undefined {
@@ -292,7 +292,7 @@ export function projectUnmodeledRelationNameForSymbol(
   return relationNamesBySymbol.get(symbolKey);
 }
 
-export function unmodeledRelationForInitializer(
+/** @internal */ export function unmodeledRelationForInitializer(
   initializer: Node | undefined,
 ): Pick<UnmodeledRelationFact, 'kind' | 'name'> | undefined {
   if (!initializer || !Node.isCallExpression(initializer)) return undefined;
@@ -314,7 +314,7 @@ export function unmodeledRelationForInitializer(
   };
 }
 
-export function rootCallExpression(call: CallExpression): CallExpression {
+/** @internal */ export function rootCallExpression(call: CallExpression): CallExpression {
   let current = call;
 
   while (true) {
@@ -324,11 +324,11 @@ export function rootCallExpression(call: CallExpression): CallExpression {
   }
 }
 
-export function unmodeledRelationExpression(kind: UnmodeledRelationFact['kind'], name: string): string {
+/** @internal */ export function unmodeledRelationExpression(kind: UnmodeledRelationFact['kind'], name: string): string {
   return `${UNMODELED_RELATION_EXPRESSION_PREFIX}:${kind}:${name}`;
 }
 
-export function unmodeledRelationFromExpression(expression: string): UnmodeledRelationFact | undefined {
+/** @internal */ export function unmodeledRelationFromExpression(expression: string): UnmodeledRelationFact | undefined {
   const [prefix, kind, ...nameParts] = expression.split(':');
   const name = nameParts.join(':');
   if (
@@ -342,7 +342,7 @@ export function unmodeledRelationFromExpression(expression: string): UnmodeledRe
   return { expression, kind, name };
 }
 
-export function appendProjectAliasTableNames(
+/** @internal */ export function appendProjectAliasTableNames(
   sourceFiles: readonly SourceFile[],
   namesBySymbol: Map<string, string>,
 ): void {
@@ -367,7 +367,7 @@ export function appendProjectAliasTableNames(
   }
 }
 
-export function appendProjectConditionalTableNames(
+/** @internal */ export function appendProjectConditionalTableNames(
   sourceFiles: readonly SourceFile[],
   namesBySymbol: Map<string, string>,
 ): ReadonlyMap<string, readonly string[]> {
@@ -403,7 +403,7 @@ export function appendProjectConditionalTableNames(
   return targetsBySyntheticName;
 }
 
-export function projectUnresolvedConditionalTableExpressions(extraction: ProjectExtraction): Set<string> {
+/** @internal */ export function projectUnresolvedConditionalTableExpressions(extraction: ProjectExtraction): Set<string> {
   const unresolved = new Set<string>();
 
   for (const sourceFile of extraction.sourceFiles) {
@@ -428,7 +428,7 @@ export function projectUnresolvedConditionalTableExpressions(extraction: Project
   return unresolved;
 }
 
-export function projectConditionalTargetTableNames(
+/** @internal */ export function projectConditionalTargetTableNames(
   initializer: Node | undefined,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): string[] {
@@ -442,7 +442,7 @@ export function projectConditionalTargetTableNames(
     .filter((target): target is string => target !== undefined);
 }
 
-export function projectAliasTargetTableName(
+/** @internal */ export function projectAliasTargetTableName(
   initializer: Node | undefined,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): string | undefined {
@@ -456,7 +456,7 @@ export function projectAliasTargetTableName(
   return target ? projectTableNameForNode(target, tableNamesBySymbol) : undefined;
 }
 
-export function isProjectDrizzleAliasCall(call: CallExpression): boolean {
+/** @internal */ export function isProjectDrizzleAliasCall(call: CallExpression): boolean {
   const expression = call.getExpression();
   if (!Node.isIdentifier(expression) || expression.getText() !== 'alias') return false;
 
@@ -466,7 +466,7 @@ export function isProjectDrizzleAliasCall(call: CallExpression): boolean {
   );
 }
 
-export function isDrizzleOrmDeclaration(declaration: Node): boolean {
+/** @internal */ export function isDrizzleOrmDeclaration(declaration: Node): boolean {
   if (declaration.getSourceFile().getFilePath().includes('drizzle-orm')) return true;
 
   const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
@@ -477,7 +477,7 @@ export function isDrizzleOrmDeclaration(declaration: Node): boolean {
   return Node.isStringLiteral(moduleName) && moduleName.getLiteralText().startsWith('drizzle-orm');
 }
 
-export function projectColumnShapesByTable(
+/** @internal */ export function projectColumnShapesByTable(
   sourceFiles: readonly SourceFile[],
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): ReadonlyMap<string, Readonly<Record<string, QueryShape>>> {
@@ -501,7 +501,7 @@ export function projectColumnShapesByTable(
   return shapes;
 }
 
-export function tableColumnShapes(
+/** @internal */ export function tableColumnShapes(
   initializer: Node,
   mode: 'project' | 'source' = 'source',
 ): Record<string, QueryShape> {
@@ -526,7 +526,7 @@ export function tableColumnShapes(
   return shapes;
 }
 
-export function projectForeignKeysForTable(
+/** @internal */ export function projectForeignKeysForTable(
   initializer: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
@@ -555,7 +555,7 @@ export function projectForeignKeysForTable(
   return foreignKeys;
 }
 
-export function projectForeignKeyForColumn(
+/** @internal */ export function projectForeignKeyForColumn(
   column: string,
   initializer: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
@@ -582,7 +582,7 @@ export function projectForeignKeyForColumn(
   };
 }
 
-export function foreignKeyTargetTableExpression(
+/** @internal */ export function foreignKeyTargetTableExpression(
   callback: Node | undefined,
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
@@ -598,7 +598,7 @@ export function foreignKeyTargetTableExpression(
   return projectTableNameForNode(tableExpression, tableNamesBySymbol, namespaceTableNames);
 }
 
-export function foreignKeyCallbackReturnExpression(callback: Node | undefined): Node | undefined {
+/** @internal */ export function foreignKeyCallbackReturnExpression(callback: Node | undefined): Node | undefined {
   if (!callback) return undefined;
 
   const expression = unwrappedStaticExpressionNode(callback);
@@ -614,7 +614,7 @@ export function foreignKeyCallbackReturnExpression(callback: Node | undefined): 
   return undefined;
 }
 
-export function blockSingleReturnExpression(body: Node): Node | undefined {
+/** @internal */ export function blockSingleReturnExpression(body: Node): Node | undefined {
   if (!Node.isBlock(body)) return undefined;
 
   const statements = body.getStatements();
@@ -626,7 +626,7 @@ export function blockSingleReturnExpression(body: Node): Node | undefined {
   return statement.getExpression();
 }
 
-export function foreignKeyActions(
+/** @internal */ export function foreignKeyActions(
   referencesCall: CallExpression,
   calls: readonly CallExpression[],
 ): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
@@ -637,7 +637,7 @@ export function foreignKeyActions(
   };
 }
 
-export function foreignKeyActionOptions(
+/** @internal */ export function foreignKeyActionOptions(
   options: Node | undefined,
 ): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
   if (!options || !Node.isObjectLiteralExpression(options)) return {};
@@ -650,7 +650,7 @@ export function foreignKeyActionOptions(
   };
 }
 
-export function foreignKeyActionMethods(
+/** @internal */ export function foreignKeyActionMethods(
   calls: readonly CallExpression[],
 ): Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> {
   const actions: Pick<ExtractedForeignKey, 'onDelete' | 'onUpdate'> = {};
@@ -667,7 +667,7 @@ export function foreignKeyActionMethods(
   return actions;
 }
 
-export function projectColumnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
+/** @internal */ export function projectColumnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
   const builder = projectColumnBuilderName(initializer);
   if (!builder) return undefined;
 
@@ -676,7 +676,7 @@ export function projectColumnBuilderShape(initializer: Node | undefined): QueryS
   return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
-export function propertyNameText(name: Node, resolveStaticComputed = false): string | undefined {
+/** @internal */ export function propertyNameText(name: Node, resolveStaticComputed = false): string | undefined {
   if (Node.isIdentifier(name) || Node.isStringLiteral(name) || Node.isNumericLiteral(name)) {
     return name.getText().replace(/^["']|["']$/g, '');
   }
@@ -695,7 +695,7 @@ export function propertyNameText(name: Node, resolveStaticComputed = false): str
   return undefined;
 }
 
-export function computedPropertyNameExpression(name: Node): Node | undefined {
+/** @internal */ export function computedPropertyNameExpression(name: Node): Node | undefined {
   if (!ts.isComputedPropertyName(name.compilerNode)) return undefined;
 
   return name.getChildren().find((child) => {
@@ -704,7 +704,7 @@ export function computedPropertyNameExpression(name: Node): Node | undefined {
   });
 }
 
-export function staticPropertyNameExpressionText(
+/** @internal */ export function staticPropertyNameExpressionText(
   expression: Node,
   seen: Set<string> = new Set(),
 ): string | undefined {
@@ -733,7 +733,7 @@ export function staticPropertyNameExpressionText(
   return undefined;
 }
 
-export function objectAssignmentTargetNode(
+/** @internal */ export function objectAssignmentTargetNode(
   property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
 ): Node | undefined {
   if (Node.isShorthandPropertyAssignment(property)) return property.getNameNode();
@@ -742,7 +742,7 @@ export function objectAssignmentTargetNode(
   return initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
 }
 
-export function objectAssignmentPropertyName(
+/** @internal */ export function objectAssignmentPropertyName(
   property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
 ): string | undefined {
   if (!Node.isShorthandPropertyAssignment(property) && !Node.isPropertyAssignment(property)) {
@@ -751,7 +751,7 @@ export function objectAssignmentPropertyName(
   return propertyNameText(property.getNameNode());
 }
 
-export function objectHasProperty(object: Node, name: string): boolean {
+/** @internal */ export function objectHasProperty(object: Node, name: string): boolean {
   if (!Node.isObjectLiteralExpression(object)) return false;
 
   return object.getProperties().some((property) => {
@@ -760,7 +760,7 @@ export function objectHasProperty(object: Node, name: string): boolean {
   });
 }
 
-export function objectPropertyInitializer(object: Node, name: string): Node | undefined {
+/** @internal */ export function objectPropertyInitializer(object: Node, name: string): Node | undefined {
   if (!Node.isObjectLiteralExpression(object)) return undefined;
 
   for (const property of object.getProperties()) {
@@ -773,7 +773,7 @@ export function objectPropertyInitializer(object: Node, name: string): Node | un
   return undefined;
 }
 
-export function queryDeclaredReadExpressions(
+/** @internal */ export function queryDeclaredReadExpressions(
   body: ObjectLiteralExpression,
   readTableIdentifier: ((node: Node) => string | undefined) | undefined,
 ): string[] {
@@ -789,12 +789,12 @@ export function queryDeclaredReadExpressions(
   });
 }
 
-export function queryOutputShape(body: ObjectLiteralExpression): QueryShape | undefined {
+/** @internal */ export function queryOutputShape(body: ObjectLiteralExpression): QueryShape | undefined {
   const output = objectPropertyInitializer(body, 'output');
   return output ? queryShapeFromSchemaExpression(output) : undefined;
 }
 
-export function queryShapeFromSchemaExpression(expression: Node): QueryShape | undefined {
+/** @internal */ export function queryShapeFromSchemaExpression(expression: Node): QueryShape | undefined {
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isCallExpression(node)) return undefined;
 
@@ -844,7 +844,7 @@ export function queryShapeFromSchemaExpression(expression: Node): QueryShape | u
   return undefined;
 }
 
-export function columnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
+/** @internal */ export function columnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
   // SPEC §10-§11: column nullability is a parsed call-chain fact, not string contents.
   const builder = columnBuilderName(initializer);
   if (!builder) return undefined;
@@ -854,7 +854,7 @@ export function columnBuilderShape(initializer: Node | undefined): QueryShape | 
   return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
 }
 
-export function columnBuilderBaseShape(builder: string, mode?: string): QueryShape | undefined {
+/** @internal */ export function columnBuilderBaseShape(builder: string, mode?: string): QueryShape | undefined {
   if (builder === 'integer' && mode === 'boolean') return 'boolean';
   if (builder === 'text' && mode === 'json') return 'object';
   if (BOOLEAN_COLUMN_BUILDERS.has(builder)) return 'boolean';
@@ -871,14 +871,14 @@ export function columnBuilderBaseShape(builder: string, mode?: string): QuerySha
   return undefined;
 }
 
-export function columnBuilderMode(initializer: Node | undefined): string | undefined {
+/** @internal */ export function columnBuilderMode(initializer: Node | undefined): string | undefined {
   if (!initializer) return undefined;
   return columnBuilderModeFromExpression(
     unwrappedTsExpression(initializer.compilerNode as ts.Expression),
   );
 }
 
-export function columnBuilderModeFromExpression(expression: ts.Expression): string | undefined {
+/** @internal */ export function columnBuilderModeFromExpression(expression: ts.Expression): string | undefined {
   const rootCall = columnBuilderRootCallExpression(expression);
   if (!rootCall) return undefined;
 
@@ -890,7 +890,7 @@ export function columnBuilderModeFromExpression(expression: ts.Expression): stri
   return undefined;
 }
 
-export function columnBuilderRootCallExpression(expression: ts.Expression): ts.CallExpression | undefined {
+/** @internal */ export function columnBuilderRootCallExpression(expression: ts.Expression): ts.CallExpression | undefined {
   const target = unwrappedTsExpression(expression);
   if (!ts.isCallExpression(target)) return undefined;
 
@@ -903,7 +903,7 @@ export function columnBuilderRootCallExpression(expression: ts.Expression): ts.C
   return target;
 }
 
-export function staticStringPropertyValue(expression: ts.Expression, name: string): string | undefined {
+/** @internal */ export function staticStringPropertyValue(expression: ts.Expression, name: string): string | undefined {
   const target = unwrappedTsExpression(expression);
   if (!ts.isObjectLiteralExpression(target)) return undefined;
 
@@ -924,14 +924,14 @@ export function staticStringPropertyValue(expression: ts.Expression, name: strin
   return undefined;
 }
 
-export function columnBuilderName(initializer: Node | undefined): string | undefined {
+/** @internal */ export function columnBuilderName(initializer: Node | undefined): string | undefined {
   if (!initializer) return undefined;
   return columnBuilderNameFromExpression(
     unwrappedTsExpression(initializer.compilerNode as ts.Expression),
   );
 }
 
-export function projectColumnBuilderName(initializer: Node | undefined): string | undefined {
+/** @internal */ export function projectColumnBuilderName(initializer: Node | undefined): string | undefined {
   if (!initializer) return undefined;
 
   const expression = unwrappedStaticExpressionNode(initializer);
@@ -949,7 +949,7 @@ export function projectColumnBuilderName(initializer: Node | undefined): string 
   return isDrizzleCoreNamespaceMember(callee) ? callee.getName() : undefined;
 }
 
-export function columnBuilderNameFromExpression(expression: ts.Expression): string | undefined {
+/** @internal */ export function columnBuilderNameFromExpression(expression: ts.Expression): string | undefined {
   const target = unwrappedTsExpression(expression);
   if (!ts.isCallExpression(target)) return undefined;
 
@@ -961,7 +961,7 @@ export function columnBuilderNameFromExpression(expression: ts.Expression): stri
   return ts.isCallExpression(base) ? columnBuilderNameFromExpression(base) : undefined;
 }
 
-export function columnBuilderIsNonNull(initializer: Node | undefined): boolean {
+/** @internal */ export function columnBuilderIsNonNull(initializer: Node | undefined): boolean {
   if (!initializer) return false;
 
   for (const method of columnBuilderChainMethods(
@@ -973,7 +973,7 @@ export function columnBuilderIsNonNull(initializer: Node | undefined): boolean {
   return false;
 }
 
-export function columnBuilderChainMethods(expression: ts.Expression): string[] {
+/** @internal */ export function columnBuilderChainMethods(expression: ts.Expression): string[] {
   const target = unwrappedTsExpression(expression);
   if (!ts.isCallExpression(target)) return [];
 
@@ -985,7 +985,7 @@ export function columnBuilderChainMethods(expression: ts.Expression): string[] {
   return [...methods, callee.name.text];
 }
 
-export function columnShapesForFile(
+/** @internal */ export function columnShapesForFile(
   sourceFile: SourceFile,
   tableNamesBySymbol: ReadonlyMap<string, string>,
   columnShapesByTable: ReadonlyMap<string, Readonly<Record<string, QueryShape>>>,
@@ -1032,7 +1032,7 @@ export function columnShapesForFile(
   return shapes;
 }
 
-export function projectTableNameForColumnShapeAccess(
+/** @internal */ export function projectTableNameForColumnShapeAccess(
   node: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
@@ -1047,7 +1047,7 @@ export function projectTableNameForColumnShapeAccess(
   );
 }
 
-export function appendColumnShapesForTablePath(
+/** @internal */ export function appendColumnShapesForTablePath(
   shapes: Record<string, QueryShape>,
   tablePath: string,
   tableShapes: Readonly<Record<string, QueryShape>>,
@@ -1059,7 +1059,7 @@ export function appendColumnShapesForTablePath(
   }
 }
 
-export function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined {
+/** @internal */ export function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | undefined {
   const target = symbol?.getAliasedSymbol() ?? symbol;
   const declaration = target?.getDeclarations()[0];
   if (!declaration) return undefined;
@@ -1067,7 +1067,7 @@ export function resolvedSymbolKey(symbol: MorphSymbol | undefined): string | und
   return `${declaration.getSourceFile().getFilePath()}:${declaration.getStart()}`;
 }
 
-export function isTableInitializerNode(initializer: Node): boolean {
+/** @internal */ export function isTableInitializerNode(initializer: Node): boolean {
   if (!Node.isCallExpression(initializer)) return false;
   const expression = initializer.getExpression();
   if (!Node.isIdentifier(expression)) return false;
@@ -1076,7 +1076,7 @@ export function isTableInitializerNode(initializer: Node): boolean {
   return true;
 }
 
-export function isProjectTableInitializerNode(initializer: Node): boolean {
+/** @internal */ export function isProjectTableInitializerNode(initializer: Node): boolean {
   if (!Node.isCallExpression(initializer)) return false;
   const expression = unwrappedStaticExpressionNode(initializer.getExpression());
   const isTableFactory = Node.isIdentifier(expression)
@@ -1086,13 +1086,13 @@ export function isProjectTableInitializerNode(initializer: Node): boolean {
   return isTableFactory;
 }
 
-export function isDrizzleTableFactoryNamespaceMember(access: Node): boolean {
+/** @internal */ export function isDrizzleTableFactoryNamespaceMember(access: Node): boolean {
   if (!Node.isPropertyAccessExpression(access)) return false;
   if (!isDrizzleTableFactoryName(access.getName())) return false;
   return isDrizzleCoreNamespaceMember(access);
 }
 
-export function isDrizzleCoreNamespaceMember(access: Node): boolean {
+/** @internal */ export function isDrizzleCoreNamespaceMember(access: Node): boolean {
   if (!Node.isPropertyAccessExpression(access)) return false;
 
   const expression = unwrappedStaticExpressionNode(access.getExpression());
@@ -1118,7 +1118,7 @@ export function isDrizzleCoreNamespaceMember(access: Node): boolean {
   );
 }
 
-export function projectDrizzleCoreIdentifierExportName(identifier: Node): string | undefined {
+/** @internal */ export function projectDrizzleCoreIdentifierExportName(identifier: Node): string | undefined {
   if (!Node.isIdentifier(identifier)) return undefined;
 
   const symbol = identifier.getSymbol();
@@ -1135,7 +1135,7 @@ export function projectDrizzleCoreIdentifierExportName(identifier: Node): string
   return undefined;
 }
 
-export function drizzleCoreExportNameFromDeclarations(declarations: readonly Node[]): string | undefined {
+/** @internal */ export function drizzleCoreExportNameFromDeclarations(declarations: readonly Node[]): string | undefined {
   for (const declaration of declarations) {
     const name = drizzleCoreImportSpecifierExportName(declaration);
     if (name) return name;
@@ -1156,7 +1156,7 @@ export function drizzleCoreExportNameFromDeclarations(declarations: readonly Nod
   return undefined;
 }
 
-export function drizzleCoreImportSpecifierExportName(declaration: Node): string | undefined {
+/** @internal */ export function drizzleCoreImportSpecifierExportName(declaration: Node): string | undefined {
   if (!Node.isImportSpecifier(declaration)) return undefined;
   const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
   if (!isDrizzleCoreModuleSpecifier(importDeclaration?.getModuleSpecifierValue())) return undefined;
@@ -1164,7 +1164,7 @@ export function drizzleCoreImportSpecifierExportName(declaration: Node): string 
   return declaration.getNameNode().getText();
 }
 
-export function drizzleCoreExportSpecifierExportName(declaration: Node): string | undefined {
+/** @internal */ export function drizzleCoreExportSpecifierExportName(declaration: Node): string | undefined {
   if (!Node.isExportSpecifier(declaration)) return undefined;
   const exportDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ExportDeclaration);
   if (!isDrizzleCoreModuleSpecifier(exportDeclaration?.getModuleSpecifierValue())) return undefined;
@@ -1172,22 +1172,22 @@ export function drizzleCoreExportSpecifierExportName(declaration: Node): string 
   return declaration.getNameNode().getText();
 }
 
-export function drizzleCoreModuleSpecifierForDeclaration(declaration: Node): string | undefined {
+/** @internal */ export function drizzleCoreModuleSpecifierForDeclaration(declaration: Node): string | undefined {
   const filePath = declaration.getSourceFile().getFilePath();
   return [...DRIZZLE_CORE_MODULE_SPECIFIERS].find((specifier) => filePath.includes(specifier));
 }
 
-export function isDrizzleCoreModuleSpecifier(specifier: string | undefined): boolean {
+/** @internal */ export function isDrizzleCoreModuleSpecifier(specifier: string | undefined): boolean {
   return specifier !== undefined && DRIZZLE_CORE_MODULE_SPECIFIERS.has(specifier);
 }
 
-export function isKovoAnnotationCall(node: Node): boolean {
+/** @internal */ export function isKovoAnnotationCall(node: Node): boolean {
   if (!Node.isCallExpression(node)) return false;
   const expression = node.getExpression();
   return Node.isIdentifier(expression) && isKovoExtraConfigCallName(expression.getText());
 }
 
-export function tableNameArgument(initializer: Node): string | undefined {
+/** @internal */ export function tableNameArgument(initializer: Node): string | undefined {
   if (!Node.isCallExpression(initializer)) return undefined;
   const name = initializer.getArguments()[0];
   if (!name || !Node.isStringLiteral(name)) return undefined;

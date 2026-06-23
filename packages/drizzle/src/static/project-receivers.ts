@@ -73,7 +73,7 @@ import {
   writeInstanceKeyComparisons,
 } from '../static.js';
 
-export function projectFunctionsForFile(
+/** @internal */ export function projectFunctionsForFile(
   file: SourceFileInput,
   projectFunctionExtractions: ReadonlyMap<string, ReadonlyMap<string, ExtractedFunction>>,
 ): ExtractedFunction[] {
@@ -82,24 +82,24 @@ export function projectFunctionsForFile(
   return [...(projectFunctionExtractions.get(file.fileName)?.values() ?? [])];
 }
 
-export interface ProjectDrizzleReceivers {
+/** @internal */ export interface ProjectDrizzleReceivers {
   names: ReadonlySet<string>;
   symbolKeys: ReadonlySet<string>;
 }
 
-export interface QueryReceiverReferences {
+/** @internal */ export interface QueryReceiverReferences {
   names: ReadonlySet<string>;
   projectContainers?: boolean;
   symbolKeys: ReadonlySet<string>;
 }
 
-export interface DomainWriteProperty {
+/** @internal */ export interface DomainWriteProperty {
   initializer: Node | undefined;
   keyNode: Node;
   memberName: string;
 }
 
-export function projectDomainWriteCallbacks(
+/** @internal */ export function projectDomainWriteCallbacks(
   sourceFile: SourceFile,
 ): Map<string, { body: Node; fn: Node; key: string; name: string }> {
   const callbacks = new Map<string, { body: Node; fn: Node; key: string; name: string }>();
@@ -133,7 +133,7 @@ export function projectDomainWriteCallbacks(
   return callbacks;
 }
 
-export function projectObjectLiteralCallbacks(
+/** @internal */ export function projectObjectLiteralCallbacks(
   sourceFile: SourceFile,
 ): { body: Node; fn: Node; key: string; name: string }[] {
   const callbacks: { body: Node; fn: Node; key: string; name: string }[] = [];
@@ -173,7 +173,7 @@ export function projectObjectLiteralCallbacks(
   return callbacks;
 }
 
-export function projectClassStaticMemberCallbacks(
+/** @internal */ export function projectClassStaticMemberCallbacks(
   sourceFile: SourceFile,
 ): { body: Node; fn: Node; key: string; name: string }[] {
   // SPEC §10.2/§11.1: class static helper members are executable surfaces only when ts-morph
@@ -218,7 +218,7 @@ export function projectClassStaticMemberCallbacks(
   return callbacks;
 }
 
-export function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
+/** @internal */ export function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers {
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
@@ -238,7 +238,7 @@ export function projectDrizzleReceivers(callback: Node): ProjectDrizzleReceivers
   return { names, symbolKeys };
 }
 
-export function projectReceiverParameterRequirements(callback: Node): ReceiverParameterRequirement[] {
+/** @internal */ export function projectReceiverParameterRequirements(callback: Node): ReceiverParameterRequirement[] {
   if (
     !Node.isArrowFunction(callback) &&
     !Node.isFunctionDeclaration(callback) &&
@@ -258,7 +258,7 @@ export function projectReceiverParameterRequirements(callback: Node): ReceiverPa
   });
 }
 
-export function appendProjectDrizzleReceiverParameterBinding(
+/** @internal */ export function appendProjectDrizzleReceiverParameterBinding(
   parameter: ParameterDeclaration,
   names: Set<string>,
   symbolKeys: Set<string>,
@@ -273,7 +273,7 @@ export function appendProjectDrizzleReceiverParameterBinding(
   });
 }
 
-export function appendProjectDrizzleReceiverBinding(
+/** @internal */ export function appendProjectDrizzleReceiverBinding(
   name: Node,
   names: Set<string>,
   symbolKeys: Set<string>,
@@ -303,7 +303,7 @@ export function appendProjectDrizzleReceiverBinding(
   }
 }
 
-export function appendProjectDrizzleReceiverBindingsFromBody(
+/** @internal */ export function appendProjectDrizzleReceiverBindingsFromBody(
   body: Node,
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
@@ -329,7 +329,7 @@ export function appendProjectDrizzleReceiverBindingsFromBody(
   }
 }
 
-export function appendProjectDrizzleReceiverInitializerAlias(
+/** @internal */ export function appendProjectDrizzleReceiverInitializerAlias(
   declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
@@ -345,7 +345,7 @@ export function appendProjectDrizzleReceiverInitializerAlias(
   appendProjectDrizzleReceiverAliasIdentifier(binding, receivers);
 }
 
-export function appendProjectDrizzleReceiverBindingInitializerAliases(
+/** @internal */ export function appendProjectDrizzleReceiverBindingInitializerAliases(
   declaration: ReturnType<SourceFile['getVariableDeclarations']>[number],
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
@@ -373,7 +373,7 @@ export function appendProjectDrizzleReceiverBindingInitializerAliases(
   }
 }
 
-export function appendProjectDrizzleReceiverAssignmentAliases(
+/** @internal */ export function appendProjectDrizzleReceiverAssignmentAliases(
   body: Node,
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
@@ -399,7 +399,7 @@ export function appendProjectDrizzleReceiverAssignmentAliases(
   }
 }
 
-export function appendProjectDrizzleReceiverArrayBindingAliasesForType(
+/** @internal */ export function appendProjectDrizzleReceiverArrayBindingAliasesForType(
   binding: Node,
   location: Node,
   sourceType: MorphType,
@@ -423,7 +423,7 @@ export function appendProjectDrizzleReceiverArrayBindingAliasesForType(
   });
 }
 
-export function appendProjectDrizzleReceiverObjectBindingAliasesForType(
+/** @internal */ export function appendProjectDrizzleReceiverObjectBindingAliasesForType(
   binding: Node,
   location: Node,
   sourceType: MorphType,
@@ -448,7 +448,7 @@ export function appendProjectDrizzleReceiverObjectBindingAliasesForType(
   }
 }
 
-export function appendProjectDrizzleReceiverBindingAliasForType(
+/** @internal */ export function appendProjectDrizzleReceiverBindingAliasForType(
   target: Node,
   location: Node,
   targetType: MorphType,
@@ -476,7 +476,7 @@ export function appendProjectDrizzleReceiverBindingAliasForType(
   }
 }
 
-export function appendProjectDrizzleReceiverObjectAssignmentAliases(
+/** @internal */ export function appendProjectDrizzleReceiverObjectAssignmentAliases(
   assignment: ObjectLiteralExpression,
   source: Node,
   receivers: { names: Set<string>; symbolKeys: Set<string> },
@@ -491,7 +491,7 @@ export function appendProjectDrizzleReceiverObjectAssignmentAliases(
   );
 }
 
-export function appendProjectDrizzleReceiverArrayAssignmentAliases(
+/** @internal */ export function appendProjectDrizzleReceiverArrayAssignmentAliases(
   assignment: Node,
   source: Node,
   receivers: { names: Set<string>; symbolKeys: Set<string> },
@@ -507,7 +507,7 @@ export function appendProjectDrizzleReceiverArrayAssignmentAliases(
   );
 }
 
-export function appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
+/** @internal */ export function appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
   assignment: Node,
   location: Node,
   sourceType: MorphType,
@@ -548,7 +548,7 @@ export function appendProjectDrizzleReceiverArrayAssignmentAliasesForType(
   });
 }
 
-export function appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
+/** @internal */ export function appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
   assignment: ObjectLiteralExpression,
   location: Node,
   sourceType: MorphType,
@@ -592,7 +592,7 @@ export function appendProjectDrizzleReceiverObjectAssignmentAliasesForType(
   }
 }
 
-export function projectObjectPropertyType(
+/** @internal */ export function projectObjectPropertyType(
   sourceType: MorphType,
   location: Node,
   propertyName: string,
@@ -600,21 +600,21 @@ export function projectObjectPropertyType(
   return sourceType.getProperty(propertyName)?.getTypeAtLocation(location);
 }
 
-export function projectArrayElementType(sourceType: MorphType, index: number): MorphType | undefined {
+/** @internal */ export function projectArrayElementType(sourceType: MorphType, index: number): MorphType | undefined {
   return sourceType.getTupleElements()[index] ?? sourceType.getArrayElementType();
 }
 
-export function objectBindingElementPropertyName(element: BindingElement): string | undefined {
+/** @internal */ export function objectBindingElementPropertyName(element: BindingElement): string | undefined {
   return propertyNameText(element.getPropertyNameNode() ?? element.getNameNode());
 }
 
-export function isRestBindingElement(element: BindingElement): boolean {
+/** @internal */ export function isRestBindingElement(element: BindingElement): boolean {
   // SPEC §11.1: a rest binding is a receiver container, not the receiver itself. Project-mode
   // exact facts must come from typed member/element access off that container.
   return element.compilerNode.dotDotDotToken !== undefined;
 }
 
-export function appendProjectDrizzleReceiverAliasIdentifier(
+/** @internal */ export function appendProjectDrizzleReceiverAliasIdentifier(
   identifier: Node,
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
@@ -625,7 +625,7 @@ export function appendProjectDrizzleReceiverAliasIdentifier(
   if (symbolKey) receivers.symbolKeys.add(symbolKey);
 }
 
-export function appendProjectTransactionReceiverAliases(
+/** @internal */ export function appendProjectTransactionReceiverAliases(
   callback: Node,
   receivers: { names: Set<string>; symbolKeys: Set<string> },
 ): void {
@@ -668,7 +668,7 @@ export function appendProjectTransactionReceiverAliases(
   }
 }
 
-export function extractProjectDrizzleWriteCalls(
+/** @internal */ export function extractProjectDrizzleWriteCalls(
   body: Node,
   file: SourceFileInput,
   tableNamesBySymbol: ReadonlyMap<string, string>,
@@ -735,7 +735,7 @@ export function extractProjectDrizzleWriteCalls(
   return calls;
 }
 
-export function extractProjectSelectReadCalls(
+/** @internal */ export function extractProjectSelectReadCalls(
   body: Node,
   file: SourceFileInput,
   receivers: ProjectDrizzleReceivers,
@@ -762,7 +762,7 @@ export function extractProjectSelectReadCalls(
   return calls;
 }
 
-export function extractProjectRelationalReadCalls(
+/** @internal */ export function extractProjectRelationalReadCalls(
   body: Node,
   file: SourceFileInput,
   receivers: ProjectDrizzleReceivers,
@@ -787,7 +787,7 @@ export function extractProjectRelationalReadCalls(
   return calls;
 }
 
-export function extractProjectUnresolvedCalls(
+/** @internal */ export function extractProjectUnresolvedCalls(
   body: Node,
   receivers: ProjectDrizzleReceivers,
   localFunctionNames: ReadonlySet<string>,
@@ -828,7 +828,7 @@ export function extractProjectUnresolvedCalls(
   ];
 }
 
-export function extractOpaqueClosureProjectReceiverCallsFromBody(
+/** @internal */ export function extractOpaqueClosureProjectReceiverCallsFromBody(
   body: Node,
   receivers: ProjectDrizzleReceivers,
   carrierSymbolKeys: ReadonlySet<string>,
@@ -872,7 +872,7 @@ export function extractOpaqueClosureProjectReceiverCallsFromBody(
   return uniqueExternalDbArgumentCalls(calls);
 }
 
-export function opaqueTouchClosureAncestor(node: Node, body: Node): Node | undefined {
+/** @internal */ export function opaqueTouchClosureAncestor(node: Node, body: Node): Node | undefined {
   for (const ancestor of node.getAncestors()) {
     if (ancestor === body) return undefined;
     if (!isFunctionLikeNode(ancestor)) continue;
@@ -883,7 +883,7 @@ export function opaqueTouchClosureAncestor(node: Node, body: Node): Node | undef
   return undefined;
 }
 
-export function uniqueExternalDbArgumentCalls(
+/** @internal */ export function uniqueExternalDbArgumentCalls(
   calls: readonly ExternalDbArgumentCall[],
 ): ExternalDbArgumentCall[] {
   const seen = new Set<string>();
@@ -899,7 +899,7 @@ export function uniqueExternalDbArgumentCalls(
   return unique;
 }
 
-export function extractProjectExternalDbArgumentCalls(
+/** @internal */ export function extractProjectExternalDbArgumentCalls(
   body: Node,
   receivers: ProjectDrizzleReceivers,
   localFunctionNames: ReadonlySet<string>,
@@ -941,7 +941,7 @@ export function extractProjectExternalDbArgumentCalls(
   return calls;
 }
 
-export function extractProjectUnclassifiedDrizzleReceiverCalls(
+/** @internal */ export function extractProjectUnclassifiedDrizzleReceiverCalls(
   body: Node,
   receivers: ProjectDrizzleReceivers,
 ): ExternalDbArgumentCall[] {
@@ -958,7 +958,7 @@ export function extractProjectUnclassifiedDrizzleReceiverCalls(
   return calls;
 }
 
-export function extractProjectDrizzleReceiverContainerCalls(body: Node): ExternalDbArgumentCall[] {
+/** @internal */ export function extractProjectDrizzleReceiverContainerCalls(body: Node): ExternalDbArgumentCall[] {
   const calls: ExternalDbArgumentCall[] = [];
   const bodyStart = bodySourceStart(body);
 
@@ -973,7 +973,7 @@ export function extractProjectDrizzleReceiverContainerCalls(body: Node): Externa
   return calls;
 }
 
-export function isProjectDrizzleReceiverContainerCallReceiver(node: Node): boolean {
+/** @internal */ export function isProjectDrizzleReceiverContainerCallReceiver(node: Node): boolean {
   // SPEC §11.1: project-mode containers that merely contain a Drizzle receiver are opaque
   // surfaces. Exact facts require a proven receiver member such as `context.db`.
   if (isProjectDrizzleReceiverMemberExpression(node)) return false;
@@ -981,7 +981,7 @@ export function isProjectDrizzleReceiverContainerCallReceiver(node: Node): boole
   return isProjectDrizzleReceiverContainerExpression(node);
 }
 
-export function projectUnclassifiedCallSurface(
+/** @internal */ export function projectUnclassifiedCallSurface(
   call: CallExpression,
 ): { name: string; receiver: Node } | undefined {
   // SPEC §10-§11: only the relational query API (`db.query.<table>.find*`) is classified as a
@@ -997,7 +997,7 @@ export function projectUnclassifiedCallSurface(
   return surface;
 }
 
-export function relationalReadCall(
+/** @internal */ export function relationalReadCall(
   call: CallExpression,
 ): { receiver: Node; tableExpression: string } | undefined {
   const expression = call.getExpression();
@@ -1019,7 +1019,7 @@ export function relationalReadCall(
   };
 }
 
-export function selectReadCall(call: CallExpression): { receiver: Node; table: Node } | undefined {
+/** @internal */ export function selectReadCall(call: CallExpression): { receiver: Node; table: Node } | undefined {
   // SPEC §10-§11: standalone Drizzle select reads are touch-graph facts; unresolved table
   // expressions become KV406 instead of silently disappearing.
   if (!isReadSourceCall(call)) return undefined;
@@ -1033,7 +1033,7 @@ export function selectReadCall(call: CallExpression): { receiver: Node; table: N
   return { receiver, table };
 }
 
-export function queryBuilderRootCallName(call: CallExpression): string | undefined {
+/** @internal */ export function queryBuilderRootCallName(call: CallExpression): string | undefined {
   let current: CallExpression | undefined = call;
   let name: string | undefined;
 
@@ -1046,7 +1046,7 @@ export function queryBuilderRootCallName(call: CallExpression): string | undefin
   return name;
 }
 
-export function isNestedInWriteReadSource(call: CallExpression): boolean {
+/** @internal */ export function isNestedInWriteReadSource(call: CallExpression): boolean {
   for (const ancestor of call.getAncestors()) {
     if (!Node.isCallExpression(ancestor)) continue;
     if (ancestor === call) continue;
@@ -1058,11 +1058,11 @@ export function isNestedInWriteReadSource(call: CallExpression): boolean {
   return false;
 }
 
-export function bodySourceStart(body: Node): number {
+/** @internal */ export function bodySourceStart(body: Node): number {
   return Node.isBlock(body) ? body.getStart() + 1 : body.getStart();
 }
 
-export function singleReturnExpression(declaration: Node): Node | undefined {
+/** @internal */ export function singleReturnExpression(declaration: Node): Node | undefined {
   if (!Node.isGetAccessorDeclaration(declaration)) return undefined;
 
   const body = declaration.getBody();
@@ -1077,18 +1077,18 @@ export function singleReturnExpression(declaration: Node): Node | undefined {
   return statement.getExpression();
 }
 
-export function callExpressionsInNode(body: Node): CallExpression[] {
+/** @internal */ export function callExpressionsInNode(body: Node): CallExpression[] {
   return [
     ...(Node.isCallExpression(body) ? [body] : []),
     ...body.getDescendantsOfKind(SyntaxKind.CallExpression),
   ];
 }
 
-export function touchBodyCallExpressions(body: Node): CallExpression[] {
+/** @internal */ export function touchBodyCallExpressions(body: Node): CallExpression[] {
   return callExpressionsInNode(body).filter((call) => isTouchBodyNode(call, body));
 }
 
-export function touchBodyVariableDeclarations(
+/** @internal */ export function touchBodyVariableDeclarations(
   body: Node,
 ): ReturnType<SourceFile['getVariableDeclarations']> {
   return body
@@ -1096,7 +1096,7 @@ export function touchBodyVariableDeclarations(
     .filter((declaration) => isTouchBodyNode(declaration, body));
 }
 
-export function isTouchBodyNode(node: Node, body: Node): boolean {
+/** @internal */ export function isTouchBodyNode(node: Node, body: Node): boolean {
   if (node === body) return true;
 
   for (const ancestor of node.getAncestors()) {
@@ -1110,7 +1110,7 @@ export function isTouchBodyNode(node: Node, body: Node): boolean {
   return true;
 }
 
-export function isFunctionLikeNode(node: Node): boolean {
+/** @internal */ export function isFunctionLikeNode(node: Node): boolean {
   return (
     Node.isArrowFunction(node) ||
     Node.isFunctionDeclaration(node) ||
@@ -1118,7 +1118,7 @@ export function isFunctionLikeNode(node: Node): boolean {
   );
 }
 
-export function isInlineTransactionCallback(callback: Node): boolean {
+/** @internal */ export function isInlineTransactionCallback(callback: Node): boolean {
   const parent = callback.getParent();
   if (!Node.isCallExpression(parent)) return false;
   if (!parent.getArguments().includes(callback)) return false;
@@ -1126,7 +1126,7 @@ export function isInlineTransactionCallback(callback: Node): boolean {
   return staticAccessName(parent.getExpression()) === 'transaction';
 }
 
-export function isInlineIterationCallback(callback: Node): boolean {
+/** @internal */ export function isInlineIterationCallback(callback: Node): boolean {
   const parent = callback.getParent();
   if (!Node.isCallExpression(parent)) return false;
   if (!parent.getArguments().includes(callback)) return false;
@@ -1135,7 +1135,7 @@ export function isInlineIterationCallback(callback: Node): boolean {
   return method ? TOUCH_BODY_ITERATION_CALLBACK_METHODS.has(method) : false;
 }
 
-export function isProjectDrizzleReceiverIdentifier(
+/** @internal */ export function isProjectDrizzleReceiverIdentifier(
   node: Node | undefined,
   receivers: { names: ReadonlySet<string>; symbolKeys: ReadonlySet<string> },
 ): boolean {
@@ -1152,7 +1152,7 @@ export function isProjectDrizzleReceiverIdentifier(
   return receivers.names.has(node.getText());
 }
 
-export function isProjectDrizzleReceiverMemberExpression(node: Node | undefined): boolean {
+/** @internal */ export function isProjectDrizzleReceiverMemberExpression(node: Node | undefined): boolean {
   if (!node || (!Node.isPropertyAccessExpression(node) && !Node.isElementAccessExpression(node))) {
     return false;
   }
@@ -1160,7 +1160,7 @@ export function isProjectDrizzleReceiverMemberExpression(node: Node | undefined)
   return isDrizzleReceiver(node);
 }
 
-export function drizzleWriteChainRoot(call: CallExpression): Node {
+/** @internal */ export function drizzleWriteChainRoot(call: CallExpression): Node {
   let chain: Node = call;
 
   while (true) {
@@ -1179,7 +1179,7 @@ export function drizzleWriteChainRoot(call: CallExpression): Node {
   }
 }
 
-export function projectTableNameForNode(
+/** @internal */ export function projectTableNameForNode(
   node: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames = new Map(),
@@ -1212,7 +1212,7 @@ export function projectTableNameForNode(
   return projectTableNameForSymbol(node, tableNamesBySymbol);
 }
 
-export function projectTableNameForSymbol(
+/** @internal */ export function projectTableNameForSymbol(
   node: Node,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): string | undefined {
@@ -1221,9 +1221,9 @@ export function projectTableNameForSymbol(
   return tableNamesBySymbol.get(symbolKey);
 }
 
-export type ProjectNamespaceTableNames = ReadonlyMap<string, ReadonlyMap<string, string>>;
+/** @internal */ export type ProjectNamespaceTableNames = ReadonlyMap<string, ReadonlyMap<string, string>>;
 
-export function projectNamespaceTableNamesByLocal(
+/** @internal */ export function projectNamespaceTableNamesByLocal(
   sourceFile: SourceFile,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): ProjectNamespaceTableNames {
@@ -1241,7 +1241,7 @@ export function projectNamespaceTableNamesByLocal(
   return namespaces;
 }
 
-export function projectExportedTableNamesByName(
+/** @internal */ export function projectExportedTableNamesByName(
   sourceFile: SourceFile,
   tableNamesBySymbol: ReadonlyMap<string, string>,
 ): Map<string, string> {
@@ -1255,7 +1255,7 @@ export function projectExportedTableNamesByName(
   return tables;
 }
 
-export function projectNamespaceAccessTableName(
+/** @internal */ export function projectNamespaceAccessTableName(
   access: Node,
   namespaceTableNames: ProjectNamespaceTableNames,
 ): string | undefined {

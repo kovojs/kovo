@@ -49,7 +49,7 @@ import {
   unwrappedStaticExpressionNode,
 } from '../static.js';
 
-export function extractLocalFunctionCallsFromBody(
+/** @internal */ export function extractLocalFunctionCallsFromBody(
   body: Node,
   localFunctionKeys: ReadonlySet<string>,
   localFunctionsByKey: ReadonlyMap<string, Pick<ExtractedFunction, 'receiverParameters'>>,
@@ -80,7 +80,7 @@ export function extractLocalFunctionCallsFromBody(
   return [...new Set(calls)];
 }
 
-export function localFunctionCallSatisfiesReceiverRequirements(
+/** @internal */ export function localFunctionCallSatisfiesReceiverRequirements(
   call: CallExpression,
   requirements: readonly ReceiverParameterRequirement[],
   isReceiverArgument: (argument: Node) => boolean,
@@ -94,7 +94,7 @@ export function localFunctionCallSatisfiesReceiverRequirements(
   });
 }
 
-export function extractTransactionCallbackLocalFunctionCallsFromBody(
+/** @internal */ export function extractTransactionCallbackLocalFunctionCallsFromBody(
   body: Node,
   localFunctionKeys: ReadonlySet<string>,
   localFunctionsByKey: ReadonlyMap<string, Pick<ExtractedFunction, 'receiverParameters'>>,
@@ -119,7 +119,7 @@ export function extractTransactionCallbackLocalFunctionCallsFromBody(
   return [...new Set(calls)];
 }
 
-export function extractUnresolvedTransactionCallbackCallsFromBody(
+/** @internal */ export function extractUnresolvedTransactionCallbackCallsFromBody(
   body: Node,
   localFunctionKeys: ReadonlySet<string>,
   localFunctionsByKey: ReadonlyMap<string, Pick<ExtractedFunction, 'receiverParameters'>>,
@@ -153,7 +153,7 @@ export function extractUnresolvedTransactionCallbackCallsFromBody(
   return calls;
 }
 
-export function transactionCallbackLocalFunctionKey(
+/** @internal */ export function transactionCallbackLocalFunctionKey(
   call: CallExpression,
   localFunctionKeys: ReadonlySet<string>,
   isReceiverIdentifier: (node: Node | undefined) => boolean,
@@ -171,13 +171,13 @@ export function transactionCallbackLocalFunctionKey(
   return localFunctionKeyForReference(callback, localFunctionKeys);
 }
 
-export function transactionCallHasInlineCallback(call: CallExpression): boolean {
+/** @internal */ export function transactionCallHasInlineCallback(call: CallExpression): boolean {
   return call
     .getArguments()
     .some((argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument));
 }
 
-export function transactionCallbackSatisfiesReceiverRequirements(
+/** @internal */ export function transactionCallbackSatisfiesReceiverRequirements(
   requirements: readonly ReceiverParameterRequirement[],
 ): boolean {
   // SPEC §11.1: `transaction(callback)` supplies the proven Drizzle transaction receiver as the
@@ -185,12 +185,12 @@ export function transactionCallbackSatisfiesReceiverRequirements(
   return requirements.length > 0 && requirements.every((requirement) => requirement.index === 0);
 }
 
-export interface ExternalDbArgumentCall {
+/** @internal */ export interface ExternalDbArgumentCall {
   index: number;
   name: string;
 }
 
-export function extractOpaqueLocalHelperReceiverCallsFromBody(
+/** @internal */ export function extractOpaqueLocalHelperReceiverCallsFromBody(
   body: Node,
   localFunctionKeys: ReadonlySet<string>,
   localFunctionsByKey: ReadonlyMap<string, Pick<ExtractedFunction, 'receiverParameters'>>,
@@ -224,12 +224,12 @@ export function extractOpaqueLocalHelperReceiverCallsFromBody(
   return calls;
 }
 
-export interface ExternalHelperCallSurface {
+/** @internal */ export interface ExternalHelperCallSurface {
   name: string;
   reference: Node;
 }
 
-export function externalHelperCallSurface(call: CallExpression): ExternalHelperCallSurface | undefined {
+/** @internal */ export function externalHelperCallSurface(call: CallExpression): ExternalHelperCallSurface | undefined {
   const expression = call.getExpression();
   if (Node.isIdentifier(expression)) {
     return { name: expression.getText(), reference: expression };
@@ -239,7 +239,7 @@ export function externalHelperCallSurface(call: CallExpression): ExternalHelperC
   return name ? { name, reference: expression } : undefined;
 }
 
-export function localFunctionKeyForReference(
+/** @internal */ export function localFunctionKeyForReference(
   reference: Node,
   localFunctionKeys: ReadonlySet<string>,
 ): string | undefined {
@@ -265,7 +265,7 @@ export function localFunctionKeyForReference(
   return undefined;
 }
 
-export function localFunctionKeyForIdentifier(
+/** @internal */ export function localFunctionKeyForIdentifier(
   identifier: Node,
   localFunctionKeys: ReadonlySet<string>,
 ): string | undefined {
@@ -283,7 +283,7 @@ export function localFunctionKeyForIdentifier(
   return undefined;
 }
 
-export function localFunctionKeyForCallback(callback: Node): string | undefined {
+/** @internal */ export function localFunctionKeyForCallback(callback: Node): string | undefined {
   if (Node.isFunctionDeclaration(callback)) {
     const name = callback.getName();
     const nameNode = callback.getNameNode();
@@ -316,7 +316,7 @@ export function localFunctionKeyForCallback(callback: Node): string | undefined 
   return undefined;
 }
 
-export function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
+/** @internal */ export function localFunctionKeyForDeclaration(declaration: Node): string | undefined {
   if (Node.isFunctionDeclaration(declaration)) {
     const name = declaration.getName();
     const nameNode = declaration.getNameNode();
@@ -358,7 +358,7 @@ export function localFunctionKeyForDeclaration(declaration: Node): string | unde
   return undefined;
 }
 
-export function extractSourceReceiverSurfaceCallsFromBody(
+/** @internal */ export function extractSourceReceiverSurfaceCallsFromBody(
   body: Node,
   localFunctionKeys: ReadonlySet<string>,
   isReceiverIdentifier: (node: Node | undefined) => boolean,
@@ -395,7 +395,7 @@ export function extractSourceReceiverSurfaceCallsFromBody(
   );
 }
 
-export function sourceReceiverCallSurface(
+/** @internal */ export function sourceReceiverCallSurface(
   call: CallExpression,
   isReceiverIdentifier: (node: Node | undefined) => boolean,
   bodyOffset: number,
@@ -431,7 +431,7 @@ export function sourceReceiverCallSurface(
   return null;
 }
 
-export function sourceReceiverHelperCallSurface(
+/** @internal */ export function sourceReceiverHelperCallSurface(
   call: CallExpression,
   localFunctionKeys: ReadonlySet<string>,
   isReceiverIdentifier: (node: Node | undefined) => boolean,
@@ -467,7 +467,7 @@ export function sourceReceiverHelperCallSurface(
   return { index, name };
 }
 
-export function dedupeExternalDbArgumentCalls(
+/** @internal */ export function dedupeExternalDbArgumentCalls(
   calls: readonly ExternalDbArgumentCall[],
 ): ExternalDbArgumentCall[] {
   const seen = new Set<string>();
@@ -484,11 +484,11 @@ export function dedupeExternalDbArgumentCalls(
   return deduped;
 }
 
-export interface SourceReceiverAliasReferences extends QueryReceiverReferences {
+/** @internal */ export interface SourceReceiverAliasReferences extends QueryReceiverReferences {
   carrierProperties: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
-export function sourceReceiverAliasReferencesForBody(
+/** @internal */ export function sourceReceiverAliasReferencesForBody(
   body: Node,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
 ): SourceReceiverAliasReferences {
@@ -555,7 +555,7 @@ export function sourceReceiverAliasReferencesForBody(
   return { carrierProperties, names, symbolKeys };
 }
 
-export function appendSourceReceiverAliasesFromCarrierAssignment(
+/** @internal */ export function appendSourceReceiverAliasesFromCarrierAssignment(
   assignment: Node,
   initializer: Node,
   references: {
@@ -609,7 +609,7 @@ export function appendSourceReceiverAliasesFromCarrierAssignment(
   }
 }
 
-export function appendSourceReceiverAliasesFromArrayCarrierAssignment(
+/** @internal */ export function appendSourceReceiverAliasesFromArrayCarrierAssignment(
   assignment: Node,
   carrierProperties: ReadonlySet<string>,
   references: {
@@ -642,7 +642,7 @@ export function appendSourceReceiverAliasesFromArrayCarrierAssignment(
   });
 }
 
-export function appendSourceReceiverAliasesFromNestedCarrierAssignment(
+/** @internal */ export function appendSourceReceiverAliasesFromNestedCarrierAssignment(
   assignment: Node,
   carrierProperties: ReadonlySet<string>,
   references: {
@@ -686,7 +686,7 @@ export function appendSourceReceiverAliasesFromNestedCarrierAssignment(
   }
 }
 
-export function appendSourceReceiverCarrierPropertiesForTarget(
+/** @internal */ export function appendSourceReceiverCarrierPropertiesForTarget(
   target: Node,
   nestedProperties: ReadonlySet<string>,
   references: {
@@ -704,7 +704,7 @@ export function appendSourceReceiverCarrierPropertiesForTarget(
   }
 }
 
-export function appendSourceReceiverAliasesFromCarrierBinding(
+/** @internal */ export function appendSourceReceiverAliasesFromCarrierBinding(
   binding: Node,
   initializer: Node,
   references: {
@@ -751,7 +751,7 @@ export function appendSourceReceiverAliasesFromCarrierBinding(
   }
 }
 
-export function appendSourceReceiverAliasesFromArrayCarrierBinding(
+/** @internal */ export function appendSourceReceiverAliasesFromArrayCarrierBinding(
   binding: Node,
   carrierProperties: ReadonlySet<string>,
   references: {
@@ -794,7 +794,7 @@ export function appendSourceReceiverAliasesFromArrayCarrierBinding(
   });
 }
 
-export function appendSourceReceiverCarrierPropertiesForRestTarget(
+/** @internal */ export function appendSourceReceiverCarrierPropertiesForRestTarget(
   target: Node,
   carrierProperties: ReadonlySet<string>,
   startIndex: number,
@@ -814,7 +814,7 @@ export function appendSourceReceiverCarrierPropertiesForRestTarget(
   for (const property of remappedProperties) properties.add(property);
 }
 
-export function restCarrierProperties(
+/** @internal */ export function restCarrierProperties(
   carrierProperties: ReadonlySet<string>,
   startIndex: number,
 ): ReadonlySet<string> {
@@ -831,7 +831,7 @@ export function restCarrierProperties(
   return remapped;
 }
 
-export function appendSourceReceiverAliasesFromNestedCarrierBinding(
+/** @internal */ export function appendSourceReceiverAliasesFromNestedCarrierBinding(
   binding: Node,
   carrierProperties: ReadonlySet<string>,
   references: {
@@ -870,7 +870,7 @@ export function appendSourceReceiverAliasesFromNestedCarrierBinding(
   }
 }
 
-export function appendSourceReceiverCarrierPropertiesFromArrayLiteral(
+/** @internal */ export function appendSourceReceiverCarrierPropertiesFromArrayLiteral(
   binding: Node,
   array: Node,
   references: SourceReceiverAliasReferences,
@@ -894,7 +894,7 @@ export function appendSourceReceiverCarrierPropertiesFromArrayLiteral(
   }
 }
 
-export function sourceReceiverReferenceSize(
+/** @internal */ export function sourceReceiverReferenceSize(
   names: ReadonlySet<string>,
   symbolKeys: ReadonlySet<string>,
   carrierProperties: ReadonlyMap<string, ReadonlySet<string>>,
@@ -906,7 +906,7 @@ export function sourceReceiverReferenceSize(
   );
 }
 
-export function isSourceReceiverAliasExpression(
+/** @internal */ export function isSourceReceiverAliasExpression(
   node: Node,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
   references: QueryReceiverReferences,
@@ -917,7 +917,7 @@ export function isSourceReceiverAliasExpression(
   );
 }
 
-export function appendSourceReceiverCarrierProperties(
+/** @internal */ export function appendSourceReceiverCarrierProperties(
   binding: Node,
   initializer: Node,
   references: SourceReceiverAliasReferences,
@@ -953,7 +953,7 @@ export function appendSourceReceiverCarrierProperties(
   }
 }
 
-export function receiverCarrierPropertiesFromObjectLiteral(
+/** @internal */ export function receiverCarrierPropertiesFromObjectLiteral(
   object: ObjectLiteralExpression,
   references: SourceReceiverAliasReferences,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
@@ -992,7 +992,7 @@ export function receiverCarrierPropertiesFromObjectLiteral(
   return properties;
 }
 
-export function receiverCarrierPropertiesFromArrayLiteral(
+/** @internal */ export function receiverCarrierPropertiesFromArrayLiteral(
   array: Node,
   references: SourceReceiverAliasReferences,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
@@ -1016,7 +1016,7 @@ export function receiverCarrierPropertiesFromArrayLiteral(
   return properties;
 }
 
-export function receiverCarrierSpreadProperties(
+/** @internal */ export function receiverCarrierSpreadProperties(
   property: Node,
   references: SourceReceiverAliasReferences,
 ): ReadonlySet<string> | undefined {
@@ -1029,7 +1029,7 @@ export function receiverCarrierSpreadProperties(
   return symbolKey ? references.carrierProperties.get(symbolKey) : undefined;
 }
 
-export function receiverCarrierPropertyPaths(
+/** @internal */ export function receiverCarrierPropertyPaths(
   property: ReturnType<ObjectLiteralExpression['getProperties']>[number],
   references: QueryReceiverReferences,
   isBaseReceiverIdentifier: (node: Node | undefined) => boolean,
@@ -1058,7 +1058,7 @@ export function receiverCarrierPropertyPaths(
   );
 }
 
-export function receiverCarrierPathsForValue(
+/** @internal */ export function receiverCarrierPathsForValue(
   propertyName: string,
   value: Node,
   references: QueryReceiverReferences,
@@ -1106,7 +1106,7 @@ export function receiverCarrierPathsForValue(
   return paths;
 }
 
-export function receiverCarrierPropertiesForExpression(
+/** @internal */ export function receiverCarrierPropertiesForExpression(
   expression: Node,
   references: QueryReceiverReferences,
 ): ReadonlySet<string> | undefined {
@@ -1118,14 +1118,14 @@ export function receiverCarrierPropertiesForExpression(
     : undefined;
 }
 
-export function prefixedReceiverCarrierProperties(
+/** @internal */ export function prefixedReceiverCarrierProperties(
   propertyName: string,
   properties: ReadonlySet<string>,
 ): ReadonlySet<string> {
   return new Set([...properties].map((property) => `${propertyName}.${property}`));
 }
 
-export function receiverCarrierNestedProperties(
+/** @internal */ export function receiverCarrierNestedProperties(
   properties: ReadonlySet<string>,
   propertyName: string,
 ): ReadonlySet<string> {
@@ -1137,7 +1137,7 @@ export function receiverCarrierNestedProperties(
   );
 }
 
-export function removeReceiverCarrierPropertyPath(properties: Set<string>, propertyName: string): void {
+/** @internal */ export function removeReceiverCarrierPropertyPath(properties: Set<string>, propertyName: string): void {
   properties.delete(propertyName);
 
   const prefix = `${propertyName}.`;
@@ -1146,7 +1146,7 @@ export function removeReceiverCarrierPropertyPath(properties: Set<string>, prope
   }
 }
 
-export function carrierPropertiesForSymbol(
+/** @internal */ export function carrierPropertiesForSymbol(
   carrierProperties: ReadonlyMap<string, ReadonlySet<string>>,
   symbolKey: string,
 ): Set<string> {
@@ -1159,7 +1159,7 @@ export function carrierPropertiesForSymbol(
   return next;
 }
 
-export function isSourceReceiverAliasIdentifier(
+/** @internal */ export function isSourceReceiverAliasIdentifier(
   node: Node | undefined,
   references: QueryReceiverReferences,
 ): boolean {
@@ -1170,7 +1170,7 @@ export function isSourceReceiverAliasIdentifier(
   return references.names.has(node.getText());
 }
 
-export function isSourceReceiverCarrierMemberExpression(
+/** @internal */ export function isSourceReceiverCarrierMemberExpression(
   node: Node | undefined,
   references: SourceReceiverAliasReferences,
 ): boolean {
@@ -1194,13 +1194,13 @@ export function isSourceReceiverCarrierMemberExpression(
   return carriedProperties.has(path.slice(rootPath.length + 1));
 }
 
-export interface DirectDrizzleReceiverCallSurface {
+/** @internal */ export interface DirectDrizzleReceiverCallSurface {
   displayName?: string;
   name: string;
   receiver: Node;
 }
 
-export function directDrizzleReceiverCallSurface(
+/** @internal */ export function directDrizzleReceiverCallSurface(
   call: CallExpression,
 ): DirectDrizzleReceiverCallSurface | undefined {
   const expression = unwrappedStaticExpressionNode(call.getExpression());
@@ -1223,7 +1223,7 @@ export function directDrizzleReceiverCallSurface(
   return undefined;
 }
 
-export function extractReceiverMethodAliasCallsFromBody(
+/** @internal */ export function extractReceiverMethodAliasCallsFromBody(
   body: Node,
   isReceiverIdentifier: (node: Node) => boolean,
   bodyOffset = bodySourceStart(body),
@@ -1243,7 +1243,7 @@ export function extractReceiverMethodAliasCallsFromBody(
   return calls;
 }
 
-export function receiverMethodAliasCallName(
+/** @internal */ export function receiverMethodAliasCallName(
   call: CallExpression,
   aliases: ReceiverMethodAliases,
 ): string | undefined {
@@ -1261,7 +1261,7 @@ export function receiverMethodAliasCallName(
   return method === 'findFirst' || method === 'findMany' ? 'query' : undefined;
 }
 
-export function receiverMethodAliasName(
+/** @internal */ export function receiverMethodAliasName(
   identifier: Node,
   aliases: ReceiverMethodAliases,
 ): string | undefined {
@@ -1273,11 +1273,11 @@ export function receiverMethodAliasName(
   return symbolKey ? aliases.symbols.get(symbolKey) : undefined;
 }
 
-export interface ReceiverMethodAliases {
+/** @internal */ export interface ReceiverMethodAliases {
   symbols: ReadonlyMap<string, string>;
 }
 
-export function receiverMethodAliasesForBody(
+/** @internal */ export function receiverMethodAliasesForBody(
   body: Node,
   isReceiverIdentifier: (node: Node) => boolean,
 ): ReceiverMethodAliases {
@@ -1346,7 +1346,7 @@ export function receiverMethodAliasesForBody(
   return { symbols };
 }
 
-export function appendReceiverMethodAliasesFromObjectPattern(
+/** @internal */ export function appendReceiverMethodAliasesFromObjectPattern(
   binding: Node,
   symbols: Map<string, string>,
 ): void {
@@ -1363,7 +1363,7 @@ export function appendReceiverMethodAliasesFromObjectPattern(
   }
 }
 
-export function appendReceiverMethodAliasesFromArrayPattern(
+/** @internal */ export function appendReceiverMethodAliasesFromArrayPattern(
   binding: Node,
   initializer: Node,
   symbols: Map<string, string>,
@@ -1391,7 +1391,7 @@ export function appendReceiverMethodAliasesFromArrayPattern(
   });
 }
 
-export function appendReceiverMethodAliasesFromObjectAssignment(
+/** @internal */ export function appendReceiverMethodAliasesFromObjectAssignment(
   assignment: Node,
   symbols: Map<string, string>,
 ): void {
@@ -1417,7 +1417,7 @@ export function appendReceiverMethodAliasesFromObjectAssignment(
   }
 }
 
-export function appendReceiverMethodAliasesFromArrayAssignment(
+/** @internal */ export function appendReceiverMethodAliasesFromArrayAssignment(
   assignment: Node,
   initializer: Node,
   symbols: Map<string, string>,
@@ -1442,7 +1442,7 @@ export function appendReceiverMethodAliasesFromArrayAssignment(
   });
 }
 
-export function receiverMethodAliasExpressionName(
+/** @internal */ export function receiverMethodAliasExpressionName(
   node: Node,
   isReceiverIdentifier: (node: Node) => boolean,
   aliases: ReceiverMethodAliases,
@@ -1461,7 +1461,7 @@ export function receiverMethodAliasExpressionName(
   return staticAccessName(expression);
 }
 
-export function boundReceiverMethodAccessName(
+/** @internal */ export function boundReceiverMethodAccessName(
   node: Node,
   isReceiverIdentifier: (node: Node) => boolean,
 ): string | undefined {
@@ -1481,7 +1481,7 @@ export function boundReceiverMethodAccessName(
   return staticAccessName(methodAccess) ?? COMPUTED_DRIZZLE_RECEIVER_METHOD;
 }
 
-export function appendReceiverMethodAlias(
+/** @internal */ export function appendReceiverMethodAlias(
   symbols: Map<string, string>,
   alias: Node,
   method: string,
@@ -1491,7 +1491,7 @@ export function appendReceiverMethodAlias(
   if (symbolKey) symbols.set(symbolKey, method);
 }
 
-export function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {
+/** @internal */ export function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean {
   // SPEC §10-§11: direct receiver calls not statically classified are explicit KV406 surfaces.
   return (
     UNCLASSIFIED_DRIZZLE_RECEIVER_MUTATION_METHODS.has(name) ||
@@ -1499,7 +1499,7 @@ export function isUnclassifiedDirectDrizzleReceiverMethod(name: string): boolean
   );
 }
 
-export function projectReceiverReferenceInArgument(
+/** @internal */ export function projectReceiverReferenceInArgument(
   argument: Node,
   receivers: ProjectDrizzleReceivers,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
@@ -1513,7 +1513,7 @@ export function projectReceiverReferenceInArgument(
   );
 }
 
-export function queryReceiverReferenceInArgument(
+/** @internal */ export function queryReceiverReferenceInArgument(
   argument: Node,
   receiverReferences: QueryReceiverReferences,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
@@ -1530,7 +1530,7 @@ export function queryReceiverReferenceInArgument(
   );
 }
 
-export function receiverReferenceInArgument(
+/** @internal */ export function receiverReferenceInArgument(
   argument: Node,
   isReceiverIdentifier: (node: Node) => boolean,
   carrierSymbolKeys: ReadonlySet<string> = new Set(),
@@ -1584,7 +1584,7 @@ export function receiverReferenceInArgument(
   return undefined;
 }
 
-export function isReceiverArgumentReference(
+/** @internal */ export function isReceiverArgumentReference(
   node: Node,
   argument: Node,
   isReceiverIdentifier: (node: Node) => boolean,
@@ -1612,13 +1612,13 @@ export function isReceiverArgumentReference(
   return true;
 }
 
-export function isReceiverCarrierIdentifier(node: Node, carrierSymbolKeys: ReadonlySet<string>): boolean {
+/** @internal */ export function isReceiverCarrierIdentifier(node: Node, carrierSymbolKeys: ReadonlySet<string>): boolean {
   if (!Node.isIdentifier(node) || carrierSymbolKeys.size === 0) return false;
   const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
   return symbolKey ? carrierSymbolKeys.has(symbolKey) : false;
 }
 
-export function isProjectDrizzleReceiverContainerExpression(node: Node | undefined): boolean {
+/** @internal */ export function isProjectDrizzleReceiverContainerExpression(node: Node | undefined): boolean {
   if (!node) return false;
   if (isFunctionLikeNode(node)) return false;
   if (isProjectDrizzleReceiverMemberExpression(node)) return false;
@@ -1628,7 +1628,7 @@ export function isProjectDrizzleReceiverContainerExpression(node: Node | undefin
   return projectTypeContainsDrizzleReceiver(node.getType(), node, new Set(), 0);
 }
 
-export function projectTypeContainsDrizzleReceiver(
+/** @internal */ export function projectTypeContainsDrizzleReceiver(
   type: MorphType,
   location: Node,
   seen: Set<string>,
@@ -1664,7 +1664,7 @@ export function projectTypeContainsDrizzleReceiver(
   return false;
 }
 
-export function receiverCarrierSymbolKeysForBody(
+/** @internal */ export function receiverCarrierSymbolKeysForBody(
   body: Node,
   isReceiverIdentifier: (node: Node) => boolean,
 ): ReadonlySet<string> {
@@ -1712,7 +1712,7 @@ export function receiverCarrierSymbolKeysForBody(
   return carrierSymbolKeys;
 }
 
-export function queryReceiverCarrierSymbolKeys(
+/** @internal */ export function queryReceiverCarrierSymbolKeys(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
 ): ReadonlySet<string> {
@@ -1729,7 +1729,7 @@ export function queryReceiverCarrierSymbolKeys(
   return carrierSymbolKeys;
 }
 
-export function isIdentifierDeclarationPosition(node: Node): boolean {
+/** @internal */ export function isIdentifierDeclarationPosition(node: Node): boolean {
   const parent = node.getParent();
   if (!parent) return false;
 
@@ -1741,7 +1741,7 @@ export function isIdentifierDeclarationPosition(node: Node): boolean {
   return false;
 }
 
-export function isPropertyNamePosition(node: Node): boolean {
+/** @internal */ export function isPropertyNamePosition(node: Node): boolean {
   const parent = node.getParent();
   if (!parent) return false;
 
@@ -1757,7 +1757,7 @@ export function isPropertyNamePosition(node: Node): boolean {
   return false;
 }
 
-export function isAccessExpressionReceiver(node: Node): boolean {
+/** @internal */ export function isAccessExpressionReceiver(node: Node): boolean {
   const parent = node.getParent();
   return (
     (Node.isPropertyAccessExpression(parent) || Node.isElementAccessExpression(parent)) &&
@@ -1765,7 +1765,7 @@ export function isAccessExpressionReceiver(node: Node): boolean {
   );
 }
 
-export function isInsideNestedFunction(node: Node, boundary: Node): boolean {
+/** @internal */ export function isInsideNestedFunction(node: Node, boundary: Node): boolean {
   if (node === boundary) return false;
 
   for (const ancestor of node.getAncestors()) {
@@ -1776,7 +1776,7 @@ export function isInsideNestedFunction(node: Node, boundary: Node): boolean {
   return false;
 }
 
-export function symbolForIdentifierReference(node: Node): MorphSymbol | undefined {
+/** @internal */ export function symbolForIdentifierReference(node: Node): MorphSymbol | undefined {
   if (Node.isIdentifier(node)) {
     const parent = node.getParent();
     if (Node.isShorthandPropertyAssignment(parent) && parent.getNameNode() === node) {
@@ -1787,7 +1787,7 @@ export function symbolForIdentifierReference(node: Node): MorphSymbol | undefine
   return aliasedSymbol(node.getSymbol());
 }
 
-export function receiverParameterDeclaration(declaration: Node): ParameterDeclaration | null {
+/** @internal */ export function receiverParameterDeclaration(declaration: Node): ParameterDeclaration | null {
   if (Node.isParameterDeclaration(declaration)) return declaration;
   if (Node.isIdentifier(declaration)) {
     const parent = declaration.getParent();
@@ -1801,7 +1801,7 @@ export function receiverParameterDeclaration(declaration: Node): ParameterDeclar
 // detector only. The db/tx name/property heuristic here never proves a receiver or produces a
 // read/write fact; unprovenDestructuredReceiverReferences later drops any binding project mode
 // already type-proved, so only un-analyzable destructured receivers reach the KV406 surface.
-export function appendSourceDestructuredReceiverBinding(
+/** @internal */ export function appendSourceDestructuredReceiverBinding(
   name: Node,
   names: Set<string>,
   symbolKeys: Set<string>,
@@ -1825,7 +1825,7 @@ export function appendSourceDestructuredReceiverBinding(
   }
 }
 
-export function appendSourceDestructuredReceiverIdentifier(
+/** @internal */ export function appendSourceDestructuredReceiverIdentifier(
   binding: Node,
   names: Set<string>,
   symbolKeys: Set<string>,
@@ -1836,7 +1836,7 @@ export function appendSourceDestructuredReceiverIdentifier(
   if (symbolKey) symbolKeys.add(symbolKey);
 }
 
-export function isSourceDestructuredReceiverIdentifier(
+/** @internal */ export function isSourceDestructuredReceiverIdentifier(
   node: Node | undefined,
   receiverReferences: QueryReceiverReferences,
 ): boolean {
@@ -1846,7 +1846,7 @@ export function isSourceDestructuredReceiverIdentifier(
   return receiverReferences.names.has(node.getText());
 }
 
-export function isLikelyDrizzleReceiver(name: string): boolean {
+/** @internal */ export function isLikelyDrizzleReceiver(name: string): boolean {
   // SPEC §11.1 (v1 scope): this canonical db/tx name heuristic is NOT receiver proof and never
   // produces a read/write fact. It only seeds the fail-closed KV406 detector for destructured
   // loader receiver slots that project-mode ts-morph could not type-prove.

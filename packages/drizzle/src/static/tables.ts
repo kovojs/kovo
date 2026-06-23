@@ -81,7 +81,7 @@ function variableDeclarationIsExported(
   );
 }
 
-export function withParsedSourceFile<T>(file: SourceFileInput, visit: (sourceFile: SourceFile) => T): T {
+/** @internal */ export function withParsedSourceFile<T>(file: SourceFileInput, visit: (sourceFile: SourceFile) => T): T {
   const project = new Project({
     compilerOptions: {
       allowJs: false,
@@ -102,7 +102,7 @@ export function withParsedSourceFile<T>(file: SourceFileInput, visit: (sourceFil
   }
 }
 
-export interface SourceModuleContext {
+/** @internal */ export interface SourceModuleContext {
   fileNames: ReadonlySet<string>;
   filesByName: ReadonlyMap<string, SourceFileInput>;
   tablesByFileName: ReadonlyMap<string, ReadonlyMap<string, readonly ExtractedTable[]>>;
@@ -123,7 +123,7 @@ interface ExportStarAlias {
   moduleSpecifier: string;
 }
 
-export function projectSourceModuleContext(extraction: ProjectExtraction): SourceModuleContext {
+/** @internal */ export function projectSourceModuleContext(extraction: ProjectExtraction): SourceModuleContext {
   // SPEC §10-§11: project-mode table facts come from resolved ts-morph symbols, not rewritten
   // source text that is reparsed through source-mode table extraction.
   const tablesBySyntheticName = projectTablesBySyntheticName(extraction);
@@ -154,7 +154,7 @@ export function projectSourceModuleContext(extraction: ProjectExtraction): Sourc
   };
 }
 
-export function projectTablesBySyntheticName(
+/** @internal */ export function projectTablesBySyntheticName(
   extraction: ProjectExtraction,
 ): ReadonlyMap<string, ExtractedTable> {
   const tables = new Map<string, ExtractedTable>();
@@ -438,7 +438,7 @@ function appendProjectNamespaceTableAccess(
   if (tablePath && table) appendTableEntries(tables, tablePath, [table]);
 }
 
-export function tablesForFile(
+/** @internal */ export function tablesForFile(
   file: SourceFileInput,
   context: SourceModuleContext,
 ): Map<string, ExtractedTable[]> {
@@ -604,7 +604,7 @@ function resolveRelativeModuleFileName(
   return candidates.find((candidate) => fileNames.has(candidate));
 }
 
-export function normalizeModulePath(path: string): string {
+/** @internal */ export function normalizeModulePath(path: string): string {
   const parts: string[] = [];
 
   for (const part of path.split('/')) {
@@ -694,7 +694,7 @@ function exportStarAliases(sourceFile: SourceFile): ExportStarAlias[] {
   return aliases;
 }
 
-export function extractUnresolvedConditionalIdentifiers(
+/** @internal */ export function extractUnresolvedConditionalIdentifiers(
   file: SourceFileInput,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string[] {

@@ -58,7 +58,7 @@ import {
   unmodeledRelationFromExpression,
 } from '../static.js';
 
-export function queryReadDomains(
+/** @internal */ export function queryReadDomains(
   tableExpressions: readonly string[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string[] {
@@ -74,7 +74,7 @@ export function queryReadDomains(
   return [...domains].sort();
 }
 
-export function exemptQueryReadDiagnostics(
+/** @internal */ export function exemptQueryReadDiagnostics(
   tableExpressions: readonly string[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   site: string,
@@ -100,7 +100,7 @@ export function exemptQueryReadDiagnostics(
   ];
 }
 
-export function unmodeledRelationReadDiagnostics(
+/** @internal */ export function unmodeledRelationReadDiagnostics(
   tableExpressions: readonly string[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   site: string,
@@ -123,7 +123,7 @@ export function unmodeledRelationReadDiagnostics(
     }));
 }
 
-export function queryTableExpressions(
+/** @internal */ export function queryTableExpressions(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   options: QueryReadResolutionOptions = {},
@@ -134,12 +134,12 @@ export function queryTableExpressions(
   ];
 }
 
-export interface QueryReadResolutionOptions {
+/** @internal */ export interface QueryReadResolutionOptions {
   readTableIdentifier?: (node: Node) => string | undefined;
   relationalTableName?: (name: string) => string | undefined;
 }
 
-export function queryJoinTableExpressions(
+/** @internal */ export function queryJoinTableExpressions(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
@@ -159,7 +159,7 @@ export function queryJoinTableExpressions(
   });
 }
 
-export function queryRelationalTableExpressions(
+/** @internal */ export function queryRelationalTableExpressions(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
@@ -185,7 +185,7 @@ export function queryRelationalTableExpressions(
   });
 }
 
-export function unresolvedQueryReadDiagnostics(
+/** @internal */ export function unresolvedQueryReadDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   options: QueryReadResolutionOptions = {},
@@ -227,7 +227,7 @@ export function unresolvedQueryReadDiagnostics(
   return diagnostics;
 }
 
-export function unresolvedRelationalQueryReadDiagnostics(
+/** @internal */ export function unresolvedRelationalQueryReadDiagnostics(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   relationalTableName?: (name: string) => string | undefined,
@@ -258,7 +258,7 @@ export function unresolvedRelationalQueryReadDiagnostics(
   });
 }
 
-export function queryBodyCallExpressions<T>(
+/** @internal */ export function queryBodyCallExpressions<T>(
   body: ObjectLiteralExpression,
   mode: 'project' | 'source',
   extract: (call: CallExpression) => readonly T[],
@@ -271,11 +271,11 @@ export function queryBodyCallExpressions<T>(
     .flatMap(extract);
 }
 
-export function queryReceiverMode(receiverReferences: QueryReceiverReferences): 'project' | 'source' {
+/** @internal */ export function queryReceiverMode(receiverReferences: QueryReceiverReferences): 'project' | 'source' {
   return receiverReferences.projectContainers ? 'project' : 'source';
 }
 
-export function isQueryCallOnReceiver(
+/** @internal */ export function isQueryCallOnReceiver(
   call: CallExpression,
   receiverReferences: QueryReceiverReferences,
 ): boolean {
@@ -284,7 +284,7 @@ export function isQueryCallOnReceiver(
   return isQueryReceiverIdentifier(receiver, receiverReferences);
 }
 
-export function queryCallChainReceiver(call: CallExpression): Node | undefined {
+/** @internal */ export function queryCallChainReceiver(call: CallExpression): Node | undefined {
   let receiver = staticAccessExpression(call.getExpression());
 
   while (receiver && Node.isCallExpression(receiver)) {
@@ -300,7 +300,7 @@ export function queryCallChainReceiver(call: CallExpression): Node | undefined {
  * calls are unwound; any other CallExpression receiver is returned as-is so it
  * fails closed (not a project receiver identifier ⇒ KV406 surface).
  */
-export function writeCallChainReceiver(receiver: Node | undefined): Node | undefined {
+/** @internal */ export function writeCallChainReceiver(receiver: Node | undefined): Node | undefined {
   let current = receiver;
 
   while (current && Node.isCallExpression(current)) {
@@ -311,14 +311,14 @@ export function writeCallChainReceiver(receiver: Node | undefined): Node | undef
   return current;
 }
 
-export function callSourceOrder(call: CallExpression): number {
+/** @internal */ export function callSourceOrder(call: CallExpression): number {
   const expression = call.getExpression();
   return Node.isPropertyAccessExpression(expression)
     ? expression.getNameNode().getStart()
     : call.getStart();
 }
 
-export function isQueryReadCallName(name: string): boolean {
+/** @internal */ export function isQueryReadCallName(name: string): boolean {
   return (
     name === 'from' ||
     name === 'innerJoin' ||
@@ -328,11 +328,11 @@ export function isQueryReadCallName(name: string): boolean {
   );
 }
 
-export function isJoinReadCallName(name: string): boolean {
+/** @internal */ export function isJoinReadCallName(name: string): boolean {
   return name === 'join' || isQueryReadCallName(name);
 }
 
-export function staticExpressionPath(
+/** @internal */ export function staticExpressionPath(
   node: Node | undefined,
   resolveIdentifier?: (node: Node) => string | undefined,
 ): string | undefined {
@@ -355,7 +355,7 @@ export function staticExpressionPath(
   return undefined;
 }
 
-export function staticExpressionRootIdentifier(node: Node): Node | undefined {
+/** @internal */ export function staticExpressionRootIdentifier(node: Node): Node | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   if (Node.isIdentifier(expression)) return expression;
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
@@ -367,7 +367,7 @@ export function staticExpressionRootIdentifier(node: Node): Node | undefined {
   return undefined;
 }
 
-export function unwrappedStaticExpressionNode(node: Node): Node {
+/** @internal */ export function unwrappedStaticExpressionNode(node: Node): Node {
   let current = node;
 
   while (
@@ -383,14 +383,14 @@ export function unwrappedStaticExpressionNode(node: Node): Node {
   return current;
 }
 
-export function unwrappedFunctionExpression(node: Node): ArrowFunction | FunctionExpression | undefined {
+/** @internal */ export function unwrappedFunctionExpression(node: Node): ArrowFunction | FunctionExpression | undefined {
   const expression = unwrappedStaticExpressionNode(node);
   return Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)
     ? expression
     : undefined;
 }
 
-export function queryInstanceKey(
+/** @internal */ export function queryInstanceKey(
   comparisons: QueryInstanceKeyComparisons,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Pick<QueryFact, 'instanceKey'> | null {
@@ -404,7 +404,7 @@ export function queryInstanceKey(
  * session-traceability). A read of an owner-annotated domain anchored this way is
  * session-scoped (not IDOR), so it discharges KV414.
  */
-export function querySessionAnchoredDomains(
+/** @internal */ export function querySessionAnchoredDomains(
   comparisons: QueryInstanceKeyComparisons,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): readonly string[] {
@@ -425,7 +425,7 @@ export function querySessionAnchoredDomains(
  * `or(...)`-branch operands (A2, fail-closed). The declared-key match in
  * `queryInstanceKey` still governs instanceKey/invalidation granularity.
  */
-export function queryArgScopedDomains(
+/** @internal */ export function queryArgScopedDomains(
   comparisons: QueryInstanceKeyComparisons,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): readonly string[] {
@@ -437,7 +437,7 @@ export function queryArgScopedDomains(
   return [...domains].sort();
 }
 
-export function argScopedDomainFromEqOperands(
+/** @internal */ export function argScopedDomainFromEqOperands(
   left: QueryInstanceKeyOperand,
   right: QueryInstanceKeyOperand,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -467,7 +467,7 @@ export function argScopedDomainFromEqOperands(
  * domain for an `args` predicate on ANY column of an owner table (the owner column is
  * usually not the key column), so it matches on table identity + owner-ness.
  */
-export function resolvedQueryOwnerTableDomain(
+/** @internal */ export function resolvedQueryOwnerTableDomain(
   key: { key: string; tableIdentifier: string },
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string | null {
@@ -489,7 +489,7 @@ export function resolvedQueryOwnerTableDomain(
  * declared `key:` column — used for session-anchoring detection on any domain table
  * column (matching prior declared-key behavior, now column-agnostic).
  */
-export function resolvedQueryTableDomain(
+/** @internal */ export function resolvedQueryTableDomain(
   key: { key: string; tableIdentifier: string },
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): string | null {
@@ -502,7 +502,7 @@ export function resolvedQueryTableDomain(
   return null;
 }
 
-export function sessionAnchoredDomainFromEqOperands(
+/** @internal */ export function sessionAnchoredDomainFromEqOperands(
   left: QueryInstanceKeyOperand,
   right: QueryInstanceKeyOperand,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -537,7 +537,7 @@ export function sessionAnchoredDomainFromEqOperands(
  *   branch is an `args`-scope candidate that must surface KV414, but an `or`-branch
  *   does NOT pin a row, so these never discharge an instance key.
  */
-export function queryInstanceKeyComparisons(
+/** @internal */ export function queryInstanceKeyComparisons(
   body: ObjectLiteralExpression,
   receiverReferences: QueryReceiverReferences,
   readTableIdentifier?: (node: Node) => string | undefined,
@@ -576,7 +576,7 @@ export function queryInstanceKeyComparisons(
   return { argCandidates, instanceKey };
 }
 
-export interface QueryInstanceKeyComparisons {
+/** @internal */ export interface QueryInstanceKeyComparisons {
   argCandidates: readonly QueryInstanceKeyComparison[];
   instanceKey: readonly QueryInstanceKeyComparison[];
 }
@@ -586,11 +586,11 @@ export interface QueryInstanceKeyComparisons {
  * KV414 fail-closed). Used only for `args`/`session` scope candidacy — `or(...)`
  * branches are included here but must never discharge an instance key.
  */
-export function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
+/** @internal */ export function allEqOperandPairs(predicate: Node): EqPredicateConjunct[] {
   return pnfAllEqOperandPairs(predicatePnf(predicate));
 }
 
-export function queryInstanceKeyOperand(
+/** @internal */ export function queryInstanceKeyOperand(
   expression: Node,
   readTableIdentifier?: (node: Node) => string | undefined,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
@@ -607,7 +607,7 @@ export function queryInstanceKeyOperand(
  * guard access or a same-package helper with an explicit analyzer summary. Private
  * values participate in proof but are erased from client-visible keys.
  */
-export function queryPrivateScopeKeyOperand(
+/** @internal */ export function queryPrivateScopeKeyOperand(
   expression: Node,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
@@ -619,7 +619,7 @@ export function queryPrivateScopeKeyOperand(
   };
 }
 
-export function queryTableKeyOperand(
+/** @internal */ export function queryTableKeyOperand(
   expression: Node,
   readTableIdentifier?: (node: Node) => string | undefined,
 ): Pick<QueryInstanceKeyOperand, 'tableKey'> {
@@ -638,7 +638,7 @@ export function queryTableKeyOperand(
   };
 }
 
-export function queryInputKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'inputKey'> {
+/** @internal */ export function queryInputKeyOperand(expression: Node): Pick<QueryInstanceKeyOperand, 'inputKey'> {
   const node = staticAccessExpression(expression);
   if (!Node.isIdentifier(node) || node.getText() !== 'input') return {};
 
@@ -646,7 +646,7 @@ export function queryInputKeyOperand(expression: Node): Pick<QueryInstanceKeyOpe
   return key ? { inputKey: `arg:${key}` } : {};
 }
 
-export function compositeQueryInstanceKey(
+/** @internal */ export function compositeQueryInstanceKey(
   comparisons: readonly QueryInstanceKeyComparison[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Pick<QueryFact, 'instanceKey'> | null {
@@ -677,7 +677,7 @@ export function compositeQueryInstanceKey(
   return null;
 }
 
-export function valueKeyForTableColumnComparison(
+/** @internal */ export function valueKeyForTableColumnComparison(
   comparison: QueryInstanceKeyComparison,
   tableIdentifier: string,
 ): { column: string; valueKey: string } | null {
@@ -696,7 +696,7 @@ export function valueKeyForTableColumnComparison(
   return null;
 }
 
-export function directSummaryForFunction(
+/** @internal */ export function directSummaryForFunction(
   fn: ExtractedFunction,
   file: SourceFileInput,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -804,7 +804,7 @@ export function directSummaryForFunction(
   return { reads, unresolved, writes };
 }
 
-export function materializedViewRefreshFactsForFunction(
+/** @internal */ export function materializedViewRefreshFactsForFunction(
   fn: ExtractedFunction,
   file: SourceFileInput,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -834,7 +834,7 @@ export function materializedViewRefreshFactsForFunction(
   return facts;
 }
 
-export function isAsyncMaterializedViewAnnotation(
+/** @internal */ export function isAsyncMaterializedViewAnnotation(
   annotation: ExtractedTableAnnotation,
 ): annotation is KovoDomainTableAnnotation & {
   name: string;
@@ -849,7 +849,7 @@ export function isAsyncMaterializedViewAnnotation(
   );
 }
 
-export function appendReadSourceSummaries(
+/** @internal */ export function appendReadSourceSummaries(
   reads: ReadSummaryInput[],
   unresolved: UnresolvedSummaryInput[],
   call: ExtractedWriteCall,
@@ -901,7 +901,7 @@ export function appendReadSourceSummaries(
   }
 }
 
-export function appendForeignKeyCascadeWriteSummaries(
+/** @internal */ export function appendForeignKeyCascadeWriteSummaries(
   writes: WriteSummaryInput[],
   call: ExtractedWriteCall,
   site: string,
@@ -962,11 +962,11 @@ export function appendForeignKeyCascadeWriteSummaries(
   }
 }
 
-export function isTouchingForeignKeyAction(action: string | undefined): action is string {
+/** @internal */ export function isTouchingForeignKeyAction(action: string | undefined): action is string {
   return action === 'cascade' || action === 'set null' || action === 'set default';
 }
 
-export function foreignKeyTargetsTable(
+/** @internal */ export function foreignKeyTargetsTable(
   foreignKey: ExtractedForeignKey,
   parentTable: KovoDomainTableAnnotation & { name: string },
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -978,7 +978,7 @@ export function foreignKeyTargetsTable(
   );
 }
 
-export function appendDeclaredFanOutWriteSummaries(
+/** @internal */ export function appendDeclaredFanOutWriteSummaries(
   writes: WriteSummaryInput[],
   call: ExtractedWriteCall,
   site: string,
@@ -998,7 +998,7 @@ export function appendDeclaredFanOutWriteSummaries(
   }
 }
 
-export function appendMissingTriggerFanOutDiagnostics(
+/** @internal */ export function appendMissingTriggerFanOutDiagnostics(
   unresolved: UnresolvedSummaryInput[],
   call: ExtractedWriteCall,
   site: string,
@@ -1017,7 +1017,7 @@ export function appendMissingTriggerFanOutDiagnostics(
   });
 }
 
-export function fanAnnotationsForOperation(
+/** @internal */ export function fanAnnotationsForOperation(
   table: KovoDomainTableAnnotation & { name: string },
   operation: string,
 ): readonly KovoFanAnnotation[] {
@@ -1025,7 +1025,7 @@ export function fanAnnotationsForOperation(
   return (table.fans ?? []).filter((fan) => fan.when === undefined || fan.when === operation);
 }
 
-export function triggerTableNamesFromSource(source: string): ReadonlySet<string> {
+/** @internal */ export function triggerTableNamesFromSource(source: string): ReadonlySet<string> {
   const tables = new Set<string>();
   const triggerPattern =
     /CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER[\s\S]*?\bON\s+("?)([A-Za-z_][\w]*)\1/gi;
@@ -1038,7 +1038,7 @@ export function triggerTableNamesFromSource(source: string): ReadonlySet<string>
   return tables;
 }
 
-export function functionTouchSummariesForFile(
+/** @internal */ export function functionTouchSummariesForFile(
   file: SourceFileInput,
   functions: readonly ExtractedFunction[],
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
@@ -1075,7 +1075,7 @@ export function functionTouchSummariesForFile(
   return summaries;
 }
 
-export function mergeSummary(target: FunctionTouchSummary, source: FunctionTouchSummary): boolean {
+/** @internal */ export function mergeSummary(target: FunctionTouchSummary, source: FunctionTouchSummary): boolean {
   let changed = false;
 
   changed =
@@ -1091,7 +1091,7 @@ export function mergeSummary(target: FunctionTouchSummary, source: FunctionTouch
   return changed;
 }
 
-export function pushUnique<T>(target: T[], source: readonly T[], keyFor: (item: T) => string): boolean {
+/** @internal */ export function pushUnique<T>(target: T[], source: readonly T[], keyFor: (item: T) => string): boolean {
   const keys = new Set(target.map(keyFor));
   let changed = false;
 
@@ -1107,7 +1107,7 @@ export function pushUnique<T>(target: T[], source: readonly T[], keyFor: (item: 
   return changed;
 }
 
-export function readSummaryKey(read: ReadSummaryInput): string {
+/** @internal */ export function readSummaryKey(read: ReadSummaryInput): string {
   return [
     read.operation,
     read.table.name,
@@ -1118,7 +1118,7 @@ export function readSummaryKey(read: ReadSummaryInput): string {
   ].join('\0');
 }
 
-export function unresolvedSummaryKey(unresolved: UnresolvedSummaryInput): string {
+/** @internal */ export function unresolvedSummaryKey(unresolved: UnresolvedSummaryInput): string {
   return [
     unresolved.code ?? '',
     unresolved.operation,
@@ -1127,7 +1127,7 @@ export function unresolvedSummaryKey(unresolved: UnresolvedSummaryInput): string
   ].join('\0');
 }
 
-export function writeSummaryKey(write: WriteSummaryInput): string {
+/** @internal */ export function writeSummaryKey(write: WriteSummaryInput): string {
   return [
     write.operation,
     write.table.name,
@@ -1138,7 +1138,7 @@ export function writeSummaryKey(write: WriteSummaryInput): string {
   ].join('\0');
 }
 
-export function extractReadSourcesFromWriteChain(
+/** @internal */ export function extractReadSourcesFromWriteChain(
   chain: Node,
   operation: string,
   tableExpressionText: (node: Node) => string,
@@ -1171,7 +1171,7 @@ export function extractReadSourcesFromWriteChain(
     : [{ operation: 'insert-select', tableExpression: UNRESOLVED_READ_SOURCE_EXPRESSION }];
 }
 
-export function writeReadSourceOperation(
+/** @internal */ export function writeReadSourceOperation(
   call: CallExpression,
   chain: Node,
   operation: string,
@@ -1196,7 +1196,7 @@ export function writeReadSourceOperation(
   return callExpressionContinuesToChain(call, chain) ? 'update-from' : 'update-predicate';
 }
 
-export function callExpressionContinuesToChain(call: CallExpression, chain: Node): boolean {
+/** @internal */ export function callExpressionContinuesToChain(call: CallExpression, chain: Node): boolean {
   let current: Node = call;
 
   while (current !== chain) {
@@ -1215,7 +1215,7 @@ export function callExpressionContinuesToChain(call: CallExpression, chain: Node
   return true;
 }
 
-export function isReadSourceCall(call: CallExpression): boolean {
+/** @internal */ export function isReadSourceCall(call: CallExpression): boolean {
   const name = propertyAccessCallName(call);
   return (
     name === 'from' ||
@@ -1227,12 +1227,12 @@ export function isReadSourceCall(call: CallExpression): boolean {
   );
 }
 
-export function propertyAccessCallName(call: CallExpression): string | undefined {
+/** @internal */ export function propertyAccessCallName(call: CallExpression): string | undefined {
   const expression = call.getExpression();
   return staticAccessName(expression);
 }
 
-export function staticAccessName(node: Node): string | undefined {
+/** @internal */ export function staticAccessName(node: Node): string | undefined {
   if (Node.isPropertyAccessExpression(node)) return node.getName();
   if (!Node.isElementAccessExpression(node)) return undefined;
 
@@ -1244,14 +1244,14 @@ export function staticAccessName(node: Node): string | undefined {
   return undefined;
 }
 
-export function staticAccessExpression(node: Node): Node | undefined {
+/** @internal */ export function staticAccessExpression(node: Node): Node | undefined {
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     return node.getExpression();
   }
   return undefined;
 }
 
-export function predicateSummaryFromFacts(
+/** @internal */ export function predicateSummaryFromFacts(
   facts: readonly ExtractedPredicateFact[],
   tableIdentifier: string,
   table: KovoDomainTableAnnotation,
@@ -1276,18 +1276,18 @@ export function predicateSummaryFromFacts(
   return keyFacts.some((fact) => fact?.predicate === 'non-eq') ? { predicate: 'non-eq' } : {};
 }
 
-export function isPrivateScopeKey(key: string): boolean {
+/** @internal */ export function isPrivateScopeKey(key: string): boolean {
   return key.startsWith('guard:') || key.startsWith('session:') || key.startsWith('tenant:');
 }
 
-export function tableKeyColumns(key: string): string[] {
+/** @internal */ export function tableKeyColumns(key: string): string[] {
   return key
     .split(',')
     .map((column) => column.trim())
     .filter((column) => column.length > 0);
 }
 
-export function extractPredicateFactsFromWriteChain(
+/** @internal */ export function extractPredicateFactsFromWriteChain(
   chain: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string> = new Set(),
@@ -1329,7 +1329,7 @@ export function extractPredicateFactsFromWriteChain(
  * write keyed by a client arg against an owner table emits a `kind:'write'` scope
  * audit (the write half of KV414 the framework previously never produced).
  */
-export function writeInstanceKeyComparisons(
+/** @internal */ export function writeInstanceKeyComparisons(
   chain: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
@@ -1354,7 +1354,7 @@ export function writeInstanceKeyComparisons(
   };
 }
 
-export function extractParameterizedKeys(
+/** @internal */ export function extractParameterizedKeys(
   pnf: PredicatePnf,
   resolveIdentifier?: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string> = new Set(),
@@ -1390,18 +1390,18 @@ export function extractParameterizedKeys(
   return facts;
 }
 
-export interface EqPredicateConjunct {
+/** @internal */ export interface EqPredicateConjunct {
   left: Node;
   right: Node;
 }
 
-export type PredicatePnf =
+/** @internal */ export type PredicatePnf =
   | { expr: string; kind: 'and'; nodes: readonly PredicatePnf[] }
   | { kind: 'eq'; left: Node; right: Node }
   | { expr: string; kind: 'opaque' }
   | { expr: string; kind: 'or'; nodes: readonly PredicatePnf[] };
 
-export function predicatePnf(node: Node): PredicatePnf {
+/** @internal */ export function predicatePnf(node: Node): PredicatePnf {
   const expression = unwrappedStaticExpressionNode(node);
   if (!Node.isCallExpression(expression)) return { expr: expression.getText(), kind: 'opaque' };
 
@@ -1424,7 +1424,7 @@ export function predicatePnf(node: Node): PredicatePnf {
     : { expr: expression.getText(), kind: 'opaque' };
 }
 
-export function pnfExactConjuncts(pnf: PredicatePnf): EqPredicateConjunct[] | null {
+/** @internal */ export function pnfExactConjuncts(pnf: PredicatePnf): EqPredicateConjunct[] | null {
   if (pnf.kind === 'eq') return [{ left: pnf.left, right: pnf.right }];
   if (pnf.kind === 'and') {
     const conjuncts: EqPredicateConjunct[] = [];
@@ -1438,17 +1438,17 @@ export function pnfExactConjuncts(pnf: PredicatePnf): EqPredicateConjunct[] | nu
   return null;
 }
 
-export function eqPredicateConjuncts(node: Node): EqPredicateConjunct[] | null {
+/** @internal */ export function eqPredicateConjuncts(node: Node): EqPredicateConjunct[] | null {
   return pnfExactConjuncts(predicatePnf(node));
 }
 
-export function pnfAllEqOperandPairs(pnf: PredicatePnf): EqPredicateConjunct[] {
+/** @internal */ export function pnfAllEqOperandPairs(pnf: PredicatePnf): EqPredicateConjunct[] {
   if (pnf.kind === 'eq') return [{ left: pnf.left, right: pnf.right }];
   if (pnf.kind === 'and' || pnf.kind === 'or') return pnf.nodes.flatMap(pnfAllEqOperandPairs);
   return [];
 }
 
-export function tableKeyReferences(
+/** @internal */ export function tableKeyReferences(
   node: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
 ): ExtractedPredicateFact[] {
@@ -1464,7 +1464,7 @@ export function tableKeyReferences(
   return dedupePredicateFacts(references);
 }
 
-export function tableKeyReference(
+/** @internal */ export function tableKeyReference(
   node: Node,
   resolveIdentifier?: (node: Node) => string | undefined,
 ): ExtractedPredicateFact | undefined {
@@ -1480,7 +1480,7 @@ export function tableKeyReference(
   };
 }
 
-export function dedupePredicateFacts(facts: readonly ExtractedPredicateFact[]): ExtractedPredicateFact[] {
+/** @internal */ export function dedupePredicateFacts(facts: readonly ExtractedPredicateFact[]): ExtractedPredicateFact[] {
   const seen = new Set<string>();
   const deduped: ExtractedPredicateFact[] = [];
 
@@ -1496,7 +1496,7 @@ export function dedupePredicateFacts(facts: readonly ExtractedPredicateFact[]): 
   return deduped;
 }
 
-export function argumentKey(
+/** @internal */ export function argumentKey(
   expression: Node,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),

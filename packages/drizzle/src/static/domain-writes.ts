@@ -29,13 +29,13 @@ import {
   unwrappedStaticExpressionNode,
 } from '../static.js';
 
-export function functionReceiverParametersByKey(
+/** @internal */ export function functionReceiverParametersByKey(
   functions: Iterable<Pick<ExtractedFunction, 'key' | 'receiverParameters'>>,
 ): ReadonlyMap<string, readonly ReceiverParameterRequirement[]> {
   return new Map([...functions].map((fn) => [fn.key, fn.receiverParameters]));
 }
 
-export function unresolvedDomainWriteCallbacks(
+/** @internal */ export function unresolvedDomainWriteCallbacks(
   file: SourceFileInput,
 ): { mergeWithExact: boolean; name: string; site: string }[] {
   return withParsedSourceFile(file, (sourceFile) => {
@@ -105,17 +105,17 @@ export function unresolvedDomainWriteCallbacks(
   });
 }
 
-export interface DomainWriteObjectResolution {
+/** @internal */ export interface DomainWriteObjectResolution {
   body?: ObjectLiteralExpression;
   unresolved: boolean;
 }
 
-export function domainWriteObject(argument: Node | undefined): DomainWriteObjectResolution {
+/** @internal */ export function domainWriteObject(argument: Node | undefined): DomainWriteObjectResolution {
   if (!argument) return { unresolved: true };
   return domainWriteObjectFromNode(argument, new Set()) ?? { unresolved: true };
 }
 
-export function domainWriteObjectFromNode(
+/** @internal */ export function domainWriteObjectFromNode(
   node: Node,
   seen: Set<string>,
 ): DomainWriteObjectResolution | undefined {
@@ -150,7 +150,7 @@ export function domainWriteObjectFromNode(
   return { unresolved: true };
 }
 
-export function domainWriteObjectFromDeclaration(
+/** @internal */ export function domainWriteObjectFromDeclaration(
   declaration: Node,
   seen: Set<string>,
 ): DomainWriteObjectResolution | undefined {
@@ -196,7 +196,7 @@ export function domainWriteObjectFromDeclaration(
   return undefined;
 }
 
-export function unresolvedComputedDomainWriteProperties(
+/** @internal */ export function unresolvedComputedDomainWriteProperties(
   object: ObjectLiteralExpression,
 ): { siteNode: Node }[] {
   const unresolved: { siteNode: Node }[] = [];
@@ -218,12 +218,12 @@ export function unresolvedComputedDomainWriteProperties(
   return unresolved;
 }
 
-export interface UnresolvedDomainWriteSpread {
+/** @internal */ export interface UnresolvedDomainWriteSpread {
   memberName: string;
   siteNode: Node;
 }
 
-export function unresolvedDomainWriteSpreads(
+/** @internal */ export function unresolvedDomainWriteSpreads(
   object: ObjectLiteralExpression,
 ): UnresolvedDomainWriteSpread[] {
   const unresolved: UnresolvedDomainWriteSpread[] = [];
@@ -275,7 +275,7 @@ export function unresolvedDomainWriteSpreads(
   return unresolved;
 }
 
-export function domainWriteSpreadHasUnresolvedBranch(expression: Node): boolean {
+/** @internal */ export function domainWriteSpreadHasUnresolvedBranch(expression: Node): boolean {
   if (!Node.isConditionalExpression(expression)) {
     const type = expression.getType();
     return type.isAny() || type.isUnknown() || typeHasOpaqueStringMembers(type);
@@ -286,13 +286,13 @@ export function domainWriteSpreadHasUnresolvedBranch(expression: Node): boolean 
   );
 }
 
-export function typeHasOpaqueStringMembers(type: MorphType): boolean {
+/** @internal */ export function typeHasOpaqueStringMembers(type: MorphType): boolean {
   // SPEC §10.2/§11.1: string-indexed objects can hide arbitrary loader/action members. Without
   // concrete property declarations, keep that surface visible as KV406 instead of assuming empty.
   return type.getStringIndexType() !== undefined;
 }
 
-export function domainWriteProperties(
+/** @internal */ export function domainWriteProperties(
   object: ObjectLiteralExpression,
   seen: Set<string> = new Set(),
 ): DomainWriteProperty[] {
@@ -347,7 +347,7 @@ export function domainWriteProperties(
   return [...properties.values()];
 }
 
-export function domainWritePropertiesFromSpread(property: Node, seen: Set<string>): DomainWriteProperty[] {
+/** @internal */ export function domainWritePropertiesFromSpread(property: Node, seen: Set<string>): DomainWriteProperty[] {
   if (!Node.isSpreadAssignment(property)) return [];
 
   const expression = unwrappedStaticExpressionNode(property.getExpression());
@@ -370,7 +370,7 @@ export function domainWritePropertiesFromSpread(property: Node, seen: Set<string
   return domainWritePropertiesFromExpression(expression, seen);
 }
 
-export function domainWritePropertiesFromExpression(
+/** @internal */ export function domainWritePropertiesFromExpression(
   expression: Node,
   seen: Set<string>,
 ): DomainWriteProperty[] {
@@ -406,7 +406,7 @@ export function domainWritePropertiesFromExpression(
   return properties;
 }
 
-export function domainWritePropertyFromDeclaration(
+/** @internal */ export function domainWritePropertyFromDeclaration(
   memberName: string,
   declaration: Node,
   seen: Set<string>,
@@ -480,7 +480,7 @@ export function domainWritePropertyFromDeclaration(
   return undefined;
 }
 
-export function domainWritePropertyFromBindingElement(
+/** @internal */ export function domainWritePropertyFromBindingElement(
   memberName: string,
   declaration: BindingElement,
   seen: Set<string>,
@@ -518,7 +518,7 @@ export function domainWritePropertyFromBindingElement(
   return undefined;
 }
 
-export function domainWritePropertyFromShorthandAssignment(
+/** @internal */ export function domainWritePropertyFromShorthandAssignment(
   declaration: Node,
   seen: Set<string>,
 ): DomainWriteProperty | undefined {
@@ -537,7 +537,7 @@ export function domainWritePropertyFromShorthandAssignment(
   return undefined;
 }
 
-export function writeCallbackFunction(
+/** @internal */ export function writeCallbackFunction(
   initializer: Node | undefined,
 ): ReturnType<CallExpression['getArguments']>[number] | null {
   if (!initializer) return null;
@@ -554,7 +554,7 @@ export function writeCallbackFunction(
   return null;
 }
 
-export function rawTablesByDomainWriteCallback(
+/** @internal */ export function rawTablesByDomainWriteCallback(
   file: SourceFileInput,
 ): ReadonlyMap<string, readonly string[]> {
   return withParsedSourceFile(file, (sourceFile) => {
@@ -584,7 +584,7 @@ export function rawTablesByDomainWriteCallback(
   });
 }
 
-export function rawTablesFromWriteInitializer(initializer: Node | undefined): string[] {
+/** @internal */ export function rawTablesFromWriteInitializer(initializer: Node | undefined): string[] {
   if (!initializer) return [];
   const writeCall = unwrappedStaticExpressionNode(initializer);
   if (!Node.isCallExpression(writeCall)) return [];
@@ -601,19 +601,19 @@ export function rawTablesFromWriteInitializer(initializer: Node | undefined): st
   return [];
 }
 
-export function writeActionCallbackFunction(
+/** @internal */ export function writeActionCallbackFunction(
   initializer: Node | undefined,
   seen: Set<string> = new Set(),
 ): ReturnType<CallExpression['getArguments']>[number] | null {
   return writeActionCallbackResolution(initializer, seen).callbacks[0] ?? null;
 }
 
-export interface WriteActionCallbackResolution {
+/** @internal */ export interface WriteActionCallbackResolution {
   callbacks: Node[];
   unresolved: boolean;
 }
 
-export function writeActionCallbackResolution(
+/** @internal */ export function writeActionCallbackResolution(
   initializer: Node | undefined,
   seen: Set<string> = new Set(),
 ): WriteActionCallbackResolution {
@@ -652,7 +652,7 @@ export function writeActionCallbackResolution(
   return { callbacks: [], unresolved: true };
 }
 
-export function writeActionCallbackFromDeclaration(
+/** @internal */ export function writeActionCallbackFromDeclaration(
   declaration: Node,
   seen: Set<string>,
 ): ReturnType<CallExpression['getArguments']>[number] | null {
@@ -692,7 +692,7 @@ export function writeActionCallbackFromDeclaration(
   return null;
 }
 
-export function writeActionCallbackFromBindingElement(
+/** @internal */ export function writeActionCallbackFromBindingElement(
   declaration: BindingElement,
   seen: Set<string>,
 ): ReturnType<CallExpression['getArguments']>[number] | null {
@@ -717,7 +717,7 @@ export function writeActionCallbackFromBindingElement(
   return null;
 }
 
-export function writeCallbackArgumentFunction(argument: Node): Node | null {
+/** @internal */ export function writeCallbackArgumentFunction(argument: Node): Node | null {
   const expression = unwrappedStaticExpressionNode(argument);
   if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
   if (Node.isObjectLiteralExpression(expression)) {
@@ -731,13 +731,13 @@ export function writeCallbackArgumentFunction(argument: Node): Node | null {
   return referencedWriteCallbackFunction(expression) ?? null;
 }
 
-export function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
+/** @internal */ export function referencedWriteCallbackFunction(identifier: Node): Node | undefined {
   // SPEC §10-§11: mutation touch facts must come from an executable local callback body; cross
   // module project references are followed through ts-morph aliases instead of by-name fallback.
   return callbackFunctionFromReference(identifier, new Set());
 }
 
-export function extractedFunctionKey(name: string, callback: Node, keyNode: Node = callback): string {
+/** @internal */ export function extractedFunctionKey(name: string, callback: Node, keyNode: Node = callback): string {
   return (
     resolvedSymbolKey(keyNode.getSymbol()) ??
     `${callback.getSourceFile().getFilePath()}:${callback.getStart()}:${name}`
