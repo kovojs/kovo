@@ -106,8 +106,7 @@ describe('server node adapter', () => {
   });
 
   it('serves multiple Early Hints Link values through node:http', async () => {
-    const link =
-      '</assets/app.css>; rel=preload; as=style, </c/app.client.js>; rel=modulepreload';
+    const link = '</assets/app.css>; rel=preload; as=style, </c/app.client.js>; rel=modulepreload';
     const server = await serveWithNode(
       toNodeHandler(
         async () =>

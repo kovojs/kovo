@@ -91,6 +91,32 @@ describe('browser inline loader bootstrap', () => {
     await vi.waitFor(() => expect(replayedClicks).toBe(1));
   });
 
+  it('loads the runtime immediately and replays early authored handler clicks', async () => {
+    installRafQueue();
+    const target = document.createElement('button');
+    target.setAttribute('on:click', '/client.ts#mark');
+    let runtimeInstalled = false;
+    let replayedClicks = 0;
+    target.addEventListener('click', () => {
+      if (runtimeInstalled) replayedClicks += 1;
+    });
+    document.body.append(target);
+    const runtimeImport = vi.fn(async () => ({
+      installKovoDeferredRuntime() {
+        runtimeInstalled = true;
+      },
+    }));
+
+    installInlineKovoBootstrap('/c/__v/runtime/kovo-runtime.client.js', runtimeImport);
+
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+    target.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(runtimeImport).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(replayedClicks).toBe(1));
+  });
+
   it('queues deferred stream apply calls until the runtime installs', async () => {
     const callbacks = installRafQueue();
     const applied: string[] = [];

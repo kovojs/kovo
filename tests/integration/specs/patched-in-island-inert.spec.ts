@@ -1,11 +1,8 @@
 import { expect, test } from '@kovojs/test/internal/integration';
 
-test.use({ kovoFixture: 'patched-in-island-inert' });
+import { isAuthoredClientModuleRequest } from './client-module-requests';
 
-function isClientModuleRequest(url: string): boolean {
-  const pathname = new URL(url).pathname;
-  return pathname.endsWith('/client.ts') || pathname.startsWith('/c/');
-}
+test.use({ kovoFixture: 'patched-in-island-inert' });
 
 test('patched-in islands stay inert until their first delegated interaction', async ({
   kovoApp,
@@ -13,7 +10,7 @@ test('patched-in islands stay inert until their first delegated interaction', as
 }) => {
   const clientModuleRequests: string[] = [];
   page.on('request', (request) => {
-    if (isClientModuleRequest(request.url())) clientModuleRequests.push(request.url());
+    if (isAuthoredClientModuleRequest(request.url())) clientModuleRequests.push(request.url());
   });
 
   await page.goto('/');

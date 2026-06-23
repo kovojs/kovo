@@ -12,6 +12,7 @@ import {
   createStaticExportL0L1App,
   type StaticExportRenderCounter,
 } from '../fixtures/static-export-l0-l1/app';
+import { isAuthoredStaticClientModulePath } from './client-module-requests';
 
 test.use({ kovoFixture: 'static-export-l0-l1' });
 
@@ -29,7 +30,12 @@ test('exports L0/L1 documents and serves them without a second render path', asy
       '/index.html',
       '/search/index.html',
     ]);
-    expect(result.clientModules.map((artifact) => artifact.path).sort()).toEqual([
+    expect(
+      result.clientModules
+        .map((artifact) => artifact.path)
+        .filter(isAuthoredStaticClientModulePath)
+        .sort(),
+    ).toEqual([
       '/c/__v/static-export-analytics-1/static-export-analytics.client.js',
       '/c/__v/static-export-docs-1/static-export-docs.client.js',
     ]);

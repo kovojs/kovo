@@ -16,7 +16,7 @@ test('assembles the default document shell around route content', async ({
   const html = await raw.text();
   expect(html.startsWith('<!doctype html><html lang="en-US">')).toBeTruthy();
   expect(html).toContain('<title>Document Shell</title>');
-  expect(html).toContain('installInlineKovoLoader');
+  expect(html).toContain('installInlineKovoBootstrap');
   expect(html).toContain('data-kovo-csp-hash=');
   expect(html).toContain('kovo-query="shell"');
 

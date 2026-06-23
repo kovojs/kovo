@@ -939,6 +939,20 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
     const form = event.target?.closest?.('form[enhance],form[data-enhance],form[data-mutation]');
     return form ? { submitter: event.submitter, target: form, type: 'submit' } : undefined;
   };
+  const authoredClick = (event) => {
+    if (
+      event.defaultPrevented ||
+      event.button ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    const target = event.target;
+    return target?.closest?.('[on\\:click]') ? { target, type: 'click' } : undefined;
+  };
   const replay = (item) => {
     if (!item.target?.isConnected) return;
     if (item.type === 'submit') {
@@ -965,6 +979,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       return;
     }
     if (item.href) location.assign?.(item.href);
+    else replay(item);
   };
   const cleanup = () => {
     for (const event of events) removeEventListener(event, capture, { capture: true });
@@ -985,7 +1000,8 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
         for (const item of queued.splice(0)) fallback(item);
       }));
   const capture = (event) => {
-    const item = event.type === 'submit' ? enhancedSubmit(event) : enhancedAnchor(event);
+    const item =
+      event.type === 'submit' ? enhancedSubmit(event) : authoredClick(event) || enhancedAnchor(event);
     if (!item) return;
     event.preventDefault();
     queued.push(item);

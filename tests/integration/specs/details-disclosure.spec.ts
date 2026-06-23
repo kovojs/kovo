@@ -1,11 +1,13 @@
 import { expect, test } from '@kovojs/test/internal/integration';
 
+import { isAuthoredClientModuleRequest } from './client-module-requests';
+
 test.use({ kovoFixture: 'details-disclosure' });
 
 test('native details toggles open without importing client code', async ({ page, kovoApp }) => {
   const clientModuleRequests: string[] = [];
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname.startsWith('/c/')) {
+    if (isAuthoredClientModuleRequest(request.url())) {
       clientModuleRequests.push(request.url());
     }
   });

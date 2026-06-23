@@ -5,11 +5,17 @@ test.use({ kovoFixture: 'kovo-defer-initial-stream' });
 test('kovo-defer fallback morphs to initial streamed fragment with query truth first', async ({
   page,
   kovoApp,
+  request,
 }) => {
-  await page.goto('/', { waitUntil: 'commit' });
+  const raw = await request.get('/');
+  expect(raw.status()).toBe(200);
+  const html = await raw.text();
+  const fallbackIndex = html.indexOf('data-testid="reviews-fallback"');
+  const boundaryIndex = html.indexOf('--kovo-boundary');
+  expect(fallbackIndex).toBeGreaterThan(-1);
+  expect(boundaryIndex).toBeGreaterThan(fallbackIndex);
 
-  await expect(page.getByTestId('reviews-fallback')).toBeVisible();
-  await expect(page.locator('kovo-defer[target="reviews:p1"]')).toHaveAttribute('state', 'pending');
+  await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Reviews ready' })).toBeVisible();
   await expect(page.locator('[kovo-c="reviews:p1"] [data-bind="reviews.count"]')).toHaveText('1');

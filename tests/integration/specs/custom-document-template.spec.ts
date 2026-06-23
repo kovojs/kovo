@@ -14,7 +14,7 @@ test('wraps assembled document parts and keeps client interaction working', asyn
   const html = await raw.text();
   expect(html.startsWith('<!doctype html><html lang="en-GB" data-template="custom">')).toBeTruthy();
   expect(html).toContain('<header role="banner">Custom Chrome</header>');
-  expect(html).toContain('installInlineKovoLoader');
+  expect(html).toContain('installInlineKovoBootstrap');
   expect(html).toContain('data-kovo-csp-hash=');
   expect(html).toContain('on:click="/client.ts#mark"');
 

@@ -1,11 +1,13 @@
 import { expect, test } from '@kovojs/test/internal/integration';
 
+import { isAuthoredClientModuleRequest } from './client-module-requests';
+
 test.use({ kovoFixture: 'children-render-time' });
 
 test('renders children and named slots in the initial server HTML', async ({ page, kovoApp }) => {
   const clientModuleRequests: string[] = [];
   page.on('request', (request) => {
-    if (new URL(request.url()).pathname.startsWith('/c/')) clientModuleRequests.push(request.url());
+    if (isAuthoredClientModuleRequest(request.url())) clientModuleRequests.push(request.url());
   });
 
   const response = await page.goto('/');
