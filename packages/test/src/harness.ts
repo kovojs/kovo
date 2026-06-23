@@ -1,16 +1,21 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import type { MutationDefinition, MutationResult, QueryDefinition, Schema } from '@kovojs/server';
+import type {
+  CsrfValidationOptions,
+  MutationDefinition,
+  MutationResult,
+  QueryDefinition,
+  Schema,
+} from '@kovojs/server';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
-  type HarnessMutationOptions,
   type HarnessPageFixture,
   loadHarnessPage,
 } from './harness-operations.js';
 import type { PageAssertion } from './page.js';
 import { createDbVerifier } from './verifier.js';
 import type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
-import type { DbVerificationConfig } from './verifier-observation.js';
+import type { DbVerificationConfig as InternalDbVerificationConfig } from './verifier-observation.js';
 
 // SPEC.md §11: the harness verification API returns `DbVerificationDiagnostic`s
 // and the `page()` API returns a `PageAssertion`, so both documented types are
@@ -38,17 +43,68 @@ export interface KovoTestContext<Db = unknown> {
   verificationDiagnostics(): readonly DbVerificationDiagnostic[];
 }
 
+/** Touch-site fact accepted by the public harness verifier options (SPEC.md §11). */
+export interface KovoTestTouchSite {
+  branch?: string;
+  domain: string;
+  keys: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  via: string;
+}
+
+/** Read-site fact accepted by the public harness verifier options (SPEC.md §11). */
+export interface KovoTestReadSite {
+  branch?: string;
+  domain: string;
+  keys: null | string;
+  predicate?: 'eq' | 'non-eq';
+  site: string;
+  source: string;
+  via: string;
+}
+
+/** Unresolved static write fact accepted by the public harness verifier options (SPEC.md §11). */
+export interface KovoTestUnresolvedWriteSite {
+  code: 'KV404' | 'KV406' | 'KV413';
+  domain?: string;
+  message: string;
+  site: string;
+}
+
+/** One public touch-graph entry consumed by `createKovoTestHarness` verification (SPEC.md §11). */
+export interface KovoTestTouchGraphEntry {
+  reads?: readonly KovoTestReadSite[];
+  touches: readonly KovoTestTouchSite[];
+  unresolved: readonly KovoTestUnresolvedWriteSite[];
+}
+
+/** Public structural touch graph accepted by `createKovoTestHarness` verification (SPEC.md §11). */
+export type KovoTestTouchGraph = Readonly<Record<string, KovoTestTouchGraphEntry>>;
+
+/** Public database-observation config for harness verification (SPEC.md §11). */
+export interface KovoTestVerificationConfig {
+  domainByTable: Record<string, string>;
+  exemptTables?: readonly string[];
+  keyByTable?: Record<string, string>;
+  sqlDialect?: 'postgres' | 'sqlite';
+}
+
 /** Options for `createKovoTestHarness`: the `db`, optional `pages`, request stub, touch graph, and verification config. */
 export interface KovoTestHarnessOptions<Db> {
   db: Db;
   pages?: Record<string, HarnessPageFixture<Db>>;
   request?: Record<string, unknown>;
-  touchGraph?: CoreGraph.TouchGraph;
-  verification?: DbVerificationConfig;
+  touchGraph?: KovoTestTouchGraph;
+  verification?: KovoTestVerificationConfig;
 }
 
 /** Options for a single `exec` of a mutation inside the harness. */
-export type KovoTestExecOptions<Request> = HarnessMutationOptions<Request>;
+export interface KovoTestExecOptions<Request> {
+  csrf?: CsrfValidationOptions<Request>;
+  request?: Partial<Omit<Request, 'db'>>;
+  touchGraphKey?: string;
+}
 
 /**
  * Create a test harness around a database: run mutations and queries, load
@@ -63,7 +119,10 @@ export function createKovoTestHarness<Db>(
 ): KovoTestContext<Db> {
   const verifier =
     options.touchGraph && options.verification
-      ? createDbVerifier(options.touchGraph, options.verification)
+      ? createDbVerifier(
+          options.touchGraph as CoreGraph.TouchGraph,
+          options.verification as InternalDbVerificationConfig,
+        )
       : null;
   const db = verifier ? (verifier.wrap(options.db) as Db) : options.db;
 
