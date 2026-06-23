@@ -15,7 +15,10 @@ type SoQueryLoadContext = QueryLoadContext<SoRequest> & { db?: SoDb };
 export const questionList = query('questionList', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
-    const sessionId = requireSoSessionId(context);
+    const sessionId = context?.request?.session?.id;
+    if (!sessionId) {
+      throw new Error('stackoverflow query loaders require request.session.id');
+    }
     const items = await db
       .select({
         authorId: questions.authorId,
@@ -40,7 +43,10 @@ export const questionList = query('questionList', {
 export const answerList = query('answerList', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
-    const sessionId = requireSoSessionId(context);
+    const sessionId = context?.request?.session?.id;
+    if (!sessionId) {
+      throw new Error('stackoverflow query loaders require request.session.id');
+    }
     const items = await db
       .select({
         id: answers.id,
@@ -62,7 +68,10 @@ export const questionDetail = query('questionDetail', {
     context?: SoQueryLoadContext,
   ): Promise<QuestionDetailResult | null> => {
     const db = requireSoQueryDb(context);
-    const sessionId = requireSoSessionId(context);
+    const sessionId = context?.request?.session?.id;
+    if (!sessionId) {
+      throw new Error('stackoverflow query loaders require request.session.id');
+    }
     const [row] = await db
       .select({
         id: questions.id,
@@ -89,7 +98,10 @@ export const questionAnswers = query('questionAnswers', {
     context?: SoQueryLoadContext,
   ): Promise<QuestionAnswersResult> => {
     const db = requireSoQueryDb(context);
-    const sessionId = requireSoSessionId(context);
+    const sessionId = context?.request?.session?.id;
+    if (!sessionId) {
+      throw new Error('stackoverflow query loaders require request.session.id');
+    }
     return db
       .select({
         id: answers.id,
@@ -111,7 +123,10 @@ export const questionAnswers = query('questionAnswers', {
 export const questionScore = query('questionScore', {
   load: async (_input: unknown, context?: SoQueryLoadContext) => {
     const db = requireSoQueryDb(context);
-    const sessionId = requireSoSessionId(context);
+    const sessionId = context?.request?.session?.id;
+    if (!sessionId) {
+      throw new Error('stackoverflow query loaders require request.session.id');
+    }
     const rows = await db
       .select({ value: sum(votes.value) })
       .from(votes)
@@ -126,12 +141,4 @@ function requireSoQueryDb(context?: SoQueryLoadContext): SoDb {
     throw new Error('stackoverflow query loaders require context.db or request.db');
   }
   return db;
-}
-
-function requireSoSessionId(context?: SoQueryLoadContext): string {
-  const sessionId = context?.request?.session?.id;
-  if (!sessionId) {
-    throw new Error('stackoverflow query loaders require request.session.id');
-  }
-  return sessionId;
 }

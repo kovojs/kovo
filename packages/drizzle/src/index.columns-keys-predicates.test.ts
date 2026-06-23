@@ -1049,6 +1049,117 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
   });
 
+  it('extracts session-scoped composite keys without exposing private scope', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            '  const sessionId = request.session?.id;',
+            '  if (!sessionId) throw new Error("auth required");',
+            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      voteUp: {
+        reads: [],
+        touches: [
+          {
+            domain: 'question',
+            keys: 'arg:targetId',
+            site: 'question.domain.ts:9',
+            via: 'questions',
+          },
+        ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
+  it('degrades unguarded nullable session aliases instead of proving row identity', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            '  const sessionId = request.session?.id;',
+            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'question.domain.ts:8',
+        via: 'questions',
+      },
+    ]);
+  });
+
+  it('degrades guarded session aliases that are reassigned before use', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'question.domain.ts',
+          source: [
+            'import { and, eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+            '',
+            'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+            '  let sessionId = request.session?.id;',
+            '  if (!sessionId) return;',
+            '  sessionId = targetId;',
+            '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'question.domain.ts:10',
+        via: 'questions',
+      },
+    ]);
+  });
+
   it('degrades eq predicates with non-parameter values to table-level invalidation', () => {
     const graph = extractTouchGraphFromProject({
       files: [
