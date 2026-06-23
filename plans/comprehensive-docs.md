@@ -26,7 +26,7 @@ commands that prove the claim.
 
 ## P0 - Correctness And Trust
 
-- [ ] **Reconcile live-query/SSE documentation with `SPEC.md`.**
+- [x] **Reconcile live-query/SSE documentation with `SPEC.md`.**
   - Evidence: `SPEC.md:880` and `SPEC.md:886` define `<kovo-live>`, SSE transport, `live: true`,
     shared fragment/query vocabulary, and guard rechecks. The deployment guide currently says v1
     has no SSE/live bus and pushes SSE to v2 at `site/content/guides/deployment.md:20` and
@@ -34,10 +34,13 @@ commands that prove the claim.
   - Deliverable: add or update `/guides/live-queries/`, Deployment, Queries, and Security with the
     current live-query contract, infra choices, instance-key routing, degradation, and per-push guard
     behavior.
-  - Done evidence: docs files plus site build/link checks and a SPEC-citation scan proving no stale
-    "v2 only" live-query language remains.
+  - Done evidence: `site/content/guides/live-queries.md`, `site/content/guides/deployment.md`,
+    `site/content/guides/queries.md`, and `site/content/guides/security.md` document SSE live
+    queries, instance-key routing, degradation, and per-push guard rechecks; `pnpm --filter
+    @kovojs/site build`, `pnpm --filter @kovojs/site check:links`, and `rg "no SSE|live bus|v2.*live|live.*v2" site/content/guides site/content/docs site/content/tutorial`
+    verified the site and stale live-query language.
 
-- [ ] **Fix fragment-target and island-state preservation docs.**
+- [x] **Fix fragment-target and island-state preservation docs.**
   - Evidence: `SPEC.md:810` and `SPEC.md:1310` say morph preserves DOM/UA state but not serialized
     island-local `kovo-state`; KV420 rejects stateful islands inside server-refreshable targets. The
     mutations guide currently says nested island state survives fragments at
@@ -45,9 +48,12 @@ commands that prove the claim.
   - Deliverable: update Mutations and Islands with server-refreshable boundary rules and the KV420
     fix menu: lift state to a query, use `isomorphic: true`, disable server refresh, or move the
     island.
-  - Done evidence: updated guide sections, KV420 cross-links, and link check.
+  - Done evidence: `site/content/guides/mutations.md`, `site/content/guides/islands.md`, and
+    `site/content/guides/diagnostics.md` now state that morph preserves browser/UA state but not
+    island-local `kovo-state`, with the KV420 fix menu; `pnpm --filter @kovojs/site check:links`
+    verified cross-links.
 
-- [ ] **Update auth/form failure, CSRF, and idempotency docs to match the spec.**
+- [x] **Update auth/form failure, CSRF, and idempotency docs to match the spec.**
   - Evidence: `SPEC.md:733` and `SPEC.md:876` distinguish unauthenticated mutation failures
     (`401 Kovo-Reauth` enhanced, no-JS `303`) from authenticated unauthorized `403` typed failures.
     `SPEC.md:737`, `SPEC.md:1075`, and `SPEC.md:1077` require anonymous-CSRF, KV418 for unsafe
@@ -55,8 +61,10 @@ commands that prove the claim.
     guard failures through the typed-error path at `site/content/guides/security.md:56`.
   - Deliverable: expand Mutations and Security with pre-auth CSRF, reauth redirects, typed 403
     failures, KV418, replay reservation, and concurrent submit behavior.
-  - Done evidence: docs changes plus focused search proving stale guard/CSRF/idempotency statements
-    are gone.
+  - Done evidence: `site/content/guides/mutations.md`, `site/content/guides/security.md`, and
+    `site/content/guides/endpoints-webhooks.md` document 401 `Kovo-Reauth`, no-JS 303, typed 403,
+    anonymous CSRF, KV418, replay reservation, and per-submit `Kovo-Idem`; `rg "guard failures take the typed-error|warn/error|KV406 \\| warn" site/content/guides site/content/docs site/content/tutorial`
+    found no stale requested statements.
 
 - [ ] **Refresh starter and project-structure docs to match the real `create-kovo` scaffold.**
   - Evidence: Quickstart and Installation describe a small one-page starter
@@ -141,33 +149,39 @@ commands that prove the claim.
   - Done evidence: new page(s), template/source references, link check, and any focused auth doc
     snippet validation available.
 
-- [ ] **Add a layouts guide.**
+- [x] **Add a layouts guide.**
   - Evidence: `SPEC.md:247` and `SPEC.md:263` define first-class `layout()` declarations with nesting,
     `parent`, `queries`, `guard`, `boundaries`, and `kovo explain page --layouts`. The routing guide
     currently shows only inline `layout:` examples (`site/content/guides/routing.md:25`,
     `site/content/guides/routing.md:32`).
   - Deliverable: document nested layouts, layout queries/guards/stylesheets, boundaries, no persistent
     layout state, and explain output.
-  - Done evidence: guide changes plus examples or snippets from CRM/reference app.
+  - Done evidence: `site/content/guides/layouts.md` documents nested layouts, layout queries/guards,
+    stylesheets, boundaries, no persistent layout state, and `kovo explain page --layouts`, and
+    `site/content/guides/routing.md` links it; site build/link checks passed.
 
-- [ ] **Document request shell, adapters, error shells, and load-shed configuration.**
+- [x] **Document request shell, adapters, error shells, and load-shed configuration.**
   - Evidence: `SPEC.md:912` through `SPEC.md:920` describe `createApp()` ownership of routes,
     mutations, queries, endpoints, document options, errors, CSRF, db/session providers, dispatch
     order, no middleware chain, and pre-dispatch 413/429 limits. Deployment only shows a minimal
     server entrypoint.
   - Deliverable: add `/guides/request-shell/` covering app options, dispatch order, document
     templates, error shells, adapters, max body size, coarse limits, and no-middleware implications.
-  - Done evidence: docs changes plus generated API cross-links for `@kovojs/server`.
+  - Done evidence: `site/content/guides/request-shell.md` documents `createApp()`, dispatch order,
+    document templates, error shells, adapters, pre-dispatch 413/429 limits, no middleware chain, and
+    links `/api/server/`; site build generated `/api/server/index.html` and link check passed.
 
-- [ ] **Document raw machine ingress: `endpoint()`, `webhook()`, typed headers, cookies, and audits.**
+- [x] **Document raw machine ingress: `endpoint()`, `webhook()`, typed headers, cookies, and audits.**
   - Evidence: `SPEC.md:856`, `SPEC.md:860`, `SPEC.md:862`, and `SPEC.md:1341` define endpoints,
     webhooks, verifier kits, typed response headers/cookies, CSRF exemptions, and `--endpoints`
     audit rows. Site docs mostly mention these as audits/escape hatches.
   - Deliverable: add `/guides/endpoints-webhooks/` for OAuth callbacks, webhooks, downloads,
     non-browser writes, `csrf: false`, typed cookies/headers, and security review.
-  - Done evidence: new guide, API links, and endpoint audit example.
+  - Done evidence: `site/content/guides/endpoints-webhooks.md` documents `endpoint()`, `webhook()`,
+    verifier kits, typed headers/cookies, KV415, KV418, CSRF exemptions, and a `--endpoints` audit
+    example, with `/api/server/` cross-link verified by the site link check.
 
-- [ ] **Tighten deployment, deploy-skew, and static-export docs.**
+- [x] **Tighten deployment, deploy-skew, and static-export docs.**
   - Evidence: `SPEC.md:1431` and `SPEC.md:1435` require token-mismatch recovery and at least 24 hours
     of prior immutable `/c/__v/*` modules plus prior-token `/_q/` reads. Deployment currently says
     retain modules for "as long as you believe a tab can stay open" at
@@ -175,16 +189,20 @@ commands that prove the claim.
     `docs/static-export.md`, not the public site.
   - Deliverable: document the 24-hour floor, prior-token query reads, KV417, token mismatch recovery,
     static export decision tree, and platform-specific retention checks.
-  - Done evidence: updated Deployment/static export docs, link check, and search proving no weaker
-    retention language remains.
+  - Done evidence: `site/content/guides/deployment.md` and `site/content/guides/static-export.md`
+    document the 24-hour floor, prior-token `/_q/` reads, KV417, token mismatch recovery, and static
+    export decision tree; `rg "as long as you believe|Retain versions for as long" site/content`
+    found no weaker retention language.
 
-- [ ] **Document typed query endpoint caching, versioning, and skew behavior.**
+- [x] **Document typed query endpoint caching, versioning, and skew behavior.**
   - Evidence: `SPEC.md:906` and `SPEC.md:908` require render-plan version tokens on `/_q/` responses
     and private/no-store cache posture with `Vary: Cookie` for guarded or session-dependent reads.
     The Queries guide shows the GET shape but omits those cache/version rules.
   - Deliverable: add a Queries section on typed read endpoint headers, private caching, guard reruns,
     render-plan tokens, and recovery.
-  - Done evidence: updated Queries plus Security/Deployment cross-links.
+  - Done evidence: `site/content/guides/queries.md` documents `/_q/` render-plan tokens,
+    `Cache-Control: private, no-store`, `Vary: Cookie`, guard reruns, and skew recovery, with
+    deployment/live-query cross-links verified by the link check.
 
 - [ ] **Promote dataflow devtool and MCP docs to the site.**
   - Evidence: `packages/devtool/README.md:12` explains mounting and MCP, while the site only has a
@@ -234,14 +252,16 @@ commands that prove the claim.
     `Accordion`, `Commerce`, `Dataflow Devtools`, and `Data-layer dialects` in the generated search
     index.
 
-- [ ] **Surface SQLite dialect support in the site data-layer docs.**
+- [x] **Surface SQLite dialect support in the site data-layer docs.**
   - Evidence: `plans/sqlite-support.md:131` marks docs done via `docs/data-layer-dialects.md`, but the
     public site data-layer guide still says "Drizzle over Postgres (or PGlite)" at
     `site/content/guides/data-layer.md:219` and does not expose SQLite type mapping or
     `create-kovo --dialect sqlite`.
   - Deliverable: integrate supported dialects, blessed drivers, SQLite type mapping, and scaffold
     dialect selection into the public site.
-  - Done evidence: updated site docs and search/link checks.
+  - Done evidence: `site/content/guides/data-layer.md` now exposes `create-kovo --dialect sqlite`,
+    blessed drivers, SQLite type mapping, and Better Auth SQLite adapter posture, mirrored from
+    `docs/data-layer-dialects.md`; site link check passed.
 
 - [ ] **Clarify the `@kovojs/browser/client` advanced boundary.**
   - Evidence: `@kovojs/browser/client` is public and generated in `site/gen/api/browser.md`, but the
@@ -267,13 +287,15 @@ commands that prove the claim.
     Postgres default, SQLite opt-in, and non-empty directory behavior.
   - Done evidence: CLI docs changes and focused `create-kovo` tests or help-output capture.
 
-- [ ] **Refresh diagnostics guide from generated diagnostics or add advanced-flow coverage.**
+- [x] **Refresh diagnostics guide from generated diagnostics or add advanced-flow coverage.**
   - Evidence: the hand-authored diagnostics guide stops the touch-graph section at KV411
     (`site/content/guides/diagnostics.md:93`), while `SPEC.md:1313` and
     `site/gen/reference/diagnostics.md:57` include newer KV414-KV420 entries.
   - Deliverable: replace duplicate hand tables with generated diagnostics where possible, or add an
     "Advanced app flow diagnostics" section linked from Security, Routing, Mutations, and Deployment.
-  - Done evidence: docs changes, generated diagnostics check, and link check.
+  - Done evidence: `site/content/guides/diagnostics.md` adds KV414-KV420 advanced-flow coverage and
+    corrects KV405/KV406 severity; `site/content/guides/testing.md` summary table matches; `pnpm
+    --filter @kovojs/site build` emitted `diagnostics-ref/v1 codes=57` and link check passed.
 
 - [x] **Wire or retire the site route artifact stale check.**
   - Evidence: `site/scripts/emit-routes.mjs:46` supports `--check`, but `site/package.json:15` exposes
@@ -285,6 +307,16 @@ commands that prove the claim.
     `site-routes/v1 pages=104`.
 
 ## Latest Verification
+
+- 2026-06-23 app-authoring guide slice:
+  - `pnpm install --frozen-lockfile`
+  - `pnpm --filter @kovojs/site build` (emitted `site-export/v1 html=102 ... diagnostics=0`; Vite
+    logged a port-24678 websocket warning but exited 0)
+  - `pnpm --filter @kovojs/site check:links` (`pages=103 internal=13139 external=837 OK`)
+  - `git diff --check`
+  - Focused stale-language scans over `site/content/guides`, `site/content/docs`, and
+    `site/content/tutorial` for requested live-query, deploy-retention, KV420, auth failure,
+    SQLite, and diagnostics drift phrases.
 
 - 2026-06-23 audit-only verification:
   - `jq`/`rg`/`nl`/`wc` sweeps over `public-packages.json`, `site/content`, `site/gen/api`,

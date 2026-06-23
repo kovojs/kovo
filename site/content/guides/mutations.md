@@ -123,15 +123,24 @@ const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name=
 ```
 
 CSRF stays on for server-rendered mutation endpoints unless you set `csrf: false` on a mutation,
-which you reserve for non-browser or externally authenticated endpoints. Any opt-out shows up in
-the `kovo explain --endpoints` audit.
+which you reserve for non-browser or externally authenticated endpoints. When `req.session` exists,
+the token is bound to that session. When the user is anonymous, it is bound to a framework-owned
+signed-cookie secret, so pre-auth forms like login, signup, and password reset are CSRF-protected
+before there is a session to bind to.
+
+A `csrf: false` mutation may not read `req.session` or run a session/cookie-derived guard such as
+`authed`, `role()`, or `owns()`; that is **KV418** because the mutation would skip CSRF while still
+riding ambient browser authority. Truly non-browser writes belong in
+[endpoints and webhooks](/guides/endpoints-webhooks/). Any opt-out shows up in the
+`kovo explain --endpoints` audit with its justification.
 
 ## The request lifecycle
 
 Every mutation POST runs the same pipeline:
 
 ```
-CSRF validation → replay lookup by idempotency key → parse + coerce input (schema)
+pre-dispatch size/rate limits → CSRF validation → replay reservation by idempotency key
+→ parse + coerce input (schema)
 → guard chain → BEGIN tx → handler (Tx-typed db; escaping the tx is a type error)
 → COMMIT → re-run invalidated queries (post-commit) → render <kovo-query>/<kovo-fragment> → respond
                      ↘ on fail(): ROLLBACK → typed error fragment, 422
@@ -139,8 +148,13 @@ CSRF validation → replay lookup by idempotency key → parse + coerce input (s
 
 Queries re-run after commit, so a response never renders pre-commit data — which would visibly
 revert the user's optimistic update. The `Kovo-Idem` hidden field makes duplicate submissions
-replayable: the server answers a duplicate with the stored response instead of running the handler
-again.
+replayable: the server atomically reserves `(principal, mutation, idem-token)` before parsing input.
+A concurrent submit carrying the same triple waits for the winning submit to settle and then replays
+that stored response instead of running the handler again.
+
+`Kovo-Idem` is per-submit, not per-form. The client mints a fresh high-entropy token for each
+logical submit, and an enhanced success response refreshes the hidden field. Editing a form and
+submitting again is therefore a new mutation rather than a replay of the first response.
 
 ## The enhanced round-trip
 
@@ -180,9 +194,12 @@ What each piece does:
 - **`<kovo-query>`** chunks replace the client's query values and run each query's update plan across
   every dependent island. When §4.8 bindings cover the affected output, query JSON or prod deltas
   are preferred over a full fragment.
-- **`<kovo-fragment>`** chunks are DOM-morphed in by default, so focus, scroll, selection, and nested
-  island state survive. They are sent for affected live targets whose output is not fully covered by
-  the query update plan. `mode="append"` is the explicit vocabulary for pagination and streams.
+- **`<kovo-fragment>`** chunks are DOM-morphed in by default, so focus, scroll, selection, and
+  browser-owned element state survive. The morph carries no serialization of island-local
+  `kovo-state`: an island declaring local `state` inside another component's server-refreshable
+  target is **KV420**, because refreshing the parent would clobber the child's private state. They
+  are sent for affected live targets whose output is not fully covered by the query update plan.
+  `mode="append"` is the explicit vocabulary for pagination and streams.
 - **`Kovo-Changes`** is the sanitized summary of committed writes — `{domain, keys}` only, never
   mutation input or failure detail.
 
@@ -260,6 +277,19 @@ Unexpected server failures stay outside the typed union and don't leak internals
 after commit returns a render-error fragment with HTTP 500 and a sanitized `Kovo-Changes` header for
 the writes that already committed.
 
+## Auth failures are not all form errors
+
+Mutation guard failures distinguish "not signed in" from "signed in but not allowed."
+
+An unauthenticated `authed` failure, such as an expired session on submit, is not part of the typed
+422 form union. The enhanced path returns HTTP 401 with a `Kovo-Reauth` directive carrying the login
+route and a same-origin `next` URL; the loader follows it so the user can re-authenticate. The no-JS
+path returns a 303 redirect to the login route with the same validated `next` value.
+
+An authenticated-but-unauthorized failure keeps the typed failure path: HTTP 403 with
+`forms.<mutation>.failure` carrying an `unauthorized` code. That lets a permission-denied UI render
+in the submitted form without confusing routine session expiry with validation.
+
 ## Audit what you built
 
 This is real output from the commerce reference app's committed graph:
@@ -288,6 +318,7 @@ invalidations, and every consumer that updates. See
 
 - [Optimistic updates](/guides/optimistic/) — make the round-trip feel instant.
 - [Queries & invalidation](/guides/queries/) — where `invalidates:` comes from.
+- [Endpoints & webhooks](/guides/endpoints-webhooks/) — non-browser writes and CSRF exemptions.
 - [Testing](/guides/testing/) — mutations as request/response assertions, no browser.
 
 <details>
@@ -296,7 +327,9 @@ invalidations, and every consumer that updates. See
 The mutation contract and the enhanced round-trip: SPEC §9.1. Declare-once derivation: SPEC §6.3.
 Input schema and FormData coercion, plus CSRF default-on: SPEC §6.6. Typed errors and the 422 path:
 SPEC §9.2. The guard chain, the unguarded audit, and the request lifecycle: SPEC §10.3. The
-endpoints audit: SPEC §11.4. Update plans across dependent islands: SPEC §4.8. Direct db access in a
-handler is **KV330**. The `kovo explain` artifact format: SPEC §5.3.
+endpoints audit: SPEC §11.4. Anonymous CSRF and KV418: SPEC §6.6. Replay reservation and per-submit
+`Kovo-Idem`: SPEC §10.3. Fragment morph state preservation and KV420: SPEC §9.1 and §4.5. Update
+plans across dependent islands: SPEC §4.8. Direct db access in a handler is **KV330**. The
+`kovo explain` artifact format: SPEC §5.3.
 
 </details>

@@ -183,7 +183,8 @@ export const dealDetailRoute = route('/deals/:id', {
 
 `redirect()` and `notFound()` are the two sanctioned non-200 page outcomes in v1. (Routes may also
 return `respond.file()` / `respond.stream()` for non-HTML 200/304 bodies; those are still ordinary
-routes with params, guards, KV220 validation, and the audits applied.)
+routes with params, guards, KV220 validation, and the audits applied. See
+[endpoints and webhooks](/guides/endpoints-webhooks/) for raw machine ingress.)
 
 ## Route guards
 
@@ -279,6 +280,7 @@ document as its oracle, and app TSX never authors navigation segment stamps or p
 ## Next
 
 - [Interactive islands & client state](/guides/islands/) — coordinating islands through the typed URL.
+- [Layouts](/guides/layouts/) — nested route chrome, layout queries, guards, and boundaries.
 - [Mutations & forms](/guides/mutations/) — the POST-redirect-GET write side of navigation.
 - [The kovo & vp CLIs](/guides/cli/) — running `kovo explain --unguarded` and `kovo explain page`.
 

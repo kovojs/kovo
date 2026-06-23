@@ -135,8 +135,8 @@ the boundary between declared dataflow and actual dataflow, from both sides:
 | KV402 | error      | Write touched an undeclared domain — the silent-stale-UI bug                                   |
 | KV403 | warn       | Declared domain never observed written — stale claim or untested branch                        |
 | KV404 | error      | Write to an unmapped table — map it or mark `exempt` (write-side only)                         |
-| KV405 | warn       | Conditional writes on branches never executed under instrumentation                            |
-| KV406 | warn/error | Statically un-analyzable write site — manual `touches` required, runtime-verified              |
+| KV405 | error      | Conditional writes on branches never executed under instrumentation                            |
+| KV406 | error      | Statically un-analyzable write site — manual `touches` required, plus `tables:` for raw SQL     |
 | KV407 | error      | Query read from an undeclared domain — missed invalidations                                    |
 | KV408 | error      | Declared row key ≠ observed row predicate                                                      |
 | KV409 | notice     | Non-eq predicate — degraded to table-level invalidation                                        |

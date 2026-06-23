@@ -216,7 +216,43 @@ same PR. Because invalidation now derives from the SQL that runs, the classic st
 join to a query and forgetting to invalidate the joined table — can't happen: the read set comes from
 the query expression, not from memory.
 
-## Set up Drizzle over Postgres (or PGlite)
+## Choose a scaffold dialect
+
+Postgres remains the default scaffold and reference path. The starter uses PGlite through
+`@electric-sql/pglite` and `drizzle-orm/pglite`, with tables from `drizzle-orm/pg-core`, so tests run
+against real Postgres semantics in-process. Hosted Postgres is a driver swap to
+`drizzle-orm/node-postgres`.
+
+SQLite is an opt-in scaffold dialect:
+
+```sh
+create-kovo my-app --dialect sqlite
+```
+
+The SQLite starter uses `better-sqlite3` through `drizzle-orm/better-sqlite3`, with tables from
+`drizzle-orm/sqlite-core`. Kovo's dataflow analysis is dialect-independent where it follows Drizzle
+table identity, domain annotations, query/mutation structure, and Better Auth schema bridge
+metadata. Dialect-specific handling stays pinned to the table factory, database type, column
+builders, and runtime SQL parser/observation surface.
+
+### SQLite type mapping
+
+SQLite has dynamic storage classes, so the scaffold uses explicit Drizzle modes where Kovo needs
+stable shape facts:
+
+| App shape | SQLite scaffold mapping                                  |
+| --------- | -------------------------------------------------------- |
+| Boolean   | `integer('field', { mode: 'boolean' })`                  |
+| JSON      | `text('field', { mode: 'json' })` when app code adds JSON |
+| Timestamp | ISO text columns, not Postgres `timestamp()`/`defaultNow()` |
+| DDL now   | `strftime('%Y-%m-%dT%H:%M:%fZ', 'now')`                  |
+
+Better Auth follows the same mapping in generated SQLite schema source, and its Drizzle adapter is
+configured with `provider: 'sqlite'`. The blessed scaffolded drivers are PGlite for Postgres and
+`better-sqlite3` for SQLite; LibSQL/Turso, SQL.js, and Bun SQLite may be recognized by analyzer
+stages, but they are not starter defaults.
+
+## Set up Drizzle over Postgres or SQLite
 
 The runtime `db` is ordinary Drizzle. The commerce reference app runs on real Postgres semantics
 in-process via PGlite, the same engine the [test harness](/guides/testing/) uses:
@@ -242,6 +278,20 @@ Swapping PGlite for a hosted Postgres is a driver change — `drizzle(pool, { sc
 unchanged. The request shell resolves the `db` provider once per request before any guard runs
 (SPEC §9.5).
 
+A SQLite scaffold has the same Kovo shape with the SQLite driver and schema core:
+
+```ts
+import Database from 'better-sqlite3';
+import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import * as schema from './schema.js';
+
+export type AppDb = BetterSQLite3Database<typeof schema>;
+
+export function createAppDb(filename = ':memory:'): AppDb {
+  return drizzle(new Database(filename), { schema });
+}
+```
+
 ## What carries over from store to Drizzle
 
 The progression is additive — moving from a plain store to Drizzle changes only the data access, and
@@ -265,13 +315,15 @@ takes over, and the verifier confirms nothing slipped.
 - [Mutations & forms](/guides/mutations/) — the request lifecycle around a write.
 - [Optimistic updates](/guides/optimistic/) — transforms derived from the same SQL shape.
 - [Testing](/guides/testing/) — running the `observed ⊆ static ∪ declared` verifier.
+- [Installation](/docs/installation/) — scaffold options, including `--dialect sqlite`.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
 Domains, writes, and the guard chain: SPEC §10.3. Schema as domain registry and the `kovo({ domain,
 key })` / `exempt` annotation: SPEC §10.1 (verified against `examples/commerce/src/schema.ts` and
-`@kovojs/drizzle`'s `kovo()`). Touch-set extraction from Drizzle SQL and the committed
+`@kovojs/drizzle`'s `kovo()`). Dialect support and SQLite type mapping are mirrored from
+`docs/data-layer-dialects.md`. Touch-set extraction from Drizzle SQL and the committed
 `touch-graph.ts`: SPEC §11.1. Runtime cross-check `observed ⊆ static ∪ KV406-declared`: SPEC §11.2.
 Direct db access in a handler is **KV330**; a statically un-analyzable write needs manual `touches`
 or it is **KV406**; a write touching an undeclared domain is **KV402**, a declared-but-never-written
@@ -279,5 +331,3 @@ domain is **KV403**, a write to an unmapped table is **KV404**, and an `exempt` 
 is **KV411** (SPEC §10.1, §11.3). The `db` provider and per-request resolution: SPEC §9.5.
 
 </details>
-</content>
-</invoke>
