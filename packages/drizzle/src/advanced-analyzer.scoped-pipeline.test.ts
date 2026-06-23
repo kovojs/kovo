@@ -465,7 +465,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       entries: [{ program: result.program, query: 'openTickets' }],
       formImport: { name: 'closeTicketForm', path: '../../app.js' },
     });
-    const publicQueryKey = queryFact.instanceKey ?? queryFact.query;
+    const publicQueryKey = queryFact.query;
     const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
       (match) => match[1] ?? '',
     );
@@ -557,7 +557,7 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
       entries: [{ program: result.program, query: 'openDocuments' }],
       formImport: { name: 'archiveDocumentForm', path: '../../app.js' },
     });
-    const publicQueryKey = queryFact.instanceKey ?? queryFact.query;
+    const publicQueryKey = queryFact.query;
     const transformInputs = [...loweredBrowserCode.matchAll(/\$input\.([A-Za-z_$][\w$]*)/g)].map(
       (match) => match[1] ?? '',
     );

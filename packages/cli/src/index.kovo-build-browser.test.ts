@@ -53,50 +53,6 @@ function writeClientEntry(root: string): void {
   writeFileSync(join(root, 'src/style.css'), 'main { color: rebeccapurple; }\n', 'utf8');
 }
 
-function writeRetentionCapableNodePresetConfig(root: string): void {
-  writeFileSync(
-    join(root, 'kovo.config.ts'),
-    [
-      "import { defineConfig, node } from '@kovojs/server/build';",
-      '',
-      'const nodePreset = node();',
-      '',
-      '// SPEC §14: this fixture models a serving layer that retains prior /c/__v/',
-      '// modules and prior-token /_q reads for at least the 24-hour deploy-skew floor.',
-      'export default defineConfig({',
-      '  preset: {',
-      "    name: 'node',",
-      '    inspect(build) {',
-      '      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {',
-      '        return [{',
-      "          code: 'node-missing-handler',",
-      "          message: 'The node preset requires a neutral build with server/handler.mjs.',",
-      "          severity: 'error',",
-      '        }];',
-      '      }',
-      '      return [];',
-      '    },',
-      '    emit(build, context) {',
-      '      return nodePreset.emit?.(build, context);',
-      '    },',
-      '  },',
-      '});',
-      '',
-    ].join('\n'),
-    'utf8',
-  );
-}
-
-async function withCwd<T>(cwd: string, run: () => Promise<T>): Promise<T> {
-  const previous = process.cwd();
-  process.chdir(cwd);
-  try {
-    return await run();
-  } finally {
-    process.chdir(previous);
-  }
-}
-
 async function listen(server: Server): Promise<string> {
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
@@ -127,7 +83,7 @@ describe('kovo build — browser drive (S1)', () => {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       writeFileSync(appPath, appSource(), 'utf8');
       writeClientEntry(root);
-      writeRetentionCapableNodePresetConfig(root);
+      writeRetentionProofConfig(root);
 
       const exitCode = await withCwd(root, () =>
         mainAsync(['build', './app.mjs', '--out', './dist']),
@@ -189,3 +145,36 @@ describe('kovo build — browser drive (S1)', () => {
     }
   }, 120_000);
 });
+
+function writeRetentionProofConfig(root: string): void {
+  writeFileSync(
+    join(root, 'kovo.config.ts'),
+    [
+      "import { defineConfig, node } from '@kovojs/server/build';",
+      'const base = node();',
+      'export default defineConfig({',
+      '  preset: {',
+      "    name: 'node',",
+      '    emit(build, context) {',
+      '      return base.emit?.(build, context);',
+      '    },',
+      '    inspect() {',
+      '      return [];',
+      '    },',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+async function withCwd<T>(cwd: string, run: () => Promise<T>): Promise<T> {
+  const previous = process.cwd();
+  process.chdir(cwd);
+  try {
+    return await run();
+  } finally {
+    process.chdir(previous);
+  }
+}

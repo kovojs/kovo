@@ -27,6 +27,15 @@ import {
  */
 describe('commands manifest', () => {
   const indexSource = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8');
+  const cliCommandSource = [
+    './index.ts',
+    './commands/build-export.ts',
+    './commands/compile.ts',
+    './commands/mcp.ts',
+    './graph-output.ts',
+  ]
+    .map((file) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8'))
+    .join('\n');
 
   it('covers exactly the commands the bin dispatches', () => {
     // Commands dispatched in main()/mainAsync() are matched on `args[0] === '<cmd>'`.
@@ -100,7 +109,7 @@ describe('commands manifest', () => {
   it('the bin references the manifest usage constants (no inline drift)', () => {
     // The bin must import the usage constants from the manifest rather than
     // hard-coding the usage literals, so they cannot diverge.
-    expect(indexSource).toMatch(/from '\.\/commands-manifest\.js'/);
+    expect(cliCommandSource).toMatch(/from '\.\.?\/commands-manifest\.js'/);
     for (const constant of [
       'CHECK_USAGE',
       'AUDIT_USAGE',
@@ -110,7 +119,9 @@ describe('commands manifest', () => {
       'EXPORT_USAGE',
       'MCP_USAGE',
     ]) {
-      expect(indexSource, `index.ts should reference ${constant}`).toContain(constant);
+      expect(cliCommandSource, `CLI command modules should reference ${constant}`).toContain(
+        constant,
+      );
     }
   });
 });

@@ -110,13 +110,13 @@ describe('gallery demo fixtures', () => {
   });
 
   it('keeps every static gallery route pinned to authored TSX source and a markup snapshot', () => {
-    const moduleSource = readFileSync(new URL('./demo-fixtures.tsx', import.meta.url), 'utf8');
+    const moduleSources = readGalleryFixtureSources();
 
     // SPEC.md §5.2 requires app components to stay authored as TSX/JSX; generated lowered IR
     // belongs under generated artifacts, not in the source fixture surface.
     expect(
       staticRouteFixtureMatrix.map((fixture) => {
-        const source = extractDemoSource(moduleSource, fixture.functionName);
+        const source = extractDemoSource(moduleSources, fixture.functionName);
 
         return {
           demoMarker: source.includes(`data-gallery-demo="${fixture.component}"`),
@@ -148,13 +148,13 @@ describe('gallery demo fixtures', () => {
   });
 
   it('keeps H3 search and selection routes pinned to authored styled source fixtures', () => {
-    const moduleSource = readFileSync(new URL('./demo-fixtures.tsx', import.meta.url), 'utf8');
+    const moduleSources = readGalleryFixtureSources();
 
     // SPEC.md §5.2 keeps app components authored as TSX/JSX source; these source facts pin the
     // styled H3 search/selection gallery routes without accepting lowered IR or generated stamps.
     expect(
       h3SearchSelectionSourceFixtures.map((fixture) => {
-        const source = extractDemoSource(moduleSource, fixture.functionName);
+        const source = extractDemoSource(moduleSources, fixture.functionName);
 
         return {
           contractSnippets: fixture.contractSnippets.filter((snippet) => source.includes(snippet)),
@@ -1190,13 +1190,23 @@ const h3SearchSelectionSourceFixtures = [
   },
 ] as const;
 
-function extractDemoSource(moduleSource: string, functionName: string): string {
-  const start = moduleSource.indexOf(`export function ${functionName}(): string {`);
+function readGalleryFixtureSources(): readonly string[] {
+  return [
+    readFileSync(new URL('./demo-fixtures.tsx', import.meta.url), 'utf8'),
+    readFileSync(new URL('./demo-fixtures-controls.tsx', import.meta.url), 'utf8'),
+  ];
+}
 
-  if (start === -1) {
+function extractDemoSource(moduleSources: readonly string[], functionName: string): string {
+  const moduleSource = moduleSources.find((source) =>
+    source.includes(`export function ${functionName}(): string {`),
+  );
+
+  if (!moduleSource) {
     throw new Error(`Missing demo source for ${functionName}`);
   }
 
+  const start = moduleSource.indexOf(`export function ${functionName}(): string {`);
   const next = moduleSource.indexOf('\nexport function ', start + 1);
   return moduleSource.slice(start, next === -1 ? moduleSource.length : next);
 }

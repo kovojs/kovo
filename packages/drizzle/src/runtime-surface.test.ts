@@ -23,6 +23,10 @@ function drizzleStaticSource(): string {
   return readFileSync(fileURLToPath(new URL('./static.ts', import.meta.url)), 'utf8');
 }
 
+function drizzleProjectSetupSource(): string {
+  return readFileSync(fileURLToPath(new URL('./static/project-setup.ts', import.meta.url)), 'utf8');
+}
+
 function drizzleDeriveSource(): string {
   return readFileSync(fileURLToPath(new URL('./derive.ts', import.meta.url)), 'utf8');
 }
@@ -38,6 +42,7 @@ describe('@kovojs/drizzle runtime surface', () => {
     const compatibilityBarrel = await import('./index.js');
     const packageJson = drizzlePackageJson();
     const compatibilityBarrelSource = drizzleCompatibilityBarrelSource();
+    const projectSetupSource = drizzleProjectSetupSource();
     const runtimeSource = drizzleRuntimeSource();
     const staticSource = drizzleStaticSource();
 
@@ -75,10 +80,10 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(staticSource).toContain("from 'ts-morph'");
     expect(staticSource).not.toContain('SOURCE_EXTRACTION_FILE_NAME');
     expect(staticSource).not.toContain('__kovo_source.ts');
-    expect(staticSource).toContain(
+    expect(projectSetupSource).toContain(
       'createSourceFile(projectSourceFileName(file.fileName), file.source',
     );
-    expect(staticSource).toContain('function projectSourceFileName(fileName: string): string');
+    expect(projectSetupSource).toContain('function projectSourceFileName(fileName: string): string');
     expect(compatibilityBarrelSource).not.toContain('ts-morph');
     expect(compatibilityBarrelSource).not.toContain('./static.js');
     expect(compatibilityBarrelSource).not.toContain('./graph.js');
