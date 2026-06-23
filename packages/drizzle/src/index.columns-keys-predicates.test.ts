@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   diagnosticsForTouchGraph,
+  extractSymbolicEffectsFromProject,
   extractTouchGraphFromProject,
   extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
 } from '@kovojs/drizzle/internal/static';
@@ -1140,6 +1141,168 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       },
     });
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
+  it('uses declared analyzer summaries for same-package session helper provenance', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'question.domain.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+          '',
+          'function requireSessionId(request: { session?: { id?: string } | null }) {',
+          '  if (!request.session?.id) throw new Error("auth required");',
+          '  return request.session.id;',
+          '}',
+          '',
+          'kovoAnalyzerSummary(requireSessionId, { returns: { kind: "session", path: "id" } });',
+          '',
+          'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+          '  const sessionId = requireSessionId(request);',
+          '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const graph = extractTouchGraphFromProject({ files });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: 'arg:targetId',
+        site: 'question.domain.ts:16',
+        via: 'questions',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
+      {
+        match: {
+          eq: [
+            { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+            { column: 'id', value: { kind: 'param', path: 'targetId' } },
+          ],
+          kind: 'keys',
+        },
+        op: 'update',
+        sets: { score: { kind: 'const', value: 1 } },
+        table: 'questions',
+      },
+    ]);
+  });
+
+  it('degrades unsummarized helpers returning private scope with a named opaque match', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'question.domain.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+          '',
+          'function requireSessionId(request: { session?: { id?: string } | null }) {',
+          '  if (!request.session?.id) throw new Error("auth required");',
+          '  return request.session.id;',
+          '}',
+          '',
+          'export async function voteUp(db: PgDatabase, request: { session?: { id?: string } | null }, targetId: string) {',
+          '  const sessionId = requireSessionId(request);',
+          '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const graph = extractTouchGraphFromProject({ files });
+
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: null,
+        predicate: 'non-eq',
+        site: 'question.domain.ts:13',
+        via: 'questions',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toMatchObject([
+      { code: 'KV409', site: 'question.domain.ts:13' },
+    ]);
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
+      {
+        match: { expr: 'unsummarized-helper:requireSessionId', kind: 'opaque' },
+        op: 'update',
+        sets: { score: { kind: 'const', value: 1 } },
+        table: 'questions',
+      },
+    ]);
+  });
+
+  it('erases tenant helper summaries from visible composite keys', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'ticket.domain.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+          '',
+          'export const tickets = pgTable("tickets", {}, kovo({ domain: "ticket", key: "tenantId,id" }));',
+          '',
+          'function tenantId(request: { tenant?: { id?: string } | null }) {',
+          '  if (!request.tenant?.id) throw new Error("tenant required");',
+          '  return request.tenant.id;',
+          '}',
+          '',
+          'kovoAnalyzerSummary(tenantId, { returns: { kind: "tenant", path: "id" } });',
+          '',
+          'export async function closeTicket(db: PgDatabase, request: { tenant?: { id?: string } | null }, targetId: string) {',
+          '  const currentTenantId = tenantId(request);',
+          '  await db.update(tickets).set({ status: "closed" }).where(and(eq(tickets.tenantId, currentTenantId), eq(tickets.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const graph = extractTouchGraphFromProject({ files });
+
+    expect(graph.closeTicket?.touches).toEqual([
+      {
+        domain: 'ticket',
+        keys: 'arg:targetId',
+        site: 'ticket.domain.ts:16',
+        via: 'tickets',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
+      {
+        match: {
+          eq: [
+            { column: 'tenantId', value: { kind: 'tenant', path: 'id' } },
+            { column: 'id', value: { kind: 'param', path: 'targetId' } },
+          ],
+          kind: 'keys',
+        },
+        op: 'update',
+        sets: { status: { kind: 'const', value: 'closed' } },
+        table: 'tickets',
+      },
+    ]);
   });
 
   it('degrades unguarded nullable session aliases instead of proving row identity', () => {

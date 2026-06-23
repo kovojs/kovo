@@ -14,6 +14,20 @@ export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
 
 export const KOVO_EXTRA_CONFIG_CALL_NAME = 'kovo';
 
+/** Private server-side provenance kinds that the analyzer may use as proof inputs. */
+export type KovoAnalyzerPrivateScopeKind = 'guard' | 'session' | 'tenant';
+
+/**
+ * A declared analyzer summary for a pure helper. The helper body is not inspected
+ * for provenance; the static analyzer consumes this typed declaration instead.
+ */
+export interface KovoAnalyzerFunctionSummary {
+  returns: {
+    kind: KovoAnalyzerPrivateScopeKind;
+    path: string;
+  };
+}
+
 /**
  * A column reference inside a Kovo annotation: either the column name as a
  * string, or a `(table) => table.column` selector (the Drizzle idiom, SPEC
@@ -99,6 +113,27 @@ export function kovo(annotation: KovoAnnotation): KovoTableExtraConfig | KovoVie
   return Object.assign((() => []) as (self: unknown) => [], annotation) as
     | KovoTableExtraConfig
     | KovoViewExtraConfig;
+}
+
+/**
+ * Declare a typed provenance summary for a same-package helper that participates
+ * in server-side invalidation or optimistic-update proof. The runtime value is
+ * the original helper; only the analyzer consumes the summary object.
+ *
+ * @param helper - The pure helper being summarized.
+ * @param summary - A typed private-scope provenance summary.
+ * @returns The original helper, unchanged at runtime.
+ * @example
+ * import { kovoAnalyzerSummary } from '@kovojs/drizzle';
+ *
+ * kovoAnalyzerSummary(requireSessionId, { returns: { kind: 'session', path: 'id' } });
+ */
+export function kovoAnalyzerSummary<T extends (...args: never[]) => unknown>(
+  helper: T,
+  summary: KovoAnalyzerFunctionSummary,
+): T {
+  void summary;
+  return helper;
 }
 
 export function isDrizzleDatabaseTypeName(name: string): boolean {

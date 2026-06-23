@@ -26,7 +26,7 @@ export type PlaceholderKind = 'now' | 'tempId';
 
 /**
  * §10.5 Stage-1 `value` grammar:
- * `value ::= Param(path) | Session(path) | Const | ColRef(t.c) | Arith(op,v,v) | Opaque`.
+ * `value ::= Param(path) | Session(path) | Tenant(path) | Guard(path) | Const | ColRef(t.c) | Arith(op,v,v) | Opaque`.
  *
  * `col` doubles as the §10.5 `ColRef(t.c)` in effects and, inside a row-scoped
  * `PatchOp`, as a read of the row's own column in client data (e.g. `stock -= q`
@@ -40,10 +40,12 @@ export type SymbolicValue =
   | { kind: 'arith'; left: SymbolicValue; op: ArithOp; right: SymbolicValue }
   | { kind: 'col'; column: string; table?: string }
   | { kind: 'const'; value: JsonValue }
+  | { kind: 'guard'; path: string }
   | { kind: 'opaque'; expr: string }
   | { kind: 'param'; path: string }
   | { kind: 'placeholder'; placeholder: PlaceholderKind }
-  | { kind: 'session'; path: string };
+  | { kind: 'session'; path: string }
+  | { kind: 'tenant'; path: string };
 
 /**
  * One `eq(T.keyCol, expr)` predicate of a write `match` (SPEC.md §10.5/§11.1).
@@ -523,9 +525,15 @@ function evalSymbolicValue(value: SymbolicValue, ctx: EvalContext): JsonValue {
       return readPath(ctx.input, value.path);
     case 'placeholder':
       return value.placeholder === 'now' ? ctx.now() : ctx.tempId();
+    case 'guard':
+      throw new Error(`derivation: guard value(${value.path}) is private scope and not executable`);
     case 'session':
       throw new Error(
         `derivation: session value(${value.path}) is private scope and not executable`,
+      );
+    case 'tenant':
+      throw new Error(
+        `derivation: tenant value(${value.path}) is private scope and not executable`,
       );
   }
 }

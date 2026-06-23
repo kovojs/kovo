@@ -3479,6 +3479,7 @@ interface QueryInstanceKeyComparison {
 
 interface QueryInstanceKeyOperand {
   inputKey?: string;
+  privateKey?: string;
   sessionKey?: string;
   tableKey?: {
     key: string;
@@ -3486,15 +3487,26 @@ interface QueryInstanceKeyOperand {
   };
 }
 
+type PrivateScopeKind = 'guard' | 'session' | 'tenant';
+
+interface PrivateScopeProvenance {
+  kind: PrivateScopeKind;
+  path: string;
+  requiresGuard?: boolean;
+}
+
 interface SessionAlias {
   declaration: Node;
+  kind: PrivateScopeKind;
   name: string;
   path: string;
+  requiresGuard: boolean;
 }
 
 interface SessionProvenanceContext {
   aliases: ReadonlyMap<string, SessionAlias>;
-  helpers: ReadonlyMap<string, string>;
+  helpers: ReadonlyMap<string, PrivateScopeProvenance>;
+  opaqueAliases: Map<string, string>;
 }
 
 interface ExtractedWriteCall {
@@ -6006,25 +6018,25 @@ function queryInstanceKeyOperand(
   return {
     ...queryTableKeyOperand(expression, readTableIdentifier),
     ...queryInputKeyOperand(expression),
-    ...querySessionKeyOperand(expression, sessionContext),
+    ...queryPrivateScopeKeyOperand(expression, sessionContext),
   };
 }
 
 /**
- * Detects a session-anchored predicate operand (SPEC §11.1): a static access
- * chain rooted at a non-`input` identifier (`req`/`request`/`ctx`) whose path
- * includes `session` — e.g. `req.session.cartId`. `req.session.*` is the trusted
- * principal the `sessionProvider` sets server-side, so a key predicate anchored
- * to it makes an owner-table access session-scoped (not IDOR). A non-static
- * operand (a call, etc.) is NOT session-anchored — the scope classifier then
- * fails closed.
+ * Detects private-scope predicate operands (SPEC §11.1): static session/tenant/
+ * guard access or a same-package helper with an explicit analyzer summary. Private
+ * values participate in proof but are erased from client-visible keys.
  */
-function querySessionKeyOperand(
+function queryPrivateScopeKeyOperand(
   expression: Node,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
-): Pick<QueryInstanceKeyOperand, 'sessionKey'> {
-  const sessionPath = sessionPathForExpression(expression, sessionContext);
-  return sessionPath !== undefined ? { sessionKey: sessionPath } : {};
+): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
+  const provenance = privateScopeForExpression(expression, sessionContext);
+  if (!provenance) return {};
+  return {
+    privateKey: privateScopeKey(provenance),
+    ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
+  };
 }
 
 function queryTableKeyOperand(
@@ -6096,16 +6108,12 @@ function valueKeyForTableColumnComparison(
 
   for (const candidate of candidates) {
     if (!candidate.tableKey || candidate.tableKey.tableIdentifier !== tableIdentifier) continue;
-    const valueKey = candidate.value.inputKey ?? sessionValueKey(candidate.value.sessionKey);
+    const valueKey = candidate.value.inputKey ?? candidate.value.privateKey;
     if (!valueKey) continue;
     return { column: candidate.tableKey.key, valueKey };
   }
 
   return null;
-}
-
-function sessionValueKey(sessionPath: string | undefined): string | undefined {
-  return sessionPath === undefined ? undefined : `session:${sessionPath}`;
 }
 
 function directSummaryForFunction(
@@ -10119,7 +10127,7 @@ function predicateSummaryFromFacts(
 }
 
 function isPrivateScopeKey(key: string): boolean {
-  return key.startsWith('session:') || key.startsWith('guard:');
+  return key.startsWith('guard:') || key.startsWith('session:') || key.startsWith('tenant:');
 }
 
 function tableKeyColumns(key: string): string[] {
@@ -10312,8 +10320,8 @@ function argumentKey(
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): string | undefined {
   const node = unwrappedStaticExpressionNode(expression);
-  const sessionPath = sessionPathForExpression(node, sessionContext);
-  if (sessionPath !== undefined) return `session:${sessionPath}`;
+  const provenance = privateScopeForExpression(node, sessionContext);
+  if (provenance) return privateScopeKey(provenance);
 
   if (Node.isIdentifier(node)) {
     const symbolKey = resolvedSymbolKey(symbolForIdentifierReference(node));
@@ -10330,20 +10338,19 @@ function argumentKey(
 }
 
 function emptySessionProvenanceContext(): SessionProvenanceContext {
-  return { aliases: new Map(), helpers: new Map() };
+  return { aliases: new Map(), helpers: new Map(), opaqueAliases: new Map() };
 }
 
 function sessionProvenanceContextForNodes(
   sourceFile: SourceFile,
   bodies: readonly Node[],
 ): SessionProvenanceContext {
-  void sourceFile;
   // advanced-analyzer.md Layer 1: helper provenance must come from explicit typed
-  // analyzer summaries, not arbitrary helper source-body inference. No summary
-  // registry exists yet, so unsummarized helpers remain opaque.
-  const helpers = new Map<string, string>();
+  // analyzer summaries, not arbitrary helper source-body inference.
+  const helpers = analyzerHelperSummariesForSourceFile(sourceFile);
   const aliases = new Map<string, SessionAlias>();
-  const context: SessionProvenanceContext = { aliases, helpers };
+  const opaqueAliases = new Map<string, string>();
+  const context: SessionProvenanceContext = { aliases, helpers, opaqueAliases };
 
   for (const body of bodies) {
     for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
@@ -10352,6 +10359,82 @@ function sessionProvenanceContextForNodes(
   }
 
   return context;
+}
+
+function analyzerHelperSummariesForSourceFile(
+  sourceFile: SourceFile,
+): Map<string, PrivateScopeProvenance> {
+  const summaries = new Map<string, PrivateScopeProvenance>();
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const callee = unwrappedStaticExpressionNode(call.getExpression());
+    const calleeName = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+    if (calleeName !== 'kovoAnalyzerSummary') continue;
+
+    const [helper, summary] = call.getArguments();
+    if (!helper || !summary) continue;
+
+    const key = helperSymbolKeyForSummary(helper);
+    const provenance = analyzerSummaryReturnProvenance(summary);
+    if (!provenance) continue;
+    if (key) summaries.set(key, provenance);
+    const helperName = summaryHelperName(helper);
+    if (helperName) summaries.set(`name:${helperName}`, provenance);
+  }
+  return summaries;
+}
+
+function helperSymbolKeyForSummary(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  const symbol = Node.isIdentifier(expression)
+    ? symbolForIdentifierReference(expression)
+    : expression.getSymbol();
+  return resolvedSymbolKey(symbol);
+}
+
+function summaryHelperName(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  return Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+}
+
+function analyzerSummaryReturnProvenance(node: Node): PrivateScopeProvenance | undefined {
+  const object = unwrappedStaticExpressionNode(node);
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  const returns = objectLiteralPropertyInitializer(object, 'returns');
+  const returnsObject = returns ? unwrappedStaticExpressionNode(returns) : undefined;
+  if (!returnsObject || !Node.isObjectLiteralExpression(returnsObject)) return undefined;
+
+  const kind = objectLiteralStringProperty(returnsObject, 'kind');
+  const path = objectLiteralStringProperty(returnsObject, 'path');
+  if (!isPrivateScopeKind(kind) || path === undefined) return undefined;
+
+  return { kind, path, requiresGuard: false };
+}
+
+function objectLiteralPropertyInitializer(
+  object: ObjectLiteralExpression,
+  name: string,
+): Node | undefined {
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+    return property.getInitializer();
+  }
+  return undefined;
+}
+
+function objectLiteralStringProperty(
+  object: ObjectLiteralExpression,
+  name: string,
+): string | undefined {
+  const value = objectLiteralPropertyInitializer(object, name);
+  const expression = value ? unwrappedStaticExpressionNode(value) : undefined;
+  return Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)
+    ? expression.getLiteralText()
+    : undefined;
+}
+
+function isPrivateScopeKind(kind: string | undefined): kind is PrivateScopeKind {
+  return kind === 'guard' || kind === 'session' || kind === 'tenant';
 }
 
 function addSessionAliasesForVariableDeclaration(
@@ -10364,23 +10447,38 @@ function addSessionAliasesForVariableDeclaration(
 
   const nameNode = declaration.getNameNode();
   if (Node.isIdentifier(nameNode)) {
-    const sessionPath = sessionPathForExpression(initializer, context);
+    const provenance = privateScopeForExpression(initializer, context);
     const key = resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol());
-    if (sessionPath !== undefined && key) {
-      aliases.set(key, { declaration, name: nameNode.getText(), path: sessionPath });
-    } else if (sessionPath !== undefined) {
+    if (provenance && key) {
+      aliases.set(key, {
+        declaration,
+        kind: provenance.kind,
+        name: nameNode.getText(),
+        path: provenance.path,
+        requiresGuard: provenance.requiresGuard ?? true,
+      });
+    } else if (provenance) {
       aliases.set(`name:${nameNode.getText()}`, {
         declaration,
+        kind: provenance.kind,
         name: nameNode.getText(),
-        path: sessionPath,
+        path: provenance.path,
+        requiresGuard: provenance.requiresGuard ?? true,
       });
+    } else {
+      const opaqueReason = unsummarizedHelperReasonForExpression(initializer);
+      if (opaqueReason && key) {
+        context.opaqueAliases.set(key, opaqueReason);
+      } else if (opaqueReason) {
+        context.opaqueAliases.set(`name:${nameNode.getText()}`, opaqueReason);
+      }
     }
     return;
   }
 
   if (!Node.isObjectBindingPattern(nameNode)) return;
-  const basePath = sessionPathForExpression(initializer, context);
-  if (basePath === undefined) return;
+  const base = privateScopeForExpression(initializer, context);
+  if (!base) return;
 
   for (const element of nameNode.getElements()) {
     const binding = element.getNameNode();
@@ -10389,20 +10487,98 @@ function addSessionAliasesForVariableDeclaration(
     const segment = propertyName ? propertyNameText(propertyName) : binding.getText();
     if (!segment) continue;
     const key = resolvedSymbolKey(symbolForIdentifierReference(binding) ?? binding.getSymbol());
+    const provenance = {
+      kind: base.kind,
+      path: joinPrivateScopePath(base.path, segment),
+      requiresGuard: base.requiresGuard,
+    };
     if (key) {
       aliases.set(key, {
         declaration: element,
+        kind: provenance.kind,
         name: binding.getText(),
-        path: joinSessionPath(basePath, segment),
+        path: provenance.path,
+        requiresGuard: provenance.requiresGuard ?? true,
       });
     } else {
       aliases.set(`name:${binding.getText()}`, {
         declaration: element,
+        kind: provenance.kind,
         name: binding.getText(),
-        path: joinSessionPath(basePath, segment),
+        path: provenance.path,
+        requiresGuard: provenance.requiresGuard ?? true,
       });
     }
   }
+}
+
+function privateScopeForExpression(
+  node: Node,
+  context: SessionProvenanceContext,
+  depth = 0,
+): PrivateScopeProvenance | undefined {
+  if (depth > 4) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+
+  const direct = directPrivateScopeForExpression(expression);
+  if (direct) return direct;
+
+  if (Node.isIdentifier(expression)) {
+    const key = resolvedSymbolKey(
+      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
+    );
+    if (
+      (key ? context.opaqueAliases.get(key) : undefined) ??
+      context.opaqueAliases.get(`name:${expression.getText()}`)
+    ) {
+      return undefined;
+    }
+    const alias =
+      (key ? context.aliases.get(key) : undefined) ??
+      [...context.aliases.values()].find((candidate) => candidate.name === expression.getText());
+    return alias && (!alias.requiresGuard || sessionAliasGuardDominatesUse(alias, expression))
+      ? { kind: alias.kind, path: alias.path }
+      : undefined;
+  }
+
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const base = privateScopeForExpression(expression.getExpression(), context, depth + 1);
+    const name = staticAccessName(expression);
+    return base && name
+      ? { kind: base.kind, path: joinPrivateScopePath(base.path, name) }
+      : undefined;
+  }
+
+  if (Node.isCallExpression(expression)) {
+    const callee = unwrappedStaticExpressionNode(expression.getExpression());
+    if (Node.isIdentifier(callee)) {
+      const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
+      return (
+        (key ? context.helpers.get(key) : undefined) ??
+        context.helpers.get(`name:${callee.getText()}`)
+      );
+    }
+  }
+
+  return undefined;
+}
+
+function opaqueAliasReasonForExpression(
+  node: Node,
+  context: SessionProvenanceContext,
+): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (!Node.isIdentifier(expression)) return undefined;
+  const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
+  return (
+    (key ? context.opaqueAliases.get(key) : undefined) ??
+    context.opaqueAliases.get(`name:${expression.getText()}`)
+  );
+}
+
+function unsummarizedHelperReasonForExpression(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  return Node.isCallExpression(expression) ? unsummarizedHelperReason(expression) : undefined;
 }
 
 function sessionPathForExpression(
@@ -10410,49 +10586,26 @@ function sessionPathForExpression(
   context: SessionProvenanceContext,
   depth = 0,
 ): string | undefined {
-  if (depth > 4) return undefined;
-  const expression = unwrappedStaticExpressionNode(node);
+  const provenance = privateScopeForExpression(node, context, depth);
+  return provenance?.kind === 'session' ? provenance.path : undefined;
+}
 
-  const direct = directSessionPathForExpression(expression);
-  if (direct !== undefined) return direct;
-
-  if (Node.isIdentifier(expression)) {
-    const key = resolvedSymbolKey(
-      symbolForIdentifierReference(expression) ?? expression.getSymbol(),
-    );
-    const alias =
-      (key ? context.aliases.get(key) : undefined) ??
-      [...context.aliases.values()].find((candidate) => candidate.name === expression.getText());
-    return alias && sessionAliasGuardDominatesUse(alias, expression) ? alias.path : undefined;
+function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | undefined {
+  const segments = staticAccessSegments(node);
+  if (!segments) return undefined;
+  for (const kind of ['guard', 'session', 'tenant'] as const) {
+    const index = segments.path.indexOf(kind);
+    if (index < 0) continue;
+    return { kind, path: segments.path.slice(index + 1).join('.'), requiresGuard: true };
   }
-
-  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
-    const base = sessionPathForExpression(expression.getExpression(), context, depth + 1);
-    const name = staticAccessName(expression);
-    return base !== undefined && name ? joinSessionPath(base, name) : undefined;
-  }
-
-  if (Node.isCallExpression(expression)) {
-    const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    if (Node.isIdentifier(callee)) {
-      const key = resolvedSymbolKey(symbolForIdentifierReference(callee) ?? callee.getSymbol());
-      if (key) return context.helpers.get(key);
-    }
-  }
-
   return undefined;
 }
 
-function directSessionPathForExpression(node: Node): string | undefined {
-  const segments = staticAccessSegments(node);
-  if (!segments) return undefined;
-  const sessionIndex = segments.path.indexOf('session');
-  if (sessionIndex < 0) return undefined;
-  const path = segments.path.slice(sessionIndex + 1).join('.');
-  return path;
+function privateScopeKey(provenance: PrivateScopeProvenance): string {
+  return `${provenance.kind}:${provenance.path}`;
 }
 
-function joinSessionPath(base: string, segment: string): string {
+function joinPrivateScopePath(base: string, segment: string): string {
   return base.length === 0 ? segment : `${base}.${segment}`;
 }
 
@@ -10911,9 +11064,14 @@ function chainMatch(
     paramSymbolKeys,
     sessionContext,
   );
-  if (eqMatches) return { eq: eqMatches, kind: 'keys' };
+  if (eqMatches?.kind === 'matches') return { eq: eqMatches.matches, kind: 'keys' };
+  if (eqMatches?.kind === 'opaque') return { expr: eqMatches.expr, kind: 'opaque' };
   return { expr: predicate.getText(), kind: 'opaque' };
 }
+
+type KeyEqMatchParseResult =
+  | { kind: 'matches'; matches: { column: string; value: SymbolicValue }[] }
+  | { expr: string; kind: 'opaque' };
 
 /**
  * AND-of-`eq(t.col, value)` predicates → key matches, or `null` when ANY conjunct
@@ -10924,7 +11082,7 @@ function keyEqMatchesFromPredicate(
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
-): { column: string; value: SymbolicValue }[] | null {
+): KeyEqMatchParseResult | null {
   const conjuncts = eqPredicateConjuncts(predicate);
   if (!conjuncts) return null;
 
@@ -10937,11 +11095,15 @@ function keyEqMatchesFromPredicate(
     if (!column || !valueNode) return null;
 
     const value = symbolicValueFromExpression(valueNode, paramSymbolKeys, sessionContext);
-    if (value.kind === 'opaque') return null;
+    if (value.kind === 'opaque') {
+      return value.expr.startsWith('unsummarized-helper:')
+        ? { expr: value.expr, kind: 'opaque' }
+        : null;
+    }
     matches.push({ column, value });
   }
 
-  return matches;
+  return { kind: 'matches', matches };
 }
 
 /** Resolve a `t.col` / `t['col']` reference whose base resolves to a known table → its column. */
@@ -11012,15 +11174,28 @@ function symbolicValueFromExpression(
   const paramPath = paramPathForExpression(expression, paramSymbolKeys);
   if (paramPath) return { kind: 'param', path: paramPath };
 
-  const sessionPath = sessionPathForExpression(expression, sessionContext);
-  if (sessionPath !== undefined) return { kind: 'session', path: sessionPath };
+  const privateScope = privateScopeForExpression(expression, sessionContext);
+  if (privateScope) return { kind: privateScope.kind, path: privateScope.path };
+
+  const opaqueAliasReason = opaqueAliasReasonForExpression(expression, sessionContext);
+  if (opaqueAliasReason) return { kind: 'opaque', expr: opaqueAliasReason };
 
   // Runtime-valid column arithmetic: `sql`${t.col} - ${quantity}`` (the way real
   // drizzle expresses a self-referential SET, since JS `-` on a column is invalid).
   const sqlArith = sqlTemplateArith(expression, paramSymbolKeys, sessionContext, selfColumn);
   if (sqlArith) return sqlArith;
 
+  if (Node.isCallExpression(expression)) {
+    return { kind: 'opaque', expr: unsummarizedHelperReason(expression) };
+  }
+
   return { kind: 'opaque', expr: expression.getText() };
+}
+
+function unsummarizedHelperReason(call: CallExpression): string {
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  const name = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
+  return name ? `unsummarized-helper:${name}` : 'unsummarized-helper';
 }
 
 /** Parse `sql`${A} <op> ${B}`` (a two-interpolation binary template) into an Arith value. */
