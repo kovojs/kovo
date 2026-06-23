@@ -55,9 +55,11 @@ The combinators (verified against `@kovojs/server`'s `guards`):
 
 Guard outcomes are fixed so auth stays part of the typed surface. Route/query `authed` failures run
 the app's `onUnauthenticated` handler (default: 303 redirect to the login route with the original URL
-as `next`); authorize-but-unauthorized failures render the 403 shell with status 403. Mutation guard
-failures take the typed-error path (no redirect vocabulary on enhanced responses) — see
-[the 422 path](/guides/mutations/) (SPEC §6.5, §9.2).
+as `next`); authenticated-but-unauthorized failures render the 403 shell with status 403. Mutation
+guard failures split the same way: unauthenticated submits return HTTP 401 with `Kovo-Reauth` on the
+enhanced path, or 303 to login on the no-JS path; authenticated-but-unauthorized submits return HTTP
+403 with a typed `forms.<mutation>.failure` code. See [mutations](/guides/mutations/) for the form
+failure paths (SPEC §6.5, §9.2).
 
 ## Type your session
 
@@ -146,10 +148,13 @@ session field, never by an unguarded `args.userId`.
 
 ## CSRF is on by default
 
-`kovo-csrf` is a session-bound synchronizer token stamped into every emitted mutation form. The server
-verifies it **first** — before schema parsing, before replay lookup, before the guard chain — on every
-mutation POST (SPEC §6.6, §9.1). Note the wire field name is `kovo-csrf`; the app-side config object
-carries a `field` (e.g. `'csrf'`) plus the signing `secret` and a `sessionId` resolver:
+`kovo-csrf` is a synchronizer token stamped into every emitted mutation form. The server verifies it
+**first** — before schema parsing, before replay reservation, before the guard chain — on every
+mutation POST (SPEC §6.6, §9.1). When `req.session` exists, the token is bound to that session. When
+the user is anonymous, it is bound to a framework-owned signed-cookie secret so login, signup, and
+password-reset forms are protected before there is a session. Note the wire field name is
+`kovo-csrf`; the app-side config object carries a `field` (e.g. `'csrf'`) plus the signing `secret`
+and a `sessionId` resolver:
 
 ```ts
 export const commerceCsrf = {
@@ -172,8 +177,21 @@ const csrf = csrfField(request, commerceCsrf); // → <input type="hidden" name=
 ```
 
 CSRF stays on for server-rendered mutation endpoints. The only opt-out is `csrf: false` on an
-individual mutation, reserved for non-browser or externally authenticated endpoints — and every
-opt-out shows up in the `--endpoints` audit with its justification (SPEC §6.6, §11.4).
+individual mutation, reserved for non-browser or externally authenticated endpoints. A `csrf: false`
+mutation must not read `req.session` or run a session/cookie-derived guard; doing so is **KV418**
+because the mutation would skip CSRF while still using ambient browser authority. Route non-browser
+writes through [endpoints and webhooks](/guides/endpoints-webhooks/), where cookies are not
+interpreted and verifier auth is explicit. Every opt-out shows up in the `--endpoints` audit with
+its justification (SPEC §6.6, §11.4).
+
+## Idempotency and replay
+
+Each emitted form carries a `Kovo-Idem` token. It is fresh for each logical submit, not a hidden
+form-instance constant, and enhanced success responses refresh it for the next submit. The replay
+store atomically reserves `(principal, mutation, idem-token)` before input parsing; a duplicate or
+concurrent submit with the same triple replays the settled response and does not execute the handler
+again. A replay hit still re-evaluates the current guard chain before serving the stored response, so
+revoked authorization does not get an old private response.
 
 ## The three static audits
 
@@ -248,6 +266,7 @@ the rest of the explain output, so a new endpoint or a `csrf: false` opt-out can
 ## Next
 
 - [Mutations & forms](/guides/mutations/) — the guarded request lifecycle and the 422 path.
+- [Endpoints & webhooks](/guides/endpoints-webhooks/) — machine ingress and CSRF exemptions.
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — the audits as CI assertions.
 - [Domains, writes & data access](/guides/data-layer/) — where `owner:` annotations live.
 
@@ -256,12 +275,11 @@ the rest of the explain output, so a new endpoint or a `csrf: false` opt-out can
 
 The guard chain, combinators, and the `--unguarded` / `--unscoped` audits: SPEC §10.3 (verified
 against `examples/commerce/src/domain.ts` and `@kovojs/server`'s `guards`). Typed sessions, the
-`sessionProvider`, and guard-failure outcomes: SPEC §6.5. CSRF default-on, the `kovo-csrf` token, and
-the soundness boundary: SPEC §6.6, §9.1. The typed read endpoint and per-read guard checks:
-SPEC §9.4. Live-push guard re-checks (fragments must not become a privilege-escalation channel):
-SPEC §9.3. The `owner:` annotation and `exempt`: SPEC §10.1. The verification surface and
-`--endpoints` machine-ingress audit: SPEC §11.4. Typed mutation error path: SPEC §9.2.
+`sessionProvider`, and guard-failure outcomes: SPEC §6.5. CSRF default-on, anonymous-CSRF, KV418, the
+`kovo-csrf` token, and the soundness boundary: SPEC §6.6, §9.1. Per-submit `Kovo-Idem` and replay
+reservation: SPEC §10.3. The typed read endpoint and per-read guard checks: SPEC §9.4. Live-push
+guard re-checks (fragments must not become a privilege-escalation channel): SPEC §9.3. The `owner:`
+annotation and `exempt`: SPEC §10.1. The verification surface and `--endpoints` machine-ingress
+audit: SPEC §11.4. Typed mutation error path: SPEC §9.2.
 
 </details>
-</content>
-</invoke>

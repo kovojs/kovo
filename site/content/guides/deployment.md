@@ -1,6 +1,6 @@
 ---
 title: Deployment
-description: Run a stateless server, keep old client modules published across deploys, and know what "live" means without sockets.
+description: Run a stateless server, keep old modules and typed reads available across deploys, and choose the right live-query infrastructure.
 order: 5
 ---
 
@@ -8,7 +8,8 @@ order: 5
 
 To ship a Kovo app you run a stateless app server (or, for sites without mutations, no server at
 all), a database, and one thing most platforms leave implicit: you keep versioned client modules
-available across deploys. This guide covers each piece, and what "live" means without a socket tier.
+and prior-token typed reads available across deploys. This guide covers each piece, live-query
+infrastructure, and static export.
 
 ## The stateless server
 
@@ -17,14 +18,17 @@ The v1 server holds no state between requests. Concretely:
 - **No session of what's on screen.** An enhanced mutation tells the server which fragments to render
   through the `Kovo-Targets` header, read off the live DOM's `kovo-deps` stamps at submit time. The
   server answers a self-contained question on every request.
-- **No socket tier, no pub/sub.** v1 ships no SSE and no live bus. `<kovo-live>` over SSE is v2, added
-  as a transport over the same fragment/query vocabulary, so adopting it later isn't a rearchitecture.
+- **Live subscriptions are explicit infrastructure.** Ordinary mutation refreshes, refetch-on-focus,
+  and BroadcastChannel tab sync stay stateless. A query with `live: true` can additionally be
+  subscribed with `<kovo-live>` over SSE; single-node apps use the in-process emitter, and multi-node
+  apps use Redis pub/sub or an equivalent fan-out layer.
 - **No optimistic state server-side.** Predictions live in the document and die with it.
 
-Operationally, this means any instance can answer any request. Horizontal scaling is
-load-balancer-plain: no sticky sessions, no Redis for UI state, no draining protocol beyond finishing
-in-flight requests. Session data follows whatever your `sessionProvider` reads — a signed cookie, a
-session table — while the framework itself pins nothing to an instance.
+Operationally, this means any instance can answer ordinary routes, mutations, and typed reads. You
+do not need sticky sessions. If you enable SSE live queries in a multi-node deploy, events need a
+shared pub/sub bus so the node holding a subscription can hear writes committed by another node.
+Session data follows whatever your `sessionProvider` reads — a signed cookie, a session table —
+while the framework itself pins no UI state to an instance.
 
 Two request-shaped facts worth knowing at the infrastructure layer:
 
@@ -33,11 +37,13 @@ Two request-shaped facts worth knowing at the infrastructure layer:
 - In-flight mutations at navigation use `keepalive`, and the framework registers no `unload`
   handlers, so bfcache hygiene is a guarantee rather than a tuning exercise.
 
-## Retain `/c/*` module versions
+## Retain prior build artifacts and reads
 
 This is the deployment mistake to design out first. Emitted module URLs are immutable and versioned,
-and your serving layer has to retain prior versions — so an old document's `on:*` refs keep
-resolving after a deploy, and the first interaction on a still-open tab never 404s.
+and your serving layer has to retain prior versions. The same deploy-skew contract covers typed
+read endpoints: a stale document must be able to ask `/_q/<key>` for a token-tagged full value for
+the build it was rendered with. That is how token mismatch recovery stays loud and recoverable
+instead of silently merging a foreign query shape.
 
 Here's why it matters. Kovo documents are long-lived. A tab opened before your Tuesday deploy still
 has HTML pointing at Tuesday-minus-one's handler modules:
@@ -56,15 +62,18 @@ So the rule for your serving layer:
   delete the ones still referenced by documents in the wild.
 - **Serve them immutable.** The version lives in the URL (cache-busting query strings or ETag-driven,
   a server-controlled choice), so `Cache-Control: public, max-age=31536000, immutable` is correct.
-- **Age out by document lifetime, not deploy count.** Retain versions for as long as you believe a
-  tab can stay open against your app; pruning is a cleanup policy, separate from the deploy.
+- **Keep the required skew window.** Retain prior immutable modules and prior-token `/_q/` reads for
+  the supported deploy-skew window, with a required minimum of 24 hours. Configuring less, or using a
+  platform that cannot retain both artifact classes for that window, is **KV417**.
 
 A CDN or object store in front of `/c/*` makes this nearly free: deploys upload new versions and
 touch nothing else.
 
-The framework handles the other half of deploy skew. A long-lived document that POSTs yesterday's
-form shape is answered by schema validation and the 422 path, never undefined behavior. You keep old
-modules resolvable; the framework keeps old documents safe.
+The framework handles the merge decision. Every page render, mutation truth chunk, delta, and typed
+read response carries the render-plan version token. If a stale document receives a mismatched
+payload, the loader discards it, refetches the full query over `/_q/<key>`, and reloads the current
+route if the refetch still belongs to a different token. A long-lived document that POSTs yesterday's
+form shape is answered by schema validation and the 422 path, never undefined behavior.
 
 ## What a deploy actually changes
 
@@ -74,6 +83,7 @@ It helps to see the two artifact classes a deploy touches and their opposite cac
 | --------------------- | ---------------------- | ---------------------------------------- | -------------------------------------------- |
 | HTML documents        | stable paths (`/cart`) | revalidate (`no-store` on PRG responses) | replaced — next navigation gets the new page |
 | `/c/*` client modules | versioned, immutable   | `immutable`, long max-age                | added — old versions retained                |
+| `/_q/*` typed reads   | stable typed endpoint  | private/no-store when session-dependent  | serves current and in-window prior tokens    |
 
 Documents update by navigation; modules update by being referenced from newer documents. A tab that
 never navigates keeps working against its original module set indefinitely — which is the point of the
@@ -94,8 +104,21 @@ deployable to any static host. This docs site is exactly that — every page wor
 and the search island's module loads on first use. The degradation contract holds either way: Safari,
 Firefox, and no-JS visitors get a working website rather than a blank screen.
 
-The `/c/*` retention rule applies to both shapes. On a static host it just means not deleting old
-module files when you re-upload.
+The 24-hour `/c/*` retention floor applies to both shapes. On a static host it means not deleting old
+module files during the skew window when you re-upload.
+
+### Static export decision tree
+
+Static export replays synthetic GET `Request`s through the same request handler; there is no second
+render path. Use it when every exported route is L0/L1: platform behavior, pure islands, static
+assets, and no per-request server truth. A route with a guard, unproven session dependence,
+mutation-only interaction, or a parameterized path without explicit `staticPaths` is not silently
+made static. It fails or skips according to export policy with **KV229**.
+
+Use a server deploy instead when the app needs mutations, live queries, guarded routes, parameterized
+queries without an enumerable path set, raw endpoints, webhooks, or per-request data. Exported
+documents should not assume server refetches will exist later; the no-JS HTML document is the
+artifact.
 
 ### A node-server entrypoint
 
@@ -150,21 +173,25 @@ connection), `CSRF_SECRET` (the session-bound token secret behind §9.1 `kovo-cs
 secret your `sessionProvider` validates against. None of these is instance-specific — the same image
 runs behind a load balancer unchanged.
 
-## Liveness without a socket tier
+## Liveness and live queries
 
-v1 ships liveness only where the server stays stateless:
+Kovo has three liveness mechanisms, each with a different operational cost:
 
 - **BroadcastChannel rebroadcast** — a mutation's `<kovo-query>` response is rebroadcast to the user's
   other open tabs. Add to cart in tab A, and the badge in tab B ticks. Zero server cost, no
-  infrastructure.
+  infrastructure. Envelopes carry a principal fingerprint so another user on the same origin cannot
+  receive private query data after an account switch.
 - **Refetch on focus/visibility** — the loader re-runs queries over the typed read endpoint
   (`GET /_q/…`) when a stale tab returns, with per-query opt-out. One conditional in the loader fakes
-  a lot of "live" UX.
+  a lot of live UX.
+- **SSE live queries** — `<kovo-live query="cart">` subscribes to a query declared with `live: true`.
+  The SSE stream carries the same `<kovo-query>` / `<kovo-fragment>` vocabulary mutation responses
+  use. Guards run at subscription time and again for every push, so a fragment push cannot become a
+  privilege-escalation channel.
 
-Both arrive with the loader, so there's nothing to deploy for them. What v1 deliberately doesn't
-cover: another user's write appearing in your open tab without a refetch trigger. That's L4 —
-SSE-pushed fragments with guards re-checked at every push — and it lands in v2 with the first
-genuinely stateful infrastructure in the design. Don't provision for it now.
+For a single process, the in-process emitter is enough. For multiple app instances, route write
+events through Redis pub/sub or another fan-out bus keyed by the same query instance keys the typed
+read endpoint uses. See [live queries](/guides/live-queries/) for the authoring contract.
 
 ## Pre-deploy gates
 
@@ -198,16 +225,20 @@ are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain
 ## Next
 
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — the gates in that checklist.
+- [Live queries](/guides/live-queries/) — SSE over the fragment/query vocabulary.
+- [Static export](/guides/static-export/) — deciding whether a route can ship without a server.
 - [Streaming & defer](/guides/streaming/) — response streaming and what it needs from the edge.
 
 <details>
 <summary>Spec & diagnostics</summary>
 
-The stateless-server guarantee and liveness without sockets: SPEC §9.3. `Kovo-Targets` and the
-mutation round-trip: SPEC §9.1. Session providers: SPEC §6.5. The typed read endpoint: SPEC §9.4.
+The stateless-server guarantee and live subscriptions: SPEC §9.3. `Kovo-Targets` and the mutation
+round-trip: SPEC §9.1. Session providers: SPEC §6.5. The typed read endpoint: SPEC §9.4.
 `keepalive` and bfcache hygiene, plus per-route Speculation Rules: SPEC §8. Immutable versioned
-module URLs and the retention rule, plus deploy-skew handling: SPEC §6.6. Schema-validated old-form
-recovery via the 422 path: SPEC §9.2. The request lifecycle: SPEC §10.3. Browser-free pre-deploy
-gates: SPEC §11.4.
+module URLs, prior-token typed reads, the 24-hour retention floor, and deploy-skew recovery:
+SPEC §6.6 and §14. Static export through the request shell and KV229: SPEC §9.5. Schema-validated
+old-form recovery via the 422 path: SPEC §9.2. The request lifecycle: SPEC §10.3. Browser-free
+pre-deploy gates: SPEC §11.4. KV417 reports a serving layer that cannot meet the skew-retention
+floor.
 
 </details>
