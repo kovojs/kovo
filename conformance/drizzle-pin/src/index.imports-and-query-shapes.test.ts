@@ -33,7 +33,7 @@ describe('Drizzle pinned subset conformance', () => {
     expect(inArray(cartItems.cartId, ['c1', 'c2'])).toBeDefined();
   });
 
-  it('does not promote deferred real SQLite/MySQL database receivers to v1 project proof', () => {
+  it('accepts deferred SQLite database receivers while keeping MySQL out of v1 project proof', () => {
     const files = [
       {
         fileName: 'conformance/drizzle-pin/src/deferred-engine.domain.ts',
@@ -58,7 +58,20 @@ describe('Drizzle pinned subset conformance', () => {
       },
     ];
 
-    expect(extractTouchGraphFromProject({ files })).toEqual({});
+    expect(extractTouchGraphFromProject({ files })).toEqual({
+      writeSqlite: {
+        reads: [],
+        touches: [
+          {
+            domain: 'product',
+            keys: null,
+            site: 'conformance/drizzle-pin/src/deferred-engine.domain.ts:9',
+            via: 'products',
+          },
+        ],
+        unresolved: [],
+      },
+    });
     expect(extractQueryFactsFromProject({ files })).toEqual([]);
   });
 
