@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Wifi Cog icon (Lucide). https://lucide.dev/icons/wifi-cog */
-export function WifiCog(props: IconProps = {}): string {
+export function WifiCog(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14.305 19.53.923-.382"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Thermometer Snowflake icon (Lucide). https://lucide.dev/icons/thermometer-snowflake */
-export function ThermometerSnowflake(props: IconProps = {}): string {
+export function ThermometerSnowflake(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10 20-1.25-2.5L6 18"></path>

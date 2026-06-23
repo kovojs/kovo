@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentRenderResult } from '@kovojs/core';
 import {
   dialogCloseAttributes,
   dialogContentAttributes,
@@ -268,7 +268,7 @@ export const sheetSideStyles = style.create({
   },
 });
 
-function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): string {
+function renderDialogPanel(props: SheetProps, defaultSide: SheetSide): ComponentRenderResult {
   const open = props.open === true;
   const side = props.side ?? defaultSide;
   const titleId = `${props.contentId}-title`;

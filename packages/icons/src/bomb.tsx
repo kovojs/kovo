@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Bomb icon (Lucide). https://lucide.dev/icons/bomb */
-export function Bomb(props: IconProps = {}): string {
+export function Bomb(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="11" cy="13" r="9"></circle>

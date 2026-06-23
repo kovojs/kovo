@@ -12,6 +12,7 @@ import { exportKovoAppShellViteBuild } from './vite-static-export-build.js';
 import { exportKovoAppShellViteBuildFromManifestFile } from './vite-static-export-manifest-file.js';
 import { kovoAppShellVitePlugin } from './internal/app-shell-vite.js';
 import { kovoAppShellViteStaticExportAssets } from './vite-build-assets.js';
+import { renderedHtml } from './html.js';
 
 describe('server app shell Vite plugin', () => {
   it('turns Vite build asset plans into static-export copy inputs', async () => {
@@ -28,7 +29,7 @@ describe('server app shell Vite plugin', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main>Cart</main>';
+                return renderedHtml('<main>Cart</main>');
               },
             }),
           ],
@@ -102,7 +103,7 @@ describe('server app shell Vite plugin', () => {
           routes: [
             route('/cart', {
               page() {
-                return '<main class="cart">Cart</main>';
+                return renderedHtml('<main class="cart">Cart</main>');
               },
             }),
           ],
@@ -184,7 +185,7 @@ describe('server app shell Vite plugin', () => {
             route('/cart', {
               modulepreloads: ['/c/cart.client.js?v=cart-v1'],
               page() {
-                return '<main class="cart">Cart</main>';
+                return renderedHtml('<main class="cart">Cart</main>');
               },
             }),
           ],
@@ -294,7 +295,7 @@ describe('server app shell Vite plugin', () => {
               route('/cart', {
                 page() {
                   rendered = true;
-                  return '<main class="cart">Cart</main>';
+                  return renderedHtml('<main class="cart">Cart</main>');
                 },
               }),
             ],
@@ -341,11 +342,13 @@ describe('server app shell Vite plugin', () => {
           routes: [
             route('/cart', {
               page() {
-                return [
-                  '<main class="cart">Cart',
-                  '<button on:click="/c/__v/cart-v1/cart.client.js#Cart$add">Add</button>',
-                  '</main>',
-                ].join('');
+                return renderedHtml(
+                  [
+                    '<main class="cart">Cart',
+                    '<button on:click="/c/__v/cart-v1/cart.client.js#Cart$add">Add</button>',
+                    '</main>',
+                  ].join(''),
+                );
               },
             }),
           ],

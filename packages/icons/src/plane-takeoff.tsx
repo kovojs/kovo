@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Plane Takeoff icon (Lucide). https://lucide.dev/icons/plane-takeoff */
-export function PlaneTakeoff(props: IconProps = {}): string {
+export function PlaneTakeoff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 22h20"></path>

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
 
 import {
@@ -24,6 +25,23 @@ import {
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
 
 describe('server mutation primitives', () => {
+  it('rejects raw string streaming fragments while keeping stream.text as escaped text', () => {
+    const assertRawFragmentRejected = () => {
+      stream.fragment({
+        // @ts-expect-error SPEC §9.1: streaming fragment markup needs rendered JSX or trustedHtml().
+        html: '<article>raw</article>',
+        target: 'messages',
+      });
+    };
+
+    expect(assertRawFragmentRejected).toBeTypeOf('function');
+    expect(stream.text('messages', '<article>text</article>')).toEqual({
+      kind: 'text',
+      target: 'messages',
+      text: '<article>text</article>',
+    });
+  });
+
   it('selects enhanced success chunks from committed changes intersected with live target deps', async () => {
     const cart = domain('cart');
     const account = domain('account');
@@ -435,7 +453,7 @@ describe('server mutation primitives', () => {
     });
     const CartPanel = component({
       errorBoundary: {
-        fallback: '<section role="alert">Cart panel unavailable.</section>',
+        fallback: renderedHtml('<section role="alert">Cart panel unavailable.</section>'),
         target: 'cart-panel',
       },
       queries: { cart: cartQuery },
@@ -1041,7 +1059,9 @@ describe('server mutation primitives', () => {
       },
       async *stream({ result }) {
         yield stream.fragment({
-          html: '<article data-role="assistant"><span data-stream-text="assistant:a1"></span></article>',
+          html: trustedHtml(
+            '<article data-role="assistant"><span data-stream-text="assistant:a1"></span></article>',
+          ),
           mode: 'append',
           target: 'messages',
         });

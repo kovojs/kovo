@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chart Area icon (Lucide). https://lucide.dev/icons/chart-area */
-export function ChartArea(props: IconProps = {}): string {
+export function ChartArea(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M3 3v16a2 2 0 0 0 2 2h16"></path>

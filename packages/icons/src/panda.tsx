@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Panda icon (Lucide). https://lucide.dev/icons/panda */
-export function Panda(props: IconProps = {}): string {
+export function Panda(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11.25 17.25h1.5L12 18z"></path>

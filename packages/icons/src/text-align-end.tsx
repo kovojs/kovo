@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Text Align End icon (Lucide). https://lucide.dev/icons/text-align-end */
-export function TextAlignEnd(props: IconProps = {}): string {
+export function TextAlignEnd(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M21 5H3"></path>

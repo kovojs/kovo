@@ -23,6 +23,7 @@ import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, route } from '@kovojs/server';
+import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
 import { mainAsync } from './index.js';
@@ -939,6 +940,8 @@ import {
   s,
 } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 const cart = domain('cart');
 const db = { count: 0 };
 const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -970,7 +973,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
-      page: () => '<main>Cart ' + db.count + '</main>',
+      page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
 });
@@ -987,6 +990,8 @@ import {
   route,
   s,
 } from '@kovojs/server';
+
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
 
 const cart = domain('cart');
 const db = { count: 0 };
@@ -1012,7 +1017,7 @@ export default createApp({
   queries: [cartQuery],
   routes: [
     route('/cart', {
-      page: () => '<main>Cart ' + db.count + '</main>',
+      page: () => trustedHtml('<main>Cart ') + db.count + '</main>',
     }),
   ],
 });
@@ -1046,10 +1051,12 @@ function staticAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 export default createApp({
   routes: [
     route('/', {
-      page: () => '<main>Static Home</main>',
+      page: () => trustedHtml('<main>Static Home</main>'),
     }),
   ],
 });
@@ -1125,6 +1132,8 @@ import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 const home = domain('home');
 const homeQuery = query('home', {
   load: () => ({ ok: true }),
@@ -1147,7 +1156,7 @@ export default createApp({
     {
       component: 'home-panel/home-panel',
       queries: ['home'],
-      render: () => '<home-panel>HomePanel</home-panel>',
+      render: () => trustedHtml('<home-panel>HomePanel</home-panel>'),
     },
   ],
   mutations: [touchHome],
@@ -1169,10 +1178,12 @@ function databaseEnvAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 export default createApp({
   routes: [
     route('/db', {
-      page: () => '<main>' + (process.env.DATABASE_URL ?? 'missing') + '</main>',
+      page: () => trustedHtml('<main>') + (process.env.DATABASE_URL ?? 'missing') + '</main>',
     }),
   ],
 });
@@ -1411,10 +1422,10 @@ async function devRouteDocument(root: string, appPath: string): Promise<string> 
         default: createApp({
           routes: [
             route('/', {
-              page: () => '<main>Home</main>',
+              page: () => renderedHtml('<main>Home</main>'),
             }),
             route('/login', {
-              page: () => '<main>Login</main>',
+              page: () => renderedHtml('<main>Login</main>'),
             }),
           ],
         }),
@@ -1519,6 +1530,8 @@ function typescriptAppModuleSource(): string {
   return `
 import { createApp, domain, query, route } from '@kovojs/server';
 
+const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+
 const db: { count: number } = { count: 4 };
 const typed = domain('typed');
 const typedQuery = query('typed', {
@@ -1530,7 +1543,7 @@ export default createApp({
   queries: [typedQuery],
   routes: [
     route('/typed', {
-      page: () => '<main>Typed Cart ' + db.count + '</main>',
+      page: () => trustedHtml('<main>Typed Cart ') + db.count + '</main>',
     }),
   ],
 });

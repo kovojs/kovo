@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Paint Roller icon (Lucide). https://lucide.dev/icons/paint-roller */
-export function PaintRoller(props: IconProps = {}): string {
+export function PaintRoller(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="16" height="6" x="2" y="2" rx="2"></rect>

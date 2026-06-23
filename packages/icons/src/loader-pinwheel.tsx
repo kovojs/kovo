@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Loader Pinwheel icon (Lucide). https://lucide.dev/icons/loader-pinwheel */
-export function LoaderPinwheel(props: IconProps = {}): string {
+export function LoaderPinwheel(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M22 12a1 1 0 0 1-10 0 1 1 0 0 0-10 0"></path>

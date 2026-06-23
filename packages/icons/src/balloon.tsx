@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Balloon icon (Lucide). https://lucide.dev/icons/balloon */
-export function Balloon(props: IconProps = {}): string {
+export function Balloon(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 16v1a2 2 0 0 0 2 2h1a2 2 0 0 1 2 2v1"></path>

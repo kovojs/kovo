@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Share 2 icon (Lucide). https://lucide.dev/icons/share-2 */
-export function Share2(props: IconProps = {}): string {
+export function Share2(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="18" cy="5" r="3"></circle>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Zoom Out icon (Lucide). https://lucide.dev/icons/zoom-out */
-export function ZoomOut(props: IconProps = {}): string {
+export function ZoomOut(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="11" cy="11" r="8"></circle>

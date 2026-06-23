@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Swords icon (Lucide). https://lucide.dev/icons/swords */
-export function Swords(props: IconProps = {}): string {
+export function Swords(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"></polyline>

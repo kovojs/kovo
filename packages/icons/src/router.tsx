@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Router icon (Lucide). https://lucide.dev/icons/router */
-export function Router(props: IconProps = {}): string {
+export function Router(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="20" height="8" x="2" y="14" rx="2"></rect>

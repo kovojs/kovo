@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Pi icon (Lucide). https://lucide.dev/icons/pi */
-export function Pi(props: IconProps = {}): string {
+export function Pi(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="9" x2="9" y1="4" y2="20"></line>

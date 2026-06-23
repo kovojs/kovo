@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Copy X icon (Lucide). https://lucide.dev/icons/copy-x */
-export function CopyX(props: IconProps = {}): string {
+export function CopyX(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="12" x2="18" y1="12" y2="18"></line>

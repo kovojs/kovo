@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Pilcrow Left icon (Lucide). https://lucide.dev/icons/pilcrow-left */
-export function PilcrowLeft(props: IconProps = {}): string {
+export function PilcrowLeft(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 3v11"></path>

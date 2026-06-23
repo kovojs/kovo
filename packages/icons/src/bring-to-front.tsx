@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Bring To Front icon (Lucide). https://lucide.dev/icons/bring-to-front */
-export function BringToFront(props: IconProps = {}): string {
+export function BringToFront(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect x="8" y="8" width="8" height="8" rx="2"></rect>

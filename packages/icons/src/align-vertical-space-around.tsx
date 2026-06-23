@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Align Vertical Space Around icon (Lucide). https://lucide.dev/icons/align-vertical-space-around */
-export function AlignVerticalSpaceAround(props: IconProps = {}): string {
+export function AlignVerticalSpaceAround(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="10" height="6" x="7" y="9" rx="2"></rect>

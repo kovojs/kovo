@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Database Search icon (Lucide). https://lucide.dev/icons/database-search */
-export function DatabaseSearch(props: IconProps = {}): string {
+export function DatabaseSearch(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M21 11.693V5"></path>

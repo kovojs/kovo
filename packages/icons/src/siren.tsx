@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Siren icon (Lucide). https://lucide.dev/icons/siren */
-export function Siren(props: IconProps = {}): string {
+export function Siren(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M7 18v-6a5 5 0 1 1 10 0v6"></path>

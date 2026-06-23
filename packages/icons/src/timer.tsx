@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Timer icon (Lucide). https://lucide.dev/icons/timer */
-export function Timer(props: IconProps = {}): string {
+export function Timer(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="10" x2="14" y1="2" y2="2"></line>

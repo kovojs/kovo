@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Receipt Cent icon (Lucide). https://lucide.dev/icons/receipt-cent */
-export function ReceiptCent(props: IconProps = {}): string {
+export function ReceiptCent(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 7v10"></path>

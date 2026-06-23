@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Scooter icon (Lucide). https://lucide.dev/icons/scooter */
-export function Scooter(props: IconProps = {}): string {
+export function Scooter(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M21 4h-3.5l2 11.05"></path>

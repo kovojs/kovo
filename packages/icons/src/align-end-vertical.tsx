@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Align End Vertical icon (Lucide). https://lucide.dev/icons/align-end-vertical */
-export function AlignEndVertical(props: IconProps = {}): string {
+export function AlignEndVertical(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="16" height="6" x="2" y="4" rx="2"></rect>

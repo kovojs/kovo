@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Square Arrow Right Enter icon (Lucide). https://lucide.dev/icons/square-arrow-right-enter */
-export function SquareArrowRightEnter(props: IconProps = {}): string {
+export function SquareArrowRightEnter(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10 16 4-4-4-4"></path>

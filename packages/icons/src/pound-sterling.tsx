@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Pound Sterling icon (Lucide). https://lucide.dev/icons/pound-sterling */
-export function PoundSterling(props: IconProps = {}): string {
+export function PoundSterling(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18 7c0-5.333-8-5.333-8 0"></path>

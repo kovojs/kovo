@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Gallery Vertical End icon (Lucide). https://lucide.dev/icons/gallery-vertical-end */
-export function GalleryVerticalEnd(props: IconProps = {}): string {
+export function GalleryVerticalEnd(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M7 2h10"></path>

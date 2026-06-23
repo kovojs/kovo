@@ -269,7 +269,7 @@ const defaultRateLimitMaxKeys = 10_000;
  *
  * export const dashboard = route('/dashboard', {
  *   guard: guards.authed<AppRequest>(),
- *   page: () => '<h1>Dashboard</h1>',
+ *   page: () => <h1>Dashboard</h1>,
  * });
  */
 export const guards = {

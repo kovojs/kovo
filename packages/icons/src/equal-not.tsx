@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Equal Not icon (Lucide). https://lucide.dev/icons/equal-not */
-export function EqualNot(props: IconProps = {}): string {
+export function EqualNot(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <line x1="5" x2="19" y1="9" y2="9"></line>

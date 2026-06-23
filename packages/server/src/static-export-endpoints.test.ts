@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
@@ -19,12 +20,14 @@ describe('server static export', () => {
         routes: [
           route('/cart', {
             page: () =>
-              [
-                '<main>',
-                '<form method="post" action="/_m/cart/add"><button>Add</button></form>',
-                '<a href="/_q/cart?args=%7B%7D">Refresh cart</a>',
-                '</main>',
-              ].join(''),
+              trustedHtml(
+                [
+                  '<main>',
+                  '<form method="post" action="/_m/cart/add"><button>Add</button></form>',
+                  '<a href="/_q/cart?args=%7B%7D">Refresh cart</a>',
+                  '</main>',
+                ].join(''),
+              ),
           }),
         ],
       });
@@ -59,7 +62,9 @@ describe('server static export', () => {
       routes: [
         route('/cart', {
           page: () =>
-            '<main><button formaction="/_m/cart/add" formmethod="post">Add</button></main>',
+            trustedHtml(
+              '<main><button formaction="/_m/cart/add" formmethod="post">Add</button></main>',
+            ),
         }),
       ],
     });
@@ -89,12 +94,14 @@ describe('server static export', () => {
       routes: [
         route('/cart', {
           page: () =>
-            [
-              '<main>',
-              `<button on:click="${cartHref}#Cart$add">Add locally</button>`,
-              '<a href="https://api.example.test/_m/cart/add">Remote API docs</a>',
-              '</main>',
-            ].join(''),
+            trustedHtml(
+              [
+                '<main>',
+                `<button on:click="${cartHref}#Cart$add">Add locally</button>`,
+                '<a href="https://api.example.test/_m/cart/add">Remote API docs</a>',
+                '</main>',
+              ].join(''),
+            ),
         }),
       ],
     });
@@ -126,16 +133,18 @@ describe('server static export', () => {
       routes: [
         route('/guide', {
           page: () =>
-            [
-              '<main>',
-              '<!-- <form action="/_m/comment/add"><button>Add</button></form> -->',
-              '<script type="application/json">',
-              '{"example":"<button on:click=\\"/c/example-only.client.js?v=example-only#open\\" formaction=\\"/_m/script/add\\">Add</button>"}',
-              '</script>',
-              '<style>.example::before { content: \'<a href="/_q/style">\'; }</style>',
-              `<button on:click="${realHref}#Guide$open">Open</button>`,
-              '</main>',
-            ].join(''),
+            trustedHtml(
+              [
+                '<main>',
+                '<!-- <form action="/_m/comment/add"><button>Add</button></form> -->',
+                '<script type="application/json">',
+                '{"example":"<button on:click=\\"/c/example-only.client.js?v=example-only#open\\" formaction=\\"/_m/script/add\\">Add</button>"}',
+                '</script>',
+                '<style>.example::before { content: \'<a href="/_q/style">\'; }</style>',
+                `<button on:click="${realHref}#Guide$open">Open</button>`,
+                '</main>',
+              ].join(''),
+            ),
         }),
       ],
     });

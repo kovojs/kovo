@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Text Cursor Input icon (Lucide). https://lucide.dev/icons/text-cursor-input */
-export function TextCursorInput(props: IconProps = {}): string {
+export function TextCursorInput(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 20h-1a2 2 0 0 1-2-2 2 2 0 0 1-2 2H6"></path>

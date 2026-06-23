@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Biohazard icon (Lucide). https://lucide.dev/icons/biohazard */
-export function Biohazard(props: IconProps = {}): string {
+export function Biohazard(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="11.9" r="2"></circle>

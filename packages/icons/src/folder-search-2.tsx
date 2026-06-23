@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Folder Search 2 icon (Lucide). https://lucide.dev/icons/folder-search-2 */
-export function FolderSearch2(props: IconProps = {}): string {
+export function FolderSearch2(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="11.5" cy="12.5" r="2.5"></circle>

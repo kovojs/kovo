@@ -38,15 +38,17 @@ export type {
 } from './verifier.js';
 export { customVerifier, hmacSignature, standardWebhooks } from './verifier.js';
 
-/** Opaque non-callback result of a component's `render` — the compiler lowers it to HTML/IR. */
+/** Opaque non-string result of a component's `render` — the compiler lowers TSX to HTML/IR (SPEC §4.1, §4.8). */
 export type ComponentRenderResult =
   | boolean
   | null
   | number
   | readonly ComponentRenderResult[]
-  | string
   | undefined
   | object;
+
+/** Escaped text/message content used by explicit text-oriented helpers. */
+export type ComponentTextResult = ComponentRenderResult | string;
 
 /** Props accepted by the server-bound `<ErrorBoundary />` render fallback helper. */
 export interface ErrorBoundaryProps {
@@ -130,7 +132,7 @@ export interface Component<Definition extends ComponentDefinitionInput> {
 export function component<
   const Definition extends Omit<ComponentDefinitionInput, 'mutations' | 'render'> & {
     mutations?: ComponentMutationDefinitions;
-    render: (...args: any[]) => any;
+    render: (...args: any[]) => ComponentRenderResult;
   },
 >(
   definition: Definition & {
@@ -138,7 +140,7 @@ export function component<
       queries: any,
       state: any,
       slots: ComponentRenderSlots<ComponentDefinitionMutations<Definition>>,
-    ) => any;
+    ) => ComponentRenderResult;
   },
 ): Component<Definition> {
   const descriptor = (() => undefined) as Component<Definition>;
@@ -558,7 +560,7 @@ export interface FieldErrorProps<Failure = unknown> {
   code?: string | readonly string[];
   failure?: Failure | null;
   id?: string;
-  message?: ComponentRenderResult | ((failure: any) => ComponentRenderResult);
+  message?: ComponentTextResult | ((failure: any) => ComponentTextResult);
   name: string;
   role?: string;
   [attribute: string]: unknown;
@@ -571,7 +573,7 @@ export interface FormErrorProps<Failure = unknown> {
   code?: string | readonly string[];
   failure?: Failure | null;
   id?: string;
-  message?: ComponentRenderResult | ((failure: any) => ComponentRenderResult);
+  message?: ComponentTextResult | ((failure: any) => ComponentTextResult);
   role?: string;
   [attribute: string]: unknown;
 }

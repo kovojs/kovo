@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Message Circle Code icon (Lucide). https://lucide.dev/icons/message-circle-code */
-export function MessageCircleCode(props: IconProps = {}): string {
+export function MessageCircleCode(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m10 9-3 3 3 3"></path>

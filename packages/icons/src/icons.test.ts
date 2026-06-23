@@ -12,6 +12,16 @@ describe('@kovojs/icons generation', () => {
   });
 });
 describe('@kovojs/icons rendering', () => {
+  it('does not advertise generated icons as raw string components', () => {
+    const assertIconIsNotString = () => {
+      // @ts-expect-error SPEC §4.1: icon components return an opaque render result, not raw string markup.
+      const html: string = ArrowRight({});
+      return html;
+    };
+
+    expect(assertIconIsNotString).toBeTypeOf('function');
+  });
+
   it('renders an <svg> with Lucide defaults, decorative by default', () => {
     const html = String(ArrowRight({}));
     expect(html).toContain('<svg');

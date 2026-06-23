@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Shield Off icon (Lucide). https://lucide.dev/icons/shield-off */
-export function ShieldOff(props: IconProps = {}): string {
+export function ShieldOff(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m2 2 20 20"></path>

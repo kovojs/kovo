@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Bookmark X icon (Lucide). https://lucide.dev/icons/bookmark-x */
-export function BookmarkX(props: IconProps = {}): string {
+export function BookmarkX(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m14.5 7.5-5 5"></path>

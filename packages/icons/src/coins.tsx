@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Coins icon (Lucide). https://lucide.dev/icons/coins */
-export function Coins(props: IconProps = {}): string {
+export function Coins(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.744 17.736a6 6 0 1 1-7.48-7.48"></path>

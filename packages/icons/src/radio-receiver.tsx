@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Radio Receiver icon (Lucide). https://lucide.dev/icons/radio-receiver */
-export function RadioReceiver(props: IconProps = {}): string {
+export function RadioReceiver(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M5 16v2"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Arrow Down Wide Narrow icon (Lucide). https://lucide.dev/icons/arrow-down-wide-narrow */
-export function ArrowDownWideNarrow(props: IconProps = {}): string {
+export function ArrowDownWideNarrow(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m3 16 4 4 4-4"></path>

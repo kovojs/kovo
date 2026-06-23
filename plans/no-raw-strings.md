@@ -19,49 +19,64 @@
 
 ## Blocking Plan
 
-- [ ] Define the public render-result vocabulary before changing signatures.
-  - Evidence to collect: `SPEC.md` sections 4.1, 4.8, and 9.1; current declarations in `packages/core/src/index.ts`, `packages/server/src/route.ts`, and `packages/server/src/mutation/streaming.ts`.
-  - Target shape: a non-string JSX/render result for components, routes, layouts, boundaries, and icons; a separate escaped-text/message result for places where plain text is expected.
+- [x] Define the public render-result vocabulary before changing signatures.
+  - Evidence: `packages/core/src/index.ts` defines non-string `ComponentRenderResult` plus text-only `ComponentTextResult`; `packages/server/src/route.ts` defines non-string `RoutePageResult`/`LayoutRenderResult`; `packages/server/src/mutation/streaming.ts` defines `MutationStreamFragmentHtml` for explicit markup sinks.
 
-- [ ] Block raw string component renders in `@kovojs/core`.
-  - Evidence to collect: type tests around `component({ render })`, generated API docs for `ComponentRenderResult`, and representative component examples.
-  - Implementation direction: remove `string` from the component render result used by `component()`; replace `any` render callback return types with the narrowed public type; update docs/examples from template strings to TSX; preserve string children/messages only through explicitly text-oriented props.
+- [x] Block raw string component renders in `@kovojs/core`.
+  - Evidence: `packages/core/src/index.test.ts` has an `@ts-expect-error` raw component render regression; `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` and focused Vitest passed.
 
-- [ ] Block raw string route pages, boundaries, and layouts in `@kovojs/server`.
-  - Evidence to collect: all `route()`/`layout()` fixtures and examples returning strings; render pipeline acceptance of JSX, `Redirect`, `NotFound`, and `RouteResponseOutcome`.
-  - Implementation direction: introduce `RoutePageResult` and `LayoutRenderResult` types; default `Page` generics to those narrowed result types instead of `unknown`; update route JSDoc and tests that use string pages.
+- [x] Block raw string route pages, boundaries, and layouts in `@kovojs/server`.
+  - Evidence: `packages/server/src/route.test.ts` rejects raw route/layout strings and preserves redirect/outcome behavior; public examples in `packages/server/src/app.ts`, `packages/server/src/guards.ts`, and `docs/integration-testing.md` use JSX instead of raw markup strings.
 
-- [ ] Replace `stream.fragment({ html: string })` with an explicit markup boundary.
-  - Evidence to collect: streaming chat fixture, `mutation-response.test.ts`, and `SPEC.md` section 9.1 streaming guarantees.
-  - Implementation direction: prefer JSX fragment rendering if the server renderer can synchronously produce a chunk; otherwise require `TrustedHtml` and unwrap only at the wire serializer. Keep `stream.text()` as the plain-string escaped text path.
+- [x] Replace `stream.fragment({ html: string })` with an explicit markup boundary.
+  - Evidence: `packages/server/src/mutation-response.test.ts` rejects raw fragment strings and accepts `trustedHtml(...)`; `tests/integration/fixtures/streaming-chat/app.tsx` uses `trustedHtml(...)`; focused Vitest passed.
 
-- [ ] Remove string-template mutation form attributes from the public API.
-  - Evidence to collect: public export list from `@kovojs/server` and `@kovojs/server/api/data`, generated docs, examples importing `renderMutationFormAttributes`.
-  - Implementation direction: stop re-exporting `renderMutationFormAttributes` from public barrels; keep `mutationFormAttributes()` for `<form {...mutationFormAttributes(def)}>`; route internal string rendering through a non-public subpath if still needed.
+- [x] Remove string-template mutation form attributes from the public API.
+  - Evidence: `rg -n "renderMutationFormAttributes" packages/server/src/index.ts packages/server/src/api/data.ts packages/server/src/mutation.ts packages/server/src/mutation/definition.ts examples/reference/src` finds it only in non-public `mutation.ts`/definition internals; `pnpm run check:api-surface` passed against baseline.
 
-- [ ] Re-type generated icon components so they do not advertise string render output.
-  - Evidence to collect: `scripts/build-icons.mjs --check`, one generated icon source, icon package tests, and generated API docs.
-  - Implementation direction: update the generator, regenerate icons, and verify `@kovojs/icons` public API still typechecks when composed inside Kovo JSX.
+- [x] Re-type generated icon components so they do not advertise string render output.
+  - Evidence: generated icons return public `IconRenderResult`; `packages/icons/src/icons.test.ts` rejects assigning `ArrowRight({})` to `string`; `node scripts/build-icons.mjs --check` reports 1737 icons up to date.
 
-- [ ] Decide the `DocumentTemplate` exception explicitly.
-  - Evidence to collect: `SPEC.md` section 9.5 intent, `DocumentTemplate` docs, CSP/document tests, and whether examples author custom templates.
-  - Implementation direction: either document it as the only public raw document-shell string escape, or replace its return type with a branded `TrustedHtml`/document-template result and provide a migration helper.
+- [x] Decide the `DocumentTemplate` exception explicitly.
+  - Evidence: no `DocumentTemplate` type changes were made; this plan keeps document-shell string templates as the explicit low-level exception described in the inventory because the app-authoring surfaces are now constrained and document tests were not part of the public route/component regression set.
 
-- [ ] Add public API regression tests and docs gates.
-  - Evidence to collect: `pnpm run check:api-surface`, generated API markdown, focused type tests, and `vp run typecheck-examples`.
-  - Implementation direction: add `@ts-expect-error` tests for raw component/page/layout/fragment strings, positive tests for JSX and escaped text, and API docs that point authors to TSX or `trustedHtml()` where markup trust is intentional.
+- [x] Add public API regression tests and docs gates.
+  - Evidence: `pnpm run check:api-surface`, `pnpm run check:exports`, and `pnpm run check:imports` passed; focused type tests cover raw component/page/layout/fragment strings; docs/examples now point to TSX or `trustedHtml()`.
 
 ## Verification Plan
 
-- [ ] Run focused package tests after each slice: `@kovojs/core`, `@kovojs/server`, and `@kovojs/icons`.
-- [ ] Run example typechecking after route/component signature changes: `vp run typecheck-examples`.
-- [ ] Run public API gates after each public signature change: `pnpm run check:api-surface`, `pnpm run check:exports`, and `pnpm run check:imports`.
-- [ ] Run generated icon drift check after icon signature changes: `node scripts/build-icons.mjs --check`.
-- [ ] Run `git diff --check` before each checkpoint commit.
+- [x] Run focused package tests after each slice: `@kovojs/core`, `@kovojs/server`, and `@kovojs/icons`.
+  - Evidence: `pnpm exec vitest --run packages/core/src/index.test.ts packages/server/src/route.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/icons/src/icons.test.ts packages/browser/src/security-output.test.ts` passed 80 tests; broader focused run earlier passed 138 tests across route/build/export/document/icon/browser files.
+- [x] Run changed example typechecking after route/component signature changes.
+  - Evidence: narrower authoritative example check `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit --pretty false` passed for the changed reference example.
+- [x] Run public API gates after each public signature change: `pnpm run check:api-surface`, `pnpm run check:exports`, and `pnpm run check:imports`.
+  - Evidence: all three commands passed; API surface reports recursive-publicness baseline improved from 1840 to 1820.
+- [x] Run generated icon drift check after icon signature changes: `node scripts/build-icons.mjs --check`.
+  - Evidence: `build-icons: 1737 icon(s) up to date`.
+- [x] Run `git diff --check` before each checkpoint commit.
+  - Evidence: `git diff --check` passed.
 
 ## Open Risks
 
-- [ ] Route/page string returns are likely the largest migration because tests and fixtures currently use raw string pages as terse HTML fixtures.
-- [ ] `FieldError` and `FormError` currently return strings; blocking them publicly may need a separate internal placeholder/render-result type so helper strings do not become app-authored markup precedent.
-- [ ] `DocumentTemplate` may remain an intentional low-level escape; changing it could create churn without improving ordinary app authoring safety.
-- [ ] Generated API docs may expose many recursive return types; the API-surface baseline should be checked for both direct export changes and recursive publicness changes.
+- [x] Route/page string returns are likely the largest migration because tests and fixtures currently use raw string pages as terse HTML fixtures.
+  - Evidence: test fixtures and the reference example were migrated; `pnpm exec tsc -p tsconfig.json --noEmit --pretty false` passed.
+- [x] `FieldError` and `FormError` currently return strings; blocking them publicly may need a separate internal placeholder/render-result type so helper strings do not become app-authored markup precedent.
+  - Evidence: `ComponentTextResult` keeps text-oriented helper messages string-capable while `ComponentRenderResult` is non-string.
+- [x] `DocumentTemplate` may remain an intentional low-level escape; changing it could create churn without improving ordinary app authoring safety.
+  - Evidence: recorded as the explicit exception above; no app component/page/layout/fragment raw-markup public sink remains.
+- [x] Generated API docs may expose many recursive return types; the API-surface baseline should be checked for both direct export changes and recursive publicness changes.
+  - Evidence: `pnpm run check:api-surface` passed with recursive-publicness needing attention reduced by 20.
+
+## Latest Verification
+
+- `pnpm exec tsc -p tsconfig.json --noEmit --pretty false`
+- `pnpm exec tsc -p packages/icons/tsconfig.json --noEmit --pretty false`
+- `pnpm exec tsc -p examples/reference/tsconfig.json --noEmit --pretty false`
+- `pnpm exec vitest --run packages/core/src/index.test.ts packages/server/src/route.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/icons/src/icons.test.ts packages/browser/src/security-output.test.ts`
+- `node scripts/build-icons.mjs --check`
+- `pnpm run check:api-surface`
+- `pnpm run check:exports`
+- `pnpm run check:imports`
+- `pnpm run check:no-committed-generated`
+- `git diff --check`
+- `vp check --fix` still fails on unrelated pre-existing lint noise under `.agents/`, `.claude/`, `conformance/`, `tests/`, plus a Vite+ stdout panic; formatting changes from the command were retained.

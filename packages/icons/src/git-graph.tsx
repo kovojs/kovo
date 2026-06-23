@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Git Graph icon (Lucide). https://lucide.dev/icons/git-graph */
-export function GitGraph(props: IconProps = {}): string {
+export function GitGraph(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="5" cy="6" r="3"></circle>

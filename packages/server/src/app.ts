@@ -63,7 +63,7 @@ import type {
  * import { createApp, createRequestHandler, route } from '@kovojs/server';
  *
  * const app = createApp({
- *   routes: [route('/', { page: () => '<h1>Home</h1>' })],
+ *   routes: [route('/', { page: () => <h1>Home</h1> })],
  * });
  *
  * export const handler = createRequestHandler(app);

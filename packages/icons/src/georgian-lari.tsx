@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Georgian Lari icon (Lucide). https://lucide.dev/icons/georgian-lari */
-export function GeorgianLari(props: IconProps = {}): string {
+export function GeorgianLari(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11.5 21a7.5 7.5 0 1 1 7.35-9"></path>

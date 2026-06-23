@@ -1,11 +1,5 @@
-import {
-  csrfField,
-  csrfToken,
-  renderMutationFormAttributes,
-  route,
-  s,
-  session,
-} from '@kovojs/server';
+import { csrfField, csrfToken, mutationFormAttributes, route, s, session } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
 import {
   authed,
   betterAuthSession,
@@ -254,14 +248,18 @@ export const referenceGraph = {
 export const accountRoute = route('/account', {
   guard: authed<ReferenceRequest>(),
   page(_input, request) {
-    return `account:${request.session.user.email}${renderReferenceLogoutForm(request)}`;
+    return trustedHtml(
+      `account:${request.session.user.email}${renderReferenceLogoutForm(request)}`,
+    );
   },
 });
 
 export const adminRoute = route('/admin', {
   guard: role<ReferenceRequest>('admin'),
   page(_input, request) {
-    return `admin:${request.session?.user.id ?? 'anonymous'}${renderReferenceLogoutForm(request)}`;
+    return trustedHtml(
+      `admin:${request.session?.user.id ?? 'anonymous'}${renderReferenceLogoutForm(request)}`,
+    );
   },
 });
 
@@ -274,17 +272,29 @@ export function renderReferenceLoginForm(
       ? '<output role="alert" data-error-code="INVALID_CREDENTIALS">Invalid email or password.</output>'
       : '';
 
-  return `<form ${renderMutationFormAttributes(referenceSignIn)}>${csrfField(
+  return `<form ${renderReferenceMutationFormAttributes(referenceSignIn)}>${csrfField(
     request,
     referenceAuthCsrf,
   )}<input type="hidden" name="next" value="${escapeAttribute(options.next ?? '/account')}"><input name="email" type="email" autocomplete="email" required><input name="password" type="password" autocomplete="current-password" required>${error}<button type="submit">Sign in</button></form>`;
 }
 
 export function renderReferenceLogoutForm(request: ReferenceRequest): string {
-  return `<form ${renderMutationFormAttributes(referenceSignOut)}>${csrfField(
+  return `<form ${renderReferenceMutationFormAttributes(referenceSignOut)}>${csrfField(
     request,
     referenceAuthCsrf,
   )}<button type="submit">Sign out</button></form>`;
+}
+
+function renderReferenceMutationFormAttributes(mutation: { key: string }): string {
+  const attrs = mutationFormAttributes(mutation);
+  return [
+    `method="${attrs.method}"`,
+    `action="${escapeAttribute(attrs.action)}"`,
+    attrs.enhance ? 'enhance' : '',
+    `data-mutation="${escapeAttribute(attrs['data-mutation'])}"`,
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 export function referenceAuthRequest(cookie?: string): ReferenceRequest {

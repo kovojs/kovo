@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Person Standing icon (Lucide). https://lucide.dev/icons/person-standing */
-export function PersonStanding(props: IconProps = {}): string {
+export function PersonStanding(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="5" r="1"></circle>

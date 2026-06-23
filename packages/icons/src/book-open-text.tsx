@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Book Open Text icon (Lucide). https://lucide.dev/icons/book-open-text */
-export function BookOpenText(props: IconProps = {}): string {
+export function BookOpenText(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 7v14"></path>

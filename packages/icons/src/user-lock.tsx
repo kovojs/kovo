@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** User Lock icon (Lucide). https://lucide.dev/icons/user-lock */
-export function UserLock(props: IconProps = {}): string {
+export function UserLock(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M19 16v-2a2 2 0 0 0-4 0v2"></path>

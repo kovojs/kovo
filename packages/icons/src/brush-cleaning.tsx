@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Brush Cleaning icon (Lucide). https://lucide.dev/icons/brush-cleaning */
-export function BrushCleaning(props: IconProps = {}): string {
+export function BrushCleaning(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 22-1-4"></path>

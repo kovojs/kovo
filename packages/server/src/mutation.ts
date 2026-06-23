@@ -98,6 +98,7 @@ export type {
   MutationStreamContext,
   MutationStreamDoneChunk,
   MutationStreamFragmentChunk,
+  MutationStreamFragmentHtml,
   MutationStreamQueryChunk,
   MutationStreamSource,
   MutationStreamTextChunk,

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Eye Closed icon (Lucide). https://lucide.dev/icons/eye-closed */
-export function EyeClosed(props: IconProps = {}): string {
+export function EyeClosed(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 18-.722-3.25"></path>

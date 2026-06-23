@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Banana icon (Lucide). https://lucide.dev/icons/banana */
-export function Banana(props: IconProps = {}): string {
+export function Banana(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M4 13c3.5-2 8-2 10 2a5.5 5.5 0 0 1 8 5"></path>

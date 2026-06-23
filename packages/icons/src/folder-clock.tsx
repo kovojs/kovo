@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Folder Clock icon (Lucide). https://lucide.dev/icons/folder-clock */
-export function FolderClock(props: IconProps = {}): string {
+export function FolderClock(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M16 14v2.2l1.6 1"></path>

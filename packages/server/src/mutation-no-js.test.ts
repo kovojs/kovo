@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 import { component, form } from '@kovojs/core';
 
 import { renderComponentMutationFailure } from './component-render.js';
+import { renderedHtml } from './html.js';
 import { renderNoJsMutationResponse } from './mutation.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
@@ -67,11 +69,13 @@ describe('no-JS mutation responses', () => {
     const AddToCartForm = component({
       mutations: { addToCart: addToCartForm },
       render: (_queries, _state, { forms }) =>
-        '<!doctype html><html><body><form>' +
-        (forms.addToCart.failure?.code === 'OUT_OF_STOCK'
-          ? `<output role="alert">Only ${forms.addToCart.failure.payload.availableQuantity} left.</output>`
-          : '') +
-        '</form></body></html>',
+        renderedHtml(
+          '<!doctype html><html><body><form>' +
+            (forms.addToCart.failure?.code === 'OUT_OF_STOCK'
+              ? `<output role="alert">Only ${forms.addToCart.failure.payload.availableQuantity} left.</output>`
+              : '') +
+            '</form></body></html>',
+        ),
     });
     const addToCart = mutation('cart/add', {
       errors: {

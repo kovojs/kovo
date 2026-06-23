@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Maximize 2 icon (Lucide). https://lucide.dev/icons/maximize-2 */
-export function Maximize2(props: IconProps = {}): string {
+export function Maximize2(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M15 3h6v6"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Table Columns Split icon (Lucide). https://lucide.dev/icons/table-columns-split */
-export function TableColumnsSplit(props: IconProps = {}): string {
+export function TableColumnsSplit(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M14 14v2"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Music 4 icon (Lucide). https://lucide.dev/icons/music-4 */
-export function Music4(props: IconProps = {}): string {
+export function Music4(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M9 18V5l12-2v13"></path>

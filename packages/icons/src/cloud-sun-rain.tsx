@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Cloud Sun Rain icon (Lucide). https://lucide.dev/icons/cloud-sun-rain */
-export function CloudSunRain(props: IconProps = {}): string {
+export function CloudSunRain(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M12 2v2"></path>

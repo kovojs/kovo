@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Wifi Pen icon (Lucide). https://lucide.dev/icons/wifi-pen */
-export function WifiPen(props: IconProps = {}): string {
+export function WifiPen(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M2 8.82a15 15 0 0 1 20 0"></path>

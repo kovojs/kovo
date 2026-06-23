@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Iteration Ccw icon (Lucide). https://lucide.dev/icons/iteration-ccw */
-export function IterationCcw(props: IconProps = {}): string {
+export function IterationCcw(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m16 14 4 4-4 4"></path>

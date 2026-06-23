@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Copy Check icon (Lucide). https://lucide.dev/icons/copy-check */
-export function CopyCheck(props: IconProps = {}): string {
+export function CopyCheck(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m12 15 2 2 4-4"></path>

@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Glasses icon (Lucide). https://lucide.dev/icons/glasses */
-export function Glasses(props: IconProps = {}): string {
+export function Glasses(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="6" cy="15" r="4"></circle>

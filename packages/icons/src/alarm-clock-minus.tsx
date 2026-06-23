@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Alarm Clock Minus icon (Lucide). https://lucide.dev/icons/alarm-clock-minus */
-export function AlarmClockMinus(props: IconProps = {}): string {
+export function AlarmClockMinus(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="12" cy="13" r="8"></circle>

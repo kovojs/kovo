@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Bell Electric icon (Lucide). https://lucide.dev/icons/bell-electric */
-export function BellElectric(props: IconProps = {}): string {
+export function BellElectric(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M18.518 17.347A7 7 0 0 1 14 19"></path>

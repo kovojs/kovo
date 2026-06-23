@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Satellite Dish icon (Lucide). https://lucide.dev/icons/satellite-dish */
-export function SatelliteDish(props: IconProps = {}): string {
+export function SatelliteDish(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M4 10a7.31 7.31 0 0 0 10 10Z"></path>

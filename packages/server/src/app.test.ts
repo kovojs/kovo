@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 
@@ -15,6 +16,7 @@ import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { stylesheet } from './hints.js';
+import { renderedHtml } from './html.js';
 
 describe('server createApp request shell', () => {
   it('stores the closed app registries and options without adding middleware', () => {
@@ -88,7 +90,7 @@ describe('server createApp request shell', () => {
     const accountLayout = layout({
       queries: { profile: profileQuery },
       render: ({ profile }, _state, { children }) =>
-        `<main data-profile="${profile.name}">${String(children)}</main>`,
+        trustedHtml(`<main data-profile="${profile.name}">${String(children)}</main>`),
     });
 
     const app = createApp({
@@ -104,7 +106,7 @@ describe('server createApp request shell', () => {
       routes: [
         route('/account', {
           layout: accountLayout,
-          page: () => '<section>Account</section>',
+          page: () => trustedHtml('<section>Account</section>'),
         }),
       ],
     });
@@ -224,14 +226,14 @@ describe('server createApp request shell', () => {
         }),
       ],
       queries: [query('cart', { reads: [domain('cart')] })],
-      routes: [route('/cart', { page: () => '<main>Cart</main>' })],
+      routes: [route('/cart', { page: () => trustedHtml('<main>Cart</main>') })],
     });
 
     for (const malformedApp of [
       { ...app, endpoints: [{ path: '/status' }] },
       { ...app, mutations: [{ key: 'cart/add', handler: () => ({ ok: true }) }] },
       { ...app, queries: [{ key: 'cart', reads: [{ name: 'cart' }] }] },
-      { ...app, routes: [{ page: () => '<main>Cart</main>' }] },
+      { ...app, routes: [{ page: () => trustedHtml('<main>Cart</main>') }] },
     ]) {
       expect(() =>
         createRequestHandler(malformedApp as unknown as Parameters<typeof createRequestHandler>[0]),
@@ -243,7 +245,7 @@ describe('server createApp request shell', () => {
     const productRoute = route('/products/:id', {
       meta: { title: 'Product' },
       page({ params, search }) {
-        return `<main>${params.id}:${search.tab}</main>`;
+        return renderedHtml(`<main>${params.id}:${search.tab}</main>`);
       },
       search: s.object({ tab: s.string() }),
     });
@@ -264,7 +266,9 @@ describe('server createApp request shell', () => {
             meta: { title: 'Product' },
             params: s.object({ id: s.string() }),
             page({ params }) {
-              return `<main kovo-nav-segment="page:/products/:id">${params.id}</main>`;
+              return renderedHtml(
+                `<main kovo-nav-segment="page:/products/:id">${params.id}</main>`,
+              );
             },
           }),
         ],
@@ -326,8 +330,8 @@ describe('server createApp request shell', () => {
   it('blocks ambiguous route tables with KV228 before declaration-order dispatch', async () => {
     const app = createApp({
       routes: [
-        route('/products/:id', { page: () => '<main>Param</main>' }),
-        route('/products/new', { page: () => '<main>New</main>' }),
+        route('/products/:id', { page: () => trustedHtml('<main>Param</main>') }),
+        route('/products/new', { page: () => trustedHtml('<main>New</main>') }),
       ],
     });
 
@@ -565,7 +569,7 @@ describe('server createApp request shell', () => {
     const handler = createRequestHandler(
       createApp({
         endpoints: [statusEndpoint],
-        routes: [route('/status', { page: () => 'route' })],
+        routes: [route('/status', { page: () => trustedHtml('route') })],
         sessionProvider: () => ({ user: { id: 'u1' } }),
       }),
     );
@@ -606,7 +610,7 @@ describe('server createApp request shell', () => {
     const adminRoute = route('/admin', {
       guard: guards.authed<{ session?: { user?: { id: string } | null } | null }>(),
       page(_context, request) {
-        return `admin:${request.session.user.id}`;
+        return renderedHtml(`admin:${request.session.user.id}`);
       },
     });
     const handler = createRequestHandler(
@@ -690,7 +694,7 @@ describe('server createApp request shell', () => {
         routes: [
           route('/cart', {
             page(_context, request: AppRequest) {
-              return `<main>${request.db.count}:${request.session?.user.id}</main>`;
+              return renderedHtml(`<main>${request.db.count}:${request.session?.user.id}</main>`);
             },
           }),
         ],
@@ -762,7 +766,9 @@ describe('server createApp request shell', () => {
     const CartLayout = layout({
       queries: { cart: cartQuery },
       render: ({ cart }, _state, { children }) =>
-        `<main><output data-bind="cart.count">${cart.count}</output>${String(children)}</main>`,
+        trustedHtml(
+          `<main><output data-bind="cart.count">${cart.count}</output>${String(children)}</main>`,
+        ),
     });
     const handler = createRequestHandler(
       createApp({
@@ -771,7 +777,7 @@ describe('server createApp request shell', () => {
         routes: [
           route('/cart', {
             layout: CartLayout,
-            page: () => '<section>Cart</section>',
+            page: () => trustedHtml('<section>Cart</section>'),
           }),
         ],
       }),

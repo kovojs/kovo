@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Paint Bucket icon (Lucide). https://lucide.dev/icons/paint-bucket */
-export function PaintBucket(props: IconProps = {}): string {
+export function PaintBucket(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 7 6 2"></path>

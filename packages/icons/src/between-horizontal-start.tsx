@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Between Horizontal Start icon (Lucide). https://lucide.dev/icons/between-horizontal-start */
-export function BetweenHorizontalStart(props: IconProps = {}): string {
+export function BetweenHorizontalStart(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="13" height="7" x="8" y="3" rx="1"></rect>

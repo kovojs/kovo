@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Layout Panel Left icon (Lucide). https://lucide.dev/icons/layout-panel-left */
-export function LayoutPanelLeft(props: IconProps = {}): string {
+export function LayoutPanelLeft(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <rect width="7" height="18" x="3" y="3" rx="1"></rect>

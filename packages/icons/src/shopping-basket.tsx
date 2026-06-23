@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Shopping Basket icon (Lucide). https://lucide.dev/icons/shopping-basket */
-export function ShoppingBasket(props: IconProps = {}): string {
+export function ShoppingBasket(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m15 11-1 9"></path>

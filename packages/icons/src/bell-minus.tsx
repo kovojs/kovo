@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Bell Minus icon (Lucide). https://lucide.dev/icons/bell-minus */
-export function BellMinus(props: IconProps = {}): string {
+export function BellMinus(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>

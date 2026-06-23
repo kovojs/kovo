@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Id Card Lanyard icon (Lucide). https://lucide.dev/icons/id-card-lanyard */
-export function IdCardLanyard(props: IconProps = {}): string {
+export function IdCardLanyard(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M13.5 8h-3"></path>

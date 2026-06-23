@@ -18,6 +18,11 @@
     "types": ["node", "vitest"],
     "verbatimModuleSyntax": true
   },
-  "include": ["packages/**/*.ts", "examples/vite-kovo-compiler.ts", "vite.config.ts"],
+  "include": [
+    "packages/**/*.ts",
+    "packages/icons/src/*.tsx",
+    "examples/vite-kovo-compiler.ts",
+    "vite.config.ts"
+  ],
   "exclude": ["packages/create-kovo/templates/**"]
 }

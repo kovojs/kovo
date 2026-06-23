@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Decimals Arrow Left icon (Lucide). https://lucide.dev/icons/decimals-arrow-left */
-export function DecimalsArrowLeft(props: IconProps = {}): string {
+export function DecimalsArrowLeft(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m13 21-3-3 3-3"></path>

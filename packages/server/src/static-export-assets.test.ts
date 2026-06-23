@@ -4,11 +4,13 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { stylesheet } from './hints.js';
 import { route } from './route.js';
 import { exportStaticApp } from './static-export.js';
+import { renderedHtml } from './html.js';
 
 describe('server static export', () => {
   it('rejects non-file static asset source URLs before synthetic route replay', async () => {
@@ -18,7 +20,7 @@ describe('server static export', () => {
         route('/', {
           page: () => {
             rendered = true;
-            return '<main>Home</main>';
+            return renderedHtml('<main>Home</main>');
           },
         }),
       ],
@@ -59,7 +61,7 @@ describe('server static export', () => {
         routes: [
           route('/', {
             stylesheets: ['/assets/app.css'],
-            page: () => '<main>Home</main>',
+            page: () => trustedHtml('<main>Home</main>'),
           }),
         ],
       });
@@ -111,7 +113,7 @@ describe('server static export', () => {
       routes: [
         route('/', {
           stylesheets: ['/assets/app.css'],
-          page: () => '<main>Home</main>',
+          page: () => trustedHtml('<main>Home</main>'),
         }),
       ],
     });
@@ -142,7 +144,7 @@ describe('server static export', () => {
       routes: [
         route('/', {
           stylesheets: [stylesheet('./home.css')],
-          page: () => '<main>Home</main>',
+          page: () => trustedHtml('<main>Home</main>'),
         }),
       ],
       stylesheets: [stylesheet('./styles.css')],
@@ -162,7 +164,7 @@ describe('server static export', () => {
 
   it('rejects duplicate static asset paths during dry-run inventory planning', async () => {
     const app = createApp({
-      routes: [route('/', { page: () => '<main>Home</main>' })],
+      routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
     });
 
     await expect(
@@ -193,7 +195,7 @@ describe('server static export', () => {
       const source = path.join(sourceDir, 'app.css');
       await writeFile(source, 'body {}\n', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => '<main>Home</main>' })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
       });
 
       await expect(
@@ -225,7 +227,7 @@ describe('server static export', () => {
       const source = path.join(sourceDir, 'index.html');
       await writeFile(source, '<p>asset</p>', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => '<main>Home</main>' })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
       });
 
       await expect(
@@ -261,7 +263,7 @@ describe('server static export', () => {
       await writeFile(firstSource, 'body { color: red; }\n', 'utf8');
       await writeFile(secondSource, 'body { color: blue; }\n', 'utf8');
       const app = createApp({
-        routes: [route('/', { page: () => '<main>Home</main>' })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
       });
 
       await expect(
@@ -297,7 +299,7 @@ describe('server static export', () => {
     try {
       const missingSource = path.join(sourceDir, 'missing.css');
       const app = createApp({
-        routes: [route('/', { page: () => '<main>Home</main>' })],
+        routes: [route('/', { page: () => trustedHtml('<main>Home</main>') })],
       });
 
       await expect(

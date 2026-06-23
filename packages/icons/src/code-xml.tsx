@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Code Xml icon (Lucide). https://lucide.dev/icons/code-xml */
-export function CodeXml(props: IconProps = {}): string {
+export function CodeXml(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m18 16 4-4-4-4"></path>

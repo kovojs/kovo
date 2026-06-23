@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Git Compare Arrows icon (Lucide). https://lucide.dev/icons/git-compare-arrows */
-export function GitCompareArrows(props: IconProps = {}): string {
+export function GitCompareArrows(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <circle cx="5" cy="6" r="3"></circle>

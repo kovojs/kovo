@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Chart Column Stacked icon (Lucide). https://lucide.dev/icons/chart-column-stacked */
-export function ChartColumnStacked(props: IconProps = {}): string {
+export function ChartColumnStacked(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M11 13H7"></path>

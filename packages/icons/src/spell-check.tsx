@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Spell Check icon (Lucide). https://lucide.dev/icons/spell-check */
-export function SpellCheck(props: IconProps = {}): string {
+export function SpellCheck(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="m6 16 6-12 6 12"></path>

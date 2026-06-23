@@ -27,6 +27,9 @@ export interface IconProps {
   [dataAttr: `data-${string}`]: unknown;
 }
 
+/** Opaque non-string value returned by generated icon components (SPEC §4.1). */
+export type IconRenderResult = object;
+
 /**
  * Lucide's default root `<svg>` attributes. Emitted verbatim (kebab-case, not
  * React camelCase) because the Kovo scanner/runtime read attribute names as

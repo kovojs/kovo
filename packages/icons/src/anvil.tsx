@@ -1,8 +1,8 @@
 /** @jsxImportSource @kovojs/server */
-import { iconRootAttrs, type IconProps } from './icon-base.js';
+import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';
 
 /** Anvil icon (Lucide). https://lucide.dev/icons/anvil */
-export function Anvil(props: IconProps = {}): string {
+export function Anvil(props: IconProps = {}): IconRenderResult {
   return (
     <svg {...iconRootAttrs(props)}>
       <path d="M7 10H6a4 4 0 0 1-4-4 1 1 0 0 1 1-1h4"></path>
