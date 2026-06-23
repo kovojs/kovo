@@ -503,13 +503,48 @@ describe('compiler conformance corpus', () => {
               ],
               "styleRules": [
                 {
+                  "className": "kv-product-grid-fg-s0iea3",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
+                  "styleRef": "productGridStyles.authPrompt",
+                },
+                {
+                  "className": "kv-product-grid-d-1bf5lb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
+                  "styleRef": "productGridStyles.authPrompt",
+                },
+                {
+                  "className": "kv-product-grid-gap-17c2ao",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
+                  "styleRef": "productGridStyles.authPrompt",
+                },
+                {
+                  "className": "kv-product-grid-fg-10tdu4",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
+                  "styleRef": "productGridStyles.authPromptLink",
+                },
+                {
+                  "className": "kv-product-grid-font-cgqqv9",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
+                  "styleRef": "productGridStyles.authPromptLink",
+                },
+                {
+                  "className": "kv-product-grid-font-fvtqbe",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
+                  "styleRef": "productGridStyles.authPromptLink",
+                },
+                {
+                  "className": "kv-product-grid-text-gwsvu5",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
+                  "styleRef": "productGridStyles.authPromptLink",
+                },
+                {
                   "className": "kv-product-grid-fg-1a8f0w",
                   "source": "examples/commerce/src/components/product-grid.tsx#errorText",
                   "styleRef": "productGridStyles.errorText",
                 },
                 {
-                  "className": "kv-product-grid-font-1dmql4",
-                  "source": "examples/commerce/src/components/product-grid.tsx#errorText",
+                  "className": "kv-product-grid-font-cgqqv9",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
                   "styleRef": "productGridStyles.errorText",
                 },
                 {
@@ -558,13 +593,13 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.field",
                 },
                 {
-                  "className": "kv-product-grid-fg-emqj71",
-                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "className": "kv-product-grid-fg-s0iea3",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
                   "styleRef": "productGridStyles.formLabel",
                 },
                 {
-                  "className": "kv-product-grid-d-zbwzwb",
-                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "className": "kv-product-grid-d-1bf5lb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
                   "styleRef": "productGridStyles.formLabel",
                 },
                 {
@@ -573,8 +608,8 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.formLabel",
                 },
                 {
-                  "className": "kv-product-grid-font-1riwsq",
-                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "className": "kv-product-grid-font-fvtqbe",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
                   "styleRef": "productGridStyles.formLabel",
                 },
                 {
@@ -583,23 +618,23 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.formLabel",
                 },
                 {
-                  "className": "kv-product-grid-fg-p4cbfq",
-                  "source": "examples/commerce/src/components/product-grid.tsx#link",
+                  "className": "kv-product-grid-fg-10tdu4",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
                   "styleRef": "productGridStyles.link",
                 },
                 {
-                  "className": "kv-product-grid-font-1dmql4",
-                  "source": "examples/commerce/src/components/product-grid.tsx#errorText",
+                  "className": "kv-product-grid-font-cgqqv9",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
                   "styleRef": "productGridStyles.link",
                 },
                 {
-                  "className": "kv-product-grid-font-1riwsq",
-                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "className": "kv-product-grid-font-fvtqbe",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
                   "styleRef": "productGridStyles.link",
                 },
                 {
-                  "className": "kv-product-grid-text-5zwurx",
-                  "source": "examples/commerce/src/components/product-grid.tsx#link",
+                  "className": "kv-product-grid-text-gwsvu5",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
                   "styleRef": "productGridStyles.link",
                 },
                 {
@@ -633,8 +668,8 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.panelError",
                 },
                 {
-                  "className": "kv-product-grid-font-1dmql4",
-                  "source": "examples/commerce/src/components/product-grid.tsx#errorText",
+                  "className": "kv-product-grid-font-cgqqv9",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPromptLink",
                   "styleRef": "productGridStyles.panelError",
                 },
                 {
@@ -653,8 +688,8 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.productEmoji",
                 },
                 {
-                  "className": "kv-product-grid-d-zbwzwb",
-                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "className": "kv-product-grid-d-1bf5lb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
                   "styleRef": "productGridStyles.productEmoji",
                 },
                 {
@@ -693,8 +728,8 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.productForm",
                 },
                 {
-                  "className": "kv-product-grid-gap-1og9b5",
-                  "source": "examples/commerce/src/components/product-grid.tsx#productForm",
+                  "className": "kv-product-grid-gap-17c2ao",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
                   "styleRef": "productGridStyles.productForm",
                 },
                 {
@@ -728,8 +763,8 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.rowBetween",
                 },
                 {
-                  "className": "kv-product-grid-d-zbwzwb",
-                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "className": "kv-product-grid-d-1bf5lb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
                   "styleRef": "productGridStyles.stack",
                 },
                 {
@@ -738,8 +773,8 @@ describe('compiler conformance corpus', () => {
                   "styleRef": "productGridStyles.stack",
                 },
                 {
-                  "className": "kv-product-grid-d-zbwzwb",
-                  "source": "examples/commerce/src/components/product-grid.tsx#formLabel",
+                  "className": "kv-product-grid-d-1bf5lb",
+                  "source": "examples/commerce/src/components/product-grid.tsx#authPrompt",
                   "styleRef": "productGridStyles.stackSm",
                 },
                 {
@@ -795,8 +830,8 @@ describe('compiler conformance corpus', () => {
             "hasQueryStamp": true,
           },
           "moduleFacts": {
-            "clientHasNoHandlerFallback": true,
-            "clientHasQueryPlans": false,
+            "clientHasNoHandlerFallback": false,
+            "clientHasQueryPlans": true,
             "registryHasRoutes": false,
             "serverHasRenderSource": true,
           },

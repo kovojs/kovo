@@ -14,7 +14,7 @@ import { renderAddToCartForm } from './components/product-grid.js';
 import { createCommerceScenarioClient } from './app-test-helpers.js';
 
 describe('commerce example', () => {
-  it('renders add-to-cart forms only for authenticated shoppers', async () => {
+  it('renders SPEC 6.3 no-JS add-to-cart forms as the page output', async () => {
     const client = createCommerceScenarioClient();
     const form = renderAddToCartForm({ id: 'p1', stock: 5 }, true);
     const response = await client.get('/cart');

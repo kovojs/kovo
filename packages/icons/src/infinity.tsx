@@ -2,7 +2,6 @@
 import { iconRootAttrs, type IconProps } from './icon-base.js';
 
 /** Infinity icon (Lucide). https://lucide.dev/icons/infinity */
-// oxlint-disable-next-line no-shadow-restricted-names -- public icon export name.
 export function Infinity(props: IconProps = {}): string {
   return (
     <svg {...iconRootAttrs(props)}>

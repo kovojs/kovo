@@ -253,7 +253,7 @@ describe('commerce app HTTP entry', () => {
 
 function expectCommerceShellDocument(html: string): void {
   expect(htmlElementCount(html, commerceShellSelector)).toBe(1);
-  expect(htmlFormActions(html)).toContain('/_m/cart/add');
+  expect(htmlFormActions(html)).not.toContain('/_m/cart/add');
 }
 
 async function signInCookie(db: ReturnType<typeof createCommerceApp>['db']): Promise<string> {
