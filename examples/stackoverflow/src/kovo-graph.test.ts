@@ -34,13 +34,6 @@ describe('stackoverflow graph', () => {
 
     const result = kovoCheck(soGraph);
     expect(result.exitCode).toBe(0);
-    expect(result.output).toBe(
-      [
-        'kovo-check/v1',
-        'NOTICE KV409 examples/stackoverflow/src/mutations.ts:60 Non-eq predicate degraded to table-level invalidation.',
-        'NOTICE KV409 examples/stackoverflow/src/mutations.ts:78 Non-eq predicate degraded to table-level invalidation.',
-        '',
-      ].join('\n'),
-    );
+    expect(result.output).toBe('kovo-check/v1\nOK\n');
   });
 });

@@ -1295,6 +1295,69 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForTouchGraph(graph)).toEqual([]);
   });
 
+  it('keeps guarded session aliases stable after server-side Drizzle write payload uses', () => {
+    const files = [
+      pgDatabaseTypes([
+        'insert(table: unknown): { values(value: unknown): Promise<void> };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'question.domain.ts',
+        source: [
+          'import { and, eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const questions = pgTable("questions", {}, kovo({ domain: "question", key: "sessionId,id" }));',
+          'export const votes = pgTable("votes", {}, kovo({ domain: "vote", key: "sessionId,id" }));',
+          '',
+          'export async function voteUp({ id, targetId, userId }: { id: string; targetId: string; userId: string }, db: PgDatabase, request: { session?: { id?: string } | null }) {',
+          '  const sessionId = request.session?.id;',
+          '  if (!sessionId) throw new Error("auth required");',
+          '  await db.insert(votes).values({ sessionId, id, targetId, userId, value: 1 });',
+          '  await db.update(questions).set({ score: 1 }).where(and(eq(questions.sessionId, sessionId), eq(questions.id, targetId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const graph = extractTouchGraphFromProject({ files });
+    expect(graph.voteUp?.touches).toEqual([
+      {
+        domain: 'question',
+        keys: 'arg:targetId',
+        site: 'question.domain.ts:11',
+        via: 'questions',
+      },
+      { domain: 'vote', keys: null, site: 'question.domain.ts:10', via: 'votes' },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
+      {
+        op: 'insert',
+        table: 'votes',
+        values: {
+          id: { kind: 'param', path: 'id' },
+          sessionId: { kind: 'session', path: 'id' },
+          targetId: { kind: 'param', path: 'targetId' },
+          userId: { kind: 'param', path: 'userId' },
+          value: { kind: 'const', value: 1 },
+        },
+      },
+      {
+        match: {
+          eq: [
+            { column: 'sessionId', value: { kind: 'session', path: 'id' } },
+            { column: 'id', value: { kind: 'param', path: 'targetId' } },
+          ],
+          kind: 'keys',
+        },
+        op: 'update',
+        sets: { score: { kind: 'const', value: 1 } },
+        table: 'questions',
+      },
+    ]);
+  });
+
   it('keeps guarded session aliases stable across repeated Drizzle predicate uses', () => {
     const files = [
       pgDatabaseTypes([

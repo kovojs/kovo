@@ -36,7 +36,7 @@ matches its local helper names, or hard-codes its query/target layout does not s
 
 ## Design Goals
 
-- [ ] **Represent request/session/guard provenance as first-class symbolic values.**
+- [x] **Represent request/session/guard provenance as first-class symbolic values.**
   - Current gap: `SymbolicValue` handles params/constants/columns/arithmetic, while request-derived
     scope values collapse to opaque. This is the root cause behind the Stack Overflow `sessionId,id`
     table-level notices.
@@ -48,14 +48,19 @@ matches its local helper names, or hard-codes its query/target layout does not s
   - The guard must dominate the Drizzle predicate/write use. Use before guard, reassignment, mutation,
     alias escape, capture into an opaque callback, or an async helper boundary makes the value
     conditional/opaque for that use.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+    covers session, tenant, and guard provenance, nullable guard dominance, and degradation cases.
 
-- [ ] **Normalize predicates into a typed predicate algebra before invalidation or optimism.**
+- [x] **Normalize predicates into a typed predicate algebra before invalidation or optimism.**
   - The analyzer should lower Drizzle predicates into `and` / `or` / `not` / `eq` / range /
     `inArray` / `isNull` / opaque nodes with table-column identity and symbolic value provenance.
   - Evidence target: no post-parse analyzer decision depends on `getText()` except diagnostic
     rendering, preserving `rules/compiler-hard-rules.md` rule 9.
+  - Evidence: `packages/drizzle/src/static.ts` defines `predicatePnf(...)` and `chainMatch(...)`;
+    `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts`
+    covers typed PNF extraction, local opaque degradation, and codegen from typed facts.
 
-- [ ] **Prove row identity separately from row membership.**
+- [x] **Prove row identity separately from row membership.**
   - Row identity answers: “does this write address exactly one row under the table key?”
   - Row membership answers: “does this write affect the query's filtered rowset?”
   - This avoids conflating a session/tenant scope predicate with a non-key filter and lets composite
@@ -65,24 +70,32 @@ matches its local helper names, or hard-codes its query/target layout does not s
     single-row proof and must not be used to emit a single-row optimistic patch.
   - Membership filters may derive exits only when the transition is decidable from write values plus
     shipped query data; entry remains a named punt unless the full row can be constructed soundly.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts`
+    covers exact-row scoped updates, scoped-rowset erasure, filtered-list exits, `partial-key`, and
+    `membership-entry` degradation.
 
-- [ ] **Forbid private-scope leakage by construction.**
+- [x] **Forbid private-scope leakage by construction.**
   - `session(...)`, `tenant(...)`, and `guard(...)` values may participate in server-side proof only.
   - They must never appear in browser-visible query instance keys, `kovo-deps`, `Kovo-Targets`,
     generated optimistic module exports, generated transform inputs, or lowered browser code.
   - Leak checks are required fixtures, not manual review notes.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive-codegen.test.ts`
+    covers private-scope leak checks across query keys, `kovo-deps`, `Kovo-Targets`, exports,
+    transform inputs, and lowered browser code.
 
-- [ ] **Keep failures named and useful.**
+- [x] **Keep failures named and useful.**
   - `KV409` should remain a non-blocking table-level degradation notice for valid but imprecise
     predicates.
   - Punts should carry structured reasons such as `untraceable-session`, `disjunctive-row-identity`,
     `partial-key`, `membership-entry`, `range-filter`, or `raw-sql-boundary`, not generic opaque text.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts`
+    covers named optimistic proof/punt output and stable reason labels.
 
 ## Proposed Analyzer Architecture
 
 ### Layer 1: Symbolic Provenance
 
-- [ ] **Extend `SymbolicValue` with request/session scope.**
+- [x] **Extend `SymbolicValue` with request/session scope.**
   - Add value kinds equivalent to `input(path)`, `session(path)`, `guard(path)`, `const`,
     `column`, `arith`, `sql-placeholder`, and `opaque`.
   - Recognize common lifecycle shapes: `request.session.id`, `req.session.user.id`,
@@ -90,8 +103,11 @@ matches its local helper names, or hard-codes its query/target layout does not s
     nullable checks immediately preceding use.
   - Keep absence explicit: nullable session access without a guard remains an analyzable
     conditional only if the code throws/returns before the write.
+  - Evidence: `packages/core/src/derivation.ts` declares `session`, `tenant`, and `guard`
+    `SymbolicValue` kinds; `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts`
+    covers guarded and unguarded request/session extraction.
 
-- [ ] **Track value equality classes within one mutation handler.**
+- [x] **Track value equality classes within one mutation handler.**
   - If `const sessionId = request.session?.id; if (!sessionId) throw ...`, subsequent
     `sessionId` comparisons should be equivalent to `session.id`.
   - Equality-class promotion requires a dominating guard when the source is nullable. Reassignment,
@@ -99,8 +115,11 @@ matches its local helper names, or hard-codes its query/target layout does not s
     equality class for the affected use.
   - If `const tenantId = await lookupTenant(request.session.id)`, keep it opaque unless the helper
     has an analyzer summary.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts`
+    covers repeated alias uses, server-side Drizzle write payload uses, reassignment, mutation,
+    alias escape, and async helper opacity.
 
-- [ ] **Add summarized pure helper support for provenance.**
+- [x] **Add summarized pure helper support for provenance.**
   - Summaries should be explicit and typed, not inferred from arbitrary source strings.
   - Same-package helpers are allowed only when they match a declared analyzer summary or a small typed
     summary form maintained by the analyzer. Arbitrary helper source text must not be mined for proof.
@@ -108,10 +127,12 @@ matches its local helper names, or hard-codes its query/target layout does not s
     projectors, and guard combinators such as `owns(...)`.
   - Unsummarized helpers that return tenant/session/request/guard values must produce a named punt or
     table-level degradation such as `unsummarized-helper`, not a guessed proof.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+    covers declared `kovoAnalyzerSummary` provenance and unsummarized-helper degradation.
 
 ### Layer 2: Predicate Normal Form
 
-- [ ] **Introduce a Predicate Normal Form (PNF) IR.**
+- [x] **Introduce a Predicate Normal Form (PNF) IR.**
   - Shape: conjunctions of column comparisons plus bounded disjunctions where each arm is itself a
     provable key predicate.
   - Preserve table aliases and Drizzle alias resolution.
@@ -123,55 +144,72 @@ matches its local helper names, or hard-codes its query/target layout does not s
   - Unsupported predicate children should remain local opaque nodes when the surrounding proof stays
     sound. If uncertainty affects row identity or membership, degrade the relevant proof level rather
     than preserving a stronger classification.
+  - Evidence: `packages/drizzle/src/static.ts` defines `PredicatePnf`, `predicatePnf(...)`, and
+    `pnfExactConjuncts(...)`; `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts`
+    covers PNF conjunction, bounded disjunction, local opaque, and mixed-disjunction behavior.
 
-- [ ] **Classify predicate proof levels.**
+- [x] **Classify predicate proof levels.**
   - `exact-row`: predicates cover every declared row-key column with traceable symbolic values.
   - `scoped-rowset`: predicates prove a tenant/session/owner scope but not a single row.
   - `membership-filter`: predicates affect whether a row appears in a query rowset.
   - `table-level`: valid write/read, but precision is intentionally degraded.
   - `opaque`: unresolved table/value boundary requiring existing KV406-style declaration where
     applicable.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/drizzle/src/derive.test.ts`
+    covers `exact-row`, `scoped-rowset`, `table-level`, and `opaque` proof levels.
 
-- [ ] **Support composite keys and scoped keys as first-class.**
+- [x] **Support composite keys and scoped keys as first-class.**
   - Composite `kovo({ key: 'sessionId,id' })` must be satisfied by an `and()` of both equality
     conjuncts, regardless of conjunct order.
   - A scoped single-row proof should be valid when `sessionId` is session-derived and `id` is
     mutation-input-derived.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts examples/stackoverflow/src/kovo-graph.test.ts`
+    covers scoped composite keys for Stack Overflow, tenant, and cart/natural-key fixtures.
 
 ### Layer 3: Query Shape & Scope Alignment
 
-- [ ] **Thread query scope predicates into algebraic query shapes.**
+- [x] **Thread query scope predicates into algebraic query shapes.**
   - Query shapes should carry rowset filters with provenance, not just columns.
   - If a query is scoped by `sessionId = request.session.id`, a mutation scoped by the same symbolic
     value can update that query instance precisely.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive.test.ts`
+    covers session, tenant, and cart scope predicates carried into algebraic rowsets.
 
-- [ ] **Differentiate public query args from private scope.**
+- [x] **Differentiate public query args from private scope.**
   - Query instance keys stay client-visible only for declared args (`SPEC.md` §10.2).
   - Private session/tenant scope participates in proof but should not be exposed in browser
     instance keys or `Kovo-Targets`.
   - This is an erasure invariant over all emitted/browser-visible surfaces: query keys, `kovo-deps`,
     `Kovo-Targets`, generated optimistic module exports, generated transform inputs, and lowered
     browser code.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive-codegen.test.ts`
+    covers public-key-only transforms and private-scope erasure from browser-visible surfaces.
 
-- [ ] **Handle common filtered-list transitions.**
+- [x] **Handle common filtered-list transitions.**
   - `UPDATE status = 'closed' WHERE sessionId = session.id AND id = input.id` against
     `WHERE sessionId = session.id AND status = 'open'` should derive a row removal.
   - Entry into a filtered list still punts unless the written row carries all fields needed to
     construct the row.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive.test.ts`
+    covers filtered-list exits and `membership-entry` punts.
 
 ### Layer 4: Deriver Integration
 
-- [ ] **Teach the deriver that row-key coverage is over symbolic proof, not raw predicate text.**
+- [x] **Teach the deriver that row-key coverage is over symbolic proof, not raw predicate text.**
   - `match.kind === 'keys'` should include a proof object: covered columns, symbolic values,
     private scope columns, and query-scope compatibility.
   - The current `non-key-match` punt should remain for true non-key matches, not for traceable
     scoped composite keys.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts examples/stackoverflow/src/kovo-graph.test.ts packages/drizzle/src/derive.test.ts`
+    covers scoped composite `match.kind === 'keys'` extraction and preserves named non-key punts.
 
-- [ ] **Emit guarded patches for scoped exact-row updates.**
+- [x] **Emit guarded patches for scoped exact-row updates.**
   - For row lists, generated patches should find by the public row key if private scope is already
     guaranteed by the query instance.
   - For shared browser data that includes scope columns, the match may include both scope and id.
   - The generated code must not leak private session values into browser-visible keys.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive-codegen.test.ts examples/stackoverflow/src/kovo-graph.test.ts`
+    covers generated public-key-only scoped exact-row patches and private-scope leak checks.
 
 - [x] **Support bounded disjunctions only when each arm is independently derivable.**
   - Example: `where(or(eq(id, a), eq(id, b)))` may derive as two guarded row updates.
@@ -340,13 +378,15 @@ from table-level fallback to scoped or exact optimism.
 
 ## Implementation Sequence
 
-- [ ] **Phase 0: Baseline current behavior.**
+- [x] **Phase 0: Baseline current behavior.**
   - Add red tests for the Stack Overflow `sessionId,id` predicate in `@kovojs/drizzle` static
     extraction, derivation, and `kovo check` output.
-  - Evidence when complete: failing tests that currently show `KV409` and `non-key-match` for the
-    session-scoped composite key.
+  - Evidence: `git show 820bf4bf:examples/stackoverflow/src/kovo-graph.test.ts` preserves the
+    original baseline expectation for `KV409` notices on Stack Overflow scoped composite writes;
+    current `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts examples/stackoverflow/src/kovo-graph.test.ts`
+    proves the replacement regression now expects public-key extraction and `kovo check` `OK`.
 
-- [ ] **Phase 1: Symbolic provenance IR.**
+- [x] **Phase 1: Symbolic provenance IR.**
   - Extend core derivation types and Drizzle static extraction to represent session/request-derived
     values.
   - Add alias/destructure/narrowing tests for session values.
@@ -362,10 +402,11 @@ from table-level fallback to scoped or exact optimism.
     - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts`
       covers `request.session.id` proving only after `if (!request.session?.id) throw`, while
       unguarded direct access and direct access used before its guard degrade to `non-eq`.
-  - Evidence when complete: extractor facts show `session:id` or equivalent structured provenance
-    instead of opaque values.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+    covers extractor facts with structured `session`, `tenant`, and `guard` provenance instead of
+    opaque values.
 
-- [ ] **Phase 2: Predicate Normal Form.**
+- [x] **Phase 2: Predicate Normal Form.**
   - Replace ad hoc predicate matching with PNF for write matches and query rowset filters.
   - Preserve existing behavior for simple `eq(id, input.id)` and direct non-eq KV409 cases.
   - Add local opaque-child tests and mixed-disjunction negative tests so row identity/membership
@@ -373,10 +414,11 @@ from table-level fallback to scoped or exact optimism.
   - [x] Write-side predicate matching consumes an internal typed PNF tree for exact conjunctions,
         bounded disjunctions, and local opaque children.
     - Evidence: `pnpm exec vitest --run packages/core/src/derivation.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/derive-codegen.test.ts` covers typed PNF write extraction, local opaque-child degradation, mixed-disjunction punts, and partial composite-key `partial-key` punts.
-  - Evidence when complete: old predicate tests stay green; new composite/session predicates
-    classify as `exact-row`.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts packages/core/src/derivation.test.ts`
+    keeps old predicate tests green and classifies scoped composite/session predicates as exact-row
+    where all key columns are covered.
 
-- [ ] **Phase 3: Scope alignment between writes and queries.**
+- [x] **Phase 3: Scope alignment between writes and queries.**
   - Carry private query scope through algebraic shapes and compare it against write scope.
   - Ensure private scope never becomes a browser-visible query instance key.
   - Add leak-check fixtures for `kovo-deps`, `Kovo-Targets`, generated optimistic exports,
@@ -385,10 +427,11 @@ from table-level fallback to scoped or exact optimism.
     - Evidence: `pnpm exec vitest --run packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts`
       covers scoped exact-row derivation erasing `sessionId` from lowered browser code and rejects
       `session`, `tenant`, or `guard` values before generated optimistic source is emitted.
-  - Evidence when complete: tenant/session fixture proves precise invalidation without target-key
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive-codegen.test.ts`
+    covers tenant/session/guard precise invalidation and private-scope erasure without target-key
     leakage.
 
-- [ ] **Phase 4: Deriver support for scoped exact-row matches.**
+- [x] **Phase 4: Deriver support for scoped exact-row matches.**
   - Update `deriveOptimistic` and codegen to consume match proof objects.
   - Re-enable derived optimism for scoped row updates where query shape already ships the affected
     data.
@@ -397,10 +440,12 @@ from table-level fallback to scoped or exact optimism.
       extracts a session-scoped `questionList` rowset and `voteUp` update from source, derives an
       `update-row` patch matched only by public `id`, and verifies generated optimistic source omits
       private `sessionId` material.
-  - Evidence when complete: Stack Overflow `voteUp` can derive `questionList`/`questionScore` when
-    query shape permits it, or punts only for a specific non-shape limitation.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts examples/stackoverflow/src/kovo-graph.test.ts`
+    covers the real Stack Overflow `voteUp` and `postAnswer` guarded-session insert-then-update
+    pattern extracting public keys instead of `KV409`, and `node examples/stackoverflow/scripts/emit-graph.mjs --check`
+    verifies generated `voteUp` optimism derives `questionList` and `questionScore`.
 
-- [ ] **Phase 5: Explain and diagnostic polish.**
+- [x] **Phase 5: Explain and diagnostic polish.**
   - `kovo explain --optimistic` and `kovo check` should print proof levels, private scope, and named
     punts.
   - Update KV409 wording if needed to distinguish “valid table-level fallback” from “untraceable
@@ -411,18 +456,22 @@ from table-level fallback to scoped or exact optimism.
   - [x] `kovo check` renders the same proof levels/private scope without depending on source-text
         snippets.
     - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/conformance-fixtures/src/kovo-check-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts` covers `kovo check optimistic` `OPTIMISTIC-PROOF` rows for `exact-row`, `scoped-rowset`, `table-level`, and `opaque`, including private scope and named punt reasons.
-  - Evidence when complete: snapshot tests cover exact-row, scoped-rowset, table-level, and opaque
-    outputs.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/conformance-fixtures/src/kovo-check-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts`
+    covers exact-row, scoped-rowset, table-level, opaque, private-scope, and named punt output.
 
-- [ ] **Phase 6: Property and integration verification.**
+- [x] **Phase 6: Property and integration verification.**
   - Expand commuting-diagram property tests over scoped composite keys, filtered rowsets, and
     aggregates.
   - [x] Derived advanced-analyzer patch programs commute with lowered browser transforms over scoped
         composite keys, filtered rowset exits, and aggregate recount/resum cases.
     - Evidence: `pnpm exec vitest --run packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts` covers derived scoped `sessionId,id` row updates, tenant filtered-list exits, and scoped natural-key aggregate update/delete programs by comparing lowered codegen output to `applyPatchProgram`.
-  - Add HTTP-level integration tests against PGlite for mutation response fragments and optimistic
-    reconcile behavior.
-  - Evidence when complete: property suite plus focused integration tests pass under the root gate.
+  - [x] HTTP-level PGlite mutation responses reconcile derived optimism to committed query truth.
+    - Evidence: `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts` covers
+      Stack Overflow `voteUp` over shared PGlite by parsing `questionList` and `questionScore`
+      response query chunks, comparing them to the expected exact-row optimistic transition and
+      committed PGlite vote totals, and asserting private session scope is not shipped in the wire.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts examples/stackoverflow/src/kovo-graph.test.ts examples/stackoverflow/src/interactive-app.test.ts packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts`
+    passes the scoped predicate, graph, property/codegen, and HTTP integration proof set.
 
 ## Risks & Guardrails
 
@@ -448,18 +497,34 @@ from table-level fallback to scoped or exact optimism.
 
 ## Definition of Done
 
-- [ ] Stack Overflow's shared-db server can keep session-scoped composite predicates without
+- [x] Stack Overflow's shared-db server can keep session-scoped composite predicates without
       `KV409` notices for those exact-row updates.
-- [ ] Derived optimism works for at least one scoped composite-key update whose query shape is
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts examples/stackoverflow/src/kovo-graph.test.ts`
+    verifies Stack Overflow `postAnswer` and `voteUp` scoped composite updates extract
+    `arg:questionId`/`arg:targetId` touches and `kovo check` returns `OK`.
+- [x] Derived optimism works for at least one scoped composite-key update whose query shape is
       otherwise inside the §10.5 grammar.
-- [ ] Punts remain named, stable, and visible in `kovo explain --optimistic`.
-- [ ] Runtime cross-checks still enforce `observed ⊆ static ∪ declared`.
-- [ ] No private session/tenant/guard key material appears in browser-visible query instance keys,
+  - Evidence: `node examples/stackoverflow/scripts/emit-graph.mjs --check` verifies the real Stack
+    Overflow `voteUp` generated optimistic module derives `questionList` and `questionScore` from
+    the scoped `sessionId,id` update shape.
+- [x] Punts remain named, stable, and visible in `kovo explain --optimistic`.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/conformance-fixtures/src/kovo-check-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts`
+    covers `OPTIMISTIC-PROOF` rows and named punt reasons in explain/check/conformance outputs.
+- [x] Runtime cross-checks still enforce `observed ⊆ static ∪ declared`.
+  - Evidence: `pnpm exec vitest --run packages/test/src/advanced-analyzer-runtime.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/derive.test.ts packages/core/src/derivation.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts`
+    includes the PGlite runtime cross-check and static proof suites.
+- [x] No private session/tenant/guard key material appears in browser-visible query instance keys,
       `kovo-deps`, `Kovo-Targets`, generated optimistic module exports, generated transform inputs,
       or lowered browser code.
-- [ ] Nullable private-scope proofs require a dominating accepted exit guard and degrade on
+  - Evidence: same command covers scoped-pipeline leak fixtures for query keys, `kovo-deps`,
+    `Kovo-Targets`, generated optimistic exports, transform inputs, and lowered browser code.
+- [x] Nullable private-scope proofs require a dominating accepted exit guard and degrade on
       reassignment, mutation, alias escape, async-helper opacity, unsummarized helpers, or use before
       guard.
-- [ ] Row identity, scoped rowset, and membership proofs remain separate: partial composite keys and
+  - Evidence: same command covers nullable guard dominance, use-before-guard, reassignment, mutation,
+    alias escape, async-helper opacity, and unsummarized-helper degradation.
+- [x] Row identity, scoped rowset, and membership proofs remain separate: partial composite keys and
       scoped-rowset-only proofs cannot emit single-row patches, and membership exits require a
       decidable transition from write values plus shipped query data.
+  - Evidence: same command covers partial composite-key `partial-key` punts, scoped-rowset/private
+    scope erasure, and filtered membership exit versus `membership-entry` degradation.

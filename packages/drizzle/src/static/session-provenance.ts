@@ -554,6 +554,9 @@ function nearestVariableDeclarationAncestor(
 function isPrivateScopeProofCall(call: CallExpression): boolean {
   const expression = unwrappedStaticExpressionNode(call.getExpression());
   const name = Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+  // Server-side Drizzle write payloads may consume guarded private scope before a
+  // later predicate in the same handler. That is not an alias escape: the value
+  // stays in server proof/write space and is not handed to an opaque helper.
   return (
     name === 'and' ||
     name === 'eq' ||
@@ -565,7 +568,9 @@ function isPrivateScopeProofCall(call: CallExpression): boolean {
     name === 'lt' ||
     name === 'lte' ||
     name === 'not' ||
-    name === 'or'
+    name === 'or' ||
+    name === 'set' ||
+    name === 'values'
   );
 }
 
