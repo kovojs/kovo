@@ -334,6 +334,62 @@ describe('query endpoints', () => {
     expect(result.headers['Kovo-Build']).toBeUndefined();
   });
 
+  it('AUD-006: stamps Kovo-Build on every /_q/ non-200 response when buildToken is provided', async () => {
+    const buildToken = 'sha256-aud006';
+    const forbiddenQuery = query('forbidden', {
+      guard: () => ({ kind: 'forbidden' as const }),
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+    const redirectQuery = query('redirect', {
+      guard: () => ({ kind: 'unauthenticated' as const }),
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+    const rateLimitedQuery = query('rateLimited', {
+      guard: () => ({ kind: 'rateLimited' as const, retryAfter: 7 }),
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+    const validationQuery = query('validation', {
+      args: alienValidationSchema<{ id: string }>('Expected string', ['id']),
+      load: (input: { id: string }) => input,
+      reads: [],
+    });
+    const throwingQuery = query('throwing', {
+      load() {
+        throw new Error('db down');
+      },
+      reads: [],
+    });
+
+    const responses = [
+      await renderQueryEndpointResponse(validationQuery, { buildToken, request: {} }),
+      await renderQueryEndpointResponse(throwingQuery, { buildToken, request: {} }),
+      await renderQueryEndpointResponse(forbiddenQuery, {
+        buildToken,
+        currentUrl: '/_q/forbidden',
+        request: { session: { user: { id: 'u1' } } },
+      }),
+      await renderQueryEndpointResponse(redirectQuery, {
+        buildToken,
+        currentUrl: '/_q/redirect',
+        request: {},
+      }),
+      await renderQueryRegistryEndpointResponse({ queries: [] }, 'missing', {
+        buildToken,
+        request: {},
+      }),
+      await renderQueryEndpointResponse(rateLimitedQuery, { buildToken, request: {} }),
+    ];
+
+    expect(responses.map((response) => response.status)).toEqual([422, 500, 403, 303, 404, 429]);
+    for (const response of responses) {
+      expect(response.headers['Kovo-Build']).toBe(buildToken);
+    }
+    expect(responses.at(-1)?.headers['Retry-After']).toBe('7');
+  });
+
   it('L3: a bigint column resolves to 200 with a serialized value (no throw, headers intact)', async () => {
     const totalsQuery = query('totals', {
       load: () => ({ count: 10n }),

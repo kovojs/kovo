@@ -298,7 +298,7 @@ describe('server build-time deployment API', () => {
     }
   });
 
-  it('warns presets to retain immutable client modules across deploys', async () => {
+  it('AUD-007: emits KV417 when presets cannot prove deploy-skew retention support', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-client-retention-'));
 
     try {
@@ -323,13 +323,13 @@ describe('server build-time deployment API', () => {
       });
 
       expect(node().inspect!(build, { declaredEnv: [] })).toEqual([
-        clientModuleRetentionWarning('node'),
+        clientModuleRetentionError('node'),
       ]);
       expect(vercel().inspect!(build, { declaredEnv: [] })).toEqual([
-        clientModuleRetentionWarning('vercel'),
+        clientModuleRetentionError('vercel'),
       ]);
       await expect(cloudflare().inspect!(build, { declaredEnv: [] })).resolves.toEqual([
-        clientModuleRetentionWarning('cloudflare'),
+        clientModuleRetentionError('cloudflare'),
       ]);
     } finally {
       await rm(root, { force: true, recursive: true });
@@ -1183,11 +1183,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function clientModuleRetentionWarning(presetName: string) {
+function clientModuleRetentionError(presetName: string) {
   return {
-    code: 'client-module-retention',
-    message: `The ${presetName} preset emits immutable /c/* client modules. Keep old versioned /c/ artifacts published until documents that reference them expire; never purge or rewrite them during deploys.`,
-    severity: 'warning',
+    code: 'KV417',
+    message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure a serving layer that retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
+    severity: 'error',
   };
 }
 

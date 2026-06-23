@@ -81,6 +81,11 @@ export interface VersionedClientModuleRequest {
  * versioned client-module registry (SPEC §9.5).
  */
 export interface MemoryVersionedClientModuleRegistryOptions {
+  /**
+   * @deprecated SPEC §14 requires at least 24 hours of prior immutable
+   * `/c/__v/...` module retention. Count-based immediate eviction cannot prove
+   * that floor and is rejected with KV417.
+   */
   maxVersionsPerPath?: number;
   /**
    * Initial projected-query-shape fingerprint (produced by
@@ -110,6 +115,7 @@ export function versionedClientModuleHref(href: string, version: string): string
 export function createMemoryVersionedClientModuleRegistry(
   options: MemoryVersionedClientModuleRegistryOptions = {},
 ): VersionedClientModuleRegistry {
+  assertDeploySkewRetentionOptions(options);
   const modules = new Map<string, VersionedClientModuleInput>();
   const versionsByPath = new Map<string, string[]>();
   // Shape fingerprint threaded in from the build pipeline (SPEC §5.2.1 rule 1).
@@ -172,7 +178,7 @@ export function createMemoryVersionedClientModuleRegistry(
       const key = versionedClientModuleKey(path, module.version);
 
       modules.set(key, { ...module, path });
-      rememberClientModuleVersion(versionsByPath, modules, path, module.version, options);
+      rememberClientModuleVersion(versionsByPath, path, module.version);
       buildTokenGeneration += 1;
 
       return href;
@@ -279,20 +285,20 @@ function versionedClientModuleKey(path: string, version: string): string {
 
 function rememberClientModuleVersion(
   versionsByPath: Map<string, string[]>,
-  modules: Map<string, VersionedClientModuleInput>,
   path: string,
   version: string,
-  options: MemoryVersionedClientModuleRegistryOptions,
 ): void {
   const versions = versionsByPath.get(path) ?? [];
   if (!versions.includes(version)) versions.push(version);
   versionsByPath.set(path, versions);
+}
 
-  const maxVersions = options.maxVersionsPerPath;
-  if (maxVersions === undefined) return;
+function assertDeploySkewRetentionOptions(options: MemoryVersionedClientModuleRegistryOptions): void {
+  if (options.maxVersionsPerPath === undefined) return;
 
-  while (versions.length > maxVersions) {
-    const evicted = versions.shift();
-    if (evicted) modules.delete(versionedClientModuleKey(path, evicted));
-  }
+  throw new Error(
+    'KV417: createMemoryVersionedClientModuleRegistry({ maxVersionsPerPath }) cannot satisfy ' +
+      'SPEC §14. The serving layer must retain prior immutable /c/__v/... modules and prior-token ' +
+      '/_q reads for at least 24 hours; count-based immediate eviction is unsupported.',
+  );
 }
