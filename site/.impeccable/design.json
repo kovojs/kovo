@@ -1,0 +1,240 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-23",
+  "title": "Design System: Kovo",
+  "extensions": {
+    "colorMeta": {
+      "indigo": {
+        "role": "primary",
+        "displayName": "Compiler Indigo",
+        "canonical": "#2f4d8a",
+        "tonalRamp": [
+          "#0d162b",
+          "#16213f",
+          "#1f3158",
+          "#2f4d8a",
+          "#4f6aa6",
+          "#7d92c2",
+          "#aab8d9",
+          "#d6deec"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#191919",
+        "tonalRamp": [
+          "#191919",
+          "#2e2e2e",
+          "#444444",
+          "#525252",
+          "#6e6e6e",
+          "#838383",
+          "#b4b4b4",
+          "#dcdcdc"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Off-White Ground",
+        "canonical": "#fafafa",
+        "tonalRamp": [
+          "#e6e6e6",
+          "#ececec",
+          "#f0f0f0",
+          "#f4f4f4",
+          "#f7f7f7",
+          "#fafafa",
+          "#fcfcfc",
+          "#ffffff"
+        ]
+      },
+      "stale-red": {
+        "role": "tertiary",
+        "displayName": "Stale Red",
+        "canonical": "#c0392b",
+        "tonalRamp": [
+          "#3d120d",
+          "#5e1b14",
+          "#86281d",
+          "#c0392b",
+          "#d35e51",
+          "#e38c83",
+          "#f0bab4",
+          "#fbeceb"
+        ]
+      },
+      "synced-green": {
+        "role": "tertiary",
+        "displayName": "Synced Green",
+        "canonical": "#1c7d44",
+        "tonalRamp": [
+          "#0a2c18",
+          "#0f4324",
+          "#155f33",
+          "#1c7d44",
+          "#3a9c61",
+          "#62b888",
+          "#9bd3b1",
+          "#e9f4ec"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero headline only — Source Serif 4, the authority of print."
+      },
+      "lede": {
+        "displayName": "Lede",
+        "purpose": "Serif subhead. Literate, calm, carries the consistency promise."
+      },
+      "body": { "displayName": "Body", "purpose": "Inter, long-form reading capped at 65-75ch." },
+      "label": {
+        "displayName": "Label",
+        "purpose": "JetBrains Mono — the machine's voice only (code, diagnostics, CLI, labels)."
+      }
+    },
+    "shadows": [
+      {
+        "name": "overlay",
+        "value": "0 4px 12px rgba(16, 18, 22, 0.16)",
+        "purpose": "Transient overlapping UI only (dropdown, popover, dialog). Never on a card or button at rest."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-out-quint",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Default easing for state transitions and entrances. Exponential decel, no overshoot."
+      },
+      { "name": "dur-fast", "value": "0.15s", "purpose": "Color, border, and hover transitions." },
+      {
+        "name": "dur-move",
+        "value": "0.45s",
+        "purpose": "Cursor travel, reveals, larger position changes."
+      }
+    ],
+    "breakpoints": [
+      { "name": "card", "value": "32rem" },
+      { "name": "stack", "value": "60rem" },
+      { "name": "hero", "value": "64rem" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The high-commitment action. Solid ink fill, mono uppercase label, square.",
+      "html": "<button class=\"ds-btn-primary\">Get started</button>",
+      "css": ".ds-btn-primary{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;background:#191919;color:#fafafa;border:none;border-radius:0;padding:.75rem 1.4rem;cursor:pointer;transition:background .15s,transform .15s}.ds-btn-primary:hover{background:#000}.ds-btn-primary:focus-visible{outline:2px solid #2f4d8a;outline-offset:2px}"
+    },
+    {
+      "name": "Line Button",
+      "kind": "button",
+      "refersTo": "button-line",
+      "description": "Secondary action. Hairline border, no fill, no shadow.",
+      "html": "<button class=\"ds-btn-line\">Read the spec</button>",
+      "css": ".ds-btn-line{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.74rem;letter-spacing:.12em;text-transform:uppercase;background:#fff;color:#191919;border:1px solid #dcdcdc;border-radius:0;padding:.75rem 1.4rem;cursor:pointer;transition:border-color .15s}.ds-btn-line:hover{border-color:#838383}.ds-btn-line:focus-visible{outline:2px solid #2f4d8a;outline-offset:2px}"
+    },
+    {
+      "name": "Install Chip",
+      "kind": "custom",
+      "refersTo": "install-chip",
+      "description": "The inline CLI command with a copy affordance. The most-clicked element; plain by design.",
+      "html": "<div class=\"ds-chip\"><span><span class=\"d\">$</span> pnpm create kovo my-app</span><button class=\"c\">copy</button></div>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:1rem;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.85rem;color:#191919;background:#f0f0f0;border:1px solid #dcdcdc;padding:.66rem 1rem}.ds-chip .d{color:#2f4d8a}.ds-chip .c{background:none;border:none;color:#838383;font:inherit;font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;cursor:pointer}.ds-chip .c:hover{color:#191919}"
+    },
+    {
+      "name": "Link",
+      "kind": "custom",
+      "refersTo": "link",
+      "description": "Inline prose link. Indigo with a soft underline that solidifies on hover.",
+      "html": "<a class=\"ds-link\" href=\"#\">see how it's verified</a>",
+      "css": ".ds-link{color:#2f4d8a;font-weight:500;text-decoration:underline;text-decoration-color:rgba(47,77,138,.4);text-underline-offset:3px;transition:text-decoration-color .15s}.ds-link:hover{text-decoration-color:#2f4d8a}"
+    },
+    {
+      "name": "Verdict Callout",
+      "kind": "custom",
+      "refersTo": "callout",
+      "description": "Status callout with a leading filled chip carrying the color (never a left stripe). Shown in the stale state.",
+      "html": "<div class=\"ds-callout stale\"><span class=\"mk\">✕</span><span class=\"bd\">Header shows 2, cart shows 3 — the stale UI most frameworks ship.</span></div>",
+      "css": ".ds-callout{display:flex;gap:.7rem;align-items:flex-start;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.76rem;line-height:1.55;color:#191919;border:1px solid #dcdcdc;padding:.85rem .95rem}.ds-callout .mk{flex:none;width:1.35rem;height:1.35rem;display:grid;place-items:center;color:#fff;font-weight:700}.ds-callout.stale{background:#fbeceb;border-color:#c0392b}.ds-callout.stale .mk{background:#c0392b}.ds-callout.synced{background:#e9f4ec;border-color:#1c7d44}.ds-callout.synced .mk{background:#1c7d44}"
+    },
+    {
+      "name": "Code / Terminal Frame",
+      "kind": "card",
+      "refersTo": "code-frame",
+      "description": "Dark frame for code and captured toolchain output, in both themes. Reads as evidence.",
+      "html": "<div class=\"ds-term\"><div class=\"bar\"><span>server/queries/product.ts</span><span>kovo check</span></div><pre><span class=\"err\">✗ KV251</span> <span class=\"loc\">cart/add</span> updates items, but the header reads cart.count\n  <span class=\"fix\">→ add cart.count to the touch set</span></pre></div>",
+      "css": ".ds-term{background:#16171b;border:1px solid #2a2c31;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.78rem;line-height:1.7}.ds-term .bar{display:flex;justify-content:space-between;color:#7e828b;font-size:.64rem;letter-spacing:.13em;text-transform:uppercase;padding:.6rem 1.1rem;border-bottom:1px solid #2a2c31}.ds-term pre{margin:0;padding:1rem 1.25rem;color:#dcdee2;white-space:pre-wrap}.ds-term .err{color:#ff7a72;font-weight:700}.ds-term .loc{color:#cfd2d7}.ds-term .fix{color:#5fd0c4}"
+    },
+    {
+      "name": "Section Heading",
+      "kind": "custom",
+      "refersTo": "headline",
+      "description": "Serif section title. The display family carries authority; body stays Inter.",
+      "html": "<h2 class=\"ds-h2\">Build-time checks, backend to frontend.</h2>",
+      "css": ".ds-h2{font-family:'Source Serif 4','Iowan Old Style',Charter,Georgia,serif;font-weight:600;font-size:clamp(1.8rem,3.2vw,2.4rem);letter-spacing:-.02em;line-height:1.12;color:#191919;margin:0;text-wrap:balance}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Proof",
+    "overview": "Kovo's thesis is that an application's behavior should be provable, checked end to end before anything runs. The site makes that thesis visible by presenting itself as a typeset proof: the restraint of a well-set engineering paper, the precision of a reference manual, the confidence of an author who shows the failure cases. The system is editorial-technical — a near-neutral off-white ground, a single deep-indigo accent used like an errata mark, serif display over a grotesque body, with monospace reserved for the machine's voice and dark terminal frames that read as evidence.",
+    "keyCharacteristics": [
+      "Off-white neutral ground (chroma 0), never cream or warm-tinted.",
+      "One indigo accent, used on ≤10% of any screen.",
+      "Serif display + grotesque body + mono for machine voice.",
+      "Square frames, hairline borders, flat by default. No decorative shadows.",
+      "Dark code/terminal frames in both themes — evidence, not chrome.",
+      "Red means stale/error, green means in-sync; semantics, never the brand color."
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Indigo appears on no more than ~10% of any screen. Its rarity is what makes it read as a deliberate mark rather than decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Semantics-Aren't-Branding Rule",
+        "body": "Red is always stale/error and green is always in-sync. Never recolor a status to the brand, and never use indigo to mean good.",
+        "section": "colors"
+      },
+      {
+        "name": "The Machine-Voice Rule",
+        "body": "Monospace is reserved for things the machine produced or consumes: code, diagnostics, file paths, CLI commands, key labels. Never set prose in mono to look technical.",
+        "section": "typography"
+      },
+      {
+        "name": "The Display-Serif-Only Rule",
+        "body": "The serif is for display, headline, and lede. Body prose is always the grotesque. Two competing serifs at reading size is forbidden.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat. Use a hairline border or a tonal step instead of a shadow. A 1px border plus a wide soft shadow on one element (the ghost-card) is forbidden.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the ground a true neutral off-white (#fafafa, chroma 0). Carry warmth in type and accent, never the body background.",
+      "Do use Indigo on ≤10% of any screen.",
+      "Do set headings in the serif and body in Inter; reserve mono for the machine's voice.",
+      "Do draw structure with 1px hairline borders and tonal steps.",
+      "Do keep red = stale/error and green = in-sync, everywhere.",
+      "Do pair every animation with a prefers-reduced-motion fallback to the consistent state.",
+      "Do verify body text ≥4.5:1 and large text ≥3:1 in both themes, including tinted callouts."
+    ],
+    "donts": [
+      "Don't ship the SaaS-cream dev-tool look: gradient-purple hero, rounded glassy cards, tracked-uppercase eyebrow on every section, identical icon-card grid.",
+      "Don't make hype claims without a runnable, reproducible artifact beside them.",
+      "Don't over-animate: no scroll-jacking, no parallax-everything, no decorative motion.",
+      "Don't go sterile either — default-browser styling with no point of view is the opposite failure.",
+      "Don't use a colored border-left/right greater than 1px as an accent stripe. Use the leading status chip.",
+      "Don't pair a 1px border with a wide box-shadow (≥16px blur) on the same element.",
+      "Don't round cards to 24px+. Cards are square or 4-6px; pills are for tags only.",
+      "Don't recolor a status to the brand, or use Indigo to mean good."
+    ]
+  }
+}

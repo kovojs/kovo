@@ -35,12 +35,7 @@ const routes: SiteRoute[] = [
     meta: siteRouteData.landing.meta,
     stylesheets: siteStylesheetsForRoute('/'),
     page() {
-      return (
-        <LandingRoutePage
-          clients={clientHrefs}
-          loaderGzipBytes={siteRouteData.landing.loaderGzipBytes}
-        />
-      );
+      return <LandingRoutePage clients={clientHrefs} />;
     },
   }) as SiteRoute,
   ...siteRouteData.pages.map((page) => docsRoute(page)),
