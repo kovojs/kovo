@@ -397,11 +397,13 @@ describe('server app document boundary', () => {
   it('renders critical regions immediately without a deferred stream', async () => {
     const productRoute = route('/products/:id', {
       async page({ params }) {
-        return renderedHtml(await defer({
-          priority: 'critical',
-          render: () => `<main>Critical ${params.id}</main>`,
-          target: `critical:${params.id}`,
-        }));
+        return renderedHtml(
+          await defer({
+            priority: 'critical',
+            render: () => `<main>Critical ${params.id}</main>`,
+            target: `critical:${params.id}`,
+          }),
+        );
       },
     });
     const request = new Request('https://shop.example.test/products/p1');

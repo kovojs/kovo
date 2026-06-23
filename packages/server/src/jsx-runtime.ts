@@ -61,20 +61,15 @@ const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
-export type JsxNode =
-  | JsxNode[]
-  | boolean
-  | null
-  | number
-  | RenderedHtml
-  | string
-  | undefined;
+export type JsxNode = JsxChild[] | boolean | null | number | RenderedHtml | string | undefined;
 
-export type MaybeAsyncJsxNode = JsxNode | Promise<JsxNode>;
+export type JsxChild = JsxNode | Promise<JsxNode>;
+
+export type MaybeAsyncJsxNode = JsxChild;
 
 /** @generated JSX automatic-runtime ABI props type (compiler-emitted). */
 export interface JsxProps {
-  children?: JsxNode;
+  children?: JsxChild;
   [attribute: string]: unknown;
 }
 
@@ -126,11 +121,10 @@ export function jsx(
   const children = renderJsxChildren(renderJsxContent(props));
   const afterChildren = type === 'form' ? renderFormAfterChildrenContent(props, key) : '';
   return isPromiseLike(children)
-    ? children.then(
-        (html) =>
-          renderedHtml(
-            `<${type}${attributes}>${renderFormChildrenContent(type, props, key, html)}${afterChildren}</${type}>`,
-          ),
+    ? children.then((html) =>
+        renderedHtml(
+          `<${type}${attributes}>${renderFormChildrenContent(type, props, key, html)}${afterChildren}</${type}>`,
+        ),
       )
     : renderedHtml(
         `<${type}${attributes}>${renderFormChildrenContent(type, props, key, children)}${afterChildren}</${type}>`,
@@ -446,7 +440,7 @@ function submittedInputContainsValue(input: unknown, value: string): boolean {
   return Object.values(input).some((submitted) => submitted === value);
 }
 
-function renderJsxContent(props: JsxProps): JsxNode {
+function renderJsxContent(props: JsxProps): JsxChild {
   const rawHtml = rawHtmlContent(props);
   return rawHtml === undefined ? props.children : renderedHtml(rawHtml);
 }
@@ -491,7 +485,7 @@ function isRawHtmlAttribute(name: string): boolean {
   );
 }
 
-function renderJsxChildren(children: JsxNode): MaybePromise<string> {
+function renderJsxChildren(children: JsxChild): MaybePromise<string> {
   if (children === null || children === undefined || typeof children === 'boolean') return '';
   if (isPromiseLike(children)) return children.then((child) => renderJsxChildren(child));
   if (isRenderedHtml(children)) return children.html;

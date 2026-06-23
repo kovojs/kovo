@@ -17,9 +17,9 @@ describe('server jsx runtime', () => {
   it('renders intrinsic elements to light-DOM HTML strings', () => {
     // SPEC.md section 4.2: components render to plain, never-registered elements.
     expect(html(jsx('span', { children: 'Cart' }))).toBe('<span>Cart</span>');
-    expect(html(jsx('cart-badge', { class: 'badge', children: jsx('span', { children: 2 }) }))).toBe(
-      '<cart-badge class="badge"><span>2</span></cart-badge>',
-    );
+    expect(
+      html(jsx('cart-badge', { class: 'badge', children: jsx('span', { children: 2 }) })),
+    ).toBe('<cart-badge class="badge"><span>2</span></cart-badge>');
   });
 
   it('renders Kovo component descriptors instead of invoking their callable placeholder', async () => {
@@ -32,9 +32,9 @@ describe('server jsx runtime', () => {
 
   it('renders boolean attributes bare and omits false, null, and undefined values', () => {
     expect(html(jsx('form', { enhance: true, children: '' }))).toBe('<form enhance></form>');
-    expect(html(jsx('form', { enhance: false, hidden: null, action: undefined, children: '' }))).toBe(
-      '<form></form>',
-    );
+    expect(
+      html(jsx('form', { enhance: false, hidden: null, action: undefined, children: '' })),
+    ).toBe('<form></form>');
   });
 
   it('lowers typed mutation form values for direct server JSX forms', () => {
@@ -42,12 +42,14 @@ describe('server jsx runtime', () => {
     // value instead of hard-coding the `/_m/*` endpoint string.
     const addToCart = { key: 'cart/add' } as const;
 
-    const formHtml = html(jsx('form', {
-      enhance: true,
-      mutation: addToCart,
-      class: 'add',
-      children: '',
-    }));
+    const formHtml = html(
+      jsx('form', {
+        enhance: true,
+        mutation: addToCart,
+        class: 'add',
+        children: '',
+      }),
+    );
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field.
     expect(formHtml).toContain('action="/_m/cart/add" data-mutation="cart/add" class="add"');
     expect(formHtml).toMatch(/name="Kovo-Idem" value="[^"]+"/);
@@ -56,15 +58,17 @@ describe('server jsx runtime', () => {
   it('renders JSX key identity as kovo-key for direct server JSX forms', () => {
     const addToCart = { key: 'cart/add' } as const;
 
-    const formHtml = html(jsx(
-      'form',
-      {
-        enhance: true,
-        mutation: addToCart,
-        children: '',
-      },
-      'p1',
-    ));
+    const formHtml = html(
+      jsx(
+        'form',
+        {
+          enhance: true,
+          mutation: addToCart,
+          children: '',
+        },
+        'p1',
+      ),
+    );
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
     // (value is a fresh UUID each render, so we match the structure not the exact value).
     expect(formHtml).toMatch(
@@ -84,17 +88,21 @@ describe('server jsx runtime', () => {
     };
     const addToCart = { csrf, key: 'cart/add' } as const;
 
-    const rendered = html(runWithJsxRequestContext(request, () =>
-      jsx('form', {
-        enhance: true,
-        mutation: addToCart,
-        children: '',
-      }),
-    ));
+    const rendered = html(
+      runWithJsxRequestContext(request, () =>
+        jsx('form', {
+          enhance: true,
+          mutation: addToCart,
+          children: '',
+        }),
+      ),
+    );
 
     // SPEC.md §10.3:1063/1065: mutation forms include a per-submit Kovo-Idem field
     // alongside the CSRF field. The idem value is a fresh UUID each render.
-    expect(rendered).toContain(`<input type="hidden" name="csrf" value="${csrfToken(request, csrf)}">`);
+    expect(rendered).toContain(
+      `<input type="hidden" name="csrf" value="${csrfToken(request, csrf)}">`,
+    );
     expect(rendered).toMatch(/name="Kovo-Idem" value="[^"]+"/);
     expect(rendered).toContain('action="/_m/cart/add"');
     expect(rendered.match(/name="csrf"/g)).toHaveLength(1);
@@ -102,13 +110,15 @@ describe('server jsx runtime', () => {
   });
 
   it('does not render CSRF fields for csrf:false mutation forms but does render Kovo-Idem', () => {
-    const rendered = html(runWithJsxRequestContext({ session: { id: 's1' } }, () =>
-      jsx('form', {
-        enhance: true,
-        mutation: { csrf: false, key: 'cart/add' },
-        children: '',
-      }),
-    ));
+    const rendered = html(
+      runWithJsxRequestContext({ session: { id: 's1' } }, () =>
+        jsx('form', {
+          enhance: true,
+          mutation: { csrf: false, key: 'cart/add' },
+          children: '',
+        }),
+      ),
+    );
 
     expect(rendered).not.toContain('name="kovo-csrf"');
     // SPEC.md §10.3:1063/1065: idem field is always emitted for mutation forms
@@ -125,12 +135,14 @@ describe('server jsx runtime', () => {
     };
     const addToCart = { csrf, key: 'cart/add' } as const;
 
-    const rendered = html(runWithJsxRequestContext(request, () =>
-      jsx('form', {
-        ...mutationFormAttributes(addToCart),
-        children: '',
-      }),
-    ));
+    const rendered = html(
+      runWithJsxRequestContext(request, () =>
+        jsx('form', {
+          ...mutationFormAttributes(addToCart),
+          children: '',
+        }),
+      ),
+    );
 
     expect(rendered).toContain('action="/_m/cart/add"');
     expect(rendered).toContain(`name="csrf" value="${csrfToken(request, csrf)}"`);
@@ -156,13 +168,15 @@ describe('server jsx runtime', () => {
   });
 
   it('F1: neutralizes javascript: with embedded control chars (bypass attempt)', () => {
-    expect(html(jsx('a', { href: 'java\nscript:alert(1)', children: 'x' }))).toBe('<a href="#">x</a>');
+    expect(html(jsx('a', { href: 'java\nscript:alert(1)', children: 'x' }))).toBe(
+      '<a href="#">x</a>',
+    );
   });
 
   it('F1: passes safe https:// href through unchanged', () => {
-    expect(html(jsx('a', { href: 'https://example.com/pricing', external: true, children: 'go' }))).toBe(
-      '<a href="https://example.com/pricing" external>go</a>',
-    );
+    expect(
+      html(jsx('a', { href: 'https://example.com/pricing', external: true, children: 'go' })),
+    ).toBe('<a href="https://example.com/pricing" external>go</a>');
   });
 
   it('F1: passes relative href through unchanged', () => {
@@ -170,7 +184,9 @@ describe('server jsx runtime', () => {
   });
 
   it('F1: passes fragment href through unchanged', () => {
-    expect(html(jsx('a', { href: '#section', children: 'sec' }))).toBe('<a href="#section">sec</a>');
+    expect(html(jsx('a', { href: '#section', children: 'sec' }))).toBe(
+      '<a href="#section">sec</a>',
+    );
   });
 
   it('F1: passes ftp:// href through unchanged (SPEC §4.8:347 includes ftp)', () => {
@@ -181,13 +197,15 @@ describe('server jsx runtime', () => {
 
   it('renders style objects through property-level sanitizers', () => {
     expect(
-      html(jsx('span', {
-        style: {
-          left: '25%',
-          transform: 'translate(-50%, -50%)',
-          width: 'url(javascript:alert(1))',
-        },
-      })),
+      html(
+        jsx('span', {
+          style: {
+            left: '25%',
+            transform: 'translate(-50%, -50%)',
+            width: 'url(javascript:alert(1))',
+          },
+        }),
+      ),
     ).toBe('<span style="left: 25%; transform: translate(-50%, -50%)"></span>');
   });
 
@@ -206,11 +224,13 @@ describe('server jsx runtime', () => {
       /^<button class="kv-style-bg-[^ ]+ kv-style-fg-[^"]+">Buy<\/button>$/,
     );
     expect(
-      html(jsx('button', {
-        class: 'manual',
-        style: [styles.root, [styles.inline, { opacity: 0.8 }]],
-        children: 'Buy',
-      })),
+      html(
+        jsx('button', {
+          class: 'manual',
+          style: [styles.root, [styles.inline, { opacity: 0.8 }]],
+          children: 'Buy',
+        }),
+      ),
     ).toMatch(
       /^<button class="manual kv-style-bg-[^ ]+ kv-style-fg-[^ ]+ kv-style-m-[^"]+" style="opacity:0.8">Buy<\/button>$/,
     );
@@ -223,10 +243,12 @@ describe('server jsx runtime', () => {
     } as const;
 
     expect(
-      html(jsx('section', {
-        dangerouslySetInnerHTML: trustedHtml('<b>kovo trusted</b>'),
-        children: 'ignored',
-      })),
+      html(
+        jsx('section', {
+          dangerouslySetInnerHTML: trustedHtml('<b>kovo trusted</b>'),
+          children: 'ignored',
+        }),
+      ),
     ).toBe('<section><b>kovo trusted</b></section>');
     expect(html(jsx('section', { innerHTML: browserTrustedHtml }))).toBe(
       '<section><i>browser trusted</i></section>',

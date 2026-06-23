@@ -13,6 +13,7 @@
     "./internal/build": "./src/internal/build.ts",
     "./internal/client-modules": "./src/internal/client-modules.ts",
     "./internal/csrf": "./src/internal/csrf.ts",
+    "./internal/escape": "./src/internal/escape.ts",
     "./internal/execution": "./src/internal/execution.ts",
     "./internal/html": "./src/internal/html.ts",
     "./internal/route": "./src/internal/route.ts",
@@ -51,6 +52,10 @@
         "types": "./dist/internal/csrf.d.mts",
         "default": "./dist/internal/csrf.mjs"
       },
+      "./internal/escape": {
+        "types": "./dist/internal/escape.d.mts",
+        "default": "./dist/internal/escape.mjs"
+      },
       "./internal/execution": {
         "types": "./dist/internal/execution.d.mts",
         "default": "./dist/internal/execution.mjs"
@@ -82,7 +87,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/execution.ts src/internal/html.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

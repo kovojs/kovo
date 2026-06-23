@@ -80,7 +80,7 @@ function renderLoweredComponent(loweredSource: string): string {
           },
         };
       }
-      if (specifier === '@kovojs/server/internal/html') {
+      if (specifier === '@kovojs/server/internal/escape') {
         return { escapeText };
       }
       if (specifier === '@kovojs/server/jsx-runtime') {

@@ -59,10 +59,12 @@ describe('@kovojs/ui Table StyleX slots', () => {
       ] as const,
       headClasses: [style.attrs(tableStyles.head).class ?? ''] as const,
       headerCellClasses: [style.attrs(tableStyles.headerCell).class ?? ''] as const,
-      rendered: String(Table.definition.render({
-        caption: 'Invoices for the current billing period',
-        children: `${header}${body}`,
-      })),
+      rendered: String(
+        Table.definition.render({
+          caption: 'Invoices for the current billing period',
+          children: `${header}${body}`,
+        }),
+      ),
       rootClasses: [style.attrs(tableStyles.table).class ?? ''] as const,
       rowClasses: [style.attrs(tableStyles.row).class ?? ''] as const,
       wrapperClasses: [style.attrs(tableStyles.wrapper).class ?? ''] as const,
@@ -104,35 +106,41 @@ describe('@kovojs/ui Table StyleX slots', () => {
     );
 
     expect(
-      String(Table.definition.render({
-        caption: 'Custom invoices',
-        children:
-          TableHead.definition.render({
-            children: TableRow.definition.render({
-              children: TableHeaderCell.definition.render({
-                children: 'Invoice',
-                styles: { headerCell: overrides.headerCell },
+      String(
+        Table.definition.render({
+          caption: 'Custom invoices',
+          children:
+            String(
+              TableHead.definition.render({
+                children: TableRow.definition.render({
+                  children: TableHeaderCell.definition.render({
+                    children: 'Invoice',
+                    styles: { headerCell: overrides.headerCell },
+                  }),
+                  styles: { row: overrides.row },
+                }),
+                styles: { head: overrides.head },
               }),
-              styles: { row: overrides.row },
-            }),
-            styles: { head: overrides.head },
-          }) +
-          TableBody.definition.render({
-            children: TableRow.definition.render({
-              children: TableCell.definition.render({
-                children: 'INV-1000',
-                styles: { cell: overrides.cell },
+            ) +
+            String(
+              TableBody.definition.render({
+                children: TableRow.definition.render({
+                  children: TableCell.definition.render({
+                    children: 'INV-1000',
+                    styles: { cell: overrides.cell },
+                  }),
+                  styles: { row: overrides.row },
+                }),
+                styles: { body: overrides.body },
               }),
-              styles: { row: overrides.row },
-            }),
-            styles: { body: overrides.body },
-          }),
-        styles: {
-          caption: overrides.caption,
-          table: overrides.table,
-          wrapper: overrides.wrapper,
-        },
-      })),
+            ),
+          styles: {
+            caption: overrides.caption,
+            table: overrides.table,
+            wrapper: overrides.wrapper,
+          },
+        }),
+      ),
     ).toMatchSnapshot();
   });
 

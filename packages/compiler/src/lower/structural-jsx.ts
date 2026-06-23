@@ -199,11 +199,11 @@ export function lowerStructuralJsx(
   const alreadyImportsEscapeText = model.namedImports.some(
     (entry) =>
       entry.importedName === 'escapeText' &&
-      entry.moduleSpecifier === '@kovojs/server/internal/html',
+      entry.moduleSpecifier === '@kovojs/server/internal/escape',
   );
   const escapeImport =
     escapeApplied && !alreadyImportsEscapeText
-      ? `import { escapeText } from '@kovojs/server/internal/html';\n`
+      ? `import { escapeText } from '@kovojs/server/internal/escape';\n`
       : '';
   const runtimeImports = [
     ...(deriveExports.length > 0 ? ['derive'] : []),
@@ -1348,8 +1348,16 @@ function isExplicitHtmlCompositionExpression(
   expression: JsxExpressionModel,
   model: ComponentModuleModel,
 ): boolean {
+  if (
+    expression.propertyAccesses.some((access) => {
+      const parts = access.path.split('.');
+      return parts.at(-2) === 'definition' && parts.at(-1) === 'render';
+    })
+  ) {
+    return true;
+  }
   const call = model.calls.find(
-    (item) => item.start === expression.start && item.end === expression.end,
+    (item) => item.start >= expression.start && item.end <= expression.end,
   );
   if (!call) return false;
   if (call.name === 'trustedHtml') return true;

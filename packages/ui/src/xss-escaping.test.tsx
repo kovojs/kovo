@@ -33,10 +33,12 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   });
 
   it('escapes AutocompleteOption itemLabel/itemValue but passes children through raw', () => {
-    const escaped = html(AutocompleteOption.definition.render({
-      itemLabel: PAYLOAD,
-      itemValue: 'value',
-    }));
+    const escaped = html(
+      AutocompleteOption.definition.render({
+        itemLabel: PAYLOAD,
+        itemValue: 'value',
+      }),
+    );
     expect(escaped).toContain(DOUBLE_ESCAPED);
     expect(escaped).not.toContain(PAYLOAD);
 
@@ -44,10 +46,12 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(escapedValue).toContain(DOUBLE_ESCAPED);
     expect(escapedValue).not.toContain(PAYLOAD);
 
-    const rawChildren = html(AutocompleteOption.definition.render({
-      children: RAW_CHILD,
-      itemValue: 'value',
-    }));
+    const rawChildren = html(
+      AutocompleteOption.definition.render({
+        children: RAW_CHILD,
+        itemValue: 'value',
+      }),
+    );
     expect(rawChildren).toContain(ESCAPED_CHILD);
     expect(rawChildren).not.toContain(RAW_CHILD);
   });
@@ -60,17 +64,21 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   });
 
   it('escapes ComboboxOption itemLabel but passes children through raw', () => {
-    const escaped = html(ComboboxOption.definition.render({
-      itemLabel: PAYLOAD,
-      itemValue: 'value',
-    }));
+    const escaped = html(
+      ComboboxOption.definition.render({
+        itemLabel: PAYLOAD,
+        itemValue: 'value',
+      }),
+    );
     expect(escaped).toContain(DOUBLE_ESCAPED);
     expect(escaped).not.toContain(PAYLOAD);
 
-    const rawChildren = html(ComboboxOption.definition.render({
-      children: RAW_CHILD,
-      itemValue: 'value',
-    }));
+    const rawChildren = html(
+      ComboboxOption.definition.render({
+        children: RAW_CHILD,
+        itemValue: 'value',
+      }),
+    );
     expect(rawChildren).toContain(ESCAPED_CHILD);
     expect(rawChildren).not.toContain(RAW_CHILD);
   });
@@ -83,17 +91,21 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   });
 
   it('escapes CommandItem itemLabel but passes children through raw', () => {
-    const escaped = html(CommandItem.definition.render({
-      itemLabel: PAYLOAD,
-      itemValue: 'value',
-    }));
+    const escaped = html(
+      CommandItem.definition.render({
+        itemLabel: PAYLOAD,
+        itemValue: 'value',
+      }),
+    );
     expect(escaped).toContain(DOUBLE_ESCAPED);
     expect(escaped).not.toContain(PAYLOAD);
 
-    const rawChildren = html(CommandItem.definition.render({
-      children: RAW_CHILD,
-      itemValue: 'value',
-    }));
+    const rawChildren = html(
+      CommandItem.definition.render({
+        children: RAW_CHILD,
+        itemValue: 'value',
+      }),
+    );
     expect(rawChildren).toContain(ESCAPED_CHILD);
     expect(rawChildren).not.toContain(RAW_CHILD);
   });
@@ -106,17 +118,21 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   });
 
   it('escapes SelectItem itemLabel but passes children through raw', () => {
-    const escaped = html(SelectItem.definition.render({
-      itemLabel: PAYLOAD,
-      itemValue: 'value',
-    }));
+    const escaped = html(
+      SelectItem.definition.render({
+        itemLabel: PAYLOAD,
+        itemValue: 'value',
+      }),
+    );
     expect(escaped).toContain(DOUBLE_ESCAPED);
     expect(escaped).not.toContain(PAYLOAD);
 
-    const rawChildren = html(SelectItem.definition.render({
-      children: RAW_CHILD,
-      itemValue: 'value',
-    }));
+    const rawChildren = html(
+      SelectItem.definition.render({
+        children: RAW_CHILD,
+        itemValue: 'value',
+      }),
+    );
     expect(rawChildren).toContain(ESCAPED_CHILD);
     expect(rawChildren).not.toContain(RAW_CHILD);
   });
@@ -129,26 +145,32 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   });
 
   it('escapes MenubarItem itemLabel but passes children through raw', () => {
-    const escaped = html(MenubarItem.definition.render({
-      itemLabel: PAYLOAD,
-      itemValue: 'value',
-    }));
+    const escaped = html(
+      MenubarItem.definition.render({
+        itemLabel: PAYLOAD,
+        itemValue: 'value',
+      }),
+    );
     expect(escaped).toContain(DOUBLE_ESCAPED);
     expect(escaped).not.toContain(PAYLOAD);
 
-    const rawChildren = html(MenubarItem.definition.render({
-      children: RAW_CHILD,
-      itemValue: 'value',
-    }));
+    const rawChildren = html(
+      MenubarItem.definition.render({
+        children: RAW_CHILD,
+        itemValue: 'value',
+      }),
+    );
     expect(rawChildren).toContain(ESCAPED_CHILD);
     expect(rawChildren).not.toContain(RAW_CHILD);
   });
 
   it('escapes DropdownMenuItem itemLabel/itemValue but passes children through raw', () => {
-    const escaped = html(DropdownMenuItem.definition.render({
-      itemLabel: PAYLOAD,
-      itemValue: 'value',
-    }));
+    const escaped = html(
+      DropdownMenuItem.definition.render({
+        itemLabel: PAYLOAD,
+        itemValue: 'value',
+      }),
+    );
     expect(escaped).toContain(DOUBLE_ESCAPED);
     expect(escaped).not.toContain(PAYLOAD);
 
@@ -156,19 +178,23 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(escapedValue).toContain(DOUBLE_ESCAPED);
     expect(escapedValue).not.toContain(PAYLOAD);
 
-    const rawChildren = html(DropdownMenuItem.definition.render({
-      children: RAW_CHILD,
-      itemValue: 'value',
-    }));
+    const rawChildren = html(
+      DropdownMenuItem.definition.render({
+        children: RAW_CHILD,
+        itemValue: 'value',
+      }),
+    );
     expect(rawChildren).toContain(ESCAPED_CHILD);
     expect(rawChildren).not.toContain(RAW_CHILD);
   });
 
   it('escapes ContextMenuItem itemLabel/itemValue but passes children through raw', () => {
-    const escaped = html(ContextMenuItem.definition.render({
-      itemLabel: PAYLOAD,
-      itemValue: 'value',
-    }));
+    const escaped = html(
+      ContextMenuItem.definition.render({
+        itemLabel: PAYLOAD,
+        itemValue: 'value',
+      }),
+    );
     expect(escaped).toContain(DOUBLE_ESCAPED);
     expect(escaped).not.toContain(PAYLOAD);
 
@@ -176,23 +202,27 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(escapedValue).toContain(DOUBLE_ESCAPED);
     expect(escapedValue).not.toContain(PAYLOAD);
 
-    const rawChildren = html(ContextMenuItem.definition.render({
-      children: RAW_CHILD,
-      itemValue: 'value',
-    }));
+    const rawChildren = html(
+      ContextMenuItem.definition.render({
+        children: RAW_CHILD,
+        itemValue: 'value',
+      }),
+    );
     expect(rawChildren).toContain(ESCAPED_CHILD);
     expect(rawChildren).not.toContain(RAW_CHILD);
   });
 
   it('escapes Sheet title/description/trigger/closeLabel but passes the body slot through raw', () => {
-    const rendered = html(Sheet.definition.render({
-      children: RAW_CHILD,
-      closeLabel: PAYLOAD,
-      contentId: 'sheet-1',
-      description: PAYLOAD,
-      title: PAYLOAD,
-      trigger: PAYLOAD,
-    }));
+    const rendered = html(
+      Sheet.definition.render({
+        children: RAW_CHILD,
+        closeLabel: PAYLOAD,
+        contentId: 'sheet-1',
+        description: PAYLOAD,
+        title: PAYLOAD,
+        trigger: PAYLOAD,
+      }),
+    );
     // Three scalar sinks + close label all escaped; payload must never appear unescaped.
     expect(rendered).not.toContain(PAYLOAD);
     expect(rendered).toContain(DOUBLE_ESCAPED);
@@ -201,14 +231,16 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   });
 
   it('escapes the standalone Drawer title/description/trigger/closeLabel but passes the body slot through raw', () => {
-    const rendered = html(DrawerPanel.definition.render({
-      children: RAW_CHILD,
-      closeLabel: PAYLOAD,
-      contentId: 'drawer-2',
-      description: PAYLOAD,
-      title: PAYLOAD,
-      trigger: PAYLOAD,
-    }));
+    const rendered = html(
+      DrawerPanel.definition.render({
+        children: RAW_CHILD,
+        closeLabel: PAYLOAD,
+        contentId: 'drawer-2',
+        description: PAYLOAD,
+        title: PAYLOAD,
+        trigger: PAYLOAD,
+      }),
+    );
     expect(rendered).not.toContain(PAYLOAD);
     expect(rendered).toContain(DOUBLE_ESCAPED);
     expect(rendered).toContain(ESCAPED_CHILD);
@@ -216,10 +248,12 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
   });
 
   it('escapes the Table caption but passes the table body children through raw', () => {
-    const rendered = html(Table.definition.render({
-      caption: PAYLOAD,
-      children: RAW_CHILD,
-    }));
+    const rendered = html(
+      Table.definition.render({
+        caption: PAYLOAD,
+        children: RAW_CHILD,
+      }),
+    );
     expect(rendered).toContain(ESCAPED);
     // The payload must not appear unescaped anywhere, including inside <caption>.
     expect(rendered).not.toContain(PAYLOAD);

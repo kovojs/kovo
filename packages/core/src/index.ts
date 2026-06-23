@@ -46,7 +46,7 @@ export type ComponentRenderResult =
   | readonly ComponentRenderResult[]
   | string
   | undefined
-  | { readonly [key: string]: unknown };
+  | object;
 
 /** Props accepted by the server-bound `<ErrorBoundary />` render fallback helper. */
 export interface ErrorBoundaryProps {

@@ -80,7 +80,7 @@ export interface KovoExportStaticBehaviorFact {
 export interface KovoExportStaticBehaviorOptions {
   appCoreModuleUrl: string;
   cliMarker?: string;
-  createApp: (options: { routes: unknown[] }) => unknown;
+  createApp: (options: { renderRoute?: (value: unknown) => string; routes: unknown[] }) => unknown;
   errorDiagnostic: KovoExportStaticDiagnosticLike;
   expectedStaticExportCliError: string;
   expectedStaticExportError: string;
@@ -178,6 +178,7 @@ export async function kovoExportStaticBehaviorFact({
 }: KovoExportStaticBehaviorOptions): Promise<KovoExportStaticBehaviorFact> {
   const apiOutDir = await mkdtemp(join(tmpdir(), `${fixturePrefix}api-`));
   const app = createApp({
+    renderRoute: (value: unknown) => String(value ?? ''),
     routes: [
       serverRoute('/', {
         page: () => `<main ${markerAttribute}="api"></main>`,
@@ -230,6 +231,7 @@ import { createApp } from ${JSON.stringify(appCoreModuleUrl)};
 export const diagnostics = ${JSON.stringify(diagnostics, null, 2)};
 
 export default createApp({
+  renderRoute: (value) => String(value ?? ''),
   routes: [
     serverRoute('/', {
       page: () => '<main ${markerAttribute}="${cliMarker}"></main>',

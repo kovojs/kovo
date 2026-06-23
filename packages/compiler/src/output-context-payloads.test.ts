@@ -87,7 +87,7 @@ export const ClientPayloadCard = component({
         "serverDiagnostics": [],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { escapeText } from '@kovojs/server/internal/html';
+        return \`import { escapeText } from '@kovojs/server/internal/escape';
 
       export const ServerPayloadCard = component({
         render: ({ product }) => (
@@ -293,7 +293,7 @@ export const PayloadCard = component({
         ],
         "serverSource": "// @kovojs-ir
       export function renderSource() {
-        return \`import { escapeText } from '@kovojs/server/internal/html';
+        return \`import { escapeText } from '@kovojs/server/internal/escape';
       import { derive } from '@kovojs/browser/generated';
       import { componentLiveTargetRenderer, registerGeneratedLiveTargetRenderer } from '@kovojs/server/internal/wire';
 

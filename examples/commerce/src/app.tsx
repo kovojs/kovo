@@ -163,9 +163,19 @@ export function createCommerceApp(options: CommerceAppOptions = {}): CommerceApp
 }
 
 function routeValueToHtml(value: unknown): string {
-  if (typeof value === 'string') return value;
   if (value === undefined || value === null) return '';
+  if (isFrameworkRenderedHtml(value)) return value.html;
+  if (typeof value === 'string') return value;
   return JSON.stringify(value);
+}
+
+function isFrameworkRenderedHtml(value: unknown): value is { html: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[Symbol.for('kovo.renderedHtml')] === true &&
+    typeof (value as { html?: unknown }).html === 'string'
+  );
 }
 
 export const commerceApp = createCommerceApp();

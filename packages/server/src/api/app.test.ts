@@ -4,6 +4,7 @@ import * as packageRootApi from '@kovojs/server';
 import * as packageViteApi from '@kovojs/server/vite';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
 import * as packageInternalCsrfApi from '@kovojs/server/internal/csrf';
+import * as packageInternalEscapeApi from '@kovojs/server/internal/escape';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
 import * as packageInternalRouteApi from '@kovojs/server/internal/route';
@@ -18,6 +19,7 @@ import * as deferredStreamApi from '../deferred-stream.js';
 import * as publicApi from '../index.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
 import * as internalCsrfApi from '../internal/csrf.js';
+import * as internalEscapeApi from '../internal/escape.js';
 import * as internalExecutionApi from '../internal/execution.js';
 import * as internalHtmlApi from '../internal/html.js';
 import * as internalRouteApi from '../internal/route.js';
@@ -521,6 +523,14 @@ describe('server app-shell public API barrels', () => {
       'renderMutationIdemField',
     ]);
     expect(packageInternalCsrfApi).toEqual(internalCsrfApi);
+    expect(moduleValueKeys(packageInternalEscapeApi)).toEqual([
+      'escapeAttribute',
+      'escapeHtml',
+      'escapeScriptJson',
+      'escapeText',
+      'safeUrlAttribute',
+    ]);
+    expect(packageInternalEscapeApi).toEqual(internalEscapeApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
       'createMemoryMutationReplayStore',
       'endpointMatches',
@@ -603,6 +613,7 @@ describe('server app-shell public API barrels', () => {
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
       './internal/client-modules': './src/internal/client-modules.ts',
       './internal/csrf': './src/internal/csrf.ts',
+      './internal/escape': './src/internal/escape.ts',
       './internal/execution': './src/internal/execution.ts',
     });
   });
