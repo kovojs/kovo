@@ -65,7 +65,8 @@ export interface SymbolicKeyEq {
  */
 export type SymbolicMatch =
   | { eq: readonly SymbolicKeyEq[]; kind: 'keys' }
-  | { expr: string; kind: 'opaque' };
+  | { arms: readonly { eq: readonly SymbolicKeyEq[] }[]; kind: 'or' }
+  | { expr: string; kind: 'opaque'; reason?: PuntReason };
 
 /**
  * §10.5 Stage-1 `effect` grammar:
@@ -278,6 +279,7 @@ export interface PatchProgram {
 export type PuntReason =
   | { code: 'interprocedural'; site: string }
   | { code: 'membership-entry'; field: string }
+  | { code: 'mixed-disjunction'; expr: string }
   | { code: 'no-row-witness'; field: string }
   | { code: 'non-key-match'; expr: string }
   | { code: 'opaque-orderby'; column: string }
@@ -335,6 +337,8 @@ export function puntReasonLabel(reason: PuntReason): string {
       return `interprocedural KV406: ${reason.site}`;
     case 'membership-entry':
       return `membership entry: ${reason.field}`;
+    case 'mixed-disjunction':
+      return `mixed disjunction: ${reason.expr}`;
     case 'no-row-witness':
       return `no client rows: ${reason.field}`;
     case 'non-key-match':

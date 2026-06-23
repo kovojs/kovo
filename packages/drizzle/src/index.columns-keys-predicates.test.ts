@@ -1063,6 +1063,79 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('extracts bounded disjunctions as typed symbolic match alternatives', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq, or } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProducts(db: PgDatabase, primaryId: string, fallbackId: string) {',
+          '  await db.update(products).set({ reserved: true }).where(or(eq(products.id, primaryId), eq(products.id, fallbackId)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
+      {
+        match: {
+          arms: [
+            { eq: [{ column: 'id', value: { kind: 'param', path: 'primaryId' } }] },
+            { eq: [{ column: 'id', value: { kind: 'param', path: 'fallbackId' } }] },
+          ],
+          kind: 'or',
+        },
+        op: 'update',
+        sets: { reserved: { kind: 'const', value: true } },
+        table: 'products',
+      },
+    ]);
+  });
+
+  it('degrades mixed derivable/opaque disjunctions with a named reason', () => {
+    const files = [
+      pgDatabaseTypes([
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'product.domain.ts',
+        source: [
+          'import { eq, gt, or } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));',
+          '',
+          'export async function syncProducts(db: PgDatabase, productId: string) {',
+          '  await db.update(products).set({ reserved: true }).where(or(eq(products.id, productId), gt(products.stock, 0)));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    expect(extractSymbolicEffectsFromProject({ files }).map((fact) => fact.effect)).toEqual([
+      {
+        match: {
+          expr: 'or(eq(products.id, productId), gt(products.stock, 0))',
+          kind: 'opaque',
+          reason: {
+            code: 'mixed-disjunction',
+            expr: 'or(eq(products.id, productId), gt(products.stock, 0))',
+          },
+        },
+        op: 'update',
+        sets: { reserved: { kind: 'const', value: true } },
+        table: 'products',
+      },
+    ]);
+  });
+
   it('extracts composite parameter keys from and(eq(...)) predicates', () => {
     const graph = extractTouchGraphFromProject({
       files: [
@@ -1096,6 +1169,38 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             via: 'users',
           },
         ],
+        unresolved: [],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+  });
+
+  it('degrades partial composite keys instead of treating them as exact-row', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        pgDatabaseTypes([
+          'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+        ]),
+        {
+          fileName: 'ticket.domain.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const tickets = pgTable("tickets", {}, kovo({ domain: "ticket", key: "tenantId,id" }));',
+            '',
+            'export async function closeTicket(db: PgDatabase, id: string) {',
+            '  await db.update(tickets).set({ status: "closed" }).where(eq(tickets.id, id));',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      closeTicket: {
+        reads: [],
+        touches: [{ domain: 'ticket', keys: null, site: 'ticket.domain.ts:7', via: 'tickets' }],
         unresolved: [],
       },
     });

@@ -172,9 +172,10 @@ guard-owned, and natural-key applications.
   - For shared browser data that includes scope columns, the match may include both scope and id.
   - The generated code must not leak private session values into browser-visible keys.
 
-- [ ] **Support bounded disjunctions only when each arm is independently derivable.**
+- [x] **Support bounded disjunctions only when each arm is independently derivable.**
   - Example: `where(or(eq(id, a), eq(id, b)))` may derive as two guarded row updates.
   - Mixed derivable/opaque arms degrade or punt as a whole, with a named reason.
+  - Evidence: `pnpm exec vitest --run packages/core/src/derivation.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive-codegen.test.ts` covers typed OR extraction, two-arm guarded row updates, partial composite-key degradation, and named `mixed-disjunction` punts.
 
 ## Required Acceptance Fixtures
 

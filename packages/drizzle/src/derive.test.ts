@@ -153,6 +153,77 @@ describe('deriveOptimistic — §10.5 Stage-3 rules (positive)', () => {
     });
   });
 
+  it('UPDATE × AGG expands a bounded disjunction into one guarded update per arm', () => {
+    const rowset = {
+      filters: [],
+      key: 'id',
+      orderBy: [{ column: 'id', direction: 'asc' as const }],
+      table: 'products',
+    };
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: { kind: 'agg', projection: ['id', 'stock'], rowKey: 'id', rowset },
+      },
+      query: 'productGrid',
+      rowsByTable: { products: { columns: ['id', 'stock'], rowsPath: 'items' } },
+    };
+    const effect: SymbolicEffect = {
+      match: {
+        arms: [
+          { eq: [{ column: 'id', value: { kind: 'param', path: 'primaryId' } }] },
+          { eq: [{ column: 'id', value: { kind: 'param', path: 'fallbackId' } }] },
+        ],
+        kind: 'or',
+      },
+      op: 'update',
+      sets: {
+        stock: {
+          kind: 'arith',
+          left: { kind: 'col', column: 'stock' },
+          op: '-',
+          right: { kind: 'param', path: 'quantity' },
+        },
+      },
+      table: 'products',
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'derived',
+      program: {
+        ops: [
+          {
+            guard: 'find-or-noop',
+            match: [{ column: 'id', value: { kind: 'param', path: 'primaryId' } }],
+            op: 'update-row',
+            path: 'items',
+            sets: {
+              stock: {
+                kind: 'arith',
+                left: { kind: 'col', column: 'stock' },
+                op: '-',
+                right: { kind: 'param', path: 'quantity' },
+              },
+            },
+          },
+          {
+            guard: 'find-or-noop',
+            match: [{ column: 'id', value: { kind: 'param', path: 'fallbackId' } }],
+            op: 'update-row',
+            path: 'items',
+            sets: {
+              stock: {
+                kind: 'arith',
+                left: { kind: 'col', column: 'stock' },
+                op: '-',
+                right: { kind: 'param', path: 'quantity' },
+              },
+            },
+          },
+        ],
+        query: 'productGrid',
+      },
+    });
+  });
+
   it('DELETE × (AGG + COUNT) removes the row then recounts from the shipped rows', () => {
     const rowset = { filters: [], key: 'id', orderBy: [], table: 'todos' };
     const shape: AlgebraicQueryShape = {
@@ -241,6 +312,40 @@ describe('deriveOptimistic — §10.5 PUNT list (negative surfaces)', () => {
     expect(deriveOptimistic([effect], shape)).toEqual({
       kind: 'punt',
       reason: { code: 'non-key-match', expr: 'gt(total, 100)' },
+    });
+  });
+
+  it('preserves the named punt for mixed derivable/opaque disjunctions', () => {
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['id'],
+          rowKey: 'id',
+          rowset: { filters: [], key: 'id', orderBy: [], table: 'products' },
+        },
+      },
+      query: 'products',
+    };
+    const effect: SymbolicEffect = {
+      match: {
+        expr: 'or(eq(products.id, productId), gt(products.stock, 0))',
+        kind: 'opaque',
+        reason: {
+          code: 'mixed-disjunction',
+          expr: 'or(eq(products.id, productId), gt(products.stock, 0))',
+        },
+      },
+      op: 'update',
+      sets: { reserved: { kind: 'const', value: true } },
+      table: 'products',
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'punt',
+      reason: {
+        code: 'mixed-disjunction',
+        expr: 'or(eq(products.id, productId), gt(products.stock, 0))',
+      },
     });
   });
 
@@ -544,6 +649,35 @@ describe('deriveOptimistic — C5: non-key eq match must punt, not single-row up
     expect(deriveOptimistic([effect], shape)).toEqual({
       kind: 'punt',
       reason: { code: 'non-key-match', expr: 'non-key eq on products' },
+    });
+  });
+
+  it('punts when a composite row key is only partially covered', () => {
+    const compositeRowset = { filters: [], key: 'tenantId,id', orderBy: [], table: 'tickets' };
+    const compositeShape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['tenantId', 'id', 'status'],
+          rowKey: 'tenantId,id',
+          rowset: compositeRowset,
+        },
+      },
+      query: 'ticketGrid',
+      rowsByTable: { tickets: { columns: ['tenantId', 'id', 'status'], rowsPath: 'items' } },
+    };
+    const effect: SymbolicEffect = {
+      match: {
+        eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }],
+        kind: 'keys',
+      },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'closed' } },
+      table: 'tickets',
+    };
+    expect(deriveOptimistic([effect], compositeShape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'non-key-match', expr: 'non-key eq on tickets' },
     });
   });
 });
