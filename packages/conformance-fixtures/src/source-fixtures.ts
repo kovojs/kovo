@@ -585,6 +585,8 @@ export async function postParseSourceStringProjectFact(options: {
 function isPostParseGuardedFile(path: string): boolean {
   if (!path.endsWith('.ts') || path.endsWith('.test.ts')) return false;
   return (
+    path === 'packages/compiler/src/app-graph.ts' ||
+    path === 'packages/compiler/src/compile.ts' ||
     path === 'packages/compiler/src/graph.ts' ||
     /^packages\/compiler\/src\/(lower|validate|analyze|emit)\//.test(path)
   );

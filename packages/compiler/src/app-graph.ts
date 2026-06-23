@@ -6,8 +6,10 @@ import { factHash } from './fact-hash.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectKeys,
+  componentDeclaresMutableLocalState,
   componentHasInferredServerRefreshTarget,
   type ComponentModuleModel,
+  type ObjectLiteralEntry,
 } from './scan/parse.js';
 import { queryBindingFromExpression } from './scan/query-binding.js';
 import type {
@@ -168,6 +170,7 @@ export function componentGraphFact(
     ...(exportName === undefined ? {} : { exportName }),
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
     ...(mutationForms.length === 0 ? {} : { mutationForms }),
+    ...(firstComponentDeclaresMutableLocalState(model) ? { mutableLocalState: true } : {}),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
     ...(styleRuleUsages.length === 0
@@ -184,23 +187,26 @@ export function componentGraphFact(
 
 function componentClockExplainFacts(model: ComponentModuleModel): CoreGraph.ClockExplain[] {
   return componentOptionObjectEntries(model, 'clocks').flatMap((entry) =>
-    entry.value ? [{ cadence: clockCadenceSummary(entry.value), name: entry.key }] : [],
+    entry.value ? [{ cadence: clockCadenceSummary(entry), name: entry.key }] : [],
   );
 }
 
-function clockCadenceSummary(source: string): string {
-  if (/\brenderOnce\s*:\s*true\b/.test(source)) return 'renderOnce';
-
-  const parts = ['every', 'at', 'until'].flatMap((key) => {
-    const value = objectPropertySource(source, key);
-    return value ? [`${key}=${value}`] : [];
-  });
-  return parts.length > 0 ? parts.join(',') : 'manual';
+function firstComponentDeclaresMutableLocalState(model: ComponentModuleModel): boolean {
+  const component = model.components[0];
+  return component ? componentDeclaresMutableLocalState(component, model) : false;
 }
 
-function objectPropertySource(source: string, key: string): string | null {
-  const match = new RegExp(`\\b${key}\\s*:\\s*([^,}]+)`).exec(source);
-  return match?.[1]?.trim().replace(/\s+/g, ' ') ?? null;
+function clockCadenceSummary(entry: Pick<ObjectLiteralEntry, 'objectEntries'>): string {
+  const fields = entry.objectEntries ?? [];
+  if (fields.some((field) => field.key === 'renderOnce' && field.value === 'true')) {
+    return 'renderOnce';
+  }
+
+  const parts = ['every', 'at', 'until'].flatMap((key) => {
+    const value = fields.find((field) => field.key === key)?.value;
+    return value ? [`${key}=${value.trim().replace(/\s+/g, ' ')}`] : [];
+  });
+  return parts.length > 0 ? parts.join(',') : 'manual';
 }
 
 /**
@@ -215,6 +221,7 @@ export function deriveRegistryFactsFromGraph(
   const components = deriveComponentFactsFromGraph(graph);
   const diagnostics = [...routeFactDiagnostics(graph), ...mutationFactDiagnostics(graph)];
   const fragmentTargets = deriveFragmentTargetsFromGraph(graph);
+  const statefulComponents = deriveStatefulComponentsFromGraph(graph);
   const viewTransitions = deriveViewTransitionsFromGraph(graph);
 
   return {
@@ -226,6 +233,7 @@ export function deriveRegistryFactsFromGraph(
     ...(Object.keys(options.mutations ?? {}).length > 0 ? { mutations: options.mutations } : {}),
     ...(Object.keys(options.queries ?? {}).length > 0 ? { queries: options.queries } : {}),
     routes: [...new Set((graph.pages ?? []).map((page) => page.route))].sort(),
+    ...(statefulComponents.length > 0 ? { statefulComponents } : {}),
     ...(viewTransitions.length > 0 ? { viewTransitions } : {}),
   };
 }
@@ -332,6 +340,16 @@ function disambiguateComponentDomNames(
 function deriveFragmentTargetsFromGraph(graph: RegistryGraphInput): string[] {
   return [
     ...new Set((graph.components ?? []).flatMap((component) => component.fragments ?? [])),
+  ].sort((left, right) => left.localeCompare(right));
+}
+
+function deriveStatefulComponentsFromGraph(graph: RegistryGraphInput): string[] {
+  return [
+    ...new Set(
+      (graph.components ?? [])
+        .filter((component) => component.mutableLocalState === true)
+        .map((component) => component.name),
+    ),
   ].sort((left, right) => left.localeCompare(right));
 }
 

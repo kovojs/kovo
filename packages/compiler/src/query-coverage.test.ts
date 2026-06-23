@@ -244,7 +244,7 @@ export const MessageRow = component({
 export const ClockLabel$value = derive(['now'], (now) => now.ago.toISOString());
 
 export const ClockLabel = component({
-  clocks: { ago: { every: '1s' }, pub: { renderOnce: true } },
+  clocks: { 'ago': { ['every']: '1s' }, pub: { /* freeze */ ['renderOnce']: true } },
   render: () => <time data-derive="now.ClockLabel$value">initial</time>,
 });
 `,
@@ -266,7 +266,7 @@ export const ClockLabel = component({
       "import { applyCompiledQueryUpdatePlan, derive, installClockUpdatePlans } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain('export const ClockLabel$clockUpdatePlans = [{');
-    expect(clientSource).toContain('clocks: { "ago": { every: \'1s\' } }');
+    expect(clientSource).toContain('clocks: { "ago": { [\'every\']: \'1s\' } }');
     expect(clientSource).not.toContain('"pub"');
     expect(clientSource).toContain('return ClockLabel$queryUpdatePlans.now(root, now, context);');
     expect(clientSource).toContain('export function installClockLabelClockUpdates(root)');

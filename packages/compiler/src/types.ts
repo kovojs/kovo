@@ -35,6 +35,7 @@ export type ComponentGraphFact = Pick<
   | 'domName'
   | 'exportName'
   | 'fragments'
+  | 'mutableLocalState'
   | 'name'
   | 'mutationForms'
   | 'queries'
@@ -98,6 +99,7 @@ export interface RegistryFacts {
   mutations?: RegistryTypeFacts;
   queries?: RegistryTypeFacts;
   routes?: readonly string[];
+  statefulComponents?: readonly string[];
   viewTransitions?: readonly string[];
 }
 

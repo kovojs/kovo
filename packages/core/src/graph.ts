@@ -100,6 +100,7 @@ export interface ComponentExplain {
   handlers?: readonly HandlerExplain[];
   mutationForms?: readonly MutationFormExplain[];
   name: string;
+  mutableLocalState?: boolean;
   platformSubstitutions?: readonly PlatformSubstitutionExplain[];
   queries?: readonly string[];
   styleRules?: readonly StyleRuleExplain[];

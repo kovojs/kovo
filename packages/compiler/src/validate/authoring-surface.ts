@@ -52,11 +52,18 @@ export function validateAuthoringSurface(
 }
 
 export function isNonPublicKovoSpecifier(specifier: string): boolean {
-  return /^@kovojs\/[^/]+\/(?:internal|generated)(?:\/|$)/.test(specifier);
+  return (
+    /^@kovojs\/[^/]+\/(?:internal|generated)(?:\/|$)/.test(specifier) ||
+    /^kovo\/(?:internal|generated)(?:\/|$)/.test(specifier)
+  );
 }
 
 export function isAppLocalGeneratedSpecifier(specifier: string): boolean {
-  return /^\.{1,2}\/(?:.*\/)?generated\//.test(specifier);
+  return /(?:^|\/)generated\//.test(specifier) && !isPackageSpecifier(specifier);
+}
+
+function isPackageSpecifier(specifier: string): boolean {
+  return !specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.startsWith('src/');
 }
 
 function nonPublicKovoImportDiagnostic({

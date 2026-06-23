@@ -41,6 +41,7 @@ import {
   firstComponentModel,
   componentOptionObjectEntries,
   type ComponentModuleModel,
+  type ObjectLiteralEntry,
 } from './scan/parse.js';
 import { applyTerminalEmitPatches, componentPipelineState } from './model-pipeline.js';
 import {
@@ -489,10 +490,16 @@ function collectClockUpdatePlans(
   if (!queryUpdatePlans.some((plan) => plan.query === 'now')) return [];
 
   const clocks = componentOptionObjectEntries(model, 'clocks')
-    .filter((entry) => entry.value && !/\brenderOnce\s*:\s*true\b/.test(entry.value))
+    .filter((entry) => entry.value && !clockEntryIsRenderOnce(entry))
     .map((entry) => ({ name: entry.key, spec: entry.value! }));
 
   return clocks.length > 0 ? [{ clocks, componentName }] : [];
+}
+
+function clockEntryIsRenderOnce(entry: Pick<ObjectLiteralEntry, 'objectEntries'>): boolean {
+  return (entry.objectEntries ?? []).some(
+    (field) => field.key === 'renderOnce' && field.value === 'true',
+  );
 }
 
 function componentDescriptorNameAssignments(

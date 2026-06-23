@@ -18,6 +18,7 @@ export interface ComponentOptionEntry {
 
 export interface ObjectLiteralEntry {
   key: string;
+  objectEntries?: readonly ObjectLiteralEntry[];
   staticConstructorType?: 'boolean' | 'number' | 'string';
   value?: string;
   valuePropertyAccesses?: readonly PropertyAccessPathModel[];
@@ -1319,6 +1320,13 @@ function propertyNameText(name: ts.PropertyName): string | null {
     return name.text;
   }
 
+  if (
+    ts.isComputedPropertyName(name) &&
+    (ts.isStringLiteralLike(name.expression) || ts.isNumericLiteral(name.expression))
+  ) {
+    return name.expression.text;
+  }
+
   return null;
 }
 
@@ -1335,6 +1343,9 @@ function objectLiteralEntries(
       return [
         {
           key,
+          ...(ts.isObjectLiteralExpression(property.initializer)
+            ? { objectEntries: objectLiteralEntries(sourceFile, source, property.initializer) }
+            : {}),
           ...staticConstructorTypeEntry(property.initializer),
           ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
           value: source.slice(
