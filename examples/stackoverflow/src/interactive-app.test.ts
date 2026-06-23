@@ -21,7 +21,10 @@ function withCsrf(fields: Record<string, string>): Record<string, string> {
   return withSessionCsrf('demo-session', fields);
 }
 
-function withSessionCsrf(sessionId: string, fields: Record<string, string>): Record<string, string> {
+function withSessionCsrf(
+  sessionId: string,
+  fields: Record<string, string>,
+): Record<string, string> {
   return {
     csrf: csrfToken({ session: { id: sessionId } }, soCsrf),
     ...fields,

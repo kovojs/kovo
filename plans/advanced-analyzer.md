@@ -15,7 +15,7 @@ conjunctive `eq(...)` predicates, but values are mostly traceable only to mutati
 That means a safe real-world predicate such as:
 
 ```ts
-where(and(eq(questions.sessionId, request.session.id), eq(questions.id, input.questionId)))
+where(and(eq(questions.sessionId, request.session.id), eq(questions.id, input.questionId)));
 ```
 
 is degraded to table-level invalidation and punts derived optimism, even when the table key is
