@@ -158,7 +158,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Evidence: `pnpm exec vitest run packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts packages/server/src/shell.test.ts packages/better-auth/src/index.session.test.ts` verified endpoint declaration metadata, dispatch behavior, Better Auth mount metadata, and no implicit any-method matching.
 - [ ] Add a general "unregistered sink" diagnostic for app source.
   - Any app-authored direct dangerous sink not behind a Kovo helper or explicit trust API should fail with a teaching message pointing to the safe surface.
-- [ ] Extend `kovo explain --endpoints`.
+- [x] Extend `kovo explain --endpoints`.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verifies endpoint explain rows include surface kind, auth, CSRF, cache, body/body-size, rate-limit, header, file, dynamic, and write posture columns for webhook and file-route examples.
   - Include routes returning `respond.file`/`respond.stream`, endpoints/webhooks, CSRF posture, auth scheme, cache posture, body-size/rate-limit posture, header writes, file outputs, and dynamic export surfaces in one ingress table.
 - [ ] Add `kovo explain --trust`.
   - List every `trustedHtml`, `trustedUrl`, future `trustedSql`, raw endpoint, webhook custom/none verifier, and static export path override with source spans and justifications.
@@ -207,6 +208,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm --dir site run content` verified the security-guide source/sink model and common app-code rules render through the site content pipeline.
 - `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified Phase 1 source/sink CLI output, source/sink taxonomy enrollment, source ownership columns, and `.kovo/sources-sinks.json` artifact writing.
 - `node packages/cli/src/bin.ts check sources-sinks` verified current-repo drift scan output: `DRIFT-SCAN roots=packages|examples|site|tests files=3467 hits=1938 findings=587 unregistered=0 status=accounted`.
+- `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts` verified expanded `kovo explain --endpoints` ingress posture output.
 - `pnpm exec vitest run packages/core/src/storage.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-route-guards.test.ts packages/server/src/static-export-replay.test.ts packages/server/src/document.test.ts packages/server/src/endpoint.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/cli/src/index.kovo-explain.test.ts`, `pnpm --dir tests/integration exec playwright test specs/respond-file.spec.ts`, and `rg -n -i "\\b(csv|tsv|spreadsheet|excel|formula)\\b|text/csv|orders\\.csv|inventory\\.csv" packages tests examples site docs -g '!node_modules' -g '!packages/icons/**'` verified spreadsheet export is absent from framework-owned helpers/examples/tests except disclaimer text.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.

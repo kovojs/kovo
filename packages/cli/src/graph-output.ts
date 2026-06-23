@@ -151,7 +151,8 @@ export type KovoExplainOptions =
 
 /**
  * `kovo explain --endpoints` options: emit the stable machine-ingress audit table
- * of every declared endpoint, webhook, and file/stream route (SPEC.md §11.4).
+ * of every declared endpoint, webhook, file/stream route, and dynamic ingress
+ * surface (SPEC.md §11.4; plans/sources-sinks.md Phase 3).
  */
 export interface KovoEndpointExplainOptions {
   endpoints: true;
@@ -1169,11 +1170,19 @@ function unguardedLine(access: UnguardedAccessFact): string {
 function endpointExplainLine(endpoint: CoreGraph.EndpointExplain): string {
   return [
     `ENDPOINT ${endpointName(endpoint)}`,
+    `surface=${endpoint.surface ?? 'endpoint'}`,
     `method=${endpoint.method ?? 'ANY'}`,
     `path=${endpoint.path}`,
     `mount=${endpoint.mount ?? 'exact'}`,
     `auth=${endpointAuth(endpoint)}`,
     `csrf=${endpointCsrf(endpoint)}`,
+    `cache=${endpoint.cache ?? '-'}`,
+    `body=${endpoint.body ?? '-'}`,
+    `bodySize=${endpoint.bodySize ?? '-'}`,
+    `rateLimit=${endpoint.rateLimit ?? '-'}`,
+    `headers=${list(endpoint.headers)}`,
+    `files=${list(endpoint.files)}`,
+    `dynamic=${list(endpoint.dynamicExports)}`,
     `writes=${list(endpoint.writes)}`,
   ].join(' ');
 }

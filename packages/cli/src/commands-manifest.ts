@@ -132,7 +132,11 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
         flag: '--sources-sinks',
         description: 'Print the Phase 1 source/sink inventory and write its JSON artifact.',
       },
-      { flag: '--endpoints', description: 'List the machine-ingress endpoints audit.' },
+      {
+        flag: '--endpoints',
+        description:
+          'List the machine-ingress audit for endpoints, webhooks, file/stream routes, and dynamic surfaces.',
+      },
       { flag: '--unguarded', description: 'Audit handlers reachable without a guard.' },
       { flag: '--unscoped', description: 'Audit storage access that is not tenant-scoped.' },
       {

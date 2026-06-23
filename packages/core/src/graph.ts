@@ -256,13 +256,21 @@ export interface PageExplain {
 /** @internal */
 export interface EndpointExplain {
   auth?: string;
+  body?: string;
+  bodySize?: string;
+  cache?: string;
   csrf?: 'checked' | 'exempt';
   csrfJustification?: string;
+  dynamicExports?: readonly string[];
+  files?: readonly string[];
   guards?: readonly string[];
+  headers?: readonly string[];
   method?: string;
   mount?: 'exact' | 'prefix';
   name?: string;
   path: string;
+  rateLimit?: string;
+  surface?: 'dynamic-export' | 'endpoint' | 'route-file' | 'route-stream' | 'webhook';
   writes?: readonly string[];
 }
 

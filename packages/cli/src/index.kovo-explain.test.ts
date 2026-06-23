@@ -457,19 +457,32 @@ describe('kovo explain', () => {
         endpoints: [
           {
             auth: 'verifier:stripe-signature',
+            body: 'raw',
+            bodySize: '1mb',
+            cache: 'no-store',
             csrf: 'exempt',
             csrfJustification: 'signed stripe webhook',
+            headers: ['Stripe-Signature'],
             method: 'POST',
             name: 'stripe/webhook',
             path: '/webhooks/stripe',
+            rateLimit: 'webhook:stripe',
+            surface: 'webhook',
             writes: ['order'],
           },
           {
             auth: 'custom:api-key',
+            body: 'bytes',
+            bodySize: 'stream',
+            cache: 'private,no-store',
             csrf: 'checked',
+            files: ['inventory.bin'],
+            headers: ['Content-Disposition', 'Content-Type'],
             method: 'GET',
             name: 'inventory/download',
             path: '/downloads/inventory.bin',
+            rateLimit: 'download:user',
+            surface: 'route-file',
           },
         ],
       },
@@ -480,8 +493,8 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       ENDPOINTS
-      ENDPOINT inventory/download method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked writes=-
-      ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook writes=order
+      ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
+      ENDPOINT stripe/webhook surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
       SUMMARY total=2
       "
     `);
@@ -503,11 +516,15 @@ describe('kovo explain', () => {
           endpoints: [
             {
               auth: 'verifier:stripe-signature',
+              body: 'raw',
+              cache: 'no-store',
               csrf: 'exempt',
               csrfJustification: 'signed stripe webhook',
+              headers: ['Stripe-Signature'],
               method: 'POST',
               name: 'stripe/webhook',
               path: '/webhooks/stripe',
+              surface: 'webhook',
               writes: ['order'],
             },
           ],
@@ -524,7 +541,7 @@ describe('kovo explain', () => {
       [
         'kovo-explain/v1',
         'ENDPOINTS',
-        'ENDPOINT stripe/webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook writes=order',
+        'ENDPOINT stripe/webhook surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=- rateLimit=- headers=Stripe-Signature files=- dynamic=- writes=order',
         'SUMMARY total=1',
         '',
       ].join('\n'),
