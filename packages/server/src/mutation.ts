@@ -81,8 +81,10 @@ export type { ChangeRecord, InvalidateOptions, MutationTouchSite } from './chang
 
 /**
  * A typed mutation failure outcome (SPEC §9.2): a declared `error` `code` plus its
- * validated `payload`, served as HTTP 422 (validation/app `fail()`) or 429 (rate limit,
- * with optional `retryAfter`). Produced via `MutationContext.fail`.
+ * validated `payload`, served as HTTP 422 (validation/app `fail()`), 429 (rate limit,
+ * with optional `retryAfter`), or framework-owned authenticated authorization denial
+ * as HTTP 403. Produced via `MutationContext.fail` for app failures and by guards for
+ * authorization failures.
  */
 export interface MutationFail<Code extends string = string, Payload = unknown> {
   error: {
@@ -91,7 +93,7 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
   };
   ok: false;
   retryAfter?: number;
-  status: 422 | 429;
+  status: 403 | 422 | 429;
 }
 
 /**
@@ -751,7 +753,7 @@ export async function renderMutationResponse<
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
     const reauthResponse = enhancedMutationReauthResponse(guardFailure, lifecycleRequestForGuard, {
-      currentUrl: wireRequest.currentUrl,
+      ...(wireRequest.currentUrl === undefined ? {} : { currentUrl: wireRequest.currentUrl }),
     });
     if (reauthResponse) return reauthResponse;
     const status = mutationGuardFailureStatus(guardFailure);
@@ -1414,7 +1416,7 @@ export async function renderNoJsMutationResponse<
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
     const reauthResponse = noJsMutationReauthResponse(guardFailure, lifecycleRequestForGuard, {
-      currentUrl: noJsRequest.currentUrl,
+      ...(noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl }),
     });
     if (reauthResponse) return reauthResponse;
     const status = mutationGuardFailureStatus(guardFailure);

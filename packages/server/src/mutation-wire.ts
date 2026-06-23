@@ -52,6 +52,7 @@ export interface MutationWireRequest<
    */
   buildToken?: string;
   csrf?: CsrfValidationOptions<Request>;
+  currentUrl?: string;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragment?: boolean;
