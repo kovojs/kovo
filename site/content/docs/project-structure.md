@@ -1,85 +1,121 @@
 ---
 title: Project structure
-description: Tour the files in a scaffolded project and see how the graph-verification workflow plugs into your CI.
+description: Tour the files in the current create-kovo scaffold and see where to extend them.
 order: 5
 ---
 
 # Project structure
 
-A scaffolded Kovo project is small enough to hold in your head. Here is the whole thing:
+A scaffolded Kovo project is a small authenticated app. Here is the shape `create-kovo` writes:
 
-```
+```txt
 my-app/
-├── index.html              # document shell
-├── src/
-│   ├── app.ts              # routes + page assembly (the app entry)
-│   ├── styles.css          # document CSS: fonts, tokens, page chrome
-│   └── theme.ts            # typed style tokens / theme
-├── scripts/
-│   ├── emit-graph.mjs      # emits graph.json from app facts
-│   └── graph-assertions.mjs# your behavior assertions, as graph queries
-├── graph.json              # the app's behavior graph (generated)
-├── vite.config.ts          # Vite+ config: dev, build, run tasks
-└── .github/workflows/ci.yml
+|-- .env                    # generated local CSRF/auth secret, gitignored
+|-- .env.example            # deployment secret template
+|-- .github/workflows/ci.yml
+|-- .gitignore
+|-- kovo.config.ts          # production build preset
+|-- package.json
+|-- vite.config.ts          # Vite+ plus the Kovo plugin
+|-- src/
+|   |-- app.tsx             # createApp(), routes, layout, request handler
+|   |-- app.test.ts         # focused app smoke test
+|   |-- auth.ts             # Better Auth + Kovo session/mutation adapters
+|   |-- db.ts               # Drizzle database setup and seed data
+|   |-- mutations.ts        # guarded add-contact mutation
+|   |-- queries.ts          # typed contact query
+|   |-- schema.ts           # app tables plus Better Auth tables
+|   |-- styles.css          # document CSS
+|   |-- theme.ts            # typed theme tokens
+|   `-- components/
+|       |-- auth-forms.tsx  # sign-in/sign-out forms
+|       `-- contacts.tsx    # query-backed contact region and add form
+`-- tsconfig.json           # when your package manager/template writes one
 ```
 
-Most of it is what you'd expect. The part that isn't is `graph.json`.
+The SQLite dialect swaps in `package.sqlite.json`, `src/db.sqlite.ts`, `src/schema.sqlite.ts`,
+`src/auth.sqlite.ts`, and `README.sqlite.md` at scaffold time. The public file names stay the same
+inside your generated app.
 
-## What the tutorial adds
+## The app entry
 
-The scaffold above is the bare floor. As you work through the [Tutorial](/tutorial/) — and as the
-[reference `examples/commerce`](https://github.com/kovojs/kovo/tree/main/examples/commerce) app
-shows — a real project grows a small, conventional set of files. Each concept lives in its own
-module so the declare-once facts stay easy to find:
+`src/app.tsx` is the center of the scaffold. It imports the database, session provider, mutations,
+queries, route components, theme, and stylesheet, then creates the app:
 
+```tsx
+createApp({
+  db: () => appDb,
+  mutations: [addContact, appSignIn, appSignOut],
+  queries: [contactsQuery],
+  sessionProvider: (request) => appSessionProvider(request),
+  routes: [homeRoute, loginRoute],
+});
 ```
-src/
-├── app.ts                  # routes, page assembly, the app graph value
-├── domains.ts              # named data domains (invalidation currency)
-├── db.ts                   # the data store / per-request database
-├── queries.ts              # typed reads (load + read sets)
-├── registries.ts           # invalidation/optimistic registry interfaces
-├── components/             # one file per component (cart-badge.tsx, …)
-└── generated/              # compiler artifacts: lowered .tsx, .client.js, graph.json
-```
 
-`src/generated/` holds compiler output — lowered component IR, named client-handler modules, and
-the emitted `graph.json`. You don't hand-author these (SPEC §5.2 makes hand-written lowered IR
-**KV235**); you read them to verify, and they recompile to a no-op. The tutorial inlines a few of
-these facts (registries, the graph value) so the mechanism stays visible; a production project
-commits the generated files so graph changes show up as reviewable diffs.
+The home route redirects unauthenticated requests to `/login`; the login route renders the auth
+form. Both use the same `layout()` and stylesheet declaration.
+
+## Auth and secrets
+
+`src/auth.ts` wires Better Auth through `@kovojs/better-auth`:
+
+- `betterAuthSession()` adapts Better Auth's session into `request.session`.
+- `betterAuthSignInEmailMutation()` and `betterAuthSignOutMutation()` create ordinary Kovo
+  mutations for the auth forms.
+- CSRF tokens bind to an anonymous id before login and to the session id after login.
+- `seedDemoUser()` creates `demo@example.com / password123` for a fresh `vp dev`.
+
+`create-kovo` writes a fresh `KOVO_CSRF_SECRET` into `.env` and refuses to let the app run with the
+placeholder. In production, set `BETTER_AUTH_SECRET` or `KOVO_CSRF_SECRET` through the platform's
+secret store.
+
+## Data, queries, and mutations
+
+`src/schema.ts` declares the app table and the Better Auth tables. The contact table is annotated so
+the compiler can connect writes to query refreshes. `src/db.ts` creates the Drizzle database and
+seeds local data. `src/queries.ts` owns the contact read; `src/mutations.ts` owns the guarded
+add-contact write.
+
+When adding product data, keep the same separation:
+
+1. Add the table and domain metadata in `schema.ts`.
+2. Seed or connect storage in `db.ts`.
+3. Add typed reads in `queries.ts`.
+4. Add guarded writes in `mutations.ts`.
+5. Render the data from `components/`.
+
+That path keeps the compiler's query/write extraction readable and gives tests one clear place to
+assert each behavior.
 
 ## The graph workflow
 
-Kovo keeps application wiring auditable through one generated artifact: `graph.json`. It records
-components, queries, mutations, pages, optimistic coverage, and the touch graph — the derived map
-of which writes refresh which queries, the complete "what updates what" of your app.
+The starter no longer asks you to hand-maintain a root `graph.json`. The app facts live in the
+authored modules above; the Kovo compiler/build tools derive the graph from those facts. For larger
+apps, add an explicit graph-emission script like the example apps do:
 
 ```sh
-vp run emit-graph          # regenerate graph.json from the app
-vp run kovo-check            # framework semantic checks (KV310 optimistic coverage, audits…)
+pnpm --filter @kovojs/example-commerce run build:demo
+pnpm --filter @kovojs/example-crm run emit-graph
 kovo explain query cart graph.json
 kovo explain mutation cart/add --optimistic graph.json
-kovo explain --unguarded graph.json
 ```
 
-`kovo explain` output is stable and diffable by design. When a product rule matters — "every
-component that shows cart data must refresh when the cart changes" — you assert it in
-`scripts/graph-assertions.mjs` and CI enforces it from then on. The [kovo check & kovo explain
-guide](/guides/kovo-explain/) walks through the recipes. SPEC §11.4
+`kovo explain` output is stable and diffable by design. When a product rule matters, assert it in a
+test or graph script and run it in CI. The [kovo check & kovo explain guide](/guides/kovo-explain/)
+walks through the recipes. SPEC section 11.4
 
 ## Styling
 
 StyleX is the default component styling path. Author typed `@kovojs/style` objects in TSX, use
 plain document CSS for fonts, page chrome, and theme tokens, and declare stylesheet hints for every
-page, mutation fragment, and deferred stream so late HTML arrives styled. SPEC §13.1
+page, mutation fragment, and deferred stream so late HTML arrives styled. SPEC section 13.1
 
 ## Deployment shape
 
-A Kovo app deploys as a stateless server: mutation responses are ordinary HTML over the wire, the
-server keeps no record of what's on screen, and liveness comes from BroadcastChannel tab sync
-plus refetch-on-focus — no Redis, no sticky sessions, no socket tier. SPEC §9.3
+A Kovo app deploys as a stateless server: mutation responses are ordinary HTML over the wire and
+the server keeps no record of what's on screen. `kovo build ./src/app.tsx` emits `dist/server`, and
+`npm start` runs `dist/server/server.mjs` for the Node preset.
 
 The [deployment guide](/guides/deployment/) covers the two real obligations: keeping versioned
 `/c/*` client modules published across deploys, and not breaking the stateless-server guarantee.
-SPEC §6.6
+SPEC section 9.5
