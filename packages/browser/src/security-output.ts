@@ -1,3 +1,5 @@
+import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
+
 /**
  * Browser Trusted Types `TrustedHTML` values accepted by Kovo raw HTML sinks.
  */
@@ -177,39 +179,6 @@ function formatOutputValue(value: unknown): string {
 
 function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
   return typeof value === 'string' ? value : value.toString();
-}
-
-const URL_BOUND_ATTRIBUTES = new Set([
-  'href',
-  'src',
-  'action',
-  'formaction',
-  'poster',
-  'background',
-  'cite',
-  'data',
-  'ping',
-  'xlink:href',
-]);
-
-const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
-
-function isUrlAttributeName(name: string): boolean {
-  return URL_BOUND_ATTRIBUTES.has(name.toLowerCase());
-}
-
-function hasUnsafeUrlScheme(value: string): boolean {
-  const normalized = Array.from(value)
-    .filter((character) => {
-      const codePoint = character.codePointAt(0) ?? 0;
-      return codePoint > 0x20;
-    })
-    .join('')
-    .toLowerCase();
-  const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
-  if (!match) return false;
-
-  return !SAFE_URL_SCHEMES.has(match[1] ?? '');
 }
 
 function sanitizeCssIdentifier(value: string): string {

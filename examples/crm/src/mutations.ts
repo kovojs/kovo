@@ -77,6 +77,8 @@ const authed = guards.authed<CrmRequest>();
 const duplicateEmailError = s.object({ email: s.string() });
 const contactOwnershipError = s.object({ contactId: s.string() });
 const dealOwnershipError = s.object({ dealId: s.string() });
+const contactIdSchema = prefixedUuidSchema('c');
+const dealIdSchema = prefixedUuidSchema('d');
 const crmStageSchema: Schema<CrmStage> = {
   parse(input: unknown): CrmStage {
     if (typeof input !== 'string' || !isCrmStage(input)) {
@@ -116,7 +118,7 @@ export const addContact = mutation('addContact', {
   },
   guard: authed,
   input: s.object({
-    id: s.string(),
+    id: contactIdSchema,
     name: s.string(),
     email: s.string(),
   }),
@@ -165,7 +167,7 @@ export const createDeal = mutation('createDeal', {
   },
   guard: authed,
   input: s.object({
-    id: s.string(),
+    id: dealIdSchema,
     contactId: s.string(),
     stage: crmStageSchema,
     amount: s.number().int().min(0),
@@ -384,6 +386,21 @@ async function hasOwnedDeal(db: CrmDb, dealId: string, ownerId: string): Promise
 
 function isCrmStage(value: string): value is CrmStage {
   return (CRM_STAGES as readonly string[]).includes(value);
+}
+
+function prefixedUuidSchema(prefix: 'c' | 'd'): Schema<string> {
+  const pattern = new RegExp(
+    `^${prefix}-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`,
+    'i',
+  );
+  return {
+    parse(input: unknown): string {
+      if (typeof input !== 'string' || !pattern.test(input)) {
+        throw validationFailure(`Expected ${prefix}-prefixed UUID`, ['id']);
+      }
+      return input;
+    },
+  };
 }
 
 function validationFailure(message: string, path: readonly string[]): SchemaValidationError {

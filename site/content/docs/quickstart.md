@@ -41,11 +41,8 @@ gitignored; replace the secret in your deployment environment before shipping.
 vp dev
 ```
 
-Open `/login` and sign in with the seeded demo user:
-
-```txt
-demo@example.com / password123
-```
+Open `/login` and sign in with the seeded demo user. Use `demo@example.com` and the random
+`KOVO_DEMO_PASSWORD` value from the generated, gitignored `.env` file.
 
 The home page is a complete HTML document served from typed routes - no client framework booted, no
 hydration. View Source and you'll see real markup for the shell, the signed-in user, and the

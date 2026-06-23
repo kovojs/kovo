@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
 import { defer } from './deferred-region.js';
 import { guards } from './guards.js';
+import { renderedHtml } from './html.js';
 import { stylesheet } from './hints.js';
 import { layout, notFound, route } from './route.js';
 import {
@@ -312,17 +313,17 @@ describe('server app document boundary', () => {
   it('streams after-paint deferred route regions after the initial document shell', async () => {
     const productRoute = route('/products/:id', {
       async page({ params }) {
-        return (
+        return renderedHtml(
           `<main><h1>Product ${params.id}</h1>` +
-          (await defer({
-            fallback:
-              '<section aria-busy="true" style="min-height:120px">Loading reviews</section>',
-            priority: 'after-paint',
-            render: () => '<section class="reviews-card">Reviews ready</section>',
-            stylesheets: ['/assets/reviews.css'],
-            target: `reviews:${params.id}`,
-          })) +
-          '</main>'
+            (await defer({
+              fallback:
+                '<section aria-busy="true" style="min-height:120px">Loading reviews</section>',
+              priority: 'after-paint',
+              render: () => '<section class="reviews-card">Reviews ready</section>',
+              stylesheets: ['/assets/reviews.css'],
+              target: `reviews:${params.id}`,
+            })) +
+            '</main>',
         );
       },
     });
@@ -355,16 +356,16 @@ describe('server app document boundary', () => {
   it('streams visible deferred route regions for viewport-gated browser apply', async () => {
     const productRoute = route('/products/:id', {
       async page({ params }) {
-        return (
+        return renderedHtml(
           `<main><h1>Product ${params.id}</h1>` +
-          (await defer({
-            fallback: '<aside aria-busy="true" style="min-height:320px">Loading rail</aside>',
-            priority: 'visible',
-            render: () => '<aside class="product-rail">Rail ready</aside>',
-            stylesheets: ['/assets/rail.css'],
-            target: `rail:${params.id}`,
-          })) +
-          '</main>'
+            (await defer({
+              fallback: '<aside aria-busy="true" style="min-height:320px">Loading rail</aside>',
+              priority: 'visible',
+              render: () => '<aside class="product-rail">Rail ready</aside>',
+              stylesheets: ['/assets/rail.css'],
+              target: `rail:${params.id}`,
+            })) +
+            '</main>',
         );
       },
     });
@@ -396,11 +397,11 @@ describe('server app document boundary', () => {
   it('renders critical regions immediately without a deferred stream', async () => {
     const productRoute = route('/products/:id', {
       async page({ params }) {
-        return defer({
+        return renderedHtml(await defer({
           priority: 'critical',
           render: () => `<main>Critical ${params.id}</main>`,
           target: `critical:${params.id}`,
-        });
+        }));
       },
     });
     const request = new Request('https://shop.example.test/products/p1');

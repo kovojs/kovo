@@ -63,11 +63,12 @@ form. Both use the same `layout()` and stylesheet declaration.
 - `betterAuthSignInEmailMutation()` and `betterAuthSignOutMutation()` create ordinary Kovo
   mutations for the auth forms.
 - CSRF tokens bind to an anonymous id before login and to the session id after login.
-- `seedDemoUser()` creates `demo@example.com / password123` for a fresh `vp dev`.
+- `seedDemoUser()` creates `demo@example.com` with the random `KOVO_DEMO_PASSWORD` from the
+  generated, gitignored `.env` file for a fresh `vp dev`.
 
-`create-kovo` writes a fresh `KOVO_CSRF_SECRET` into `.env` and refuses to let the app run with the
-placeholder. In production, set `BETTER_AUTH_SECRET` or `KOVO_CSRF_SECRET` through the platform's
-secret store.
+`create-kovo` writes a fresh `KOVO_CSRF_SECRET` and local-only `KOVO_DEMO_PASSWORD` into `.env` and
+refuses to let the app run with the CSRF placeholder. In production, set `BETTER_AUTH_SECRET` or
+`KOVO_CSRF_SECRET` through the platform's secret store and leave `KOVO_DEMO_PASSWORD` unset.
 
 ## Data, queries, and mutations
 

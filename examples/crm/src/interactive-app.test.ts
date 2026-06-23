@@ -25,6 +25,12 @@ const pipelineComponent = 'components/pipeline/pipeline-region';
 const dealDetailTarget = 'deal-detail-region';
 const dealDetailComponent = 'components/deal-detail/deal-detail-region';
 const demoCsrfRequest = { session: { id: 'demo-session' } };
+const insertedContactId = 'c-11111111-1111-4111-8111-111111111111';
+const duplicateEmailContactId = 'c-22222222-2222-4222-8222-222222222222';
+const spoofedOwnerContactId = 'c-33333333-3333-4333-8333-333333333333';
+const insertedDealId = 'd-11111111-1111-4111-8111-111111111111';
+const unownedDealInputId = 'd-22222222-2222-4222-8222-222222222222';
+const invalidStageDealId = 'd-33333333-3333-4333-8333-333333333333';
 
 function withCsrf(fields: Record<string, string>): Record<string, string> {
   return {
@@ -102,7 +108,7 @@ describe('crm interactive app', () => {
       handler,
       'addContact',
       withCsrf({
-        id: 'c-test-1',
+        id: insertedContactId,
         name: 'Edsger Dijkstra',
         email: 'edsger@demo.example.com',
       }),
@@ -116,7 +122,7 @@ describe('crm interactive app', () => {
 
     const rows = await db.select().from(contacts);
     expect(rows).toHaveLength(before + 1);
-    const inserted = rows.find((row) => row.id === 'c-test-1');
+    const inserted = rows.find((row) => row.id === insertedContactId);
     expect(inserted?.ownerId).toBe('u1');
   });
 
@@ -129,7 +135,7 @@ describe('crm interactive app', () => {
       handler,
       'addContact',
       withCsrf({
-        id: 'c-duplicate-email',
+        id: duplicateEmailContactId,
         name: 'Duplicate Contact',
         email: contact.email,
       }),
@@ -143,6 +149,27 @@ describe('crm interactive app', () => {
     expect(html).toContain(`"email":"${contact.email}"`);
   });
 
+  it('rejects arbitrary client-provided contact IDs before writing rows', async () => {
+    const { db, handler } = await buildCrmInteractiveApp();
+    const before = (await db.select().from(contacts)).length;
+
+    const { status, html } = await postForm(
+      handler,
+      'addContact',
+      withCsrf({
+        id: 'contact-card" onmouseover="alert(1)',
+        name: 'Attacker Controlled',
+        email: 'attacker-id@demo.example.com',
+      }),
+      `${contactsTarget}=contactList`,
+      liveHeader(contactsTarget, contactsComponent),
+    );
+
+    expect(status).toBe(422);
+    expect(html).toContain('data-error-path="id.id"');
+    expect(await db.select().from(contacts)).toHaveLength(before);
+  });
+
   it('createDeal inserts the deal, bumps the contact dealCount, and re-renders the pipeline', async () => {
     const { db, handler } = await buildCrmInteractiveApp();
     const [contact] = await db.select().from(contacts).orderBy(asc(contacts.id)).limit(1);
@@ -154,7 +181,7 @@ describe('crm interactive app', () => {
       handler,
       'createDeal',
       withCsrf({
-        id: 'd-test-1',
+        id: insertedDealId,
         contactId: contact.id,
         stage: 'open',
         amount: '7500',
@@ -170,7 +197,7 @@ describe('crm interactive app', () => {
 
     const dealRows = await db.select().from(deals);
     expect(dealRows).toHaveLength(beforeDeals + 1);
-    const inserted = dealRows.find((row) => row.id === 'd-test-1');
+    const inserted = dealRows.find((row) => row.id === insertedDealId);
     expect(inserted?.amount).toBe(7500);
     expect(inserted?.ownerId).toBe('u1');
 
@@ -188,7 +215,7 @@ describe('crm interactive app', () => {
       handler,
       'createDeal',
       withCsrf({
-        id: 'd-unowned',
+        id: unownedDealInputId,
         contactId: unowned.id,
         stage: 'open',
         amount: '7500',
@@ -204,7 +231,7 @@ describe('crm interactive app', () => {
       handler,
       'createDeal',
       withCsrf({
-        id: 'd-invalid-stage',
+        id: invalidStageDealId,
         contactId: 'c1',
         stage: 'javascript:alert(1)',
         amount: '7500',
@@ -225,7 +252,7 @@ describe('crm interactive app', () => {
       handler,
       'addContact',
       withCsrf({
-        id: 'c-spoof-owner',
+        id: spoofedOwnerContactId,
         name: 'Spoofed Owner',
         email: 'spoofed-owner@demo.example.com',
         ownerId: 'u2',
@@ -238,7 +265,7 @@ describe('crm interactive app', () => {
     const [inserted] = await db
       .select()
       .from(contacts)
-      .where(eq(contacts.id, 'c-spoof-owner'))
+      .where(eq(contacts.id, spoofedOwnerContactId))
       .limit(1);
     expect(inserted?.ownerId).toBe('u1');
   });

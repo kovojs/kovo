@@ -103,14 +103,18 @@ export const appSignOut = betterAuthSignOutMutation<
 });
 
 /**
- * Create the demo account so a fresh `vp dev` can sign in immediately. Safe to
- * call repeatedly — a duplicate sign-up is ignored.
+ * Create the local demo account when KOVO_DEMO_PASSWORD is present. create-kovo
+ * writes a random value into the gitignored .env file; leave it unset in
+ * production. Safe to call repeatedly — a duplicate sign-up is ignored.
  */
 export async function seedDemoUser(): Promise<void> {
+  const password = process.env.KOVO_DEMO_PASSWORD;
+  if (!password || password === 'replace-with-a-local-demo-password') return;
+
   try {
     await auth.api.signUpEmail({
       asResponse: true,
-      body: { email: 'demo@example.com', name: 'Demo User', password: 'password123' },
+      body: { email: 'demo@example.com', name: 'Demo User', password },
       headers: new Headers(),
     });
   } catch {

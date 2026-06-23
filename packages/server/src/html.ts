@@ -1,3 +1,5 @@
+import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
+
 /**
  * @internal HTML-coercion helper the compiler injects into emitted server modules
  * (SPEC.md §6.x rendering). Escapes `&`/`<`/`>` so interpolated app/DB strings cannot
@@ -17,47 +19,53 @@ export function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
 }
 
-/**
- * @internal URL-bearing attribute names whose values must be scheme-checked.
- * Mirrors `URL_BOUND_ATTRIBUTES` in `packages/browser/src/security-output.ts`
- * (SPEC.md §4.8, §5.2#10 — server and client must encode identically).
- */
-const URL_ATTRIBUTE_NAMES = new Set([
-  'href',
-  'src',
-  'action',
-  'formaction',
-  'poster',
-  'background',
-  'cite',
-  'data',
-  'ping',
-  'xlink:href',
-]);
+const kovoRenderedHtml = Symbol.for('kovo.renderedHtml');
+
+/** @internal framework-rendered HTML, distinct from app-authored text strings. */
+export interface RenderedHtml {
+  readonly [kovoRenderedHtml]: true;
+  readonly html: string;
+  [Symbol.toPrimitive](): string;
+  toString(): string;
+}
+
+/** @internal create a branded framework-rendered HTML value. */
+export function renderedHtml(html: string): RenderedHtml {
+  return {
+    [kovoRenderedHtml]: true,
+    html,
+    [Symbol.toPrimitive]() {
+      return html;
+    },
+    toString() {
+      return html;
+    },
+  };
+}
+
+/** @internal true for values produced by the server JSX/runtime HTML renderer. */
+export function isRenderedHtml(value: unknown): value is RenderedHtml {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Partial<RenderedHtml>)[kovoRenderedHtml] === true &&
+    typeof (value as { html?: unknown }).html === 'string'
+  );
+}
 
 /**
- * @internal Allowlist of safe URL schemes. Includes `ftp` per SPEC.md §4.8:347
- * (the browser-side list currently omits `ftp` — the OUT-SINK lane adds it there;
- * both sides must agree per §5.2#10).
+ * @internal Default page/component value renderer. Unwraps framework-rendered HTML
+ * and escapes app-authored scalar strings as text (SPEC.md §4.5, §5.2).
  */
-const SAFE_URL_SCHEMES = new Set(['http', 'https', 'mailto', 'tel', 'ftp']);
+export function renderHtmlValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (isRenderedHtml(value)) return value.html;
+  if (typeof value === 'string') return escapeText(value);
+  if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'boolean') {
+    return escapeText(value);
+  }
 
-/**
- * Returns true when the URL string carries an unsafe scheme.
- * Strips control characters ≤ U+0020 (the same normalisation the client uses)
- * before extracting the scheme so `java\nscript:` is caught.
- */
-function hasUnsafeUrlScheme(value: string): boolean {
-  const normalized = Array.from(value)
-    .filter((character) => {
-      const codePoint = character.codePointAt(0) ?? 0;
-      return codePoint > 0x20;
-    })
-    .join('')
-    .toLowerCase();
-  const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
-  if (!match) return false;
-  return !SAFE_URL_SCHEMES.has(match[1] ?? '');
+  return escapeText(JSON.stringify(value) ?? '');
 }
 
 /**
@@ -69,7 +77,7 @@ function hasUnsafeUrlScheme(value: string): boolean {
  * Exported only for compiler-emitted code and in-repo callers, not app authors.
  */
 export function safeUrlAttribute(name: string, value: string): string {
-  if (URL_ATTRIBUTE_NAMES.has(name.toLowerCase()) && hasUnsafeUrlScheme(value)) {
+  if (isUrlAttributeName(name) && hasUnsafeUrlScheme(value)) {
     return '#';
   }
   return escapeAttribute(value);

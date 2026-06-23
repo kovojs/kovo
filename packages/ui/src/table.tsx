@@ -17,24 +17,56 @@ export interface TableStyleOverrides {
 
 export interface TableProps {
   caption?: string;
-  children?: string;
+  children?: unknown;
   styles?: TableStyleOverrides;
 }
 
 export interface TableSectionProps {
-  children?: string;
+  children?: unknown;
   styles?: TableStyleOverrides;
 }
 
 export interface TableCellProps {
-  children?: string;
+  children?: unknown;
   colSpan?: number;
   scope?: 'col' | 'row';
   styles?: TableStyleOverrides;
 }
 
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const kovoRenderedHtml = Symbol.for('kovo.renderedHtml');
+
+interface RenderedHtml {
+  readonly [kovoRenderedHtml]: true;
+  readonly html: string;
+  [Symbol.toPrimitive](): string;
+  toString(): string;
+}
+
+function renderedHtml(html: string): RenderedHtml {
+  return {
+    [kovoRenderedHtml]: true,
+    html,
+    [Symbol.toPrimitive]() {
+      return html;
+    },
+    toString() {
+      return html;
+    },
+  };
+}
+
+function escapeHtml(value: unknown): string {
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<symbol, unknown>)[kovoRenderedHtml] === true &&
+    typeof (value as { html?: unknown }).html === 'string'
+  ) {
+    return (value as { html: string }).html;
+  }
+  const text =
+    value === null || value === undefined || typeof value === 'boolean' ? '' : String(value);
+  return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function escapeAttribute(value: string): string {
@@ -98,18 +130,13 @@ export const Table = component({
     const wrapperAttrs = style.attrs(tableStyles.wrapper, props.styles?.wrapper);
     const tableAttrs = style.attrs(tableStyles.table, props.styles?.table);
     const captionAttrs = style.attrs(tableStyles.caption, props.styles?.caption);
+    const caption =
+      props.caption === undefined
+        ? ''
+        : `<caption${tableAttributes(captionAttrs)}>${escapeHtml(props.caption)}</caption>`;
 
-    return (
-      <div {...wrapperAttrs}>
-        <table {...tableAttrs}>
-          {props.caption === undefined ? (
-            ''
-          ) : (
-            <caption {...captionAttrs}>{escapeHtml(props.caption)}</caption>
-          )}
-          {props.children}
-        </table>
-      </div>
+    return renderedHtml(
+      `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${props.children ?? ''}</table></div>`,
     );
   },
 });
@@ -159,15 +186,15 @@ export const TableCell = component({
 function tablePart(
   tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',
   attributes: TablePartAttributes,
-  children: string | undefined,
-): string {
+  children: unknown,
+): RenderedHtml {
   // SPEC.md §5.2 keeps vendored styled components as app-authored TSX source. These table
   // parts still emit semantic HTML, while avoiding isolated JSX <tr>/<td> bodies
   // that the compiler correctly rejects when compiled without their table parent.
-  return `<${tag}${tableAttributes(attributes)}>${children ?? ''}</${tag}>`;
+  return renderedHtml(`<${tag}${tableAttributes(attributes)}>${children ?? ''}</${tag}>`);
 }
 
-function tableAttributes(attributes: TablePartAttributes): string {
+function tableAttributes(attributes: TablePartAttributes | Record<string, unknown>): string {
   let rendered = '';
 
   for (const [name, value] of Object.entries(attributes)) {

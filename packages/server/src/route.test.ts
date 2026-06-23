@@ -138,6 +138,17 @@ describe('route primitives', () => {
     });
   });
 
+  it('escapes default route string returns as text', async () => {
+    const unsafeStringRoute = route('/unsafe', {
+      page: () => '<img src=x onerror=alert(1)>',
+    });
+
+    await expect(renderRoutePageResponse(unsafeStringRoute, {}, {})).resolves.toMatchObject({
+      body: '&lt;img src=x onerror=alert(1)&gt;',
+      status: 200,
+    });
+  });
+
   it('renders route page and renderer exceptions as stable 500 HTML', async () => {
     const loadError = new Error('private route load detail');
     const renderError = new Error('private render detail');
