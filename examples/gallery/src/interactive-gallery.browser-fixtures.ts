@@ -306,7 +306,7 @@ export function installInteractiveGalleryLoader(
 
 function normalizeInteractiveClientModulePath(url: string): string {
   const modulePath = url.split('?')[0] ?? url;
-  const versioned = /^\/c\/__v\/[0-9a-f]{8}\/(.+)$/.exec(modulePath);
+  const versioned = /^\/c\/__v\/[^/]+\/(.+)$/.exec(modulePath);
 
   return versioned ? `/c/${versioned[1]}` : modulePath;
 }
