@@ -156,9 +156,11 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Phase 5: Docs, Examples, and Templates
 
-- [ ] Update the security guide with the source/sink model.
+- [x] Update the security guide with the source/sink model.
+  - Evidence: `pnpm --dir site run content` and `git diff --check` verified `site/content/guides/security.md` renders with a source/safe-path/dangerous-sink/escape-hatch/diagnostic table.
   - Include one table: "source", "safe Kovo path", "dangerous sink", "escape hatch", "diagnostic".
-- [ ] Add copyable rules for common app code.
+- [x] Add copyable rules for common app code.
+  - Evidence: `site/content/guides/security.md` now lists rules forbidding unreviewed interpolation into HTML, URL, SQL, headers, cookies, filesystem paths, or raw endpoints and explicitly excludes CSV/TSV/spreadsheet export from Kovo's safe-by-default contract; `pnpm --dir site run content` passed.
   - Never interpolate request/DB/model data into HTML, URL, SQL, headers, cookies, filesystem paths, or raw endpoints without the corresponding Kovo safe helper or trust API; do not present CSV/TSV/spreadsheet export as a Kovo-supported safe-by-default pattern.
 - [ ] Audit examples/templates against the inventory.
   - Starter templates, tutorial steps, reference apps, examples, site demos, and gallery code should have zero unregistered app-authored sinks.
@@ -182,6 +184,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm --dir tests/integration exec playwright test specs/endpoint-raw-request.spec.ts` verified full request-handler bad signature → 401 and good signature → 200 with the handler still reading the raw body.
 - `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check` verified type/import boundaries, example typechecks, public API surface baseline, and whitespace.
 - `pnpm exec vitest run packages/core/src/diagnostics.test.ts` verified source/sink diagnostic allocation KV422-KV425 in `diagnosticDefinitions` and snapshots.
+- `pnpm --dir site run content` verified the security-guide source/sink model and common app-code rules render through the site content pipeline.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
 - `sed -n '1,260p' plans/fix-security.md` inspected prior non-SQL security remediation lanes.
