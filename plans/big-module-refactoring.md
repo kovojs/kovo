@@ -65,6 +65,10 @@ Current command output after completed splits:
     to `packages/drizzle/src/static/receiver-surface.ts`.
     Evidence: `packages/drizzle/src/static/receiver-surface.ts` is 1,854 LoC and
     `packages/drizzle/src/static.ts` is reduced to 7,476 LoC; `pnpm exec vitest --run packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.writes-receivers.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts packages/drizzle/src/index.query-loader-config.test.ts` passed 5 files / 94 tests; `git diff --check` passed.
+  - [x] Extract query-loader config, projection shape, static callback resolution, and KV406/KV410
+    query diagnostics to `packages/drizzle/src/static/query-shapes.ts`.
+    Evidence: `packages/drizzle/src/static/query-shapes.ts` is 1,809 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 5,840 LoC; `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts packages/drizzle/src/index.receiver-alias-bindings.test.ts packages/drizzle/src/index.write-callbacks-carriers.test.ts` passed 5 files / 111 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
