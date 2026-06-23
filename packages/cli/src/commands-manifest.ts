@@ -28,6 +28,7 @@ export const EXPLAIN_USAGE = [
   'usage: kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json]',
   '       kovo explain --sources-sinks',
   '       kovo explain --endpoints [graph.json]',
+  '       kovo explain --trust [graph.json]',
   '       kovo explain --unguarded [--fail-on-findings] [graph.json]',
   '       kovo explain --unscoped [--fail-on-findings] [graph.json]',
 ] as const;
@@ -38,7 +39,7 @@ export const EXPLAIN_USAGE = [
  * literal here so the drift guard can compare against `explainUsage()`.
  */
 export const EXPLAIN_USAGE_LINE =
-  'kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json] | kovo explain --sources-sinks | kovo explain --endpoints [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
+  'kovo explain component|mutation|query|page|context <target> [--optimistic] [--layouts] [graph.json] | kovo explain --sources-sinks | kovo explain --endpoints [graph.json] | kovo explain --trust [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]';
 
 /** @internal Usage line emitted for `kovo add` (see `addUsage`). */
 export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
@@ -137,6 +138,10 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
         description:
           'List the machine-ingress audit for endpoints, webhooks, file/stream routes, and dynamic surfaces.',
       },
+      {
+        flag: '--trust',
+        description: 'List explicit trust escape hatches and their provenance.',
+      },
       { flag: '--unguarded', description: 'Audit handlers reachable without a guard.' },
       { flag: '--unscoped', description: 'Audit storage access that is not tenant-scoped.' },
       {
@@ -148,6 +153,7 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
       'kovo explain component Cart graph.json',
       'kovo explain --sources-sinks',
       'kovo explain --endpoints',
+      'kovo explain --trust',
       'kovo explain --unguarded --fail-on-findings',
     ],
   },

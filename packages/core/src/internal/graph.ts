@@ -35,6 +35,7 @@ export type {
   TouchGraphEntry,
   TouchSite,
   TriggerExplain,
+  TrustEscapeExplain,
   UnresolvedWriteSite,
   UpdateCoverageFact,
   VerificationCoverageFact,

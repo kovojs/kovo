@@ -67,6 +67,7 @@ export interface KovoCheckInput {
   renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
   scopeAudits?: readonly ScopeAuditFact[];
   touchGraph?: TouchGraph;
+  trustEscapes?: readonly TrustEscapeExplain[];
   updateCoverage?: readonly UpdateCoverageFact[];
   verificationCoverage?: readonly VerificationCoverageFact[];
   verificationDiagnostics?: readonly VerificationDiagnosticFact[];
@@ -305,6 +306,23 @@ export interface ScopeAuditFact {
 }
 
 /** @internal */
+export interface TrustEscapeExplain {
+  justification?: string;
+  kind:
+    | 'customVerifier'
+    | 'rawEndpoint'
+    | 'staticExportPathOverride'
+    | 'trustedHtml'
+    | 'trustedSql'
+    | 'trustedUrl'
+    | 'webhookVerifyNone';
+  owner?: string;
+  safePath?: string;
+  site: string;
+  source?: string;
+}
+
+/** @internal */
 export interface UpdateCoverageFact {
   component: string;
   detail?: string;
@@ -419,6 +437,7 @@ const arrayFields = [
   'requestProviders',
   'renderEquivalenceChecks',
   'scopeAudits',
+  'trustEscapes',
   'updateCoverage',
   'verificationCoverage',
   'verificationDiagnostics',

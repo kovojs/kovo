@@ -146,6 +146,7 @@ export type KovoExplainOptions =
   | KovoEndpointExplainOptions
   | KovoSourcesSinksExplainOptions
   | KovoTargetExplainOptions
+  | { trust: true }
   | KovoUnguardedExplainOptions
   | KovoUnscopedExplainOptions;
 
@@ -272,6 +273,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
   }
 
   if ('sourcesSinks' in options) return sourcesSinksExplainResult(explainOutputVersion);
+
+  if ('trust' in options) {
+    const escapes = [...(graph.trustEscapes ?? [])].sort(compareTrustEscape);
+    lines.push('TRUST');
+
+    for (const escape of escapes) {
+      lines.push(trustEscapeLine(escape));
+    }
+
+    lines.push(`SUMMARY total=${escapes.length}`);
+    return ok(lines);
+  }
 
   if (options.kind === 'context') {
     const provider = graph.requestProviders?.find((item) => item.kind === options.target);
@@ -794,15 +807,20 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--layouts',
     '--optimistic',
     '--sources-sinks',
+    '--trust',
     '--unguarded',
     '--unscoped',
   ]);
   if (!parsed.ok) return parsed;
 
   const { flags, positional } = parsed;
-  const modeFlags = ['--endpoints', '--sources-sinks', '--unguarded', '--unscoped'].filter((flag) =>
-    flags.has(flag),
-  );
+  const modeFlags = [
+    '--endpoints',
+    '--sources-sinks',
+    '--trust',
+    '--unguarded',
+    '--unscoped',
+  ].filter((flag) => flags.has(flag));
   if (modeFlags.length > 1) return explainUsage();
 
   if (flags.has('--sources-sinks')) {
@@ -827,6 +845,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: positional[0], ok: true, options: { endpoints: true } };
+  }
+
+  if (flags.has('--trust')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { trust: true } };
   }
 
   if (flags.has('--unguarded') || flags.has('--unscoped')) {
@@ -1187,6 +1217,18 @@ function endpointExplainLine(endpoint: CoreGraph.EndpointExplain): string {
   ].join(' ');
 }
 
+function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {
+  return [
+    'TRUST',
+    `kind=${escape.kind}`,
+    `site=${escape.site}`,
+    `source=${escape.source ?? '-'}`,
+    `owner=${escape.owner ?? '-'}`,
+    `safePath=${escape.safePath ?? '-'}`,
+    `justification=${stableValue(escape.justification)}`,
+  ].join(' ');
+}
+
 function unguardedWarningLine(access: UnguardedAccessFact): string {
   if (access.kind === 'endpoint') {
     return `WARN UNGUARDED ${access.name} endpoint is reachable without an auth declaration.`;
@@ -1237,6 +1279,17 @@ function compareEndpointExplain(
   right: CoreGraph.EndpointExplain,
 ): number {
   return endpointName(left).localeCompare(endpointName(right));
+}
+
+function compareTrustEscape(
+  left: CoreGraph.TrustEscapeExplain,
+  right: CoreGraph.TrustEscapeExplain,
+): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.site.localeCompare(right.site) ||
+    (left.source ?? '').localeCompare(right.source ?? '')
+  );
 }
 
 function endpointAuth(endpoint: CoreGraph.EndpointExplain): string {
