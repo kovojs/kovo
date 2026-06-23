@@ -120,7 +120,7 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
     const input = { productId: 'p1', quantity: 2 };
 
     // Executing the emitted transform source is exactly what proves codegen ≡ interpreter.
-    // eslint-disable-next-line no-implied-eval, @typescript-eslint/no-implied-eval -- see above
+    // oxlint-disable-next-line no-implied-eval -- see above.
     const factory = new Function('tempId', 'now', `return ${lowerTransform(program)};`) as (
       t: () => string,
       n: () => number,
@@ -152,8 +152,7 @@ describe('lowerTransform — codegen ≡ interpreter parity', () => {
   // string-concatenates into a corrupt total and codegen ≢ interpreter.
   async function runBoth(program: PatchProgram, before: unknown, input: unknown) {
     const { applyPatchProgram } = await import('@kovojs/core/internal/derivation');
-    // eslint-disable-next-line no-implied-eval, @typescript-eslint/no-implied-eval -- executing the
-    // emitted source is precisely what proves codegen ≡ interpreter.
+    // oxlint-disable-next-line no-implied-eval -- executing emitted source proves codegen parity.
     const factory = new Function('tempId', 'now', `return ${lowerTransform(program)};`) as (
       t: () => string,
       n: () => number,

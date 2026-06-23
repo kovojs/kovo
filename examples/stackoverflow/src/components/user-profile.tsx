@@ -5,7 +5,7 @@ import * as style from '@kovojs/style';
 import { questionList } from '../queries.js';
 import type { QuestionListItem } from '../model.js';
 import { answersByUser, displayName, reputationOf, userById } from '../directory.js';
-import { compactCount, initials, tagHref } from './chrome.js';
+import { initials, tagHref } from './chrome.js';
 import { cardStyles, newestFirst, renderQuestionRow } from './question-card.js';
 
 // Palette inlined as a same-file literal (StyleX-style extraction resolves only

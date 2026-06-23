@@ -1,5 +1,3 @@
-import * as ts from 'typescript';
-
 import { compilerIrHeader } from '../ir.js';
 import {
   outputContextForAttribute,
