@@ -108,7 +108,7 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     Overflow `/questions/q3` critical CSS budget staying under 2 KB while retaining only the used
     theme variables.
 
-- [ ] **5. Route-split Stack Overflow CSS.**
+- [x] **5. Route-split Stack Overflow CSS.**
   - Current issue: `/questions/q3` receives CSS namespaces for unrelated pages such as users,
     profile, tags, tagged, list, and card.
   - Direction: emit route/component CSS chunks so the question detail route initially receives only
@@ -123,6 +123,10 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
   - Verification target: `/questions/:id` route CSS excludes users/profile/tags/list-only
     namespaces, includes chrome/detail/rail when rendered, and mutation/fragment responses remain
     styled when they introduce component markup.
+  - Evidence: `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts`
+    passed, covering the materialized Stack Overflow CSS manifest for `/questions/:id` with
+    chrome/detail/rail CSS present, users/profile/tags/tagged/list/card CSS absent, and the rendered
+    document carrying only the app/base plus question-detail route critical stylesheet hints.
 
 - [ ] **6. Defer below-the-fold document content.**
   - Current issue: initial HTML includes the right rail, duplicated hot-question lists, watched
@@ -171,6 +175,11 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
       for `packages/icons/src/infinity.tsx` and generated `packages/browser/src/inline-loader.ts`
       length.
 - [x] 2026-06-23 critical theme pruning slice: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/document.test.ts packages/server/src/app-document.test.ts packages/server/src/build.test.ts packages/server/src/vite-dev.test.ts packages/cli/src/index.kovo-build.test.ts examples/stackoverflow/src/interactive-app.test.ts examples/stackoverflow/src/kovo-graph.test.ts site/src/route-kit.test.ts`
+      passed.
+- [x] 2026-06-23 Stack Overflow route CSS split slice: `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts`
+      and `pnpm exec vitest --run scripts/import-boundary.test.mjs packages/compiler/src/css.test.ts`
+      passed.
+- [x] 2026-06-23 touched-file lint/type: `vp check --no-fmt examples/stackoverflow/scripts/materialize-demo-css.mjs examples/stackoverflow/src/interactive-app.tsx examples/stackoverflow/src/interactive-app.test.ts scripts/import-boundary.mjs`
       passed.
 - [x] 2026-06-23 diff hygiene: `git diff --check` passed.
 

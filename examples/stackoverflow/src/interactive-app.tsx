@@ -12,6 +12,7 @@ import {
   s,
   stylesheet,
   type RequestHandler,
+  type StylesheetAsset,
 } from '@kovojs/server';
 import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
 import { eq } from 'drizzle-orm';
@@ -45,13 +46,6 @@ import { soTheme } from './theme.js';
 
 const soRoot = fileURLToPath(new URL('../', import.meta.url));
 const soCriticalCss = stackOverflowCriticalCss();
-const soStylesheets = [
-  stylesheet('./styles.css', {
-    ...(soCriticalCss === undefined ? {} : { criticalCss: soCriticalCss }),
-    href: stackOverflowStylesheetHref(),
-    theme: soTheme,
-  }),
-] as const;
 const SO_DEMO_SESSION_HEADER = 'x-kovo-demo-sid';
 const SO_DEMO_SESSION_COOKIE = 'kovo_demo_sid';
 export const FALLBACK_SO_DEMO_SESSION_ID = 'demo-session';
@@ -73,32 +67,42 @@ const UsersLayout = soLayout('users');
 // SPEC.md §4.2: the source-served route still needs the same derived component
 // identities as lowered components so runtime root stamps advertise morphable
 // live targets in the full GET document.
-QuestionDetailRegion.name = 'components/question-detail/question-detail-region';
-QuestionListRegion.name = 'components/question-list/question-list-region';
+const questionDetailComponentName = 'components/question-detail/question-detail-region';
+const questionListComponentName = 'components/question-list/question-list-region';
+QuestionDetailRegion.name = questionDetailComponentName;
+QuestionListRegion.name = questionListComponentName;
 
-const sourceLiveTargetRenderers = [
-  stampSourceLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: QuestionListRegion,
-      componentId: QuestionListRegion.name,
-    }),
-    { deps: 'questionList questionScore', target: 'question-list-region' },
-  ),
-  stampSourceLiveTargetRenderer(
-    componentLiveTargetRenderer({
-      component: QuestionDetailRegion,
-      componentId: QuestionDetailRegion.name,
-    }),
-    { deps: 'questionAnswers questionDetail', target: 'question-detail-region' },
-  ),
-] as const;
+function sourceLiveTargetRenderers(
+  manifest: StackOverflowStylesheetManifest,
+): readonly LiveTargetRenderer<Request>[] {
+  return [
+    stampSourceLiveTargetRenderer(
+      componentLiveTargetRenderer({
+        component: QuestionListRegion,
+        componentId: questionListComponentName,
+      }),
+      { deps: 'questionList questionScore', target: 'question-list-region' },
+      stackOverflowFragmentStylesheets(manifest, questionListComponentName),
+    ),
+    stampSourceLiveTargetRenderer(
+      componentLiveTargetRenderer({
+        component: QuestionDetailRegion,
+        componentId: questionDetailComponentName,
+      }),
+      { deps: 'questionAnswers questionDetail', target: 'question-detail-region' },
+      stackOverflowFragmentStylesheets(manifest, questionDetailComponentName),
+    ),
+  ];
+}
 
 function stampSourceLiveTargetRenderer<Request>(
   renderer: LiveTargetRenderer<Request>,
   attrs: { deps: string; target: string },
+  stylesheets: readonly StylesheetAsset[] = [],
 ): LiveTargetRenderer<Request> {
   return {
     ...renderer,
+    ...(stylesheets.length === 0 ? {} : { stylesheets }),
     async render(context) {
       const html = await renderer.render(context);
       const props =
@@ -140,18 +144,102 @@ function escapeSourceAttribute(value: string): string {
     .replaceAll('"', '&quot;');
 }
 
-function stackOverflowStylesheetHref(): string {
-  const manifestPath = resolve(soRoot, 'dist/stackoverflow-css-manifest.json');
-  if (!existsSync(manifestPath)) return '/assets/styles.css';
+interface StackOverflowStylesheetManifest {
+  app: readonly StylesheetAsset[];
+  fragments: Readonly<Record<string, readonly StylesheetAsset[]>>;
+  href?: string;
+  routes: Readonly<Record<string, readonly StylesheetAsset[]>>;
+}
+
+function stackOverflowStylesheetManifest(): StackOverflowStylesheetManifest {
+  const manifestPath = resolve(stackOverflowDistRoot(), 'stackoverflow-css-manifest.json');
+  if (!existsSync(manifestPath)) return emptyStackOverflowStylesheetManifest();
 
   try {
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { href?: unknown };
-    return typeof manifest.href === 'string' && manifest.href.startsWith('/assets/')
-      ? manifest.href
-      : '/assets/styles.css';
+    return stackOverflowStylesheetManifestFromJson(JSON.parse(readFileSync(manifestPath, 'utf8')));
   } catch {
-    return '/assets/styles.css';
+    return emptyStackOverflowStylesheetManifest();
   }
+}
+
+function stackOverflowStylesheetManifestFromJson(value: unknown): StackOverflowStylesheetManifest {
+  if (!isRecord(value)) return emptyStackOverflowStylesheetManifest();
+  const href =
+    typeof value.href === 'string' && localAssetHref(value.href) ? value.href : undefined;
+  const app = stylesheetAssetList(value.app);
+  const routes = stylesheetAssetMap(value.routes);
+  const fragments = stylesheetAssetMap(value.fragments);
+
+  return {
+    app,
+    fragments,
+    ...(href === undefined ? {} : { href }),
+    routes,
+  };
+}
+
+function emptyStackOverflowStylesheetManifest(): StackOverflowStylesheetManifest {
+  return { app: [], fragments: {}, routes: {} };
+}
+
+function stackOverflowDistRoot(): string {
+  return process.env.KOVO_SO_CSS_DIST
+    ? resolve(process.env.KOVO_SO_CSS_DIST)
+    : resolve(soRoot, 'dist');
+}
+
+function stackOverflowBaseStylesheets(
+  manifest: StackOverflowStylesheetManifest,
+): readonly StylesheetAsset[] {
+  return [
+    stylesheet('./styles.css', {
+      ...(soCriticalCss === undefined ? {} : { criticalCss: soCriticalCss }),
+      href: manifest.href ?? '/assets/styles.css',
+      theme: soTheme,
+    }),
+    ...manifest.app,
+  ];
+}
+
+function stackOverflowRouteStylesheets(
+  manifest: StackOverflowStylesheetManifest,
+  routePath: string,
+): readonly StylesheetAsset[] {
+  return [...stackOverflowBaseStylesheets(manifest), ...(manifest.routes[routePath] ?? [])];
+}
+
+function stackOverflowFragmentStylesheets(
+  manifest: StackOverflowStylesheetManifest,
+  component: string,
+): readonly StylesheetAsset[] {
+  return manifest.fragments[component] ?? [];
+}
+
+function stylesheetAssetMap(value: unknown): Readonly<Record<string, readonly StylesheetAsset[]>> {
+  if (!isRecord(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value).map(([key, assets]) => [key, stylesheetAssetList(assets)]),
+  );
+}
+
+function stylesheetAssetList(value: unknown): readonly StylesheetAsset[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(isStylesheetAsset);
+}
+
+function isStylesheetAsset(value: unknown): value is StylesheetAsset {
+  if (!isRecord(value) || typeof value.href !== 'string' || !localAssetHref(value.href)) {
+    return false;
+  }
+  return value.criticalCss === undefined || typeof value.criticalCss === 'string';
+}
+
+function localAssetHref(value: string): boolean {
+  return value.startsWith('/assets/');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function stackOverflowCriticalCss(): string | undefined {
@@ -187,6 +275,7 @@ export async function buildSoInteractiveApp(
   const database = options.db ?? (await createSoDb());
   const ensureDemoSession = createSoDemoSessionSeeder(database);
   await ensureDemoSession(FALLBACK_SO_DEMO_SESSION_ID);
+  const stylesheetManifest = stackOverflowStylesheetManifest();
 
   // SPEC.md §5.1: one parameterized detail route (not a route per seeded row), so
   // questions posted at runtime are immediately viewable. SPEC.md §9.5 route
@@ -200,7 +289,7 @@ export async function buildSoInteractiveApp(
       return withRail(<QuestionDetailRegion questionId={params.id} />, questionRail(params.id));
     },
     layout: QuestionsLayout,
-    stylesheets: soStylesheets,
+    stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/questions/:id'),
   });
 
   const taggedQuestionsRoute = route('/questions/tagged/:tag', {
@@ -210,7 +299,7 @@ export async function buildSoInteractiveApp(
       return <TaggedQuestionsRegion tag={params.tag} />;
     },
     layout: TagsLayout,
-    stylesheets: soStylesheets,
+    stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/questions/tagged/:tag'),
   });
 
   const userProfileRoute = route('/users/:id', {
@@ -220,7 +309,7 @@ export async function buildSoInteractiveApp(
       return <UserProfileRegion userId={params.id} />;
     },
     layout: UsersLayout,
-    stylesheets: soStylesheets,
+    stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/users/:id'),
   });
 
   const app = createApp({
@@ -231,7 +320,7 @@ export async function buildSoInteractiveApp(
       return database;
     },
     document: { lang: 'en-US' },
-    liveTargetRenderers: sourceLiveTargetRenderers,
+    liveTargetRenderers: sourceLiveTargetRenderers(stylesheetManifest),
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
     queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],
     routes: [
@@ -244,7 +333,7 @@ export async function buildSoInteractiveApp(
           return withRail(<QuestionListRegion />, homeRail());
         },
         layout: QuestionsLayout,
-        stylesheets: soStylesheets,
+        stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/'),
       }),
       taggedQuestionsRoute,
       questionDetailRoute,
@@ -254,7 +343,7 @@ export async function buildSoInteractiveApp(
           return <TagsPage />;
         },
         layout: TagsLayout,
-        stylesheets: soStylesheets,
+        stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/tags'),
       }),
       route('/users', {
         meta: { description: 'The KovOverflow community.', title: 'Users · KovOverflow' },
@@ -262,7 +351,7 @@ export async function buildSoInteractiveApp(
           return <UsersPage />;
         },
         layout: UsersLayout,
-        stylesheets: soStylesheets,
+        stylesheets: stackOverflowRouteStylesheets(stylesheetManifest, '/users'),
       }),
       userProfileRoute,
     ],
