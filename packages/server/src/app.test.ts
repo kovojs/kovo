@@ -288,6 +288,9 @@ describe('server createApp request shell', () => {
     expect(fullBody).toContain('installInlineKovoBootstrap');
     expect(fullBody).toContain('/c/__v/');
     expect(fullBody).toContain('/kovo-runtime.client.js');
+    expect(fullBody).toMatch(
+      /\)\("\/c\/__v\/[^"]+\/kovo-runtime\.client\.js",\(url\)=>import\(url\)\);/,
+    );
     expect(enhancedBody).not.toContain('installInlineKovoBootstrap');
     expect(enhancedBody).not.toContain('installInlineKovoLoader');
     expect(enhancedBody).toContain('<title>Product</title>');

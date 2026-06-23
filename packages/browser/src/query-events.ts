@@ -11,6 +11,7 @@ import type { QueryChunk, QueryElementChunkLike } from './wire-parser.js';
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface InlineQueryEventDetail {
   queries: QueryElementChunkLike[];
+  qs?: QueryElementChunkLike[];
 }
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
@@ -83,8 +84,9 @@ function queryChunksFromInlineEvent(
   const detail = event.detail;
   if (!isInlineQueryWireEventDetail(detail)) return [];
 
+  const queries = detail.queries ?? detail.qs ?? [];
   const chunks: QueryChunk[] = [];
-  for (const query of detail.queries) {
+  for (const query of queries) {
     const chunk = readQueryElementChunk(query, onError);
     if (chunk) chunks.push(chunk);
   }
@@ -94,8 +96,9 @@ function queryChunksFromInlineEvent(
 function isInlineQueryWireEventDetail(value: unknown): value is InlineQueryEventDetail {
   if (typeof value !== 'object' || value === null) return false;
 
-  const detail = value as InlineQueryEventDetail;
-  return Array.isArray(detail.queries) && detail.queries.every(isQueryElementChunkLike);
+  const detail = value as Partial<InlineQueryEventDetail>;
+  const queries = detail.queries ?? detail.qs;
+  return Array.isArray(queries) && queries.every(isQueryElementChunkLike);
 }
 
 function isQueryElementChunkLike(value: unknown): value is QueryElementChunkLike {

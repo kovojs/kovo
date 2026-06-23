@@ -315,7 +315,8 @@ describe('server app document boundary', () => {
         return (
           `<main><h1>Product ${params.id}</h1>` +
           (await defer({
-            fallback: '<section aria-busy="true" style="min-height:120px">Loading reviews</section>',
+            fallback:
+              '<section aria-busy="true" style="min-height:120px">Loading reviews</section>',
             priority: 'after-paint',
             render: () => '<section class="reviews-card">Reviews ready</section>',
             stylesheets: ['/assets/reviews.css'],

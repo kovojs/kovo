@@ -4,7 +4,7 @@ import {
   buildInlineKovoLoaderInstallerSource,
   inlineKovoLoaderInstallerReadableSource,
 } from './inline-loader-build.js';
-import { createInlineKovoLoaderSource, installInlineKovoLoader } from './inline-loader.js';
+import { inlineKovoLoaderInstallerSource, installInlineKovoLoader } from './inline-loader.js';
 
 export type InlineSourceInstall = (
   importModule: (url: string) => Promise<Record<string, unknown>>,
@@ -33,11 +33,11 @@ export const inlineSourceInstallCases: readonly [string, InlineSourceInstall][] 
     },
   ],
   [
-    'generated bootstrap source',
+    'generated installer source',
     (importModule, globalRecord) => {
       installDefaultLocation(globalRecord);
       globalRecord.__kovoInlineImport = importModule;
-      runInThisContext(createInlineKovoLoaderSource('globalThis.__kovoInlineImport'));
+      runInThisContext(`(${inlineKovoLoaderInstallerSource})(globalThis.__kovoInlineImport);`);
     },
   ],
   [

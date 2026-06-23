@@ -177,9 +177,7 @@ describe('server node adapter', () => {
       });
 
       expect(response.headers['content-encoding']).toBe('gzip');
-      expect(gunzipSync(response.encodedBody).toString('utf8')).toBe(
-        'gzip preferred'.repeat(128),
-      );
+      expect(gunzipSync(response.encodedBody).toString('utf8')).toBe('gzip preferred'.repeat(128));
     } finally {
       await server.close();
     }
@@ -219,18 +217,23 @@ describe('server node adapter', () => {
 
     try {
       const requestOptions = { headers: { 'Accept-Encoding': 'br,gzip' } };
-      expect((await server.fetch('/no-transform', requestOptions)).headers['content-encoding'])
-        .toBeUndefined();
+      expect(
+        (await server.fetch('/no-transform', requestOptions)).headers['content-encoding'],
+      ).toBeUndefined();
       expect((await server.fetch('/encoded', requestOptions)).headers['content-encoding']).toBe(
         'gzip',
       );
-      expect((await server.fetch('/binary', requestOptions)).headers['content-encoding'])
-        .toBeUndefined();
-      expect((await server.fetch('/empty', requestOptions)).headers['content-encoding'])
-        .toBeUndefined();
-      expect((await server.fetch('/head', { ...requestOptions, method: 'HEAD' })).headers[
-        'content-encoding'
-      ]).toBeUndefined();
+      expect(
+        (await server.fetch('/binary', requestOptions)).headers['content-encoding'],
+      ).toBeUndefined();
+      expect(
+        (await server.fetch('/empty', requestOptions)).headers['content-encoding'],
+      ).toBeUndefined();
+      expect(
+        (await server.fetch('/head', { ...requestOptions, method: 'HEAD' })).headers[
+          'content-encoding'
+        ],
+      ).toBeUndefined();
     } finally {
       await server.close();
     }

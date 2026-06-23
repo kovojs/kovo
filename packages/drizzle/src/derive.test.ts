@@ -1,4 +1,9 @@
-import type { AlgebraicQueryShape, SymbolicEffect } from '@kovojs/core/internal/derivation';
+import type {
+  AlgebraicQueryShape,
+  Rowset,
+  RowsetFilter,
+  SymbolicEffect,
+} from '@kovojs/core/internal/derivation';
 import { describe, expect, it } from 'vitest';
 
 import { deriveOptimistic } from './derive.js';
@@ -38,7 +43,7 @@ describe('deriveOptimistic — §10.5 Stage-3 rules (positive)', () => {
   });
 
   it('UPDATE × AGG (keyed row, self-arith) emits a guarded update; cursor is invariant', () => {
-    const rowset = {
+    const rowset: Rowset = {
       filters: [],
       key: 'id',
       orderBy: [{ column: 'id', direction: 'asc' as const }],
@@ -744,14 +749,13 @@ describe('deriveOptimistic — C6: SUM resum must not proceed when witness omits
 
 describe('deriveOptimistic — filtered aggregate witnesses', () => {
   it('recomputes filtered COUNT and SUM from a shipped row witness with the same rowset', () => {
-    const rowset = {
-      filters: [
-        {
-          column: 'cartId',
-          op: 'eq' as const,
-          value: { kind: 'session' as const, path: 'cartId' },
-        },
-      ],
+    const cartFilter: RowsetFilter = {
+      column: 'cartId',
+      op: 'eq',
+      value: { kind: 'session', path: 'cartId' },
+    };
+    const rowset: Rowset = {
+      filters: [cartFilter],
       key: 'cartId,productId',
       orderBy: [],
       table: 'cart_items',
@@ -764,7 +768,7 @@ describe('deriveOptimistic — filtered aggregate witnesses', () => {
           rowKey: 'cartId,productId',
           rowset,
         },
-        itemCount: { kind: 'count', pred: rowset.filters[0], rowset },
+        itemCount: { kind: 'count', pred: cartFilter, rowset },
         totalQuantity: {
           arith: { kind: 'col', column: 'quantity' },
           kind: 'sum',

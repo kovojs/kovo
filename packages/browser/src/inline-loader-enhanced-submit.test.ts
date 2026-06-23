@@ -788,11 +788,15 @@ describe('inline loader enhanced submit source', () => {
           method: 'GET',
         });
         expect(dispatched).toHaveLength(2);
-        expect((dispatched[0] as { detail?: { queries?: unknown[] } }).detail?.queries).toEqual([]);
-        expect(
-          (dispatched[1] as { detail?: { queries?: Array<{ attrs: string }> } }).detail
-            ?.queries?.[0]?.attrs,
-        ).toContain('name="cart"');
+        const firstQueries = (dispatched[0] as { detail?: { queries?: unknown[]; qs?: unknown[] } })
+          .detail;
+        const secondQueries = (
+          dispatched[1] as {
+            detail?: { queries?: Array<{ attrs: string }>; qs?: Array<{ attrs: string }> };
+          }
+        ).detail;
+        expect(firstQueries?.queries ?? firstQueries?.qs).toEqual([]);
+        expect((secondQueries?.queries ?? secondQueries?.qs)?.[0]?.attrs).toContain('name="cart"');
       } finally {
         Object.assign(globalRecord, {
           CustomEvent: originals.CustomEvent,

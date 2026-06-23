@@ -483,7 +483,7 @@ function inlineLoaderScript(runtimeHref: string | undefined): {
   const source =
     runtimeHref === undefined
       ? `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`
-      : createInlineKovoLoaderSource(JSON.stringify(runtimeHref));
+      : createInlineKovoLoaderSource(JSON.stringify(runtimeHref), '(url)=>import(url)');
   const hash = cspSha256(source);
   return {
     csp: { scripts: [hash], styles: [] },

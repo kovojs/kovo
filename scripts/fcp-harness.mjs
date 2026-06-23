@@ -73,9 +73,7 @@ export async function probeUrl(url, options = {}, redirectCount = 0) {
           const location = readHeader(response.headers, 'location');
           if (status >= 300 && status < 400 && location && redirectCount < 5) {
             try {
-              resolve(
-                await probeUrl(new URL(location, target), options, redirectCount + 1),
-              );
+              resolve(await probeUrl(new URL(location, target), options, redirectCount + 1));
             } catch (error) {
               reject(error);
             }
@@ -90,9 +88,7 @@ export async function probeUrl(url, options = {}, redirectCount = 0) {
             timings: {
               totalMs: Math.round((endedAt - startedAt) * 10) / 10,
               ttfbMs:
-                firstByteAt === undefined
-                  ? null
-                  : Math.round((firstByteAt - startedAt) * 10) / 10,
+                firstByteAt === undefined ? null : Math.round((firstByteAt - startedAt) * 10) / 10,
             },
             url: target.href,
           });
@@ -141,7 +137,10 @@ export function htmlAssetInventory(html, baseUrl) {
     criticalAssetUrls: unique(assetUrls),
     criticalStyles,
     duplicateAssetUrls: duplicates(assetUrls),
-    inlineScriptBytes: inlineScripts.reduce((total, script) => total + byteLength(script.content), 0),
+    inlineScriptBytes: inlineScripts.reduce(
+      (total, script) => total + byteLength(script.content),
+      0,
+    ),
     inlineStyleBytes: inlineStyles.reduce((total, style) => total + byteLength(style.content), 0),
     modulepreloads,
     noscriptStylesheetHrefs: noscriptLinks
@@ -236,9 +235,8 @@ async function runBrowserSmoke(url, outputDir) {
           bodyStyle.visibility !== 'hidden';
 
         return {
-          deferredStylesheetCount: document.querySelectorAll(
-            'link[data-kovo-deferred-style]',
-          ).length,
+          deferredStylesheetCount: document.querySelectorAll('link[data-kovo-deferred-style]')
+            .length,
           firstViewportTextVisible,
           paintEntries,
           resources,
@@ -320,8 +318,7 @@ function readNoscriptLinks(html, baseUrl) {
 
 function parseAttributes(source) {
   const attrs = {};
-  const pattern =
-    /([^\s"'=<>`]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  const pattern = /([^\s"'=<>`]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
   for (const match of source.matchAll(pattern)) {
     const name = (match[1] ?? '').toLowerCase();
     if (!name || name === '/') continue;
@@ -346,10 +343,7 @@ function isStylesheetLike(attrs) {
 }
 
 function relTokens(value = '') {
-  return String(value)
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  return String(value).toLowerCase().split(/\s+/).filter(Boolean);
 }
 
 function normalizedHeaders(headers) {

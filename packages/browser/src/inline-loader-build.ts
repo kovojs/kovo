@@ -579,26 +579,15 @@ function installInlineKovoLoader(im) {
       })
       .catch(() => {});
   };
-  const ab = (body, build = '', applyTexts = true, applyQueries = true) => {
-    const chunks = readInlineMutationResponseBodyChunks(body);
-    const skew = build && kb() && build !== kb();
-    if (skew) {
-      for (const q of chunks.queries) qr(q);
-      return;
-    }
-    const missed = chunks.queries.filter(qd);
+  const aq = (queries, applyQueries) => {
     if (applyQueries) {
-      for (const q of missed) qr(q);
-      chunks.queries = chunks.queries.filter((q) => !qd(q));
-      dq('kovo:query', {
-        detail: {
-          ['quer' + 'ies']: chunks.queries,
-        },
-      });
-    } else {
-      chunks.queries = [];
+      const ok = [];
+      for (const q of queries) qd(q) ? qr(q) : ok.push(q);
+      dq('kovo:query', { detail: { queries: ok } });
     }
-    for (const x of chunks.fragments) {
+  };
+  const af = (fragments) => {
+    for (const x of fragments) {
       if (x.mode === 'append') continue;
       const e = ft(x.target);
       if (e) for (const y of qa(e, '[kovo-c]')) {
@@ -606,8 +595,18 @@ function installInlineKovoLoader(im) {
         y.a?.abort();
       }
     }
-    applyInlineMutationResponseChunks(chunks, { findFragmentTarget: ft });
-    if (applyTexts) at(chunks.texts);
+    applyInlineMutationResponseChunks({ fragments }, { findFragmentTarget: ft });
+  };
+  const ab = (body, build) => {
+    const chunks = readInlineMutationResponseBodyChunks(body);
+    const skew = build && kb() && build !== kb();
+    if (skew) {
+      for (const q of chunks.queries) qr(q);
+      return;
+    }
+    aq(chunks.queries, 1);
+    af(chunks.fragments);
+    at(chunks.texts);
   };
   globalThis.__kovo_a = ab;
   const st = {};
@@ -643,6 +642,13 @@ function installInlineKovoLoader(im) {
   const sfail = () => {
     for (const key in se) se[key].setAttribute?.('data-stream-state', 'error');
   };
+  const ax = (chunks, applyQueries) => {
+    const textStart = chunks.texts[0]?.start ?? 1 / 0;
+    af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start < textStart)));
+    at(readStreamTextChunksFromElements(chunks.texts));
+    af(readFragmentChunksFromElements(chunks.fragments.filter((chunk) => chunk.start >= textStart)));
+    aq(chunks.queries, applyQueries);
+  };
   const cp = (body) => {
     const chunks = readMutationResponseElementChunks(body);
     const dones = readElementChunks(body, 'kovo-done');
@@ -652,11 +658,11 @@ function installInlineKovoLoader(im) {
     }
     if (!end) return body;
     if (!dones.length) {
-      ab(body.slice(0, end), '', true, false);
+      ax(chunks, false);
       return body.slice(end);
     }
     const complete = dones.some((x) => (readAttribute(x.attrs, 'reason') ?? 'complete') === 'complete');
-    ab(body.slice(0, end), '', true, complete);
+    ax(chunks, complete);
     for (const x of dones) {
       const reason = readAttribute(x.attrs, 'reason') ?? 'complete';
       if (reason && reason !== 'complete') sfail();
@@ -1086,7 +1092,10 @@ export function buildInlineKovoLoaderModuleSource(
     '  runtimeUrl: string,',
     '  runtimeImport?: (url: string) => Promise<{ installKovoDeferredRuntime?: () => void }>,',
     '): void {',
-    '  inlineKovoLoaderBootstrapInstaller(runtimeUrl, runtimeImport ?? ((url) => import(/* @vite-ignore */ url)));',
+    '  inlineKovoLoaderBootstrapInstaller(',
+    '    runtimeUrl,',
+    '    runtimeImport ?? ((url) => import(/* @vite-ignore */ url)),',
+    '  );',
     '}',
     '',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
@@ -1094,10 +1103,17 @@ export function buildInlineKovoLoaderModuleSource(
     '  runtimeModuleExpression = JSON.stringify(kovoDeferredRuntimeModulePath),',
     '  runtimeImportExpression?: string,',
     '): string {',
-    "  const importExpression = (runtimeImportExpression ?? (runtimeModuleExpression === JSON.stringify(kovoDeferredRuntimeModulePath) ? '(url)=>import(url)' : runtimeModuleExpression)).trim();",
-    '  const runtimeExpression = (runtimeImportExpression === undefined',
-    '    ? JSON.stringify(kovoDeferredRuntimeModulePath)',
-    '    : runtimeModuleExpression).trim();',
+    '  const importExpression = (',
+    '    runtimeImportExpression ??',
+    '    (runtimeModuleExpression === JSON.stringify(kovoDeferredRuntimeModulePath)',
+    "      ? '(url)=>import(url)'",
+    '      : runtimeModuleExpression)',
+    '  ).trim();',
+    '  const runtimeExpression = (',
+    '    runtimeImportExpression === undefined',
+    '      ? JSON.stringify(kovoDeferredRuntimeModulePath)',
+    '      : runtimeModuleExpression',
+    '  ).trim();',
     '  if (!runtimeExpression) {',
     "    throw new Error('Inline Kovo loader runtime expression cannot be empty.');",
     '  }',

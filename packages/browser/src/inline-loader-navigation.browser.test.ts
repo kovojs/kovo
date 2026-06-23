@@ -250,8 +250,7 @@ describe('browser inline loader enhanced navigation', () => {
     await vi.waitFor(() => expect(document.title).toBe('Cart'));
     await vi.waitFor(() => {
       const promoted = Array.from(document.head.children).find(
-        (element) =>
-          element.tagName === 'LINK' && element.getAttribute('href') === '/cart.css',
+        (element) => element.tagName === 'LINK' && element.getAttribute('href') === '/cart.css',
       );
       expect(promoted?.getAttribute('rel')).toBe('stylesheet');
       expect(promoted?.hasAttribute('data-kovo-deferred-style')).toBe(false);

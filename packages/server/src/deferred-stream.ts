@@ -173,10 +173,7 @@ function randomBoundaryToken(): string {
   return randomBytes(16).toString('hex');
 }
 
-function deferredChunkApplyScriptBody(
-  boundary: string,
-  visibleTargets: readonly string[],
-): string {
+function deferredChunkApplyScriptBody(boundary: string, visibleTargets: readonly string[]): string {
   const collectBody = `var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}`;
   if (visibleTargets.length === 0) {
     return `${collectBody}globalThis.__kovo_a?.(e.join("\\n"));s.remove()`;

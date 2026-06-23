@@ -10,6 +10,12 @@ export function renderMarkdownStream(
   ]
     .filter(Boolean)
     .join(' ');
-  target.setAttribute('data-rendered-markdown', features || 'plain');
-  document.body.setAttribute('data-rendered-markdown', features || 'plain');
+  const rendered = new Set(
+    `${document.body.getAttribute('data-rendered-markdown') ?? ''} ${features || 'plain'}`
+      .split(/\s+/)
+      .filter(Boolean),
+  );
+  const value = [...rendered].join(' ');
+  target.setAttribute('data-rendered-markdown', value);
+  document.body.setAttribute('data-rendered-markdown', value);
 }

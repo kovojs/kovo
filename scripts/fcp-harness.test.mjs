@@ -33,9 +33,7 @@ describe('fcp harness HTML asset inventory', () => {
       'https://example.test/c/app.client.js',
     ]);
     expect(inventory.inlineStyleBytes).toBe(Buffer.byteLength('body{color:red}', 'utf8'));
-    expect(inventory.inlineScriptBytes).toBe(
-      Buffer.byteLength('globalThis.ready = true;', 'utf8'),
-    );
+    expect(inventory.inlineScriptBytes).toBe(Buffer.byteLength('globalThis.ready = true;', 'utf8'));
     expect(inventory.bodyBytes).toBe(Buffer.byteLength('<main>Question</main>', 'utf8'));
   });
 
