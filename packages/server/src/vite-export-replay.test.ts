@@ -224,6 +224,16 @@ describe('server app shell Vite plugin', () => {
           path: '/c/cart.client.js',
           status: 200,
         },
+        {
+          body: expect.stringContaining('installKovoDeferredRuntime'),
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': 'text/javascript; charset=utf-8',
+          },
+          href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+          path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+          status: 200,
+        },
       ]);
       expect(result.assets).toEqual([
         {
@@ -409,6 +419,16 @@ describe('server app shell Vite plugin', () => {
           },
           href: '/c/__v/cart-v1/cart.client.js#Cart$add',
           path: '/c/__v/cart-v1/cart.client.js',
+          status: 200,
+        },
+        {
+          body: expect.stringContaining('installKovoDeferredRuntime'),
+          headers: {
+            'cache-control': 'public, max-age=31536000, immutable',
+            'content-type': 'text/javascript; charset=utf-8',
+          },
+          href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
+          path: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
           status: 200,
         },
       ]);

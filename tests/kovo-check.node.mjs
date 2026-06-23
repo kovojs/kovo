@@ -43,7 +43,11 @@ import {
   applyDeferredStreamResponseToRuntime,
   kovoEscapeHtml,
 } from '../dist/browser/src/generated.mjs';
-import { refetchQueries, kovoLoaderSource } from '../dist/browser/src/internal/inline-loader.mjs';
+import {
+  inlineKovoLoaderInstallerSource,
+  kovoLoaderSource,
+  refetchQueries,
+} from '../dist/browser/src/internal/inline-loader.mjs';
 import { DomMorphTarget, morphStructuralTree } from '../dist/browser/src/internal/morph.mjs';
 import {
   applyCompiledQueryUpdatePlan,
@@ -768,7 +772,9 @@ void test('S2 loader budget and inline enhanced form behavior are acceptance evi
     `inline loader gzip size ${gzipSync(kovoLoaderSource).byteLength} exceeds 8192 bytes`,
   );
 
-  const fact = await executeInlineEnhancedFormLoaderFixture(kovoLoaderSource);
+  const fact = await executeInlineEnhancedFormLoaderFixture(
+    `(${inlineKovoLoaderInstallerSource})((url)=>import(url));`,
+  );
   assert.deepEqual(fact.listenerEvents, [...delegatedLifecycleEvents, 'popstate']);
   assert.equal(fact.listenerOptions.click?.capture, true);
   assert.equal(fact.fetchCalls.length, 1);
@@ -2900,7 +2906,7 @@ document.querySelector('#app')!.textContent = 'D10 build green';
         outputStream: 'stdout',
         summary: {
           assets: '0',
-          clientModules: '0',
+          clientModules: '1',
           diagnostics: '0',
           html: '1',
           outDir: exportBehavior.cli.green.summary?.outDir,

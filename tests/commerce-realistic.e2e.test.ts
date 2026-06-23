@@ -39,7 +39,9 @@ describe('realistic-app: commerce real stack driven in a browser (B2/S2/S3)', ()
       // The storefront SSRs through the real compiler/runtime, but anonymous
       // shoppers do not see an auth-guarded add-to-cart form.
       await expect(page.locator('[kovo-fragment-target="cart-badge"]').first()).toBeVisible();
-      expect(await page.content()).toContain('installInlineKovoLoader');
+      const initialDocument = await page.content();
+      expect(initialDocument).toContain('installInlineKovoBootstrap');
+      expect(initialDocument).toContain('kovo-runtime.client.js');
       await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
       await expect(page.locator('form[action="/_m/cart/add"]')).toHaveCount(0);
 

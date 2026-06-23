@@ -515,6 +515,7 @@ interface InlineEnhancedFormEventFact {
     key?: string;
     name?: string;
     queries?: Array<{ attrs?: unknown; content?: unknown }>;
+    qs?: Array<{ attrs?: unknown; content?: unknown }>;
   };
   type: string;
 }
@@ -1609,6 +1610,9 @@ export async function executeInlineEnhancedFormLoaderFixture(
       if (type === 'unload') throw new Error('inline loader must not register unload handlers');
       listeners.set(type, { listener, options });
     },
+    removeEventListener(type: string, listener: InlineEnhancedFormListener) {
+      if (listeners.get(type)?.listener === listener) listeners.delete(type);
+    },
     attachShadow() {
       throw new Error('inline loader must not attach shadow roots');
     },
@@ -1708,8 +1712,13 @@ function inlineEnhancedFormQueryEvents(event: InlineEnhancedFormEventFact): Arra
   name: string;
   type: string;
 }> {
-  if (Array.isArray(event.detail?.queries)) {
-    return event.detail.queries.map((query) =>
+  const queries = Array.isArray(event.detail?.queries)
+    ? event.detail.queries
+    : Array.isArray(event.detail?.qs)
+      ? event.detail.qs
+      : undefined;
+  if (queries !== undefined) {
+    return queries.map((query) =>
       inlineEnhancedFormQueryChunk(event.type, {
         attrs: typeof query.attrs === 'string' ? query.attrs : '',
         content: typeof query.content === 'string' ? query.content : '',

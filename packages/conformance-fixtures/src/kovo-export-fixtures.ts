@@ -116,6 +116,10 @@ export function parseKovoExportOutput(output: string): KovoExportOutput {
       continue;
     }
 
+    if (line.startsWith('CLIENT-MODULE ')) {
+      continue;
+    }
+
     if (line.startsWith('ERROR ')) {
       errors.push(parseKovoExportErrorLine(line));
       continue;

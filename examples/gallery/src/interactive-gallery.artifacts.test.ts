@@ -85,11 +85,11 @@ describe('compiled interactive gallery demos', () => {
 
       expect(output).toContain('gallery-interactive-export/v1');
       expect(output).toContain('html=1');
-      // One module per demo, plus the shared kovo-runtime module and the served headless-ui
-      // primitive modules imported by compiled handlers (SPEC §4.4: resolvable URLs, no import map).
+      // One module per demo, plus framework runtime modules and the served headless-ui primitive
+      // modules imported by compiled handlers (SPEC §4.4: resolvable URLs, no import map).
       expect(output).toContain(
         `client-modules=${
-          interactiveGalleryDemos.length + galleryHeadlessUiClientModuleHrefs.length + 1
+          interactiveGalleryDemos.length + galleryHeadlessUiClientModuleHrefs.length + 2
         }`,
       );
       expect(output).toContain(

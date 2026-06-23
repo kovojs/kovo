@@ -96,16 +96,20 @@ describe('reference app shell HTTP entry', () => {
     await rm(distDir, { force: true, recursive: true });
 
     try {
-      const result = await execFileResult(pnpmCommand(), ['exec', 'vp', 'run', 'export'], {
-        cwd: referenceRoot,
-        timeout: 30000,
-      });
+      const result = await execFileResult(
+        pnpmCommand(),
+        ['exec', 'vp', 'run', '--no-cache', 'export'],
+        {
+          cwd: referenceRoot,
+          timeout: 30000,
+        },
+      );
       const output = `${result.stdout}\n${result.stderr}`;
 
       expect(result.status, output).toBe(0);
       expect(output).toContain('reference-export/v1');
       expect(output).toContain('html=1');
-      expect(output).toContain('client-modules=1');
+      expect(output).toContain('client-modules=2');
       expect(output).toContain('diagnostics=0');
 
       const html = await readFile(path.join(distDir, 'index.html'), 'utf8');
