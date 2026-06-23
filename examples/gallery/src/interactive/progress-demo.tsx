@@ -24,16 +24,8 @@ export const GalleryProgressDemo = component({
           aria-valuetext={
             state.value === null ? 'Upload pending' : `${state.value} percent uploaded`
           }
-          // Reactive fill: written at the call site so the compiler emits
-          // data-bind:style / data-bind:data-state, which the styled component
-          // forwards to its visible indicator span (bindingProps). Without this
-          // the bar is painted once at SSR and the buttons appear to do nothing.
-          data-state={
-            state.value === null ? 'indeterminate' : state.value >= 100 ? 'complete' : 'loading'
-          }
           id="gallery-progress-value"
           max={100}
-          style={{ width: state.value === null ? '40%' : `${state.value}%` }}
           value={state.value}
           valueText={valueText}
         >

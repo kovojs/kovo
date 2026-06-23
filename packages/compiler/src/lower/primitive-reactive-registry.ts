@@ -36,6 +36,8 @@ export const primitiveReactiveComponents: Readonly<Record<string, PrimitiveReact
   Disclosure: { controlProp: 'open', primitiveKey: 'disclosure.root' },
   DisclosureContent: { controlProp: 'open', primitiveKey: 'disclosure.content' },
   DisclosureTrigger: { controlProp: 'open', primitiveKey: 'disclosure.trigger' },
+  Meter: { controlProp: 'value', primitiveKey: 'meter.root' },
+  Progress: { controlProp: 'value', primitiveKey: 'progress.root' },
   RadioGroupItem: { controlProp: 'value', primitiveKey: 'radio-group.item' },
   RadioGroupLabel: { controlProp: 'value', primitiveKey: 'radio-group.label' },
   RadioGroupRadio: { controlProp: 'value', primitiveKey: 'radio-group.radio' },

@@ -8,7 +8,13 @@
 // data-bind:<attr> derives for primitive-owned attributes automatically.
 
 /** Supported reactive-control expression families. */
-export type PrimitiveReactiveControlKind = 'boolean' | 'equality' | 'set-membership' | 'tri-state';
+export type PrimitiveReactiveControlKind =
+  | 'boolean'
+  | 'equality'
+  | 'meter-range'
+  | 'progress-ratio'
+  | 'set-membership'
+  | 'tri-state';
 
 /** One reactive attribute the compiler should bind from the controlling state. */
 export interface PrimitiveReactiveAttr {
@@ -20,6 +26,8 @@ export interface PrimitiveReactiveAttr {
   readonly whenTrue: boolean | string;
   /** Serialized attribute value when a tri-state checkbox is indeterminate. */
   readonly whenIndeterminate?: boolean | string;
+  /** Serialized attribute values for additional sampled primitive enum states. */
+  readonly [sampledState: `when${string}`]: boolean | string | undefined;
 }
 
 /** All reactive attributes a primitive derives from one control field. */
@@ -29,6 +37,8 @@ export interface PrimitiveReactiveAttrEntry {
   readonly controlField: string;
   /** How the compiler should derive the active/inactive condition. */
   readonly controlKind: PrimitiveReactiveControlKind;
+  /** Compiler-owned computed attrs for numeric/range primitives. */
+  readonly computedAttrs?: readonly string[];
   /** Per-element static prop compared with the control field when applicable. */
   readonly discriminatorField?: string;
   /** Optional per-element mode prop, used by accordion single vs multiple. */
@@ -164,6 +174,56 @@ export const primitiveReactiveAttrs: Readonly<Record<string, PrimitiveReactiveAt
     },
     controlField: 'pressed',
     controlKind: 'boolean',
+  },
+  'progress.root': {
+    attrs: {
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'indeterminate',
+        whenTrue: 'loading',
+        whenComplete: 'complete',
+      },
+    },
+    controlField: 'value',
+    controlKind: 'progress-ratio',
+    computedAttrs: ['data-max', 'data-state', 'data-value', 'style'],
+  },
+  'meter.root': {
+    attrs: {
+      'data-state': {
+        booleanPresence: false,
+        whenFalse: 'suboptimum',
+        whenTrue: 'optimum',
+        whenEvenLessGood: 'suboptimum',
+        whenSuboptimum: 'suboptimum',
+      },
+      'data-value': {
+        booleanPresence: false,
+        whenFalse: '30',
+        whenTrue: '72',
+        whenEvenLessGood: '96',
+        whenSuboptimum: '30',
+      },
+      value: {
+        booleanPresence: false,
+        whenFalse: '30',
+        whenTrue: '72',
+        whenEvenLessGood: '96',
+        whenSuboptimum: '30',
+      },
+    },
+    controlField: 'value',
+    controlKind: 'meter-range',
+    computedAttrs: [
+      'data-high',
+      'data-low',
+      'data-max',
+      'data-min',
+      'data-optimum',
+      'data-state',
+      'data-value',
+      'style',
+    ],
   },
   'disclosure.root': {
     attrs: {

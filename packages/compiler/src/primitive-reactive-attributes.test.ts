@@ -217,6 +217,63 @@ export const CheckboxDemo = component({
     );
   });
 
+  it('binds progress numeric state, mirror attrs, and indicator width from value/max', () => {
+    const server = compile(
+      'progress-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { Progress } from '@kovojs/ui/progress';
+export const ProgressDemo = component({
+  state: () => ({ max: 100, value: 40 as number | null }),
+  render: (_q: Record<string, never>, state: { max: number; value: number | null }) => (
+    <Progress max={state.max} value={state.value}>Upload</Progress>
+  ),
+});
+`,
+    );
+
+    expect(server).toContain('data-bind:value=');
+    expect(server).toContain('data-bind:data-max=');
+    expect(server).toContain('data-bind:data-state=');
+    expect(server).toContain('data-bind:data-value=');
+    expect(server).toContain('data-bind:style=');
+    expect(server).toContain('kovoStyleProperty("width",');
+    expect(server).toContain('rawValue === null || rawValue === undefined');
+    expect(server).toContain('"indeterminate"');
+    expect(server).toContain('"complete"');
+    expect(server).toContain('toFixed(4).replace');
+  });
+
+  it('binds meter numeric state, thresholds, and indicator width from value', () => {
+    const server = compile(
+      'meter-demo.tsx',
+      `/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { Meter } from '@kovojs/ui/meter';
+export const MeterDemo = component({
+  state: () => ({ value: 72 }),
+  render: (_q: Record<string, never>, state: { value: number }) => (
+    <Meter high={85} low={40} max={100} min={0} optimum={70} value={state.value}>Storage</Meter>
+  ),
+});
+`,
+    );
+
+    expect(server).toContain('data-bind:value=');
+    expect(server).toContain('data-bind:data-high=');
+    expect(server).toContain('data-bind:data-low=');
+    expect(server).toContain('data-bind:data-max=');
+    expect(server).toContain('data-bind:data-min=');
+    expect(server).toContain('data-bind:data-optimum=');
+    expect(server).toContain('data-bind:data-state=');
+    expect(server).toContain('data-bind:data-value=');
+    expect(server).toContain('data-bind:style=');
+    expect(server).toContain('kovoStyleProperty("width",');
+    expect(server).toContain('"even-less-good"');
+    expect(server).toContain('"suboptimum"');
+    expect(server).toContain('"optimum"');
+  });
+
   it('binds radio item/radio attributes by comparing value with itemValue', () => {
     const server = compile(
       'radio-group-demo.tsx',
