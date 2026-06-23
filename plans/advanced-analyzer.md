@@ -186,10 +186,14 @@ guard-owned, and natural-key applications.
   - Expected: no `KV409`, no `non-key-match` punt, and derived or explicitly justified optimistic
     status for `questionList` / `questionScore` where the shape is otherwise derivable.
 
-- [ ] **Tenant-scoped SaaS fixture.**
+- [x] **Tenant-scoped SaaS fixture.**
   - Tables keyed by `tenantId,id`; session carries `tenantId`.
   - Mutations update by `tenantId + id`; list queries filter by tenant and secondary status.
   - Expected: exact-row invalidation inside the tenant, no cross-tenant instance key exposure.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+    extracts an `openTickets` tenant-scoped rowset from `session.tenantId`, proves
+    `closeTicket` by `tenantId + id`, derives a filtered-list exit, asserts no client-visible query
+    instance key is created from tenant scope, and verifies generated optimism omits tenant material.
 
 - [ ] **Composite natural key fixture.**
   - Table key: `cartId,productId`.
