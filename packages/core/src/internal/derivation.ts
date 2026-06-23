@@ -3,6 +3,8 @@ export type {
   AlgebraicQueryShape,
   ApplyPatchOptions,
   ArithOp,
+  DerivationProof,
+  DerivationProofLevel,
   DerivationResult,
   DerivationStatus,
   OrderByColumn,

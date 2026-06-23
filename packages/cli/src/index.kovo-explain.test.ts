@@ -244,13 +244,26 @@ describe('kovo explain', () => {
           ],
           optimistic: [
             {
-              derivation: { status: 'derived' },
+              derivation: {
+                proof: { level: 'exact-row', privateScope: ['session:id'] },
+                status: 'derived',
+              },
               mutation: 'cart/add',
               query: 'cart',
               status: 'derived',
             },
             {
               derivation: {
+                proof: { level: 'scoped-rowset', privateScope: ['tenant:id'] },
+                status: 'derived',
+              },
+              mutation: 'cart/add',
+              query: 'cart.total',
+              status: 'derived',
+            },
+            {
+              derivation: {
+                proof: { level: 'opaque' },
                 reason: { code: 'opaque-set', expr: 'compute_total' },
                 status: 'PUNTED',
               },
@@ -258,10 +271,22 @@ describe('kovo explain', () => {
               query: 'orders',
               status: 'UNHANDLED',
             },
+            {
+              derivation: {
+                proof: { level: 'table-level' },
+                reason: { code: 'non-key-match', expr: 'gt(orders.total, 100)' },
+                status: 'PUNTED',
+              },
+              mutation: 'cart/add',
+              query: 'orders.byPrice',
+              status: 'UNHANDLED',
+            },
           ],
           queries: [
             { domains: ['cart'], query: 'cart' },
+            { domains: ['cart'], query: 'cart.total' },
             { domains: ['order'], query: 'orders' },
+            { domains: ['order'], query: 'orders.byPrice' },
           ],
         },
         { kind: 'mutation', optimistic: true, target: 'cart/add' },
@@ -277,12 +302,20 @@ describe('kovo explain', () => {
         'manual-invalidates: -',
         'updates: -',
         'OPTIMISTIC cart derived',
+        'OPTIMISTIC-PROOF cart level=exact-row private-scope=session:id',
+        'OPTIMISTIC cart.total derived',
+        'OPTIMISTIC-PROOF cart.total level=scoped-rowset private-scope=tenant:id',
         'OPTIMISTIC orders UNHANDLED',
+        'OPTIMISTIC-PROOF orders level=opaque private-scope=-',
         // A PUNTED derivation is metadata, not coverage: the pair stays UNHANDLED,
         // shows its named reason, and still gets the fix line.
         'OPTIMISTIC-PUNT orders: Opaque: compute_total',
         "  -> hand-write in the mutation module, or declare 'await-fragment'",
-        'OPTIMISTIC-SUMMARY total=2 derived=1 hand-written=0 await-fragment=0 UNHANDLED=1 PUNTED=1',
+        'OPTIMISTIC orders.byPrice UNHANDLED',
+        'OPTIMISTIC-PROOF orders.byPrice level=table-level private-scope=-',
+        'OPTIMISTIC-PUNT orders.byPrice: non-key match: gt(orders.total, 100)',
+        "  -> hand-write in the mutation module, or declare 'await-fragment'",
+        'OPTIMISTIC-SUMMARY total=4 derived=2 hand-written=0 await-fragment=0 UNHANDLED=2 PUNTED=2',
         '',
       ].join('\n'),
     });

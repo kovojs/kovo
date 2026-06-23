@@ -309,7 +309,23 @@ export type DerivationResult =
  *
  * @internal
  */
-export type DerivationStatus = { reason: PuntReason; status: 'PUNTED' } | { status: 'derived' };
+export type DerivationProofLevel =
+  | 'exact-row'
+  | 'membership-filter'
+  | 'opaque'
+  | 'scoped-rowset'
+  | 'table-level';
+
+/** @internal */
+export interface DerivationProof {
+  level: DerivationProofLevel;
+  privateScope?: readonly string[];
+}
+
+/** @internal */
+export type DerivationStatus =
+  | { proof?: DerivationProof; reason: PuntReason; status: 'PUNTED' }
+  | { proof?: DerivationProof; status: 'derived' };
 
 /**
  * Construct a `derived` result.

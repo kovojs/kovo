@@ -350,14 +350,23 @@ compileDrizzleOptimistic({
   outPath: optimisticSourcePath,
   queue: 'cart',
 });
-assert.deepEqual(
-  readJson(optimisticFactsPath),
-  cartAddOptimisticQueries.map(({ query }) => ({
-    derivation: { status: 'derived' },
-    query,
+assert.deepEqual(readJson(optimisticFactsPath), [
+  {
+    derivation: { proof: { level: 'scoped-rowset' }, status: 'derived' },
+    query: 'cart',
     status: 'derived',
-  })),
-);
+  },
+  {
+    derivation: { proof: { level: 'membership-filter' }, status: 'derived' },
+    query: 'orderHistory',
+    status: 'derived',
+  },
+  {
+    derivation: { proof: { level: 'exact-row' }, status: 'derived' },
+    query: 'productGrid',
+    status: 'derived',
+  },
+]);
 const optimisticSource = [
   "import '../live-targets.js';",
   '',
