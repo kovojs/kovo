@@ -235,6 +235,8 @@ component is a starting point and future changes should live in your app.
   stylesheet contract.
 - [Accessibility](/guides/accessibility/) — the behavior `@kovojs/headless-ui` bakes into every
   primitive.
+- [Package import surfaces](/guides/package-imports/) — public subpaths for UI, headless
+  primitives, icons, and browser/client helpers.
 
 <details>
 <summary>Spec & diagnostics</summary>

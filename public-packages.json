@@ -1777,6 +1777,18 @@
         ],
         "generated": [],
         "internal": []
+      },
+      "apiRef": {
+        "order": 1.5,
+        "slug": "icons",
+        "description": "Lucide icons as native Kovo SVG components. The root documents the shared IconProps type; import each glyph from its own tree-shakeable subpath.",
+        "entries": [
+          {
+            "path": ".",
+            "slug": "icons",
+            "description": "Shared icon props for the per-icon SVG component subpaths."
+          }
+        ]
       }
     },
     {
@@ -1982,6 +1994,11 @@
         ],
         "generated": [],
         "internal": ["./internal"]
+      },
+      "apiRef": {
+        "order": 5.5,
+        "slug": "headless-ui",
+        "description": "Headless primitive behavior: ARIA/data attribute builders, render-input types, and primitive event helpers for styled and copied components."
       }
     },
     {
@@ -2109,6 +2126,11 @@
         ],
         "generated": [],
         "internal": []
+      },
+      "apiRef": {
+        "order": 8,
+        "slug": "ui",
+        "description": "Styled Kovo server components: versioned component subpaths, StyleX slot overrides, and copy-in source surfaces."
       }
     },
     {

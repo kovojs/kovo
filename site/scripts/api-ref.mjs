@@ -659,18 +659,20 @@ function normalizeExportPath(entryPath) {
 
 function publicEntrySpecs(pkg) {
   const apiRef = pkg.apiRef ?? {};
+  const explicitEntries = apiRef.entries ?? apiRef.publicEntries ?? pkg.publicEntries;
   const described = new Map(
-    normalizeEntryList(apiRef.entries ?? apiRef.publicEntries ?? pkg.publicEntries).map((entry) => [
-      entry.path,
-      entry,
-    ]),
+    normalizeEntryList(explicitEntries).map((entry) => [entry.path, entry]),
   );
-  const paths =
-    Array.isArray(pkg.apiBoundary?.public) && pkg.apiBoundary.public.length > 0
-      ? pkg.apiBoundary.public
-      : described.size > 0
-        ? [...described.keys()]
-        : ['.'];
+  let paths;
+  if (explicitEntries !== undefined) {
+    paths = [...described.keys()];
+  } else if (Array.isArray(pkg.apiBoundary?.public) && pkg.apiBoundary.public.length > 0) {
+    paths = pkg.apiBoundary.public;
+  } else if (described.size > 0) {
+    paths = [...described.keys()];
+  } else {
+    paths = ['.'];
+  }
 
   return paths.map((pathValue, index) => {
     const path = normalizeExportPath(pathValue);
