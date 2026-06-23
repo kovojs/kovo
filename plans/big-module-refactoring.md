@@ -45,6 +45,11 @@ Current command output after completed splits:
 ## P0 Source Splits
 
 - [ ] **Split `packages/drizzle/src/static.ts` into static-analysis concern modules.**
+  - [x] Extract SPEC §10.5 symbolic-effect and algebraic query-shape extraction to
+    `packages/drizzle/src/static/derivation.ts`, with `static.ts` preserving the existing
+    `./internal/static` export surface.
+    Evidence: `packages/drizzle/src/static/derivation.ts` is 1,375 LoC and
+    `packages/drizzle/src/static.ts` is reduced to 10,976 LoC; `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts` passed 3 files / 74 tests; `git diff --check` passed.
   - Target shape:
     - `static/project.ts`: `ts-morph` project setup, file discovery, extraction context.
     - `static/tables.ts`: table/domain/view annotations and Drizzle surface classification.
