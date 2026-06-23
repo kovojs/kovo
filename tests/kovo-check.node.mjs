@@ -31,6 +31,7 @@ import {
   kovoVitePlugin,
 } from '../dist/compiler/src/index.mjs';
 import {
+  compilerBuildId,
   collectCssAssetManifest,
   collectMinifierReservedNames,
   queryShapesFromFacts,
@@ -310,6 +311,17 @@ const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
   loadVitePlusConfig(await readProjectFile(configPath));
 
 const projectRootPath = fileURLToPath(new URL('..', import.meta.url));
+
+void test('built compiler cache identity resolves the compiler package version', async () => {
+  const manifest = JSON.parse(
+    await readFile(join(projectRootPath, 'packages/compiler/package.json'), 'utf8'),
+  );
+  const id = compilerBuildId();
+
+  assert.equal(id.startsWith(`${manifest.name}@${manifest.version}/`), true);
+  assert.doesNotMatch(id, /0\.0\.0-unresolved/);
+});
+
 void test('kovo-check wrapper explains the production build prerequisite', () => {
   assert.equal(
     missingBuildMessage('dist/missing-cli.mjs'),

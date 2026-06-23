@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { canonicalJson } from './canonical-json.js';
@@ -20,31 +20,79 @@ const compilerPackageName = '@kovojs/compiler';
  * own URL to the nearest `@kovojs/compiler` package.json, so it works both from
  * `src/*.ts` (vitest) and from the bundled `dist/*.mjs` artifact.
  */
-function resolveCompilerPackageIdentity(): { name: string; version: string; manifestDir: string } {
-  let dir = dirname(fileURLToPath(import.meta.url));
+function resolveCompilerPackageIdentity(): {
+  distFingerprintDir: string;
+  manifestDir: string;
+  name: string;
+  version: string;
+} {
+  const initialDir = dirname(fileURLToPath(import.meta.url));
+  let dir = initialDir;
   // Walk up to the filesystem root looking for our own package manifest.
   for (;;) {
-    const manifestPath = join(dir, 'package.json');
-    try {
-      const parsed = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-        name?: unknown;
-        version?: unknown;
+    const packageManifest = readCompilerPackageManifest(join(dir, 'package.json'));
+    if (packageManifest) {
+      return {
+        distFingerprintDir: join(dir, 'dist'),
+        manifestDir: dir,
+        name: packageManifest.name,
+        version: packageManifest.version,
       };
-      if (parsed.name === compilerPackageName && typeof parsed.version === 'string') {
-        return { manifestDir: dir, name: parsed.name, version: parsed.version };
-      }
-    } catch {
-      // Not a readable/parseable manifest here; keep climbing.
     }
+
+    const workspaceManifestDir = join(dir, 'packages/compiler');
+    const workspaceManifest = readCompilerPackageManifest(
+      join(workspaceManifestDir, 'package.json'),
+    );
+    if (workspaceManifest) {
+      const rootDistDir = join(dir, 'dist');
+      return {
+        distFingerprintDir: isWithinPath(initialDir, rootDistDir)
+          ? rootDistDir
+          : join(workspaceManifestDir, 'dist'),
+        manifestDir: workspaceManifestDir,
+        name: workspaceManifest.name,
+        version: workspaceManifest.version,
+      };
+    }
+
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  // Defensive fallback: identity is unknown rather than silently a wrong literal.
-  return { manifestDir: dir, name: compilerPackageName, version: '0.0.0-unresolved' };
+  // Defensive fallback: identity is unknown rather than silently a wrong literal, but the
+  // cache still moves with the current bundle/source directory when possible.
+  return {
+    distFingerprintDir: initialDir,
+    manifestDir: initialDir,
+    name: compilerPackageName,
+    version: '0.0.0-unresolved',
+  };
 }
 
-const { version: compilerPackageVersion, manifestDir } = resolveCompilerPackageIdentity();
+function readCompilerPackageManifest(
+  manifestPath: string,
+): { name: typeof compilerPackageName; version: string } | null {
+  try {
+    const parsed = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      name?: unknown;
+      version?: unknown;
+    };
+    if (parsed.name === compilerPackageName && typeof parsed.version === 'string') {
+      return { name: parsed.name, version: parsed.version };
+    }
+  } catch {
+    // Not a readable/parseable compiler manifest.
+  }
+  return null;
+}
+
+function isWithinPath(child: string, parent: string): boolean {
+  return child === parent || child.startsWith(parent.endsWith(sep) ? parent : `${parent}${sep}`);
+}
+
+const { distFingerprintDir: compilerDistFingerprintDir, version: compilerPackageVersion } =
+  resolveCompilerPackageIdentity();
 
 /**
  * @internal Best-effort content hash of the emitted compiler `dist`, computed
@@ -59,7 +107,7 @@ const { version: compilerPackageVersion, manifestDir } = resolveCompilerPackageI
  * dist tree without reading every byte.
  */
 function resolveDistContentHash(): string | undefined {
-  const distDir = join(manifestDir, 'dist');
+  const distDir = compilerDistFingerprintDir;
   try {
     const lines: string[] = [];
     collectDistManifest(distDir, distDir, lines);

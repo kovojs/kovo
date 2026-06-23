@@ -28,6 +28,8 @@ export interface StyleObject {
 export interface StyleRecord {
   readonly [CSS_MARKER]: true | string;
   readonly [STYLE_SRC]?: string;
+  readonly __rules?: readonly AtomicRule[];
+  readonly __styleKey?: string;
   readonly [property: string]: unknown;
 }
 
@@ -60,7 +62,7 @@ export type Vars<Tokens extends Record<string, CssValue>> = {
 } & {
   readonly [CSS_MARKER]: true | string;
   readonly __vars: true;
-  readonly __rules?: unknown;
+  readonly __rules?: readonly AtomicRule[];
 };
 
 /** @internal Compile-time constants returned unchanged for use inside static style objects. */
@@ -70,7 +72,7 @@ export type Consts<Constants extends Record<string, StylePrimitive>> = Readonly<
 export interface Theme {
   readonly [CSS_MARKER]: true | string;
   readonly [STYLE_SRC]?: string;
-  readonly __rules?: unknown;
+  readonly __rules?: readonly AtomicRule[];
   readonly __theme: true;
   readonly className: string;
 }

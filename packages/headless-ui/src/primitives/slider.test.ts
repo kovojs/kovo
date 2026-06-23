@@ -45,6 +45,7 @@ import {
   sliderThumbAttributes,
   sliderTrackPointerDown,
   sliderTrackAttributes,
+  type SliderInputEvent,
   sliderValueFromString,
   sliderValueState,
 } from './slider.js';
@@ -473,10 +474,8 @@ describe('headless-ui slider primitive', () => {
   });
 });
 
-function sliderInputEvent(value: string): Event & {
-  readonly currentTarget: { value: string } | null;
-} {
-  const event = new Event('input', { cancelable: true }) as Event & {
+function sliderInputEvent(value: string): SliderInputEvent {
+  const event = new Event('input', { cancelable: true }) as SliderInputEvent & {
     currentTarget: { value: string } | null;
   };
   Object.defineProperty(event, 'currentTarget', { value: { value } });
