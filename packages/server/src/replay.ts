@@ -3,7 +3,7 @@ import { cloneResponseHeaders, type ResponseHeaders, type ServerResponseBase } f
 export type MutationReplayResponse = ServerResponseBase<
   string,
   ResponseHeaders,
-  200 | 422 | 429 | 500
+  200 | 401 | 403 | 422 | 429 | 500
 >;
 
 /**

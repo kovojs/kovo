@@ -62,7 +62,10 @@ import {
   conformanceGateFacts,
   loadVitePlusConfig,
   p10PerfAcceptanceProjectFact,
+  pnpmRunScriptNames,
   runCapturedCliCommand,
+  vitePlusTaskInputFacts,
+  workflowStepCommands,
 } from '../packages/conformance-fixtures/src/command-fixtures.ts';
 import {
   compilerDataBindBehaviorFact,
@@ -3828,6 +3831,62 @@ void test('framework-owned browser suite is wired into acceptance', async () => 
     scriptName: 'test:browser',
     taskName: 'browser',
   });
+});
+
+void test('root acceptance and CI cover the omitted release gates plus gallery browser coverage', async () => {
+  const packageJson = JSON.parse(await readProjectFile('package.json'));
+  const acceptanceScripts = pnpmRunScriptNames(packageJson.scripts?.acceptance);
+  assert.deepEqual(
+    acceptanceScripts.filter((scriptName) =>
+      [
+        'check',
+        'check:api-surface',
+        'test:browser',
+        'test:gallery-browser',
+        'test:integration',
+        'check:build',
+        'check:publish',
+      ].includes(scriptName),
+    ),
+    [
+      'check',
+      'check:api-surface',
+      'test:browser',
+      'test:gallery-browser',
+      'test:integration',
+      'check:build',
+      'check:publish',
+    ],
+  );
+
+  const workflowCommands = workflowStepCommands(await readProjectFile('.github/workflows/ci.yml'))
+    .map((step) => step.run)
+    .filter(Boolean);
+  assert.ok(workflowCommands.includes('vp exec pnpm run check'));
+  assert.ok(workflowCommands.includes('vp exec pnpm run check:api-surface'));
+  assert.ok(workflowCommands.includes('vp exec pnpm --filter @kovojs/example-gallery run test:browser'));
+  assert.ok(workflowCommands.includes('vp exec pnpm run check:publish'));
+});
+
+void test('typecheck-examples watches every tsx-bearing example source tree', async () => {
+  const viteTasks = (await loadProjectVitePlusConfig()).run.tasks;
+  const typecheckInputs = vitePlusTaskInputFacts(viteTasks['typecheck-examples'])
+    .map((fact) => fact.pattern)
+    .filter(Boolean);
+  const exampleTsconfigs = [
+    'examples/commerce/tsconfig.json',
+    'examples/stackoverflow/tsconfig.json',
+    'examples/crm/tsconfig.json',
+    'examples/reference/tsconfig.json',
+  ];
+
+  for (const tsconfigPath of exampleTsconfigs) {
+    const tsconfig = JSON.parse(await readProjectFile(tsconfigPath));
+    const hasTsx = (tsconfig.include ?? []).includes('src/**/*.tsx');
+    const sourceBase = tsconfigPath.replace(/\/tsconfig\.json$/, '');
+    assert.ok(typecheckInputs.includes(`${sourceBase}/src/**/*.ts`));
+    assert.equal(typecheckInputs.includes(`${sourceBase}/src/**/*.tsx`), hasTsx);
+  }
 });
 
 void test('P10 perf acceptance is wired through Playwright and CDP', async () => {

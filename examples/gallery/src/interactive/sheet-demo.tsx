@@ -76,6 +76,9 @@ export const GallerySheetDemo = component({
               const result = _dialogCloseClick(Object(event), { open: state.open });
               if (!result?.changed) return;
               state.open = result.open;
+              const root = Object(event)['target']?.closest?.('[data-gallery-interactive="sheet"]');
+              const trigger = Object(root)?.querySelector?.('button[command="show-modal"]');
+              Object(trigger)['focus']?.call(trigger);
             }}
           >
             Close sheet

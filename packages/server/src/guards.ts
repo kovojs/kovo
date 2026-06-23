@@ -628,7 +628,7 @@ function sanitizeNextOrigin(next: string): string | undefined {
   }
 }
 
-function guardFailureIsUnauthenticated<Request>(
+export function guardFailureIsUnauthenticated<Request>(
   result: { auth?: ResolvedGuardFailure['auth'] },
   request: Request,
 ): boolean {

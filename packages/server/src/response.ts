@@ -69,7 +69,10 @@ export interface RoutePageResponse extends ServerResponseBase<
   RouteResponseBody,
   ResponseHeaders,
   RouteResponseStatus
-> {}
+> {
+  /** @internal The request after the route lifecycle resolved session/db (SPEC §6.5). */
+  lifecycleRequest?: unknown;
+}
 
 export interface DocumentRouteResponseBase extends ServerResponseBase<
   DocumentRouteResponseBody,

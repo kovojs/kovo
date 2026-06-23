@@ -2,6 +2,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { componentQueryShapes, queryShapePaths } from '../analyze/query-shapes.js';
+import { componentRegistryNamespace } from '../component-names.js';
 import { capturesUnserializableReferences } from '../lower/handlers.js';
 import {
   callExpressions,
@@ -23,11 +24,17 @@ import {
   type JsxElementChildBody,
   type JsxElementModel,
   jsxElements,
+  type NamedImportModel,
   type PropertyAccessPathModel,
   type RenderInputModel,
 } from '../scan/parse.js';
-import { dedupeBy } from '../shared.js';
-import type { QueryShape, QueryShapeFact, QueryUpdateCoverageFact } from '../types.js';
+import { dedupeBy, kebabCase } from '../shared.js';
+import type {
+  CompileComponentOptions,
+  QueryShape,
+  QueryShapeFact,
+  QueryUpdateCoverageFact,
+} from '../types.js';
 
 interface ComponentContractValidationOptions {
   fileName: string;
@@ -240,6 +247,7 @@ export function validateFragmentTargetChildren(
 export function validateNestedStatefulIslandInRefreshTarget(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
+  options: Pick<CompileComponentOptions, 'fileName' | 'registryFacts'>,
 ): CompilerDiagnostic[] {
   const statefulSiblingsByName = new Map<string, ComponentModel>();
   for (const component of model.components) {
@@ -248,7 +256,8 @@ export function validateNestedStatefulIslandInRefreshTarget(
       statefulSiblingsByName.set(component.localName, component);
     }
   }
-  if (statefulSiblingsByName.size === 0) return [];
+  const statefulImportsByName = importedStatefulComponentsByLocalName(model, options);
+  if (statefulSiblingsByName.size === 0 && statefulImportsByName.size === 0) return [];
 
   const found: CompilerDiagnostic[] = [];
   for (const parent of model.components) {
@@ -257,7 +266,11 @@ export function validateNestedStatefulIslandInRefreshTarget(
     for (const childTag of componentRefreshTargetChildComponentTags(model, parent)) {
       const childComponent = statefulSiblingsByName.get(childTag.tag);
       // A component never trips KV420 against its own recursive render-time reference.
-      if (!childComponent || childComponent.localName === parent.localName) continue;
+      if (childComponent?.localName === parent.localName) continue;
+      const childName = childComponent
+        ? childTag.tag
+        : (statefulImportsByName.get(childTag.tag) ?? null);
+      if (!childName) continue;
 
       found.push(
         diagnostics.at(
@@ -266,7 +279,7 @@ export function validateNestedStatefulIslandInRefreshTarget(
             start: childTag.openingTagNameStart,
             length: childTag.openingTagNameEnd - childTag.openingTagNameStart,
           },
-          `${childTag.tag} inside ${parent.localName ?? 'the enclosing'}.`,
+          `${childName} inside ${parent.localName ?? 'the enclosing'}.`,
         ),
       );
     }
@@ -302,6 +315,51 @@ function componentRefreshTargetChildComponentTags(
 
 function isComponentReferenceTag(tag: string): boolean {
   return /^[A-Z]/.test(tag);
+}
+
+function importedStatefulComponentsByLocalName(
+  model: ComponentModuleModel,
+  options: Pick<CompileComponentOptions, 'fileName' | 'registryFacts'>,
+): Map<string, string> {
+  const statefulComponents = new Set(options.registryFacts?.statefulComponents ?? []);
+  if (statefulComponents.size === 0) return new Map();
+
+  const found = new Map<string, string>();
+  for (const namedImport of model.namedImports) {
+    const registryName = importedComponentRegistryName(options.fileName, namedImport);
+    if (!registryName || !statefulComponents.has(registryName)) continue;
+    found.set(namedImport.localName, namedImport.localName);
+  }
+  return found;
+}
+
+function importedComponentRegistryName(
+  fileName: string,
+  namedImport: NamedImportModel,
+): string | null {
+  if (!namedImport.moduleSpecifier.startsWith('.')) return null;
+  const modulePath = resolveRelativeModulePath(fileName, namedImport.moduleSpecifier);
+  if (!modulePath) return null;
+
+  const namespace = componentRegistryNamespace(modulePath);
+  const domName = kebabCase(namedImport.importedName);
+  return namespace ? `${namespace}/${domName}` : domName;
+}
+
+function resolveRelativeModulePath(fileName: string, specifier: string): string | null {
+  const base = fileName.replaceAll('\\', '/').split('/').slice(0, -1);
+  const parts = [...base, ...specifier.replaceAll('\\', '/').split('/')];
+  const out: string[] = [];
+  for (const part of parts) {
+    if (!part || part === '.') continue;
+    if (part === '..') {
+      if (out.length === 0) return null;
+      out.pop();
+      continue;
+    }
+    out.push(part);
+  }
+  return out.join('/');
 }
 
 export function validateEventPayloads(

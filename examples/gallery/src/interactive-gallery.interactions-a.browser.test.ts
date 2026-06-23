@@ -204,6 +204,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(trigger.getAttribute('aria-haspopup')).toBe('listbox');
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(trigger.getAttribute('aria-controls')).toBe('gallery-select-listbox');
+    expect(trigger.getAttribute('aria-activedescendant')).toBeNull();
     expect(listbox.getAttribute('role')).toBe('listbox');
     expect(listbox.hidden).toBe(true);
     expect(standard.getAttribute('role')).toBe('option');
@@ -221,6 +222,9 @@ describe('compiled interactive gallery demos in the browser', () => {
         '{"highlightedValue":"standard","open":true,"value":"standard"}',
       );
       expect(trigger.getAttribute('aria-expanded')).toBe('true');
+      expect(trigger.getAttribute('aria-activedescendant')).toBe(
+        'gallery-select-option-standard',
+      );
       expect(listbox.hidden).toBe(false);
       expect(standard.getAttribute('data-highlighted')).toBe('');
     });
@@ -233,6 +237,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(root.getAttribute('kovo-state')).toBe(
         '{"highlightedValue":"express","open":true,"value":"standard"}',
       );
+      expect(trigger.getAttribute('aria-activedescendant')).toBe('gallery-select-option-express');
       expect(express.getAttribute('data-highlighted')).toBe('');
     });
 
@@ -247,11 +252,12 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(input.value).toBe('express');
       expect(new FormData(form).get('gallery-shipping-speed')).toBe('express');
       expect(trigger.getAttribute('aria-expanded')).toBe('false');
+      expect(trigger.getAttribute('aria-activedescendant')).toBeNull();
       expect(express.getAttribute('aria-selected')).toBe('true');
       expect(
         required(root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'))
           .textContent,
-      ).toBe('Standard');
+      ).toBe('Express');
     });
 
     trigger.click();
@@ -273,7 +279,32 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(
         required(root.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'))
           .textContent,
-      ).toBe('Standard');
+      ).toBe('Express');
+    });
+
+    const keyboardRoot = await mountInteractiveDemo(GallerySelectDemo);
+    const keyboardTrigger = required(
+      keyboardRoot.querySelector<HTMLButtonElement>('#gallery-select-trigger'),
+    );
+    const keyboardInput = required(
+      keyboardRoot.querySelector<HTMLInputElement>('#gallery-select-control'),
+    );
+    installInteractiveGalleryLoader(keyboardRoot, { events: ['click', 'keydown'] });
+
+    keyboardTrigger.focus();
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+
+    await vi.waitFor(() => {
+      expect(keyboardRoot.getAttribute('kovo-state')).toBe(
+        '{"highlightedValue":"express","open":false,"value":"express"}',
+      );
+      expect(keyboardInput.value).toBe('express');
+      expect(keyboardTrigger.textContent).toContain('Express');
+      expect(
+        required(
+          keyboardRoot.querySelector<HTMLOutputElement>('[data-demo-state="select-value"]'),
+        ).textContent,
+      ).toBe('Express');
     });
 
     // SPEC §12.1: the select end-state after keyboard selection and a canceled
@@ -1098,6 +1129,8 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(trigger.getAttribute('aria-controls')).toBe('gallery-dialog-content');
     expect(dialog.open).toBe(false);
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(dialog.getAttribute('closedby')).toBe('any');
     expect(dialog.getAttribute('aria-labelledby')).toBe('gallery-dialog-title');
     expect(dialog.getAttribute('aria-describedby')).toBe('gallery-dialog-description');
@@ -1115,9 +1148,13 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
 
-    // SPEC §12.1: the open modal dialog top-layer state (aria-labelledby/aria-describedby wired,
-    // focus trapped inside the promoted <dialog>) must stay axe-clean. axe.run(root) descends into
-    // the dialog because it remains a DOM child of root.
+    await userEvent.tab();
+    expect(dialog.contains(document.activeElement)).toBe(true);
+
+    // SPEC §12.1: the open modal dialog top-layer state (role=dialog, aria-modal,
+    // aria-labelledby/aria-describedby wired, focus trapped inside the promoted
+    // <dialog>) must stay axe-clean. axe.run(root) descends into the dialog
+    // because it remains a DOM child of root.
     await expectNoAxeViolations(root);
 
     close.click();
@@ -1125,6 +1162,7 @@ describe('compiled interactive gallery demos in the browser', () => {
     await vi.waitFor(() => {
       expect(root.getAttribute('kovo-state')).toBe('{"open":false}');
       expect(dialog.open).toBe(false);
+      expect(document.activeElement).toBe(trigger);
     });
 
     trigger.click();

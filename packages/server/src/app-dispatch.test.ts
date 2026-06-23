@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import type { KovoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
+import { csrfToken } from './csrf.js';
 import { endpoint } from './endpoint.js';
 import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
 import { mutation } from './mutation.js';
@@ -75,6 +76,87 @@ describe('server app matched dispatch boundary', () => {
 
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toBe('session:false');
+  });
+
+  it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
+    'enforces default endpoint CSRF before %s handler dispatch',
+    async (method) => {
+      let handlerCalls = 0;
+      const updateEmail = endpoint('/account/email', {
+        handler() {
+          handlerCalls += 1;
+          return new Response('updated');
+        },
+        method,
+      });
+      const app = createApp({
+        csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
+        endpoints: [updateEmail],
+      });
+      const request = new Request('https://shop.example.test/account/email', {
+        body: new URLSearchParams({ email: 'ada@example.com' }),
+        method,
+      });
+
+      const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+      expect(response.status).toBe(422);
+      await expect(response.text()).resolves.toBe('CSRF');
+      expect(handlerCalls).toBe(0);
+    },
+  );
+
+  it('allows default endpoint CSRF requests with a valid token', async () => {
+    let handlerCalls = 0;
+    const updateEmail = endpoint('/account/email', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('updated');
+      },
+      method: 'POST',
+    });
+    const csrf = { secret: 'endpoint-secret', sessionId: () => 's1' };
+    const app = createApp({ csrf, endpoints: [updateEmail] });
+    const request = new Request('https://shop.example.test/account/email', {
+      body: new URLSearchParams({
+        email: 'ada@example.com',
+        'kovo-csrf': csrfToken({} as Request, csrf),
+      }),
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('updated');
+    expect(handlerCalls).toBe(1);
+  });
+
+  it('preserves raw body dispatch for explicitly CSRF-exempt endpoints', async () => {
+    let handlerCalls = 0;
+    const signedWebhook = endpoint('/webhooks/signed', {
+      csrf: false,
+      csrfJustification: 'signed webhook validates raw body',
+      async handler(request) {
+        handlerCalls += 1;
+        return new Response(await request.text(), { status: 202 });
+      },
+      method: 'POST',
+    });
+    const app = createApp({
+      csrf: { secret: 'endpoint-secret', sessionId: () => 's1' },
+      endpoints: [signedWebhook],
+    });
+    const request = new Request('https://shop.example.test/webhooks/signed', {
+      body: '{"event":"ok"}',
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(202);
+    await expect(response.text()).resolves.toBe('{"event":"ok"}');
+    expect(handlerCalls).toBe(1);
   });
 
   it('owns SPEC §9.5 page method rejection after route matching', async () => {

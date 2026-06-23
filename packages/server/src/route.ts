@@ -898,22 +898,24 @@ export async function renderRoutePageResponse<
     };
   }
 
-  if ('outcome' in result) return routeOutcomeResponse(result.outcome, request);
+  if ('outcome' in result) {
+    return attachLifecycleRequest(routeOutcomeResponse(result.outcome, request), lifecycleRequest);
+  }
   // SPEC §6.4: page redirect() → 303 + sanitized Location header.
   if ('redirect' in result) {
-    return {
+    return attachLifecycleRequest({
       body: '',
       headers: { Location: sanitizeNext(result.redirect.location) },
       status: 303,
-    };
+    }, lifecycleRequest);
   }
 
   try {
-    return {
+    return attachLifecycleRequest({
       body: await render(result.value),
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
       status: 200,
-    };
+    }, lifecycleRequest);
   } catch (error) {
     reportServerError(options.onError, error, {
       operation: 'route-render',
@@ -922,6 +924,18 @@ export async function renderRoutePageResponse<
     });
     return htmlServerErrorResponse();
   }
+}
+
+function attachLifecycleRequest<Request>(
+  response: RoutePageResponse,
+  lifecycleRequest: Request,
+): RoutePageResponse {
+  Object.defineProperty(response, 'lifecycleRequest', {
+    configurable: true,
+    enumerable: false,
+    value: lifecycleRequest,
+  });
+  return response;
 }
 
 function routeJsxContextOptions<Request>(

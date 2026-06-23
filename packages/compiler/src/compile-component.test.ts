@@ -959,6 +959,7 @@ export function renderSource() {
       fileName: 'cart-badge.tsx',
       source: `
 import { component } from '@kovojs/core';
+import { helper } from 'kovo/internal';
 import type { KovoExplainInput } from '@kovojs/core/internal/graph';
 import { derive } from '@kovojs/browser/generated';
 import { main } from '@kovojs/cli/internal';
@@ -976,13 +977,25 @@ export const CartBadge = component({
         code: 'KV235',
         fileName: 'cart-badge.tsx',
         help: expect.stringContaining(
+          'Blocked reason: app source imports non-public Kovo subpath `kovo/internal`.',
+        ),
+        length: 15,
+        message:
+          'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+        severity: 'error',
+        start: { column: 24, line: 3 },
+      },
+      {
+        code: 'KV235',
+        fileName: 'cart-badge.tsx',
+        help: expect.stringContaining(
           'SPEC.md §5.2: app-authored source may import Kovo packages only through documented public entrypoints.',
         ),
         length: 29,
         message:
           'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
         severity: 'error',
-        start: { column: 39, line: 3 },
+        start: { column: 39, line: 4 },
       },
       {
         code: 'KV235',
@@ -994,7 +1007,7 @@ export const CartBadge = component({
         message:
           'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
         severity: 'error',
-        start: { column: 24, line: 4 },
+        start: { column: 24, line: 5 },
       },
       {
         code: 'KV235',
@@ -1006,7 +1019,7 @@ export const CartBadge = component({
         message:
           'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
         severity: 'error',
-        start: { column: 22, line: 5 },
+        start: { column: 22, line: 6 },
       },
       {
         code: 'KV235',
@@ -1018,7 +1031,7 @@ export const CartBadge = component({
         message:
           'App source imports a non-public Kovo subpath; use a documented public entrypoint.',
         severity: 'error',
-        start: { column: 28, line: 7 },
+        start: { column: 28, line: 8 },
       },
     ]);
   });
@@ -1078,6 +1091,36 @@ export const CartBadge = component({
           'App source imports an app-local generated artifact; import the authored source instead.',
         severity: 'error',
         start: { column: 49, line: 3 },
+      },
+    ]);
+  });
+
+  it('reports KV235 for non-relative app-local generated artifact imports', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { CartBadge as GeneratedA } from 'src/generated/cart-badge.server.js';
+import { CartBadge as GeneratedB } from '/src/generated/cart-badge.server.js';
+
+export const CartBadge = component({
+  render: () => <cart-badge />,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV235')).toMatchObject([
+      {
+        help: expect.stringContaining(
+          'Blocked reason: app source imports app-local generated artifact `src/generated/cart-badge.server.js`.',
+        ),
+        start: { column: 41, line: 3 },
+      },
+      {
+        help: expect.stringContaining(
+          'Blocked reason: app source imports app-local generated artifact `/src/generated/cart-badge.server.js`.',
+        ),
+        start: { column: 41, line: 4 },
       },
     ]);
   });

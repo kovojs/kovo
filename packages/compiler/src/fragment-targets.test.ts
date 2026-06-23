@@ -1,7 +1,7 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { describe, expect, it } from 'vitest';
 
-import { compileComponentModule } from './index.js';
+import { compileComponentModule, deriveAppGraph } from './index.js';
 
 const kv230 = diagnosticDefinitions.KV230;
 const kv303 = diagnosticDefinitions.KV303;
@@ -634,6 +634,43 @@ export const CartPanel = component({
       help: kv420.help,
       severity: 'error',
     });
+    expect(kv420Diagnostics[0]?.message).toContain('Stepper');
+    expect(kv420Diagnostics[0]?.message).toContain('CartPanel');
+  });
+
+  it('reports an imported stateful child rendered inside a query-backed parent', () => {
+    const stepper = compileComponentModule({
+      fileName: 'src/components/stepper.tsx',
+      source: `
+export const Stepper = component({
+  state: () => ({ count: 0 }),
+  render: (_, state) => <span>{state.count}</span>,
+});
+`,
+    });
+    const { registryFacts } = deriveAppGraph({ components: [stepper] });
+
+    const result = compileComponentModule({
+      fileName: 'src/panels/cart-panel.tsx',
+      registryFacts,
+      source: `
+import { Stepper } from '../components/stepper.js';
+
+export const CartPanel = component({
+  queries: { cart: {} },
+  render: ({ cart }) => (
+    <section>
+      <p>{cart.total}</p>
+      <Stepper />
+    </section>
+  ),
+});
+`,
+    });
+
+    const kv420Diagnostics = result.diagnostics.filter((d) => d.code === 'KV420');
+    expect(registryFacts.statefulComponents).toEqual(['components/stepper/stepper']);
+    expect(kv420Diagnostics).toHaveLength(1);
     expect(kv420Diagnostics[0]?.message).toContain('Stepper');
     expect(kv420Diagnostics[0]?.message).toContain('CartPanel');
   });

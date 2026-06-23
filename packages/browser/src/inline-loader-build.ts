@@ -664,11 +664,16 @@ function installInlineKovoLoader(im) {
       keepalive: !streaming,
       method: (form.method || 'post').toUpperCase(),
     })
-      .then((response) =>
-        streaming && response.body
+      .then((response) => {
+        const reauth = response.headers?.get('Kovo-Reauth') ?? response.headers?.get('kovo-reauth');
+        if (response.status === 401 && reauth) {
+          location.assign?.(reauth);
+          return;
+        }
+        return streaming && response.body
           ? asr(response.body)
-          : response.text().then(ab),
-      )
+          : response.text().then(ab);
+      })
       .catch(() => fsb(form));
   };
   const rp = (el) =>

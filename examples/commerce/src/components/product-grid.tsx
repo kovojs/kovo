@@ -11,6 +11,17 @@ import { productGridQuery } from '../queries.js';
 const addToCartForm = form('cart/add');
 
 const productGridStyles = style.create({
+  authPrompt: {
+    color: style.tokens.sys.color.onSurfaceVariant,
+    display: 'grid',
+    gap: 8,
+  },
+  authPromptLink: {
+    color: style.tokens.sys.color.primary,
+    fontSize: 14,
+    fontWeight: 500,
+    textDecoration: 'none',
+  },
   errorText: {
     color: style.tokens.sys.color.error,
     fontSize: 14,
@@ -114,6 +125,19 @@ export const ProductGrid = component({
   },
 });
 
+export const GuestProductGrid = component({
+  errorBoundary: {
+    fallback: renderProductGridError,
+    target: 'product-grid',
+  },
+  queries: { productGrid: productGridQuery },
+  render: ({ productGrid }: { productGrid: ProductGridResult }) => (
+    <section data-page-cursor={productGrid.nextCursor ?? ''}>
+      {renderProductGridItems(productGrid, false)}
+    </section>
+  ),
+});
+
 export function ProductGridError(): string {
   return renderProductGridError();
 }
@@ -124,19 +148,14 @@ function renderProductGridError(): string {
   );
 }
 
-export function renderProductGridItems(result: ProductGridResult): string {
-  const cards = result.items.map((item) => renderProductCard(item));
-  const cursor = result.nextCursor;
+export function renderProductGridItems(
+  result: ProductGridResult,
+  signedIn = true,
+): string {
+  const cards = result.items.map((item) => renderProductCard(item, signedIn));
   return (
     <>
       {cards}
-      {cursor ? (
-        <a style={productGridStyles.link} href={`/products?after=${cursor}`} data-cursor={cursor}>
-          More
-        </a>
-      ) : (
-        ''
-      )}
     </>
   );
 }
@@ -163,7 +182,7 @@ function stockBadge(stock: number): string {
   return Badge.definition.render({ variant: 'success', children: `${stock} in stock` });
 }
 
-function renderProductCard(item: ProductItem): string {
+function renderProductCard(item: ProductItem, signedIn: boolean): string {
   const body = (
     <div style={productGridStyles.stack}>
       <div style={productGridStyles.row}>
@@ -177,13 +196,23 @@ function renderProductCard(item: ProductItem): string {
         <span style={productGridStyles.tabularStrong}>{priceLabel(item.unitPrice)}</span>
         {stockBadge(item.stock)}
       </div>
-      {renderAddToCartForm(item)}
+      {renderAddToCartForm(item, signedIn)}
     </div>
   );
   return <article kovo-key={item.id}>{Card.definition.render({ children: body })}</article>;
 }
 
-export function renderAddToCartForm(item: { id: string; stock: number }): string {
+export function renderAddToCartForm(item: { id: string; stock: number }, signedIn = true): string {
+  if (!signedIn) {
+    return (
+      <div style={productGridStyles.authPrompt}>
+        <span>Sign in to add items to the demo cart.</span>
+        <a style={productGridStyles.authPromptLink} href="/login?next=%2Fcart">
+          Sign in
+        </a>
+      </div>
+    );
+  }
   const soldOut = item.stock === 0;
   return (
     <form enhance mutation={addToCart} key={item.id} style={productGridStyles.productForm}>

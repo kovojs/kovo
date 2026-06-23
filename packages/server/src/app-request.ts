@@ -4,6 +4,7 @@ import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch } from './shell.js';
 import { routeResponseToWebResponse } from './response.js';
 import type { KovoApp } from './app-types.js';
+import { preDispatchLoadShedResponse, type LoadShedSurface } from './app-load-shed.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
 import { appRequestUrl, renderAppErrorDocumentResponse } from './app-document.js';
 
@@ -29,6 +30,9 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     });
   }
 
+  const loadShed = preDispatchLoadShedResponse(app, request, loadShedSurface(match.kind));
+  if (loadShed) return loadShed;
+
   try {
     return await dispatchMatchedAppRequest({ app, match, request, url });
   } catch (error) {
@@ -42,4 +46,10 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       request,
     );
   }
+}
+
+function loadShedSurface(kind: string): LoadShedSurface {
+  if (kind === 'mutation') return 'mutation';
+  if (kind === 'query') return 'query';
+  return 'other';
 }

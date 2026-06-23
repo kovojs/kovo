@@ -98,6 +98,7 @@ export async function handleAppMutationRequest(
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     ...(buildToken !== '' ? { buildToken } : {}),
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
+    currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),
     ...(mutationResponseOptions?.csrf === undefined ? {} : { csrf: mutationResponseOptions.csrf }),

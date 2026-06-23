@@ -1,29 +1,41 @@
-// SPEC §6.5 + §10.3: mutation guards fail before writes and use the enhanced
-// typed-error fragment path instead of redirecting the fragment response.
+// SPEC §6.5 + §10.3: unauthenticated mutation guard failures use the auth
+// redirect vocabulary, while signed-in writes still run through server truth.
 import { expect, test } from '@kovojs/test/internal/integration';
 
 test.use({ kovoFixture: 'guarded-mutation' });
 
-test('enhanced guarded mutation blocks anonymous writes and permits signed-in writes', async ({
+test('guarded mutation reauths anonymous submits and permits signed-in writes', async ({
+  request,
   page,
   kovoApp,
 }) => {
   await page.goto('/');
   await expect(page.locator('[data-count]')).toHaveText('0');
 
-  const deniedResponsePromise = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/_m/guarded-mutation/increment') && response.status() === 422,
-  );
-  await page.getByRole('button', { name: 'Increment protected counter' }).click();
-  const deniedResponse = await deniedResponsePromise;
+  const enhancedDenied = await request.post('/_m/guarded-mutation/increment', {
+    form: {},
+    headers: {
+      'Kovo-Fragment': 'true',
+      'Kovo-Targets': 'guarded-count',
+    },
+  });
 
-  expect(await deniedResponse.text()).toContain('data-error-code="UNAUTHORIZED"');
-  await expect(page.getByRole('alert')).toHaveAttribute('data-error-code', 'UNAUTHORIZED');
+  expect(enhancedDenied.status()).toBe(401);
+  expect(enhancedDenied.headers()['kovo-reauth']).toBe('/login?next=%2F');
+  expect(await enhancedDenied.text()).toBe('');
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.locator('[data-count]')).toHaveText('0');
   await expect(kovoApp.db.query('select count from guarded_counter where id = 1')).resolves.toEqual(
     [{ count: 0 }],
   );
+
+  const noJsDenied = await request.post('/_m/guarded-mutation/increment', {
+    form: {},
+    headers: { Referer: '/' },
+    maxRedirects: 0,
+  });
+  expect(noJsDenied.status()).toBe(303);
+  expect(noJsDenied.headers().location).toBe('/login?next=%2F');
 
   await page.context().addCookies([
     {

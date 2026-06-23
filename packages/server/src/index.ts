@@ -23,11 +23,17 @@ export type {
   AppMutationResponseContext,
   AppMutationResponseOptions,
   AppMutationResponseResolver,
+  AppRateLimitOptions,
+  AppRequestLimitOptions,
+  AppRequestRateLimitOptions,
   AppRouteRenderContext,
   CreateAppOptions,
   ErrorShellRenderer,
   KovoApp,
   RequestHandler,
+  ResolvedAppRateLimitOptions,
+  ResolvedAppRequestLimitOptions,
+  ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
 // Option/registry types named by `createApp({ clientModules })` and by app
 // consumers that hold a registry reference (recursive publicness,

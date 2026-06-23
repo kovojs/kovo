@@ -32,7 +32,7 @@ import { LoginForm } from './components/auth-forms.js';
 import { CartBadge } from './components/cart-badge.js';
 import { OrderHistory } from './components/order-history.js';
 import { renderOrderHistory } from './components/order-history-view.js';
-import { ProductGrid, ProductGridError } from './components/product-grid.js';
+import { GuestProductGrid, ProductGrid, ProductGridError } from './components/product-grid.js';
 import { commerceTheme } from './theme.js';
 
 export type CommerceRouteRequest = Request & CommerceAuthRequest;
@@ -85,7 +85,7 @@ function CommerceCartPage({ request }: { request: CommerceRouteRequest }): strin
     <section data-commerce-page="cart">
       <CartBadge />
       <ErrorBoundary fallback={<ProductGridError />}>
-        <ProductGrid />
+        {request.session?.user?.id ? <ProductGrid /> : <GuestProductGrid />}
       </ErrorBoundary>
       {request.session?.user?.id ? <OrderHistory /> : renderOrderHistory({ items: [] })}
     </section>

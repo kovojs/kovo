@@ -14,6 +14,53 @@ import {
 } from './runtime-test-fakes.js';
 
 describe('enhanced mutation submit', () => {
+  it('follows 401 Kovo-Reauth without applying mutation fragments', async () => {
+    const store = createQueryStore();
+    const root = new FakeMorphRoot();
+    const assign = vi.fn();
+    const originalLocation = globalThis.location;
+    Object.defineProperty(globalThis, 'location', {
+      configurable: true,
+      value: { assign },
+    });
+    const text = vi.fn(async () => '<kovo-fragment target="cart">wrong</kovo-fragment>');
+    const fetch = vi.fn(async () => ({
+      headers: {
+        get(name: string) {
+          return name.toLowerCase() === 'kovo-reauth' ? '/login?next=%2Fcart' : null;
+        },
+      },
+      status: 401,
+      text,
+    }));
+
+    try {
+      const result = await submitEnhancedMutation({
+        fetch,
+        form: { action: '/_m/cart/add', method: 'post' },
+        formData: new FormData(),
+        root,
+        store,
+      });
+      expect(result).toEqual({
+        appliedFragments: [],
+        changes: [],
+        fragments: [],
+        idem: expect.any(String),
+        queries: [],
+        targets: [],
+      });
+    } finally {
+      Object.defineProperty(globalThis, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+    }
+
+    expect(assign).toHaveBeenCalledWith('/login?next=%2Fcart');
+    expect(text).not.toHaveBeenCalled();
+  });
+
   it('submits enhanced mutation forms with live targets and applies the fragment response', async () => {
     const store = createQueryStore();
     const channel = new FakeBroadcastChannel();

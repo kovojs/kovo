@@ -283,7 +283,8 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(new FormData(form).get('gallery-contact-channel')).toBe('email');
     expect(sms.tabIndex).toBe(-1);
 
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    sms.focus();
+    await userEvent.keyboard('{ArrowRight}');
 
     await vi.waitFor(() => {
       const currentEmail = required(root.querySelector<HTMLInputElement>('#gallery-radio-email'));
@@ -703,7 +704,8 @@ describe('compiled interactive gallery demos in the browser', () => {
     expect(detailsPanel.hidden).toBe(true);
     expect(auditPanel.hidden).toBe(true);
 
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowRight' }));
+    overview.focus();
+    await userEvent.keyboard('{ArrowRight}');
 
     await vi.waitFor(() => {
       const currentOverview = required(
@@ -726,9 +728,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentDetails.getAttribute('aria-selected')).toBe('false');
       expect(currentDetails.tabIndex).toBe(0);
       expect(currentDetailsPanel.hidden).toBe(true);
+      expect(document.activeElement).toBe(currentDetails);
     });
 
-    root.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }));
+    await userEvent.keyboard('{Enter}');
 
     await vi.waitFor(() => {
       const currentOverview = required(
@@ -748,6 +751,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(currentOverview.getAttribute('aria-selected')).toBe('false');
       expect(currentOverviewPanel.hidden).toBe(true);
       expect(currentDetails.getAttribute('aria-selected')).toBe('true');
+      expect(document.activeElement).toBe(currentDetails);
       expect(currentDetailsPanel.hidden).toBe(false);
     });
 

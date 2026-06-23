@@ -52,6 +52,7 @@ export interface MutationWireRequest<
    */
   buildToken?: string;
   csrf?: CsrfValidationOptions<Request>;
+  currentUrl?: string;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragment?: boolean;
@@ -122,7 +123,7 @@ export interface LiveTargetRenderContext<Request = unknown> {
 export interface BufferedMutationWireResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
-  200 | 422 | 429 | 500
+  200 | 401 | 403 | 422 | 429 | 500
 > {}
 
 /**
@@ -159,6 +160,7 @@ export interface MutationWireRequestOptions<
   /** Build-global render-plan version token (SPEC §5.1, §9.1.1). */
   buildToken?: string;
   csrf?: CsrfValidationOptions<Request>;
+  currentUrl?: string;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
   fragmentRenderers?: readonly FragmentRenderer[];
@@ -173,13 +175,13 @@ export interface MutationWireRequestOptions<
 
 /**
  * @internal Mutation-wire protocol type (SPEC.md §9.1). The fragment-mode wire response
- * (200/422/429/500). Exported only for in-repo consumers and compiler-emitted code, not
+ * (200/401/403/422/429/500). Exported only for in-repo consumers and compiler-emitted code, not
  * app authors.
  */
 export interface MutationWireResponse extends ServerResponseBase<
   ReadableStream<Uint8Array> | string,
   MutationResponseHeaders,
-  200 | 422 | 429 | 500
+  200 | 401 | 403 | 422 | 429 | 500
 > {}
 
 /**
@@ -193,6 +195,7 @@ export interface NoJsMutationRequest<
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
   csrf?: CsrfValidationOptions<Request>;
+  currentUrl?: string;
   /**
    * Idempotency key for dedup of no-JS form submissions (A2, SPEC §10.3:1063).
    * Read from the hidden `Kovo-Idem` form field emitted by the SRV-OUTPUT lane.
@@ -215,7 +218,7 @@ export interface NoJsMutationRequest<
 export interface NoJsMutationResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
-  303 | 422 | 429 | 500
+  303 | 403 | 422 | 429 | 500
 > {}
 
 /**

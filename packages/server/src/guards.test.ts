@@ -363,6 +363,84 @@ describe('server guard and session primitives', () => {
     });
   });
 
+  it('returns 401 plus Kovo-Reauth for unauthenticated enhanced mutation guard failures', async () => {
+    const guarded = mutation('cart/add', {
+      csrf: false,
+      guard: guards.authed<{ session?: { user?: { id: string } } | null }>(),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(
+      renderMutationResponse(guarded, {
+        currentUrl: '/cart?from=button',
+        rawInput: { productId: 'p1' },
+        request: { session: null },
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        'Kovo-Reauth': '/login?next=%2Fcart%3Ffrom%3Dbutton',
+      },
+      status: 401,
+    });
+  });
+
+  it('returns 303 login redirect for unauthenticated no-JS mutation guard failures', async () => {
+    const guarded = mutation('cart/add', {
+      csrf: false,
+      guard: guards.authed<{ session?: { user?: { id: string } } | null }>(),
+      input: s.object({ productId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(guarded, {
+        currentUrl: '/cart',
+        rawInput: { productId: 'p1' },
+        redirectTo: '/cart',
+        request: { session: null },
+      }),
+    ).resolves.toEqual({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        Location: '/login?next=%2Fcart',
+      },
+      status: 303,
+    });
+  });
+
+  it('keeps authenticated authorization failures on typed enhanced fragments with 403', async () => {
+    const guarded = mutation('admin/refund', {
+      csrf: false,
+      guard: guards.role<{ session?: { user?: { roles?: readonly string[] } } | null }>('admin'),
+      input: s.object({ orderId: s.string() }),
+      handler() {
+        return 'ok';
+      },
+    });
+
+    await expect(
+      renderMutationResponse(guarded, {
+        failureTarget: 'refund-form',
+        rawInput: { orderId: 'o1' },
+        request: { session: { user: { roles: ['staff'] } } },
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-fragment target="refund-form"><output role="alert" data-error-code="UNAUTHORIZED">{}</output></kovo-fragment>',
+      headers: {
+        'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
+      },
+      status: 403,
+    });
+  });
+
   it('preserves rate-limit status and retry-after headers in no-JS mutation responses', async () => {
     const guarded = mutation('cart/add', {
       guard: guards.rateLimit({ max: 1, per: 'session', windowMs: 60_000 }),

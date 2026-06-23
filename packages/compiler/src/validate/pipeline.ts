@@ -87,8 +87,8 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ loweredDiagnostics, model }) => validateFragmentTargetInputs(loweredDiagnostics, model),
   ({ loweredDiagnostics, model }) => validateIsomorphicSlotComposition(loweredDiagnostics, model),
   ({ loweredDiagnostics, model }) => validateFragmentTargetChildren(loweredDiagnostics, model),
-  ({ loweredDiagnostics, model }) =>
-    validateNestedStatefulIslandInRefreshTarget(loweredDiagnostics, model),
+  ({ loweredDiagnostics, model, options }) =>
+    validateNestedStatefulIslandInRefreshTarget(loweredDiagnostics, model, options),
   ({ loweredDiagnostics, model, options }) =>
     validateDataBindings(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>

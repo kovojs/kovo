@@ -977,7 +977,8 @@ describe('gallery demo fixtures', () => {
     expect(drawer.html).toContain('command="show-modal" commandfor="gallery-drawer"');
     expect(drawer.html).toContain('<dialog class=');
     expect(drawer.html).toContain('aria-describedby="gallery-drawer-description"');
-    expect(drawer.html).toContain('id="gallery-drawer" open>');
+    expect(drawer.html).toContain('aria-modal="true"');
+    expect(drawer.html).toContain('id="gallery-drawer" open role="dialog"');
     expect(drawer.html).toContain('data-style-src="drawer.tsx#content; drawer.tsx#bottom"');
     expect(drawer.html).toContain('command="request-close" commandfor="gallery-drawer"');
 
@@ -1014,7 +1015,8 @@ describe('gallery demo fixtures', () => {
     expect(sheet.html).toContain('command="show-modal" commandfor="gallery-sheet"');
     expect(sheet.html).toContain('<dialog class=');
     expect(sheet.html).toContain('aria-describedby="gallery-sheet-description"');
-    expect(sheet.html).toContain('id="gallery-sheet" open>');
+    expect(sheet.html).toContain('aria-modal="true"');
+    expect(sheet.html).toContain('id="gallery-sheet" open role="dialog"');
     expect(sheet.html).toContain('command="request-close" commandfor="gallery-sheet"');
 
     expect(skeleton.html).toContain('data-ui-demo="skeleton"');

@@ -16,6 +16,7 @@
     "serve": "node scripts/serve.mjs",
     "serve:static": "node scripts/serve-static.mjs",
     "smoke:navigation": "node scripts/navigation-smoke.mjs",
+    "test:examples-live": "node scripts/example-health.mjs",
     "test": "vitest --run"
   },
   "dependencies": {

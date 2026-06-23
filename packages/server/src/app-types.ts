@@ -88,6 +88,58 @@ export interface AppRouteRenderContext<Route extends AnyRouteDeclaration = AnyRo
   search: Record<string, string | string[]>;
 }
 
+/** Coarse request-rate budget enforced by the request shell before dispatch (SPEC §9.5). */
+export interface AppRateLimitOptions {
+  /** Maximum accepted requests within `windowMs`. */
+  max: number;
+  /** Sliding bucket duration in milliseconds. Defaults to the request-shell default window. */
+  windowMs?: number;
+}
+
+/** Per-surface request-rate budgets enforced before dispatch (SPEC §9.5). */
+export interface AppRequestRateLimitOptions {
+  global?: AppRateLimitOptions | false;
+  perIp?: AppRateLimitOptions | false;
+}
+
+/**
+ * Request-shell load-shedding configuration. Defaults are filled in by
+ * `createApp()` so every app has a printable/enforceable posture (SPEC §9.5).
+ */
+export interface AppRequestLimitOptions extends AppRequestRateLimitOptions {
+  /**
+   * Maximum accepted request body size, checked from Content-Length before the body
+   * is read. `false` disables the coarse body-size gate.
+   */
+  maxBodyBytes?: number | false;
+  /** Optional IP key extractor used by the coarse per-IP limiter. */
+  clientIp?: (request: Request) => string | undefined;
+  /** Additional budgets applied to `/_m/<mutation>` requests. */
+  mutations?: AppRequestRateLimitOptions;
+  /** Additional budgets applied to `/_q/<query>` requests. */
+  queries?: AppRequestRateLimitOptions;
+}
+
+/** Normalized request-rate budget stored on the app aggregate. */
+export interface ResolvedAppRateLimitOptions {
+  max: number;
+  windowMs: number;
+}
+
+/** Normalized per-surface request-rate budgets stored on the app aggregate. */
+export interface ResolvedAppRequestRateLimitOptions {
+  global: ResolvedAppRateLimitOptions | false;
+  perIp: ResolvedAppRateLimitOptions | false;
+}
+
+/** Normalized request-shell load-shedding posture stored on `KovoApp`. */
+export interface ResolvedAppRequestLimitOptions extends ResolvedAppRequestRateLimitOptions {
+  clientIp?: (request: Request) => string | undefined;
+  maxBodyBytes: number | false;
+  mutations: ResolvedAppRequestRateLimitOptions;
+  queries: ResolvedAppRequestRateLimitOptions;
+}
+
 /** Options for `createApp`: the routes, queries, mutations, endpoints, document, CSRF, and request providers. */
 export interface CreateAppOptions<
   SessionValue = never,
@@ -116,6 +168,7 @@ export interface CreateAppOptions<
   onError?: ServerErrorHandler;
   queries?: AppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>;
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
+  requestLimits?: AppRequestLimitOptions | false;
   routes?: AppAuthoringDeclarations<AppRouteDeclaration<AppRequest>, AppRequest>;
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
@@ -158,6 +211,7 @@ export interface KovoApp<
   onError?: ServerErrorHandler;
   queries: readonly AppQueryDeclaration<any>[];
   renderRoute?: (value: unknown, context: AppRouteRenderContext) => Promise<string> | string;
+  requestLimits: ResolvedAppRequestLimitOptions;
   routes: readonly AppRouteDeclaration<any>[];
   sessionProvider?: SessionProvider<any, any>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */

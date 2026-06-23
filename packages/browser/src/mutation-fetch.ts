@@ -90,6 +90,17 @@ export async function fetchEnhancedMutation(
     method: (options.form.method ?? 'post').toUpperCase(),
     ...definedProps({ onUploadProgress: options.onUploadProgress }),
   });
+  const reauth = response.headers?.get('Kovo-Reauth') ?? response.headers?.get('kovo-reauth');
+  if (response.status === 401 && reauth) {
+    followReauthDirective(reauth);
+    return {
+      body: '',
+      changes: [],
+      idem,
+      response,
+      targets: targetSnapshot.targets,
+    };
+  }
   const changes = readMutationChangeHeader(response, options.onError);
   // SPEC §9.1.1: read build token from response header for delta validation.
   const buildToken =
@@ -104,6 +115,13 @@ export async function fetchEnhancedMutation(
     ...(options.streaming && response.body ? { streamBody: response.body } : {}),
     targets: targetSnapshot.targets,
   };
+}
+
+function followReauthDirective(location: string): void {
+  // SPEC §6.5: the server's 401 Kovo-Reauth directive is the enhanced
+  // mutation equivalent of the no-JS 303 login redirect.
+  const globalLocation = (globalThis as { location?: Location }).location;
+  globalLocation?.assign(location);
 }
 
 function readFormDataIdem(formData: unknown): string | undefined {

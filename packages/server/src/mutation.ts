@@ -19,10 +19,12 @@ import { reportServerError } from './diagnostics.js';
 import { type Domain } from './domain.js';
 import { escapeAttribute, escapeHtml } from './html.js';
 import {
+  guardFailureIsUnauthenticated,
   resolveLifecycleRequest,
   runGuard,
   type Guard,
   type RequestLifecycleOptions,
+  type ResolvedGuardFailure,
 } from './guards.js';
 import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
@@ -79,8 +81,10 @@ export type { ChangeRecord, InvalidateOptions, MutationTouchSite } from './chang
 
 /**
  * A typed mutation failure outcome (SPEC §9.2): a declared `error` `code` plus its
- * validated `payload`, served as HTTP 422 (validation/app `fail()`) or 429 (rate limit,
- * with optional `retryAfter`). Produced via `MutationContext.fail`.
+ * validated `payload`, served as HTTP 422 (validation/app `fail()`), 429 (rate limit,
+ * with optional `retryAfter`), or framework-owned authenticated authorization denial
+ * as HTTP 403. Produced via `MutationContext.fail` for app failures and by guards for
+ * authorization failures.
  */
 export interface MutationFail<Code extends string = string, Payload = unknown> {
   error: {
@@ -89,7 +93,7 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
   };
   ok: false;
   retryAfter?: number;
-  status: 422 | 429;
+  status: 403 | 422 | 429;
 }
 
 /**
@@ -748,20 +752,25 @@ export async function renderMutationResponse<
   );
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
+    const reauthResponse = enhancedMutationReauthResponse(guardFailure, lifecycleRequestForGuard, {
+      ...(wireRequest.currentUrl === undefined ? {} : { currentUrl: wireRequest.currentUrl }),
+    });
+    if (reauthResponse) return reauthResponse;
+    const status = mutationGuardFailureStatus(guardFailure);
     return {
       body: await renderFailureFragment(
         {
           error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
           ok: false,
           ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-          status: guardFailure.status,
+          status,
         },
         wireRequest,
       ),
       // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
       // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
       headers: { ...mutationWireResponseHeaders(wireRequest), ...retryAfterHeaders(guardFailure) },
-      status: guardFailure.status,
+      status,
     };
   }
 
@@ -1266,6 +1275,7 @@ export async function renderMutationEndpointResponse<
 
   return renderNoJsMutationResponse(endpointDefinition, {
     ...(endpointRequest.csrf === undefined ? {} : { csrf: endpointRequest.csrf }),
+    ...(endpointRequest.currentUrl === undefined ? {} : { currentUrl: endpointRequest.currentUrl }),
     rawInput: endpointRequest.rawInput,
     redirectTo: endpointRequest.redirectTo,
     ...(endpointRequest.renderFailurePage === undefined
@@ -1405,21 +1415,26 @@ export async function renderNoJsMutationResponse<
   );
   const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
   if (guardFailure) {
+    const reauthResponse = noJsMutationReauthResponse(guardFailure, lifecycleRequestForGuard, {
+      ...(noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl }),
+    });
+    if (reauthResponse) return reauthResponse;
+    const status = mutationGuardFailureStatus(guardFailure);
     const body = noJsRequest.renderFailurePage
       ? await noJsRequest.renderFailurePage({
           error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
           ok: false,
-          status: guardFailure.status,
+          status,
         })
       : renderDefaultFailurePage({
           error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
           ok: false,
-          status: guardFailure.status,
+          status,
         });
     return {
       body,
       headers: { 'Content-Type': 'text/html; charset=utf-8', ...retryAfterHeaders(guardFailure) },
-      status: guardFailure.status,
+      status,
     };
   }
 
@@ -2255,4 +2270,51 @@ function mutationWireResponseHeaders<Request>(
     'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
     ...(wireRequest.idem ? { 'Kovo-Idem': wireRequest.idem } : {}),
   };
+}
+
+function enhancedMutationReauthResponse<Request>(
+  guardFailure: ResolvedGuardFailure,
+  request: Request,
+  options: { currentUrl?: string },
+): BufferedMutationWireResponse | undefined {
+  if (!guardFailureIsUnauthenticated(guardFailure, request)) return undefined;
+
+  // SPEC §6.5: enhanced unauthenticated mutation guard failures re-enter auth
+  // with a 401 Kovo-Reauth directive instead of rendering validation UI.
+  return {
+    body: '',
+    headers: {
+      'Cache-Control': 'no-store',
+      'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
+    },
+    status: 401,
+  };
+}
+
+function noJsMutationReauthResponse<Request>(
+  guardFailure: ResolvedGuardFailure,
+  request: Request,
+  options: { currentUrl?: string },
+): NoJsMutationResponse | undefined {
+  if (!guardFailureIsUnauthenticated(guardFailure, request)) return undefined;
+
+  return {
+    body: '',
+    headers: {
+      'Cache-Control': 'no-store',
+      Location: loginLocation(options.currentUrl ?? '/'),
+    },
+    status: 303,
+  };
+}
+
+function mutationGuardFailureStatus(guardFailure: ResolvedGuardFailure): 403 | 422 | 429 {
+  if (guardFailure.auth === 'unauthorized') return 403;
+  return guardFailure.status as 422 | 429;
+}
+
+function loginLocation(next: string): string {
+  const url = new URL('/login', 'https://kovo.local');
+  url.searchParams.set('next', next.startsWith('/') && !next.startsWith('//') ? next : '/');
+  return `${url.pathname}${url.search}${url.hash}`;
 }
