@@ -37,7 +37,10 @@ export const GalleryNumberFieldDemo = component({
 
     return (
       <form data-gallery-interactive="number-field" id={formId}>
-        <label for={inputId} style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717">
+        <label
+          for={inputId}
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:var(--ink,#171717)"
+        >
           Seats
         </label>
         <NumberField {...fieldState}>
@@ -115,7 +118,7 @@ export const GalleryNumberFieldDemo = component({
         </NumberField>
         <output
           data-demo-state="value"
-          style="font-size:0.75rem;color:#6b7280;margin-top:0.25rem;display:block"
+          style="font-size:0.75rem;color:var(--dim,#6b7280);margin-top:0.25rem;display:block"
         >
           {String(state.value)}
         </output>

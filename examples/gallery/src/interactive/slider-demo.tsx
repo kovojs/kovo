@@ -42,7 +42,7 @@ export const GallerySliderDemo = component({
         <form id="gallery-slider-form" data-gallery-form="slider" />
         <label
           id="gallery-slider-label"
-          style="font-size:0.875rem;font-weight:500;line-height:1;color:#171717"
+          style="font-size:0.875rem;font-weight:500;line-height:1;color:var(--ink,#171717)"
         >
           Completion
         </label>

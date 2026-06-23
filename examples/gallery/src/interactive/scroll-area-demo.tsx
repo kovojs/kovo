@@ -60,118 +60,73 @@ export const GalleryScrollAreaDemo = component({
     const viewportId = 'gallery-scroll-area-viewport';
 
     return (
-      <ScrollArea
-        {...rootState}
-        data-dragging={state.dragging ? '' : null}
-        data-gallery-interactive="scroll-area"
-        data-has-overflow-y={state.hasOverflowY ? '' : null}
-        data-hovering={state.hovering ? '' : null}
-        data-scrolling={state.scrolling ? '' : null}
-        id="gallery-scroll-area-root"
-        onPointerEnter={() => {
-          state.hovering = true;
-        }}
-        onPointerLeave={() => {
-          state.hovering = false;
-          state.dragging = false;
-        }}
-      >
-        <ScrollAreaViewport
+      // The overlay scrollbar is positioned against the ScrollArea root, so the
+      // root must be exactly the viewport box (shadcn/Radix shape). The "jump to
+      // end" control and the sr-only state probe therefore live OUTSIDE the
+      // ScrollArea, as siblings under this wrapper; otherwise they stretch the
+      // root past the viewport and the thumb track runs far below the content
+      // (scroll-area "scrollbar goes too far low" bug).
+      <div data-gallery-interactive="scroll-area" style="display:grid;gap:0.75rem;max-width:28rem">
+        <ScrollArea
           {...rootState}
-          data-has-overflow-y={state.hasOverflowY ? '' : null}
-          data-scrolling={state.scrolling ? '' : null}
-          data-scroll-y={state.scrollY}
-          id={viewportId}
-          label="Release notes"
-          scrollTop={state.scrollTop}
-          scrollY={state.scrollY}
-          style="max-height: 72px; overflow: auto;"
-          onScroll={() => {
-            const result = _scrollAreaViewportScroll(Object(event), { scrollbars: 'vertical' });
-            if (!result) return;
-
-            const geometry = _scrollAreaThumbGeometry(Object(event)['target'], {
-              orientation: 'vertical',
-              scrollbars: 'vertical',
-            });
-            state.scrollTop = result.scrollTop;
-            state.scrollY = result.scrollY;
-            state.thumbOffset = geometry.offsetRatio * 100;
-            state.thumbSize = geometry.sizeRatio * 100 < 12 ? 12 : geometry.sizeRatio * 100;
-            state.hasOverflowY = result.verticalVisible;
-            state.scrolling = true;
-            state.verticalVisible = geometry.visible;
-          }}
-        >
-          <div style="min-height: 260px;">
-            <p>Framework primitives keep native scrolling in charge.</p>
-            <p>Scrollbars expose stable data attributes for styled wrappers.</p>
-            <p>Browser coverage checks focusability, labels, and live scroll position.</p>
-            <p>Generated handlers can coordinate visible state without authoring lowered IR.</p>
-          </div>
-        </ScrollAreaViewport>
-        <ScrollAreaScrollbar
-          {...rootState}
+          data-dragging={state.dragging ? '' : null}
           data-has-overflow-y={state.hasOverflowY ? '' : null}
           data-hovering={state.hovering ? '' : null}
           data-scrolling={state.scrolling ? '' : null}
-          data-state={
-            state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
-              ? 'visible'
-              : 'hidden'
-          }
-          hidden={!(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))}
-          id="gallery-scroll-area-scrollbar"
-          onPointerDown={() => {
-            const result = _scrollAreaTrackPointerDown(
-              Object(event),
-              {
-                clientHeight: 72,
-                clientWidth: 240,
-                scrollHeight: 260,
-                scrollLeft: 0,
-                scrollTop: state.scrollTop,
-                scrollWidth: 240,
-              },
-              {
-                orientation: 'vertical',
-                scrollbars: 'vertical',
-              },
-            );
-            if (!result) return;
-
-            const geometry = _scrollAreaThumbGeometry(
-              {
-                clientHeight: 72,
-                clientWidth: 240,
-                scrollHeight: 260,
-                scrollLeft: 0,
-                scrollTop: result.scrollTop,
-                scrollWidth: 240,
-              },
-              {
-                orientation: 'vertical',
-                scrollbars: 'vertical',
-              },
-            );
-            state.scrollTop = result.scrollTop;
-            state.scrollY = result.scrollY;
-            state.thumbOffset = geometry.offsetRatio * 100;
-            state.thumbSize = geometry.sizeRatio * 100 < 12 ? 12 : geometry.sizeRatio * 100;
-            state.hasOverflowY = result.verticalVisible;
-            state.scrolling = true;
-            state.verticalVisible = geometry.visible;
+          id="gallery-scroll-area-root"
+          onPointerEnter={() => {
+            state.hovering = true;
           }}
-          orientation="vertical"
-          visible={state.verticalVisible && (state.hovering || state.scrolling || state.dragging)}
+          onPointerLeave={() => {
+            state.hovering = false;
+            state.dragging = false;
+          }}
         >
-          <ScrollAreaThumb
+          <ScrollAreaViewport
             {...rootState}
-            data-dragging={state.dragging ? '' : null}
+            data-has-overflow-y={state.hasOverflowY ? '' : null}
+            data-scrolling={state.scrolling ? '' : null}
+            data-scroll-y={state.scrollY}
+            id={viewportId}
+            label="Release notes"
+            scrollTop={state.scrollTop}
+            scrollY={state.scrollY}
+            style="max-height: 72px; overflow: auto;"
+            onScroll={() => {
+              const result = _scrollAreaViewportScroll(Object(event), { scrollbars: 'vertical' });
+              if (!result) return;
+
+              const geometry = _scrollAreaThumbGeometry(Object(event)['target'], {
+                orientation: 'vertical',
+                scrollbars: 'vertical',
+              });
+              state.scrollTop = result.scrollTop;
+              state.scrollY = result.scrollY;
+              state.thumbOffset = geometry.offsetRatio * 100;
+              // Floor the thumb size to the component's rendered minimum. The
+              // styled thumb enforces min-height:32px; on this 72px viewport track
+              // (≈68px inner) that is ≈47%, so the position math (top scales by
+              // 100-thumbSize) must use the same floor or the rendered 32px thumb
+              // overruns the track at full scroll. (Ternary, not Math.max: the
+              // compiler rewrites a bare `Math.*` to `ctx.params.*` in handlers.)
+              state.thumbSize = geometry.sizeRatio * 100 < 47 ? 47 : geometry.sizeRatio * 100;
+              state.hasOverflowY = result.verticalVisible;
+              state.scrolling = true;
+              state.verticalVisible = geometry.visible;
+            }}
+          >
+            <div style="min-height: 260px;">
+              <p>Framework primitives keep native scrolling in charge.</p>
+              <p>Scrollbars expose stable data attributes for styled wrappers.</p>
+              <p>Browser coverage checks focusability, labels, and live scroll position.</p>
+              <p>Generated handlers can coordinate visible state without authoring lowered IR.</p>
+            </div>
+          </ScrollAreaViewport>
+          <ScrollAreaScrollbar
+            {...rootState}
             data-has-overflow-y={state.hasOverflowY ? '' : null}
             data-hovering={state.hovering ? '' : null}
             data-scrolling={state.scrolling ? '' : null}
-            data-scroll-position={state.scrollY}
             data-state={
               state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
                 ? 'visible'
@@ -180,10 +135,9 @@ export const GalleryScrollAreaDemo = component({
             hidden={
               !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))
             }
-            id="gallery-scroll-area-thumb"
-            style={{ height: `${state.thumbSize}%`, top: `${state.thumbOffset}%` }}
+            id="gallery-scroll-area-scrollbar"
             onPointerDown={() => {
-              const result = _scrollAreaThumbDragStart(
+              const result = _scrollAreaTrackPointerDown(
                 Object(event),
                 {
                   clientHeight: 72,
@@ -196,36 +150,6 @@ export const GalleryScrollAreaDemo = component({
                 {
                   orientation: 'vertical',
                   scrollbars: 'vertical',
-                },
-              );
-              if (!result) return;
-
-              state.dragging = true;
-              state.dragPointerStart = result.pointerStart;
-              state.dragScrollTop = result.scrollStart;
-              state.dragThumbSize = result.thumbSize;
-              state.dragTrackSize = result.trackSize;
-              state.scrolling = true;
-            }}
-            onPointerMove={() => {
-              if (!state.dragging) return;
-              const result = _scrollAreaThumbDrag(
-                Object(event),
-                {
-                  clientHeight: 72,
-                  clientWidth: 240,
-                  scrollHeight: 260,
-                  scrollLeft: 0,
-                  scrollTop: state.scrollTop,
-                  scrollWidth: 240,
-                },
-                {
-                  orientation: 'vertical',
-                  pointerStart: state.dragPointerStart,
-                  scrollStart: state.dragScrollTop,
-                  scrollbars: 'vertical',
-                  thumbSize: state.dragThumbSize,
-                  trackSize: state.dragTrackSize,
                 },
               );
               if (!result) return;
@@ -247,25 +171,138 @@ export const GalleryScrollAreaDemo = component({
               state.scrollTop = result.scrollTop;
               state.scrollY = result.scrollY;
               state.thumbOffset = geometry.offsetRatio * 100;
-              state.thumbSize = geometry.sizeRatio * 100 < 12 ? 12 : geometry.sizeRatio * 100;
+              // Floor the thumb size to the component's rendered minimum. The
+              // styled thumb enforces min-height:32px; on this 72px viewport track
+              // (≈68px inner) that is ≈47%, so the position math (top scales by
+              // 100-thumbSize) must use the same floor or the rendered 32px thumb
+              // overruns the track at full scroll. (Ternary, not Math.max: the
+              // compiler rewrites a bare `Math.*` to `ctx.params.*` in handlers.)
+              state.thumbSize = geometry.sizeRatio * 100 < 47 ? 47 : geometry.sizeRatio * 100;
               state.hasOverflowY = result.verticalVisible;
               state.scrolling = true;
               state.verticalVisible = geometry.visible;
             }}
-            onPointerUp={() => {
-              state.dragging = false;
-              state.scrolling = false;
-            }}
             orientation="vertical"
-            scrollPosition={state.scrollY}
             visible={state.verticalVisible && (state.hovering || state.scrolling || state.dragging)}
-          />
-        </ScrollAreaScrollbar>
-        <ScrollAreaCorner {...rootState} id="gallery-scroll-area-corner" visible={false} />
+          >
+            <ScrollAreaThumb
+              {...rootState}
+              data-dragging={state.dragging ? '' : null}
+              data-has-overflow-y={state.hasOverflowY ? '' : null}
+              data-hovering={state.hovering ? '' : null}
+              data-scrolling={state.scrolling ? '' : null}
+              data-scroll-position={state.scrollY}
+              data-state={
+                state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+                  ? 'visible'
+                  : 'hidden'
+              }
+              hidden={
+                !(state.verticalVisible && (state.hovering || state.scrolling || state.dragging))
+              }
+              id="gallery-scroll-area-thumb"
+              style={{
+                height: `${state.thumbSize}%`,
+                // thumbOffset is the 0..100 scroll-progress percentage (the state
+                // contract the gallery tests assert). The thumb has its own height,
+                // so mapping it straight to `top` lets the bottom edge run past the
+                // track at full scroll. Scale it into the free track space
+                // (100% - thumbSize) so top + height never exceeds 100%.
+                top: `${(state.thumbOffset * (100 - state.thumbSize)) / 100}%`,
+              }}
+              onPointerDown={() => {
+                const result = _scrollAreaThumbDragStart(
+                  Object(event),
+                  {
+                    clientHeight: 72,
+                    clientWidth: 240,
+                    scrollHeight: 260,
+                    scrollLeft: 0,
+                    scrollTop: state.scrollTop,
+                    scrollWidth: 240,
+                  },
+                  {
+                    orientation: 'vertical',
+                    scrollbars: 'vertical',
+                  },
+                );
+                if (!result) return;
+
+                state.dragging = true;
+                state.dragPointerStart = result.pointerStart;
+                state.dragScrollTop = result.scrollStart;
+                state.dragThumbSize = result.thumbSize;
+                state.dragTrackSize = result.trackSize;
+                state.scrolling = true;
+              }}
+              onPointerMove={() => {
+                if (!state.dragging) return;
+                const result = _scrollAreaThumbDrag(
+                  Object(event),
+                  {
+                    clientHeight: 72,
+                    clientWidth: 240,
+                    scrollHeight: 260,
+                    scrollLeft: 0,
+                    scrollTop: state.scrollTop,
+                    scrollWidth: 240,
+                  },
+                  {
+                    orientation: 'vertical',
+                    pointerStart: state.dragPointerStart,
+                    scrollStart: state.dragScrollTop,
+                    scrollbars: 'vertical',
+                    thumbSize: state.dragThumbSize,
+                    trackSize: state.dragTrackSize,
+                  },
+                );
+                if (!result) return;
+
+                const geometry = _scrollAreaThumbGeometry(
+                  {
+                    clientHeight: 72,
+                    clientWidth: 240,
+                    scrollHeight: 260,
+                    scrollLeft: 0,
+                    scrollTop: result.scrollTop,
+                    scrollWidth: 240,
+                  },
+                  {
+                    orientation: 'vertical',
+                    scrollbars: 'vertical',
+                  },
+                );
+                state.scrollTop = result.scrollTop;
+                state.scrollY = result.scrollY;
+                state.thumbOffset = geometry.offsetRatio * 100;
+                // Floor the thumb size to the component's rendered minimum. The
+                // styled thumb enforces min-height:32px; on this 72px viewport track
+                // (≈68px inner) that is ≈47%, so the position math (top scales by
+                // 100-thumbSize) must use the same floor or the rendered 32px thumb
+                // overruns the track at full scroll. (Ternary, not Math.max: the
+                // compiler rewrites a bare `Math.*` to `ctx.params.*` in handlers.)
+                state.thumbSize = geometry.sizeRatio * 100 < 47 ? 47 : geometry.sizeRatio * 100;
+                state.hasOverflowY = result.verticalVisible;
+                state.scrolling = true;
+                state.verticalVisible = geometry.visible;
+              }}
+              onPointerUp={() => {
+                state.dragging = false;
+                state.scrolling = false;
+              }}
+              orientation="vertical"
+              scrollPosition={state.scrollY}
+              visible={
+                state.verticalVisible && (state.hovering || state.scrolling || state.dragging)
+              }
+            />
+          </ScrollAreaScrollbar>
+          <ScrollAreaCorner {...rootState} id="gallery-scroll-area-corner" visible={false} />
+        </ScrollArea>
         <button
           aria-controls={viewportId}
           aria-pressed={state.scrollY === 'end' ? 'true' : 'false'}
-          style="display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;gap:0.5rem;border-radius:0.375rem;border:1px solid #d4d4d4;background:#fff;padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:#0a0a0a;box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)"
+          style="display:inline-flex;width:fit-content;height:2.25rem;align-items:center;justify-content:center;gap:0.5rem;border-radius:0.375rem;border:1px solid var(--edge,#d4d4d4);background:var(--panel,#fff);padding:0 0.75rem;font-size:0.875rem;font-weight:500;color:var(--ink,#0a0a0a);box-shadow:0 1px 2px 0 rgba(0,0,0,0.05)"
           id="gallery-scroll-area-toggle"
           onClick={() => {
             const nextAtEnd = state.scrollY !== 'end';
@@ -293,7 +330,7 @@ export const GalleryScrollAreaDemo = component({
         >
           {state.scrollY}
         </output>
-      </ScrollArea>
+      </div>
     );
   },
 });

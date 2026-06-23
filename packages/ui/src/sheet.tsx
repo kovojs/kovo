@@ -213,7 +213,12 @@ export const sheetSideStyles = style.create({
   left: {
     borderRightWidth: 1,
     bottom: 0,
+    // Full-height side sheet (shadcn): the UA `dialog` box is `height:fit-content`
+    // + `max-height:calc(100% - …)`, which defeats top/bottom:0 and leaves a
+    // content-height panel. Force the panel to span the whole edge.
+    height: '100%',
     left: 0,
+    maxHeight: '100%',
     maxWidth: 384,
     right: 'auto',
     top: 0,
@@ -229,7 +234,11 @@ export const sheetSideStyles = style.create({
   right: {
     borderLeftWidth: 1,
     bottom: 0,
+    // Full-height side sheet (shadcn): override the UA `dialog`
+    // height:fit-content / max-height cap so the panel spans the whole edge.
+    height: '100%',
     left: 'auto',
+    maxHeight: '100%',
     maxWidth: 384,
     right: 0,
     top: 0,

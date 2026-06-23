@@ -16,7 +16,7 @@ export const GalleryProgressDemo = component({
 
     return (
       <section
-        style="display:grid;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
+        style="display:grid;gap:0.5rem;font-size:0.875rem;color:var(--ink,#0a0a0a)"
         data-gallery-interactive="progress"
       >
         <label for="gallery-progress-value">Upload progress</label>

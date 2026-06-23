@@ -34,7 +34,7 @@ export const GalleryToggleGroupDemo = component({
 
     return (
       <section
-        style="display:flex;flex-direction:column;align-items:flex-start;gap:0.5rem;font-size:0.875rem;color:#0a0a0a"
+        style="display:flex;flex-direction:column;align-items:flex-start;gap:0.5rem;font-size:0.875rem;color:var(--ink,#0a0a0a)"
         data-gallery-interactive="toggle-group"
       >
         <h3 id="gallery-toggle-group-label" style="font-size:0.875rem;font-weight:500">

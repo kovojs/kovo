@@ -896,7 +896,10 @@ describe('compiled interactive gallery demos', () => {
       scrollTop: 100,
       scrollY: 'middle',
       thumbOffset: 50,
-      thumbSize: 33.33333333333333,
+      // Floored to the styled thumb's rendered minimum (min-height:32px ≈ 47% of
+      // the demo's 72px track) so the thumb-top position math stays consistent and
+      // the thumb never overruns the track at full scroll.
+      thumbSize: 47,
       verticalVisible: true,
     });
     scrollAreaState.scrollTop = 0;

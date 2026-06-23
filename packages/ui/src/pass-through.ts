@@ -40,7 +40,11 @@ const blockedProps = new Set([
   'side',
   'size',
   'state',
-  'style',
+  // NOTE: 'style' (inline style) is intentionally NOT blocked here. It is gated
+  // by the `includeStyle` option below — dropped by default, forwarded only when
+  // a component opts in with `passThroughProps(props, { style: true })` (e.g. the
+  // scroll-area root/viewport forwarding a consumer's inline max-height). Listing
+  // it here as well silently defeated that opt-in.
   'styles',
   'titleId',
   'triggerId',

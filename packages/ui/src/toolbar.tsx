@@ -66,10 +66,12 @@ export const toolbarStyles = style.create({
     '[data-disabled]': {
       opacity: 0.5,
     },
+    // shadcn-style toggle "on" state: a subtle muted fill with normal-weight
+    // foreground (not a heavy inverted/near-black fill, which reads as a separate
+    // primary button rather than a pressed tool).
     '[data-pressed=true]': {
-      backgroundColor: uiTheme.color.backgroundInverse,
-      boxShadow: '0 1px 2px rgb(0 0 0 / 0.05)',
-      color: uiTheme.color.foregroundInverse,
+      backgroundColor: uiTheme.color.backgroundSubtleHigh,
+      color: uiTheme.color.foreground,
     },
     ':disabled': {
       pointerEvents: 'none',

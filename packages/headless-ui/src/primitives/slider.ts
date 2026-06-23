@@ -79,7 +79,8 @@ export type SliderPrimitiveAttributes = PrimitiveDataAttributes &
   Readonly<Record<string, boolean | number | string>>;
 
 export type SliderInputEvent = Event & {
-  readonly currentTarget: { value: string } | null;
+  readonly currentTarget?: { value: string } | null;
+  readonly target?: { value: string } | null;
 };
 
 export type SliderKeyboardEvent = Event & {
@@ -264,16 +265,24 @@ export function sliderInput(
 ): SliderChangeResult | undefined {
   if (event.defaultPrevented) return;
 
-  if (event.currentTarget === null) return;
+  // SPEC.md §4.4: delegated handlers run from a capture-phase listener AFTER the
+  // awaited handler-module import, by which point the native event has finished
+  // dispatching and `currentTarget` is reset to null. `target` survives, so read
+  // the control target-first (matching the pointer/track handlers below and the
+  // number-field/autocomplete primitives). Reading only `currentTarget` left the
+  // native range overlay's `input` handler a no-op, so pointer-dragging the slider
+  // never updated state.
+  const control = event.target ?? event.currentTarget;
+  if (control == null) return;
 
   const result = setSliderValue(
     state,
-    sliderValueFromString(event.currentTarget.value, state),
+    sliderValueFromString(control.value, state),
     'input',
     options,
   );
   if (!result.changed) {
-    event.currentTarget.value = String(result.value);
+    control.value = String(result.value);
     event.preventDefault();
   }
 

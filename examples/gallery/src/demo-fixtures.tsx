@@ -632,9 +632,9 @@ export function AvatarDemo(): string {
         {Avatar.definition.render({
           ...error,
           children:
-            AvatarImage.definition.render({ ...error, alt: '' }) +
-            AvatarFallback.definition.render({ ...error, children: '?' }),
-          label: 'Fallback avatar',
+            AvatarImage.definition.render({ ...error, alt: 'Lin Wei' }) +
+            AvatarFallback.definition.render({ ...error, children: 'LW' }),
+          label: 'Lin Wei avatar',
         })}
       </div>
       {renderBehaviorContract({

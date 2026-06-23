@@ -112,6 +112,16 @@ canvas {
   max-width: 100%;
 }
 
+/* The reset above (display:block on media elements) is unlayered, so it would
+   otherwise beat the UA `[hidden]{display:none}` rule AND any layered component
+   atom that hides an element via the `hidden` attribute — e.g. the avatar's
+   error-state <img>, which then paints a broken-image glyph over its fallback.
+   This unlayered, higher-specificity ([hidden] = (0,1,0) > element = (0,0,1))
+   rule restores the invariant that a `hidden` element is never rendered. */
+[hidden] {
+  display: none;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--teal) 25%, transparent);
 }
