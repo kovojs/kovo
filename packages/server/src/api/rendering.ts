@@ -27,3 +27,21 @@ export type {
   StylesheetTheme,
 } from '../hints.js';
 export { i18n, meta, metaFromQuery, t } from '../meta.js';
+// SPEC §4.10: render LLM/DB-authored rich text that embeds a closed, pre-approved set of
+// components as well-formed XML. `parseComponentXml` is the trust boundary (untrusted string →
+// plain AST); `renderRegistry` declares the closed set; `renderTree` renders it safely server-side.
+export {
+  ComponentXmlError,
+  parseComponentXml,
+  renderRegistry,
+  renderTree,
+} from '../render-tree.js';
+export type {
+  ComponentElementNode,
+  ComponentNode,
+  ComponentRegistry,
+  ComponentRegistryEntry,
+  ComponentRegistryInput,
+  ComponentTextNode,
+  RenderTreeOptions,
+} from '../render-tree.js';
