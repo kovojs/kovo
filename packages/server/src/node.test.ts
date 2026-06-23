@@ -7,6 +7,7 @@ import type {
 } from 'node:http';
 import { connect as http2Connect, createServer as createHttp2Server } from 'node:http2';
 import type { AddressInfo, Socket } from 'node:net';
+import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createApp, createRequestHandler } from './app.js';
@@ -99,6 +100,137 @@ describe('server node adapter', () => {
         }),
         status: 200,
       });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('compresses eligible text responses by default when the client accepts Brotli', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(
+        async () =>
+          new Response('compress me'.repeat(128), {
+            headers: {
+              'Content-Length': String('compress me'.repeat(128).length),
+              'Content-Type': 'text/html; charset=utf-8',
+            },
+          }),
+      ),
+    );
+
+    try {
+      const response = await server.fetch('/compressed', {
+        headers: { 'Accept-Encoding': 'br,gzip' },
+      });
+
+      expect(response.headers).toMatchObject({
+        'content-encoding': 'br',
+        'content-type': 'text/html; charset=utf-8',
+        vary: 'Accept-Encoding',
+      });
+      expect(response.headers['content-length']).toBeUndefined();
+      expect(brotliDecompressSync(response.encodedBody).toString('utf8')).toBe(
+        'compress me'.repeat(128),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('allows Node adapter compression to be opted out', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(
+        async () =>
+          new Response('plain response', {
+            headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          }),
+        { compression: false },
+      ),
+    );
+
+    try {
+      const response = await server.fetch('/plain', {
+        headers: { 'Accept-Encoding': 'br,gzip' },
+      });
+
+      expect(response.headers['content-encoding']).toBeUndefined();
+      expect(response.headers.vary).toBeUndefined();
+      expect(response.body).toBe('plain response');
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('honors Accept-Encoding quality values when selecting gzip vs Brotli', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(
+        async () =>
+          new Response('gzip preferred'.repeat(128), {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          }),
+      ),
+    );
+
+    try {
+      const response = await server.fetch('/gzip', {
+        headers: { 'Accept-Encoding': 'br;q=0.1, gzip;q=1' },
+      });
+
+      expect(response.headers['content-encoding']).toBe('gzip');
+      expect(gunzipSync(response.encodedBody).toString('utf8')).toBe(
+        'gzip preferred'.repeat(128),
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('skips compression for no-transform, already encoded, bodyless, and binary responses', async () => {
+    const server = await serveWithNode(
+      toNodeHandler(async (request) => {
+        const pathname = new URL(request.url).pathname;
+        if (pathname === '/no-transform') {
+          return new Response('do not transform', {
+            headers: {
+              'Cache-Control': 'no-transform',
+              'Content-Type': 'text/plain; charset=utf-8',
+            },
+          });
+        }
+        if (pathname === '/encoded') {
+          return new Response('already encoded', {
+            headers: {
+              'Content-Encoding': 'gzip',
+              'Content-Type': 'text/plain; charset=utf-8',
+            },
+          });
+        }
+        if (pathname === '/binary') {
+          return new Response(new Uint8Array([1, 2, 3]), {
+            headers: { 'Content-Type': 'application/octet-stream' },
+          });
+        }
+        return new Response(null, {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+          status: 204,
+        });
+      }),
+    );
+
+    try {
+      const requestOptions = { headers: { 'Accept-Encoding': 'br,gzip' } };
+      expect((await server.fetch('/no-transform', requestOptions)).headers['content-encoding'])
+        .toBeUndefined();
+      expect((await server.fetch('/encoded', requestOptions)).headers['content-encoding']).toBe(
+        'gzip',
+      );
+      expect((await server.fetch('/binary', requestOptions)).headers['content-encoding'])
+        .toBeUndefined();
+      expect((await server.fetch('/empty', requestOptions)).headers['content-encoding'])
+        .toBeUndefined();
+      expect((await server.fetch('/head', { ...requestOptions, method: 'HEAD' })).headers[
+        'content-encoding'
+      ]).toBeUndefined();
     } finally {
       await server.close();
     }
@@ -489,6 +621,7 @@ async function serverHandleForAbort(
 interface NodeTestResponse {
   body: string;
   earlyHints: IncomingHttpHeaders[];
+  encodedBody: Buffer;
   headers: IncomingHttpHeaders;
   status: number;
 }
@@ -599,9 +732,11 @@ async function nodeFetch(
         response.on('data', (chunk: Buffer) => chunks.push(chunk));
         response.on('error', reject);
         response.on('end', () => {
+          const encodedBody = Buffer.concat(chunks);
           resolve({
-            body: Buffer.concat(chunks).toString('utf8'),
+            body: encodedBody.toString('utf8'),
             earlyHints,
+            encodedBody,
             headers: response.headers,
             status: response.statusCode ?? 0,
           });
