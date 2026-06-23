@@ -774,11 +774,35 @@ function routeAuthoringSurfaceDiagnostics(
         message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${node.name.text}.`,
       });
     }
+    if (isDeferCallJsxChild(node)) {
+      diagnostics.push(
+        diagnosticFor(
+          fileName,
+          'KV244',
+          source,
+          node.expression.getStart(sourceFile),
+          node.expression.getWidth(sourceFile),
+        ),
+      );
+    }
     ts.forEachChild(node, visit);
   };
 
   visit(sourceFile);
   return diagnostics;
+}
+
+function isDeferCallJsxChild(node: ts.Node): node is ts.JsxExpression & {
+  expression: ts.CallExpression & { expression: ts.Identifier };
+} {
+  if (!ts.isJsxExpression(node) || !node.expression) return false;
+  if (!ts.isJsxElement(node.parent) && !ts.isJsxFragment(node.parent)) return false;
+  const expression = unwrapExpression(node.expression);
+  return (
+    ts.isCallExpression(expression) &&
+    ts.isIdentifier(expression.expression) &&
+    expression.expression.text === 'defer'
+  );
 }
 
 function appLocalGeneratedImport(specifier: string): boolean {

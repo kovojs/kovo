@@ -1,7 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml } from '@kovojs/browser';
 import { component } from '@kovojs/core';
-import { defer } from '@kovojs/server';
+import { Defer } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { postAnswerMutation } from '../mutations.js';
@@ -390,15 +390,18 @@ export const QuestionDetailRegion = component({
 
         {trustedHtml(renderQuestionPost(question))}
 
-        {trustedHtml(
-          defer({
-            fallback:
-              '<section aria-busy="true" style="min-height:720px" data-kovo-region-placeholder="answers"></section>',
-            priority: 'after-paint',
-            render: () => renderQuestionDetailSecondary(question, ordered, questionId),
-            target: secondaryTarget,
-          }) as string,
-        )}
+        <Defer
+          fallback={
+            <section
+              aria-busy="true"
+              style="min-height:720px"
+              data-kovo-region-placeholder="answers"
+            />
+          }
+          priority="after-paint"
+          render={() => renderQuestionDetailSecondary(question, ordered, questionId)}
+          target={secondaryTarget}
+        />
       </div>
     );
   },

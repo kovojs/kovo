@@ -14,10 +14,13 @@ export {
 } from '../component-render.js';
 export {
   createDeferredRegionChunkCollector,
+  Defer,
   defer,
   type DeferredRegionChunkCollector,
   type DeferredRegionOptions,
+  type DeferProps,
   type RegionPriority,
+  type ServerRenderable,
 } from '../deferred-region.js';
 export {
   renderDeferredStream,

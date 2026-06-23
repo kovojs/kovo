@@ -20,9 +20,6 @@ import {
 } from './csrf.js';
 import {
   escapeAttribute,
-  escapeText,
-  escapeTextWithRenderedHtml,
-  isRenderedHtml,
   renderedHtml,
   type RenderedHtml,
   safeUrlAttribute,
@@ -30,6 +27,7 @@ import {
 } from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
+import { renderServerRenderable } from './renderable.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
 // and render to light-DOM HTML strings (SPEC.md section 3 pipeline, section
@@ -499,23 +497,7 @@ function isRawHtmlAttribute(name: string): boolean {
 }
 
 function renderJsxChildren(children: JsxChild): MaybePromise<string> {
-  if (children === null || children === undefined || typeof children === 'boolean') return '';
-  if (isPromiseLike(children)) return children.then((child) => renderJsxChildren(child));
-  if (isRenderedHtml(children)) return children.html;
-  if (typeof children === 'object') {
-    const trustedHtml = kovoTrustedHtmlContent(children);
-    if (trustedHtml !== '') return trustedHtml;
-  }
-  if (Array.isArray(children)) {
-    const rendered = children.map((child) => renderJsxChildren(child));
-    return rendered.some(isPromiseLike)
-      ? Promise.all(rendered.map((value) => Promise.resolve(value))).then((values) =>
-          values.join(''),
-        )
-      : (rendered as string[]).join('');
-  }
-
-  return escapeTextWithRenderedHtml(children);
+  return renderServerRenderable(children);
 }
 
 function toRenderedHtml(value: MaybePromise<string>): MaybePromise<RenderedHtml> {

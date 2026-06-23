@@ -837,6 +837,34 @@ export const CartBadge = component({
     ]);
   });
 
+  it('reports KV244 for defer() used directly as a JSX child', () => {
+    const result = compileComponentModule({
+      fileName: 'deferred-panel.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { Defer, defer } from '@kovojs/server';
+
+export const DeferredPanel = component({
+  render: () => (
+    <main>
+      {defer({ target: 'panel', priority: 'after-paint', render: () => '<section>Ready</section>' })}
+      <Defer target="safe" render={() => <section>Ready</section>} />
+    </main>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV244')).toMatchObject([
+      {
+        code: 'KV244',
+        fileName: 'deferred-panel.tsx',
+        message: 'defer() used as a JSX child; use <Defer> instead. defer(...)',
+        severity: 'lint',
+      },
+    ]);
+  });
+
   it('reports KV235 for app-authored renderSource modules from the parser model', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.server.ts',

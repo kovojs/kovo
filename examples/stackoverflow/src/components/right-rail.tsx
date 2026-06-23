@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
-import { defer } from '@kovojs/server';
+import { Defer, type ServerRenderable } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { tagHref } from './chrome.js';
@@ -232,7 +231,7 @@ function watchedTagsCard(): string {
 }
 
 /** The right rail for the question list (home) page. */
-export function homeRail(): string {
+export function homeRail(): ServerRenderable {
   return (
     <aside style={railStyles.rail}>
       {blogCard()}
@@ -244,7 +243,7 @@ export function homeRail(): string {
 }
 
 /** The right rail for a question detail page: related + hot questions. */
-export function questionRail(currentId: string): string {
+export function questionRail(currentId: string): ServerRenderable {
   const related = HOT_QUESTIONS.filter((item) => item.id !== currentId).slice(0, 5);
   return (
     <aside style={railStyles.rail}>
@@ -257,19 +256,22 @@ export function questionRail(currentId: string): string {
 
 /** Two-column page layout: morphable main region on the left, static rail on
  *  the right. The rail collapses below 1000px. */
-export function withRail(main: unknown, rail: string): string {
+export function withRail(main: ServerRenderable, rail: ServerRenderable): ServerRenderable {
   return (
     <div style={railStyles.columns}>
       <div style={railStyles.mainCol}>{main}</div>
-      {trustedHtml(
-        defer({
-          fallback:
-            '<aside aria-busy="true" style="flex:0 0 300px;min-height:760px;width:300px" data-kovo-region-placeholder="right-rail"></aside>',
-          priority: 'visible',
-          render: () => rail,
-          target: 'stackoverflow-right-rail',
-        }) as string,
-      )}
+      <Defer
+        fallback={
+          <aside
+            aria-busy="true"
+            style="flex:0 0 300px;min-height:760px;width:300px"
+            data-kovo-region-placeholder="right-rail"
+          />
+        }
+        priority="visible"
+        render={() => rail}
+        target="stackoverflow-right-rail"
+      />
     </div>
   );
 }

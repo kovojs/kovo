@@ -192,6 +192,12 @@ describe('compiler diagnostic coverage matrix', () => {
           "spec": "SPEC.md §5.2",
         },
         {
+          "code": "KV244",
+          "negativeCount": 1,
+          "positiveCount": 0,
+          "spec": "SPEC.md §8",
+        },
+        {
           "code": "KV236",
           "negativeCount": 1,
           "positiveCount": 0,
@@ -610,6 +616,22 @@ describe('compiler diagnostic coverage matrix', () => {
           "start": {
             "column": 25,
             "line": 4,
+          },
+        },
+        {
+          "code": "KV244",
+          "fileName": "defer-jsx-bad.tsx",
+          "help": "Would lower to: <Defer target="..." fallback={...} render={...} /> emitting a framework-owned <kovo-defer> placeholder.
+      Blocked reason: defer() is an internal string-composition helper; as a JSX child it bypasses JSX fallback escaping and can render framework markup as text.
+      Fixes: import Defer from @kovojs/server and render <Defer ... /> with JSX fallback content, or keep raw HTML behind an explicit trustedHtml(...) boundary outside JSX child position.
+      SPEC §8 makes Defer the public route-region deferral API and keeps raw string composition internal.
+      Escape: trustedHtml(...) remains the explicit raw-HTML escape hatch, but app JSX children should use <Defer>.",
+          "length": 93,
+          "message": "defer() used as a JSX child; use <Defer> instead. defer(...)",
+          "severity": "lint",
+          "start": {
+            "column": 24,
+            "line": 5,
           },
         },
         {

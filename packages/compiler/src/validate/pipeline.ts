@@ -26,6 +26,7 @@ import {
   validateDuplicateStaticViewTransitionNames as validateStaticViewTransitionNameUniqueness,
 } from './component-names.js';
 import { validateEventTriggerNames } from './event-triggers.js';
+import { validateDeferJsxChildren } from './defer-jsx.js';
 import {
   validateAttributeMergeConflicts,
   validateHandAuthoredNavigationSegmentStamps,
@@ -109,6 +110,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateOutputContexts(originalDiagnostics, originalModel, styleOwnedSpans),
   ({ loweredDiagnostics, model }) => validateHtmlContentModel(loweredDiagnostics, model),
   ({ loweredDiagnostics, model }) => validateEventTriggerNames(loweredDiagnostics, model),
+  ({ originalDiagnostics, originalModel }) =>
+    validateDeferJsxChildren(originalDiagnostics, originalModel),
   ({ loweredDiagnostics, model }) =>
     validateHandAuthoredNavigationSegmentStamps(loweredDiagnostics, model),
   ({ loweredDiagnostics, model, options }) =>

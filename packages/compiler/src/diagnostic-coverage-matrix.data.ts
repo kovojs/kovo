@@ -542,6 +542,32 @@ export const AuthoringSurfaceBad = component({
       }).diagnostics,
   },
   {
+    code: 'KV244',
+    spec: 'SPEC.md §8',
+    positive: () =>
+      compileComponentModule({
+        fileName: 'defer-jsx-ok.tsx',
+        source: `
+import { Defer } from '@kovojs/server';
+
+export const DeferJsxOk = component({
+  render: () => <main><Defer target="panel" render={() => <section>Ready</section>} /></main>,
+});
+`,
+      }).diagnostics,
+    negative: () =>
+      compileComponentModule({
+        fileName: 'defer-jsx-bad.tsx',
+        source: `
+import { defer } from '@kovojs/server';
+
+export const DeferJsxBad = component({
+  render: () => <main>{defer({ target: 'panel', priority: 'after-paint', render: () => '<section>Ready</section>' })}</main>,
+});
+`,
+      }).diagnostics,
+  },
+  {
     code: 'KV236',
     spec: 'SPEC.md §1/§5.2',
     positive: () =>

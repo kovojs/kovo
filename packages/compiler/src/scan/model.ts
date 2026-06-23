@@ -82,6 +82,7 @@ export interface SourceSpan {
 }
 
 export interface JsxExpressionModel {
+  callName?: string;
   containerEnd: number;
   containerStart: number;
   end: number;

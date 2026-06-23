@@ -104,11 +104,13 @@ type RootIsKovoApp = typeof import('@kovojs/server').isKovoApp;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootStylesheet = typeof import('@kovojs/server').stylesheet;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootDefer = typeof import('@kovojs/server').defer;
+type RootDefer = typeof import('@kovojs/server').Defer;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
-type RootDeferredRegionOptions = import('@kovojs/server').DeferredRegionOptions;
+type RootDeferProps = import('@kovojs/server').DeferProps;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootRegionPriority = import('@kovojs/server').RegionPriority;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootServerRenderable = import('@kovojs/server').ServerRenderable;
 // SPEC.md §9.5: the versioned client-module registry constructor and its option
 // surface are public at the root barrel for `createApp({ clientModules })` consumers.
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -406,10 +408,12 @@ describe('server app-shell public API barrels', () => {
     // prior not-public assertions.)
     expect(publicApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(publicApi.cspSha256).toBe(cspApi.cspSha256);
-    expect(publicApi.defer).toBe(renderingApi.defer);
+    expect(publicApi.Defer).toBe(renderingApi.Defer);
+    expect(publicValues).not.toHaveProperty('defer');
     expect(packageRootApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(packageRootApi.cspSha256).toBe(cspApi.cspSha256);
-    expect(packageRootApi.defer).toBe(renderingApi.defer);
+    expect(packageRootApi.Defer).toBe(renderingApi.Defer);
+    expect(packageRootValues).not.toHaveProperty('defer');
     expect(publicValues).not.toHaveProperty('renderDeferredDocument');
     expect(publicValues).not.toHaveProperty('renderDeferredStream');
     expect(publicValues).not.toHaveProperty('renderDiagnosticDocument');
@@ -437,7 +441,8 @@ describe('server app-shell public API barrels', () => {
     // CSP-3 (bugs-part3): the rendering barrel now re-exports the CSP helpers publicly.
     expect(renderingApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
     expect(renderingApi.cspSha256).toBe(cspApi.cspSha256);
-    expect(renderingApi.defer).toBe(internalHtmlApi.defer);
+    expect(renderingApi.Defer).toBe(internalHtmlApi.Defer);
+    expect(renderingApi).not.toHaveProperty('defer');
     expect(renderingApi).not.toHaveProperty('renderDeferredDocument');
     expect(renderingApi).not.toHaveProperty('renderDeferredStream');
     expect(renderingApi).not.toHaveProperty('renderDiagnosticDocument');

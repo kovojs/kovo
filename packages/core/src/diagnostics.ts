@@ -30,6 +30,7 @@ export type DiagnosticCode =
   | 'KV241'
   | 'KV242'
   | 'KV243'
+  | 'KV244'
   | 'KV301'
   | 'KV302'
   | 'KV303'
@@ -160,6 +161,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV241: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
   KV242: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV243: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
+  KV244: { blockedReason: true, escapePosture: 'documented', loweredForm: 'required' },
   KV301: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV302: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV303: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
@@ -480,6 +482,18 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Invalid stream text target.',
+  },
+  KV244: {
+    code: 'KV244',
+    help: [
+      'Would lower to: <Defer target="..." fallback={...} render={...} /> emitting a framework-owned <kovo-defer> placeholder.',
+      'Blocked reason: defer() is an internal string-composition helper; as a JSX child it bypasses JSX fallback escaping and can render framework markup as text.',
+      'Fixes: import Defer from @kovojs/server and render <Defer ... /> with JSX fallback content, or keep raw HTML behind an explicit trustedHtml(...) boundary outside JSX child position.',
+      'SPEC §8 makes Defer the public route-region deferral API and keeps raw string composition internal.',
+      'Escape: trustedHtml(...) remains the explicit raw-HTML escape hatch, but app JSX children should use <Defer>.',
+    ].join('\n'),
+    severity: 'lint',
+    message: 'defer() used as a JSX child; use <Defer> instead.',
   },
   KV301: {
     code: 'KV301',

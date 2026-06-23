@@ -37,6 +37,7 @@ describe('diagnostic registry', () => {
       'KV241',
       'KV242',
       'KV243',
+      'KV244',
       'KV301',
       'KV302',
       'KV303',
@@ -323,6 +324,16 @@ describe('diagnostic registry', () => {
       SPEC §9.1 scopes <kovo-text> to compiler/runtime-declared data-stream-text targets and forbids arbitrary selector targeting.",
           "message": "Invalid stream text target.",
           "severity": "error",
+        },
+        "KV244": {
+          "code": "KV244",
+          "help": "Would lower to: <Defer target="..." fallback={...} render={...} /> emitting a framework-owned <kovo-defer> placeholder.
+      Blocked reason: defer() is an internal string-composition helper; as a JSX child it bypasses JSX fallback escaping and can render framework markup as text.
+      Fixes: import Defer from @kovojs/server and render <Defer ... /> with JSX fallback content, or keep raw HTML behind an explicit trustedHtml(...) boundary outside JSX child position.
+      SPEC §8 makes Defer the public route-region deferral API and keeps raw string composition internal.
+      Escape: trustedHtml(...) remains the explicit raw-HTML escape hatch, but app JSX children should use <Defer>.",
+          "message": "defer() used as a JSX child; use <Defer> instead.",
+          "severity": "lint",
         },
         "KV301": {
           "code": "KV301",

@@ -306,6 +306,32 @@ export const home = route('/', {
     ]);
   });
 
+  it('reports KV244 for defer() used directly as a route JSX child', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `/** @jsxImportSource @kovojs/server */
+import { Defer, defer, route } from '@kovojs/server';
+
+export const home = route('/', {
+  page: () => (
+    <main>
+      {defer({ target: 'panel', priority: 'after-paint', render: () => '<section>Ready</section>' })}
+      <Defer target="safe" render={() => <section>Ready</section>} />
+    </main>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV244')).toMatchObject([
+      {
+        code: 'KV244',
+        message: 'defer() used as a JSX child; use <Defer> instead.',
+        severity: 'lint',
+      },
+    ]);
+  });
+
   it('reports KV303 for spread props in route component calls', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

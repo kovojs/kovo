@@ -10,12 +10,10 @@ import type {
   ComponentOptionEntry,
   DocumentElementActionModel,
   IdentifierReferenceModel,
-  JsxAttributeModel,
   JsxCommentModel,
   JsxElementChildBody,
   JsxElementModel,
   JsxExpressionModel,
-  JsxSpreadAttributeModel,
   ModuleScopeBindingModel,
   ModuleSpecifierModel,
   MutationHandlerModel,
@@ -1441,7 +1439,13 @@ function jsxExpressionModel(
   const start = expression.getStart(sourceFile);
   const end = expression.getEnd();
   const solePath = solePropertyAccessPathFromExpression(expression);
+  const unwrapped = unwrapExpression(expression);
+  const callName =
+    ts.isCallExpression(unwrapped) && ts.isIdentifier(unwrapped.expression)
+      ? unwrapped.expression.text
+      : undefined;
   return {
+    ...(callName === undefined ? {} : { callName }),
     containerEnd: node.getEnd(),
     containerStart: node.getStart(sourceFile),
     end,
