@@ -179,12 +179,17 @@ guard-owned, and natural-key applications.
 
 ## Required Acceptance Fixtures
 
-- [ ] **Stack Overflow shared-db fixture.**
+- [x] **Stack Overflow shared-db fixture.**
   - Table key: `sessionId,id`.
   - Query scope: `questions.sessionId = request.session.id`.
   - Mutations: `postAnswer` and `voteUp` update `questions` by `sessionId + id`.
   - Expected: no `KV409`, no `non-key-match` punt, and derived or explicitly justified optimistic
     status for `questionList` / `questionScore` where the shape is otherwise derivable.
+  - Evidence: `pnpm exec vitest --run` on `advanced-analyzer.scoped-pipeline.test.ts` and
+    `index.columns-keys-predicates.test.ts` extracts `postAnswer` and `voteUp` as exact
+    session-scoped composite-key writes, derives public-key-only transforms for `questionList` and a
+    same-row-witness `questionScore`, rejects `KV409`/`non-key-match`, and verifies generated
+    optimistic source omits private `sessionId` material.
 
 - [x] **Tenant-scoped SaaS fixture.**
   - Tables keyed by `tenantId,id`; session carries `tenantId`.
