@@ -114,8 +114,9 @@ acceptance set (b)); these checkboxes implement it.
   - Rationale: Kovo's owned versions emit detectable markers (raw) and validate at the sink (identifier); Drizzle's native ones produce unmarked chunks the runtime guard is blind to. Banning the direct import is the precondition that makes the Phase 5 raw-audit invariant enforceable.
   - `sql.raw(<non-literal>)` and `sql.identifier(<non-literal>)` are conservative diagnostics (the new KV code) — flag any non-literal argument; the sanctioned exits are `trustedSql(...)` (raw) and `sql.identifier(x, { allow })` (identifier).
   - Evidence: `packages/drizzle/src/static.ts` detects native `drizzle-orm` `sql.raw`/`sql.identifier` calls from named and namespace imports; `packages/drizzle/src/sql-safety-static.test.ts` asserts `KV422` for both direct native raw helpers.
-- [ ] Extend raw query receiver facts.
+- [x] Extend raw query receiver facts.
   - `db.execute(...)`, `db.query(...)`, `db.exec(...)`, and `prepare(...)` should emit SQL-safety facts alongside existing KV406/KV410 read/write facts.
+  - Evidence: `kovo compile drizzle-static` now accepts `extract: ["sqlSafetyDiagnostics"]` and emits `KV422` receiver diagnostics from `analyzeSqlSafetyFromProject`; `packages/cli/src/index.kovo-compile.test.ts` verifies facts for all four raw receiver methods.
 - [x] Handle dynamic identifiers and keywords without string assembly.
   - `sql.identifier(x, { allow })` covers dynamic _identifiers_ (sort columns, table aliases).
   - Add `sql.allow(x, [...])` for non-identifier _keyword_ choices that fail identifier grammar — sort directions (`asc`/`desc`), operators, clause fragments (`NULLS LAST`). Returns a branded static fragment when `x` is in the set, rejects otherwise. Keeps `trustedSql` reserved for genuinely raw SQL instead of being reached for a two-value direction choice.
