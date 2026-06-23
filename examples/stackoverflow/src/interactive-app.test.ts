@@ -269,6 +269,13 @@ describe('stackoverflow interactive app', () => {
       expect(html).toContain('<main');
       expect(html).toContain(`kovo-fragment-target="${target}"`);
       expect(html).toContain(`kovo-deps="${deps}"`);
+      expect(html).toContain(
+        '<kovo-defer target="stackoverflow-right-rail" state="pending" data-kovo-region-priority="visible">',
+      );
+      expect(html).toContain('<kovo-fragment target="stackoverflow-right-rail" priority="visible"');
+      expect(html.indexOf('<kovo-defer target="stackoverflow-right-rail"')).toBeLessThan(
+        html.indexOf('--kovo-boundary'),
+      );
       if (route === '/questions/q1') {
         expect(html).toContain(
           '<kovo-defer target="question-detail-secondary:q1" state="pending" data-kovo-region-priority="after-paint">',
@@ -277,7 +284,7 @@ describe('stackoverflow interactive app', () => {
         expect(html).toContain('No hand-written merge code.');
         expect(html).toContain('Your Answer');
       } else {
-        expect(html).not.toContain('<kovo-fragment');
+        expect(html).toContain('Hot Network Questions');
       }
     }
   });

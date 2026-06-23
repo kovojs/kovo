@@ -351,6 +351,47 @@ describe('server app document boundary', () => {
     expect(body).toContain('<section class="reviews-card">Reviews ready</section>');
   });
 
+  it('streams visible deferred route regions for viewport-gated browser apply', async () => {
+    const productRoute = route('/products/:id', {
+      async page({ params }) {
+        return (
+          `<main><h1>Product ${params.id}</h1>` +
+          (await defer({
+            fallback: '<aside aria-busy="true" style="min-height:320px">Loading rail</aside>',
+            priority: 'visible',
+            render: () => '<aside class="product-rail">Rail ready</aside>',
+            stylesheets: ['/assets/rail.css'],
+            target: `rail:${params.id}`,
+          })) +
+          '</main>'
+        );
+      },
+    });
+    const request = new Request('https://shop.example.test/products/p1');
+    const app = createApp({ routes: [productRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: { id: 'p1' },
+      request,
+      route: productRoute,
+      url: new URL(request.url),
+    });
+    if (typeof response.body !== 'string') throw new Error('expected HTML document body');
+    const body = response.body;
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      '<kovo-defer target="rail:p1" state="pending" data-kovo-region-priority="visible"><aside aria-busy="true" style="min-height:320px">Loading rail</aside></kovo-defer>',
+    );
+    expect(body.indexOf('<kovo-defer target="rail:p1"')).toBeLessThan(
+      body.indexOf('--kovo-boundary'),
+    );
+    expect(body).toContain('<kovo-fragment target="rail:p1" priority="visible">');
+    expect(body).toContain('<link rel="stylesheet" href="/assets/rail.css">');
+    expect(body).toContain('<aside class="product-rail">Rail ready</aside>');
+  });
+
   it('renders critical regions immediately without a deferred stream', async () => {
     const productRoute = route('/products/:id', {
       async page({ params }) {

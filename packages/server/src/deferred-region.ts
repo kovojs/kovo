@@ -6,7 +6,7 @@ import { currentJsxFrameworkContext, type DeferredRegionCollector } from './jsx-
 type MaybePromise<Value> = Promise<Value> | Value;
 
 /** Priority for a server-rendered region inside the initial route document (SPEC §8). */
-export type RegionPriority = 'after-paint' | 'critical';
+export type RegionPriority = 'after-paint' | 'critical' | 'visible';
 
 /** Options for {@link defer}, the route-region deferral helper. */
 export interface DeferredRegionOptions {
@@ -14,7 +14,7 @@ export interface DeferredRegionOptions {
   target: string;
   /** Placeholder HTML kept in the initial shell until the region arrives. */
   fallback?: string;
-  /** Region priority. `critical` renders immediately; `after-paint` streams after the shell. */
+  /** Region priority. `critical` renders immediately; deferred regions stream after the shell. */
   priority?: RegionPriority;
   /** Render the real region HTML from server truth. */
   render: () => MaybePromise<string>;
@@ -25,11 +25,13 @@ export interface DeferredRegionOptions {
 /**
  * Defer a route region until after the initial document shell.
  *
- * Inside normal route document rendering, `defer({ priority: 'after-paint' })`
- * returns a `<kovo-defer>` placeholder and records a fragment stream chunk that
- * arrives later in the same document response. Outside that document context,
- * including mutation fragment renders, it renders the full region immediately so
- * refreshes remain complete and no region silently disappears.
+ * Inside normal route document rendering, deferred priorities return a
+ * `<kovo-defer>` placeholder and record a fragment stream chunk that arrives
+ * later in the same document response. `visible` chunks are applied by the
+ * browser runtime only when their placeholder nears the viewport. Outside that
+ * document context, including mutation fragment renders, this renders the full
+ * region immediately so refreshes remain complete and no region silently
+ * disappears.
  */
 export function defer(options: DeferredRegionOptions): MaybePromise<string> {
   const priority = options.priority ?? 'critical';
@@ -78,5 +80,7 @@ function deferredStreamPriority(priority: Exclude<RegionPriority, 'critical'>): 
   switch (priority) {
     case 'after-paint':
       return 'normal';
+    case 'visible':
+      return 'visible';
   }
 }
