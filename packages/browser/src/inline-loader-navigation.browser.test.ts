@@ -121,7 +121,7 @@ describe('browser inline loader enhanced navigation', () => {
 
       expect(click.defaultPrevented).toBe(true);
       expect(fetch).toHaveBeenCalledWith(new URL('/cart', location.href).href, {
-        headers: { Accept: 'text/html' },
+        headers: { Accept: 'text/vnd.kovo.document+html, text/html' },
       });
       expect(document.querySelector('main')).toBe(layout);
       expect(document.activeElement).toBe(layout);

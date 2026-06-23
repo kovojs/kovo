@@ -248,6 +248,42 @@ describe('server createApp request shell', () => {
     await expect(response.text()).resolves.toContain('<main>p1:details</main>');
   });
 
+  it('serves enhanced navigation documents without resending the inline loader', async () => {
+    const handler = createRequestHandler(
+      createApp({
+        routes: [
+          route('/products/:id', {
+            meta: { title: 'Product' },
+            params: s.object({ id: s.string() }),
+            page({ params }) {
+              return `<main kovo-nav-segment="page:/products/:id">${params.id}</main>`;
+            },
+          }),
+        ],
+      }),
+    );
+
+    const full = await handler(new Request('https://example.test/products/p1'));
+    const enhanced = await handler(
+      new Request('https://example.test/products/p1', {
+        headers: { Accept: 'text/vnd.kovo.document+html, text/html' },
+      }),
+    );
+
+    expect(full.status).toBe(200);
+    expect(enhanced.status).toBe(200);
+    expect(enhanced.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(enhanced.headers.get('vary')).toBe('Accept');
+
+    const fullBody = await full.text();
+    const enhancedBody = await enhanced.text();
+    expect(fullBody).toContain('installInlineKovoLoader');
+    expect(enhancedBody).not.toContain('installInlineKovoLoader');
+    expect(enhancedBody).toContain('<title>Product</title>');
+    expect(enhancedBody).toContain('<meta name="kovo-build"');
+    expect(enhancedBody).toContain('<main kovo-nav-segment="page:/products/:id">p1</main>');
+  });
+
   it('normalizes trailing slashes before dispatching routes', async () => {
     const handler = createRequestHandler(createApp({ routes: [route('/products/:id', {})] }));
 
