@@ -52,6 +52,22 @@ function currentElementGetBoundingClientRect(): Element['getBoundingClientRect']
   ) as Element['getBoundingClientRect'];
 }
 
+function installRafQueue(): FrameRequestCallback[] {
+  const callbacks: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    callbacks.push(callback);
+    return callbacks.length;
+  });
+  return callbacks;
+}
+
+function runQueuedRafFrame(callbacks: FrameRequestCallback[]): void {
+  const pending = callbacks.splice(0);
+  for (const callback of pending) {
+    callback(performance.now());
+  }
+}
+
 function requestInputHref(input: RequestInfo | URL): string {
   if (typeof input === 'string') return input;
   if (input instanceof URL) return input.href;
@@ -245,9 +261,12 @@ describe('browser inline loader enhanced navigation', () => {
     vi.spyOn(history, 'pushState').mockImplementation(() => undefined);
 
     installNavigationLoader();
+    const rafCallbacks = installRafQueue();
     dispatchAnchorLikeClick('/cart');
 
     await vi.waitFor(() => expect(document.title).toBe('Cart'));
+    runQueuedRafFrame(rafCallbacks);
+    runQueuedRafFrame(rafCallbacks);
     await vi.waitFor(() => {
       const promoted = Array.from(document.head.children).find(
         (element) => element.tagName === 'LINK' && element.getAttribute('href') === '/cart.css',
