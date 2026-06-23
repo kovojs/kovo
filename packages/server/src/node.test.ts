@@ -336,7 +336,7 @@ describe('server node adapter', () => {
     try {
       const document = await server.fetch('/cart');
       expect(document).toMatchObject({
-        body: expect.stringContaining('<main>Cart 0</main>'),
+        body: expect.stringContaining('&lt;main&gt;Cart 0&lt;/main&gt;'),
         headers: expect.objectContaining({
           'content-type': 'text/html; charset=utf-8',
           link: `</c/__v/cart-v1/cart.client.js>; rel=modulepreload`,

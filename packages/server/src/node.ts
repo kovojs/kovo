@@ -243,6 +243,52 @@ function appendVary(headers: Headers, token: string): void {
   if (!tokens.includes(token.toLowerCase())) headers.set('Vary', `${existing}, ${token}`);
 }
 
+function nodeEarlyHintsLinkValue(header: string): string | string[] {
+  const entries = splitLinkHeaderEntries(header);
+  return entries.length > 1 ? entries : header;
+}
+
+function splitLinkHeaderEntries(header: string): string[] {
+  const entries: string[] = [];
+  let start = 0;
+  let inAngle = false;
+  let inQuote = false;
+  let escaped = false;
+
+  for (let index = 0; index < header.length; index += 1) {
+    const char = header[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === '\\' && inQuote) {
+      escaped = true;
+      continue;
+    }
+    if (char === '"' && !inAngle) {
+      inQuote = !inQuote;
+      continue;
+    }
+    if (char === '<' && !inQuote) {
+      inAngle = true;
+      continue;
+    }
+    if (char === '>' && !inQuote) {
+      inAngle = false;
+      continue;
+    }
+    if (char === ',' && !inAngle && !inQuote) {
+      const entry = header.slice(start, index).trim();
+      if (entry) entries.push(entry);
+      start = index + 1;
+    }
+  }
+
+  const tail = header.slice(start).trim();
+  if (tail) entries.push(tail);
+  return entries;
+}
+
 function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): string {
   const rawUrl = request.url ?? '/';
   const origin =
