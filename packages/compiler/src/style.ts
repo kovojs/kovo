@@ -126,6 +126,10 @@ function createThemeWithIdentity<Tokens extends Record<string, CssValue>>(
   )(baseTokens, overrides, identity);
 }
 
+function atomicRulesFromMetadata(value: unknown): readonly AtomicRule[] {
+  return Array.isArray(value) ? (value as readonly AtomicRule[]) : [];
+}
+
 interface ImportedStaticValue {
   readonly importName: string;
   readonly localName: string;
@@ -330,9 +334,10 @@ function collectStyleEnvironment(
           namespace: vars.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
           source: vars.options.source ?? fileName,
         });
+        const resultRules = atomicRulesFromMetadata(result.__rules);
         staticValues.set(node.name.text, result);
-        rules.push(...(result.__rules ?? []));
-        pushRuleUsages(usages, fileName, node.name.text, result.__rules ?? []);
+        rules.push(...resultRules);
+        pushRuleUsages(usages, fileName, node.name.text, resultRules);
         continue;
       }
 
@@ -354,9 +359,10 @@ function collectStyleEnvironment(
             source: theme.options.source ?? fileName,
           },
         );
+        const resultRules = atomicRulesFromMetadata(result.__rules);
         staticValues.set(node.name.text, result);
-        rules.push(...(result.__rules ?? []));
-        pushRuleUsages(usages, fileName, node.name.text, result.__rules ?? []);
+        rules.push(...resultRules);
+        pushRuleUsages(usages, fileName, node.name.text, resultRules);
         continue;
       }
 

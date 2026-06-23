@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import * as publicStyle from './index.js';
 import { attrs, create, defineTheme, createTheme, defineVars, keyframes, tokens } from './index.js';
 import {
+  type AtomicRule,
   createAtomicStyles,
   createKeyframes,
   defineConsts,
@@ -12,6 +13,10 @@ import {
   raw,
   themeFromSeed,
 } from './internal.js';
+
+function metadataRules(value: unknown): readonly AtomicRule[] {
+  return Array.isArray(value) ? (value as readonly AtomicRule[]) : [];
+}
 
 describe('@kovojs/style phase 1 runtime fork', () => {
   it('keeps CSS emission helpers on the internal subpath', () => {
@@ -174,7 +179,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
 
     expect(tokens.accent).toBe('var(--kovo-tokens-accent)');
     expect(theme.className).toMatch(/^kv-theme-theme-[a-z0-9]+$/);
-    expect(theme.__rules?.[0]?.rule).toContain('--kovo-tokens-accent:#16a34a');
+    expect(metadataRules(theme.__rules)[0]?.rule).toContain('--kovo-tokens-accent:#16a34a');
     expect(attrs(styles.root).class).toMatch(/^kv-style-bg-[a-z0-9]+ kv-style-fg-[a-z0-9]+$/);
   });
 
@@ -289,7 +294,7 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(tokens.sys.color.primary).toBe('var(--kovo-theme-sys-color-primary)');
     expect(tokens.ref.palette.primary[40]).toBe('var(--kovo-theme-ref-palette-primary-40)');
     expect(tokens.customColor('success').onColor).toBe('var(--kovo-theme-custom-success-on-color)');
-    expect(styles.root.__rules?.map((rule) => rule.value)).toContain(
+    expect(metadataRules(styles.root.__rules).map((rule) => rule.value)).toContain(
       'var(--kovo-theme-sys-color-primary)',
     );
   });
