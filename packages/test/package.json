@@ -20,6 +20,7 @@
     "./internal/verifier-diagnostics": "./src/verifier-diagnostics.ts",
     "./internal/verifier-sql": "./src/verifier-sql.ts",
     "./pglite": "./src/pglite.ts",
+    "./sqlite": "./src/sqlite.ts",
     "./test-case": "./src/test-case.ts"
   },
   "publishConfig": {
@@ -80,6 +81,10 @@
         "types": "./dist/pglite.d.mts",
         "default": "./dist/pglite.mjs"
       },
+      "./sqlite": {
+        "types": "./dist/sqlite.d.mts",
+        "default": "./dist/sqlite.mjs"
+      },
       "./test-case": {
         "types": "./dist/test-case.d.mts",
         "default": "./dist/test-case.mjs"
@@ -87,19 +92,21 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/internal/html-wire.ts src/integration/define-fixture.ts src/integration/index.ts src/page.ts src/pglite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/internal/html-wire.ts src/integration/define-fixture.ts src/integration/index.ts src/page.ts src/pglite.ts src/sqlite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.1",
     "@kovojs/core": "workspace:*",
     "@kovojs/server": "workspace:*",
+    "better-sqlite3": "^12.11.1",
     "pgsql-ast-parser": "^12.0.2"
   },
   "devDependencies": {
     "@kovojs/compiler": "workspace:*",
     "@kovojs/drizzle": "workspace:*",
     "@playwright/test": "1.60.0",
+    "@types/better-sqlite3": "^7.6.13",
     "vite": "^8.0.16",
     "vitest": "4.1.8"
   }
