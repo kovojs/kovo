@@ -1,4 +1,5 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
+import { validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import { runEndpoint } from './endpoint.js';
 import {
   renderQueryRegistryEndpointResponse,
@@ -78,6 +79,8 @@ export async function dispatchMatchedAppRequest({
   if (match.kind === 'endpoint') {
     const endpointRequest =
       app.db === undefined ? request : await resolveLifecycleRequest(request, { db: app.db });
+    const csrfFailure = await validateEndpointCsrf(match.endpoint, endpointRequest, app.csrf);
+    if (csrfFailure) return csrfFailure;
     return runEndpoint(match.endpoint, endpointRequest);
   }
 
@@ -102,4 +105,39 @@ export async function dispatchMatchedAppRequest({
     await renderAppErrorDocumentResponse(app, request, 404),
     request,
   );
+}
+
+async function validateEndpointCsrf(
+  endpoint: KovoApp['endpoints'][number],
+  request: Request,
+  csrf: CsrfValidationOptions<any> | undefined,
+): Promise<Response | undefined> {
+  if (endpoint.csrf?.exempt) return undefined;
+  if (!requiresCsrf(request.method)) return undefined;
+
+  // SPEC §9.1 / §6.6: endpoint() is default-CSRF for unsafe browser verbs.
+  // Exempt endpoints keep raw-body access; protected endpoints validate a cloned
+  // form body before the raw handler can run.
+  if (csrf === undefined) return endpointCsrfFailureResponse();
+
+  let rawInput: unknown;
+  try {
+    rawInput = await request.clone().formData();
+  } catch {
+    rawInput = {};
+  }
+
+  return validateCsrfToken(rawInput, request, csrf) ? undefined : endpointCsrfFailureResponse();
+}
+
+function requiresCsrf(method: string): boolean {
+  const upper = method.toUpperCase();
+  return upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
+}
+
+function endpointCsrfFailureResponse(): Response {
+  return new Response('CSRF', {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    status: 422,
+  });
 }

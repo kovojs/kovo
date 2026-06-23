@@ -96,7 +96,9 @@ export async function renderAppRouteDocumentResponse({
   // the request (not the whole cookie header), so non-session cookie churn (CSRF rotation, theme)
   // does not produce different fingerprints for the same user across tabs. We do NOT re-resolve via
   // sessionProvider here (it already ran once for the guarded route).
-  const sessionFingerprint = sessionFingerprintFromRequest(request);
+  const sessionFingerprint = sessionFingerprintFromRequest(
+    routeResponse.lifecycleRequest instanceof Request ? routeResponse.lifecycleRequest : request,
+  );
 
   // part-4 G1 (SPEC §9.4:906 caching contract, §9.4:767 bfcache hygiene): a response that carries a
   // per-principal `Set-Cookie` (a rolling/refresh session token forwarded by the sessionProvider via

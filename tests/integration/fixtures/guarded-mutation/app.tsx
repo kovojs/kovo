@@ -1,5 +1,6 @@
-// SPEC §6.5 + §10.3: mutation guards run before the transaction/write path, and
-// enhanced guard failures stay on the typed mutation error fragment vocabulary.
+// SPEC §6.5 + §10.3: mutation guards run before the transaction/write path.
+// Unauthenticated enhanced failures return Kovo-Reauth; authenticated
+// authorization failures stay on typed mutation error fragments.
 import { createApp, guards, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 

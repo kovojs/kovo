@@ -184,6 +184,79 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     expect(fpA).not.toBe(fpB);
   });
 
+  it('stamps fingerprints from non-cookie sessions resolved by the lifecycle request', async () => {
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider(request) {
+        const id = request.headers.get('x-session-id');
+        return id ? { id } : null;
+      },
+    });
+
+    const [resA, resB] = await Promise.all([
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: new Request('https://example.test/', { headers: { 'x-session-id': 'alpha' } }),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: new Request('https://example.test/', { headers: { 'x-session-id': 'beta' } }),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+    ]);
+
+    const extract = (body: string) =>
+      body.match(/<meta name="kovo-session" content="([^"]*)"/)?.[1];
+
+    const fpA = extract(resA.body as string);
+    const fpB = extract(resB.body as string);
+    expect(fpA).toBeDefined();
+    expect(fpB).toBeDefined();
+    expect(fpA).not.toBe(fpB);
+  });
+
+  it('uses a resolved second-cookie session instead of collapsing on an identical first cookie', async () => {
+    const homeRoute = route('/', { page: () => '<main>Home</main>' });
+    const sessionProvider = (request: Request) => {
+      const cookie = request.headers.get('cookie') ?? '';
+      const match = cookie.match(/(?:^|; )sid=([^;]+)/);
+      return match ? { id: match[1] } : null;
+    };
+    const app = createApp({ routes: [homeRoute], sessionProvider });
+
+    const [resA, resB] = await Promise.all([
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: new Request('https://example.test/', {
+          headers: { cookie: 'theme=light; sid=user-a' },
+        }),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+      renderAppRouteDocumentResponse({
+        app,
+        params: {},
+        request: new Request('https://example.test/', {
+          headers: { cookie: 'theme=light; sid=user-b' },
+        }),
+        route: homeRoute,
+        url: new URL('https://example.test/'),
+      }),
+    ]);
+
+    const extract = (body: string) =>
+      body.match(/<meta name="kovo-session" content="([^"]*)"/)?.[1];
+
+    expect(extract(resA.body as string)).not.toBe(extract(resB.body as string));
+  });
+
   it('anonymous request (no cookies) produces no kovo-session meta (K3)', async () => {
     const homeRoute = route('/', { page: () => '<main>Home</main>' });
     const app = createApp({ routes: [homeRoute] });
