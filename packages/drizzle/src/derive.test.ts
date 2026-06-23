@@ -677,7 +677,7 @@ describe('deriveOptimistic — C5: non-key eq match must punt, not single-row up
     };
     expect(deriveOptimistic([effect], compositeShape)).toEqual({
       kind: 'punt',
-      reason: { code: 'non-key-match', expr: 'non-key eq on tickets' },
+      reason: { code: 'partial-key', columns: ['tenantId'], table: 'tickets' },
     });
   });
 });

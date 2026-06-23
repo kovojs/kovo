@@ -244,6 +244,9 @@ guard-owned, and natural-key applications.
   - Preserve existing behavior for simple `eq(id, input.id)` and direct non-eq KV409 cases.
   - Add local opaque-child tests and mixed-disjunction negative tests so row identity/membership
     degrade only at the affected proof level.
+  - [x] Write-side predicate matching consumes an internal typed PNF tree for exact conjunctions,
+        bounded disjunctions, and local opaque children.
+    - Evidence: `pnpm exec vitest --run packages/core/src/derivation.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/derive-codegen.test.ts` covers typed PNF write extraction, local opaque-child degradation, mixed-disjunction punts, and partial composite-key `partial-key` punts.
   - Evidence when complete: old predicate tests stay green; new composite/session predicates
     classify as `exact-row`.
 
