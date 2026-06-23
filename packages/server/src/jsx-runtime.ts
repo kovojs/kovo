@@ -63,8 +63,10 @@ const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistr
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
 export type JsxNode = JsxChild[] | boolean | null | number | RenderedHtml | string | undefined;
 
+/** @generated JSX automatic-runtime ABI child value, including async component output. */
 export type JsxChild = JsxNode | Promise<JsxNode>;
 
+/** @generated JSX automatic-runtime ABI maybe-async node type. */
 export type MaybeAsyncJsxNode = JsxChild;
 
 /** @generated JSX automatic-runtime ABI props type (compiler-emitted). */

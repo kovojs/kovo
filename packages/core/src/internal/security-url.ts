@@ -15,11 +15,13 @@ export const URL_ATTRIBUTE_NAMES = [
   'xlink:href',
 ] as const;
 
+/** @internal URL schemes accepted by Kovo server/client URL sinks (SPEC.md §4.8). */
 export const SAFE_URL_SCHEMES = ['http', 'https', 'mailto', 'tel', 'ftp'] as const;
 
 const urlAttributeNames = new Set<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = new Set<string>(SAFE_URL_SCHEMES);
 
+/** @internal True when an HTML attribute is URL-bearing and needs scheme checks. */
 export function isUrlAttributeName(name: string): boolean {
   return urlAttributeNames.has(name.toLowerCase());
 }

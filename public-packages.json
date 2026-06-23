@@ -18,6 +18,7 @@
           "./internal/package-prefix",
           "./internal/query-delta",
           "./internal/render-plan-token",
+          "./internal/security-url",
           "./internal/component-render",
           "./internal/event",
           "./internal/storage"
@@ -1803,6 +1804,7 @@
           "./internal/app-shell-vite",
           "./internal/client-modules",
           "./internal/csrf",
+          "./internal/escape",
           "./internal/execution",
           "./internal/html",
           "./internal/route",
