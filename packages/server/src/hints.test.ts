@@ -215,25 +215,24 @@ describe('page hints', () => {
       },
       html: [
         '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style>',
-        '<link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style>',
-        '<noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
+        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
       ].join(''),
     });
   });
 
-  it('can opt critical stylesheets out of deferred full stylesheet delivery', () => {
+  it('can opt critical stylesheets into deferred full stylesheet delivery', () => {
     expect(
       renderPageHints({
         stylesheets: [
           {
             criticalCss: 'cart-badge { color: teal; }',
-            deferFull: false,
+            deferFull: true,
             href: '/assets/components/cart/cart-badge.css',
           },
         ],
       }).html,
     ).toContain(
-      '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style><link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
+      '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style><link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style><noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
     );
   });
 
@@ -267,8 +266,7 @@ describe('page hints', () => {
       },
       html: [
         '<style data-kovo-critical-href="/assets/components/cart/cart-badge.css" data-kovo-csp-hash="sha256-sx71hKmvDG940BhsIfAcO2PDWD7BMRdMimhBDfDpbMY=">cart-badge { color: teal; }</style>',
-        '<link rel="preload" as="style" href="/assets/components/cart/cart-badge.css" data-kovo-deferred-style>',
-        '<noscript><link rel="stylesheet" href="/assets/components/cart/cart-badge.css"></noscript>',
+        '<link rel="stylesheet" href="/assets/components/cart/cart-badge.css">',
         '<link rel="stylesheet" href="/assets/components/cart/cart-drawer.css">',
       ].join(''),
     });

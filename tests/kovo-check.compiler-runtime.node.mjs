@@ -422,7 +422,7 @@ void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
       earlyHints: {
         Link: '</assets/styles.css>; rel=preload; as=style',
       },
-      html: '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="preload" as="style" href="/assets/styles.css" data-kovo-deferred-style><noscript><link rel="stylesheet" href="/assets/styles.css"></noscript><link rel="stylesheet" href="/assets/recommendations.css">',
+      html: '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/recommendations.css">',
     },
     selectedStylesheets: [
       {
