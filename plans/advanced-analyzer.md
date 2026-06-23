@@ -237,15 +237,27 @@ guard-owned, and natural-key applications.
     against those static facts, and reports `KV405` for a declared static branch that runtime did not
     exercise.
 
-- [ ] **Negative proof fixtures.**
-  - Unguarded nullable session/request access must be conditional/opaque and cannot prove row identity.
-  - Guarded aliases that are later reassigned or mutated must lose the original scope proof.
-  - Unsummarized helpers returning a tenant/session id must produce `unsummarized-helper` or an
-    equivalent named degradation.
-  - Partial composite keys must not classify as `exact-row`.
-  - Mixed derivable/opaque disjunctions must degrade or punt as a whole with a named reason.
-  - Private-scope leakage in generated keys, targets, optimistic exports, transform inputs, or lowered
-    browser code must fail a leak-check fixture.
+- [x] **Negative proof fixtures.**
+  - [x] Unguarded nullable session/request access is conditional/opaque and cannot prove row
+        identity.
+    - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/core/src/derivation.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts` covers unguarded nullable aliases and direct session access degrading to non-eq/opaque.
+  - [x] Guarded aliases that are later reassigned or mutated lose the original scope proof.
+    - Evidence: same command covers reassigned and compound-mutated session aliases degrading from
+      scoped row identity.
+  - [x] Unsummarized helpers returning a tenant/session id produce `unsummarized-helper` or an
+        equivalent named degradation.
+    - Evidence: same command covers unsummarized private-scope helpers producing
+      `unsummarized-helper:*` opaque matches and non-key degradation.
+  - [x] Partial composite keys do not classify as `exact-row`.
+    - Evidence: same command covers partial composite-key extraction and `partial-key` derivation
+      punts.
+  - [x] Mixed derivable/opaque disjunctions degrade or punt as a whole with a named reason.
+    - Evidence: same command covers mixed OR arms producing named `mixed-disjunction` punts.
+  - [x] Private-scope leakage in generated keys, targets, optimistic exports, transform inputs, or
+        lowered browser code fails a leak-check fixture.
+    - Evidence: same command covers the scoped-pipeline leak fixture for public query keys,
+      `kovo-deps`, `Kovo-Targets`, generated optimistic export names, transform inputs, and lowered
+      browser code.
 
 ## Implementation Sequence
 
