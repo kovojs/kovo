@@ -3598,6 +3598,10 @@ interface SessionProvenanceContext {
   opaqueAliases: Map<string, string>;
 }
 
+interface PrivateScopeLookupOptions {
+  allowUnguardedDirect?: boolean;
+}
+
 interface ExtractedWriteCall {
   index: number;
   /**
@@ -10646,7 +10650,9 @@ function addSessionAliasesForVariableDeclaration(
 
   const nameNode = declaration.getNameNode();
   if (Node.isIdentifier(nameNode)) {
-    const provenance = privateScopeForExpression(initializer, context);
+    const provenance = privateScopeForExpression(initializer, context, 0, {
+      allowUnguardedDirect: true,
+    });
     const key = resolvedSymbolKey(symbolForIdentifierReference(nameNode) ?? nameNode.getSymbol());
     if (provenance && key) {
       aliases.set(key, {
@@ -10676,7 +10682,9 @@ function addSessionAliasesForVariableDeclaration(
   }
 
   if (!Node.isObjectBindingPattern(nameNode)) return;
-  const base = privateScopeForExpression(initializer, context);
+  const base = privateScopeForExpression(initializer, context, 0, {
+    allowUnguardedDirect: true,
+  });
   if (!base) return;
 
   for (const element of nameNode.getElements()) {
@@ -10715,12 +10723,16 @@ function privateScopeForExpression(
   node: Node,
   context: SessionProvenanceContext,
   depth = 0,
+  options: PrivateScopeLookupOptions = {},
 ): PrivateScopeProvenance | undefined {
   if (depth > 4) return undefined;
   const expression = unwrappedStaticExpressionNode(node);
 
   const direct = directPrivateScopeForExpression(expression);
-  if (direct) return direct;
+  if (direct) {
+    if (!direct.requiresGuard || options.allowUnguardedDirect) return direct;
+    return directPrivateScopeGuardDominatesUse(direct, expression) ? direct : undefined;
+  }
 
   if (Node.isIdentifier(expression)) {
     const key = resolvedSymbolKey(
@@ -10741,7 +10753,7 @@ function privateScopeForExpression(
   }
 
   if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
-    const base = privateScopeForExpression(expression.getExpression(), context, depth + 1);
+    const base = privateScopeForExpression(expression.getExpression(), context, depth + 1, options);
     const name = staticAccessName(expression);
     return base && name
       ? { kind: base.kind, path: joinPrivateScopePath(base.path, name) }
@@ -10786,9 +10798,65 @@ function directPrivateScopeForExpression(node: Node): PrivateScopeProvenance | u
   for (const kind of ['guard', 'session', 'tenant'] as const) {
     const index = segments.path.indexOf(kind);
     if (index < 0) continue;
-    return { kind, path: segments.path.slice(index + 1).join('.'), requiresGuard: true };
+    return {
+      kind,
+      path: segments.path.slice(index + 1).join('.'),
+      requiresGuard: directPrivateScopeRequiresGuard(node),
+    };
   }
   return undefined;
+}
+
+function directPrivateScopeRequiresGuard(node: Node): boolean {
+  return (
+    accessChainHasQuestionDot(node) ||
+    accessChainHasOptionalPropertyDeclaration(node) ||
+    accessChainContainsNullishType(node)
+  );
+}
+
+function accessChainHasQuestionDot(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const compilerNode = expression.compilerNode as { questionDotToken?: unknown };
+    return (
+      Boolean(compilerNode.questionDotToken) ||
+      accessChainHasQuestionDot(expression.getExpression())
+    );
+  }
+  return false;
+}
+
+function accessChainContainsNullishType(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (typeContainsNullish(expression.getType())) return true;
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    return accessChainContainsNullishType(expression.getExpression());
+  }
+  return false;
+}
+
+function typeContainsNullish(type: MorphType): boolean {
+  if (type.isUnion()) return type.getUnionTypes().some(typeContainsNullish);
+  const flags = type.getFlags();
+  return Boolean(flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void));
+}
+
+function accessChainHasOptionalPropertyDeclaration(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (Node.isPropertyAccessExpression(expression)) {
+    const declarations = expression.getNameNode().getSymbol()?.getDeclarations() ?? [];
+    if (declarations.some(declarationHasQuestionToken)) return true;
+    return accessChainHasOptionalPropertyDeclaration(expression.getExpression());
+  }
+  if (Node.isElementAccessExpression(expression)) {
+    return accessChainHasOptionalPropertyDeclaration(expression.getExpression());
+  }
+  return false;
+}
+
+function declarationHasQuestionToken(declaration: Node): boolean {
+  return Boolean((declaration.compilerNode as { questionToken?: unknown }).questionToken);
 }
 
 function privateScopeKey(provenance: PrivateScopeProvenance): string {
@@ -10797,6 +10865,30 @@ function privateScopeKey(provenance: PrivateScopeProvenance): string {
 
 function joinPrivateScopePath(base: string, segment: string): string {
   return base.length === 0 ? segment : `${base}.${segment}`;
+}
+
+function directPrivateScopeGuardDominatesUse(target: PrivateScopeProvenance, use: Node): boolean {
+  const used = blockStatementAncestor(use);
+  if (!used) return false;
+
+  const statements = used.block.getStatements();
+  const useIndex = statements.findIndex((statement) => sameSourceNode(statement, used.statement));
+  if (useIndex < 0) return false;
+
+  let guarded = false;
+  for (const statement of statements.slice(0, useIndex)) {
+    if (isAcceptedDirectPrivateScopeGuard(statement, target)) {
+      guarded = true;
+      continue;
+    }
+    if (!statementContainsPrivateScope(statement, target)) continue;
+    if (!guarded) return false;
+    // advanced-analyzer.md Layer 1: an intervening direct private-scope use is an
+    // escape/opaque boundary just like an intervening guarded alias use.
+    return false;
+  }
+
+  return guarded;
 }
 
 function sessionAliasGuardDominatesUse(alias: SessionAlias, use: Node): boolean {
@@ -10863,12 +10955,43 @@ function isAcceptedSessionGuard(statement: Node, aliasName: string): boolean {
   return statementExits(statement.getThenStatement());
 }
 
+function isAcceptedDirectPrivateScopeGuard(
+  statement: Node,
+  target: PrivateScopeProvenance,
+): boolean {
+  if (!Node.isIfStatement(statement)) return false;
+  const checked = falsyPrivateScopeCheck(statement.getExpression());
+  return (
+    checked !== undefined &&
+    privateScopeMatches(checked, target) &&
+    statementExits(statement.getThenStatement())
+  );
+}
+
 function isFalsyIdentifierCheck(expression: Node, aliasName: string): boolean {
   const node = unwrappedStaticExpressionNode(expression);
   if (!Node.isPrefixUnaryExpression(node)) return false;
   if (node.getOperatorToken() !== SyntaxKind.ExclamationToken) return false;
   const operand = unwrappedStaticExpressionNode(node.getOperand());
   return Node.isIdentifier(operand) && operand.getText() === aliasName;
+}
+
+function falsyPrivateScopeCheck(expression: Node): PrivateScopeProvenance | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isPrefixUnaryExpression(node)) return undefined;
+  if (node.getOperatorToken() !== SyntaxKind.ExclamationToken) return undefined;
+  return directPrivateScopeForExpression(node.getOperand());
+}
+
+function statementContainsPrivateScope(statement: Node, target: PrivateScopeProvenance): boolean {
+  return statement.getDescendants().some((node) => {
+    const direct = directPrivateScopeForExpression(node);
+    return direct !== undefined && privateScopeMatches(direct, target);
+  });
+}
+
+function privateScopeMatches(left: PrivateScopeProvenance, right: PrivateScopeProvenance): boolean {
+  return left.kind === right.kind && left.path === right.path;
 }
 
 function statementExits(statement: Node): boolean {
