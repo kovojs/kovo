@@ -141,7 +141,7 @@ export const TableHeaderCell = component({
         colspan: props.colSpan,
         scope: props.scope ?? 'col',
       },
-      props.children,
+      props.children === undefined ? undefined : escapeHtml(props.children),
     );
   },
 });
@@ -151,7 +151,7 @@ export const TableCell = component({
     return tablePart(
       'td',
       { ...style.attrs(tableStyles.cell, props.styles?.cell), colspan: props.colSpan },
-      props.children,
+      props.children === undefined ? undefined : escapeHtml(props.children),
     );
   },
 });

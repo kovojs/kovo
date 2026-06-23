@@ -9,7 +9,7 @@ export const contacts = pgTable(
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
-    email: text('email').notNull(),
+    email: text('email').notNull().unique(),
     ownerId: text('owner_id').notNull(),
     dealCount: integer('deal_count').notNull(),
     // Presentational fields used by the UI; demo forms leave them to defaults.

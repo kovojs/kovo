@@ -105,7 +105,6 @@ describe('crm interactive app', () => {
         id: 'c-test-1',
         name: 'Edsger Dijkstra',
         email: 'edsger@demo.example.com',
-        ownerId: 'u1',
       }),
       `${contactsTarget}=contactList`,
       liveHeader(contactsTarget, contactsComponent),
@@ -117,7 +116,8 @@ describe('crm interactive app', () => {
 
     const rows = await db.select().from(contacts);
     expect(rows).toHaveLength(before + 1);
-    expect(rows.some((row) => row.id === 'c-test-1')).toBe(true);
+    const inserted = rows.find((row) => row.id === 'c-test-1');
+    expect(inserted?.ownerId).toBe('u1');
   });
 
   it('addContact typed failure re-renders the contact form with duplicate-email state', async () => {
@@ -132,7 +132,6 @@ describe('crm interactive app', () => {
         id: 'c-duplicate-email',
         name: 'Duplicate Contact',
         email: contact.email,
-        ownerId: 'u1',
       }),
       `${contactsTarget}=contactList`,
       liveHeader(contactsTarget, contactsComponent),
@@ -159,7 +158,6 @@ describe('crm interactive app', () => {
         contactId: contact.id,
         stage: 'open',
         amount: '7500',
-        ownerId: 'u1',
       }),
       `${pipelineTarget}=contactList openDeals pipelineByStage`,
       liveHeader(pipelineTarget, pipelineComponent),
@@ -174,9 +172,75 @@ describe('crm interactive app', () => {
     expect(dealRows).toHaveLength(beforeDeals + 1);
     const inserted = dealRows.find((row) => row.id === 'd-test-1');
     expect(inserted?.amount).toBe(7500);
+    expect(inserted?.ownerId).toBe('u1');
 
     const [after] = await db.select().from(contacts).where(eq(contacts.id, contact.id)).limit(1);
     expect(after?.dealCount).toBe(beforeCount + 1);
+  });
+
+  it('createDeal rejects unowned contacts and invalid stages before writing rows', async () => {
+    const { db, handler } = await buildCrmInteractiveApp();
+    const [unowned] = await db.select().from(contacts).where(eq(contacts.ownerId, 'u2')).limit(1);
+    if (!unowned) throw new Error('seed produced no u2 contact');
+    const beforeDeals = (await db.select().from(deals)).length;
+
+    const unownedResult = await postForm(
+      handler,
+      'createDeal',
+      withCsrf({
+        id: 'd-unowned',
+        contactId: unowned.id,
+        stage: 'open',
+        amount: '7500',
+      }),
+      `${pipelineTarget}=contactList openDeals pipelineByStage`,
+      liveHeader(pipelineTarget, pipelineComponent),
+    );
+
+    expect(unownedResult.status).toBe(422);
+    expect(unownedResult.html).toContain('data-error-code="CONTACT_NOT_FOUND"');
+
+    const invalidStageResult = await postForm(
+      handler,
+      'createDeal',
+      withCsrf({
+        id: 'd-invalid-stage',
+        contactId: 'c1',
+        stage: 'javascript:alert(1)',
+        amount: '7500',
+      }),
+      `${pipelineTarget}=contactList openDeals pipelineByStage`,
+      liveHeader(pipelineTarget, pipelineComponent),
+    );
+
+    expect(invalidStageResult.status).toBe(422);
+    expect(invalidStageResult.html).toContain('data-error-path="stage"');
+    expect(await db.select().from(deals)).toHaveLength(beforeDeals);
+  });
+
+  it('ignores spoofed ownerId fields and derives CRM identity from the session', async () => {
+    const { db, handler } = await buildCrmInteractiveApp();
+
+    const { status } = await postForm(
+      handler,
+      'addContact',
+      withCsrf({
+        id: 'c-spoof-owner',
+        name: 'Spoofed Owner',
+        email: 'spoofed-owner@demo.example.com',
+        ownerId: 'u2',
+      }),
+      `${contactsTarget}=contactList`,
+      liveHeader(contactsTarget, contactsComponent),
+    );
+
+    expect(status).toBe(200);
+    const [inserted] = await db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.id, 'c-spoof-owner'))
+      .limit(1);
+    expect(inserted?.ownerId).toBe('u1');
   });
 
   it('moveDeal updates the stage and re-renders the deal-detail region', async () => {
@@ -195,6 +259,26 @@ describe('crm interactive app', () => {
 
     const [after] = await db.select().from(deals).where(eq(deals.id, 'd1')).limit(1);
     expect(after?.stage).toBe('proposal');
+  });
+
+  it('moveDeal refuses deals outside the authenticated owner scope', async () => {
+    const { db, handler } = await buildCrmInteractiveApp();
+    const [unowned] = await db.select().from(deals).where(eq(deals.ownerId, 'u2')).limit(1);
+    if (!unowned) throw new Error('seed produced no u2 deal');
+
+    const { status, html } = await postForm(
+      handler,
+      'moveDeal',
+      withCsrf({ dealId: unowned.id, stage: 'proposal' }),
+      `${dealDetailTarget}=activityList contactList dealList`,
+      liveHeader(dealDetailTarget, dealDetailComponent, { dealId: unowned.id }),
+    );
+
+    expect(status).toBe(422);
+    expect(html).toContain('data-error-code="DEAL_NOT_FOUND"');
+
+    const [after] = await db.select().from(deals).where(eq(deals.id, unowned.id)).limit(1);
+    expect(after?.stage).toBe(unowned.stage);
   });
 
   it('closeDeal sets stage=won, applies the server commission, and re-renders the deal detail', async () => {

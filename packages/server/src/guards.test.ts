@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { guards, sanitizeNext, session } from './guards.js';
+import { guards, renderHttpGuardFailureResponse, sanitizeNext, session } from './guards.js';
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
 import { route } from './route.js';
 import { s } from './schema.js';
@@ -412,6 +412,30 @@ describe('server guard and session primitives', () => {
         'Cache-Control': 'no-store',
         Location: '/login?next=%2Fcart',
       },
+      status: 303,
+    });
+  });
+
+  it('sanitizes next before invoking custom onUnauthenticated handlers', async () => {
+    await expect(
+      renderHttpGuardFailureResponse(
+        {
+          error: { code: 'UNAUTHORIZED' },
+          ok: false,
+          status: 422,
+        },
+        { session: null },
+        {
+          currentUrl: 'https://evil.example/phish',
+          onUnauthenticated({ next }) {
+            return { location: `/signin?continue=${encodeURIComponent(next)}`, status: 303 };
+          },
+          routes: [route('/signin')],
+        },
+      ),
+    ).resolves.toEqual({
+      body: '',
+      headers: { Location: '/signin?continue=%2F' },
       status: 303,
     });
   });

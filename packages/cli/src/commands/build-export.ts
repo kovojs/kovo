@@ -1,8 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { DiagnosticCode } from '@kovojs/core';
@@ -1066,9 +1066,14 @@ function addExportManifestAsset(
   const normalizedFile = normalizedExportManifestFile(file);
   if (assets.has(normalizedFile)) return assets.get(normalizedFile);
   const href = exportManifestAssetHref(normalizedFile, base);
+  const source = resolve(distDir, normalizedFile);
+  const relativeSource = relative(distDir, source);
+  if (relativeSource === '' || relativeSource.startsWith('..') || isAbsolute(relativeSource)) {
+    throw new Error(`kovo export --manifest asset must stay within --dist: ${file}`);
+  }
   const asset = {
     path: new URL(href, 'https://kovo.local').pathname,
-    source: resolve(distDir, normalizedFile),
+    source,
   };
   assets.set(normalizedFile, asset);
   return asset;
@@ -1077,7 +1082,13 @@ function addExportManifestAsset(
 function normalizedExportManifestFile(file: string): string {
   const pathname = file.replace(/[?#].*$/, '').replace(/^\/+/, '');
   const segments = pathname.split('/');
-  if (segments.length === 0 || segments.some((segment) => !/^[A-Za-z0-9._-]+$/.test(segment))) {
+  if (
+    segments.length === 0 ||
+    segments.some(
+      (segment) =>
+        segment === '' || segment === '.' || segment === '..' || !/^[A-Za-z0-9._-]+$/.test(segment),
+    )
+  ) {
     throw new Error(`kovo export --manifest asset must stay within --dist: ${file}`);
   }
   return segments.join('/');

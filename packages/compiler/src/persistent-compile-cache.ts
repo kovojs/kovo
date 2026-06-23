@@ -85,7 +85,12 @@ export async function readPersistentCompileCacheEntry<Result>(
   if (!entry || entry.compilerBuildId !== compilerBuildId()) return null;
 
   try {
-    return JSON.parse(await readFile(join(cacheDir, entry.artifactRefs.result), 'utf8')) as Result;
+    const resultRef = entry.artifactRefs.result;
+    const digest = persistentCompileCacheBlobDigest(resultRef);
+    if (digest === null) return null;
+    const resultJson = await readFile(join(cacheDir, resultRef), 'utf8');
+    if (sha256(resultJson) !== digest) return null;
+    return JSON.parse(resultJson) as Result;
   } catch {
     return null;
   }
@@ -140,6 +145,11 @@ function isPersistentCompileCacheEntry(value: unknown): value is PersistentCompi
     Boolean(candidate.artifactRefs && typeof candidate.artifactRefs.result === 'string') &&
     Boolean(candidate.footprint && typeof candidate.footprint === 'object')
   );
+}
+
+function persistentCompileCacheBlobDigest(ref: string): string | null {
+  const match = /^blobs\/([0-9a-f]{64})\.json$/.exec(ref);
+  return match?.[1] ?? null;
 }
 
 async function atomicWriteFile(fileName: string, source: string): Promise<void> {

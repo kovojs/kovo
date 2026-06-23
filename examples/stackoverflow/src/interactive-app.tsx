@@ -261,6 +261,7 @@ export interface SoInteractiveApp {
 
 export interface BuildSoInteractiveAppOptions {
   db?: SoDb;
+  onError?: NonNullable<Parameters<typeof createApp>[0]>['onError'];
 }
 
 /**
@@ -322,6 +323,7 @@ export async function buildSoInteractiveApp(
     document: { lang: 'en-US' },
     liveTargetRenderers: sourceLiveTargetRenderers(stylesheetManifest),
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
     queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],
     routes: [
       route('/', {

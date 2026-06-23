@@ -529,7 +529,6 @@ export function voteButton(questionId: string, value: number): string {
     <form enhance mutation={voteUpMutation} key={questionId} style={chromeStyles.voteForm}>
       <input type="hidden" name="id" value={`vote-${questionId}`} />
       <input type="hidden" name="targetId" value={questionId} />
-      <input type="hidden" name="userId" value="demo-viewer" />
       <div style={chromeStyles.voteStat}>
         <button type="submit" aria-label="Up vote" style={chromeStyles.voteButton}>
           <span style={chromeStyles.voteCaret}>&#9650;</span>

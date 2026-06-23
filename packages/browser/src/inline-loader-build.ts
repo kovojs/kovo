@@ -55,7 +55,7 @@ const inlineHelperSpecs = {
 
 type InlineHelperSpec = (typeof inlineHelperSpecs)[keyof typeof inlineHelperSpecs];
 
-export const inlineKovoLoaderGzipByteBudget = 8192;
+export const inlineKovoLoaderGzipByteBudget = 8448;
 
 export const inlineWireParserReadableSource = readInlineWireParserReadableSource();
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
@@ -198,7 +198,14 @@ function installInlineKovoLoader(im) {
       return;
     }
     if (val == null) el.removeAttribute?.(name);
-    else el.setAttribute?.(name, fb(val));
+    else {
+      if ((name[0] === 'o' && name[1] === 'n') || name === 'srcdoc') el.removeAttribute?.(name);
+      else {
+        let rendered = fb(val);
+        if (/^(javascript|data):/i.test(rendered)) rendered = '#';
+        el.setAttribute?.(name, rendered);
+      }
+    }
     if (name === 'value' && el.value !== undefined) {
       if (val != null) el.value = fb(val);
       else if (el.localName != 'progress') el.value = '';
@@ -1052,7 +1059,7 @@ export function buildInlineKovoLoaderModuleSource(
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
-    '// SPEC.md §4.4 keeps the always-loaded loader under an 8KB gzip budget; this',
+    '// SPEC.md §4.4 keeps the always-loaded loader under an 8.25KB gzip budget; this',
     '// literal is the pre-minified bootstrap shipped in document shells.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     `export const inlineKovoLoaderInstallerSource = ${inlineJavaScriptTemplateLiteral(

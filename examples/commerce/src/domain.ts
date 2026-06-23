@@ -74,7 +74,7 @@ export const EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET = 'EXAMPLE_ONLY_COMMERCE_AUT
 
 export const commerceCsrf = {
   field: 'csrf',
-  secret: EXAMPLE_ONLY_COMMERCE_CSRF_SECRET,
+  secret: exampleDeploymentSecret('KOVO_COMMERCE_CSRF_SECRET', EXAMPLE_ONLY_COMMERCE_CSRF_SECRET),
   sessionId(request: CommerceRequest) {
     return request.session?.id;
   },
@@ -82,7 +82,10 @@ export const commerceCsrf = {
 
 export const commerceAuthCsrf = {
   field: 'csrf',
-  secret: EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
+  secret: exampleDeploymentSecret(
+    'KOVO_COMMERCE_AUTH_CSRF_SECRET',
+    EXAMPLE_ONLY_COMMERCE_AUTH_CSRF_SECRET,
+  ),
   sessionId(request: CommerceAuthRequest) {
     return request.session?.id ?? request.authCsrfId ?? 'commerce-shell-login';
   },
@@ -288,4 +291,13 @@ function commerceAuthResponse(
   });
 
   return { headers, status };
+}
+
+function exampleDeploymentSecret(envName: string, fallback: string): string {
+  const secret = process.env[envName];
+  if (secret && secret !== fallback) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
+  }
+  return fallback;
 }

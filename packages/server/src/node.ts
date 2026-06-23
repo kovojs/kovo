@@ -153,7 +153,7 @@ export async function writeWebResponseToNode(
     // interim response, so emitting one desynchronizes the connection. Suppress for '1.0'.
     options.httpVersion !== '1.0'
   ) {
-    nodeResponse.writeEarlyHints({ link: earlyHints });
+    nodeResponse.writeEarlyHints({ link: nodeEarlyHintsLinkValue(earlyHints) });
   }
 
   nodeResponse.writeHead(response.status, response.statusText, headers);
@@ -243,16 +243,57 @@ function appendVary(headers: Headers, token: string): void {
   if (!tokens.includes(token.toLowerCase())) headers.set('Vary', `${existing}, ${token}`);
 }
 
+function nodeEarlyHintsLinkValue(value: string): string | string[] {
+  const links = splitLinkHeader(value);
+  return links.length <= 1 ? value : links;
+}
+
+function splitLinkHeader(value: string): string[] {
+  const links: string[] = [];
+  let start = 0;
+  let inAngle = false;
+  let inQuote = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === '<' && !inQuote) {
+      inAngle = true;
+      continue;
+    }
+    if (char === '>' && !inQuote) {
+      inAngle = false;
+      continue;
+    }
+    if (char === '"') {
+      inQuote = !inQuote;
+      continue;
+    }
+    if (char !== ',' || inAngle || inQuote) continue;
+
+    const link = value.slice(start, index).trim();
+    if (link) links.push(link);
+    start = index + 1;
+  }
+
+  const tail = value.slice(start).trim();
+  if (tail) links.push(tail);
+  return links;
+}
+
 function nodeRequestUrl(request: IncomingMessage, options: NodeHandlerOptions): string {
   const rawUrl = request.url ?? '/';
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) return rawUrl;
-
   const origin =
     typeof options.origin === 'function'
       ? options.origin(request)
       : (options.origin ?? defaultOrigin(request));
 
-  return new URL(rawUrl, origin).href;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
+    const absolute = new URL(rawUrl);
+    return new URL(`${absolute.pathname}${absolute.search}${absolute.hash}`, origin).href;
+  }
+
+  const pathOnly = rawUrl.startsWith('//') ? `/${rawUrl.replace(/^\/+/, '')}` : rawUrl;
+  return new URL(pathOnly, origin).href;
 }
 
 function defaultOrigin(request: IncomingMessage): string {

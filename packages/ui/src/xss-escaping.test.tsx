@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { AutocompleteOption, AutocompleteValue } from './autocomplete.js';
+import { Badge } from './badge.js';
 import { ComboboxOption, ComboboxValue } from './combobox.js';
 import { CommandItem, CommandValue } from './command.js';
+import { ContextMenuItem } from './context-menu.js';
 import { Drawer as DrawerPanel } from './drawer.js';
+import { DropdownMenuItem } from './dropdown-menu.js';
 import { MenubarItem } from './menubar.js';
 import { SelectItem, SelectValue } from './select.js';
 import { Sheet } from './sheet.js';
-import { Table } from './table.js';
+import { Table, TableCell, TableHeaderCell } from './table.js';
 
 // SECURITY_FINDINGS.md C1: the @kovojs/server JSX runtime emits text children verbatim
 // (only attributes are escaped). Apps pass these scalar text props in attribute position
@@ -20,6 +23,12 @@ const ESCAPED = '&lt;img src=x onerror=alert(1)&gt;';
 const RAW_CHILD = '<strong>composed</strong>';
 
 describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => {
+  it('escapes Badge children as text', () => {
+    const rendered = Badge.definition.render({ children: PAYLOAD });
+    expect(rendered).toContain(ESCAPED);
+    expect(rendered).not.toContain(PAYLOAD);
+  });
+
   it('escapes AutocompleteOption itemLabel/itemValue but passes children through raw', () => {
     const escaped = AutocompleteOption.definition.render({
       itemLabel: PAYLOAD,
@@ -127,6 +136,44 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(rawChildren).toContain(RAW_CHILD);
   });
 
+  it('escapes DropdownMenuItem itemLabel/itemValue but passes children through raw', () => {
+    const escaped = DropdownMenuItem.definition.render({
+      itemLabel: PAYLOAD,
+      itemValue: 'value',
+    });
+    expect(escaped).toContain(ESCAPED);
+    expect(escaped).not.toContain(PAYLOAD);
+
+    const escapedValue = DropdownMenuItem.definition.render({ itemValue: PAYLOAD });
+    expect(escapedValue).toContain(ESCAPED);
+    expect(escapedValue).not.toContain(PAYLOAD);
+
+    const rawChildren = DropdownMenuItem.definition.render({
+      children: RAW_CHILD,
+      itemValue: 'value',
+    });
+    expect(rawChildren).toContain(RAW_CHILD);
+  });
+
+  it('escapes ContextMenuItem itemLabel/itemValue but passes children through raw', () => {
+    const escaped = ContextMenuItem.definition.render({
+      itemLabel: PAYLOAD,
+      itemValue: 'value',
+    });
+    expect(escaped).toContain(ESCAPED);
+    expect(escaped).not.toContain(PAYLOAD);
+
+    const escapedValue = ContextMenuItem.definition.render({ itemValue: PAYLOAD });
+    expect(escapedValue).toContain(ESCAPED);
+    expect(escapedValue).not.toContain(PAYLOAD);
+
+    const rawChildren = ContextMenuItem.definition.render({
+      children: RAW_CHILD,
+      itemValue: 'value',
+    });
+    expect(rawChildren).toContain(RAW_CHILD);
+  });
+
   it('escapes Sheet title/description/trigger/closeLabel but passes the body slot through raw', () => {
     const rendered = Sheet.definition.render({
       children: RAW_CHILD,
@@ -167,5 +214,15 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(rendered).not.toContain(PAYLOAD);
     // The app-composed body children are emitted raw.
     expect(rendered).toContain(RAW_CHILD);
+  });
+
+  it('escapes TableCell and TableHeaderCell children as scalar text', () => {
+    const cell = TableCell.definition.render({ children: PAYLOAD });
+    expect(cell).toContain(ESCAPED);
+    expect(cell).not.toContain(PAYLOAD);
+
+    const header = TableHeaderCell.definition.render({ children: PAYLOAD });
+    expect(header).toContain(ESCAPED);
+    expect(header).not.toContain(PAYLOAD);
   });
 });

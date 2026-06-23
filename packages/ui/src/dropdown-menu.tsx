@@ -73,6 +73,10 @@ export interface DropdownMenuSeparatorProps {
   styles?: DropdownMenuStyleOverrides;
 }
 
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
 export const dropdownMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -309,7 +313,7 @@ export const DropdownMenuItem = component({
         type="button"
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
       </button>
     );
   },

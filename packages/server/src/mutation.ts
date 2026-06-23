@@ -12,6 +12,7 @@ import {
   guardFailureIsUnauthenticated,
   resolveLifecycleRequest,
   runGuard,
+  sanitizeNext,
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
@@ -49,10 +50,7 @@ import {
   type Schema,
   type ValidationFailurePayload,
 } from './schema.js';
-import {
-  coalesceMutationStreamChunks,
-  renderStreamingMutationWireResponse,
-} from './mutation/streaming.js';
+import { renderStreamingMutationWireResponse } from './mutation/streaming.js';
 import {
   queriesToRerun,
   renderFragmentChunks,
@@ -67,7 +65,6 @@ import type {
   MutationRegistry,
   MutationResult,
   MutationSuccess,
-  QueryRerun,
   RunMutationOptions,
 } from './mutation/definition.js';
 export {
@@ -814,10 +811,7 @@ export async function renderNoJsMutationResponse<
       headers: mergeMutationResponseHeaders(
         {
           'Cache-Control': 'no-store',
-          Location:
-            typeof noJsRequest.redirectTo === 'function'
-              ? noJsRequest.redirectTo(result)
-              : noJsRequest.redirectTo,
+          Location: mutationRedirectLocation(noJsRequest.redirectTo, result),
         },
         result.responseHeaders,
       ),
@@ -865,10 +859,7 @@ export async function renderNoJsMutationResponse<
     headers: mergeMutationResponseHeaders(
       {
         'Cache-Control': 'no-store',
-        Location:
-          typeof noJsRequest.redirectTo === 'function'
-            ? noJsRequest.redirectTo(result)
-            : noJsRequest.redirectTo,
+        Location: mutationRedirectLocation(noJsRequest.redirectTo, result),
       },
       result.responseHeaders,
     ),
@@ -920,6 +911,13 @@ function isMutationFail(value: unknown): value is MutationFail {
     value.ok === false &&
     'error' in value
   );
+}
+
+function mutationRedirectLocation<Value>(
+  redirectTo: string | ((result: MutationSuccess<Value>) => string),
+  result: MutationSuccess<Value>,
+): string {
+  return sanitizeNext(typeof redirectTo === 'function' ? redirectTo(result) : redirectTo, []);
 }
 
 function noJsMutationServerErrorResponse(): NoJsMutationResponse {

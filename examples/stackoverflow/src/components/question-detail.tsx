@@ -241,10 +241,7 @@ function renderQuestionPost(question: QuestionDetailResult): string {
 
 function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
   return (
-    <li
-      kovo-key={answer.id}
-      style={answer.accepted ? [detailStyles.post, detailStyles.postAccepted] : detailStyles.post}
-    >
+    <li kovo-key={answer.id} style={detailStyles.post}>
       <div style={detailStyles.gutter}>
         <span style={detailStyles.voteArrow} aria-hidden="true">
           &#9650;
@@ -298,7 +295,6 @@ function renderQuestionDetailSecondary(
       <form enhance mutation={postAnswerMutation} id="your-answer" style={detailStyles.composer}>
         <input type="hidden" name="id" value={freshId('a')} />
         <input type="hidden" name="questionId" value={questionId} />
-        <input type="hidden" name="authorId" value="demo-viewer" />
         <h2 style={detailStyles.composerTitle}>Your Answer</h2>
         <textarea
           id="answer-body"

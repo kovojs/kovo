@@ -1,4 +1,4 @@
-import { mutation, s, type MutationContext } from '@kovojs/server';
+import { guards, mutation, s, type MutationContext } from '@kovojs/server';
 import { and, eq, sql } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
@@ -10,7 +10,7 @@ import { answers, questions, votes } from './schema.js';
 
 // Insert a new question; score and answer count start at zero.
 export async function postQuestion(
-  { id, title, body, authorId }: { id: string; title: string; body: string; authorId: string },
+  { id, title, body }: { id: string; title: string; body: string },
   request: SoRequest,
   context: MutationContext<{ DUPLICATE_TITLE: typeof duplicateTitleError }>,
 ) {
@@ -22,6 +22,10 @@ export async function postQuestion(
   const existing = await findExistingQuestionTitle(db, sessionId, title);
   if (existing) {
     return context.fail('DUPLICATE_TITLE', { title });
+  }
+  const authorId = request.session?.user?.id;
+  if (!authorId) {
+    throw new Error('stackoverflow mutations require request.session.user.id');
   }
 
   await db.insert(questions).values({
@@ -41,12 +45,7 @@ export async function postQuestion(
 
 // Insert an answer and bump the question's answer count.
 export async function postAnswer(
-  {
-    id,
-    questionId,
-    body,
-    authorId,
-  }: { id: string; questionId: string; body: string; authorId: string },
+  { id, questionId, body }: { id: string; questionId: string; body: string },
   request: SoRequest,
 ): Promise<{ id: string }> {
   const db = request.db;
@@ -54,9 +53,19 @@ export async function postAnswer(
   if (!sessionId) {
     throw new Error('stackoverflow mutations require request.session.id');
   }
-  await db
-    .insert(answers)
-    .values({ id, sessionId, questionId, body, authorId, score: 0, accepted: false });
+  const authorId = request.session?.user?.id;
+  if (!authorId) {
+    throw new Error('stackoverflow mutations require request.session.user.id');
+  }
+  await db.insert(answers).values({
+    id,
+    sessionId,
+    questionId,
+    body,
+    authorId,
+    score: 0,
+    accepted: false,
+  });
   await db
     .update(questions)
     .set({ answerCount: sql`${questions.answerCount} + ${1}` })
@@ -66,7 +75,7 @@ export async function postAnswer(
 
 // Insert an upvote and bump the target question's score.
 export async function voteUp(
-  { id, targetId, userId }: { id: string; targetId: string; userId: string },
+  { id, targetId }: { id: string; targetId: string },
   request: SoRequest,
 ): Promise<{ id: string }> {
   const db = request.db;
@@ -74,7 +83,17 @@ export async function voteUp(
   if (!sessionId) {
     throw new Error('stackoverflow mutations require request.session.id');
   }
-  await db.insert(votes).values({ sessionId, targetType: 'question', targetId, userId, value: 1 });
+  const userId = request.session?.user?.id;
+  if (!userId) {
+    throw new Error('stackoverflow mutations require request.session.user.id');
+  }
+  await db.insert(votes).values({
+    sessionId,
+    targetType: 'question',
+    targetId,
+    userId,
+    value: 1,
+  });
   await db
     .update(questions)
     .set({ score: sql`${questions.score} + ${1}` })
@@ -92,7 +111,7 @@ export const EXAMPLE_ONLY_SO_CSRF_SECRET = 'stackoverflow-reference-demo-csrf-se
 
 export const soCsrf = {
   field: 'csrf',
-  secret: EXAMPLE_ONLY_SO_CSRF_SECRET,
+  secret: exampleDeploymentSecret('KOVO_STACKOVERFLOW_CSRF_SECRET', EXAMPLE_ONLY_SO_CSRF_SECRET),
   sessionId(request: SoCsrfRequest) {
     return request.session?.id;
   },
@@ -118,12 +137,12 @@ export const postQuestionMutation = mutation('postQuestion', {
     id: s.string(),
     title: s.string(),
     body: s.string(),
-    authorId: s.string(),
   }),
   csrf: soCsrf,
   errors: {
     DUPLICATE_TITLE: duplicateTitleError,
   },
+  guard: guards.authed<SoRequest>(),
   handler: postQuestion,
 });
 
@@ -132,9 +151,9 @@ export const postAnswerMutation = mutation('postAnswer', {
     id: s.string(),
     questionId: s.string(),
     body: s.string(),
-    authorId: s.string(),
   }),
   csrf: soCsrf,
+  guard: guards.authed<SoRequest>(),
   handler: postAnswer,
 });
 
@@ -142,8 +161,17 @@ export const voteUpMutation = mutation('voteUp', {
   input: s.object({
     id: s.string(),
     targetId: s.string(),
-    userId: s.string(),
   }),
   csrf: soCsrf,
+  guard: guards.authed<SoRequest>(),
   handler: voteUp,
 });
+
+function exampleDeploymentSecret(envName: string, fallback: string): string {
+  const secret = process.env[envName];
+  if (secret && secret !== fallback) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
+  }
+  return fallback;
+}

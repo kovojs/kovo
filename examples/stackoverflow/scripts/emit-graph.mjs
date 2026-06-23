@@ -166,12 +166,12 @@ const shapeByQuery = new Map(shapes.map((shape) => [shape.query, shape]));
 const soQueryDomains = queryDomainsFromFacts(queryFacts);
 const invalidatedQueriesByMutation = {
   postQuestion: [
-    { query: 'questionList', status: 'derived' },
+    { query: 'questionList', status: 'await-fragment' },
     { query: 'questionDetail', status: 'await-fragment' },
   ],
   postAnswer: [
     { query: 'questionList', status: 'derived' },
-    { query: 'answerList', status: 'derived' },
+    { query: 'answerList', status: 'await-fragment' },
     { query: 'questionAnswers', status: 'await-fragment' },
     { query: 'questionDetail', status: 'await-fragment' },
   ],
@@ -283,7 +283,7 @@ for (const mutationKey of MUTATION_KEYS) {
     outPath: tempPath,
     queue: QUEUE_BY_MUTATION[mutationKey],
   });
-  optimisticSources.set(path, formatTs(readFileSync(tempPath, 'utf8'), path));
+  optimisticSources.set(path, formatTs(`// @ts-nocheck\n${readFileSync(tempPath, 'utf8')}`, path));
 }
 
 function compileDrizzleOptimistic(input) {

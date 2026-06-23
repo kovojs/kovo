@@ -252,7 +252,7 @@ describe('core authoring APIs', () => {
         name: 'quantity',
       }),
     ).toBe(
-      '<output role="alert" id="quantity-error" class="error" data-error-code="VALIDATION">Expected number >= 1</output>',
+      '<output role="alert" id="quantity-error" class="error" data-error-code="VALIDATION">Expected number &gt;= 1</output>',
     );
     expect(FieldError({ failure: validation, name: 'productId' })).toBe('');
     expect(FormError({ failure: validation })).toBe('');
@@ -263,6 +263,32 @@ describe('core authoring APIs', () => {
         message: (failure: typeof coded) => `Only ${failure.payload.availableQuantity} left.`,
       }),
     ).toBe('<output role="alert" data-error-code="OUT_OF_STOCK">Only 2 left.</output>');
+  });
+
+  it('escapes field and form error message bodies', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const validation = {
+      code: 'VALIDATION',
+      fieldErrors: { title: payload },
+    } satisfies FormValidationFailure;
+    const duplicate = {
+      code: 'DUPLICATE_TITLE',
+      payload: { title: payload },
+    };
+
+    expect(FieldError({ failure: validation, name: 'title' })).toBe(
+      '<output role="alert" data-error-code="VALIDATION">&lt;img src=x onerror=alert(1)&gt;</output>',
+    );
+    expect(
+      FormError({
+        code: 'DUPLICATE_TITLE',
+        failure: duplicate,
+        message: (failure: typeof duplicate) =>
+          `A question titled "${failure.payload.title}" exists.`,
+      }),
+    ).toBe(
+      '<output role="alert" data-error-code="DUPLICATE_TITLE">A question titled "&lt;img src=x onerror=alert(1)&gt;" exists.</output>',
+    );
   });
 
   it('threads typed mutation failure state into component render context', () => {

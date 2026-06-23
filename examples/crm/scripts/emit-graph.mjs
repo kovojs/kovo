@@ -90,24 +90,27 @@ const MUTATIONS = [
     handler: 'addContactHandler',
     form: 'addContactForm',
     queue: 'crm',
-    overrides: [],
+    // Server-derived ownerId is intentionally not an input, so the row shape is
+    // represented by the hand-written optimistic patch in mutations.ts.
+    overrides: ['contactList'],
   },
   {
     key: 'createDeal',
     handler: 'createDealHandler',
     form: 'createDealForm',
     queue: 'crm',
-    // contactList: derived program carries the opaque `sql\`${col} + 1\`` SET ⇒
-    // not lowerable ⇒ hand-written. pipelineByStage: GROUP BY PUNT.
-    overrides: ['contactList', 'pipelineByStage'],
+    // ownerId is server-derived and the owned-contact predicate is request-bound,
+    // so all client-visible updates use the hand-written/await patches.
+    overrides: ['contactDealCount', 'contactList', 'dealList', 'openDeals', 'pipelineByStage'],
   },
   {
     key: 'moveDeal',
     handler: 'moveDealHandler',
     form: 'moveDealForm',
     queue: 'crm',
-    // openDeals: membership-entry PUNT. pipelineByStage: GROUP BY PUNT.
-    overrides: ['openDeals', 'pipelineByStage'],
+    // Owner-scoped WHERE clauses are request-bound; keep row updates hand-written
+    // and wait for filtered/grouped server fragments.
+    overrides: ['dealList', 'openDeals', 'pipelineByStage'],
   },
   {
     key: 'closeDeal',

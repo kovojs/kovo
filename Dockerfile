@@ -13,8 +13,9 @@
 # production deps.
 #
 # Build:  docker build -t kovo-examples .
-# Run:    docker run -e EXAMPLE=commerce -e PORT=8080 -p 8080:8080 kovo-examples
-FROM node:24-slim
+# Run:    docker run -e EXAMPLE=commerce -e KOVO_COMMERCE_CSRF_SECRET=... \
+#           -e KOVO_COMMERCE_AUTH_CSRF_SECRET=... -e PORT=8080 -p 8080:8080 kovo-examples
+FROM node:24-slim@sha256:c2d5ade763cacfb03fe9cb8e8af5d1be5041ff331921fa26a9b231ca3a4f780a
 
 # The Rust `vp` (vite-plus) binary initializes its HTTPS client from the SYSTEM CA
 # trust store at both build and serve time; Debian -slim images ship without it, so
@@ -45,18 +46,24 @@ RUN pnpm -C examples/commerce run build:demo \
   && pnpm -C examples/crm run build \
   && pnpm -C examples/stackoverflow run build
 
+RUN chown -R node:node /app
+
 # Cloud Run sends traffic to $PORT and the container must listen on 0.0.0.0.
 ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV NODE_ENV=production
 # Default target; override per service: --set-env-vars EXAMPLE=crm|stackoverflow
 ENV EXAMPLE=commerce
+# Production demo services must set per-example CSRF secrets instead of relying
+# on source-level EXAMPLE_ONLY fallbacks.
 # Memory guardrails for the per-session PGlite instances (override per service).
 ENV KOVO_DEMO_MAX_SESSIONS=40
 ENV KOVO_DEMO_WARM_SESSIONS=10
 ENV KOVO_DEMO_IDLE_MS=1200000
 
 EXPOSE 8080
+
+USER node
 
 # Shell form so $EXAMPLE expands at container start.
 CMD node examples/$EXAMPLE/scripts/demo-serve.mjs
