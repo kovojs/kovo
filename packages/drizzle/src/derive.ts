@@ -235,8 +235,10 @@ function membershipTransition(
   if (value.kind !== 'const' || filter.op !== 'eq' || filter.value?.kind !== 'const') {
     return fail({ code: 'membership-entry', field: column });
   }
-  const exits = value.value !== filter.value.value;
-  return exits ? rows({ guard: 'find-or-noop', match, op: 'remove-row', path }) : ok();
+  if (value.value !== filter.value.value) {
+    return rows({ guard: 'find-or-noop', match, op: 'remove-row', path });
+  }
+  return fail({ code: 'membership-entry', field: column });
 }
 
 // ── SUM(R, arith) ────────────────────────────────────────────────────────────
@@ -260,12 +262,16 @@ function deriveSum(
   const filtered = field.rowset.filters.length > 0;
 
   // C6: Only use the resum-over-witness path when the witness ships the summed
-  // column AND the SUM is unfiltered.  RowWitness.columns records exactly which
-  // columns the sibling AGG projects; reading row[col] from a witness that doesn't
-  // ship col yields 0 for every row, collapsing the total (SPEC.md §10.5).
+  // column AND the witness ranges over the same membership as this SUM. Legacy
+  // witnesses without rowset facts are accepted only for unfiltered SUMs. Reading
+  // row[col] from a witness that doesn't ship col yields 0 for every row,
+  // collapsing the total (SPEC.md §10.5).
   const witness = shape.rowsByTable?.[field.rowset.table];
   const witnessShipsSummedCol = witness && column ? witness.columns.includes(column) : false;
-  const rowsPath = witnessShipsSummedCol && !filtered ? witness?.rowsPath : undefined;
+  const rowsPath =
+    witnessShipsSummedCol && aggregateWitnessCoversRowset(shape, field.rowset, witness)
+      ? witness?.rowsPath
+      : undefined;
 
   if (effect.op === 'insert' || effect.op === 'upsert') {
     // C1: no-op only when the inserted row provably violates a decidable filter.
@@ -310,7 +316,11 @@ function deriveCount(
   // predicate set is the full rowset filter chain (C3: not just the first eq), plus a
   // standalone `field.pred` when an extraction supplies one outside the chain (C4).
   const predicates = countPredicates(field);
-  const rowsPath = predicates.length === 0 ? fullRowsPath(shape, field.rowset.table) : undefined;
+  const witness = shape.rowsByTable?.[field.rowset.table];
+  const rowsPath =
+    witness && aggregateWitnessCoversFilters(shape, field.rowset, predicates, witness)
+      ? witness.rowsPath
+      : undefined;
 
   if (effect.op === 'insert' || effect.op === 'upsert') {
     // C3: evaluate the inserted row against the ENTIRE predicate set — keeping only the
@@ -328,8 +338,8 @@ function deriveCount(
   }
 
   // UPDATE: count only changes if a predicate column's membership flips. With predicates
-  // present there is no sound witness (rowsPath is undefined), so any touched predicate
-  // column punts.
+  // present there is no sound witness unless the shipped rows carry the same rowset
+  // membership facts, so any touched predicate column without that witness punts.
   if (!predicates.some((predicate) => predicate.column in effect.sets)) return ok();
   if (rowsPath) return agg({ from: rowsPath, op: 'recount', path });
   return fail({ code: 'no-row-witness', field: path });
@@ -617,13 +627,48 @@ function substituteRowColumns(
   }
 }
 
-function fullRowsPath(shape: AlgebraicQueryShape, table: string): string | undefined {
-  const witness = shape.rowsByTable?.[table];
-  if (!witness) return undefined;
+function aggregateWitnessCoversRowset(
+  shape: AlgebraicQueryShape,
+  rowset: Rowset,
+  witness: { rowset?: Rowset; rowsPath: string },
+): boolean {
+  return aggregateWitnessCoversFilters(shape, rowset, rowset.filters, witness);
+}
+
+function aggregateWitnessCoversFilters(
+  shape: AlgebraicQueryShape,
+  rowset: Rowset,
+  filters: readonly RowsetFilter[],
+  witness: { rowset?: Rowset; rowsPath: string },
+): boolean {
   const paginated = Object.values(shape.fields).some(
-    (field) => field.kind === 'cursor' && field.rowset.table === table,
+    (field) => field.kind === 'cursor' && field.rowset.table === rowset.table,
   );
-  return paginated ? undefined : witness.rowsPath;
+  if (paginated) return false;
+  if (witness.rowset) {
+    return rowsetsHaveSameMembership({ ...rowset, filters }, witness.rowset);
+  }
+  return filters.length === 0;
+}
+
+function rowsetsHaveSameMembership(left: Rowset, right: Rowset): boolean {
+  if (left.table !== right.table) return false;
+  if (left.filters.length !== right.filters.length) return false;
+  const unmatched = [...right.filters];
+  for (const filter of left.filters) {
+    const index = unmatched.findIndex((candidate) => rowsetFiltersEqual(filter, candidate));
+    if (index < 0) return false;
+    unmatched.splice(index, 1);
+  }
+  return true;
+}
+
+function rowsetFiltersEqual(left: RowsetFilter, right: RowsetFilter): boolean {
+  if (left.column !== right.column || left.op !== right.op) return false;
+  if (left.value === undefined || right.value === undefined) {
+    return left.value === undefined && right.value === undefined;
+  }
+  return symbolicValuesEqual(left.value, right.value);
 }
 
 function orderByColumns(rowset: Rowset): Set<string> {

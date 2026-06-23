@@ -446,6 +446,35 @@ describe('deriveOptimistic — §10.5 PUNT list (negative surfaces)', () => {
     });
   });
 
+  it('punts membership entry on a filtered-column SET to the filter value', () => {
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['id', 'status'],
+          rowKey: 'id',
+          rowset: {
+            filters: [{ column: 'status', op: 'eq', value: { kind: 'const', value: 'open' } }],
+            key: 'id',
+            orderBy: [],
+            table: 'tickets',
+          },
+        },
+      },
+      query: 'openTickets',
+    };
+    const effect: SymbolicEffect = {
+      match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'open' } },
+      table: 'tickets',
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'membership-entry', field: 'status' },
+    });
+  });
+
   it('punts when no classified field covers a written table', () => {
     const effect: SymbolicEffect = {
       op: 'insert',
@@ -709,6 +738,71 @@ describe('deriveOptimistic — C6: SUM resum must not proceed when witness omits
     expect(deriveOptimistic([effect], shape)).toEqual({
       kind: 'punt',
       reason: { code: 'no-row-witness', field: 'total' },
+    });
+  });
+});
+
+describe('deriveOptimistic — filtered aggregate witnesses', () => {
+  it('recomputes filtered COUNT and SUM from a shipped row witness with the same rowset', () => {
+    const rowset = {
+      filters: [
+        {
+          column: 'cartId',
+          op: 'eq' as const,
+          value: { kind: 'session' as const, path: 'cartId' },
+        },
+      ],
+      key: 'cartId,productId',
+      orderBy: [],
+      table: 'cart_items',
+    };
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['productId', 'quantity'],
+          rowKey: 'cartId,productId',
+          rowset,
+        },
+        itemCount: { kind: 'count', pred: rowset.filters[0], rowset },
+        totalQuantity: {
+          arith: { kind: 'col', column: 'quantity' },
+          kind: 'sum',
+          rowset,
+        },
+      },
+      query: 'cartSummary',
+      rowsByTable: {
+        cart_items: { columns: ['productId', 'quantity'], rowsPath: 'items', rowset },
+      },
+    };
+    const effect: SymbolicEffect = {
+      match: {
+        eq: [
+          { column: 'cartId', value: { kind: 'session', path: 'cartId' } },
+          { column: 'productId', value: { kind: 'param', path: 'productId' } },
+        ],
+        kind: 'keys',
+      },
+      op: 'delete',
+      table: 'cart_items',
+    };
+
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'derived',
+      program: {
+        ops: [
+          {
+            guard: 'find-or-noop',
+            match: [{ column: 'productId', value: { kind: 'param', path: 'productId' } }],
+            op: 'remove-row',
+            path: 'items',
+          },
+          { from: 'items', op: 'recount', path: 'itemCount' },
+          { column: 'quantity', from: 'items', op: 'resum', path: 'totalQuantity' },
+        ],
+        query: 'cartSummary',
+      },
     });
   });
 });
