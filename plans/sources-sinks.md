@@ -128,7 +128,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - [ ] Make raw `endpoint()` declarations always auditable.
   - Require an endpoint-level `reason`/`purpose` string for every `endpoint()` because it is the raw HTTP escape hatch. The audit row should print that reason even when auth and CSRF are otherwise safe.
   - Require explicit `method`; no implicit `ANY` for app-authored endpoints. Prefix mounts require an additional `mountJustification` because they enlarge the routed surface.
-  - Require explicit auth posture: `verifier:<name>`, `custom:<name>`, or `none:<justification>`. An omitted auth declaration should become a blocking diagnostic rather than only an unguarded warning for raw endpoints.
+  - Auth posture is covered structurally by the single-source-of-truth item above (mandatory executable verifier, or explicit `none: <justification>`, fail-closed default) — not restated here. The audit row prints the scheme derived from `auth.verify`, or `unauthenticated` for `none`.
   - Keep the existing `csrf: false` named justification, and keep KV418 for any CSRF-exempt endpoint that depends on ambient session/cookie authority.
   - Require declared output posture for raw responses: `body: 'html' | 'json' | 'text' | 'bytes' | 'stream' | 'redirect'`, cache posture, and whether app code owns all encoding/header safety. This is metadata for audit and drift checks; it does not make raw endpoints part of the safe component/mutation protocol.
 - [ ] Add a general "unregistered sink" diagnostic for app source.
