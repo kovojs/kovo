@@ -43,6 +43,8 @@ const checkbox = await import('@kovojs/headless-ui/checkbox');
 const collapsible = await import('@kovojs/headless-ui/collapsible');
 const dialog = await import('@kovojs/headless-ui/dialog');
 const disclosure = await import('@kovojs/headless-ui/disclosure');
+const meter = await import('@kovojs/headless-ui/meter');
+const progress = await import('@kovojs/headless-ui/progress');
 const radioGroup = await import('@kovojs/headless-ui/radio-group');
 const switchPrimitive = await import('@kovojs/headless-ui/switch');
 const tabs = await import('@kovojs/headless-ui/tabs');
@@ -142,6 +144,42 @@ const probes = [
     base: {},
     whenFalse: { pressed: false },
     whenTrue: { pressed: true },
+  },
+  {
+    key: 'progress.root',
+    controlField: 'value',
+    controlKind: 'progress-ratio',
+    attrs: progress.progressRootAttributes,
+    base: { max: 100 },
+    computedAttrs: ['data-max', 'data-state', 'data-value', 'style'],
+    enumStates: {
+      complete: { value: 100 },
+    },
+    whenFalse: { value: null },
+    whenTrue: { value: 42 },
+  },
+  {
+    key: 'meter.root',
+    controlField: 'value',
+    controlKind: 'meter-range',
+    attrs: meter.meterRootAttributes,
+    base: { high: 85, low: 40, max: 100, min: 0, optimum: 70 },
+    computedAttrs: [
+      'data-high',
+      'data-low',
+      'data-max',
+      'data-min',
+      'data-optimum',
+      'data-state',
+      'data-value',
+      'style',
+    ],
+    enumStates: {
+      evenLessGood: { value: 96 },
+      suboptimum: { value: 30 },
+    },
+    whenFalse: { value: 30 },
+    whenTrue: { value: 72 },
   },
   {
     key: 'disclosure.root',
@@ -430,6 +468,7 @@ for (const probe of probes) {
       ? {}
       : { discriminatorField: probe.discriminatorField }),
     ...(probe.modeField === undefined ? {} : { modeField: probe.modeField }),
+    ...(probe.computedAttrs === undefined ? {} : { computedAttrs: probe.computedAttrs }),
   };
 }
 
@@ -453,6 +492,8 @@ const body = `
 export type PrimitiveReactiveControlKind =
   | 'boolean'
   | 'equality'
+  | 'meter-range'
+  | 'progress-ratio'
   | 'set-membership'
   | 'tri-state';
 
@@ -466,6 +507,8 @@ export interface PrimitiveReactiveAttr {
   readonly whenTrue: boolean | string;
   /** Serialized attribute value when a tri-state checkbox is indeterminate. */
   readonly whenIndeterminate?: boolean | string;
+  /** Serialized attribute values for additional sampled primitive enum states. */
+  readonly [sampledState: \`when\${string}\`]: boolean | string | undefined;
 }
 
 /** All reactive attributes a primitive derives from one control field. */
@@ -475,6 +518,8 @@ export interface PrimitiveReactiveAttrEntry {
   readonly controlField: string;
   /** How the compiler should derive the active/inactive condition. */
   readonly controlKind: PrimitiveReactiveControlKind;
+  /** Compiler-owned computed attrs for numeric/range primitives. */
+  readonly computedAttrs?: readonly string[];
   /** Per-element static prop compared with the control field when applicable. */
   readonly discriminatorField?: string;
   /** Optional per-element mode prop, used by accordion single vs multiple. */

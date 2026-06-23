@@ -643,9 +643,9 @@ describe('compiled interactive gallery demos in the browser', () => {
     const { imports } = installInteractiveGalleryLoader(root);
 
     // Meter thresholds were retuned (optimum 70, high 85) so the default 72% reads
-    // as `optimum` (green) instead of the old alarming brown; the toggle now drops
-    // to 30% (below `low`, so `suboptimum`) and back.
-    expect(root.getAttribute('kovo-state')).toBe('{"dataState":"optimum","value":72}');
+    // as `optimum` (green) instead of the old alarming brown; the compiler now
+    // derives that qualitative data-state from value/threshold props.
+    expect(root.getAttribute('kovo-state')).toBe('{"value":72}');
     expect(meter.min).toBe(0);
     expect(meter.max).toBe(100);
     expect(meter.low).toBe(40);
@@ -665,7 +665,7 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
 
       expect(imports).toEqual(['/c/src/interactive/meter-demo.client.js']);
-      expect(root.getAttribute('kovo-state')).toBe('{"dataState":"suboptimum","value":30}');
+      expect(root.getAttribute('kovo-state')).toBe('{"value":30}');
       expect(currentMeter.value).toBe(30);
       expect(currentMeter.getAttribute('data-state')).toBe('suboptimum');
       expect(currentMeter.getAttribute('aria-valuetext')).toBe('30 percent capacity');

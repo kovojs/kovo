@@ -172,17 +172,18 @@ export function lowerStructuralJsx(
       outputContexts,
       nameCounts,
     ) || needsStylePropertyHelper;
-  lowerPrimitiveReactiveAttributes(
-    model,
-    tree.elements,
-    componentName,
-    knownQueries,
-    options,
-    deriveExports,
-    stateDerives,
-    outputContexts,
-    nameCounts,
-  );
+  needsStylePropertyHelper =
+    lowerPrimitiveReactiveAttributes(
+      model,
+      tree.elements,
+      componentName,
+      knownQueries,
+      options,
+      deriveExports,
+      stateDerives,
+      outputContexts,
+      nameCounts,
+    ) || needsStylePropertyHelper;
   lowerInlineTextBindings(
     tree.elements,
     model,
@@ -692,7 +693,8 @@ function lowerPrimitiveReactiveAttributes(
   stateDerives: StateDeriveFact[],
   outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
-): void {
+): boolean {
+  let needsStylePropertyHelper = false;
   for (const element of elements) {
     const entry = primitiveReactiveComponentForTag(model, element.tag);
     if (!entry) continue;
@@ -712,6 +714,22 @@ function lowerPrimitiveReactiveAttributes(
     const controlPath = reactiveControlPath(control, knownQueries);
     if (controlPath === null) continue;
     if (manifest.controlField !== entry.controlProp) continue;
+
+    if (manifest.controlKind === 'progress-ratio' || manifest.controlKind === 'meter-range') {
+      needsStylePropertyHelper =
+        lowerPrimitiveNumericReactiveAttributes(
+          element,
+          componentName,
+          manifest,
+          controlPath,
+          options,
+          deriveExports,
+          stateDerives,
+          outputContexts,
+          nameCounts,
+        ) || needsStylePropertyHelper;
+      continue;
+    }
 
     const condition = primitiveReactiveCondition(element, manifest, controlPath.path);
     if (condition === null) continue;
@@ -763,6 +781,246 @@ function lowerPrimitiveReactiveAttributes(
       );
     }
   }
+  return needsStylePropertyHelper;
+}
+
+function lowerPrimitiveNumericReactiveAttributes(
+  element: JsxIrElement,
+  componentName: string,
+  manifest: PrimitiveReactiveAttrEntry,
+  controlPath: { path: string; root: string },
+  options: StructuralJsxLoweringOptions,
+  deriveExports: string[],
+  stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
+  nameCounts: Map<string, number>,
+): boolean {
+  const expressions =
+    manifest.controlKind === 'progress-ratio'
+      ? progressReactiveExpressions(element, controlPath)
+      : meterReactiveExpressions(element, controlPath);
+  if (expressions === null) return false;
+
+  let emittedStyle = false;
+  for (const [attrName, expression] of Object.entries(expressions)) {
+    if (hasAttribute(element, stateBindingAttributeName(attrName))) continue;
+    if (hasAuthoredAttribute(element, attrName)) continue;
+
+    lowerPrimitiveComputedAttribute(
+      element,
+      componentName,
+      attrName,
+      expression,
+      controlPath.root,
+      options,
+      deriveExports,
+      stateDerives,
+      outputContexts,
+      nameCounts,
+    );
+    emittedStyle = emittedStyle || attrName === 'style';
+  }
+  return emittedStyle;
+}
+
+function lowerPrimitiveComputedAttribute(
+  element: JsxIrElement,
+  componentName: string,
+  attrName: string,
+  expression: string,
+  root: string,
+  options: StructuralJsxLoweringOptions,
+  deriveExports: string[],
+  stateDerives: StateDeriveFact[],
+  outputContexts: GeneratedOutputWriteFact[],
+  nameCounts: Map<string, number>,
+): void {
+  const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attrName)}_derive`;
+  const isState = root === 'state';
+  const source = isState ? 'client-state' : 'client-query';
+  const outputContext = outputWriteFact({
+    context: outputContextForAttribute(attrName),
+    expression,
+    sink: attrName,
+    source,
+    writer: 'primitive reactive computed attribute derive',
+  });
+
+  const { stampName } = emitDerive({
+    baseName,
+    nameCounts,
+    stampPrefix: root,
+    deriveExports,
+    inputs: JSON.stringify([root]),
+    params: `${root}: any`,
+    expression,
+    stateDerive: isState
+      ? (exportName) => ({
+          attr: attrName,
+          expression,
+          exportName,
+          input: 'state',
+          name: exportName,
+          outputContext,
+          param: 'state',
+          placeholder: `${root}.${exportName}`,
+        })
+      : undefined,
+    stateDerives,
+    outputContext,
+    outputContexts,
+  });
+
+  setJsxIrAttribute(
+    element,
+    generatedJsxIrAttribute(
+      stateBindingAttributeName(attrName),
+      { kind: 'string', value: stampName },
+      'primitive reactive computed attribute derive',
+      options,
+    ),
+  );
+}
+
+function progressReactiveExpressions(
+  element: JsxIrElement,
+  controlPath: { path: string; root: string },
+): Record<string, string> | null {
+  const max = numericAttributeExpression(element, 'max', controlPath.root, '1');
+  if (max === null) return null;
+  const value = controlPath.path;
+
+  return {
+    'data-max': progressExpression(value, max, 'max-string'),
+    'data-state': progressExpression(value, max, 'state'),
+    'data-value': progressExpression(value, max, 'value-string'),
+    style: stylePropertyExpression('width', progressExpression(value, max, 'width')),
+  };
+}
+
+function meterReactiveExpressions(
+  element: JsxIrElement,
+  controlPath: { path: string; root: string },
+): Record<string, string> | null {
+  const min = numericAttributeExpression(element, 'min', controlPath.root, '0');
+  const max = numericAttributeExpression(element, 'max', controlPath.root, '1');
+  const low = numericAttributeExpression(element, 'low', controlPath.root, 'undefined');
+  const high = numericAttributeExpression(element, 'high', controlPath.root, 'undefined');
+  const optimum = numericAttributeExpression(element, 'optimum', controlPath.root, 'undefined');
+  if (min === null || max === null || low === null || high === null || optimum === null)
+    return null;
+  const value = controlPath.path;
+
+  return {
+    'data-high': meterExpression({ high, low, max, min, optimum, value }, 'high-string'),
+    'data-low': meterExpression({ high, low, max, min, optimum, value }, 'low-string'),
+    'data-max': meterExpression({ high, low, max, min, optimum, value }, 'max-string'),
+    'data-min': meterExpression({ high, low, max, min, optimum, value }, 'min-string'),
+    'data-optimum': meterExpression({ high, low, max, min, optimum, value }, 'optimum-string'),
+    'data-state': meterExpression({ high, low, max, min, optimum, value }, 'state'),
+    'data-value': meterExpression({ high, low, max, min, optimum, value }, 'value-string'),
+    style: stylePropertyExpression(
+      'width',
+      meterExpression({ high, low, max, min, optimum, value }, 'width'),
+    ),
+  };
+}
+
+function numericAttributeExpression(
+  element: JsxIrElement,
+  name: string,
+  root: string,
+  fallback: string,
+): string | null {
+  const attribute = element.element.attributes.find((candidate) => candidate.name === name);
+  if (!attribute) return fallback;
+  const staticValue = numericStaticExpression(attribute);
+  if (staticValue !== null) return staticValue;
+  if (attribute.expression === undefined) return null;
+
+  const roots = rootsForPropertyAccesses(attribute.expressionPropertyAccesses ?? []);
+  if (roots.size === 1 && roots.has(root)) return attribute.expression.trim();
+  return null;
+}
+
+function numericStaticExpression(attribute: JsxAttributeModel): string | null {
+  if (attribute.value !== undefined) return numericLiteralExpression(attribute.value);
+  const value = attribute.expressionStaticValue;
+  if (typeof value === 'number') return JSON.stringify(value);
+  if (typeof value === 'string') return numericLiteralExpression(value);
+  return null;
+}
+
+function numericLiteralExpression(value: string): string | null {
+  const number = Number(value);
+  return Number.isFinite(number) ? JSON.stringify(number) : null;
+}
+
+function rootsForPropertyAccesses(paths: readonly { path: string }[]): ReadonlySet<string> {
+  return new Set(
+    paths
+      .map((access) => queryNameFromPath(access.path))
+      .filter((root): root is string => root !== null),
+  );
+}
+
+type ProgressExpressionTarget = 'max-string' | 'state' | 'value-string' | 'width';
+
+function progressExpression(
+  valueExpression: string,
+  maxExpression: string,
+  target: ProgressExpressionTarget,
+): string {
+  const result =
+    target === 'max-string'
+      ? 'return String(max);'
+      : target === 'state'
+        ? 'return value === null ? "indeterminate" : value >= max ? "complete" : "loading";'
+        : target === 'value-string'
+          ? 'return value === null ? null : String(value);'
+          : 'return value === null ? null : `${((value / max) * 100).toFixed(4).replace(/\\.?0+$/, "")}%`;';
+
+  return `(() => { const maxNumber = Number(${maxExpression}); const max = Number.isFinite(maxNumber) && maxNumber > 0 ? maxNumber : 1; const rawValue = (${valueExpression}); const valueNumber = Number(rawValue); const value = rawValue === null || rawValue === undefined || !Number.isFinite(valueNumber) ? null : Math.min(Math.max(valueNumber, 0), max); ${result} })()`;
+}
+
+interface MeterExpressionParts {
+  readonly high: string;
+  readonly low: string;
+  readonly max: string;
+  readonly min: string;
+  readonly optimum: string;
+  readonly value: string;
+}
+
+type MeterExpressionTarget =
+  | 'high-string'
+  | 'low-string'
+  | 'max-string'
+  | 'min-string'
+  | 'optimum-string'
+  | 'state'
+  | 'value-string'
+  | 'width';
+
+function meterExpression(parts: MeterExpressionParts, target: MeterExpressionTarget): string {
+  const result =
+    target === 'high-string'
+      ? 'return String(high);'
+      : target === 'low-string'
+        ? 'return String(low);'
+        : target === 'max-string'
+          ? 'return String(max);'
+          : target === 'min-string'
+            ? 'return String(min);'
+            : target === 'optimum-string'
+              ? 'return String(optimum);'
+              : target === 'state'
+                ? 'const valueRegion = value < low ? "low" : value > high ? "high" : "middle"; const optimumRegion = optimum < low ? "low" : optimum > high ? "high" : "middle"; return valueRegion === optimumRegion ? "optimum" : valueRegion === "middle" || optimumRegion === "middle" ? "suboptimum" : "even-less-good";'
+                : target === 'value-string'
+                  ? 'return String(value);'
+                  : 'return `${(((value - min) / (max - min)) * 100).toFixed(4).replace(/\\.?0+$/, "")}%`;';
+
+  return `(() => { const minNumber = Number(${parts.min}); const min = Number.isFinite(minNumber) ? minNumber : 0; const maxNumber = Number(${parts.max}); const normalizedMax = Number.isFinite(maxNumber) ? maxNumber : 1; const max = normalizedMax > min ? normalizedMax : min + 1; const normalize = (input, fallback) => { const number = Number(input); return Number.isFinite(number) ? Math.min(Math.max(number, min), max) : fallback; }; const low = normalize(${parts.low}, min); const high = Math.max(normalize(${parts.high}, max), low); const optimum = normalize(${parts.optimum}, (min + max) / 2); const value = normalize(${parts.value}, min); ${result} })()`;
 }
 
 // SPEC.md §4.8 data-bind-prop: emit a property-only `data-bind-prop:indeterminate`
