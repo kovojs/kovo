@@ -2,9 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installInlineKovoBootstrap } from './inline-loader.js';
 
+declare global {
+  // eslint-disable-next-line no-var
+  var __kovo_a: ((body: string) => void) | undefined;
+}
+
 const initialUrl = location.href;
 const initialHead = document.head.innerHTML;
 const initialBody = document.body.innerHTML;
+const initialApplyDeferredStream = globalThis.__kovo_a;
 
 function installRafQueue(): FrameRequestCallback[] {
   const callbacks: FrameRequestCallback[] = [];
@@ -23,6 +29,7 @@ function runNextRaf(callbacks: FrameRequestCallback[]): void {
 afterEach(() => {
   document.head.innerHTML = initialHead;
   document.body.innerHTML = initialBody;
+  globalThis.__kovo_a = initialApplyDeferredStream;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   history.replaceState({}, '', initialUrl);
@@ -82,6 +89,36 @@ describe('browser inline loader bootstrap', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(runtimeImport).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(replayedClicks).toBe(1));
+  });
+
+  it('queues deferred stream apply calls until the runtime installs', async () => {
+    const callbacks = installRafQueue();
+    const applied: string[] = [];
+    let resolveRuntime: ((value: { installKovoDeferredRuntime: () => void }) => void) | undefined;
+    const runtimeImport = vi.fn(
+      () =>
+        new Promise<{ installKovoDeferredRuntime: () => void }>((resolve) => {
+          resolveRuntime = resolve;
+        }),
+    );
+
+    installInlineKovoBootstrap('/c/__v/runtime/kovo-runtime.client.js', runtimeImport);
+
+    globalThis.__kovo_a?.('<kovo-fragment target="reviews">Ready</kovo-fragment>');
+    expect(applied).toEqual([]);
+    while (callbacks.length > 0) runNextRaf(callbacks);
+    await vi.waitFor(() => expect(runtimeImport).toHaveBeenCalledTimes(1));
+    resolveRuntime?.({
+      installKovoDeferredRuntime() {
+        globalThis.__kovo_a = (body: string) => {
+          applied.push(body);
+        };
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(applied).toEqual(['<kovo-fragment target="reviews">Ready</kovo-fragment>']),
+    );
   });
 
   it('leaves native links alone until the scheduled runtime import', async () => {

@@ -15,6 +15,8 @@ import {
 import type { PageHintOptions } from './hints.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfValidationOptions } from './csrf.js';
+import { createDeferredRegionChunkCollector } from './deferred-region.js';
+import type { DeferredRegionCollector } from './jsx-context.js';
 import type { MutationFail } from './mutation.js';
 import { runQuery, type QueryDefinition, type RegisteredQueryDefinition } from './query.js';
 import {
@@ -349,6 +351,7 @@ export function notFound(): NotFound {
 
 export interface RouteJsxContextOptions<Request> {
   csrf?: CsrfValidationOptions<Request>;
+  deferredRegions?: DeferredRegionCollector;
   mutationFailure?: {
     failure: MutationFail;
     input?: unknown;
@@ -835,13 +838,14 @@ export async function renderRoutePageResponse<
 ): Promise<RoutePageResponse> {
   let result: RoutePageInternalResult<Page>;
   let lifecycleRequest: Request = request;
+  const deferredRegions = createDeferredRegionChunkCollector();
   try {
     lifecycleRequest = await resolveLifecycleRequest(request, options);
     result = await runRoutePageInternal(
       definition,
       input,
       lifecycleRequest,
-      routeJsxContextOptions(options),
+      routeJsxContextOptions(options, deferredRegions),
     );
   } catch (error) {
     reportServerError(options.onError, error, {
@@ -914,9 +918,12 @@ export async function renderRoutePageResponse<
   }
 
   try {
+    const body = await render(result.value);
+    const deferredChunks = await deferredRegions.chunks();
     return attachLifecycleRequest(
       {
-        body: await render(result.value),
+        body,
+        ...(deferredChunks.length === 0 ? {} : { deferredChunks }),
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status: 200,
       },
@@ -946,9 +953,13 @@ function attachLifecycleRequest<Request>(
 
 function routeJsxContextOptions<Request>(
   options: GuardFailureResponseOptions<Request> & RouteJsxContextOptions<Request>,
+  deferredRegions?: DeferredRegionCollector,
 ): RouteJsxContextOptions<Request> {
   return {
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+    ...(deferredRegions === undefined && options.deferredRegions === undefined
+      ? {}
+      : { deferredRegions: deferredRegions ?? options.deferredRegions }),
     ...(options.mutationFailure === undefined ? {} : { mutationFailure: options.mutationFailure }),
   };
 }

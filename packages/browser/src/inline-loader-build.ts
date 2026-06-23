@@ -826,7 +826,12 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
   const doc = document;
   const events = ['click', 'submit'];
   const queued = [];
+  const streamQueue = [];
   let loading;
+  const previousApply = globalThis.__kovo_a;
+  globalThis.__kovo_a = (body) => {
+    streamQueue.push(body);
+  };
   const qa = (root, selector) =>
     root.querySelectorAll ? [...root.querySelectorAll(selector)] : [];
   const ps = () => {
@@ -914,6 +919,10 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
       .then((mod) => {
         cleanup();
         mod.installKovoDeferredRuntime?.();
+        const apply = globalThis.__kovo_a;
+        if (typeof apply === 'function' && apply !== previousApply) {
+          for (const body of streamQueue.splice(0)) apply(body);
+        }
         for (const item of queued.splice(0)) replay(item);
       })
       .catch(() => {

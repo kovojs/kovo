@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
+import { defer } from './deferred-region.js';
 import { guards } from './guards.js';
 import { stylesheet } from './hints.js';
 import { layout, notFound, route } from './route.js';
@@ -306,6 +307,75 @@ describe('server app document boundary', () => {
     expect(response.headers['Content-Type']).toBe('text/html; charset=utf-8');
     expect(response.body).toContain('<html lang="fr">');
     expect(response.body).toContain('<main>Product p1</main>');
+  });
+
+  it('streams after-paint deferred route regions after the initial document shell', async () => {
+    const productRoute = route('/products/:id', {
+      async page({ params }) {
+        return (
+          `<main><h1>Product ${params.id}</h1>` +
+          (await defer({
+            fallback: '<section aria-busy="true" style="min-height:120px">Loading reviews</section>',
+            priority: 'after-paint',
+            render: () => '<section class="reviews-card">Reviews ready</section>',
+            stylesheets: ['/assets/reviews.css'],
+            target: `reviews:${params.id}`,
+          })) +
+          '</main>'
+        );
+      },
+    });
+    const request = new Request('https://shop.example.test/products/p1');
+    const app = createApp({ routes: [productRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: { id: 'p1' },
+      request,
+      route: productRoute,
+      url: new URL(request.url),
+    });
+    if (typeof response.body !== 'string') throw new Error('expected HTML document body');
+    const body = response.body;
+
+    expect(response.status).toBe(200);
+    expect(body).toContain('<h1>Product p1</h1>');
+    expect(body).toContain(
+      '<kovo-defer target="reviews:p1" state="pending" data-kovo-region-priority="after-paint"><section aria-busy="true" style="min-height:120px">Loading reviews</section></kovo-defer>',
+    );
+    expect(body.indexOf('<kovo-defer target="reviews:p1"')).toBeLessThan(
+      body.indexOf('--kovo-boundary'),
+    );
+    expect(body).toContain('<kovo-fragment target="reviews:p1" priority="normal">');
+    expect(body).toContain('<link rel="stylesheet" href="/assets/reviews.css">');
+    expect(body).toContain('<section class="reviews-card">Reviews ready</section>');
+  });
+
+  it('renders critical regions immediately without a deferred stream', async () => {
+    const productRoute = route('/products/:id', {
+      async page({ params }) {
+        return defer({
+          priority: 'critical',
+          render: () => `<main>Critical ${params.id}</main>`,
+          target: `critical:${params.id}`,
+        });
+      },
+    });
+    const request = new Request('https://shop.example.test/products/p1');
+    const app = createApp({ routes: [productRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: { id: 'p1' },
+      request,
+      route: productRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain('<main>Critical p1</main>');
+    expect(response.body).not.toContain('<kovo-defer');
+    expect(response.body).not.toContain('--kovo-boundary');
   });
 
   it('inherits app-wide stylesheets before route-specific stylesheets', async () => {

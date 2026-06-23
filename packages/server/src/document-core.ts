@@ -95,7 +95,10 @@ export interface DocumentAssemblyOptions {
 }
 
 /** @internal */
-export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {}
+export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {
+  /** @internal Deferred route-region chunks streamed after the initial document shell. */
+  deferredChunks?: readonly DeferredStreamChunk[];
+}
 
 /**
  * @internal CSP-3 (bugs-part3): a wrapped HTML document response that additionally
@@ -122,7 +125,7 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
 export interface DeferredDocumentAssemblyOptions extends Omit<DocumentAssemblyOptions, 'template'> {
   boundary?: string;
   chunks: readonly DeferredStreamChunk[];
-  template?: DeferredDocumentTemplate;
+  template?: DeferredDocumentTemplate | DocumentTemplate;
 }
 
 /** @internal */
@@ -185,7 +188,10 @@ export function renderDeferredDocument(
 ): DeferredDocumentRenderResult {
   const assembled = assembleDocumentParts(options);
   const template = options.template ?? defaultDeferredDocumentTemplate;
-  const frame = template({ csp: assembled.csp, parts: assembled.parts });
+  const frame = deferredDocumentFrame(
+    template({ csp: assembled.csp, parts: assembled.parts }),
+    assembled.parts,
+  );
   const shell = enforceDocumentTemplateParts(
     frame.shell,
     assembled.parts,
@@ -284,10 +290,21 @@ export function renderRouteDocumentResponse(
     return response;
   }
 
-  const document = renderDocument({
-    ...assemblyOptions,
-    body: response.body,
-  });
+  const document =
+    response.deferredChunks && response.deferredChunks.length > 0
+      ? deferredDocumentResult(
+          renderDeferredDocument({
+            ...assemblyOptions,
+            body: response.body,
+            chunks: response.deferredChunks,
+          }),
+        )
+      : standardDocumentResult(
+          renderDocument({
+            ...assemblyOptions,
+            body: response.body,
+          }),
+        );
 
   return {
     body: document.html,
@@ -312,6 +329,26 @@ export function renderRouteDocumentResponse(
       ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
     },
     status: response.status,
+  };
+}
+
+function standardDocumentResult(document: DocumentRenderResult): {
+  csp: CspInlineMetadata;
+  earlyHints: ResponseHeaders;
+  html: string;
+} {
+  return document;
+}
+
+function deferredDocumentResult(document: DeferredDocumentRenderResult): {
+  csp: CspInlineMetadata;
+  earlyHints: ResponseHeaders;
+  html: string;
+} {
+  return {
+    csp: document.csp,
+    earlyHints: document.headers,
+    html: document.body,
   };
 }
 
@@ -388,6 +425,24 @@ function defaultDeferredDocumentTemplate({
       '<body>',
       parts.body,
     ].join(''),
+  };
+}
+
+function deferredDocumentFrame(
+  result: DeferredDocumentFrame | string,
+  parts: DocumentParts,
+): DeferredDocumentFrame {
+  if (typeof result !== 'string') return result;
+
+  const html = enforceDocumentTemplateParts(result, parts, 'DocumentTemplate');
+  const bodyCloseIndex = html.toLowerCase().lastIndexOf('</body>');
+  if (bodyCloseIndex < 0) {
+    throw new Error('DocumentTemplate omitted </body>, which is required for deferred documents.');
+  }
+
+  return {
+    closeHtml: html.slice(bodyCloseIndex),
+    shell: html.slice(0, bodyCloseIndex),
   };
 }
 
@@ -491,7 +546,7 @@ function withoutStaticTitleMeta(metas: readonly RouteMetaSource[]): readonly Rou
 
 function mergeDocumentHeaders(
   headers: ResponseHeaders,
-  earlyHints: PageHints['earlyHints'],
+  earlyHints: ResponseHeaders,
 ): ResponseHeaders {
   const merged: ResponseHeaders = { ...headers };
 
@@ -506,12 +561,14 @@ function mergeDocumentHeaders(
     merged[existingName] =
       existingValue === undefined
         ? value
-        : Array.isArray(existingValue)
-          ? [...existingValue, value]
-          : `${existingValue}, ${value}`;
+        : [...headerValueArray(existingValue), ...headerValueArray(value)].join(', ');
   }
 
   return merged;
+}
+
+function headerValueArray(value: string | readonly string[]): readonly string[] {
+  return typeof value === 'string' ? [value] : value;
 }
 
 export function mergeVaryHeader(headers: ResponseHeaders, token: string): ResponseHeaders {

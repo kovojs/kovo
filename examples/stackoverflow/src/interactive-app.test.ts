@@ -269,7 +269,16 @@ describe('stackoverflow interactive app', () => {
       expect(html).toContain('<main');
       expect(html).toContain(`kovo-fragment-target="${target}"`);
       expect(html).toContain(`kovo-deps="${deps}"`);
-      expect(html).not.toContain('<kovo-fragment');
+      if (route === '/questions/q1') {
+        expect(html).toContain(
+          '<kovo-defer target="question-detail-secondary:q1" state="pending" data-kovo-region-priority="after-paint">',
+        );
+        expect(html).toContain('<kovo-fragment target="question-detail-secondary:q1"');
+        expect(html).toContain('No hand-written merge code.');
+        expect(html).toContain('Your Answer');
+      } else {
+        expect(html).not.toContain('<kovo-fragment');
+      }
     }
   });
 

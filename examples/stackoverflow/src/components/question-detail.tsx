@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { defer } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { postAnswerMutation } from '../mutations.js';
@@ -278,6 +279,45 @@ function renderAnswerPost(answer: QuestionAnswersResult[number]): string {
   );
 }
 
+function renderQuestionDetailSecondary(
+  question: QuestionDetailResult,
+  ordered: QuestionAnswersResult,
+  questionId: string,
+): string {
+  return (
+    <section kovo-fragment-target={`question-detail-secondary:${question.id}`}>
+      <div style={detailStyles.answersHead}>
+        <h2 style={detailStyles.answersTitle}>
+          {question.answerCount} {question.answerCount === 1 ? 'Answer' : 'Answers'}
+        </h2>
+        <span style={detailStyles.sortControl}>Sorted by: Highest score</span>
+      </div>
+      <ul style={detailStyles.answerList}>{ordered.map(renderAnswerPost)}</ul>
+
+      {/* Native form; enhanced submissions refresh this whole region. */}
+      <form enhance mutation={postAnswerMutation} id="your-answer" style={detailStyles.composer}>
+        <input type="hidden" name="id" value={freshId('a')} />
+        <input type="hidden" name="questionId" value={questionId} />
+        <input type="hidden" name="authorId" value="demo-viewer" />
+        <h2 style={detailStyles.composerTitle}>Your Answer</h2>
+        <textarea
+          id="answer-body"
+          name="body"
+          required
+          rows="6"
+          placeholder="Share what you know — code and reasoning welcome…"
+          style={[detailStyles.input, detailStyles.textarea]}
+        />
+        <div style={detailStyles.composerActions}>
+          <button type="submit" style={detailStyles.submitButton}>
+            Post Your Answer
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 // Accepted answer first, then by score (desc) — Stack Overflow's default order.
 function sortedAnswers(answers: QuestionAnswersResult): QuestionAnswersResult {
   return [...answers].sort((left, right) => {
@@ -323,6 +363,7 @@ export const QuestionDetailRegion = component({
     const views = viewsFor(question.id, question.score);
     const asked = relativeTime(question.createdAt);
     const ordered = sortedAnswers(answers);
+    const secondaryTarget = `question-detail-secondary:${question.id}`;
     return (
       <div>
         <div style={detailStyles.header}>
@@ -346,34 +387,13 @@ export const QuestionDetailRegion = component({
 
         {renderQuestionPost(question)}
 
-        <div style={detailStyles.answersHead}>
-          <h2 style={detailStyles.answersTitle}>
-            {question.answerCount} {question.answerCount === 1 ? 'Answer' : 'Answers'}
-          </h2>
-          <span style={detailStyles.sortControl}>Sorted by: Highest score</span>
-        </div>
-        <ul style={detailStyles.answerList}>{ordered.map(renderAnswerPost)}</ul>
-
-        {/* Native form; enhanced submissions refresh this whole region. */}
-        <form enhance mutation={postAnswerMutation} id="your-answer" style={detailStyles.composer}>
-          <input type="hidden" name="id" value={freshId('a')} />
-          <input type="hidden" name="questionId" value={questionId} />
-          <input type="hidden" name="authorId" value="demo-viewer" />
-          <h2 style={detailStyles.composerTitle}>Your Answer</h2>
-          <textarea
-            id="answer-body"
-            name="body"
-            required
-            rows="6"
-            placeholder="Share what you know — code and reasoning welcome…"
-            style={[detailStyles.input, detailStyles.textarea]}
-          />
-          <div style={detailStyles.composerActions}>
-            <button type="submit" style={detailStyles.submitButton}>
-              Post Your Answer
-            </button>
-          </div>
-        </form>
+        {defer({
+          fallback:
+            '<section aria-busy="true" style="min-height:720px" data-kovo-region-placeholder="answers"></section>',
+          priority: 'after-paint',
+          render: () => renderQuestionDetailSecondary(question, ordered, questionId),
+          target: secondaryTarget,
+        })}
       </div>
     );
   },

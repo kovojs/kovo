@@ -148,6 +148,10 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
     browser tests prove `visible` loads when near viewport and does not load eagerly; mutation tests
     prove deferred live targets refresh correctly after submits; CSS tests prove deferred-region
     styles arrive before/with inserted markup.
+  - Partial evidence: `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/server/src/route.test.ts`
+    and `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts` passed for
+    `critical` and streamed `after-paint` region behavior, including Stack Overflow question
+    answers/composer deferral and no-JS document completeness. `visible` behavior is still open.
 
 - [ ] **7. Fix the favicon 403.**
   - Current issue: `/favicon.ico` returns 403 and creates an avoidable failed request after load.
@@ -179,6 +183,13 @@ Active ledger for reducing first contentful paint on the hosted Stack Overflow d
 - [x] 2026-06-23 Stack Overflow route CSS split slice: `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts`
       and `pnpm exec vitest --run scripts/import-boundary.test.mjs packages/compiler/src/css.test.ts`
       passed.
+- [x] 2026-06-23 after-paint deferred region slice: `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/server/src/route.test.ts`,
+      `pnpm exec vitest --config vitest.browser.config.ts --run packages/browser/src/inline-loader-bootstrap.browser.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts`,
+      `pnpm exec vitest --run packages/browser/src/inline-loader-build.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts`,
+      `pnpm --filter @kovojs/browser run check:inline-loader`, and
+      `pnpm exec vitest --run examples/stackoverflow/src/interactive-app.test.ts` passed.
+- [x] 2026-06-23 after-paint deferred region lint/type: `vp check --no-fmt packages/server/src/deferred-region.ts packages/server/src/jsx-context.ts packages/server/src/route.ts packages/server/src/response.ts packages/server/src/document-core.ts packages/server/src/api/rendering.ts packages/server/src/index.ts packages/server/src/internal/html.ts packages/server/src/api/app.test.ts packages/server/src/app-document.test.ts packages/browser/src/inline-loader-build.ts packages/browser/src/inline-loader.ts packages/browser/src/inline-loader-bootstrap.browser.test.ts examples/stackoverflow/src/components/question-detail.tsx examples/stackoverflow/src/interactive-app.test.ts plans/fcp-performance.md`
+      passed with only the existing generated inline-loader length warning.
 - [x] 2026-06-23 touched-file lint/type: `vp check --no-fmt examples/stackoverflow/scripts/materialize-demo-css.mjs examples/stackoverflow/src/interactive-app.tsx examples/stackoverflow/src/interactive-app.test.ts scripts/import-boundary.mjs`
       passed.
 - [x] 2026-06-23 diff hygiene: `git diff --check` passed.
