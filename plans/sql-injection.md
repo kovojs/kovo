@@ -154,13 +154,15 @@ acceptance set (b)); these checkboxes implement it.
   - `endpoint()` (SPEC §9.1) forwards `req.db` through the same threading (`mutation.ts:601`), so wrapping in `resolveLifecycleRequest` guards endpoints automatically — the guard is upstream of the endpoint fork. Obtaining the _raw_ driver requires an explicit, named opt-out, audited like `trustedSql`.
   - Evidence: `packages/server/src/guards.ts` wraps at `resolveLifecycleRequest`, the shared request lifecycle used by routes, queries, mutations, and endpoint threading before dispatch.
 
-- [ ] Update starter templates and examples.
+- [x] Update starter templates and examples.
   - Replace raw driver string calls with Drizzle builders, tagged SQL placeholders, or explicit static prepared statements with separate params.
+  - Evidence: `rg -n "db\.(execute|query|exec|prepare)\(|sql\.raw|sql\.identifier" examples packages/create-kovo/templates` returns no shipped example or starter-template raw SQL sites to rewrite.
 - [x] Add a copyable docs rule.
   - Docs should say: never interpolate request/form/query data into SQL text; use Drizzle builders or `sql\`\`` placeholders; use typed allowlists for identifiers.
   - Evidence: `site/content/guides/data-layer.md` now states the copyable SQL-safety rule at the raw-SQL escape hatch, and `site/content/guides/security.md` adds the same rule to the practical security checklist.
-- [ ] Add CI gates.
+- [x] Add CI gates.
   - Include focused SQL-injection corpus tests, blessed dialect conformance, `git diff --check`, and any existing data-layer acceptance command in the latest verification section when implementation starts.
+  - Evidence: `.github/workflows/ci.yml` adds a dedicated `sql-safety` job that runs the focused SQL safety corpus, pglite/sqlite harness tests, and `git diff --check`; the aggregate `check` job now requires it.
 - [x] Keep this ledger compact.
   - As phases land, replace evidence under each checkbox with the narrowest verifying command or authoritative file. Do not append full transcripts.
   - Evidence: this update records one focused command or authoritative file per completed item and leaves partial corpus/CI/explain work open.
