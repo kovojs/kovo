@@ -317,8 +317,9 @@ guard-owned, and natural-key applications.
   - [x] `kovo explain --optimistic` renders typed derivation proof levels and private scope from
         optimistic facts.
     - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-compile.test.ts packages/core/src/derivation.test.ts` covers `OPTIMISTIC-PROOF` output for `exact-row`, `scoped-rowset`, `table-level`, and `opaque`, plus compile facts emitted with typed proof metadata.
-  - [ ] `kovo check` renders the same proof levels/private scope without depending on source-text
+  - [x] `kovo check` renders the same proof levels/private scope without depending on source-text
         snippets.
+    - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/conformance-fixtures/src/kovo-check-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts` covers `kovo check optimistic` `OPTIMISTIC-PROOF` rows for `exact-row`, `scoped-rowset`, `table-level`, and `opaque`, including private scope and named punt reasons.
   - Evidence when complete: snapshot tests cover exact-row, scoped-rowset, table-level, and opaque
     outputs.
 

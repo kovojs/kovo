@@ -4091,6 +4091,12 @@ export function kovoCheck(
   }
 
   if (includeAll || family === 'optimistic') {
+    if (family === 'optimistic') {
+      for (const line of optimisticProofCheckLines(graph.optimistic ?? [])) {
+        pushFinding(line);
+      }
+    }
+
     for (const warning of optimisticCoverageWarnings(
       graph.mutations ?? [],
       graph.queries ?? [],
@@ -4746,6 +4752,40 @@ function optimisticProofLine(query: string, proof: DerivationProof): string {
     `level=${proof.level}`,
     `private-scope=${list(proof.privateScope)}`,
   ].join(' ');
+}
+
+function optimisticProofCheckLines(coverages: readonly CoreGraph.OptimisticCoverage[]): string[] {
+  return [...coverages]
+    .sort(compareOptimisticCoverage)
+    .map(optimisticProofCheckLine)
+    .filter((line): line is string => line !== undefined);
+}
+
+function optimisticProofCheckLine(coverage: CoreGraph.OptimisticCoverage): string | undefined {
+  const derivation = coverage.derivation;
+  if (!derivation?.proof && derivation?.status !== 'PUNTED') return undefined;
+
+  return [
+    'OPTIMISTIC-PROOF',
+    `mutation=${coverage.mutation}`,
+    `query=${coverage.query}`,
+    `status=${coverage.status}`,
+    derivation ? `derivation=${derivation.status}` : '',
+    derivation?.proof ? `level=${derivation.proof.level}` : '',
+    derivation?.proof ? `private-scope=${list(derivation.proof.privateScope)}` : '',
+    derivation?.status === 'PUNTED'
+      ? `reason=${JSON.stringify(puntReasonLabel(derivation.reason))}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function compareOptimisticCoverage(
+  left: CoreGraph.OptimisticCoverage,
+  right: CoreGraph.OptimisticCoverage,
+): number {
+  return left.mutation.localeCompare(right.mutation) || left.query.localeCompare(right.query);
 }
 
 function optimisticCoverageWarnings(
