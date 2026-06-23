@@ -501,7 +501,11 @@ export function autocompleteKeyDown(
 
   if (event.key === 'Enter' && state.open === true && state.highlightedValue !== undefined) {
     const result = selectAutocompleteOption(state, state.highlightedValue, options);
-    if (result.value.changed) event.preventDefault();
+    // Selecting from an open list must NEVER fall through to the host form's
+    // implicit submit, which reloads the page and discards the selection (the
+    // "Enter does not select" defect). Prevent default whenever Enter commits or
+    // closes the open list, even when re-selecting the already-current value.
+    event.preventDefault();
     return result;
   }
 

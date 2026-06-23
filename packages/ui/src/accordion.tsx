@@ -12,7 +12,7 @@ import {
 import * as style from '@kovojs/style';
 
 import type { CollectionOrientation } from './navigation-types.js';
-import { passThroughProps } from './pass-through.js';
+import { bindingProps, passThroughProps } from './pass-through.js';
 
 import { uiTheme } from './theme.js';
 
@@ -309,7 +309,11 @@ export const AccordionContent = component({
         id={attrs.id}
         role={attrs.role}
       >
-        <div {...innerStyleAttrs} data-state={attrs['data-state']}>
+        <div
+          {...innerStyleAttrs}
+          {...bindingProps(props, ['data-state'])}
+          data-state={attrs['data-state']}
+        >
           {props.children}
         </div>
       </div>

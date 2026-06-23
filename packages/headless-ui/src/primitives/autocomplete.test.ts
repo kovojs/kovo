@@ -597,7 +597,11 @@ describe('headless-ui autocomplete primitive', () => {
       open: { changed: false, open: true },
       value: { changed: false, value: 'austin' },
     });
-    expect(event.defaultPrevented).toBe(false);
+    // Enter on an open list with a highlighted option ALWAYS consumes the key —
+    // even when a consumer cancels the follow-up change — so it never falls through
+    // to the host form's implicit submit (which reloads the page and loses the
+    // selection). See autocompleteKeyDown.
+    expect(event.defaultPrevented).toBe(true);
   });
 
   it('returns frozen attribute records and exposes option helpers', () => {
