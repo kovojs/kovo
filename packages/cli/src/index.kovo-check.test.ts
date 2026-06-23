@@ -1191,7 +1191,7 @@ describe('kovo check', () => {
     }
 
     expect(output).toBe(
-      'kovo: unsupported check family "optimstic". expected optimistic or coverage.\n',
+      'kovo: unsupported check family "optimstic". expected optimistic, coverage, or sources-sinks.\n',
     );
   });
 
@@ -1208,7 +1208,9 @@ describe('kovo check', () => {
       stderrWrite.mockRestore();
     }
 
-    expect(output).toBe('kovo: usage: kovo check [optimistic|coverage] [graph.json]\n');
+    expect(output).toBe(
+      'kovo: usage: kovo check [optimistic|coverage|sources-sinks] [graph.json]\n',
+    );
   });
 
   it('rejects unknown flags before treating them as graph paths', () => {

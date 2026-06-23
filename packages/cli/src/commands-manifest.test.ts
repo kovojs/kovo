@@ -66,7 +66,7 @@ describe('commands manifest', () => {
   it('exposes every usage constant the bin references', () => {
     // The bin imports these usage constants from the manifest; assert the literal
     // text matches what the CLI emits in its usage/error paths.
-    expect(CHECK_USAGE).toBe('usage: kovo check [optimistic|coverage] [graph.json]');
+    expect(CHECK_USAGE).toBe('usage: kovo check [optimistic|coverage|sources-sinks] [graph.json]');
     expect(AUDIT_USAGE).toBe('usage: kovo audit [--fail-on-findings] [graph.json]');
     expect(ADD_USAGE).toBe('usage: kovo add <component...> [--out <dir>]');
     expect(BUILD_USAGE).toBe(

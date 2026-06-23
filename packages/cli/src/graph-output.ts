@@ -9,6 +9,7 @@ import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
 
 import { AUDIT_USAGE, CHECK_USAGE, EXPLAIN_USAGE_LINE } from './commands-manifest.js';
 import { type CliCommandResult, type KovoCheckResult } from './shared.js';
+import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
 
 interface TouchGraphDiagnosticFact {
   code: DiagnosticCode;
@@ -23,7 +24,7 @@ interface UnguardedAccessFact {
   name: string;
 }
 
-export type KovoCheckFamily = 'all' | 'coverage' | 'optimistic';
+export type KovoCheckFamily = 'all' | 'coverage' | 'optimistic' | 'sources-sinks';
 
 export const outputVersion = 'kovo-check/v1';
 export const explainOutputVersion = 'kovo-explain/v1';
@@ -103,11 +104,6 @@ export function inputErrorMessage(error: InputReadError): string {
   return messages[error.kind];
 }
 
-function writeUsageError(message: string): 1 {
-  process.stderr.write(`${message}\n`);
-  return 1;
-}
-
 function graphInputValidationReadError(
   error: CoreGraph.GraphInputValidationError,
   path: string,
@@ -147,6 +143,7 @@ export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query
  */
 export type KovoExplainOptions =
   | KovoEndpointExplainOptions
+  | KovoSourcesSinksExplainOptions
   | KovoTargetExplainOptions
   | KovoUnguardedExplainOptions
   | KovoUnscopedExplainOptions;
@@ -157,6 +154,14 @@ export type KovoExplainOptions =
  */
 export interface KovoEndpointExplainOptions {
   endpoints: true;
+}
+
+/**
+ * `kovo explain --sources-sinks` options: emit the stable Phase 1 repository
+ * source/sink inventory (SPEC.md §5.3; plans/sources-sinks.md Phase 1).
+ */
+export interface KovoSourcesSinksExplainOptions {
+  sourcesSinks: true;
 }
 
 /**
@@ -263,6 +268,8 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     lines.push(`SUMMARY total=${endpoints.length}`);
     return ok(lines);
   }
+
+  if ('sourcesSinks' in options) return sourcesSinksExplainResult(explainOutputVersion);
 
   if (options.kind === 'context') {
     const provider = graph.requestProviders?.find((item) => item.kind === options.target);
@@ -543,8 +550,10 @@ export function kovoAudit(
  */
 export function kovoCheck(
   input: KovoCheckInput,
-  options: { family?: 'all' | 'coverage' | 'optimistic' } = {},
+  options: { family?: KovoCheckFamily } = {},
 ): KovoCheckResult {
+  if (options.family === 'sources-sinks') return sourcesSinksCheckResult(outputVersion);
+
   const validationErrors = validateKovoExplainInput(input);
   if (validationErrors.length > 0) return invalidGraphInputResult(outputVersion, validationErrors);
 
@@ -726,7 +735,9 @@ function diagnosticSeverity(
 }
 
 export function checkFamilyArg(value: string | undefined): KovoCheckFamily {
-  return value === 'optimistic' || value === 'coverage' ? value : 'all';
+  return value === 'optimistic' || value === 'coverage' || value === 'sources-sinks'
+    ? value
+    : 'all';
 }
 
 type CheckArgParseResult =
@@ -746,7 +757,7 @@ export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
 export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
   const message =
     error.kind === 'unsupported-family'
-      ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic or coverage.\n`
+      ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic, coverage, or sources-sinks.\n`
       : `kovo: ${CHECK_USAGE}\n`;
   process.stderr.write(message);
   return 1;
@@ -780,14 +791,29 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--fail-on-findings',
     '--layouts',
     '--optimistic',
+    '--sources-sinks',
     '--unguarded',
     '--unscoped',
   ]);
   if (!parsed.ok) return parsed;
 
   const { flags, positional } = parsed;
-  const modeFlags = ['--endpoints', '--unguarded', '--unscoped'].filter((flag) => flags.has(flag));
+  const modeFlags = ['--endpoints', '--sources-sinks', '--unguarded', '--unscoped'].filter((flag) =>
+    flags.has(flag),
+  );
   if (modeFlags.length > 1) return explainUsage();
+
+  if (flags.has('--sources-sinks')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 0
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: undefined, ok: true, options: { sourcesSinks: true } };
+  }
 
   if (flags.has('--endpoints')) {
     if (

@@ -33,6 +33,7 @@ import {
   writeCheckUsageError,
 } from './graph-output.js';
 import { stableValue, writeCommandResult, writeUsageError } from './shared.js';
+import { writeSourcesSinksArtifact } from './sources-sinks.js';
 
 export {
   compileComponentV1,
@@ -59,6 +60,7 @@ export type {
   KovoEndpointExplainOptions,
   KovoExplainInput,
   KovoExplainOptions,
+  KovoSourcesSinksExplainOptions,
   KovoTargetExplainOptions,
   KovoUnguardedExplainOptions,
   KovoUnscopedExplainOptions,
@@ -81,6 +83,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
     const parsed = parseCheckArgs(args.slice(1));
     if (!parsed.ok) return writeCheckUsageError(parsed);
     const { family, inputPath } = parsed;
+    if (family === 'sources-sinks') writeSourcesSinksArtifact();
     return writeCommandResult(runGraphCommand(inputPath, (input) => kovoCheck(input, { family })));
   }
 
@@ -103,6 +106,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
   if (args[0] === 'explain') {
     const parsed = parseExplainArgs(args.slice(1));
     if (!parsed.ok) return writeUsageError(parsed.message);
+    if ('sourcesSinks' in parsed.options) writeSourcesSinksArtifact();
     return writeCommandResult(
       runGraphCommand(parsed.inputPath, (input) => kovoExplain(input, parsed.options)),
     );
