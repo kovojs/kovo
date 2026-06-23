@@ -205,10 +205,14 @@ guard-owned, and natural-key applications.
     from visible keys, derives `updateQuantity` as a public `productId` row update plus SUM resum,
     and derives `removeLine` as row removal plus COUNT recount and SUM resum from the shipped rows.
 
-- [ ] **Filtered membership fixture.**
+- [x] **Filtered membership fixture.**
   - Mutation changes `status`; query filters by `status`.
   - Expected: derivable exit, named punt for entry when the client lacks row fields, and precise
     fragment refresh fallback.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
+    extracts an `openTasks` filtered rowset, derives `closeTask` as a filtered-list exit, verifies
+    `reopenTask` punts with `membership-entry`, and checks the generated fallback plan uses
+    `openTasks: 'await-fragment'`.
 
 - [ ] **Helper-summary fixture.**
   - Session/tenant id flows through a same-package helper before the Drizzle predicate.

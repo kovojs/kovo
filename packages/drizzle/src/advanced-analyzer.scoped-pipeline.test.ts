@@ -448,4 +448,128 @@ describe('@kovojs/drizzle advanced analyzer scoped pipeline', () => {
     expect(removeSource).not.toContain('session:');
     expect(removeSource).not.toContain('$input.session');
   });
+
+  it('punts filtered-list membership entries and derives exits from extracted facts', () => {
+    const files = [
+      pgDatabaseTypes([
+        'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
+      ]),
+      {
+        fileName: 'task.pipeline.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'export const tasks = pgTable("tasks", {',
+          '  id: text("id").notNull(),',
+          '  title: text("title").notNull(),',
+          '  status: text("status").notNull(),',
+          '}, kovo({ domain: "task", key: "id" }));',
+          '',
+          'export const openTasks = query("openTasks", {',
+          '  async load(_input: {}, db: PgDatabase<any, any, any>) {',
+          '    return {',
+          '      items: await db.select({ id: tasks.id, title: tasks.title, status: tasks.status }).from(tasks).where(eq(tasks.status, "open")),',
+          '    };',
+          '  },',
+          '});',
+          '',
+          'export async function closeTask(db: PgDatabase<any, any, any>, id: string) {',
+          '  await db.update(tasks).set({ status: "closed" }).where(eq(tasks.id, id));',
+          '}',
+          '',
+          'export async function reopenTask(db: PgDatabase<any, any, any>, id: string) {',
+          '  await db.update(tasks).set({ status: "open" }).where(eq(tasks.id, id));',
+          '}',
+        ].join('\n'),
+      },
+    ];
+
+    const graph = extractTouchGraphFromProject({ files });
+    expect(graph.closeTask?.touches).toMatchObject([
+      {
+        domain: 'task',
+        keys: 'arg:id',
+        via: 'tasks',
+      },
+    ]);
+    expect(graph.reopenTask?.touches).toMatchObject([
+      {
+        domain: 'task',
+        keys: 'arg:id',
+        via: 'tasks',
+      },
+    ]);
+    expect(diagnosticsForTouchGraph(graph)).toEqual([]);
+
+    const shape = extractAlgebraicShapesFromProject({ files }).find(
+      (candidate) => candidate.query === 'openTasks',
+    );
+    if (!shape) throw new Error('expected openTasks algebraic shape');
+    expect(shape.fields.items).toMatchObject({
+      kind: 'agg',
+      projection: ['id', 'title', 'status'],
+      rowKey: 'id',
+      rowset: {
+        filters: [{ column: 'status', op: 'eq', value: { kind: 'const', value: 'open' } }],
+        key: 'id',
+        table: 'tasks',
+      },
+    });
+
+    const effects = extractSymbolicEffectsFromProject({ files });
+    const closeEffect = effects.find((candidate) => candidate.writeKey === 'closeTask');
+    if (!closeEffect) throw new Error('expected closeTask symbolic effect');
+    expect(closeEffect.effect).toMatchObject({
+      match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'closed' } },
+      table: 'tasks',
+    });
+
+    const closeResult = deriveOptimistic([closeEffect.effect], shape);
+    if (closeResult.kind !== 'derived') {
+      throw new Error(`expected closeTask derived, got ${closeResult.kind}`);
+    }
+    expect(closeResult.program.ops).toEqual([
+      {
+        guard: 'find-or-noop',
+        match: [{ column: 'id', value: { kind: 'param', path: 'id' } }],
+        op: 'remove-row',
+        path: 'items',
+      },
+    ]);
+
+    const reopenEffect = effects.find((candidate) => candidate.writeKey === 'reopenTask');
+    if (!reopenEffect) throw new Error('expected reopenTask symbolic effect');
+    expect(reopenEffect.effect).toMatchObject({
+      match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'open' } },
+      table: 'tasks',
+    });
+    expect(deriveOptimistic([reopenEffect.effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'membership-entry', field: 'status' },
+    });
+
+    const exitSource = serializeDerivedOptimistic({
+      complete: true,
+      constName: 'closeTaskDerivedOptimistic',
+      entries: [{ program: closeResult.program, query: 'openTasks' }],
+      formImport: { name: 'closeTaskForm', path: '../../app.js' },
+    });
+    expect(exitSource).toContain('entry.id === $input.id');
+    expect(exitSource).toContain('draft.items.splice(index, 1);');
+
+    const entryFallbackSource = serializeDerivedOptimistic({
+      awaitFragments: ['openTasks'],
+      complete: false,
+      constName: 'reopenTaskDerivedOptimistic',
+      entries: [],
+      formImport: { name: 'reopenTaskForm', path: '../../app.js' },
+    });
+    expect(entryFallbackSource).toContain("openTasks: 'await-fragment'");
+  });
 });

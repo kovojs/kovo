@@ -446,6 +446,35 @@ describe('deriveOptimistic — §10.5 PUNT list (negative surfaces)', () => {
     });
   });
 
+  it('punts membership entry on a filtered-column SET to the filter value', () => {
+    const shape: AlgebraicQueryShape = {
+      fields: {
+        items: {
+          kind: 'agg',
+          projection: ['id', 'status'],
+          rowKey: 'id',
+          rowset: {
+            filters: [{ column: 'status', op: 'eq', value: { kind: 'const', value: 'open' } }],
+            key: 'id',
+            orderBy: [],
+            table: 'tickets',
+          },
+        },
+      },
+      query: 'openTickets',
+    };
+    const effect: SymbolicEffect = {
+      match: { eq: [{ column: 'id', value: { kind: 'param', path: 'id' } }], kind: 'keys' },
+      op: 'update',
+      sets: { status: { kind: 'const', value: 'open' } },
+      table: 'tickets',
+    };
+    expect(deriveOptimistic([effect], shape)).toEqual({
+      kind: 'punt',
+      reason: { code: 'membership-entry', field: 'status' },
+    });
+  });
+
   it('punts when no classified field covers a written table', () => {
     const effect: SymbolicEffect = {
       op: 'insert',

@@ -235,8 +235,10 @@ function membershipTransition(
   if (value.kind !== 'const' || filter.op !== 'eq' || filter.value?.kind !== 'const') {
     return fail({ code: 'membership-entry', field: column });
   }
-  const exits = value.value !== filter.value.value;
-  return exits ? rows({ guard: 'find-or-noop', match, op: 'remove-row', path }) : ok();
+  if (value.value !== filter.value.value) {
+    return rows({ guard: 'find-or-noop', match, op: 'remove-row', path });
+  }
+  return fail({ code: 'membership-entry', field: column });
 }
 
 // ── SUM(R, arith) ────────────────────────────────────────────────────────────
