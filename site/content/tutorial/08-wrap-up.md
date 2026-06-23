@@ -61,8 +61,8 @@ documentation site is one, exported with no server. The full hosting matrix live
 - [Compiler internals](/guides/compiler-internals/) is the home for "what does my TSX compile
   to", with real captured lowerings.
 - The [specification](/spec/) is the normative source for every behavior this tutorial taught.
-- `examples/commerce` in the repository is the full reference app — uploads, webhooks, CSV
-  export, i18n — built on the same patterns you now know.
+- `examples/commerce` in the repository is the full reference app — uploads, webhooks, i18n,
+  and other app-owned raw integrations — built on the same patterns you now know.
 
 <details>
 <summary>Spec & diagnostics</summary>

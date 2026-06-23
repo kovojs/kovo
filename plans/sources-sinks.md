@@ -26,8 +26,8 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
   - Kovo v1 should not ship first-party CSV/TSV/spreadsheet helpers, diagnostics, corpus fixtures, examples, templates, guide recipes, or public API surface that makes spreadsheet export look supported by the framework. Spreadsheet formula execution is a separate application format hazard, not a Kovo core web-framework sink to bless.
 - [ ] Keep only generic raw response escape hatches for app-owned exports.
   - If an app needs spreadsheet export, it must be ordinary app-owned code behind `endpoint()` or `respond.file()`/`respond.stream()` with explicit app security review. The source/sink plan must not add a Kovo spreadsheet-safe helper or formula-hardening lane.
-- [ ] Remove copyable CSV/TSV export patterns from examples, templates, tutorials, and docs.
-  - If existing docs mention CSV/TSV exports, remove them or reframe them as outside the framework's safe-by-default contract.
+- [x] Remove copyable CSV/TSV export patterns from examples, templates, tutorials, and docs.
+  - Evidence: `rg -n -i "csv|tsv|spreadsheet|excel|formula|text/csv|orders\\.csv|inventory\\.csv|exports?/.*csv" docs examples site -g '!node_modules'` now surfaces only the two intentional disclaimer lines in `site/content/guides/endpoints-webhooks.md` and `site/content/guides/streaming.md`; the prior tutorial/reference-app promotion was removed from `site/content/tutorial/08-wrap-up.md`.
 
 ## Current Evidence
 

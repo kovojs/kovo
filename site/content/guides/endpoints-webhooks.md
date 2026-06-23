@@ -10,6 +10,8 @@ Most browser writes should be `mutation()` forms: schema input, CSRF, no-JS beha
 transactions, query truth, and typed failure UI. Use raw ingress when the caller is not a browser
 form or when the protocol itself needs raw HTTP control: OAuth callbacks, third-party webhooks,
 downloads, health checks, adapter-owned mounts, and externally authenticated machine writes.
+CSV/TSV/spreadsheet exports also live here if an app needs them, but they are ordinary app-owned
+raw response code, not a Kovo safe-by-default helper lane.
 
 ## `endpoint()` for raw HTTP
 
