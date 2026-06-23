@@ -100,10 +100,17 @@ The only remaining open checkbox is the deployed-service health follow-up surfac
     against Commerce, CRM, and Stack Overflow roots plus one core route per app, using the same
     manifest URLs and environment overrides as the docs iframe configuration.
 
-- [ ] **Restore deployed Commerce and CRM service health exposed by the live gate.**
-  - **Current evidence:** Post-merge `pnpm run test:examples-live` on 2026-06-23 passed Stack
-    Overflow `/` and `/questions/q1`, but observed Commerce `/` as HTTP 503, Commerce `/cart` as
-    timeout, CRM `/` as HTTP 503, and CRM `/contacts` as timeout.
+- [ ] **Restore stable deployed example service health exposed by the live gate.**
+  - **Current evidence:** `pnpm run test:examples-live` remains red on 2026-06-23. The latest run
+    passed CRM `/` and `/contacts`, but observed Commerce `/` and `/cart` as timeouts, Stack
+    Overflow `/` as HTTP 503, and Stack Overflow `/questions/q1` as timeout. Earlier post-merge
+    runs alternated between Commerce, CRM, and Stack Overflow 503/timeout failures.
+  - **Local evidence:** Running `examples/commerce/scripts/demo-serve.mjs` locally with
+    `KOVO_DEMO_WARM_SESSIONS=10` served Commerce `/` and `/cart` with HTTP 200, so the checked-out
+    source path does not reproduce the Commerce 503 locally.
+  - **Access gap:** `gcloud` works with `CLOUDSDK_PYTHON=/usr/local/bin/python3`, but no active
+    account is configured in this environment; `gh auth status` also failed. Cloud Run inspection or
+    redeploy still requires authenticated project access.
   - **Next step:** Redeploy or inspect the Cloud Run services, then rerun `pnpm run
     test:examples-live` and mark this complete only when all six probes pass.
 
@@ -137,5 +144,5 @@ The only remaining open checkbox is the deployed-service health follow-up surfac
   current local `main` and regenerating the inline loader artifact.
 - `pnpm --filter @kovojs/example-gallery run test:browser -- --reporter=dot` passed on rerun after
   gallery primitive fixes.
-- `pnpm run test:examples-live` is intentionally failing until the deployed Commerce and Stack
-  CRM services are restored.
+- `pnpm run test:examples-live` is intentionally failing until deployed example service health is
+  restored.
