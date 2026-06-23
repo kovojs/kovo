@@ -223,7 +223,6 @@ export const PipelineRegion = component({
           <h2 style={pipelineStyles.sectionLabel}>New deal</h2>
           <form {...mutationFormAttributes(createDeal)} style={pipelineStyles.formPanel}>
             <input type="hidden" name="id" value={freshId('d')} />
-            <input type="hidden" name="ownerId" value="u1" />
             <div style={pipelineStyles.formGrid}>
               <select name="contactId" required style={pipelineStyles.input}>
                 {contacts.map((contact) => (

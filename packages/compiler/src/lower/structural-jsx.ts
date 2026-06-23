@@ -175,7 +175,7 @@ export function lowerStructuralJsx(
       outputContexts,
       nameCounts,
     ) || needsStylePropertyHelper;
-  lowerInlineTextBindings(
+  const inlineTextEscapeApplied = lowerInlineTextBindings(
     tree.elements,
     model,
     componentName,
@@ -187,11 +187,14 @@ export function lowerStructuralJsx(
     nameCounts,
     boundElementStarts,
   );
-  const escapeApplied = escapeStaticTextInterpolations(
+  const staticTextEscapeApplied = escapeStaticTextInterpolations(
     tree.elements,
     boundElementStarts,
+    model,
+    knownQueries,
     outputContexts,
   );
+  const escapeApplied = inlineTextEscapeApplied || staticTextEscapeApplied;
 
   const alreadyImportsEscapeText = model.namedImports.some(
     (entry) =>
@@ -1162,12 +1165,15 @@ function lowerInlineTextBindings(
   outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
   boundElementStarts: Set<number>,
-): void {
+): boolean {
+  let escapeApplied = false;
   for (const element of elements) {
     const expression = soleExpressionChild(element);
     const binding = inlineTextBinding(element, expression, knownQueries);
-    if (binding) {
+    if (binding && expression) {
       boundElementStarts.add(element.element.start);
+      expression.replacement = `{escapeText(${binding})}`;
+      escapeApplied = true;
       setJsxIrAttribute(
         element,
         generatedJsxIrAttribute(
@@ -1191,6 +1197,8 @@ function lowerInlineTextBindings(
     const derive = inlineTextDerive(element, expression, componentName);
     if (derive) {
       boundElementStarts.add(element.element.start);
+      derive.expressionNode.replacement = `{escapeText(${derive.expression})}`;
+      escapeApplied = true;
       const { stampName } = recordStateDerive(
         derive,
         deriveExports,
@@ -1212,6 +1220,8 @@ function lowerInlineTextBindings(
     const queryDerive = inlineQueryTextDerive(element, expression, componentName, knownQueries);
     if (!queryDerive) continue;
     boundElementStarts.add(element.element.start);
+    queryDerive.expressionNode.replacement = `{escapeText(${queryDerive.expression})}`;
+    escapeApplied = true;
     const { stampName } = recordQueryTextDerive(
       queryDerive,
       deriveExports,
@@ -1232,7 +1242,8 @@ function lowerInlineTextBindings(
   for (const expression of expressionChildren(elements)) {
     const binding = inlineMixedTextBinding(expression, model, knownQueries);
     if (binding) {
-      expression.replacement = `<span data-bind="${escapeAttribute(binding)}">{${binding}}</span>`;
+      expression.replacement = `<span data-bind="${escapeAttribute(binding)}">{escapeText(${binding})}</span>`;
+      escapeApplied = true;
       outputContexts.push(
         outputWriteFact({
           context: 'text',
@@ -1253,7 +1264,8 @@ function lowerInlineTextBindings(
         outputContexts,
         nameCounts,
       );
-      expression.replacement = `<span data-bind="${escapeAttribute(stampName)}">{${derive.expression}}</span>`;
+      expression.replacement = `<span data-bind="${escapeAttribute(stampName)}">{escapeText(${derive.expression})}</span>`;
+      escapeApplied = true;
       continue;
     }
     const queryDerive = inlineMixedQueryTextDerive(expression, model, componentName, knownQueries);
@@ -1264,13 +1276,17 @@ function lowerInlineTextBindings(
       outputContexts,
       nameCounts,
     );
-    expression.replacement = `<span data-derive="${escapeAttribute(stampName)}">{${queryDerive.expression}}</span>`;
+    expression.replacement = `<span data-derive="${escapeAttribute(stampName)}">{escapeText(${queryDerive.expression})}</span>`;
+    escapeApplied = true;
   }
+  return escapeApplied;
 }
 
 function escapeStaticTextInterpolations(
   elements: readonly JsxIrElement[],
   boundElementStarts: ReadonlySet<number>,
+  model: ComponentModuleModel,
+  knownQueries: ReadonlySet<string>,
   outputContexts: GeneratedOutputWriteFact[],
 ): boolean {
   let applied = false;
@@ -1288,7 +1304,8 @@ function escapeStaticTextInterpolations(
       continue;
     }
     for (const child of directExpressionChildren(element)) {
-      if (child.expression.solePropertyAccessPath === undefined || child.replacement) continue;
+      if (child.replacement) continue;
+      if (!shouldEscapeStaticTextExpression(child.expression, model, knownQueries)) continue;
       child.replacement = `{escapeText(${child.expression.expression})}`;
       outputContexts.push(
         outputWriteFact({
@@ -1303,6 +1320,32 @@ function escapeStaticTextInterpolations(
     }
   }
   return applied;
+}
+
+function shouldEscapeStaticTextExpression(
+  expression: JsxExpressionModel,
+  model: ComponentModuleModel,
+  knownQueries: ReadonlySet<string>,
+): boolean {
+  if (expression.solePropertyAccessPath !== undefined) return true;
+  if (isExplicitHtmlCompositionExpression(expression.expression)) return false;
+  const reactiveRoots = new Set(
+    expression.propertyAccesses
+      .map((access) => queryNameFromPath(access.path))
+      .filter((root): root is string => root !== null),
+  );
+  if (reactiveRoots.has('state')) return true;
+  if ([...reactiveRoots].some((root) => knownQueries.has(root))) return true;
+
+  if (reactiveRoots.size > 0) return true;
+  const renderInputNames = new Set(
+    model.components.flatMap((component) => component.renderInputs.map((input) => input.name)),
+  );
+  return expression.references.some((reference) => renderInputNames.has(reference));
+}
+
+function isExplicitHtmlCompositionExpression(expression: string): boolean {
+  return expression.includes('.definition.render(') || expression.trim().startsWith('trustedHtml(');
 }
 
 function mergeStyle(
@@ -1751,20 +1794,6 @@ function isPrimitiveStateAriaAttribute(name: string): boolean {
     name === 'aria-current' ||
     name === 'aria-disabled'
   );
-}
-
-function replaceJsxIrAttribute(
-  element: JsxIrElement,
-  oldName: string,
-  attribute: JsxIrAttribute,
-): void {
-  const index = element.attributes.findIndex((item) => item.name === oldName);
-  if (index === -1) {
-    setJsxIrAttribute(element, attribute);
-    return;
-  }
-  element.attributes.splice(index, 1, attribute);
-  markJsxIrChanged(element);
 }
 
 function insertJsxIrAttributeAtSource(

@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events';
 import { Agent, request as httpRequest, createServer } from 'node:http';
 import type {
   IncomingHttpHeaders,
@@ -13,12 +14,33 @@ import { describe, expect, it, vi } from 'vitest';
 import { createApp, createRequestHandler } from './app.js';
 import { domain } from './domain.js';
 import { mutation } from './mutation.js';
-import { toNodeHandler, writeWebResponseToNode } from './node.js';
+import { nodeRequestToWebRequest, toNodeHandler, writeWebResponseToNode } from './node.js';
 import { query } from './query.js';
 import { route } from './route.js';
 import { s } from './schema.js';
 
+function nodeRequest(url: string): IncomingMessage {
+  const request = new EventEmitter() as IncomingMessage;
+  request.headers = { host: 'internal.example' };
+  request.method = 'GET';
+  request.socket = new EventEmitter() as Socket;
+  request.url = url;
+  return request;
+}
+
 describe('server node adapter', () => {
+  it('uses a pinned origin for absolute-form and protocol-relative request targets', () => {
+    const absolute = nodeRequestToWebRequest(nodeRequest('http://evil.example/admin?next=1'), {
+      origin: 'https://app.example',
+    });
+    const protocolRelative = nodeRequestToWebRequest(nodeRequest('//evil.example/admin?next=1'), {
+      origin: 'https://app.example',
+    });
+
+    expect(absolute.url).toBe('https://app.example/admin?next=1');
+    expect(protocolRelative.url).toBe('https://app.example/evil.example/admin?next=1');
+  });
+
   it('serves web-standard handlers through node:http with request bodies and early hints', async () => {
     const server = await serveWithNode(
       toNodeHandler(async (request) => {
@@ -608,6 +630,40 @@ describe('writeWebResponseToNode early hints HTTP version gating (L16-2)', () =>
     void writeWebResponseToNode(response, nodeResponse, 'GET', { httpVersion: '1.1' });
 
     expect(earlyHintCalls).toEqual([{ link: '</app.css>; rel=preload; as=style' }]);
+  });
+
+  it('passes multiple Link hints to Node as separate early-hint values', () => {
+    const earlyHintCalls: { link: string | string[] }[] = [];
+    const nodeResponse = {
+      headersSent: false,
+      writeEarlyHints(hints: { link: string | string[] }) {
+        earlyHintCalls.push(hints);
+      },
+      writeHead() {
+        return this;
+      },
+      end() {
+        return this;
+      },
+    } as unknown as ServerResponse;
+
+    const response = new Response(null, {
+      headers: {
+        Link: '</app.css>; rel=preload; as=style, </routes/questions.css>; rel=preload; as=style',
+      },
+      status: 200,
+    });
+
+    void writeWebResponseToNode(response, nodeResponse, 'GET', { httpVersion: '1.1' });
+
+    expect(earlyHintCalls).toEqual([
+      {
+        link: [
+          '</app.css>; rel=preload; as=style',
+          '</routes/questions.css>; rel=preload; as=style',
+        ],
+      },
+    ]);
   });
 });
 

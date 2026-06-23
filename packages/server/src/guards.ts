@@ -440,7 +440,7 @@ export async function renderHttpGuardFailureResponse<Request>(
   if (result.status !== 422 || result.error?.code !== 'UNAUTHORIZED') return undefined;
 
   if (guardFailureIsUnauthenticated(result, request)) {
-    const next = options.currentUrl ?? '/';
+    const next = sanitizeNext(options.currentUrl ?? '/', options.routes);
     const context = { next, request };
     const redirectResult = await (options.onUnauthenticated
       ? options.onUnauthenticated(context)

@@ -50,7 +50,7 @@ export const ProductCard = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
-  it('does not escape nested elements, calls, or attribute expressions', () => {
+  it('escapes render-data call and conditional expressions but not attribute expressions', () => {
     const result = compileComponentModule({
       fileName: 'card.tsx',
       source: `
@@ -58,6 +58,10 @@ export const Card = component({
   render: ({ product }) => (
     <article title={product.name}>
       {formatPrice(product.price)}
+      {product.featured ? product.name : product.fallbackName}
+      {product.subtitle ?? product.name}
+      {\`SKU \${product.sku}\`}
+      {[product.name, product.fallbackName].join(" / ")}
       <span>{product.icon}</span>
     </article>
   ),
@@ -68,10 +72,67 @@ export const Card = component({
 
     // attribute expression stays (runtime escapes attributes); call expression is not a data path.
     expect(serverSource).toContain('title={product.name}');
-    expect(serverSource).toContain('{formatPrice(product.price)}');
-    expect(serverSource).not.toContain('escapeText(formatPrice');
+    expect(serverSource).toContain('{escapeText(formatPrice(product.price))}');
+    expect(serverSource).toContain(
+      '{escapeText(product.featured ? product.name : product.fallbackName)}',
+    );
+    expect(serverSource).toContain('{escapeText(product.subtitle ?? product.name)}');
+    expect(serverSource).toContain('{escapeText(\\`SKU \\${product.sku}\\`)}');
+    expect(serverSource).toContain(
+      '{escapeText([product.name, product.fallbackName].join(" / "))}',
+    );
     expect(serverSource).not.toContain('escapeText(product.name))'); // not double-applied to the attr
     // the sole data-path text child inside <span> is escaped
     expect(serverSource).toContain('<span>{escapeText(product.icon)}</span>');
+  });
+
+  it('escapes SSR fallback text for query/state bindings and derives', () => {
+    const result = compileComponentModule({
+      fileName: 'question-detail.tsx',
+      source: `
+export const QuestionDetail = component({
+  queries: { question: {} },
+  state: () => ({ selected: "<b>raw</b>" }),
+  render: ({ question }, state) => (
+    <article>
+      <h1>{question.title}</h1>
+      <p>Asked by {question.authorName}</p>
+      <strong>{question.title + " " + question.body}</strong>
+      <em>{state.selected.toUpperCase()}</em>
+    </article>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain(
+      '<h1 data-bind="question.title">{escapeText(question.title)}</h1>',
+    );
+    expect(serverSource).toContain(
+      'Asked by <span data-bind="question.authorName">{escapeText(question.authorName)}</span>',
+    );
+    expect(serverSource).toContain('{escapeText(question.title + " " + question.body)}</strong>');
+    expect(serverSource).toContain('{escapeText(state.selected.toUpperCase())}</em>');
+    expect(serverSource).toContain("import { escapeText } from '@kovojs/server/internal/html';");
+  });
+
+  it('leaves explicit component render composition as raw HTML', () => {
+    const result = compileComponentModule({
+      fileName: 'composed.tsx',
+      source: `
+export const Composed = component({
+  render: ({ card }) => (
+    <section>
+      {Card.definition.render({ children: card.body })}
+    </section>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+
+    expect(serverSource).toContain('{Card.definition.render({ children: card.body })}');
+    expect(serverSource).not.toContain('escapeText(Card.definition.render');
   });
 });

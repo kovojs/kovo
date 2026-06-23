@@ -16,6 +16,7 @@ import { PipelineRegion } from './components/pipeline.js';
 import { CrmShell } from './components/chrome.js';
 import { createCrmDb, type CrmDb } from './db.js';
 import { seedCrmDemo } from './demo-data.js';
+import { CRM_DEMO_USER_ID } from './model.js';
 import { addContact, closeDeal, createDeal, moveDeal } from './mutations.js';
 import {
   activityListQuery,
@@ -49,7 +50,10 @@ const crmStaticDealPaths = [
 ] as const;
 
 // Fixed demo viewer attached to each request so the guarded mutations can run.
-const demoSession = { id: 'demo-session', user: { id: 'u1', roles: ['sales'] as const } };
+const demoSession = {
+  id: 'demo-session',
+  user: { id: CRM_DEMO_USER_ID, roles: ['sales'] as const },
+};
 
 const PipelineLayout = layout({
   render: (_queries, _state, { children }) => <CrmShell active="pipeline">{children}</CrmShell>,

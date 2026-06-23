@@ -10,7 +10,7 @@ export type CrmDb = PgliteDatabase<typeof schema>;
 
 const SCHEMA_DDL = [
   // Presentational fields carry defaults so the demo forms can keep their inputs small.
-  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, owner_id text NOT NULL, deal_count integer NOT NULL, company text NOT NULL DEFAULT 'Independent', title text NOT NULL DEFAULT 'Contact');",
+  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL UNIQUE, owner_id text NOT NULL, deal_count integer NOT NULL, company text NOT NULL DEFAULT 'Independent', title text NOT NULL DEFAULT 'Contact');",
   "CREATE TABLE deals (id text PRIMARY KEY, contact_id text NOT NULL, stage text NOT NULL, amount integer NOT NULL, owner_id text NOT NULL, title text NOT NULL DEFAULT 'New opportunity');",
   'CREATE TABLE activities (id serial PRIMARY KEY, deal_id text NOT NULL, kind text NOT NULL, note text NOT NULL);',
   // closeDeal uses this to show a server-computed value in the returned fragment.

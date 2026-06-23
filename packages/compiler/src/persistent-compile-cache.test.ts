@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -107,6 +107,40 @@ describe('persistent compile cache format', () => {
       entries: {},
       version: 'kovo-compile-cache/v1',
     });
+  });
+
+  it('misses cache entries whose blob ref escapes or is not content-addressed', async () => {
+    const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const entry = await writePersistentCompileCacheEntry(cacheDir, {
+      cacheKey: 'cache-key-a',
+      footprint: { reads: { queryShapeNames: ['a'] } },
+      result: { value: 'a' },
+    });
+    const manifest = await readPersistentCompileCacheManifest(cacheDir);
+    manifest.entries['cache-key-a'] = {
+      ...entry,
+      artifactRefs: { result: '../../../../outside.json' },
+    };
+    await writeFile(join(cacheDir, 'manifest.json'), `${JSON.stringify(manifest)}\n`);
+    const [entryFile] = await readdir(join(cacheDir, 'entries'));
+    await writeFile(
+      join(cacheDir, 'entries', entryFile ?? ''),
+      `${JSON.stringify(manifest.entries['cache-key-a'])}\n`,
+    );
+
+    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+  });
+
+  it('misses cache entries whose blob contents do not match the content-addressed ref', async () => {
+    const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const entry = await writePersistentCompileCacheEntry(cacheDir, {
+      cacheKey: 'cache-key-a',
+      footprint: { reads: { queryShapeNames: ['a'] } },
+      result: { value: 'a' },
+    });
+    await writeFile(join(cacheDir, entry.artifactRefs.result), '{"value":"tampered"}');
+
+    await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
   });
 });
 

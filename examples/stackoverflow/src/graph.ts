@@ -28,7 +28,7 @@ export function soGraphDeclarations(queries: readonly InvalidationQueryInput[]) 
       {
         guards: ['authed'],
         invalidates: ['question'],
-        inputFields: ['id', 'title', 'body', 'authorId'],
+        inputFields: ['id', 'title', 'body'],
         key: 'postQuestion',
         session: 'soSession',
         writes: ['question'],
@@ -36,7 +36,7 @@ export function soGraphDeclarations(queries: readonly InvalidationQueryInput[]) 
       {
         guards: ['authed'],
         invalidates: ['answer', 'question'],
-        inputFields: ['id', 'questionId', 'body', 'authorId'],
+        inputFields: ['id', 'questionId', 'body'],
         key: 'postAnswer',
         session: 'soSession',
         writes: ['answer', 'question'],
@@ -44,7 +44,7 @@ export function soGraphDeclarations(queries: readonly InvalidationQueryInput[]) 
       {
         guards: ['authed'],
         invalidates: ['vote', 'question'],
-        inputFields: ['id', 'targetId', 'userId'],
+        inputFields: ['id', 'targetId'],
         key: 'voteUp',
         session: 'soSession',
         writes: ['vote', 'question'],

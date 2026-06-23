@@ -6,7 +6,7 @@ import { postQuestionMutation } from '../mutations.js';
 import { questionList, questionScore } from '../queries.js';
 import { postQuestionForm, type QuestionListItem, type SoRequest } from '../model.js';
 import { freshId } from '../components/chrome.js';
-import { cardStyles, newestFirst, renderQuestionRow } from '../components/question-card.js';
+import { newestFirst, renderQuestionRow } from '../components/question-card.js';
 
 // Palette inlined as a same-file literal (StyleX-style extraction resolves only
 // same-file literals; SPEC §13.1). Mirrors the `so` palette in chrome.tsx.
@@ -178,29 +178,19 @@ export const QuestionListRegion = component({
         <div style={listStyles.subHead}>
           <span style={listStyles.count}>{questions.length.toLocaleString('en-US')} questions</span>
           <div style={listStyles.tabs}>
-            {FILTER_TABS.map((tab, index) => (
-              <a
-                href="/"
-                style={
-                  index === 0
-                    ? [listStyles.tab, listStyles.tabFirst, listStyles.tabActive]
-                    : listStyles.tab
-                }
-              >
+            {FILTER_TABS.map((tab) => (
+              <a href="/" style={listStyles.tab}>
                 {tab}
               </a>
             ))}
           </div>
         </div>
 
-        <ul style={cardStyles.list}>
-          {questions.map((question) => renderQuestionRow(question, { interactive: true }))}
-        </ul>
+        <ul>{questions.map((question) => renderQuestionRow(question, { interactive: true }))}</ul>
 
         {/* Native form; enhanced submissions refresh this whole region. */}
         <form enhance mutation={postQuestionMutation} id="ask-question" style={listStyles.composer}>
           <input type="hidden" name="id" value={freshId('q')} />
-          <input type="hidden" name="authorId" value="demo-viewer" />
           <p style={listStyles.composerTitle}>Ask a public question</p>
           <p style={listStyles.composerHint}>
             {totalVotes.toLocaleString('en-US')} votes cast across the community — be specific and
@@ -225,7 +215,7 @@ export const QuestionListRegion = component({
             required
             rows="3"
             placeholder="Include all the information someone would need to answer your question…"
-            style={[listStyles.input, listStyles.textarea]}
+            style={listStyles.input}
           />
           <FormError
             code="DUPLICATE_TITLE"

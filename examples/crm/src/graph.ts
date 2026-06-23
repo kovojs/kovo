@@ -12,7 +12,7 @@ export function crmGraphDeclarations(queries: readonly InvalidationQueryInput[])
     mutations: [
       {
         guards: ['authed'],
-        inputFields: ['id', 'name', 'email', 'ownerId'],
+        inputFields: ['id', 'name', 'email'],
         invalidates: ['contact'],
         key: 'addContact',
         session: 'crmSession',
@@ -20,7 +20,7 @@ export function crmGraphDeclarations(queries: readonly InvalidationQueryInput[])
       },
       {
         guards: ['authed'],
-        inputFields: ['id', 'contactId', 'stage', 'amount', 'ownerId'],
+        inputFields: ['id', 'contactId', 'stage', 'amount'],
         invalidates: ['contact', 'deal'],
         key: 'createDeal',
         session: 'crmSession',

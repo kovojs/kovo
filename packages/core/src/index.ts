@@ -781,7 +781,7 @@ function renderFailureOutput<Failure>(
   message: unknown,
 ): string {
   const attrs = failureOutputAttributes(props, failure);
-  return `<output${attrs}>${String(message)}</output>`;
+  return `<output${attrs}>${escapeHtmlText(String(message))}</output>`;
 }
 
 function failureOutputAttributes<Failure>(
@@ -801,9 +801,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function escapeHtmlAttribute(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
+  return escapeHtmlText(value).replaceAll('"', '&quot;');
+}
+
+function escapeHtmlText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }

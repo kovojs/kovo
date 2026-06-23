@@ -128,7 +128,7 @@ export function diagnosticDefinitionText(
  * }
  */
 export function isDiagnosticCode(value: unknown): value is DiagnosticCode {
-  return typeof value === 'string' && value in diagnosticDefinitions;
+  return typeof value === 'string' && Object.hasOwn(diagnosticDefinitions, value);
 }
 
 /** Compiler-owned diagnostics whose help must satisfy SPEC §5.2 teaching-error shape. */

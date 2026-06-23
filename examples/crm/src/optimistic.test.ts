@@ -4,7 +4,12 @@ import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { createCrmDb, type CrmDb } from './db.js';
-import type { CloseDealInput, CreateDealInput, MoveDealInput } from './model.js';
+import {
+  CRM_DEMO_USER_ID,
+  type CloseDealInput,
+  type CreateDealInput,
+  type MoveDealInput,
+} from './model.js';
 import {
   applyMoveDealPipeline,
   closeDealOptimistic,
@@ -39,7 +44,6 @@ describe('CRM optimistic demo behavior', () => {
       amount: 7500,
       contactId: 'c1',
       id: 'd3',
-      ownerId: 'u1',
       stage: 'open',
     };
 
@@ -96,7 +100,7 @@ describe('CRM optimistic demo behavior', () => {
 
 function createDealEffect(input: CreateDealInput) {
   return async (db: CrmDb) => {
-    await db.insert(deals).values(input);
+    await db.insert(deals).values({ ...input, ownerId: CRM_DEMO_USER_ID });
     await db
       .update(contacts)
       .set({ dealCount: sql`${contacts.dealCount} + 1` })

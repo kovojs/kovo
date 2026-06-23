@@ -37,6 +37,39 @@ describe('server mutation endpoint routing', () => {
     });
   });
 
+  it('sanitizes no-JS mutation redirect targets to same-origin paths', async () => {
+    const signIn = mutation('auth/sign-in', {
+      input: s.object({ next: s.string() }),
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(signIn, {
+        headers: {},
+        rawInput: { next: 'https://evil.example/phish' },
+        redirectTo: (result) => result.value.next,
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      headers: { Location: '/' },
+      status: 303,
+    });
+
+    await expect(
+      renderMutationEndpointResponse(signIn, {
+        headers: {},
+        rawInput: { next: '//evil.example/phish' },
+        redirectTo: (result) => result.value.next,
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      headers: { Location: '/' },
+      status: 303,
+    });
+  });
+
   it('routes mutation endpoints with Kovo-Fragment through enhanced fragment wire responses', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {

@@ -4,6 +4,7 @@ import {
   compilerDiagnosticTeachingSchemas,
   diagnosticDefinitions,
   diagnosticDefinitionText,
+  isDiagnosticCode,
 } from './diagnostics.js';
 
 describe('diagnostic registry', () => {
@@ -634,5 +635,10 @@ describe('diagnostic registry', () => {
     expect(diagnosticDefinitionText('KV410', { preferHelp: true })).toBe(
       'Opaque query projection requires a declared output schema.',
     );
+  });
+
+  it('does not accept inherited property names as diagnostic codes', () => {
+    expect(isDiagnosticCode('toString')).toBe(false);
+    expect(isDiagnosticCode('__proto__')).toBe(false);
   });
 });

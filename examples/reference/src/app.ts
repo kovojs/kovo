@@ -67,7 +67,10 @@ export const referenceSession = session(
 
 export const referenceAuthCsrf = {
   field: 'csrf',
-  secret: 'EXAMPLE_ONLY_REFERENCE_AUTH_CSRF_SECRET',
+  secret: exampleDeploymentSecret(
+    'KOVO_REFERENCE_AUTH_CSRF_SECRET',
+    'EXAMPLE_ONLY_REFERENCE_AUTH_CSRF_SECRET',
+  ),
   sessionId(request: ReferenceRequest) {
     return request.session?.id ?? request.authCsrfId ?? undefined;
   },
@@ -328,6 +331,15 @@ function readCookie(headers: Headers, name: string): string | undefined {
 
 function defaultRolesForEmail(email: string): readonly ReferenceRole[] {
   return email.startsWith('admin@') ? ['admin'] : ['member'];
+}
+
+function exampleDeploymentSecret(envName: string, fallback: string): string {
+  const secret = process.env[envName];
+  if (secret && secret !== fallback) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
+  }
+  return fallback;
 }
 
 function escapeAttribute(value: string): string {

@@ -75,6 +75,10 @@ export interface ContextMenuSeparatorProps {
   styles?: ContextMenuStyleOverrides;
 }
 
+function escapeHtml(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
 export const contextMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
@@ -319,7 +323,7 @@ export const ContextMenuItem = component({
         type="button"
         value={attrs.value}
       >
-        {props.children ?? props.itemLabel ?? props.itemValue}
+        {props.children ?? escapeHtml(props.itemLabel ?? props.itemValue)}
       </button>
     );
   },

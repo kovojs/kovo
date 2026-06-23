@@ -152,7 +152,6 @@ export const ContactsRegion = component({
         {/* The refreshed fragment resets the form with a fresh contact id. */}
         <form {...mutationFormAttributes(addContact)} style={contactStyles.formPanel}>
           <input type="hidden" name="id" value={freshId('c')} />
-          <input type="hidden" name="ownerId" value="u1" />
           <div style={contactStyles.formGrid}>
             <input name="name" required placeholder="Full name" style={contactStyles.input} />
             <input

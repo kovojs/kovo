@@ -198,6 +198,7 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
  */
 export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
   const root = options.root;
+  const writeLocks = new Map<string, Promise<void>>();
 
   return {
     async get(key) {
@@ -220,16 +221,20 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
-      const { mkdir, writeFile } = await import('node:fs/promises');
-      const path = await import('node:path');
       const filePath = await storageFilePath(root, normalizedKey);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new Date();
       const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, lastModified);
 
-      await mkdir(path.dirname(filePath), { recursive: true });
-      await writeFile(filePath, bytes);
-      await writeFile(metadataFilePath(filePath), JSON.stringify(metadataRecord(info)), 'utf8');
+      await withFileSystemWriteLock(writeLocks, filePath, async () => {
+        // SPEC §12/§13 storage parity: filesystem writes must not expose half-written blobs or
+        // mismatched blob/sidecar metadata under concurrent puts to the same object.
+        await atomicWriteFileSystemObject(filePath, bytes);
+        await atomicWriteFileSystemObject(
+          metadataFilePath(filePath),
+          JSON.stringify(metadataRecord(info)),
+        );
+      });
 
       return info;
     },
@@ -433,6 +438,7 @@ async function fileSystemStat(root: string, key: string): Promise<StorageObjectI
     .then((value) => JSON.parse(value) as Partial<FileSystemMetadataRecord>)
     .catch((error: unknown) => {
       if (isNotFoundError(error)) return undefined;
+      if (error instanceof SyntaxError) return undefined;
       throw error;
     });
 
@@ -460,6 +466,48 @@ async function storageFilePath(root: string, key: string): Promise<string> {
 
 function metadataFilePath(filePath: string): string {
   return `${filePath}${sidecarSuffix}`;
+}
+
+async function atomicWriteFileSystemObject(filePath: string, source: string | Uint8Array) {
+  const { randomUUID } = await import('node:crypto');
+  const { mkdir, rename, rm, writeFile } = await import('node:fs/promises');
+  const path = await import('node:path');
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = path.join(
+    path.dirname(filePath),
+    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
+  );
+  try {
+    await writeFile(tempPath, source);
+    await rename(tempPath, filePath);
+  } catch (error) {
+    await rm(tempPath, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function withFileSystemWriteLock<T>(
+  locks: Map<string, Promise<void>>,
+  filePath: string,
+  run: () => Promise<T>,
+): Promise<T> {
+  const previous = locks.get(filePath) ?? Promise.resolve();
+  let releaseCurrent: () => void = () => undefined;
+  const current = new Promise<void>((resolve) => {
+    releaseCurrent = resolve;
+  });
+  const lock = previous.then(
+    () => current,
+    () => current,
+  );
+  locks.set(filePath, lock);
+  await previous.catch(() => undefined);
+  try {
+    return await run();
+  } finally {
+    releaseCurrent();
+    if (locks.get(filePath) === lock) locks.delete(filePath);
+  }
 }
 
 function isNotFoundError(error: unknown): boolean {

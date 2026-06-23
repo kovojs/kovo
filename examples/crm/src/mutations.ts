@@ -1,9 +1,24 @@
-import { guards, mutation, s, type MutationContext } from '@kovojs/server';
-import { eq, sql } from 'drizzle-orm';
+import {
+  guards,
+  mutation,
+  s,
+  SchemaValidationError,
+  type MutationContext,
+  type Schema,
+} from '@kovojs/server';
+import { and, eq, sql } from 'drizzle-orm';
 import type { OptimisticPlan } from '@kovojs/browser';
 
 import type { CrmDb } from './db.js';
-import type { AddContactInput, CloseDealInput, CreateDealInput, MoveDealInput } from './model.js';
+import {
+  CRM_DEMO_USER_ID,
+  CRM_STAGES,
+  type AddContactInput,
+  type CloseDealInput,
+  type CreateDealInput,
+  type CrmStage,
+  type MoveDealInput,
+} from './model.js';
 import { contacts, deals } from './schema.js';
 
 import type {
@@ -51,7 +66,7 @@ export const EXAMPLE_ONLY_CRM_CSRF_SECRET = 'crm-reference-demo-csrf-secret';
 
 export const crmCsrf = {
   field: 'csrf',
-  secret: EXAMPLE_ONLY_CRM_CSRF_SECRET,
+  secret: exampleDeploymentSecret('KOVO_CRM_CSRF_SECRET', EXAMPLE_ONLY_CRM_CSRF_SECRET),
   sessionId(request: CrmCsrfRequest) {
     return request.session?.id;
   },
@@ -60,19 +75,37 @@ export const crmCsrf = {
 const authed = guards.authed<CrmRequest>();
 
 const duplicateEmailError = s.object({ email: s.string() });
+const contactOwnershipError = s.object({ contactId: s.string() });
+const dealOwnershipError = s.object({ dealId: s.string() });
+const crmStageSchema: Schema<CrmStage> = {
+  parse(input: unknown): CrmStage {
+    if (typeof input !== 'string' || !isCrmStage(input)) {
+      throw validationFailure('Expected CRM stage', []);
+    }
+    return input;
+  },
+};
 
 export async function addContactHandler(
-  { id, name, email, ownerId }: AddContactInput,
+  { id, name, email }: AddContactInput,
   request: CrmRequest,
   context: MutationContext<{ DUPLICATE_EMAIL: typeof duplicateEmailError }>,
 ) {
   const db = request.db;
+  const ownerId = crmUserId(request);
   const [existing] = await db.select().from(contacts).where(eq(contacts.email, email)).limit(1);
   if (existing) {
     return context.fail('DUPLICATE_EMAIL', { email });
   }
 
-  await db.insert(contacts).values({ id, name, email, ownerId, dealCount: 0 });
+  try {
+    await db.insert(contacts).values({ id, name, email, ownerId, dealCount: 0 });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return context.fail('DUPLICATE_EMAIL', { email });
+    }
+    throw error;
+  }
   return { id };
 }
 
@@ -86,7 +119,6 @@ export const addContact = mutation('addContact', {
     id: s.string(),
     name: s.string(),
     email: s.string(),
-    ownerId: s.string(),
   }),
   optimistic: {
     contactList(draft, $input) {
@@ -95,7 +127,7 @@ export const addContact = mutation('addContact', {
         email: $input.email,
         id: $input.id,
         name: $input.name,
-        ownerId: $input.ownerId,
+        ownerId: CRM_DEMO_USER_ID,
       };
       const index = draft.items.findIndex((entry) => entry.id > row.id);
       if (index < 0) draft.items.push(row);
@@ -109,27 +141,34 @@ export const addContact = mutation('addContact', {
 export const addContactOptimistic = optimisticPlan<AddContactInput>(addContact);
 
 export async function createDealHandler(
-  { id, contactId, stage, amount, ownerId }: CreateDealInput,
+  { id, contactId, stage, amount }: CreateDealInput,
   request: CrmRequest,
+  context: MutationContext<{ CONTACT_NOT_FOUND: typeof contactOwnershipError }>,
 ) {
   const db = request.db;
+  const ownerId = crmUserId(request);
+  if (!(await hasOwnedContact(db, contactId, ownerId))) {
+    return context.fail('CONTACT_NOT_FOUND', { contactId });
+  }
   await db.insert(deals).values({ id, contactId, stage, amount, ownerId });
   await db
     .update(contacts)
     .set({ dealCount: sql`${contacts.dealCount} + 1` })
-    .where(eq(contacts.id, contactId));
+    .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ownerId)));
   return { id };
 }
 
 export const createDeal = mutation('createDeal', {
   csrf: crmCsrf,
+  errors: {
+    CONTACT_NOT_FOUND: contactOwnershipError,
+  },
   guard: authed,
   input: s.object({
     id: s.string(),
     contactId: s.string(),
-    stage: s.string(),
+    stage: crmStageSchema,
     amount: s.number().int().min(0),
-    ownerId: s.string(),
   }),
   optimistic: {
     contactDealCount(draft, _$input) {
@@ -147,7 +186,7 @@ export const createDeal = mutation('createDeal', {
         amount: $input.amount,
         contactId: $input.contactId,
         id: $input.id,
-        ownerId: $input.ownerId,
+        ownerId: CRM_DEMO_USER_ID,
         stage: $input.stage,
       };
       const rowId = row.id ?? '';
@@ -160,7 +199,7 @@ export const createDeal = mutation('createDeal', {
         amount: $input.amount,
         contactId: $input.contactId,
         id: $input.id,
-        ownerId: $input.ownerId,
+        ownerId: CRM_DEMO_USER_ID,
         stage: $input.stage,
       };
       const rowId = row.id ?? '';
@@ -181,18 +220,32 @@ export const createDeal = mutation('createDeal', {
 
 export const createDealOptimistic = optimisticPlan<CreateDealInput>(createDeal);
 
-export async function moveDealHandler({ dealId, stage }: MoveDealInput, request: CrmRequest) {
+export async function moveDealHandler(
+  { dealId, stage }: MoveDealInput,
+  request: CrmRequest,
+  context: MutationContext<{ DEAL_NOT_FOUND: typeof dealOwnershipError }>,
+) {
   const db = request.db;
-  await db.update(deals).set({ stage }).where(eq(deals.id, dealId));
+  const ownerId = crmUserId(request);
+  if (!(await hasOwnedDeal(db, dealId, ownerId))) {
+    return context.fail('DEAL_NOT_FOUND', { dealId });
+  }
+  await db
+    .update(deals)
+    .set({ stage })
+    .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)));
   return { dealId };
 }
 
 export const moveDeal = mutation('moveDeal', {
   csrf: crmCsrf,
+  errors: {
+    DEAL_NOT_FOUND: dealOwnershipError,
+  },
   guard: authed,
   input: s.object({
     dealId: s.string(),
-    stage: s.string(),
+    stage: crmStageSchema,
   }),
   optimistic: {
     contactDealCount(_draft, _$input) {},
@@ -233,17 +286,28 @@ export function applyMoveDealPipeline(
   };
 }
 
-export async function closeDealHandler({ dealId }: CloseDealInput, request: CrmRequest) {
+export async function closeDealHandler(
+  { dealId }: CloseDealInput,
+  request: CrmRequest,
+  context: MutationContext<{ DEAL_NOT_FOUND: typeof dealOwnershipError }>,
+) {
   const db = request.db;
+  const ownerId = crmUserId(request);
+  if (!(await hasOwnedDeal(db, dealId, ownerId))) {
+    return context.fail('DEAL_NOT_FOUND', { dealId });
+  }
   await db
     .update(deals)
     .set({ stage: 'won', amount: sql`compute_commission(${deals.amount})` })
-    .where(eq(deals.id, dealId));
+    .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)));
   return { dealId };
 }
 
 export const closeDeal = mutation('closeDeal', {
   csrf: crmCsrf,
+  errors: {
+    DEAL_NOT_FOUND: dealOwnershipError,
+  },
   guard: authed,
   input: s.object({
     dealId: s.string(),
@@ -275,4 +339,53 @@ function optimisticPlan<Input>(definition: {
     ...(definition.queue ? { queue: definition.queue } : {}),
     transforms: (definition.optimistic ?? {}) as OptimisticPlan<Input>['transforms'],
   };
+}
+
+function exampleDeploymentSecret(envName: string, fallback: string): string {
+  const secret = process.env[envName];
+  if (secret && secret !== fallback) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
+  }
+  return fallback;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const code = 'code' in error ? String((error as { code?: unknown }).code) : '';
+  if (code === '23505') return true;
+  const message = 'message' in error ? String((error as { message?: unknown }).message) : '';
+  return /duplicate key|unique constraint|unique violation/iu.test(message);
+}
+
+function crmUserId(request: CrmRequest): string {
+  const userId = request.session?.user?.id;
+  if (!userId) throw validationFailure('Authenticated CRM user is required', ['session']);
+  return userId;
+}
+
+async function hasOwnedContact(db: CrmDb, contactId: string, ownerId: string): Promise<boolean> {
+  const [contact] = await db
+    .select({ id: contacts.id })
+    .from(contacts)
+    .where(and(eq(contacts.id, contactId), eq(contacts.ownerId, ownerId)))
+    .limit(1);
+  return contact !== undefined;
+}
+
+async function hasOwnedDeal(db: CrmDb, dealId: string, ownerId: string): Promise<boolean> {
+  const [deal] = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .where(and(eq(deals.id, dealId), eq(deals.ownerId, ownerId)))
+    .limit(1);
+  return deal !== undefined;
+}
+
+function isCrmStage(value: string): value is CrmStage {
+  return (CRM_STAGES as readonly string[]).includes(value);
+}
+
+function validationFailure(message: string, path: readonly string[]): SchemaValidationError {
+  return new SchemaValidationError([{ message, path }]);
 }

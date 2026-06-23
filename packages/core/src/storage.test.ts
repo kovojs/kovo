@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -227,6 +227,29 @@ describe('storage adapters', () => {
 
     expect(() => normalizeStorageKey('../escape.txt')).toThrow(/parent path/u);
     await expect(storage.put('/absolute.txt', 'x')).rejects.toThrow(/relative/u);
+  });
+
+  it('falls back to filesystem metadata when a sidecar is malformed', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-sidecar-'));
+    try {
+      const storage = createFileSystemStorage({ root });
+      await storage.put('docs/report.txt', 'report', {
+        contentType: 'text/plain',
+        metadata: { kind: 'report' },
+      });
+      await writeFile(path.join(root, 'docs/report.txt.kovo-storage.json'), '{not-json', 'utf8');
+
+      const stat = await storage.stat('docs/report.txt');
+      const get = await storage.get('docs/report.txt');
+
+      expect(stat).toMatchObject({ key: 'docs/report.txt', size: 6 });
+      expect(stat?.contentType).toBeUndefined();
+      expect(stat?.metadata).toBeUndefined();
+      expect(bytesToText(get?.body)).toBe('report');
+      expect(get?.size).toBe(6);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   it('maps storage operations onto an injected S3-compatible client without network access', async () => {

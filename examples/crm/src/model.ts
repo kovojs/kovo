@@ -12,24 +12,26 @@ export const createDealForm = form('createDeal');
 export const moveDealForm = form('moveDeal');
 export const closeDealForm = form('closeDeal');
 
+export const CRM_DEMO_USER_ID = 'u1';
+export const CRM_STAGES = ['lead', 'qualified', 'open', 'proposal', 'won', 'lost'] as const;
+export type CrmStage = (typeof CRM_STAGES)[number];
+
 export interface AddContactInput {
   email: string;
   id: string;
   name: string;
-  ownerId: string;
 }
 
 export interface CreateDealInput {
   amount: number;
   contactId: string;
   id: string;
-  ownerId: string;
-  stage: string;
+  stage: CrmStage;
 }
 
 export interface MoveDealInput {
   dealId: string;
-  stage: string;
+  stage: CrmStage;
 }
 
 export interface CloseDealInput {

@@ -253,6 +253,58 @@ describe('kovo export', () => {
     }
   });
 
+  it('rejects Vite manifest assets that escape --dist with dot segments', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const distDir = join(root, 'vite-dist');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(distDir, '.vite'), { recursive: true });
+      writeFileSync(join(root, 'secret.txt'), 'do-not-copy', 'utf8');
+      writeFileSync(
+        join(distDir, '.vite', 'manifest.json'),
+        JSON.stringify({
+          'src/main.ts': {
+            file: '../secret.txt',
+          },
+        }),
+        'utf8',
+      );
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route: "{ path: '/', page: () => '<main data-export-cli>CLI export</main>' }",
+        }),
+        'utf8',
+      );
+
+      await expect(
+        mainAsync([
+          'export',
+          appPath,
+          '--out',
+          outDir,
+          '--manifest',
+          join(distDir, '.vite', 'manifest.json'),
+          '--dist',
+          distDir,
+        ]),
+      ).resolves.toBe(1);
+
+      expect(stdout).not.toHaveBeenCalled();
+      const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(output).toContain('kovo export --manifest asset must stay within --dist');
+      expect(() => readFileSync(join(outDir, 'secret.txt'), 'utf8')).toThrow();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('sets a stylesheet env var from exactly one manifest stylesheet before loading the app', async () => {
     const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
     const appPath = join(root, 'app.mjs');
