@@ -3,8 +3,8 @@
 **Date:** 2026-06-23
 **Scope:** Critical/high severity bugs and testing gaps found by a parallel audit of compiler,
 server/runtime, UI components, public examples, and CI/test coverage.
-**Current state:** Refreshed after `main` moved to `e9255f58`, then merged current local `main` at
-`6ee23306` into `agent/bugs-testing-codex`. The repo-side fixes below are checked only where this
+**Current state:** Refreshed after `main` moved to `e9255f58`; merged current local `main` through
+`7258f876` into the final `main` integration. The repo-side fixes below are checked only where this
 session has direct command evidence. Live deployed example availability remains an external
 follow-up exposed by the new opt-in health gate.
 
@@ -102,8 +102,8 @@ The only remaining open checkbox is the deployed-service health follow-up surfac
 
 - [ ] **Restore stable deployed example service health exposed by the live gate.**
   - **Current evidence:** `pnpm run test:examples-live` remains red on 2026-06-23. The latest run
-    passed CRM `/`, Stack Overflow `/`, and Stack Overflow `/questions/q1`, but observed Commerce
-    `/` and `/cart` as timeouts and CRM `/contacts` as HTTP 503. Earlier post-merge runs alternated
+    passed CRM `/contacts`, Stack Overflow `/`, and Stack Overflow `/questions/q1`, but observed
+    Commerce `/`, Commerce `/cart`, and CRM `/` as timeouts. Earlier post-merge runs alternated
     between Commerce, CRM, and Stack Overflow 503/timeout failures.
   - **Local evidence:** Running `examples/commerce/scripts/demo-serve.mjs` locally with
     `KOVO_DEMO_WARM_SESSIONS=10` served Commerce `/` and `/cart` with HTTP 200, so the checked-out
@@ -145,5 +145,8 @@ The only remaining open checkbox is the deployed-service health follow-up surfac
   current local `main` and regenerating the inline loader artifact.
 - `pnpm --filter @kovojs/example-gallery run test:browser -- --reporter=dot` passed on rerun after
   gallery primitive fixes.
+- `pnpm exec vitest run scripts/demo-session/dispatcher.test.mjs --reporter=dot` passed, and local
+  Commerce `/` and `/cart` returned HTTP 200 with `KOVO_DEMO_WARM_SESSIONS=10` after the current
+  `main` warmup-after-listen fix.
 - `pnpm run test:examples-live` is intentionally failing until deployed example service health is
   restored.
