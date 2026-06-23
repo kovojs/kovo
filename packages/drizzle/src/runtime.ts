@@ -1,4 +1,6 @@
 export type {
+  KovoAnalyzerFunctionSummary,
+  KovoAnalyzerPrivateScopeKind,
   KovoDomainTableAnnotation,
   KovoFanAnnotation,
   KovoTableAnnotation,
@@ -7,4 +9,4 @@ export type {
   KovoViewExtraConfig,
   KovoViewExtraConfigAnnotation,
 } from './drizzle-surface.js';
-export { kovo } from './drizzle-surface.js';
+export { kovo, kovoAnalyzerSummary } from './drizzle-surface.js';

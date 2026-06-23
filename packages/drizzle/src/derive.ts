@@ -480,7 +480,7 @@ function rowsetProvesPrivateScope(
 }
 
 function isPrivateScopeValue(value: SymbolicValue): boolean {
-  return value.kind === 'session';
+  return value.kind === 'guard' || value.kind === 'session' || value.kind === 'tenant';
 }
 
 function predSatisfiedByInsert(
@@ -516,8 +516,12 @@ function symbolicValuesEqual(left: SymbolicValue, right: SymbolicValue): boolean
       return right.kind === 'param' && left.path === right.path;
     case 'placeholder':
       return right.kind === 'placeholder' && left.placeholder === right.placeholder;
+    case 'guard':
+      return right.kind === 'guard' && left.path === right.path;
     case 'session':
       return right.kind === 'session' && left.path === right.path;
+    case 'tenant':
+      return right.kind === 'tenant' && left.path === right.path;
   }
 }
 
@@ -543,8 +547,10 @@ function substituteRowColumns(
       return resolved;
     }
     case 'const':
+    case 'guard':
     case 'param':
     case 'session':
+    case 'tenant':
       return value;
     default:
       return undefined;
