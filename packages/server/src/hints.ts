@@ -50,7 +50,7 @@ export interface I18nCatalog<Messages extends Record<string, string> = Record<st
 export interface StylesheetAsset {
   criticalCss?: string;
   cspHash?: string;
-  /** When criticalCss exists, defer the full stylesheet by default; set false to block. */
+  /** When criticalCss exists, opt into deferring the full stylesheet until after first paint. */
   deferFull?: boolean;
   href: string;
   preload?: boolean;
@@ -71,7 +71,7 @@ export interface StylesheetDeclarationOptions {
   criticalCssTheme?: 'all' | 'used';
   /** Optional CSP hash for the inlined critical CSS. */
   cspHash?: string;
-  /** When criticalCss exists, defer the full stylesheet by default; set false to block. */
+  /** When criticalCss exists, opt into deferring the full stylesheet until after first paint. */
   deferFull?: boolean;
   /** Public stylesheet href; local sources derive `/assets/<file>` when omitted. */
   href?: string;
@@ -255,9 +255,9 @@ function renderPageStylesheetHint(asset: StylesheetAsset): InlineHtmlWithCsp {
   const cssText = escapeStyleText(asset.criticalCss);
   const hash = asset.cspHash ?? cspSha256(cssText);
   const fullStylesheet =
-    asset.deferFull === false
-      ? link
-      : `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`;
+    asset.deferFull === true
+      ? `${renderDeferredStylesheetLink(asset.href)}<noscript>${link}</noscript>`
+      : link;
 
   return {
     csp: { scripts: [], styles: [hash] },
