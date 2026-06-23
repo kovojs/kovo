@@ -170,7 +170,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
   },
   {
     context: 'endpoint.webhook.raw-request',
-    diagnostic: 'KV418',
+    diagnostic: 'KV418|KV422',
     escapeHatch: 'endpoint({csrf:false,reason})|webhook({verify:none,reason})',
     guard: 'csrf-or-machine-verifier+raw-bytes-before-parse',
     runtimeGuard: 'dispatcher-endpoint-auth+webhook-verify+replay-store',
@@ -196,7 +196,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
   },
   {
     context: 'file.storage.path.static-export',
-    diagnostic: 'KV229',
+    diagnostic: 'KV424',
     escapeHatch: 'respond.file|respond.stream|storage-adapter',
     guard: 'path-containment+attachment-nosniff+static-export-reference-check',
     runtimeGuard:
@@ -236,7 +236,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
   },
   {
     context: 'dynamic-code.process',
-    diagnostic: 'unallocated-source-sink-drift',
+    diagnostic: 'KV424',
     escapeHatch: 'compiler-owned-versioned-handler-import',
     guard: 'closed-handler-registry+request-path-deny-audit',
     runtimeGuard: 'loader-imports-only-declared-/c/__v-refs',

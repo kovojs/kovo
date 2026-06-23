@@ -78,10 +78,12 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 
 ## Phase 1: Inventory Generator
 
-- [ ] Add a repository-level source/sink extraction command.
+- [x] Add a repository-level source/sink extraction command.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified `kovo explain --sources-sinks` and `kovo check sources-sinks` command parsing/output.
   - Proposed command: `kovo check --sources-sinks` or `kovo explain --sources-sinks`.
   - It should merge compiler output-context facts, route/query/mutation/endpoint registries, app audit metadata, storage/file routes, header/cookie usage, and known raw escape hatches.
-- [ ] Emit a machine-readable artifact for CI.
+- [x] Emit a machine-readable artifact for CI.
+  - Evidence: `packages/cli/src/sources-sinks.test.ts` verifies `.kovo/sources-sinks.json` is written deterministically with `source`, `sink`, `context`, `trust`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence` fields.
   - Proposed artifact: `.kovo/sources-sinks.json`, plus stable text output for review.
   - Required fields: `source`, `sink`, `context`, `trust`, `guard`, `schema`, `runtimeGuard`, `diagnostic`, `escapeHatch`, `specAnchor`, and `testEvidence`.
 - [ ] Build a sink registry shared by compiler, server, browser, and CLI checks.
@@ -188,6 +190,7 @@ This plan does not replace `plans/sql-injection.md`; it indexes SQL as one sink 
 - `pnpm run check`, `pnpm run check:api-surface`, and `git diff --check` verified type/import boundaries, example typechecks, public API surface baseline, and whitespace.
 - `pnpm exec vitest run packages/core/src/diagnostics.test.ts` verified source/sink diagnostic allocation KV422-KV425 in `diagnosticDefinitions` and snapshots.
 - `pnpm --dir site run content` verified the security-guide source/sink model and common app-code rules render through the site content pipeline.
+- `pnpm exec vitest --run packages/cli/src/sources-sinks.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts` verified Phase 1 source/sink CLI output and `.kovo/sources-sinks.json` artifact writing.
 - `sed -n '1,260p' SPEC.md`, `sed -n '360,1140p' SPEC.md`, and `sed -n '1290,1390p' SPEC.md` inspected the normative source/sink, wire, typed-surface, lifecycle, and diagnostic contracts.
 - `sed -n '1,260p' plans/sql-injection.md` inspected the SQL-specific source/sink plan.
 - `sed -n '1,260p' plans/fix-security.md` inspected prior non-SQL security remediation lanes.

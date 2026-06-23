@@ -24,6 +24,7 @@ interface UnguardedAccessFact {
   name: string;
 }
 
+/** Check family selector accepted by {@link kovoCheck} and `kovo check`. */
 export type KovoCheckFamily = 'all' | 'coverage' | 'optimistic' | 'sources-sinks';
 
 export const outputVersion = 'kovo-check/v1';
