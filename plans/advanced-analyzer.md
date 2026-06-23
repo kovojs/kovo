@@ -31,7 +31,8 @@ This roadmap is intentionally framework-general. The Stack Overflow shared-db de
 fixture, not a special case: any implementation that recognizes only that source shape, helper name,
 table name, or file layout is incomplete. Proofs must be expressed through typed provenance, PNF, row
 identity, row membership, and private-scope erasure rules that apply equally to session, tenant,
-guard-owned, and natural-key applications.
+guard-owned, and natural-key applications. A patch that only quiets the Stack Overflow fixture,
+matches its local helper names, or hard-codes its query/target layout does not satisfy this plan.
 
 ## Design Goals
 
@@ -177,6 +178,77 @@ guard-owned, and natural-key applications.
   - Mixed derivable/opaque arms degrade or punt as a whole, with a named reason.
   - Evidence: `pnpm exec vitest --run packages/core/src/derivation.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/derive-codegen.test.ts` covers typed OR extraction, two-arm guarded row updates, partial composite-key degradation, and named `mixed-disjunction` punts.
 
+## Proof Acceptance Rules
+
+These rules are acceptance requirements for every implementation phase below. They do not narrow the
+roadmap to a subset of cases; they define the proof standard required before any case can graduate
+from table-level fallback to scoped or exact optimism.
+
+### Nullable private-scope guards
+
+- Nullable request/session/tenant/guard values may participate in row identity or membership proof
+  only after a guard proves control cannot continue without the value.
+- Accepted guards are limited to dominating exits: `if (!x) throw`, `if (!x) return`, framework
+  `fail(...)`, redirect/notFound-style exits, and equivalent typed no-return exits where control
+  does not continue in the current handler.
+- The guard must dominate the Drizzle predicate or write use it justifies. A later guard cannot prove
+  an earlier predicate, write, query-scope comparison, or helper argument.
+- Use before guard, reassignment, mutation, alias escape, capture by an opaque callback, or traversal
+  through an async helper without a typed analyzer summary makes the value conditional/opaque for the
+  affected use.
+- Alias promotion is per-use, not global: a previously proved alias loses proof only for uses whose
+  dataflow crosses a reassignment, mutation, escape, or opaque boundary.
+
+### Helper provenance summaries
+
+- Helper provenance must come from explicit typed analyzer summaries, not arbitrary helper source
+  text. Source snippets may be retained for diagnostics only.
+- Same-package helpers are allowed only when they match a declared analyzer summary or a small typed
+  summary form owned by the analyzer, such as direct property projection, object projection, or a
+  typed guard combinator.
+- Unsummarized helpers returning or transforming tenant/session/request/guard values must produce a
+  stable named degradation such as `unsummarized-helper:<name>` or `helper-provenance-opaque`; they
+  must not be guessed into `exact-row`, `scoped-rowset`, or membership proof.
+- A helper summary must declare its input provenance requirements, output provenance kind, nullable
+  behavior, and whether it preserves control-flow narrowing.
+
+### Private-scope erasure
+
+- `session(...)`, `tenant(...)`, and `guard(...)` values are server-side proof facts only.
+- They must never appear in browser-visible query instance keys, `kovo-deps`, `Kovo-Targets`,
+  generated optimistic module exports, generated transform inputs, or lowered browser code.
+- Required leak-check fixtures must exercise every browser-visible surface above for session, tenant,
+  and guard-derived values. A leak on any one surface fails the acceptance fixture, even when the
+  leaked value would be redundant with server authorization.
+- Browser patches may use public row keys and shipped row data. They may not receive private scope as
+  an argument or bake it into generated names, keys, or match predicates.
+
+### Typed PNF and proof degradation
+
+- After parsing, analyzer decisions must consume typed PNF/provenance facts: table identity, column
+  identity, comparison kind, symbolic value kind, alias resolution, proof level, and local opaque
+  nodes.
+- `getText()`, source snippets, regexes, or string slicing are allowed only for diagnostics and must
+  not decide proof level, row identity, membership, or optimistic transform shape.
+- Unsupported predicate children should remain local opaque nodes when the surrounding proof is still
+  sound. Any uncertainty that affects row identity or row membership must degrade only the relevant
+  proof level instead of silently preserving `exact-row` or `membership-filter`.
+- Mixed derivable/opaque disjunctions degrade or punt as a whole with a named reason unless every arm
+  independently proves the same required row identity or membership transition.
+
+### Row identity versus membership
+
+- `exact-row` requires all declared row-key columns to be covered by traceable equality predicates.
+  Private scope can cover a declared key column only as a server-side proof fact and only after the
+  erasure checks above.
+- `scoped-rowset` proves private scope over a rowset. It is not a single-row proof and cannot be used
+  to emit a single-row optimistic patch.
+- Membership filters can derive exits only when the transition is decidable from write values and
+  shipped query data. Membership entry requires enough write data to construct the entering row;
+  otherwise it must degrade to `membership-entry` or another stable named punt.
+- Partial composite-key coverage is never `exact-row`, even when the missing key column appears to be
+  implied by private scope or a query target name.
+
 ## Required Acceptance Fixtures
 
 - [x] **Stack Overflow shared-db fixture.**
@@ -223,6 +295,8 @@ guard-owned, and natural-key applications.
   - Session/tenant id flows through a same-package helper before the Drizzle predicate.
   - Expected: summary-recognized helper is precise; unsummarized helper gives a named punt or KV409
     without silently dropping invalidation.
+  - Helper precision must come from declared typed summaries or the analyzer-owned small summary form;
+    same-package source text is not proof input.
   - Evidence: `pnpm exec vitest --run packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts`
     extracts `invoiceList` and `markPaid` through a declared `kovoAnalyzerSummary`, derives a
     public-key-only row update, and verifies unsummarized `hiddenSessionId` degrades to `KV409` plus
@@ -237,7 +311,7 @@ guard-owned, and natural-key applications.
     against those static facts, and reports `KV405` for a declared static branch that runtime did not
     exercise.
 
-- [x] **Negative proof fixtures.**
+- [ ] **Negative proof fixtures.**
   - [x] Unguarded nullable session/request access is conditional/opaque and cannot prove row
         identity.
     - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/core/src/derivation.test.ts packages/drizzle/src/derive.test.ts packages/drizzle/src/derive-codegen.test.ts packages/drizzle/src/advanced-analyzer.scoped-pipeline.test.ts` covers unguarded nullable aliases and direct session access degrading to non-eq/opaque.
@@ -258,6 +332,11 @@ guard-owned, and natural-key applications.
     - Evidence: same command covers the scoped-pipeline leak fixture for public query keys,
       `kovo-deps`, `Kovo-Targets`, generated optimistic export names, transform inputs, and lowered
       browser code.
+  - [ ] Guard/request/session/tenant private-scope leakage fails on every browser-visible surface,
+        not only Stack Overflow query targets.
+    - Evidence when complete: leak-check fixtures cover query keys, `kovo-deps`, `Kovo-Targets`,
+      generated optimistic export names, transform inputs, and lowered browser code across session,
+      tenant, and guard scoped proof facts.
 
 ## Implementation Sequence
 
@@ -351,9 +430,11 @@ guard-owned, and natural-key applications.
   - Any proof gap must degrade to table-level invalidation or `await-fragment`, not a guessed patch.
 
 - [ ] **Do not expose private scope in client keys.**
-  - Session and tenant predicates are proof inputs; they are not automatically query args.
+  - Session, tenant, and guard predicates are proof inputs; they are not automatically query args.
   - Treat every browser-visible private-scope occurrence as a failing leak, even if the value would be
     redundant with server-side authorization.
+  - This includes query instance keys, `kovo-deps`, `Kovo-Targets`, generated optimistic module
+    exports, generated transform inputs, and lowered browser code.
 
 - [ ] **Do not weaken KV406.**
   - Interprocedural and raw-SQL opacity still requires explicit declarations and runtime
@@ -373,5 +454,12 @@ guard-owned, and natural-key applications.
       otherwise inside the §10.5 grammar.
 - [ ] Punts remain named, stable, and visible in `kovo explain --optimistic`.
 - [ ] Runtime cross-checks still enforce `observed ⊆ static ∪ declared`.
-- [ ] No private session/tenant key material appears in browser-visible query instance keys,
-      `kovo-deps`, `Kovo-Targets`, or generated optimistic module exports.
+- [ ] No private session/tenant/guard key material appears in browser-visible query instance keys,
+      `kovo-deps`, `Kovo-Targets`, generated optimistic module exports, generated transform inputs,
+      or lowered browser code.
+- [ ] Nullable private-scope proofs require a dominating accepted exit guard and degrade on
+      reassignment, mutation, alias escape, async-helper opacity, unsummarized helpers, or use before
+      guard.
+- [ ] Row identity, scoped rowset, and membership proofs remain separate: partial composite keys and
+      scoped-rowset-only proofs cannot emit single-row patches, and membership exits require a
+      decidable transition from write values plus shipped query data.
