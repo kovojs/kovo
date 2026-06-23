@@ -377,6 +377,7 @@ function extractTouchGraphFromPreparedFiles(
   for (const file of files) {
     const fileTables = tablesForFile(file, sourceContext);
     const functions = functionsForFile(file);
+    const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
     const summaries = functionTouchSummariesForFile(
       file,
       functions,
@@ -417,13 +418,14 @@ function extractTouchGraphFromPreparedFiles(
         unresolved: [],
         writes: [],
       };
-      if (reads.length > 0 || writes.length > 0 || unresolved.length > 0) {
+      const rawTables = [...(rawTablesByDomainWrite.get(fn.name) ?? [])];
+      if (reads.length > 0 || writes.length > 0 || unresolved.length > 0 || rawTables.length > 0) {
         const graphSummary = graphSummaries.get(fn.name) ?? {
           reads: [],
           unresolved: [],
           writes: [],
         };
-        mergeSummary(graphSummary, { reads, unresolved, writes });
+        mergeSummary(graphSummary, { rawTables, reads, unresolved, writes });
         graphSummaries.set(fn.name, graphSummary);
         graph[fn.name] = createTouchGraphEntry(graphSummary);
       }
@@ -2275,6 +2277,7 @@ function extractQueryFactsFromPreparedFiles(
       const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
       const localHelperSummary = localQueryHelperSummary(query.localHelperCalls, helperSummaries);
       const reads = queryReadDomains(query.tableExpressions, fileTables);
+      const declaredReads = queryReadDomains(query.declaredReadExpressions, fileTables);
       const helperReads = localHelperSummary.reads.map((read) => read.table.domain);
       const diagnostics = opaqueProjectionDiagnostics(
         query.query,
@@ -2287,7 +2290,7 @@ function extractQueryFactsFromPreparedFiles(
         .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, fileTables, site))
         .concat(exemptQueryReadDiagnostics(query.tableExpressions, fileTables, site))
         .concat(localQueryHelperDiagnostics(localHelperSummary));
-      const allReads = [...new Set([...reads, ...helperReads])].sort();
+      const allReads = [...new Set([...reads, ...declaredReads, ...helperReads])].sort();
       if (!query.hasSelection && allReads.length === 0 && diagnostics.length === 0) continue;
 
       const sessionAnchoredReads = querySessionAnchoredDomains(
@@ -3083,6 +3086,90 @@ function objectHasProperty(object: Node, name: string): boolean {
   });
 }
 
+function objectPropertyInitializer(object: Node, name: string): Node | undefined {
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+    const initializer = property.getInitializer();
+    return initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
+  }
+
+  return undefined;
+}
+
+function queryDeclaredReadExpressions(
+  body: ObjectLiteralExpression,
+  readTableIdentifier: ((node: Node) => string | undefined) | undefined,
+): string[] {
+  const reads = objectPropertyInitializer(body, 'reads');
+  if (!reads || !Node.isArrayLiteralExpression(reads)) return [];
+
+  return reads.getElements().flatMap((element) => {
+    const expression = unwrappedStaticExpressionNode(element);
+    if (Node.isIdentifier(expression) || Node.isPropertyAccessExpression(expression)) {
+      return [readTableIdentifier?.(expression) ?? expression.getText()];
+    }
+    return [];
+  });
+}
+
+function queryOutputShape(body: ObjectLiteralExpression): QueryShape | undefined {
+  const output = objectPropertyInitializer(body, 'output');
+  return output ? queryShapeFromSchemaExpression(output) : undefined;
+}
+
+function queryShapeFromSchemaExpression(expression: Node): QueryShape | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isCallExpression(node)) return undefined;
+
+  const callee = node.getExpression();
+  if (Node.isPropertyAccessExpression(callee)) {
+    const method = callee.getName();
+    if (method === 'optional') {
+      const inner = queryShapeFromSchemaExpression(callee.getExpression());
+      return inner ? { kind: 'optional', shape: inner } : undefined;
+    }
+    if (method === 'nullable') {
+      const inner = queryShapeFromSchemaExpression(callee.getExpression());
+      return inner ? { kind: 'nullable', shape: inner } : undefined;
+    }
+    if (['int', 'min', 'max', 'default'].includes(method)) {
+      return queryShapeFromSchemaExpression(callee.getExpression());
+    }
+    if (Node.isIdentifier(callee.getExpression()) && callee.getExpression().getText() === 's') {
+      if (method === 'string') return 'string';
+      if (method === 'number') return 'number';
+      if (method === 'boolean') return 'boolean';
+      if (method === 'array') {
+        const element = node.getArguments()[0];
+        const shape = element ? queryShapeFromSchemaExpression(element) : undefined;
+        return shape ? [shape] : 'array';
+      }
+      if (method === 'object') {
+        const fields = node.getArguments()[0];
+        if (!fields || !Node.isObjectLiteralExpression(fields)) return 'object';
+        const shape: Record<string, QueryShape> = {};
+        for (const property of fields.getProperties()) {
+          if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property))
+            continue;
+          const name = propertyNameText(property.getNameNode());
+          if (!name) continue;
+          const initializer = Node.isPropertyAssignment(property)
+            ? property.getInitializer()
+            : property.getNameNode();
+          const fieldShape = initializer ? queryShapeFromSchemaExpression(initializer) : undefined;
+          if (fieldShape) shape[name] = fieldShape;
+        }
+        return shape;
+      }
+    }
+  }
+
+  return undefined;
+}
+
 function columnBuilderShape(initializer: Node | undefined): QueryShape | undefined {
   // SPEC §10-§11: column nullability is a parsed call-chain fact, not string contents.
   const builder = columnBuilderName(initializer);
@@ -3453,6 +3540,7 @@ interface ReceiverParameterRequirement {
 }
 
 interface ExtractedQueryDefinition {
+  declaredReadExpressions: readonly string[];
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasOutputSchema: boolean;
   hasSelection: boolean;
@@ -3521,6 +3609,7 @@ interface ExtractedPredicateFact {
 }
 
 interface FunctionTouchSummary {
+  rawTables?: string[];
   reads: ReadSummaryInput[];
   unresolved: UnresolvedSummaryInput[];
   writes: WriteSummaryInput[];
@@ -3599,6 +3688,7 @@ function extractQueryDefinitionsFromSourceFile(
     if (!bodyResolution.body) {
       if (bodyResolution.unresolved) {
         definitions.push({
+          declaredReadExpressions: [],
           diagnostics: [unresolvedQueryLoadCallbackDiagnostic()],
           hasOutputSchema: false,
           hasSelection: false,
@@ -3633,6 +3723,12 @@ function extractQueryDefinitionsFromSourceFile(
       options.columnShapes,
       receiverMode,
     );
+    const hasOutputSchema = objectHasProperty(bodyObject, 'output');
+    const declaredReadExpressions = queryDeclaredReadExpressions(
+      bodyObject,
+      options.readTableIdentifier,
+    );
+    const declaredOpaqueRead = hasOutputSchema && declaredReadExpressions.length > 0;
     const readResolutionOptions: QueryReadResolutionOptions = {
       ...(options.readTableIdentifier ? { readTableIdentifier: options.readTableIdentifier } : {}),
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
@@ -3641,7 +3737,9 @@ function extractQueryDefinitionsFromSourceFile(
       ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic()] : []),
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
-      ...unclassifiedQueryReceiverDiagnostics(bodyObject, receiverReferences),
+      ...(declaredOpaqueRead
+        ? []
+        : unclassifiedQueryReceiverDiagnostics(bodyObject, receiverReferences)),
       ...projectQueryReceiverContainerDiagnostics(bodyObject, receiverReferences),
       ...receiverMethodAliasQueryDiagnostics(bodyObject, receiverReferences),
       ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
@@ -3661,13 +3759,20 @@ function extractQueryDefinitionsFromSourceFile(
       receiverReferences,
       localFunctionsByKey,
     );
-    if (!selection && diagnostics.length === 0 && localHelperCalls.length === 0) continue;
+    if (
+      !selection &&
+      diagnostics.length === 0 &&
+      localHelperCalls.length === 0 &&
+      !declaredOpaqueRead
+    )
+      continue;
 
     definitions.push({
+      declaredReadExpressions,
       ...(selection?.diagnostics || diagnostics.length > 0
         ? { diagnostics: [...(selection?.diagnostics ?? []), ...diagnostics] }
         : {}),
-      hasOutputSchema: objectHasProperty(bodyObject, 'output'),
+      hasOutputSchema,
       hasSelection: selection !== null,
       index: declaration.getStart(),
       instanceKeyComparisons: queryInstanceKeyComparisons(
@@ -3678,7 +3783,7 @@ function extractQueryDefinitionsFromSourceFile(
       localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],
       query,
-      shape: selection?.shape ?? {},
+      shape: selection?.shape ?? queryOutputShape(bodyObject) ?? {},
       tableExpressions: queryTableExpressions(
         bodyObject,
         receiverReferences,
@@ -6452,6 +6557,12 @@ function functionTouchSummariesForFile(
 function mergeSummary(target: FunctionTouchSummary, source: FunctionTouchSummary): boolean {
   let changed = false;
 
+  changed =
+    pushUnique(
+      target.rawTables ?? (target.rawTables = []),
+      source.rawTables ?? [],
+      (table) => table,
+    ) || changed;
   changed = pushUnique(target.reads, source.reads, readSummaryKey) || changed;
   changed = pushUnique(target.unresolved, source.unresolved, unresolvedSummaryKey) || changed;
   changed = pushUnique(target.writes, source.writes, writeSummaryKey) || changed;
@@ -6609,6 +6720,23 @@ function stringPropertyFromObject(object: Node, name: string): string | undefine
   }
 
   return undefined;
+}
+
+function stringArrayPropertyFromObject(object: Node, name: string): string[] {
+  if (!Node.isObjectLiteralExpression(object)) return [];
+
+  for (const property of object.getProperties()) {
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== name) continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer || !Node.isArrayLiteralExpression(initializer)) return [];
+    return initializer
+      .getElements()
+      .flatMap((element) => (Node.isStringLiteral(element) ? [element.getLiteralText()] : []));
+  }
+
+  return [];
 }
 
 /**
@@ -7985,6 +8113,53 @@ function writeCallbackFunction(
   return null;
 }
 
+function rawTablesByDomainWriteCallback(
+  file: SourceFileInput,
+): ReadonlyMap<string, readonly string[]> {
+  return withParsedSourceFile(file, (sourceFile) => {
+    const rawTables = new Map<string, string[]>();
+
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const domainName = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(domainName) || !initializer) continue;
+      const domainCall = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isCallExpression(domainCall)) continue;
+      const expression = domainCall.getExpression();
+      if (!Node.isIdentifier(expression) || expression.getText() !== 'domain') continue;
+
+      const domainObject = domainWriteObject(domainCall.getArguments()[0]);
+      if (!domainObject.body) continue;
+
+      for (const property of domainWriteProperties(domainObject.body)) {
+        const tables = rawTablesFromWriteInitializer(property.initializer);
+        if (tables.length > 0) {
+          rawTables.set(`${domainName.getText()}.${property.memberName}`, tables);
+        }
+      }
+    }
+
+    return rawTables;
+  });
+}
+
+function rawTablesFromWriteInitializer(initializer: Node | undefined): string[] {
+  if (!initializer) return [];
+  const writeCall = unwrappedStaticExpressionNode(initializer);
+  if (!Node.isCallExpression(writeCall)) return [];
+  const expression = writeCall.getExpression();
+  if (!Node.isIdentifier(expression) || expression.getText() !== 'write') return [];
+
+  for (const argument of writeCall.getArguments()) {
+    const object = unwrappedStaticExpressionNode(argument);
+    if (!Node.isObjectLiteralExpression(object)) continue;
+    const tables = stringArrayPropertyFromObject(object, 'tables');
+    if (tables.length > 0) return tables;
+  }
+
+  return [];
+}
+
 function writeActionCallbackFunction(
   initializer: Node | undefined,
   seen: Set<string> = new Set(),
@@ -8104,6 +8279,10 @@ function writeActionCallbackFromBindingElement(
 function writeCallbackArgumentFunction(argument: Node): Node | null {
   const expression = unwrappedStaticExpressionNode(argument);
   if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) return expression;
+  if (Node.isObjectLiteralExpression(expression)) {
+    const run = objectPropertyInitializer(expression, 'run');
+    if (run && (Node.isArrowFunction(run) || Node.isFunctionExpression(run))) return run;
+  }
   const literalReference = staticLiteralReferenceFromExpression(expression);
   if (literalReference && literalReference !== expression) {
     return writeCallbackArgumentFunction(literalReference);

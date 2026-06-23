@@ -264,6 +264,11 @@ export interface WriteDefinition<
 > {
   key: Key;
   run: (...args: Args) => Promise<Value> | Value;
+  /**
+   * Raw-SQL write table allowlist (SPEC §10.3): opaque writes declare every
+   * physical table they mutate so runtime verification can fail closed.
+   */
+  tables?: readonly string[];
   touches: Touches;
 }
 
