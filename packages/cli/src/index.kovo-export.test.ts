@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { mainAsync } from './index.js';
 
 function appModuleSource(options: {
+  readonly closed?: boolean;
   readonly exportKind?: 'default' | 'named';
   readonly prelude?: readonly string[];
   readonly route: string;
@@ -28,6 +29,23 @@ function appModuleSource(options: {
     '  mutations: [],',
     '  mutationResponses: {},',
     '  queries: [],',
+    ...(options.closed === false
+      ? []
+      : [
+          '  requestLimits: {',
+          '    global: { max: 20000, windowMs: 60000 },',
+          '    maxBodyBytes: 1048576,',
+          '    mutations: {',
+          '      global: { max: 5000, windowMs: 60000 },',
+          '      perIp: { max: 120, windowMs: 60000 },',
+          '    },',
+          '    perIp: { max: 600, windowMs: 60000 },',
+          '    queries: {',
+          '      global: { max: 15000, windowMs: 60000 },',
+          '      perIp: { max: 600, windowMs: 60000 },',
+          '    },',
+          '  },',
+        ]),
     `  routes: [${options.route}],`,
     '  stylesheets: [],',
     '};',
@@ -111,6 +129,7 @@ describe('kovo export', () => {
       writeFileSync(
         appPath,
         appModuleSource({
+          closed: false,
           exportKind: 'named',
           route: "{ path: '/products/:id', page: () => '<main>Product</main>' }",
         }),
@@ -121,8 +140,9 @@ describe('kovo export', () => {
 
       expect(stdout).not.toHaveBeenCalled();
       const output = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(output).toContain('kovo-export/v1\nERROR KV229 route=/products/:id');
-      expect(output).toContain('staticPaths metadata');
+      expect(output).toContain('kovo-export/v1\nERROR KV229 route=app');
+      expect(output).toContain('requires a closed Kovo app aggregate');
+      expect(output).toContain('SPEC §9.5 export replay must start from createApp()');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

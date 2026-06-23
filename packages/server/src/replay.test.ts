@@ -782,9 +782,14 @@ describe('server mutation response replay', () => {
       replayStore,
       request: { authed: false, sessionId: 's1' },
     });
-    // Guard rejected — must return 422 UNAUTHORIZED, not the stored 200.
-    expect(second.status).toBe(422);
-    expect(second.body).toContain('UNAUTHORIZED');
+    // Guard rejected — SPEC §6.5 enhanced unauthenticated mutation failures must
+    // re-enter auth with 401, not replay the stored 200.
+    expect(second.status).toBe(401);
+    expect(second.headers).toMatchObject({
+      'Cache-Control': 'no-store',
+      'Kovo-Reauth': '/login?next=%2F',
+    });
+    expect(second.body).toBe('');
     // Handler must not have run a second time.
     expect(handlerCalls).toBe(1);
   });

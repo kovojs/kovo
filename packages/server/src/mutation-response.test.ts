@@ -1253,7 +1253,14 @@ describe('server mutation primitives', () => {
         redirectTo: '/chat',
         request: {},
       }),
-    ).resolves.toMatchObject({ status: 422 });
+    ).resolves.toMatchObject({
+      body: '',
+      headers: {
+        'Cache-Control': 'no-store',
+        'Kovo-Reauth': '/login?next=%2F',
+      },
+      status: 401,
+    });
     expect(streamSpy).not.toHaveBeenCalled();
   });
 
