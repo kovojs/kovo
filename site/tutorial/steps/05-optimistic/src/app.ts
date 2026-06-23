@@ -25,8 +25,13 @@ export interface AddToCartFailureState {
 
 export const { ProductList, renderAddToCartError, renderAddToCartForm } = productListComponent;
 
+const EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET = 'EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET';
+
 export const shopCsrf = {
-  secret: 'tutorial-shop-secret',
+  secret: tutorialDeploymentSecret(
+    'KOVO_TUTORIAL_SHOP_CSRF_SECRET',
+    EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET,
+  ),
   sessionId(request: ShopRequest) {
     return request.session?.id;
   },
@@ -131,6 +136,15 @@ export const homeRoute = route('/', {
     return renderShopPage();
   },
 });
+
+function tutorialDeploymentSecret(envName: string, fallback: string): string {
+  const secret = process.env[envName];
+  if (secret && secret !== fallback) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
+  }
+  return fallback;
+}
 
 function optimisticPlan<Input>(definition: {
   optimistic?: Record<string, unknown>;

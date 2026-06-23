@@ -17,7 +17,14 @@ import {
   renderMutationIdemField,
   type CsrfValidationOptions,
 } from './csrf.js';
-import { escapeAttribute, safeUrlAttribute } from './html.js';
+import {
+  escapeAttribute,
+  escapeText,
+  isRenderedHtml,
+  renderedHtml,
+  type RenderedHtml,
+  safeUrlAttribute,
+} from './html.js';
 import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 
@@ -30,10 +37,9 @@ import { runQuery, type QueryDefinition } from './query.js';
 // - Attribute values are escaped; `true` renders a bare attribute (`enhance`),
 //   `false`/`null`/`undefined` omit the attribute (mirroring the loader's
 //   attribute-binding empty semantics, SPEC.md section 4.8).
-// - Child strings are inserted as written so pre-rendered HTML (component
-//   renders, framework helpers such as csrfField) composes without a wrapper
-//   type. SPEC.md section 4 does not yet define JSX text-escaping semantics;
-//   the open question is tracked by the active v1 cleanup/docs ledgers.
+// - Child strings are escaped as text. Framework-rendered HTML is carried
+//   through the internal RenderedHtml brand so nested JSX composes without
+//   turning app/DB text into markup (SPEC.md §4.5, §5.2).
 
 const voidElements = new Set([
   'area',
@@ -55,7 +61,16 @@ const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
-export type JsxNode = JsxNode[] | boolean | null | number | Promise<JsxNode> | string | undefined;
+export type JsxNode =
+  | JsxNode[]
+  | boolean
+  | null
+  | number
+  | RenderedHtml
+  | string
+  | undefined;
+
+export type MaybeAsyncJsxNode = JsxNode | Promise<JsxNode>;
 
 /** @generated JSX automatic-runtime ABI props type (compiler-emitted). */
 export interface JsxProps {
@@ -83,8 +98,8 @@ interface MutationFormHelperRegistry {
 }
 
 /** @generated JSX automatic-runtime ABI `Fragment` (compiler-emitted). */
-export function Fragment(props: JsxProps): MaybePromise<string> {
-  return renderJsxChildren(props.children);
+export function Fragment(props: JsxProps): MaybePromise<RenderedHtml> {
+  return toRenderedHtml(renderJsxChildren(props.children));
 }
 
 /** @generated JSX automatic-runtime ABI `jsx` factory (compiler-emitted). */
@@ -92,7 +107,7 @@ export function jsx(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
   key?: unknown,
-): MaybePromise<string> {
+): MaybeAsyncJsxNode {
   if (isErrorBoundaryComponent(type)) {
     return renderErrorBoundary(props as unknown as ErrorBoundaryProps);
   }
@@ -106,16 +121,20 @@ export function jsx(
   if (typeof type === 'function') return type(props);
 
   const attributes = renderJsxAttributes(type, props, key);
-  if (voidElements.has(type)) return `<${type}${attributes}>`;
+  if (voidElements.has(type)) return renderedHtml(`<${type}${attributes}>`);
 
   const children = renderJsxChildren(renderJsxContent(props));
   const afterChildren = type === 'form' ? renderFormAfterChildrenContent(props, key) : '';
   return isPromiseLike(children)
     ? children.then(
         (html) =>
-          `<${type}${attributes}>${renderFormChildrenContent(type, props, key, html)}${afterChildren}</${type}>`,
+          renderedHtml(
+            `<${type}${attributes}>${renderFormChildrenContent(type, props, key, html)}${afterChildren}</${type}>`,
+          ),
       )
-    : `<${type}${attributes}>${renderFormChildrenContent(type, props, key, children)}${afterChildren}</${type}>`;
+    : renderedHtml(
+        `<${type}${attributes}>${renderFormChildrenContent(type, props, key, children)}${afterChildren}</${type}>`,
+      );
 }
 
 function isErrorBoundaryComponent(type: JsxComponent | KovoJsxComponent | string): boolean {
@@ -125,12 +144,14 @@ function isErrorBoundaryComponent(type: JsxComponent | KovoJsxComponent | string
   );
 }
 
-function renderErrorBoundary(props: ErrorBoundaryProps): MaybePromise<string> {
+function renderErrorBoundary(props: ErrorBoundaryProps): MaybePromise<RenderedHtml> {
   try {
     const rendered = renderJsxChildren(props.children as JsxNode);
     return isPromiseLike(rendered)
-      ? rendered.catch((error) => renderErrorBoundaryFallback(props, error))
-      : rendered;
+      ? rendered
+          .catch((error) => renderErrorBoundaryFallback(props, error))
+          .then((html) => (typeof html === 'string' ? renderedHtml(html) : html))
+      : renderedHtml(rendered);
   } catch (error) {
     return renderErrorBoundaryFallback(props, error);
   }
@@ -139,9 +160,9 @@ function renderErrorBoundary(props: ErrorBoundaryProps): MaybePromise<string> {
 function renderErrorBoundaryFallback(
   props: ErrorBoundaryProps,
   error: unknown,
-): MaybePromise<string> {
+): MaybePromise<RenderedHtml> {
   const fallback = typeof props.fallback === 'function' ? props.fallback(error) : props.fallback;
-  return renderJsxChildren(fallback as JsxNode);
+  return toRenderedHtml(renderJsxChildren(fallback as JsxNode));
 }
 
 function isMutationFormHelperComponent(
@@ -160,7 +181,7 @@ export function jsxDEV(
   type: JsxComponent | KovoJsxComponent | string,
   props: JsxProps,
   key?: unknown,
-): MaybePromise<string> {
+): MaybeAsyncJsxNode {
   return jsx(type, props, key);
 }
 
@@ -294,15 +315,15 @@ function renderFormChildrenContent(
   return resolveMutationFormHelperPlaceholders(html, props, jsxKey);
 }
 
-function renderMutationFormHelper(kind: MutationFormHelperKind, props: JsxProps): string {
+function renderMutationFormHelper(kind: MutationFormHelperKind, props: JsxProps): RenderedHtml {
   if (props.failure !== undefined) {
-    return renderMutationFormHelperNow(kind, props, props.failure);
+    return renderedHtml(renderMutationFormHelperNow(kind, props, props.failure));
   }
 
   const registry = mutationFormHelperRegistry();
   registry.nextId += 1;
   registry.placeholders.set(registry.nextId, { kind, props });
-  return `<!--kovo-form-helper:${registry.nextId}-->`;
+  return renderedHtml(`<!--kovo-form-helper:${registry.nextId}-->`);
 }
 
 function resolveMutationFormHelperPlaceholders(
@@ -427,7 +448,7 @@ function submittedInputContainsValue(input: unknown, value: string): boolean {
 
 function renderJsxContent(props: JsxProps): JsxNode {
   const rawHtml = rawHtmlContent(props);
-  return rawHtml === undefined ? props.children : rawHtml;
+  return rawHtml === undefined ? props.children : renderedHtml(rawHtml);
 }
 
 function attributeText(name: string, value: unknown): string {
@@ -473,6 +494,7 @@ function isRawHtmlAttribute(name: string): boolean {
 function renderJsxChildren(children: JsxNode): MaybePromise<string> {
   if (children === null || children === undefined || typeof children === 'boolean') return '';
   if (isPromiseLike(children)) return children.then((child) => renderJsxChildren(child));
+  if (isRenderedHtml(children)) return children.html;
   if (Array.isArray(children)) {
     const rendered = children.map((child) => renderJsxChildren(child));
     return rendered.some(isPromiseLike)
@@ -482,14 +504,18 @@ function renderJsxChildren(children: JsxNode): MaybePromise<string> {
       : (rendered as string[]).join('');
   }
 
-  return String(children);
+  return escapeText(children);
+}
+
+function toRenderedHtml(value: MaybePromise<string>): MaybePromise<RenderedHtml> {
+  return isPromiseLike(value) ? value.then((html) => renderedHtml(html)) : renderedHtml(value);
 }
 
 async function renderKovoComponent(
   component: KovoJsxComponent,
   props: JsxProps,
   jsxKey?: unknown,
-): Promise<string> {
+): Promise<RenderedHtml> {
   const request = currentJsxRequestContext();
   const queries = await loadComponentQueries(component, props, request);
   const state = component.definition.state?.() as JsonValue | undefined;
@@ -501,7 +527,7 @@ async function renderKovoComponent(
   ) => unknown;
   const rendered = render({ ...props, ...queries }, state, slots) as JsxNode;
   const html = await renderJsxChildren(rendered);
-  return stampKovoComponentRoot(component, props, html, jsxKey);
+  return renderedHtml(stampKovoComponentRoot(component, props, html, jsxKey));
 }
 
 function stampKovoComponentRoot(

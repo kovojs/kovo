@@ -11,6 +11,7 @@ import {
 } from './mutation.js';
 import { renderComponentMutationFailure } from './component-render.js';
 import { domain } from './domain.js';
+import { renderedHtml } from './html.js';
 import { createMemoryMutationReplayStore } from './replay.js';
 import { query } from './query.js';
 import { s } from './schema.js';
@@ -200,7 +201,7 @@ describe('server mutation primitives', () => {
       reads: [product],
     });
     const ProductCard = component({
-      render: ({ product }) => `<product-card>${product.id}</product-card>`,
+      render: ({ product }) => renderedHtml(`<product-card>${product.id}</product-card>`),
     });
     const reserveProduct = mutation('product/reserve', {
       input: s.object({ productId: s.string() }),
@@ -259,7 +260,7 @@ describe('server mutation primitives', () => {
       reads: [product],
     });
     const ProductCard = component({
-      render: ({ product }) => `<product-card>${product.id}</product-card>`,
+      render: ({ product }) => renderedHtml(`<product-card>${product.id}</product-card>`),
     });
     const reserveProduct = mutation('product/reserve', {
       input: s.object({ productId: s.string() }),
@@ -311,7 +312,7 @@ describe('server mutation primitives', () => {
       reads: [question],
     });
     const QuestionDetail = component({
-      render: ({ question }) => `<question-detail>${question.id}</question-detail>`,
+      render: ({ question }) => renderedHtml(`<question-detail>${question.id}</question-detail>`),
     });
     const postAnswer = mutation('answer/post', {
       input: s.object({ id: s.string(), questionId: s.string() }),
@@ -538,11 +539,13 @@ describe('server mutation primitives', () => {
     const AddToCartForm = component({
       mutations: { addToCart: addToCartForm },
       render: (_queries, _state, { forms }) =>
-        `<form>` +
-        (forms.addToCart.failure?.code === 'OUT_OF_STOCK'
-          ? `<output role="alert" data-error-code="OUT_OF_STOCK">Only ${forms.addToCart.failure.payload.availableQuantity} left.</output>`
-          : '') +
-        `</form>`,
+        renderedHtml(
+          `<form>` +
+            (forms.addToCart.failure?.code === 'OUT_OF_STOCK'
+              ? `<output role="alert" data-error-code="OUT_OF_STOCK">Only ${forms.addToCart.failure.payload.availableQuantity} left.</output>`
+              : '') +
+            `</form>`,
+        ),
     });
     const addToCart = mutation('cart/add', {
       errors: {

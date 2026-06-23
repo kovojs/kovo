@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { createKovoProject, main, writeKovoProject } from './index.js';
+import { createKovoProject, demoPasswordEnvVar, main, writeKovoProject } from './index.js';
 
 const TEMPLATE_FILES = [
   'package.json',
@@ -196,9 +196,16 @@ describe('create-kovo starter (metadata)', () => {
       const secret = /^KOVO_CSRF_SECRET=(.+)$/m.exec(envSource)?.[1] ?? '';
       expect(secret).toMatch(/^[A-Za-z0-9_-]{43}$/);
       expect(secret).not.toBe('replace-with-a-deployed-secret');
+      const demoPassword =
+        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(envSource)?.[1] ?? '';
+      expect(demoPassword).toMatch(/^[A-Za-z0-9_-]{24}$/);
+      expect(demoPassword).not.toBe('password123');
 
       expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
         'KOVO_CSRF_SECRET=replace-with-a-deployed-secret',
+      );
+      expect(readFileSync(join(root, '.env.example'), 'utf8')).toContain(
+        'KOVO_DEMO_PASSWORD=replace-with-a-local-demo-password',
       );
       const gitignore = readFileSync(join(root, '.gitignore'), 'utf8');
       expect(gitignore).toContain('.env');
@@ -356,10 +363,15 @@ describe('create-kovo starter (build integration)', () => {
       mergeCookies(jar, loginResponse.headers.getSetCookie());
       const csrf = /name="csrf"\s+value="([^"]+)"/.exec(await loginResponse.text())?.[1];
       expect(csrf).toBeTruthy();
+      const demoPassword =
+        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+          readFileSync(join(root, '.env'), 'utf8'),
+        )?.[1] ?? '';
+      expect(demoPassword).toBeTruthy();
 
       const form = new URLSearchParams({
         email: 'demo@example.com',
-        password: 'password123',
+        password: demoPassword,
         next: '/',
         csrf: csrf ?? '',
       });

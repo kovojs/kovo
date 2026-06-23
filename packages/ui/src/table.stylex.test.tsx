@@ -59,10 +59,10 @@ describe('@kovojs/ui Table StyleX slots', () => {
       ] as const,
       headClasses: [style.attrs(tableStyles.head).class ?? ''] as const,
       headerCellClasses: [style.attrs(tableStyles.headerCell).class ?? ''] as const,
-      rendered: Table.definition.render({
+      rendered: String(Table.definition.render({
         caption: 'Invoices for the current billing period',
         children: `${header}${body}`,
-      }),
+      })),
       rootClasses: [style.attrs(tableStyles.table).class ?? ''] as const,
       rowClasses: [style.attrs(tableStyles.row).class ?? ''] as const,
       wrapperClasses: [style.attrs(tableStyles.wrapper).class ?? ''] as const,
@@ -104,7 +104,7 @@ describe('@kovojs/ui Table StyleX slots', () => {
     );
 
     expect(
-      Table.definition.render({
+      String(Table.definition.render({
         caption: 'Custom invoices',
         children:
           TableHead.definition.render({
@@ -132,7 +132,7 @@ describe('@kovojs/ui Table StyleX slots', () => {
           table: overrides.table,
           wrapper: overrides.wrapper,
         },
-      }),
+      })),
     ).toMatchSnapshot();
   });
 

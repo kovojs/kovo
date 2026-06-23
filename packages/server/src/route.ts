@@ -28,7 +28,7 @@ import {
   type RouteResponseOutcome,
 } from './response.js';
 import type { Schema } from './schema.js';
-import { escapeAttribute } from './html.js';
+import { escapeAttribute, isRenderedHtml, renderedHtml, renderHtmlValue } from './html.js';
 import type {
   CompiledRouteNavigationSegment,
   CompiledRoutePageFunction,
@@ -581,16 +581,16 @@ function stampRouteNavigationSegment(
   segment: CompiledRouteNavigationSegment | undefined,
   value: unknown,
 ): unknown {
-  if (!segment || typeof value !== 'string') return value;
+  if (!segment || !isRenderedHtml(value)) return value;
 
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value);
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value.html);
   if (!opening) return value;
 
   const tagName = opening[1];
   const attrs = opening[2] ?? '';
   const stampedAttrs = stampRouteNavigationAttributes(attrs, segment);
   const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return `${stampedOpening}${value.slice(opening[0].length)}`;
+  return renderedHtml(`${stampedOpening}${value.html.slice(opening[0].length)}`);
 }
 
 function stampRouteNavigationAttributes(
@@ -619,18 +619,18 @@ function stampLayoutLiveTarget(
   layoutDeclaration: LayoutDeclaration<any, any, any>,
   value: unknown,
 ): unknown {
-  if (typeof value !== 'string') return value;
+  if (!isRenderedHtml(value)) return value;
   const metadata = layoutLiveTargetMetadata.get(layoutDeclaration);
   if (!metadata || metadata.deps.length === 0) return value;
 
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value);
+  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(value.html);
   if (!opening) return value;
 
   const tagName = opening[1];
   const attrs = opening[2] ?? '';
   const stampedAttrs = stampLayoutAttributes(attrs, metadata);
   const stampedOpening = `<${tagName}${stampedAttrs}>`;
-  return `${stampedOpening}${value.slice(opening[0].length)}`;
+  return renderedHtml(`${stampedOpening}${value.html.slice(opening[0].length)}`);
 }
 
 function stampLayoutAttributes(attrs: string, metadata: LayoutLiveTargetMetadata): string {
@@ -803,8 +803,9 @@ export function routeHasBoundary(
 /**
  * Run a route and render its full HTTP response: parse params/search, run the
  * guard, call `page`, and turn the result into a `RoutePageResponse` (status,
- * headers, body), or a guard-failure response. The default `render` stringifies
- * the page value; pass a custom `render` to wrap it in a document (SPEC §6.4).
+ * headers, body), or a guard-failure response. The default `render` unwraps
+ * framework-rendered JSX HTML and escapes plain strings as text; pass a custom
+ * `render` to wrap legacy/raw values in a document (SPEC §6.4, §5.2).
  *
  * @param definition - The route to run.
  * @param input - Raw `params`/`search` to parse.
@@ -817,7 +818,7 @@ export function routeHasBoundary(
  * import { route } from '@kovojs/server';
  * import { renderRoutePageResponse } from '@kovojs/server/internal/route';
  *
- * const homeRoute = route('/', { page: () => '<h1>Home</h1>' });
+ * const homeRoute = route('/', { page: () => <h1>Home</h1> });
  *
  * export function renderHome() {
  *   return renderRoutePageResponse(homeRoute, {}, {});
@@ -834,7 +835,7 @@ export async function renderRoutePageResponse<
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
   input: RouteRequestInput,
   request: Request,
-  render: (value: Page) => string | Promise<string> = (value) => String(value ?? ''),
+  render: (value: Page) => string | Promise<string> = renderHtmlValue,
   options: GuardFailureResponseOptions<Request> & RouteJsxContextOptions<Request> = {},
 ): Promise<RoutePageResponse> {
   let result: RoutePageInternalResult<Page>;

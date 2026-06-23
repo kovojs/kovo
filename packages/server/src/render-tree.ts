@@ -1,6 +1,6 @@
 import type { Component, ComponentDefinitionInput } from '@kovojs/core';
 
-import { escapeText } from './html.js';
+import { escapeText, renderedHtml, renderHtmlValue } from './html.js';
 import { jsx } from './jsx-runtime.js';
 import { isSchemaValidationError, type Schema } from './schema.js';
 
@@ -12,10 +12,10 @@ import { isSchemaValidationError, type Schema } from './schema.js';
 // rendered server-side by dispatching through the server JSX runtime (`jsx`). The dynamic *shape*
 // of the tree is data-driven; the *set* of renderable components is statically declared.
 //
-// Safety (§4.8): the walker escapes text nodes itself — the raw JSX runtime inserts children
-// verbatim (jsx-runtime.ts) — passes only schema-declared props (no `{...attrs}` passthrough),
-// and never produces `trustedHtml`. Attribute/URL emission additionally routes through the JSX
-// runtime's `escapeAttribute`/`safeUrlAttribute` and its `on*`/`srcdoc` refusal.
+// Safety (§4.8): the walker escapes text nodes itself, brands composed child HTML before handing
+// it to the JSX runtime, passes only schema-declared props (no `{...attrs}` passthrough), and
+// never produces `trustedHtml`. Attribute/URL emission additionally routes through the JSX runtime's
+// `escapeAttribute`/`safeUrlAttribute` and its `on*`/`srcdoc` refusal.
 
 /** A literal character-data node parsed from rich-text source (SPEC §4.10). */
 export interface ComponentTextNode {
@@ -132,10 +132,10 @@ async function renderNode(
   if (validated === null) return renderUnknown(registry, node, options);
 
   const childrenHtml = await renderTree(registry, node.children, options);
-  // `childrenHtml` is already safe, fully-rendered HTML; the JSX runtime inserts a string child
-  // verbatim, which is correct here because the walker escaped/composed it (SPEC §4.10).
-  const rendered = jsx(entry.component, { ...validated, children: childrenHtml });
-  return await rendered;
+  // `childrenHtml` is already safe, fully-rendered HTML; keep it branded so the JSX runtime
+  // composes it as framework HTML instead of escaping it again (SPEC §4.10).
+  const rendered = jsx(entry.component, { ...validated, children: renderedHtml(childrenHtml) });
+  return renderHtmlValue(await rendered);
 }
 
 async function renderUnknown(

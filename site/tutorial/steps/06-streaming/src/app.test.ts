@@ -94,11 +94,19 @@ function renderShopPageDeferredStream(db = createShopDb(), request?: ShopRequest
 }
 // /snippet
 
-function expectSyncHtml(html: string | Promise<string>): string {
-  if (typeof html !== 'string') {
+function expectSyncHtml(html: unknown): string {
+  if (isPromiseLike(html)) {
     throw new Error('Tutorial deferred stream fixture expected synchronous component HTML');
   }
-  return html;
+  return String(html);
+}
+
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Promise<unknown>).then === 'function'
+  );
 }
 
 describe('tutorial step 06 — streaming & defer', () => {

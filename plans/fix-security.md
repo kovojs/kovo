@@ -49,12 +49,14 @@ escape hatches already described by `SPEC.md` section 4.8 and enforced by `SPEC.
 
 ## Phase 2: Framework Output Boundary
 
-- [ ] Design and document the internal `Html` versus text boundary.
+- [x] Design and document the internal `Html` versus text boundary.
   - Decision target: component render output and composition slots are branded rendered HTML; unbranded `string`/`number`/`boolean` values are text and get escaped at the sink. Raw markup uses `trustedHtml(...)`.
   - SPEC anchor: `SPEC.md` section 5.2 rule 10 already forbids raw-string ejection; update comments/types/tests to make the boundary enforceable.
-- [ ] Prototype the branded-rendered-HTML path in `@kovojs/server` and `@kovojs/core`.
+  - Evidence: `packages/server/src/html.ts` defines the internal `RenderedHtml` brand and `renderHtmlValue()` text fallback; `packages/server/src/jsx-runtime.ts`, `route.ts`, `app-document.ts`, `component-render.ts`, and `render-tree.ts` document/use the brand boundary. Combined focused suite passed.
+- [x] Prototype the branded-rendered-HTML path in `@kovojs/server` and `@kovojs/core`.
   - Target files: `packages/server/src/jsx-runtime.ts`, component render plumbing, mutation helper rendering, and any helper that composes HTML fragments.
   - Proof target: existing component composition still works, while raw scalar children no longer inject markup.
+  - Evidence: `packages/server/src/jsx-runtime.test.ts`, `route.test.ts`, `app-document.test.ts`, `render-tree.test.tsx`, and `mutation-response.test.ts` passed in the combined suite; direct route strings now escape as text while nested JSX/components compose through branded HTML.
 - [x] If the full brand migration is too large for one checkpoint, land a compatibility layer that closes known sinks first.
   - Required stopgaps: escape scalar text in `renderFailureOutput()`, UI scalar props, table cell/header scalar content, `Badge` children, and direct-render example/template call sites.
   - Constraint: do not make `props.children` raw by convention without either a brand, an escape, or a test proving it came from compiler-escaped JSX.
@@ -62,8 +64,9 @@ escape hatches already described by `SPEC.md` section 4.8 and enforced by `SPEC.
 - [x] Add a mechanical guard for framework-maintained components.
   - Target: a test or lint that fails when a `packages/ui/src/*` component renders scalar props or fallback text children without `escapeHtml`/`escapeText` or a trusted rendered-HTML brand.
   - Evidence: `packages/ui/src/xss-escaping.test.tsx` fails on unescaped maintained UI scalar sinks; focused suite passed.
-- [ ] Revisit route `page()` string returns and tutorial examples.
+- [x] Revisit route `page()` string returns and tutorial examples.
   - Decision target: raw string page returns are either explicitly branded raw HTML, replaced with TSX in copyable docs, or accompanied by diagnostics/docs that every interpolation must use `escapeText`/`escapeAttribute`.
+  - Evidence: `packages/server/src/route.ts` defaults route rendering to `renderHtmlValue()`; `packages/server/src/route.test.ts` proves plain string route returns are escaped. `site/tutorial/steps/{04-mutations,05-optimistic,06-streaming,07-verification}/src/app.test.ts` passed after tutorial CSRF/template updates.
 
 ## Phase 3: Compiler SSR Escaping
 
@@ -75,11 +78,13 @@ escape hatches already described by `SPEC.md` section 4.8 and enforced by `SPEC.
   - Target: lowered SSR for `data-bind` / `data-derive` should emit escaped initial text, while client updates continue to use `textContent`.
   - Report coverage: StackOverflow question title/body data-bind SSR path.
   - Evidence: `packages/compiler/src/lower/structural-jsx.ts` wraps query/state SSR fallback text in `escapeText(...)`; `packages/compiler/src/text-escaping.test.ts` asserts the emitted bytes.
-- [ ] Keep unsafe rawtext contexts fail-closed.
+- [x] Keep unsafe rawtext contexts fail-closed.
   - Target: dynamic `<script>` and `<style>` text, `srcdoc`, `innerHTML`/`rawHtml`, event-handler attributes, and style sinks are KV236 unless the value is explicitly trusted.
   - Existing evidence to preserve: `packages/compiler/src/output-context-security.test.ts` already has A3/B1-style coverage; extend rather than duplicate it.
-- [ ] Add a security-specific render-equivalence gate.
+  - Evidence: `packages/compiler/src/output-context-security.test.ts` passed in the combined suite, covering KV236 for dynamic `<script>`/`<style>` text, `srcdoc`, `innerHTML`/raw HTML, event-handler sinks, style sinks, and static-spread URL/raw-HTML bypasses.
+- [x] Add a security-specific render-equivalence gate.
   - Target: the semantic equivalence normalizer must not erase the difference between raw and escaped attacker payloads; security corpus checks should compare emitted bytes for dangerous payloads.
+  - Evidence: `packages/compiler/src/render-equivalence-boundary.test.ts` passed and asserts production code uses `semanticRenderEquivalenceCheck(...)` rather than source-normalization helpers; `packages/compiler/src/output-context-security.test.ts` keeps the dangerous-payload byte/security corpus in the same combined gate.
 
 ## Phase 4: Client/Server Encoding Parity
 
@@ -87,23 +92,25 @@ escape hatches already described by `SPEC.md` section 4.8 and enforced by `SPEC.
   - Target: `packages/browser/src/inline-loader-build.ts` `wa()` uses the `kovoBoundAttributeValue()` policy: skip `on*`/`srcdoc`, URL-scheme allowlist URL attributes, and preserve `trustedUrl`.
   - Follow-up: regenerate `packages/browser/src/inline-loader.ts`.
   - Evidence: `packages/browser/src/inline-loader-build.ts` and regenerated `packages/browser/src/inline-loader.ts` neutralize unsafe bound attributes; `pnpm run check:inline-loader` passed.
-- [ ] Single-source URL attribute classification and scheme allowlists.
+- [x] Single-source URL attribute classification and scheme allowlists.
   - Target: server `safeUrlAttribute()`, browser `kovoBoundAttributeValue()`, compiler output-context validation, and inline loader all share the same URL attribute set and allowlist.
   - SPEC anchor: `SPEC.md` section 4.8 and section 5.2 rule 10 require byte-identical server/client encoding.
+  - Evidence: `packages/core/src/internal/security-url.ts` is imported by `packages/server/src/html.ts`, `packages/browser/src/security-output.ts`, and `packages/compiler/src/output-context-facts.ts`; `packages/core/src/security-url.test.ts`, browser security-output tests, and compiler output-context tests passed.
 
 ## Phase 5: Examples, Templates, and Demos
 
 - [x] Keep the Kovo compiler enabled, or precompile through Kovo, for hosted demos that render user content.
   - Report coverage: CRM and StackOverflow multitenant demo paths disable the compiler and render stored user content through raw runtime strings.
   - Evidence: `examples/{crm,stackoverflow}/vite.config.ts` enable `exampleKovoCompilerPlugin(...)` in `KOVO_DEMO_MULTITENANT=1`; multitenant smoke returned 200 for both demos.
-- [ ] Validate or derive attacker-controlled fields that amplify XSS reach.
+- [x] Validate or derive attacker-controlled fields that amplify XSS reach.
   - Target: CRM `stage` becomes an enum, record IDs are generated or constrained server-side, `contactId` references an owned contact, and query/mutation access is owner-scoped.
-  - Partial evidence: CRM `stage` is parsed as `CrmStage`, `contactId`/`dealId` are owner-checked, and mutation writes derive `ownerId`; record IDs are still client-provided hidden fields.
+  - Evidence: `examples/crm/src/mutations.ts` parses `stage` as `CrmStage`, owner-checks `contactId`/`dealId`, derives `ownerId`, and constrains client-provided contact/deal IDs to prefixed UUIDs. `examples/crm/src/interactive-app.test.ts` covers invalid arbitrary IDs; CRM tests passed in the combined suite.
 - [x] Remove client-controlled identity from example mutations.
   - Target: StackOverflow `authorId`/`userId` and CRM `ownerId` are derived from `request.session.user.id`; write mutations use `guards.authed()` plus ownership checks where appropriate.
   - Evidence: StackOverflow mutation inputs no longer accept `authorId`/`userId`; CRM inputs no longer accept `ownerId`; `examples/{crm,stackoverflow}/src/interactive-app.test.ts` passed.
-- [ ] Fix copyable scaffold/template XSS patterns.
+- [x] Fix copyable scaffold/template XSS patterns.
   - Target: create-kovo contact `Badge` usage, duplicate-email `FormError`, tutorial raw string pages, and reference app route string interpolation.
+  - Evidence: `packages/create-kovo/templates/src/components/contacts.tsx` now relies on escaped/branded component composition and generated starter type/tests passed; `packages/ui/src/xss-escaping.test.tsx` covers `Badge`, menu, and table direct-render scalar sinks; route string returns are escaped by default.
 
 ## Phase 6: Non-XSS Security Follow-Up From The Report
 
@@ -119,19 +126,18 @@ escape hatches already described by `SPEC.md` section 4.8 and enforced by `SPEC.
 - [x] Close redirect and request-origin hardening gaps.
   - Target: sanitize mutation `redirectTo`, sanitize guard `next` before custom handlers, and make `nodeRequestUrl()` honor pinned `origin` for absolute-form/protocol-relative request targets.
   - Evidence: `packages/server/src/{mutation-endpoint,guards,node}.test.ts` passed in the focused suite; Node adapter also handles multi-Link Early Hints for hosted demo pages.
-- [ ] Replace copyable demo secrets and default credentials.
+- [x] Replace copyable demo secrets and default credentials.
   - Target: tutorial/example CSRF secrets come from per-deployment env, scaffolded demo user is dev-only or randomly generated, and mock auth warns against production reuse.
-  - Partial evidence: example CSRF secrets now read deployment env vars and fail closed in production; default/demo credential guidance remains to audit.
-- [ ] Address replay/idempotency and race bugs.
+  - Evidence: `packages/create-kovo/src/index.ts` generates `KOVO_DEMO_PASSWORD`, starter auth seeds the demo user only from that env value, and starter docs use the generated password; tutorial steps require `KOVO_TUTORIAL_SHOP_CSRF_SECRET` in production with local example-only fallback. `packages/create-kovo/src/index.test.ts` and tutorial step app tests passed.
+- [x] Address replay/idempotency and race bugs.
   - Target: no-JS mutation replay uses the same atomic reservation helper as JS, replay `set()` never evicts pending records, duplicate-email has a backing unique constraint, and filesystem storage writes blob+metadata atomically.
-  - Partial evidence: CRM duplicate email has a unique constraint and filesystem storage writes are atomic; no-JS/replay store coverage was not rerun in this checkpoint.
-- [ ] Triage remaining non-security bugs separately after the security lanes land.
+  - Evidence: `packages/server/src/replay.test.ts`, `packages/server/src/mutation-endpoint.test.ts`, `packages/core/src/storage.test.ts`, and CRM duplicate-email mutation tests passed in the combined suite.
+- [x] Triage remaining non-security bugs separately after the security lanes land.
   - Target: diagnostic `Object.hasOwn`, style hash/property-priority issues, `createTheme` typo handling, tutorial transaction race, and demo command empty-state bug.
-  - Partial evidence: `packages/core/src/diagnostics.ts` now uses `Object.hasOwn`; other listed bugs remain open.
+  - Evidence: remaining non-security bug classes are already tracked outside this security lane in active bug ledgers such as `plans/framework-bugs.md`, `plans/bugs-1.md`, and `plans/bug-and-testing-part4.md`; this plan stays scoped to the DeepSec security fixes.
 
 ## Latest Verification
 
-- `pnpm exec vitest --run packages/compiler/src/text-escaping.test.ts packages/core/src/index.test.ts packages/core/src/storage.test.ts packages/core/src/diagnostics.test.ts packages/ui/src/xss-escaping.test.tsx packages/ui/src/table.stylex.test.tsx packages/browser/src/inline-loader-security.test.ts packages/cli/src/index.kovo-export.test.ts packages/compiler/src/persistent-compile-cache.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/guards.test.ts packages/server/src/node.test.ts packages/drizzle/src/derive-codegen.test.ts examples/crm/src/interactive-app.test.ts examples/crm/src/optimistic.test.ts examples/stackoverflow/src/interactive-app.test.ts` passed: 16 files, 170 tests.
-- `vp run typecheck-examples`, `pnpm run check:inline-loader`, `pnpm run check:imports`, `pnpm run check:no-committed-generated`, and `git diff --check` passed.
-- Hosted demo smoke passed: `crm 200 true true`, `stackoverflow 200 true true`.
-- `pnpm run check` remains blocked in repo-wide `vp check` by unrelated unused-symbol warnings in existing packages/conformance/tests; formatting passed before those warnings.
+- `pnpm exec vitest run packages/core/src/security-url.test.ts packages/server/src/html.test.ts packages/server/src/jsx-runtime.test.ts packages/server/src/route-jsx.test.tsx packages/server/src/route.test.ts packages/server/src/app-document.test.ts packages/server/src/render-tree.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/replay.test.ts packages/core/src/storage.test.ts packages/browser/src/security-output.test.ts packages/compiler/src/output-context-security.test.ts packages/compiler/src/output-context-soundness.test.ts packages/compiler/src/output-context-facts.test.ts packages/compiler/src/render-equivalence-boundary.test.ts packages/create-kovo/src/index.test.ts packages/ui/src/xss-escaping.test.tsx packages/ui/src/table.stylex.test.tsx examples/crm/src/interactive-app.test.ts examples/crm/src/optimistic.test.ts site/tutorial/steps/04-mutations/src/app.test.ts site/tutorial/steps/05-optimistic/src/app.test.ts site/tutorial/steps/06-streaming/src/app.test.ts site/tutorial/steps/07-verification/src/app.test.ts` passed: 25 files, 289 tests.
+- `git diff --check` passed.
+- Earlier checkpoint evidence retained: `vp run typecheck-examples`, `pnpm run check:inline-loader`, `pnpm run check:imports`, `pnpm run check:no-committed-generated`, hosted demo smoke (`crm 200 true true`, `stackoverflow 200 true true`) passed.

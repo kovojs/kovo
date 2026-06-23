@@ -8,6 +8,7 @@ import {
 } from './document-core.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
+import { renderHtmlValue } from './html.js';
 import {
   appendResponseHeader,
   routeResponseToDocumentResponse,
@@ -257,10 +258,7 @@ export function appRequestUrl(url: URL): string {
 }
 
 function renderDefaultRouteValue(value: unknown): string {
-  if (value === undefined || value === null) return '';
-  if (typeof value === 'string') return value;
-
-  return JSON.stringify(value);
+  return renderHtmlValue(value);
 }
 
 function mergeAppRouteHints(app: KovoApp, route: AnyRouteDeclaration): PageHintOptions {

@@ -13,7 +13,8 @@ npm run build:prod   # kovo build ./src/app.tsx → dist/server (node preset)
 npm start            # node dist/server/server.mjs
 ```
 
-Sign in at `/login` with the seeded demo account **demo@example.com / password123**.
+For local development, sign in at `/login` with `demo@example.com` and the
+random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 
 ## What's here
 

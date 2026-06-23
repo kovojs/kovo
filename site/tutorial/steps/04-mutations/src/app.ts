@@ -14,11 +14,16 @@ import { cartQuery, loadCart, loadProducts, productsQuery } from './queries.js';
 
 export type { ShopRequest } from './db.js';
 
+const EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET = 'EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET';
+
 // snippet:csrf
 // SPEC.md section 6.6: kovo-csrf is a session-bound synchronizer token stamped
 // into every emitted form and verified before input parsing on every POST.
 export const shopCsrf = {
-  secret: 'tutorial-shop-secret',
+  secret: tutorialDeploymentSecret(
+    'KOVO_TUTORIAL_SHOP_CSRF_SECRET',
+    EXAMPLE_ONLY_TUTORIAL_SHOP_CSRF_SECRET,
+  ),
   sessionId(request: ShopRequest) {
     return request.session?.id;
   },
@@ -91,3 +96,12 @@ export const homeRoute = route('/', {
     return renderShopPage();
   },
 });
+
+function tutorialDeploymentSecret(envName: string, fallback: string): string {
+  const secret = process.env[envName];
+  if (secret && secret !== fallback) return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(`${envName} must be set to a deployment-specific secret in production.`);
+  }
+  return fallback;
+}

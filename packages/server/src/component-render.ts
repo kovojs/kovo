@@ -4,6 +4,7 @@ import type {
   ComponentRenderSlots,
   JsonValue,
 } from '@kovojs/core';
+import { renderHtmlValue } from './html.js';
 import type { MutationFail } from './mutation.js';
 import type { ValidationFailurePayload } from './schema.js';
 
@@ -62,7 +63,7 @@ export function renderComponent<
     slots: ComponentRenderSlots,
   ) => unknown;
 
-  return String(render(queries, state, slots));
+  return renderHtmlValue(render(queries, state, slots));
 }
 
 /**

@@ -29,8 +29,7 @@ import { appTheme } from './theme.js';
 // by real Better Auth. `kovo({ app: '/src/app.tsx' })` (vite.config.ts) and `kovo
 // build ./src/app.tsx` both load this default export (SPEC.md §9.5).
 
-// Seed the demo account so a fresh `vp dev` can sign in with
-// demo@example.com / password123.
+// Seed the local demo account when the generated .env contains KOVO_DEMO_PASSWORD.
 await seedDemoUser();
 
 const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;
