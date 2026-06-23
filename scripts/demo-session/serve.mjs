@@ -84,7 +84,6 @@ export async function createDemoServeServer({
       maxSessions: positiveEnvInt('KOVO_DEMO_MAX_SESSIONS', 40),
       warmSessions: nonNegativeEnvInt('KOVO_DEMO_WARM_SESSIONS', 0),
     });
-    await dispatcher.ready();
 
     const server = createNodeServer((req, res) => {
       void tryServeBuiltAsset(req, res, distDir).then((served) => {
@@ -98,6 +97,9 @@ export async function createDemoServeServer({
     });
 
     await listen(server, { host, port, strictPort });
+    void dispatcher.ready().catch((error) => {
+      process.stderr.write(`[${label}] demo warmup failed: ${error?.stack ?? error}\n`);
+    });
 
     return {
       close: () => closeServer(server, vite),
