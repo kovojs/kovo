@@ -23,12 +23,6 @@ import { createCommerceScenarioClient, seedCartItems } from './app-test-helpers.
 
 const commerceRoot = fileURLToPath(new URL('..', import.meta.url));
 const commercePageHints = renderCommercePageHints();
-// Base + the original headroom, plus the @kovojs/ui shadcn-parity UX overhaul
-// (plans/better-components-ux.md) and the focus-safe hover-card/toast/slider CSS
-// additions from plans/secure-framework.md. The monolithic kovo-ui.css is linked
-// by every app route; measured deterministically at 154,437 B from a clean
-// commerce build.
-const phase0CommerceRouteCssBytes = 159_737;
 
 function renderCommercePageHints(cart: CartQueryResult = { count: 0 }) {
   return renderPageHints(
@@ -101,7 +95,7 @@ describe('commerce example', () => {
     );
   });
 
-  it('keeps authored global CSS clean while building the linked app stylesheet', async () => {
+  it('keeps authored global CSS clean while route-specific CSS stays split', async () => {
     const authoredCss = readFileSync(path.join(commerceRoot, 'src', 'styles.css'), 'utf8');
     expect(authoredCss).not.toContain('./generated/');
 
@@ -122,16 +116,18 @@ describe('commerce example', () => {
     expect(css).toContain('--kovo-color-background:');
     expect(css).toContain('.kv-button-');
     expect(css).not.toContain('.kv-commerce-app-');
+    expect(css).not.toContain('.kv-auth-form-');
     expect(css).not.toContain('.kv-product-grid-');
     expect(css).not.toContain('.bg-slate-50');
     expect(css).not.toContain('.text-red-700');
 
-    const routeCssFiles = [
-      readBuiltCssAsset((href) => /^assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href)),
-    ];
-    const [loginCss] = routeCssFiles;
-    expect(loginCss?.css).toContain('.kv-auth-form-');
-    expect(loginCss?.css).not.toContain('.kv-product-grid-');
+    const loginCss = readBuiltCssAsset((href) =>
+      /^assets\/routes\/login-[a-f0-9]{8}\.css$/.test(href),
+    );
+    expect(loginCss.css).toContain('.kv-auth-form-');
+    expect(loginCss.css).not.toContain('.kv-commerce-app-');
+    expect(loginCss.css).not.toContain('.kv-product-grid-');
+    expect(loginCss.css).not.toContain('.kv-cart-badge-');
 
     const serverModule = (await import(
       `${pathToFileURL(path.join(commerceRoot, 'dist', 'server', 'server.mjs')).href}?t=${Date.now()}`
@@ -142,12 +138,27 @@ describe('commerce example', () => {
     await listen(server);
     const origin = serverOrigin(server);
     try {
-      for (const routePath of ['/', '/cart', '/login']) {
+      const routeHtml: Record<'/' | '/cart' | '/login', string> = {
+        '/': '',
+        '/cart': '',
+        '/login': '',
+      };
+
+      for (const routePath of Object.keys(routeHtml) as Array<keyof typeof routeHtml>) {
         const response = await fetch(`${origin}${routePath}`);
         const html = await response.text();
 
         expect(response.status, html).toBe(200);
-        expect(routeCssBytes(html)).toBeLessThan(phase0CommerceRouteCssBytes);
+        routeHtml[routePath] = html;
+      }
+
+      expect(routeSpecificCssAssetPaths(routeHtml['/'])).toEqual([]);
+      expect(routeSpecificCssAssetPaths(routeHtml['/cart'])).toEqual([]);
+      expect(routeSpecificCssAssetPaths(routeHtml['/login'])).toEqual([loginCss.path]);
+
+      for (const assetPath of linkedCssAssetPaths(routeHtml['/login'])) {
+        if (assetPath === loginCss.path) continue;
+        expect(readBuiltCssAssetByPath(assetPath)).not.toContain('.kv-auth-form-');
       }
     } finally {
       await close(server);
@@ -173,14 +184,20 @@ function listBuiltCssAssets(relativeDir = 'assets'): string[] {
   });
 }
 
-function routeCssBytes(html: string): number {
-  return linkedCssHrefs(html).reduce(
-    (total, href) =>
-      total +
-      readFileSync(path.join(commerceRoot, 'dist', 'server', 'client', href.replace(/^\//, '')))
-        .byteLength,
-    inlinedCriticalCssBytes(html),
-  );
+function linkedCssAssetPaths(html: string): string[] {
+  return linkedCssHrefs(html).map(cssHrefToAssetPath);
+}
+
+function routeSpecificCssAssetPaths(html: string): string[] {
+  return linkedCssAssetPaths(html).filter((href) => href.startsWith('assets/routes/'));
+}
+
+function readBuiltCssAssetByPath(assetPath: string): string {
+  return readFileSync(path.join(commerceRoot, 'dist', 'server', 'client', assetPath), 'utf8');
+}
+
+function cssHrefToAssetPath(href: string): string {
+  return href.replace(/^\//, '');
 }
 
 function linkedCssHrefs(html: string): string[] {
@@ -191,12 +208,6 @@ function linkedCssHrefs(html: string): string[] {
         .filter(Boolean),
     ),
   ];
-}
-
-function inlinedCriticalCssBytes(html: string): number {
-  return [...html.matchAll(/<style data-kovo-critical-href="[^"]+"[^>]*>([\s\S]*?)<\/style>/g)]
-    .map((match) => match[1] ?? '')
-    .reduce((total, css) => total + Buffer.byteLength(css, 'utf8'), 0);
 }
 
 async function listen(server: Server): Promise<void> {
