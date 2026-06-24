@@ -352,35 +352,57 @@ describe('server schemas', () => {
     );
   });
 
-  // SCHEMA-1 / SCHEMA-2: the FormData→record map must not read/write through the prototype.
-  // `__proto__` keys must not rebind the record's prototype, and keys like `constructor` must
-  // not be misclassified as repeats (becoming `[<fn>, value]` arrays). Normal fields still parse.
-  it('builds the FormData record with a null prototype and own-key gating', () => {
-    const record = entriesToRecord([
-      ['__proto__', 'attacker-a'],
-      ['__proto__', 'attacker-b'],
-      ['title', 'hello'],
-    ]);
+  // Phase 6 / SPEC §9.4, §10.2, §10.3: request-derived records used by schema
+  // coercion are null-prototype and reject prototype-pollution keys before assignment.
+  it('builds schema records and parsed objects with null prototypes', () => {
+    const record = entriesToRecord([['title', 'hello']]);
+    const parsed = s.object({ title: s.string() }).parse({ title: 'hello' });
 
     expect(Object.getPrototypeOf(record)).toBeNull();
     expect(record.title).toBe('hello');
-    // The repeated __proto__ entries are stored as an own-property array, never the
-    // prototype-rebinding setter, and never the attacker array contaminating other keys.
-    expect(Object.hasOwn(record, '__proto__')).toBe(true);
-    expect(record['__proto__']).toEqual(['attacker-a', 'attacker-b']);
-    expect(record.constructor).toBe(undefined);
-    expect(record['toString']).toBe(undefined);
+    expect(Object.getPrototypeOf(parsed)).toBeNull();
+    expect(parsed.title).toBe('hello');
   });
 
-  it('does not misclassify prototype-chain keys as repeated FormData fields', () => {
-    const record = entriesToRecord([
-      ['constructor', 'first'],
-      ['toString', 'only'],
-    ]);
+  it('rejects prototype-pollution keys before assigning FormData fields', () => {
+    expect(() =>
+      entriesToRecord([
+        ['__proto__', 'attacker-a'],
+        ['title', 'hello'],
+      ]),
+    ).toThrow('Forbidden object key "__proto__"');
+    expect(() => entriesToRecord([['constructor', 'attacker']])).toThrow(
+      'Forbidden object key "constructor"',
+    );
+    expect(() => entriesToRecord([['prototype', 'attacker']])).toThrow(
+      'Forbidden object key "prototype"',
+    );
+    expect(Object.prototype).not.toHaveProperty('attacker-a');
+  });
 
-    // Before the fix `record['constructor']` read the inherited function, so the first
-    // append took the array branch and produced `[<fn>, 'first']`.
-    expect(record.constructor).toBe('first');
+  it('rejects prototype-pollution keys in JSON-shaped and nested object coercion', () => {
+    const topLevel = s.object({ title: s.string() });
+    const nested = s.object({ profile: s.object({ name: s.string() }) });
+    const dangerousJson = JSON.parse('{"title":"hello","__proto__":"attacker"}') as unknown;
+
+    expect(() => topLevel.parse(dangerousJson)).toThrow('Forbidden object key "__proto__"');
+    let nestedError: unknown;
+    try {
+      nested.parse({
+        profile: JSON.parse('{"name":"Ada","constructor":"attacker"}') as unknown,
+      });
+    } catch (error) {
+      nestedError = error;
+    }
+    expect(nestedError).toMatchObject({
+      issues: [{ message: 'Forbidden object key "constructor"', path: ['profile'] }],
+    });
+  });
+
+  it('keeps safe inherited-name FormData fields as own null-prototype data', () => {
+    const record = entriesToRecord([['toString', 'only']]);
+
+    expect(Object.getPrototypeOf(record)).toBeNull();
     expect(record['toString']).toBe('only');
   });
 });

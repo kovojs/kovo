@@ -86,6 +86,28 @@ describe('route primitives', () => {
     expect(assertBadRedirect).toBeTypeOf('function');
   });
 
+  it('rejects prototype-pollution keys in route params before page execution', () => {
+    const productRoute = route('/products/:id', {
+      access: publicAccess('test fixture'),
+      page(context) {
+        return renderedHtml(context.params.id);
+      },
+      params: s.object({ id: s.string() }),
+    });
+
+    let error: unknown;
+    try {
+      parseRouteRequest(productRoute, {
+        params: JSON.parse('{"id":"p1","prototype":"attacker"}') as unknown,
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toMatchObject({
+      issues: [{ message: 'Forbidden object key "prototype"', path: [] }],
+    });
+  });
+
   it('runs route pages through guards and notFound page outcomes', async () => {
     const productRoute = route('/products/:id', {
       access: publicAccess('test fixture'),

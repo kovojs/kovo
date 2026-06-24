@@ -139,6 +139,35 @@ describe('query endpoints', () => {
     });
   });
 
+  it('rejects prototype-pollution keys in typed-read search args', async () => {
+    const productQuery = query('productDetail', {
+      access: publicAccess('test fixture'),
+      args: s.object({ id: s.string() }),
+      load(input: { id: string }) {
+        return { id: input.id };
+      },
+      reads: [domain('product')],
+    });
+
+    await expect(
+      renderQueryEndpointResponse(productQuery, {
+        request: {},
+        search: new URLSearchParams([
+          ['id', 'p1'],
+          ['__proto__', 'attacker'],
+        ]),
+      }),
+    ).resolves.toEqual({
+      body: '{"code":"VALIDATION","payload":{"issues":[{"message":"Forbidden object key \\"__proto__\\"","path":[]}]}}',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'application/json; charset=utf-8',
+        Vary: 'Cookie',
+      },
+      status: 422,
+    });
+  });
+
   it('keeps parameterized query args parseable while supporting component prop bindings', () => {
     const productQuery = query('product', {
       access: publicAccess('test fixture'),
