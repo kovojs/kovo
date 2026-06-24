@@ -62,6 +62,7 @@ export function lowerEventHandlers(
 
     if (
       capturesUnserializableReferences(eventAttributeReferences(eventAttribute), {
+        callableNamedImports: callableNamedImportReferences(eventAttribute, model.namedImports),
         elementParams: params,
         model,
       })
@@ -77,6 +78,7 @@ export function lowerEventHandlers(
     }
 
     const primaryDiagnostic = diagnostics[diagnostics.length - 1];
+    const callableNamedImports = callableNamedImportReferences(eventAttribute, model.namedImports);
     handlers.push({
       attributeName: `on:${eventName}`,
       attributeEnd,
@@ -105,16 +107,43 @@ export function lowerEventHandlers(
         model.moduleScopeBindings,
         handlerReferenceNames(eventAttribute),
       ),
-      ...clientImportDependencies(model.namedImports, handlerReferenceNames(eventAttribute)),
+      ...clientImportDependencies(model.namedImports, callableNamedImports),
       ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
       expression,
       exportName,
       isBareNamedHandler: namedHandler,
       params,
+      ...(redactsClientBody(eventAttribute, model, callableNamedImports)
+        ? { redactClientBody: true }
+        : {}),
     });
   }
 
   return handlers;
+}
+
+function redactsClientBody(
+  eventAttribute: {
+    expressionReferences?: readonly string[];
+    expressionIsBareIdentifier?: boolean;
+    expressionBareIdentifierName?: string;
+    zeroArgArrow?: ZeroArgArrowModel;
+  },
+  model: ComponentModuleModel,
+  callableNamedImports: ReadonlySet<string>,
+): boolean {
+  const references = handlerReferenceNames(eventAttribute);
+  const secretBindings = new Set(
+    model.moduleScopeBindings
+      .filter((binding) => binding.secretProvenance !== undefined)
+      .map((binding) => binding.name),
+  );
+  if ([...references].some((reference) => secretBindings.has(reference))) return true;
+
+  const namedImports = new Set(model.namedImports.map((item) => item.localName));
+  return [...references].some(
+    (reference) => namedImports.has(reference) && !callableNamedImports.has(reference),
+  );
 }
 
 export function versionHandlerLowering(
@@ -208,7 +237,7 @@ function clientConstantDependencies(
   references: ReadonlySet<string>,
 ): { clientConstants: readonly ClientConstantDependency[] } | {} {
   const clientConstants = moduleScopeBindings
-    .filter((item) => references.has(item.name))
+    .filter((item) => references.has(item.name) && item.secretProvenance === undefined)
     .map((item) => ({
       name: item.name,
       source: item.source,
@@ -287,6 +316,7 @@ function uniqueAnonymousHandlerName(
 
 interface CaptureReferenceContext {
   additionalAllowedReferences?: readonly string[];
+  callableNamedImports?: ReadonlySet<string>;
   elementParams?: readonly ElementParam[];
   model: ComponentModuleModel;
 }
@@ -306,11 +336,41 @@ export function capturesUnserializableReferences(
     'undefined',
     ...(context.additionalAllowedReferences ?? []),
     ...(context.elementParams ?? []).flatMap((param) => referenceRootsForElementParam(param)),
-    ...context.model.namedImports.map((item) => item.localName),
-    ...context.model.moduleScopeBindings.map((item) => item.name),
+    ...(context.callableNamedImports ?? context.model.namedImports.map((item) => item.localName)),
+    ...context.model.moduleScopeBindings
+      .filter((item) => item.secretProvenance === undefined)
+      .map((item) => item.name),
   ]);
 
   return references.some((name) => !allowed.has(name));
+}
+
+function callableNamedImportReferences(
+  eventAttribute: {
+    expressionBareIdentifierName?: string;
+    expressionIsBareIdentifier?: boolean;
+    zeroArgArrow?: ZeroArgArrowModel;
+  },
+  namedImports: readonly NamedImportModel[],
+): ReadonlySet<string> {
+  const imports = new Set(namedImports.map((item) => item.localName));
+  const callable = new Set<string>();
+
+  if (
+    eventAttribute.expressionIsBareIdentifier === true &&
+    eventAttribute.expressionBareIdentifierName !== undefined &&
+    imports.has(eventAttribute.expressionBareIdentifierName)
+  ) {
+    callable.add(eventAttribute.expressionBareIdentifierName);
+  }
+
+  for (const reference of eventAttribute.zeroArgArrow?.bodyReferences ?? []) {
+    if (reference.role === 'call-callee' && imports.has(reference.name)) {
+      callable.add(reference.name);
+    }
+  }
+
+  return callable;
 }
 
 function referenceRootsForElementParam(param: ElementParam): string[] {

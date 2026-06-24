@@ -246,6 +246,56 @@ export const CartBadge = component({
     expect(clientSource).toContain('track(LABEL, event.type, ctx.state.count);');
   });
 
+  it('reports KV201 instead of emitting secret-provenance module constants to the client', () => {
+    for (const secretBinding of [
+      'const KEY = process.env.API_KEY;',
+      'const KEY = secret("api-key");',
+      'const RAW = process.env.API_KEY; const KEY = RAW.slice(0, 4);',
+      'const RAW = process.env.API_KEY; const KEY = { value: RAW };',
+      'const RAW = process.env.API_KEY; const KEY = RAW ? RAW : "";',
+    ]) {
+      const result = compileComponentModule({
+        fileName: 'cart-badge.tsx',
+        source: `
+import { component } from '@kovojs/core';
+import { track } from './analytics';
+
+${secretBinding}
+
+export const CartBadge = component({
+  render: () => <button onClick={() => track(KEY)}>Track</button>,
+});
+`,
+      });
+      const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+      expect(clientSource).not.toContain('process.env');
+      expect(clientSource).not.toContain('api-key');
+      expect(clientSource).not.toContain('const KEY =');
+      expect(clientSource).not.toContain('const RAW =');
+    }
+  });
+
+  it('reports KV201 for imported data captures while preserving imported handler callees', () => {
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { API_KEY, track } from './analytics';
+
+export const CartBadge = component({
+  render: () => <button onClick={() => track(API_KEY)}>Track</button>,
+});
+`,
+    });
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['KV210', 'KV201']);
+    expect(clientSource).toContain('import { track } from "./analytics";');
+    expect(clientSource).not.toContain('API_KEY');
+  });
+
   it('passes a model-backed capture context through handler lowering', () => {
     const fileName = 'components/cart/cart-actions.tsx';
     const source = `

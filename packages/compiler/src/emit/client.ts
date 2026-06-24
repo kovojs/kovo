@@ -141,6 +141,10 @@ function emitHandlerExport(handler: HandlerLowering): string {
 }
 
 function emitHandlerBody(handler: HandlerLowering): string {
+  if (handler.redactClientBody === true) {
+    return '// blocked handler lowering; see compiler diagnostics';
+  }
+
   // SPEC §5.2: reuse the typed lowering fact instead of re-deciding bare-named-ness from the raw
   // `expression` snippet at emit time.
   if (handler.isBareNamedHandler) {
