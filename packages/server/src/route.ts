@@ -1,4 +1,5 @@
 import type { JsonValue, Redirect } from '@kovojs/core';
+import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
 import { reportServerError } from './diagnostics.js';
 import {
@@ -662,6 +663,8 @@ function stampLayoutLiveTarget(
 
 function stampableRouteHtml(value: unknown): RenderedHtml | undefined {
   if (isRenderedHtml(value)) return value;
+  const trusted = kovoTrustedHtmlContent(value);
+  if (trusted !== '') return renderedHtml(trusted);
   if (typeof value === 'string') return renderedHtml(unwrapCoercedRenderedHtml(value));
   return undefined;
 }

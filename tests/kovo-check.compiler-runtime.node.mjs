@@ -1,9 +1,5 @@
-// v1-cleanup item 1: kept whole intentionally. This is the framework's single
-// node:test acceptance surface (`check:kovo`): it runs against built `../dist/**`
-// artifacts and drives cross-package behavior end-to-end, so its tests share
-// build/setup context and a coherent pass/fail story. Splitting would fragment a
-// deliberately holistic acceptance gate. Reusable mechanics already live in
-// @kovojs/test (source-fixtures, harness); this file is the executable surface.
+// Compiler/runtime kovo-check suite. `scripts/kovo-check.mjs` can run this file
+// alone in CI or alongside the other suite files for the local aggregate gate.
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -422,7 +418,7 @@ void test('D1 commerce enhanced fragments carry stylesheet hints', async () => {
       earlyHints: {
         Link: '</assets/styles.css>; rel=preload; as=style',
       },
-      html: '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="preload" as="style" href="/assets/styles.css" data-kovo-deferred-style><noscript><link rel="stylesheet" href="/assets/styles.css"></noscript><link rel="stylesheet" href="/assets/recommendations.css">',
+      html: '<style data-kovo-critical-href="/assets/styles.css" data-kovo-csp-hash="sha256-aglF4eql6svDxPnTw19+/jdeBTsfl850MsmdffQ8F/s=">cart-badge { color: teal; }<\\/style> cart-badge { display: block; }</style><link rel="stylesheet" href="/assets/styles.css"><link rel="stylesheet" href="/assets/recommendations.css">',
     },
     selectedStylesheets: [
       {

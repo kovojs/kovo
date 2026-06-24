@@ -757,9 +757,7 @@ function prevNextCard(page: NavLink | undefined, direction: 'prev' | 'next') {
     >
       <span style={chromeStyles.paginationLabel}>{direction === 'next' ? 'Next' : 'Previous'}</span>
       <span style={chromeStyles.paginationTitle}>
-        {direction === 'next'
-          ? `${page.title} →`
-          : `← ${page.title}`}
+        {direction === 'next' ? `${page.title} →` : `← ${page.title}`}
       </span>
     </a>
   );
@@ -809,8 +807,7 @@ export const ApiSidebar = component({
           {subpath.categories.map((category) => (
             <details style={chromeStyles.apiNavGroup} open>
               <summary style={chromeStyles.apiNavGroupSummary}>
-                <span style={chromeStyles.apiSummaryArrow}>&#9656;</span>{' '}
-                {category.title}{' '}
+                <span style={chromeStyles.apiSummaryArrow}>&#9656;</span> {category.title}{' '}
                 <span style={chromeStyles.apiNavCount}>{String(category.symbols.length)}</span>
               </summary>
               <ul style={chromeStyles.apiNavList}>

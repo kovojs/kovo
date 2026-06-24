@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import type { ComponentRenderResult } from '@kovojs/core';
 import { Badge } from '@kovojs/ui/badge';
 import * as style from '@kovojs/style';
 
@@ -57,7 +58,7 @@ function priceLabel(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-export function renderOrderHistoryItems(result: OrderHistoryResult): string {
+export function renderOrderHistoryItems(result: OrderHistoryResult): ComponentRenderResult {
   return (
     <>
       {result.items.map((item: OrderHistoryItem) => (
@@ -76,6 +77,6 @@ export function renderOrderHistoryItems(result: OrderHistoryResult): string {
   );
 }
 
-export function renderOrderHistory(result: OrderHistoryResult): string {
+export function renderOrderHistory(result: OrderHistoryResult): ComponentRenderResult {
   return <ol style={orderHistoryStyles.stack}>{renderOrderHistoryItems(result)}</ol>;
 }

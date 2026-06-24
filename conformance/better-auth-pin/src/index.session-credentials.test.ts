@@ -1,6 +1,7 @@
 import { runMutation } from '@kovojs/server/internal/execution';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 import { route } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
 import { createKovoTestHarness } from '@kovojs/test/harness';
 import { describe, expect, it } from 'vitest';
 
@@ -190,11 +191,11 @@ describe('Better Auth pinned conformance', () => {
     // the request lifecycle, and anonymous vs unauthorized failures are distinct.
     const accountRoute = route('/account', {
       guard: authed<ReferenceRequest>(),
-      page: (_context, request) => `account:${request.session.user.email}`,
+      page: (_context, request) => trustedHtml(`account:${request.session.user.email}`),
     });
     const adminRoute = route('/admin', {
       guard: role<ReferenceRequest>('admin'),
-      page: (_context, request) => `admin:${request.session?.user.email ?? 'missing'}`,
+      page: (_context, request) => trustedHtml(`admin:${request.session?.user.email ?? 'missing'}`),
     });
 
     await auth.api.signUpEmail({

@@ -915,7 +915,12 @@ import {
   s,
 } from '@kovojs/server';
 
-const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+const trustedHtml = (value) => ({
+  __kovoTrustedHtml: true,
+  value,
+  [Symbol.toPrimitive]: () => String(value),
+  toString: () => String(value),
+});
 
 const cart = domain('cart');
 const db = { count: 0 };
@@ -966,7 +971,12 @@ import {
   s,
 } from '@kovojs/server';
 
-const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+const trustedHtml = (value) => ({
+  __kovoTrustedHtml: true,
+  value,
+  [Symbol.toPrimitive]: () => String(value),
+  toString: () => String(value),
+});
 
 const cart = domain('cart');
 const db = { count: 0 };
@@ -1026,7 +1036,12 @@ function staticAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
-const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+const trustedHtml = (value) => ({
+  __kovoTrustedHtml: true,
+  value,
+  [Symbol.toPrimitive]: () => String(value),
+  toString: () => String(value),
+});
 
 export default createApp({
   routes: [
@@ -1107,7 +1122,12 @@ import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 
-const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+const trustedHtml = (value) => ({
+  __kovoTrustedHtml: true,
+  value,
+  [Symbol.toPrimitive]: () => String(value),
+  toString: () => String(value),
+});
 
 const home = domain('home');
 const homeQuery = query('home', {
@@ -1153,7 +1173,12 @@ function databaseEnvAppModuleSource(): string {
   return `
 import { createApp, route } from '@kovojs/server';
 
-const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+const trustedHtml = (value) => ({
+  __kovoTrustedHtml: true,
+  value,
+  [Symbol.toPrimitive]: () => String(value),
+  toString: () => String(value),
+});
 
 export default createApp({
   routes: [
@@ -1505,7 +1530,12 @@ function typescriptAppModuleSource(): string {
   return `
 import { createApp, domain, query, route } from '@kovojs/server';
 
-const trustedHtml = (value) => ({ __kovoTrustedHtml: true, value });
+const trustedHtml = (value) => ({
+  __kovoTrustedHtml: true,
+  value,
+  [Symbol.toPrimitive]: () => String(value),
+  toString: () => String(value),
+});
 
 const db: { count: number } = { count: 4 };
 const typed = domain('typed');

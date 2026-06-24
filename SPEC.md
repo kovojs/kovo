@@ -1018,8 +1018,9 @@ through the same declared query and refresh via full server fragments.
 Framework-managed DB handles — `req.db`, query loaders, mutation domains, endpoint/webhook request
 handles, and blessed-adapter wrappers — treat executable SQL text as a typed surface, not an
 arbitrary string channel. The ordinary accepted forms are: Drizzle query builders and native SQL
-objects that keep text separate from bound parameters, Kovo `sql\`\``/`staticSql\`\``values, and
-the single audited`trustedSql(...)` escape hatch. KV406/KV410 remain the freshness/read-write proof
+objects that keep text separate from bound parameters, Kovo tagged-template SQL values (`sql` and
+`staticSql`), and the single audited `trustedSql(...)` escape hatch. KV406/KV410 remain the
+freshness/read-write proof
 diagnostics; **KV422** is distinct and answers how executable SQL text was constructed before it
 reached a managed handle.
 

@@ -166,14 +166,16 @@ describe('@kovojs/test command fixtures', () => {
       '      - uses: actions/checkout@v4',
       '      - run: vp install',
       '      - run: vp run build',
+      '      - run: vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}',
     ].join('\n');
 
     expect(workflowStepCommands(workflow)).toEqual([
       { uses: 'actions/checkout@v4' },
       { run: 'vp install' },
       { run: 'vp run build' },
+      { run: 'vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}' },
     ]);
-    expect(workflowVpRunTaskNames(workflow)).toEqual(['build']);
+    expect(workflowVpRunTaskNames(workflow)).toEqual(['build', 'kovo-check']);
   });
 
   it('loads Vite+ task configs through the fixture seam', async () => {
@@ -420,7 +422,7 @@ describe('@kovojs/test command fixtures', () => {
         'steps:',
         '  - run: vp run build',
         '  - run: vp run p10-perf',
-        '  - run: vp run kovo-check',
+        '  - run: vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}',
       ].join('\n'),
       packageJson: {
         scripts: {
@@ -514,7 +516,7 @@ describe('@kovojs/test command fixtures', () => {
           'steps:',
           '  - run: vp run build',
           '  - run: vp run p10-perf',
-          '  - run: vp run kovo-check',
+          '  - run: vp exec node scripts/kovo-check.mjs --suite ${{ matrix.suite }}',
         ].join('\n'),
       );
       await writeFile(

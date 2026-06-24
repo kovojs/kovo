@@ -182,7 +182,7 @@ export function workflowStepCommands(source: string): WorkflowStepCommand[] {
 
 export function workflowVpRunTaskNames(source: string): string[] {
   return workflowStepCommands(source)
-    .map((step) => vpRunTaskName(step.run ?? ''))
+    .map((step) => workflowTaskName(step.run ?? ''))
     .filter((taskName): taskName is string => Boolean(taskName));
 }
 
@@ -203,6 +203,19 @@ export function pnpmRunScriptNames(command: unknown): string[] {
 export function vpRunTaskName(command: string): string | undefined {
   const match = /^vp run ([\w-]+)$/.exec(command);
   return match?.[1];
+}
+
+function workflowTaskName(command: string): string | undefined {
+  const vpTaskName = vpRunTaskName(command);
+  if (vpTaskName) {
+    return vpTaskName;
+  }
+
+  if (/^vp exec node scripts\/kovo-check\.mjs(?:\s|$)/.test(command)) {
+    return 'kovo-check';
+  }
+
+  return undefined;
 }
 
 export function requiredVpRunTaskName(

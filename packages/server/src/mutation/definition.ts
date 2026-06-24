@@ -1,6 +1,5 @@
 import type { InvalidationSets, OptimisticDerivationSets, QueryRegistry } from '@kovojs/core';
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
-import { invalidate } from '../change-record.js';
 import type { CookieOptions } from '../cookies.js';
 import type { CsrfValidationOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';

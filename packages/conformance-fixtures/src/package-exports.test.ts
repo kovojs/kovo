@@ -1392,6 +1392,11 @@ describe('@kovojs/test package subpath exports', () => {
       ),
     ).toEqual([{ uses: 'actions/checkout@v4' }, { run: 'vp check' }]);
     expect(workflowVpRunTaskNames('steps:\n  - run: vp run kovo-check')).toEqual(['kovo-check']);
+    expect(
+      workflowVpRunTaskNames(
+        'steps:\n  - run: vp exec node scripts/kovo-check.mjs --suite graph-cli',
+      ),
+    ).toEqual(['kovo-check']);
     expect(() => assertOrderedItems(['build', 'kovo-check'], 'build', 'kovo-check')).not.toThrow();
     expect(browserSuiteAcceptanceGateFact).toBeTypeOf('function');
     expect(browserSuiteAcceptanceModulePath).toBeTypeOf('function');
