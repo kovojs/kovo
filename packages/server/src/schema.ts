@@ -154,7 +154,9 @@ export const s = {
     const schema: AsyncSchema<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {
       parse(input: unknown): { [Key in keyof Shape]: InferSchema<Shape[Key]> } {
         const record = formLikeToRecord(input);
-        const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
+        const output = Object.create(null) as Partial<{
+          [Key in keyof Shape]: InferSchema<Shape[Key]>;
+        }>;
 
         for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
           try {
@@ -168,7 +170,9 @@ export const s = {
       },
       async parseAsync(input: unknown): Promise<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> {
         const record = formLikeToRecord(input);
-        const output: Partial<{ [Key in keyof Shape]: InferSchema<Shape[Key]> }> = {};
+        const output = Object.create(null) as Partial<{
+          [Key in keyof Shape]: InferSchema<Shape[Key]>;
+        }>;
 
         for (const [key, schema] of Object.entries(shape) as [keyof Shape, Shape[keyof Shape]][]) {
           try {
@@ -403,7 +407,10 @@ export function formLikeToRecord(input: unknown): Record<string, unknown> {
     return entriesToRecord(input.entries());
   }
 
-  if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
+  if (typeof input === 'object' && input !== null) {
+    return entriesToRecord(Object.entries(input as Record<string, unknown>));
+  }
+
   throw validationError('Expected object input');
 }
 
@@ -455,10 +462,8 @@ export async function parseSchemaAsync<T>(schema: Schema<T>, input: unknown): Pr
 export function entriesToRecord(
   entries: Iterable<readonly [string, unknown]>,
 ): Record<string, unknown> {
-  // `Object.create(null)` (no prototype): a `__proto__` FormData entry must be a
-  // plain data key, not the accessor that rebinds the prototype and silently drops
-  // the value; and keys like `constructor`/`toString` must not be read off the
-  // prototype chain (Part 4 SCHEMA-1/SCHEMA-2).
+  // SPEC §9.4/§10.2/§10.3: every request-derived record used by schema coercion
+  // is null-prototype and rejects prototype-pollution keys before assignment.
   const record = Object.create(null) as Record<string, unknown>;
 
   for (const [key, value] of entries) {
@@ -469,6 +474,10 @@ export function entriesToRecord(
 }
 
 function appendRecordValue(record: Record<string, unknown>, key: string, value: unknown): void {
+  if (isDangerousObjectKey(key)) {
+    throw validationError(`Forbidden object key "${key}"`);
+  }
+
   // Gate first-vs-repeat on own-keys only. On a null-prototype record this is also
   // correct for inherited names, but `Object.hasOwn` keeps the intent explicit and
   // robust if the record ever carries a prototype (SCHEMA-1/SCHEMA-2).
@@ -483,4 +492,8 @@ function appendRecordValue(record: Record<string, unknown>, key: string, value: 
   } else {
     record[key] = [existing, value];
   }
+}
+
+function isDangerousObjectKey(key: string): boolean {
+  return key === '__proto__' || key === 'constructor' || key === 'prototype';
 }

@@ -370,13 +370,24 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   definition: QueryDefinition<Key, Value, Input, Request>,
   endpointRequest: QueryEndpointRequest<Request>,
 ): Promise<QueryEndpointResponse> {
-  const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
   let result: QueryEndpointResult<Value, Input>;
   let lifecycleRequest: Request = endpointRequest.request;
   try {
+    const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
     lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
     result = await runQuery(definition, rawInput, lifecycleRequest);
   } catch (error) {
+    if (isSchemaValidationError(error)) {
+      return {
+        body: JSON.stringify({
+          code: 'VALIDATION',
+          payload: validationFailurePayload(error),
+        }),
+        headers: queryJsonHeaders(endpointRequest),
+        status: 422,
+      };
+    }
+
     reportServerError(endpointRequest.onError, error, {
       operation: 'query-endpoint',
       queryKey: definition.key,
