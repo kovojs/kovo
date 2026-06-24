@@ -1,5 +1,6 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
+import type { EgressOptions } from './egress.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { Schema } from './schema.js';
@@ -169,6 +170,18 @@ export interface CreateAppOptions<
   env?: Schema<unknown>;
   /** Record validated against `env`. Defaults to `process.env`. Test/adapter seam. */
   envSource?: Record<string, unknown>;
+  /**
+   * Outbound-egress private-network deny floor (SPEC §6.6; `plans/secure-framework.md`
+   * Phase 5). OPT-IN — passing this object installs a fail-closed runtime *defense-in-depth*
+   * floor (NOT a by-construction proof) that DENIES outbound connections to private /
+   * loopback / link-local / cloud-metadata destinations while leaving all public egress
+   * unrestricted. Reach a specific internal destination by listing its `host:port` in
+   * `allowInternal`. Cloud instance-metadata is reachable only from a `kovo` credential
+   * factory, never via `allowInternal`. The floor has a high false-positive cost (every
+   * internal service hard-fails until allowlisted), so it is not default-on. See
+   * {@link EgressOptions}.
+   */
+  egress?: EgressOptions;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];

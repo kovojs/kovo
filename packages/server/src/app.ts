@@ -12,6 +12,7 @@ import { query } from './query.js';
 import { layout, route } from './route.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
 import { validateAppEnv } from './env.js';
+import { installEgressFloor } from './egress-bootstrap.js';
 export type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
@@ -90,6 +91,16 @@ export function createApp<
       ...(options.envSource === undefined ? {} : { envSource: options.envSource }),
     },
   );
+
+  // Outbound-egress private-network deny floor (SPEC §6.6; plans/secure-framework.md Phase 5).
+  // OPT-IN runtime defense-in-depth (NOT a by-construction proof, labeled as a floor): the
+  // synchronous net.connect layer is installed here at the boot chokepoint so it is active for
+  // raw node:http immediately; the undici dispatcher layer installs asynchronously (it imports
+  // `undici`) — kicked off here and not awaited so createApp stays synchronous. A bare config
+  // error (e.g. a metadata IP in allowInternal) throws synchronously and refuses boot.
+  if (options.egress !== undefined) {
+    void installEgressFloor(options.egress);
+  }
 
   const authoringContext = appAuthoringContext<AppRequest>();
   const routes = resolveAppAuthoringDeclarations(options.routes, authoringContext);

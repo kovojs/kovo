@@ -14,6 +14,9 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
+import * as egressApi from '../egress.js';
+import * as egressBootstrapApi from '../egress-bootstrap.js';
+import * as egressCredentialsApi from '../egress-credentials.js';
 import * as envApi from '../env.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
@@ -375,6 +378,18 @@ describe('server app-shell public API barrels', () => {
       committedSecretWaiver: envApi.committedSecretWaiver,
       CreateAppBootError: envApi.CreateAppBootError,
       isCreateAppBootError: envApi.isCreateAppBootError,
+      // SPEC.md §6.6 / plans/secure-framework.md Phase 5: the outbound-egress private-network
+      // deny floor (runtime defense-in-depth). The typed blocked/config errors, the
+      // worker-bootstrap install + self-probe helpers, the cloud credential factories, and the
+      // `kovo` capability namespace are public at the root barrel.
+      EgressBlockedError: egressApi.EgressBlockedError,
+      EgressConfigError: egressApi.EgressConfigError,
+      installEgressFloor: egressBootstrapApi.installEgressFloor,
+      selfProbe: egressBootstrapApi.selfProbe,
+      awsCredential: egressCredentialsApi.awsCredential,
+      gcpCredential: egressCredentialsApi.gcpCredential,
+      azureCredential: egressCredentialsApi.azureCredential,
+      kovo: publicApi.kovo,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
