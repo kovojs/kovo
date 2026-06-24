@@ -583,18 +583,20 @@ packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git 
       sound sink-validation) + **safe-default mitigations** for the inherent URL-as-credential leakage (not a
       proof). Closes a gap the legible wire amplifies (links leak via the readable store, `Referer`, logs, shared
       caches); without it apps hand-roll HMAC URLs and hit the canonical mistakes.
-  - Evidence (2026-06-24 primitive-only slice):
-    `pnpm exec vitest --run packages/server/src/capability-url.test.ts` covers HMAC signing/verification,
-    expiry, method/key/scope tamper failures, prefix scope, and backslash/`//`/dot-segment key rejection in
-    `packages/server/src/capability-url.ts`. Remaining gap: this is not wired to `ctx.signUrl`, a
-    framework-owned download endpoint/storage-read sink, one-time replay, query-cache exclusion policy, or
-    `kovo explain --capabilities`.
-  - [ ] HMAC over **canonicalized** bytes (`method+key+expiry+scope`), framework secret (anonymous-CSRF
-        machinery), **constant-time verify** (`verifier.ts`) at a framework-owned download endpoint BEFORE any
-        storage read; unsigned/tampered/expired → fail closed, object never read.
-  - [ ] Canonicalize-before-sign (reuse the path normalization) so backslash/`//`/dot-segment cannot reopen the
-        capability. Scope = per-key+method by default (optional prefix); **short expiry default**; `oneTime` via
-        the replay store (reuse).
+  - [x] HMAC over **canonicalized** bytes (`method+key+expiry+scope`), configured framework secret,
+        **constant-time verify** at a framework-owned download endpoint BEFORE any storage read;
+        unsigned/tampered/expired → fail closed, object never read.
+    - Evidence: `packages/server/src/capability-url.ts` installs `request.signUrl` via
+      `createApp({ capabilityUrls })` and reserves `/_cap/storage`; `vp exec vitest --run
+      packages/server/src/capability-url.test.ts packages/server/src/shell.test.ts
+      packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserved endpoint dispatch,
+      no-store download responses, and fail-closed missing/tampered/expired/wrong-method capabilities with no
+      storage read.
+  - [x] Canonicalize-before-sign (reuse the path normalization) so backslash/`//`/dot-segment cannot reopen the
+        capability. Scope = per-key+method by default (optional prefix); **short expiry default**.
+    - Evidence: `packages/server/src/capability-url.test.ts` verifies canonical HMAC payload coverage, 300-second
+      default expiry, exact and prefix scopes, and rejection of backslash/`//`/dot-segment key reopenings.
+  - [ ] `oneTime` via the replay store (reuse).
   - [ ] Do NOT embed signed URLs in the legible query store / cacheable contexts by default; list mints in
         `kovo explain --capabilities`. Revocation tradeoff documented (stateless → can't revoke pre-expiry
         unless `oneTime`; default short expiry). No new KV code — it's a provided safe API, not a static gate.

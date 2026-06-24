@@ -113,6 +113,9 @@ export function createApp<
   });
 
   return {
+    ...(options.capabilityUrls === undefined || options.capabilityUrls === false
+      ? {}
+      : { capabilityUrls: options.capabilityUrls }),
     clientModules,
     diagnostics: [
       ...routeTableDiagnostics(routes),

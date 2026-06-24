@@ -1,4 +1,5 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
+import { renderCapabilityStorageResponse } from './capability-url.js';
 import { validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
 import { runEndpoint, runEndpointAuth } from './endpoint.js';
 import {
@@ -40,6 +41,10 @@ export async function dispatchMatchedAppRequest({
     );
   }
 
+  if (match.kind === 'capability') {
+    return renderCapabilityStorageResponse(request, app.capabilityUrls);
+  }
+
   if (match.kind === 'query') {
     // SPEC §9.4: /_q/ is a credentialed GET endpoint. Reject non-GET/HEAD methods
     // with 405 so state-unsafe verbs (POST, DELETE …) cannot use the query channel
@@ -56,6 +61,7 @@ export async function dispatchMatchedAppRequest({
       currentUrl: appRequestUrl(url),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
       ...(buildToken !== '' ? { buildToken } : {}),
+      ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
       egressFetch: app.egress.fetch,
       request,
       search: url.searchParams,
@@ -80,6 +86,7 @@ export async function dispatchMatchedAppRequest({
   if (match.kind === 'endpoint') {
     const endpointRequest = await resolveLifecycleRequest(request, {
       ...(app.db === undefined ? {} : { db: app.db }),
+      ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
       egressFetch: app.egress.fetch,
     });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);

@@ -17,6 +17,7 @@ describe('server app shell dispatch table', () => {
     expect(shellDispatchTable.map((entry) => entry.phase)).toEqual([
       'mutation',
       'query',
+      'capability',
       'client-module',
       'endpoint-exact',
       'endpoint-prefix',

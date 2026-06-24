@@ -44,6 +44,7 @@ export async function handleAppMutationRequest(
 
   const mutationRequest = await resolveLifecycleRequest(request, {
     ...(app.db === undefined ? {} : { db: app.db }),
+    ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
     egressFetch: app.egress.fetch,
     ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
   });
@@ -104,6 +105,7 @@ export async function handleAppMutationRequest(
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     ...(buildToken !== '' ? { buildToken } : {}),
     ...(app.csrf === undefined ? {} : { csrf: app.csrf }),
+    ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
     currentUrl: appRequestUrl(sourceUrl),
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),

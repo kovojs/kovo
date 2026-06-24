@@ -1,4 +1,6 @@
 import { createHmac } from 'node:crypto';
+import type { StorageCapability, StorageStreamResult } from '@kovojs/core';
+import { respond, routeOutcomeResponse, routeResponseToWebResponse } from './response.js';
 
 /**
  * A capability URL scope. `exact` is the default and binds the URL to its
@@ -33,6 +35,31 @@ export interface SignCapabilityUrlOptions {
   /** Relative expiry in seconds. Defaults to a short 300-second lifetime. */
   expiresIn?: number;
 }
+
+/** App-shell configuration for framework-owned capability URL minting and verification. */
+export interface AppCapabilityUrlOptions {
+  /** URL path reserved for framework-owned capability verification. Defaults to `/_cap/storage`. */
+  path?: string;
+  /** HMAC signing secret for capability URLs. */
+  secret: CapabilityUrlSecret;
+  /** Object store read only after framework verification succeeds. */
+  storage?: StorageCapability;
+}
+
+/** Server-owned minting input exposed on lifecycle requests as `request.signUrl`. */
+export interface AppSignCapabilityUrlOptions {
+  /** Concrete storage/object key authorized by the capability. */
+  key: string;
+  /** HTTP method authorized by the capability. Defaults to `GET`. */
+  method?: string;
+  /** Scope classification. Defaults to exact `key + method`. */
+  scope?: CapabilityUrlScope;
+  /** Relative expiry in seconds. Defaults to a short 300-second lifetime. */
+  expiresIn?: number;
+}
+
+/** Server-owned capability URL minting function installed on lifecycle requests. */
+export type AppCapabilityUrlSigner = (options: AppSignCapabilityUrlOptions) => string;
 
 /** Input for verifying an HMAC-signed capability URL before dereferencing a key. */
 export interface VerifyCapabilityUrlOptions {
@@ -71,6 +98,8 @@ export type CapabilityUrlVerificationResult =
         | 'scope-mismatch';
     };
 
+const CAPABILITY_STORAGE_PATH = '/_cap/storage';
+
 const DEFAULT_EXPIRES_IN_SECONDS = 5 * 60;
 const textEncoder = new TextEncoder();
 
@@ -95,6 +124,26 @@ export function signCapabilityUrl(options: SignCapabilityUrlOptions): string {
   url.searchParams.set('kovo-cap-scope', scope);
   url.searchParams.set('kovo-cap-sig', signature);
   return url.toString();
+}
+
+/**
+ * Build the server-owned `request.signUrl()` helper for an app request. The base
+ * path is framework-reserved so signed credentials do not get minted into
+ * ordinary query/cacheable URLs by default (SPEC.md Phase 5 Capability-URLs).
+ */
+export function createAppCapabilityUrlSigner(
+  requestUrl: string,
+  options: AppCapabilityUrlOptions,
+): AppCapabilityUrlSigner {
+  return (input) =>
+    signCapabilityUrl({
+      baseUrl: new URL(options.path ?? CAPABILITY_STORAGE_PATH, requestUrl),
+      key: input.key,
+      method: input.method ?? 'GET',
+      ...(input.expiresIn === undefined ? {} : { expiresIn: input.expiresIn }),
+      ...(input.scope === undefined ? {} : { scope: input.scope }),
+      secret: options.secret,
+    });
 }
 
 /**
@@ -168,6 +217,45 @@ export function verifyCapabilityUrl(
   };
 }
 
+/** Render the framework-owned capability download endpoint. */
+export async function renderCapabilityStorageResponse(
+  request: Request,
+  options: AppCapabilityUrlOptions | undefined,
+): Promise<Response> {
+  if (options?.storage === undefined) return capabilityFailureResponse(request, 404);
+
+  const allowedMethods = ['GET', 'HEAD'];
+  const method = request.method.toUpperCase();
+  if (!allowedMethods.includes(method)) {
+    return new Response(request.method === 'HEAD' ? null : 'Method Not Allowed', {
+      headers: {
+        Allow: allowedMethods.join(', '),
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+      status: 405,
+    });
+  }
+
+  const url = new URL(request.url);
+  const key = url.searchParams.get('kovo-cap-key');
+  const scope = capabilityScopeFromSignedValue(url.searchParams.get('kovo-cap-scope'));
+  if (key === null || scope === undefined) return capabilityFailureResponse(request, 403);
+
+  const verification = verifyCapabilityUrl(url, {
+    key,
+    method,
+    scope,
+    secret: options.secret,
+  });
+  if (!verification.ok) return capabilityFailureResponse(request, 403);
+
+  const object = await options.storage.stream(verification.key);
+  if (object === undefined) return capabilityFailureResponse(request, 404);
+
+  return capabilityStorageObjectResponse(request, object);
+}
+
 function canonicalCapabilityPayload(input: {
   expiresAt: number;
   key: string;
@@ -211,6 +299,47 @@ function canonicalCapabilityScope(scope: CapabilityUrlScope | undefined, key: st
     return `prefix:${prefix}`;
   }
   return `key:${key}`;
+}
+
+function capabilityScopeFromSignedValue(value: string | null): CapabilityUrlScope | undefined {
+  if (value === null) return undefined;
+  if (value.startsWith('key:')) return { kind: 'exact' };
+  if (value.startsWith('prefix:')) return { kind: 'prefix', prefix: value.slice('prefix:'.length) };
+  return undefined;
+}
+
+function capabilityStorageObjectResponse(request: Request, object: StorageStreamResult): Response {
+  const response = routeOutcomeResponse(
+    respond.stream(object.body, {
+      contentType: object.contentType ?? 'application/octet-stream',
+      ...capabilityStorageFilenameOption(object.key),
+      headers: {
+        'Cache-Control': 'private, no-store',
+        ...(object.etag === undefined ? {} : { ETag: object.etag }),
+      },
+    }),
+    request,
+  );
+
+  return routeResponseToWebResponse(response, request);
+}
+
+function capabilityStorageFilenameOption(key: string): { filename: string } | {} {
+  const filename = key.split('/').at(-1);
+  return filename === undefined || filename === '' ? {} : { filename };
+}
+
+function capabilityFailureResponse(request: Request, status: 403 | 404): Response {
+  return new Response(
+    request.method === 'HEAD' ? null : status === 403 ? 'Forbidden' : 'Not Found',
+    {
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+      status,
+    },
+  );
 }
 
 function expirySeconds(now: Date | number | undefined, expiresIn: number): number {

@@ -21,6 +21,7 @@ export interface EndpointLike {
  * phase a request resolves to. Exported only for in-repo consumers, not app authors.
  */
 export type ShellDispatchPhase =
+  | 'capability'
   | 'mutation'
   | 'query'
   | 'client-module'
@@ -37,8 +38,8 @@ export type ShellDispatchPhase =
 export type ShellDispatchEntry =
   | {
       kind: 'reserved';
-      phase: 'client-module' | 'mutation' | 'query';
-      prefix: '/_m/' | '/_q/' | '/c/';
+      phase: 'capability' | 'client-module' | 'mutation' | 'query';
+      prefix: '/_cap/' | '/_m/' | '/_q/' | '/c/';
     }
   | {
       kind: 'endpoint';
@@ -59,6 +60,7 @@ type MatchingShellDispatchEntry = Exclude<ShellDispatchEntry, { kind: 'not-found
 const shellDispatchMatchingTable = [
   { kind: 'reserved', phase: 'mutation', prefix: '/_m/' },
   { kind: 'reserved', phase: 'query', prefix: '/_q/' },
+  { kind: 'reserved', phase: 'capability', prefix: '/_cap/' },
   { kind: 'reserved', phase: 'client-module', prefix: '/c/' },
   { kind: 'endpoint', mount: 'exact', phase: 'endpoint-exact' },
   { kind: 'endpoint', mount: 'prefix', phase: 'endpoint-prefix' },
@@ -107,7 +109,7 @@ export type ShellDispatchMatch<
   | {
       entry: Extract<ShellDispatchEntry, { kind: 'reserved' }>;
       key: string;
-      kind: 'client-module' | 'mutation' | 'query';
+      kind: 'capability' | 'client-module' | 'mutation' | 'query';
       normalization: PathnameNormalization;
       pathname: string;
     }

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import type { StorageCapability, StorageStreamResult } from '@kovojs/core';
+import { publicAccess } from './access.js';
+import { createApp, createRequestHandler } from './app.js';
 import { signCapabilityUrl, verifyCapabilityUrl } from './capability-url.js';
+import { renderedHtml } from './html.js';
+import { route } from './route.js';
 
 const secret = 'capability-url-test-secret';
 const now = Date.UTC(2026, 5, 24, 12, 0, 0);
@@ -189,3 +194,114 @@ describe('capability URL primitive', () => {
     ).toEqual({ ok: false, reason: 'malformed' });
   });
 });
+
+describe('capability URL app wiring', () => {
+  it('installs request.signUrl with the framework-owned storage verification path', async () => {
+    const storage = capabilityStorage({
+      'exports/report.csv': storageObject('exports/report.csv', 'id,total\n1,42\n', 'text/csv'),
+    });
+    const app = createApp({
+      capabilityUrls: { secret, storage },
+      routes: [
+        route('/exports', {
+          access: publicAccess('test fixture'),
+          page(_context, request) {
+            const href = request.signUrl?.({
+              expiresIn: 60,
+              key: 'exports/report.csv',
+            });
+            return renderedHtml(String(href));
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    const page = await handler(new Request('https://example.test/exports'));
+    const href = (await page.text()).match(/https:\/\/example\.test\/_cap\/storage[^"<]*/u)?.[0];
+    expect(href).toBeDefined();
+    const signed = new URL(href);
+    expect(signed.pathname).toBe('/_cap/storage');
+    expect(signed.searchParams.get('kovo-cap-key')).toBe('exports/report.csv');
+
+    const download = await handler(new Request(signed));
+    expect(download.status).toBe(200);
+    expect(download.headers.get('cache-control')).toBe('private, no-store');
+    expect(download.headers.get('content-disposition')).toBe('attachment; filename="report.csv"');
+    await expect(download.text()).resolves.toBe('id,total\n1,42\n');
+    expect(storage.streamCalls).toEqual(['exports/report.csv']);
+  });
+
+  it('fails closed without reading storage for missing, tampered, expired, or wrong-method caps', async () => {
+    const storage = capabilityStorage({
+      'exports/report.csv': storageObject('exports/report.csv', 'ok', 'text/csv'),
+    });
+    const handler = createRequestHandler(createApp({ capabilityUrls: { secret, storage } }));
+
+    await expect(handler(new Request('https://example.test/_cap/storage'))).resolves.toMatchObject({
+      status: 403,
+    });
+
+    const signed = signCapabilityUrl({
+      baseUrl: 'https://example.test/_cap/storage',
+      expiresIn: 60,
+      key: 'exports/report.csv',
+      method: 'GET',
+      now,
+      secret,
+    });
+    const tampered = new URL(signed);
+    tampered.searchParams.set('kovo-cap-key', 'exports/other.csv');
+    await expect(handler(new Request(tampered))).resolves.toMatchObject({ status: 403 });
+
+    const expired = signCapabilityUrl({
+      baseUrl: 'https://example.test/_cap/storage',
+      expiresIn: 1,
+      key: 'exports/report.csv',
+      method: 'GET',
+      now: 0,
+      secret,
+    });
+    await expect(handler(new Request(expired))).resolves.toMatchObject({ status: 403 });
+
+    await expect(handler(new Request(signed, { method: 'HEAD' }))).resolves.toMatchObject({
+      status: 403,
+    });
+    expect(storage.streamCalls).toEqual([]);
+  });
+});
+
+function capabilityStorage(
+  objects: Record<string, StorageStreamResult>,
+): StorageCapability & { streamCalls: string[] } {
+  const streamCalls: string[] = [];
+  return {
+    streamCalls,
+    async get() {
+      throw new Error('capability storage test does not use get()');
+    },
+    async put() {
+      throw new Error('capability storage test does not use put()');
+    },
+    async stat() {
+      throw new Error('capability storage test does not use stat()');
+    },
+    async stream(key) {
+      streamCalls.push(key);
+      return objects[key];
+    },
+  };
+}
+
+function storageObject(key: string, text: string, contentType: string): StorageStreamResult {
+  return {
+    body: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text));
+        controller.close();
+      },
+    }),
+    contentType,
+    key,
+  };
+}

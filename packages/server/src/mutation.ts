@@ -1025,6 +1025,9 @@ function runMutationOptions<Request>(
 ): RunMutationOptions<Request> {
   return {
     ...(csrf === undefined ? {} : { csrf }),
+    ...(lifecycle?.capabilityUrls === undefined
+      ? {}
+      : { capabilityUrls: lifecycle.capabilityUrls }),
     ...(lifecycle?.db === undefined ? {} : { db: lifecycle.db }),
     ...(lifecycle?.onError === undefined ? {} : { onError: lifecycle.onError }),
     ...(lifecycle?.sessionProvider === undefined

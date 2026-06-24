@@ -1,5 +1,10 @@
 import type { Redirect as CoreRedirect } from '@kovojs/core';
 import {
+  createAppCapabilityUrlSigner,
+  type AppCapabilityUrlOptions,
+  type AppCapabilityUrlSigner,
+} from './capability-url.js';
+import {
   isDbAdapterLike,
   isPreparedStatementExecutionMethod,
   isSqlHandleLike,
@@ -172,6 +177,7 @@ export type DbProvider<RawRequest, DbValue, SessionValue = unknown> = (
 /** Request shape after the framework has installed configured lifecycle channels. */
 export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> = RawRequest & {
   fetch: typeof fetch;
+  signUrl?: AppCapabilityUrlSigner;
 } & ([SessionValue] extends [never] ? {} : { session: SessionValue | null }) &
   ([DbValue] extends [never] ? {} : { db: DbValue });
 
@@ -179,6 +185,7 @@ export type LifecycleRequest<RawRequest, SessionValue = never, DbValue = never> 
 /** @internal */
 export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbValue = unknown> {
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
+  capabilityUrls?: AppCapabilityUrlOptions;
   /**
    * KV433 / SPEC §10.2: query loaders receive a managed DB handle in read mode by default.
    * Other lifecycle callers keep write-capable handles unless they opt into the same floor.
@@ -420,6 +427,14 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     lifecycleRequest = requestWithProperty(lifecycleRequest, 'fetch', options.egressFetch);
   }
 
+  if (options.capabilityUrls !== undefined) {
+    lifecycleRequest = requestWithProperty(
+      lifecycleRequest,
+      'signUrl',
+      createAppCapabilityUrlSigner(requestUrlForCapabilityMinting(request), options.capabilityUrls),
+    );
+  }
+
   if (options.sessionProvider) {
     const resolved = await options.sessionProvider(request);
     // part-3 I2 (SPEC §6.5): unwrap the additive `{ value, setCookies }` envelope so a
@@ -448,6 +463,14 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   }
 
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
+}
+
+function requestUrlForCapabilityMinting(request: unknown): string {
+  if (request && typeof request === 'object' && 'url' in request) {
+    const url = (request as { url?: unknown }).url;
+    if (typeof url === 'string') return url;
+  }
+  return 'http://localhost/';
 }
 
 export async function renderHttpGuardFailureResponse<Request>(

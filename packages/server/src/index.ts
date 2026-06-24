@@ -27,6 +27,9 @@ export { StaticExportError } from './static-export-diagnostics.js';
  */
 export { createKovoAppShellViteDevIntegration, kovoAppShellViteDevPlugin } from './vite-dev.js';
 export type {
+  AppCapabilityUrlOptions,
+  AppCapabilityUrlSigner,
+  AppSignCapabilityUrlOptions,
   CapabilityUrlScope,
   CapabilityUrlSecret,
   CapabilityUrlVerification,

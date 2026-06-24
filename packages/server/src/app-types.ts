@@ -1,5 +1,6 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
+import type { AppCapabilityUrlOptions } from './capability-url.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import type { DocumentTemplate } from './document-core.js';
@@ -157,6 +158,7 @@ export interface CreateAppOptions<
    * provisions a fresh in-memory registry.
    */
   clientModules?: VersionedClientModuleRegistry;
+  capabilityUrls?: AppCapabilityUrlOptions | false;
   csrf?: CsrfValidationOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions;
@@ -202,6 +204,7 @@ export interface KovoApp<
   _AppRequest = any,
 > {
   clientModules: VersionedClientModuleRegistry;
+  capabilityUrls?: AppCapabilityUrlOptions;
   csrf?: CsrfValidationOptions<any>;
   db?: DbProvider<any, any, any>;
   diagnostics: readonly AppDiagnostic[];
