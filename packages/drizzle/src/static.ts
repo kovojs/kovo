@@ -972,6 +972,16 @@ function extractQueryFactsFromPreparedFiles(
         site,
         query.hasOutputSchema,
       )
+        .concat(
+          secretProjectionBackstopDiagnostics(
+            query.query,
+            [...query.opaquePaths, ...query.unresolvedPaths],
+            query.tableExpressions,
+            columnShapes,
+            fileTables,
+            site,
+          ),
+        )
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
         .concat(unmodeledRelationReadDiagnostics(query.tableExpressions, fileTables, site))
@@ -1011,6 +1021,69 @@ function extractQueryFactsFromPreparedFiles(
   }
 
   return facts.sort((left, right) => left.query.localeCompare(right.query));
+}
+
+function secretProjectionBackstopDiagnostics(
+  query: string,
+  projectionPaths: readonly string[],
+  tableExpressions: readonly string[],
+  columnShapes: Readonly<Record<string, QueryShape>>,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  site: string,
+): TouchGraphDiagnostic[] {
+  const paths = [...new Set(projectionPaths)].sort();
+  if (paths.length === 0) return [];
+
+  const secretTables = tableExpressions
+    .flatMap((table) =>
+      tableHasSecretColumn(columnShapes, table)
+        ? secretBackstopTableDisplayNames(tables, table)
+        : [],
+    )
+    .sort();
+  if (secretTables.length === 0) return [];
+
+  const definition = diagnosticDefinitions.KV435;
+  const tableList = [...new Set(secretTables)].join(', ');
+  return paths.map((path) => ({
+    code: 'KV435',
+    message: `${definition.message} Query projection ${query}.${path} is opaque or unresolved while reading secret-classified table(s): ${tableList}. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.`,
+    severity: definition.severity,
+    site,
+  }));
+}
+
+function secretBackstopTableDisplayNames(
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  table: string,
+): string[] {
+  const entries = tables.get(table) ?? [];
+  const names = entries
+    .map((entry) => ('name' in entry.annotation ? entry.annotation.name : undefined))
+    .filter((name): name is string => name !== undefined);
+  return names.length > 0 ? names : [table];
+}
+
+function tableHasSecretColumn(
+  columnShapes: Readonly<Record<string, QueryShape>>,
+  table: string,
+): boolean {
+  const prefix = `${table}.`;
+  return Object.entries(columnShapes).some(
+    ([path, shape]) => path.startsWith(prefix) && queryShapeContainsSecret(shape),
+  );
+}
+
+function queryShapeContainsSecret(shape: QueryShape): boolean {
+  if (typeof shape !== 'object' || shape === null) return false;
+  if (Array.isArray(shape)) return shape.some(queryShapeContainsSecret);
+
+  if ('kind' in shape && 'shape' in shape) {
+    if (shape.kind === 'secret') return true;
+    return queryShapeContainsSecret(shape.shape);
+  }
+
+  return Object.values(shape).some(queryShapeContainsSecret);
 }
 
 function unresolvedConditionalIdentifiersForFiles(

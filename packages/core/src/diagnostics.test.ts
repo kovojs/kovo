@@ -644,9 +644,9 @@ describe('diagnostic registry', () => {
         "KV435": {
           "code": "KV435",
           "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
-      Blocked reason: the projected query shape contains a secret-classified field, so rendering this query would serialize confidential data onto the client wire.
-      Fixes: remove the secret field from the projection, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
-      SPEC §6.2 and §10.2 make query results JsonValue-bounded client wire values; a secret-classified value is ineligible for that boundary.",
+      Blocked reason: the projected query shape contains a secret-classified field, or an opaque/unresolved projection reads a table carrying secret columns, so rendering this query could serialize confidential data onto the client wire.
+      Fixes: remove the secret field or opaque projection, select explicit non-secret columns, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
+      SPEC §6.2, §10.2, and §11.3 make query results JsonValue-bounded client wire values; a secret-classified or unprovable secret-table projection is ineligible for that boundary.",
           "message": "Secret query value reaches the client wire.",
           "severity": "error",
         },
