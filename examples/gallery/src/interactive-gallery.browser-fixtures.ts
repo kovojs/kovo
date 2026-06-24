@@ -5,75 +5,75 @@ import { expect, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as accordionClient from './interactive/accordion-demo.client.js';
+import * as accordionClient from './generated/interactive/accordion-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as alertDialogClient from './interactive/alert-dialog-demo.client.js';
+import * as alertDialogClient from './generated/interactive/alert-dialog-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as autocompleteClient from './interactive/autocomplete-demo.client.js';
+import * as autocompleteClient from './generated/interactive/autocomplete-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as checkboxClient from './interactive/checkbox-demo.client.js';
+import * as checkboxClient from './generated/interactive/checkbox-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as checkboxGroupClient from './interactive/checkbox-group-demo.client.js';
+import * as checkboxGroupClient from './generated/interactive/checkbox-group-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as collapsibleClient from './interactive/collapsible-demo.client.js';
+import * as collapsibleClient from './generated/interactive/collapsible-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as comboboxClient from './interactive/combobox-demo.client.js';
+import * as comboboxClient from './generated/interactive/combobox-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as commandClient from './interactive/command-demo.client.js';
+import * as commandClient from './generated/interactive/command-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as contextMenuClient from './interactive/context-menu-demo.client.js';
+import * as contextMenuClient from './generated/interactive/context-menu-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as disclosureClient from './interactive/disclosure-demo.client.js';
+import * as disclosureClient from './generated/interactive/disclosure-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as dialogClient from './interactive/dialog-demo.client.js';
+import * as dialogClient from './generated/interactive/dialog-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as drawerClient from './interactive/drawer-demo.client.js';
+import * as drawerClient from './generated/interactive/drawer-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as dropdownMenuClient from './interactive/dropdown-menu-demo.client.js';
+import * as dropdownMenuClient from './generated/interactive/dropdown-menu-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as fieldClient from './interactive/field-demo.client.js';
+import * as fieldClient from './generated/interactive/field-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as hoverCardClient from './interactive/hover-card-demo.client.js';
+import * as hoverCardClient from './generated/interactive/hover-card-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as menubarClient from './interactive/menubar-demo.client.js';
+import * as menubarClient from './generated/interactive/menubar-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as meterClient from './interactive/meter-demo.client.js';
+import * as meterClient from './generated/interactive/meter-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as navigationMenuClient from './interactive/navigation-menu-demo.client.js';
+import * as navigationMenuClient from './generated/interactive/navigation-menu-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as numberFieldClient from './interactive/number-field-demo.client.js';
+import * as numberFieldClient from './generated/interactive/number-field-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as otpFieldClient from './interactive/otp-field-demo.client.js';
+import * as otpFieldClient from './generated/interactive/otp-field-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as popoverClient from './interactive/popover-demo.client.js';
+import * as popoverClient from './generated/interactive/popover-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as progressClient from './interactive/progress-demo.client.js';
+import * as progressClient from './generated/interactive/progress-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as pureMarkupClient from './interactive/pure-markup-demo.client.js';
+import * as pureMarkupClient from './generated/interactive/pure-markup-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as radioGroupClient from './interactive/radio-group-demo.client.js';
+import * as radioGroupClient from './generated/interactive/radio-group-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as scrollAreaClient from './interactive/scroll-area-demo.client.js';
+import * as scrollAreaClient from './generated/interactive/scroll-area-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as selectClient from './interactive/select-demo.client.js';
+import * as selectClient from './generated/interactive/select-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as sheetClient from './interactive/sheet-demo.client.js';
+import * as sheetClient from './generated/interactive/sheet-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as sliderClient from './interactive/slider-demo.client.js';
+import * as sliderClient from './generated/interactive/slider-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as switchClient from './interactive/switch-demo.client.js';
+import * as switchClient from './generated/interactive/switch-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as tabsClient from './interactive/tabs-demo.client.js';
+import * as tabsClient from './generated/interactive/tabs-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toolbarClient from './interactive/toolbar-demo.client.js';
+import * as toolbarClient from './generated/interactive/toolbar-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toggleClient from './interactive/toggle-demo.client.js';
+import * as toggleClient from './generated/interactive/toggle-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toggleGroupClient from './interactive/toggle-group-demo.client.js';
+import * as toggleGroupClient from './generated/interactive/toggle-group-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toastClient from './interactive/toast-demo.client.js';
+import * as toastClient from './generated/interactive/toast-demo.client.js';
 // @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as tooltipClient from './interactive/tooltip-demo.client.js';
+import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import accordionStaticRouteHtml from './visual-fixtures/accordion.html.txt?raw';
 import alertStaticRouteHtml from './visual-fixtures/alert.html.txt?raw';
 import alertDialogStaticRouteHtml from './visual-fixtures/alert-dialog.html.txt?raw';

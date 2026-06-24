@@ -41,6 +41,25 @@ class TestNavSegment {
   }
 }
 
+function createTestHead(innerHTML: string) {
+  const childNodes: unknown[] = [];
+
+  return {
+    childNodes,
+    innerHTML,
+    appendChild(node: unknown) {
+      childNodes.push(node);
+      return node;
+    },
+    insertBefore(node: unknown, anchor: unknown) {
+      const index = childNodes.indexOf(anchor);
+      if (index === -1) childNodes.push(node);
+      else childNodes.splice(index, 0, node);
+      return node;
+    },
+  };
+}
+
 function createTestShell({
   build = 'build-a',
   bodyAttributes = {},
@@ -84,7 +103,7 @@ function createTestShell({
   return {
     body,
     documentElement: attrs(documentAttributes),
-    head: { innerHTML: head },
+    head: createTestHead(head),
     querySelector(selector: string) {
       if (selector === 'meta[name="kovo-build"]') return { getAttribute: () => build };
       if (selector === 'main,[kovo-nav-segment],h1') return segments[0] ?? null;
