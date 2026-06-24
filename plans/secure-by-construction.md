@@ -687,7 +687,7 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
   - [ ] DB-constraint backstop (recommended, fail-closed under everything): `CHECK stock >= 0`, unique
         constraints. Multi-row/aggregate invariants need `forUpdate`/`SERIALIZABLE` — documented as NOT
         by-construction (provide the tool + guidance; do not pretend CAS covers them).
-- [ ] **Input-shape DoS (KV430).**
+- [x] **Input-shape DoS (KV430).**
       Decision (2026-06-23): the **runtime budget is the protection** (a safe-default, not a compile-time proof);
       KV430 is an auditable lint, not an error. Closes the small-body-huge-work class the byte+rate limiter misses;
       high-ROI because it lives in the shared schema engine and protects every wire boundary at once.
@@ -763,7 +763,7 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
     `VerifiedContentType` brand degrades to a runtime sidecar-marker check (refuse-to-serve-inline if
     unverified — fail-closed). Attachment content-type confusion (a lying type on a _download_) is a lesser,
     separate issue from the inline-XSS pivot this closes.
-- [ ] **ReDoS-safe validators (KV434).**
+- [x] **ReDoS-safe validators (KV434).**
       Decision (2026-06-23): blessed-formats-first + compile-visible-literal `pattern()` with static reject +
       runtime step-budget; full RE2 engine deferred. Design-the-API-safe-from-day-one (the validator API doesn't
       exist yet — cheap before apps depend on JS `RegExp` semantics, expensive after).
@@ -783,9 +783,13 @@ packages/server/src/schema.test.ts` and `vp check` passed.
         Evidence: `packages/server/src/schema.test.ts` verifies `unsafeRegex(...)` bypasses the safe-pattern
         constructor with a required justification; `packages/compiler/src/redos-validators.test.ts` verifies no
         KV434 is emitted for the escape and that an `unsafeRegex` capability fact is produced.
-  - [ ] Full linear (RE2-style/DFA) engine deferred unless static-reject + step-budget proves insufficient
+  - [x] Full linear (RE2-style/DFA) engine deferred unless static-reject + step-budget proves insufficient
         (avoids a heavy dep in v1). Honest: by-construction-ish (compile gate + runtime backstop); airtight only
         with the deferred engine.
+    - Evidence: `packages/server/src/schema.ts` documents the KV434 RE2/DFA deferral at the runtime pattern
+      backstop, and focused schema/compiler tests cover static rejection plus bounded runtime execution. Verified
+      by `vp exec vitest --run packages/server/src/schema.test.ts packages/compiler/src/redos-validators.test.ts`
+      and `vp check packages/server/src/schema.ts plans/secure-by-construction.md`.
 - [x] **Prod error opacity (12a, CWE-209).** Unexpected handler/loader/stream exceptions return an OPAQUE error
       in prod (no stack trace, no DB/driver error text, no internal detail) + a correlation id; the real error
       is logged server-side, retrievable by id. Dev keeps the §11.3 verbose teaching-error docs. Cover the

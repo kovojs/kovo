@@ -703,6 +703,8 @@ const stringFormatValidators: Record<StringFormat, (value: string) => boolean> =
 
 const maxPatternInputLength = 4_096;
 
+// KV434 intentionally avoids a RE2/DFA dependency for v1: compile-visible
+// patterns are statically screened, then this length cap bounds runtime work.
 function stringPatternFrom(pattern: string | UnsafeRegexPattern): StringPattern {
   if (typeof pattern === 'string') {
     assertSafeRegexSource(pattern);
