@@ -194,6 +194,9 @@ export async function runMutation<
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
     const handlerValue = await definition.handler(input, handlerRequest, context);
 
+    if (isKovoMutationConflict(handlerValue)) {
+      throw new MutationRollback(kovoConflictFailure(handlerValue));
+    }
     if (isMutationFail(handlerValue)) {
       throw new MutationRollback(handlerValue);
     }
@@ -210,6 +213,7 @@ export async function runMutation<
       : await runHandler(guardedRequest);
   } catch (error) {
     if (error instanceof MutationRollback) return error.failure;
+    if (isKovoMutationConflict(error)) return kovoConflictFailure(error);
     throw error;
   }
 
@@ -919,6 +923,30 @@ function isMutationFail(value: unknown): value is MutationFail {
     value.ok === false &&
     'error' in value
   );
+}
+
+interface KovoMutationConflictShape {
+  code: string;
+  payload?: unknown;
+  status: 409;
+}
+
+function isKovoMutationConflict(value: unknown): value is KovoMutationConflictShape {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<string, unknown>)['__kovoMutationConflict'] === true &&
+    (value as Record<string, unknown>)['status'] === 409 &&
+    typeof (value as Record<string, unknown>)['code'] === 'string'
+  );
+}
+
+function kovoConflictFailure(conflict: KovoMutationConflictShape): MutationFail {
+  return {
+    error: { code: conflict.code, payload: conflict.payload ?? {} },
+    ok: false,
+    status: 409,
+  };
 }
 
 function mutationRedirectLocation<Value>(

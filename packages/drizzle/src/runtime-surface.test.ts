@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validateManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
-import { adminAssign, serverValue, sql, staticSql, trustedSql } from './runtime.js';
+import {
+  adminAssign,
+  compareAndSet,
+  isKovoConflictError,
+  kovoConflict,
+  serverValue,
+  sql,
+  staticSql,
+  trustedSql,
+} from './runtime.js';
 
 interface DrizzlePackageJson {
   dependencies?: Record<string, string>;
@@ -71,6 +80,31 @@ describe('@kovojs/drizzle runtime surface', () => {
     expect(() => adminAssign('admin', '   ')).toThrow(/adminAssign requires/);
   });
 
+  it('maps zero-row compare-and-set outcomes to typed conflicts', async () => {
+    await expect(compareAndSet(Promise.resolve([{ id: 'p1' }]))).resolves.toEqual([{ id: 'p1' }]);
+    await expect(compareAndSet(Promise.resolve({ rowCount: 1 }))).resolves.toEqual({
+      rowCount: 1,
+    });
+    await expect(
+      compareAndSet(Promise.resolve({ ok: true }), {
+        affectedRows: (result) => (result.ok ? 1 : 0),
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    const conflict = await compareAndSet(Promise.resolve([]), {
+      code: 'STALE_PRODUCT',
+      payload: { id: 'p1' },
+    }).catch((error: unknown) => error);
+    expect(isKovoConflictError(conflict)).toBe(true);
+    expect(conflict).toMatchObject({
+      code: 'STALE_PRODUCT',
+      payload: { id: 'p1' },
+      status: 409,
+    });
+    expect(isKovoConflictError(kovoConflict())).toBe(true);
+    await expect(compareAndSet(Promise.resolve({ ok: true }))).rejects.toThrow(/affected rows/);
+  });
+
   it('keeps the runtime annotation entrypoint separate from static extraction', async () => {
     const runtime = await import('@kovojs/drizzle');
     const staticExtraction = await import('@kovojs/drizzle/internal/static');
@@ -82,6 +116,8 @@ describe('@kovojs/drizzle runtime surface', () => {
     const staticSource = drizzleStaticSource();
 
     expect(runtime.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
+    expect(runtime.compareAndSet).toBeTypeOf('function');
+    expect(runtime.kovoConflict().status).toBe(409);
     expect(runtime.kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }).secret).toEqual([
       'passwordHash',
     ]);

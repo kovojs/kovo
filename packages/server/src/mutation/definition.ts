@@ -13,10 +13,11 @@ import type { MutationStreamContext, MutationStreamSource } from './streaming.js
 
 /**
  * A typed mutation failure outcome (SPEC §9.2): a declared `error` `code` plus its
- * validated `payload`, served as HTTP 422 (validation/app `fail()`), 429 (rate limit,
- * with optional `retryAfter`), or framework-owned authenticated authorization denial
- * as HTTP 403. Produced via `MutationContext.fail` for app failures and by guards for
- * authorization failures.
+ * validated `payload`, served as HTTP 409 (optimistic concurrency conflict), 422
+ * (validation/app `fail()`), 429 (rate limit, with optional `retryAfter`), or
+ * framework-owned authenticated authorization denial as HTTP 403. Produced via
+ * `MutationContext.fail` for app failures, by TOCTOU primitives for conflicts, and by
+ * guards for authorization failures.
  */
 export interface MutationFail<Code extends string = string, Payload = unknown> {
   error: {
@@ -25,7 +26,7 @@ export interface MutationFail<Code extends string = string, Payload = unknown> {
   };
   ok: false;
   retryAfter?: number;
-  status: 403 | 422 | 429;
+  status: 403 | 409 | 422 | 429;
 }
 
 /**

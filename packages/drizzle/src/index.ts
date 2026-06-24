@@ -4,6 +4,8 @@ export type {
   KovoAdminAssignment,
   KovoAtomicColumnAnnotation,
   KovoColumnRef,
+  KovoCompareAndSetOptions,
+  KovoConflictOptions,
   KovoDomainTableAnnotation,
   KovoSecretColumnAnnotation,
   KovoServerValue,
@@ -13,4 +15,13 @@ export type {
   KovoViewExtraConfig,
   KovoViewExtraConfigAnnotation,
 } from './runtime.js';
-export { adminAssign, kovo, kovoAnalyzerSummary, serverValue } from './runtime.js';
+export {
+  adminAssign,
+  compareAndSet,
+  isKovoConflictError,
+  kovo,
+  kovoAnalyzerSummary,
+  kovoConflict,
+  KovoConflictError,
+  serverValue,
+} from './runtime.js';

@@ -990,6 +990,70 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('renders TOCTOU compare-and-set conflicts as 409 failure fragments', async () => {
+    const updateProduct = mutation('product/update', {
+      input: s.object({ productId: s.string(), version: s.number().int().min(0) }),
+      handler(input) {
+        return {
+          __kovoMutationConflict: true,
+          code: 'STALE_PRODUCT',
+          payload: { productId: input.productId, version: input.version },
+          status: 409,
+        };
+      },
+    });
+
+    await expect(
+      renderMutationResponse(updateProduct, {
+        failureTarget: 'product-form:p1',
+        rawInput: { productId: 'p1', version: 3 },
+        renderFailureFragment: (failure) =>
+          `<form data-conflict="${failure.error.code}">${(failure.error.payload as { version: number }).version}</form>`,
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-fragment target="product-form:p1"><form data-conflict="STALE_PRODUCT">3</form></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      status: 409,
+    });
+  });
+
+  it('rolls back thrown TOCTOU conflicts from mutation transactions', async () => {
+    const calls: string[] = [];
+    const updateProduct = mutation('product/update', {
+      input: s.object({ productId: s.string() }),
+      handler() {
+        calls.push('handler');
+        throw {
+          __kovoMutationConflict: true,
+          code: 'STALE_PRODUCT',
+          payload: { productId: 'p1' },
+          status: 409,
+        };
+      },
+      async transaction(_request, run) {
+        calls.push('begin');
+        try {
+          return await run({});
+        } finally {
+          calls.push('rollback');
+        }
+      },
+    });
+
+    await expect(
+      renderMutationResponse(updateProduct, {
+        rawInput: { productId: 'p1' },
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<kovo-fragment target="error"><output role="alert" data-error-code="STALE_PRODUCT">{"productId":"p1"}</output></kovo-fragment>',
+      headers: { 'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8' },
+      status: 409,
+    });
+    expect(calls).toEqual(['begin', 'handler', 'rollback']);
+  });
+
   it('renders schema validation failures into the submitted form target', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({

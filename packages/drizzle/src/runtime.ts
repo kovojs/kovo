@@ -28,6 +28,102 @@ export type {
 } from './drizzle-surface.js';
 export { adminAssign, kovo, kovoAnalyzerSummary, serverValue } from './drizzle-surface.js';
 
+const KOVO_CONFLICT_BRAND = '__kovoMutationConflict';
+
+export interface KovoConflictOptions<Code extends string = 'CONFLICT', Payload = unknown> {
+  code?: Code;
+  payload?: Payload;
+}
+
+export interface KovoCompareAndSetOptions<
+  Result,
+  Code extends string = 'CONFLICT',
+  Payload = unknown,
+> extends KovoConflictOptions<Code, Payload> {
+  affectedRows?: (result: Result) => number | bigint;
+}
+
+/**
+ * Runtime error thrown by typed atomic-write helpers when a guarded update affects
+ * zero rows. `@kovojs/server` maps this structural shape to a typed HTTP 409
+ * mutation failure so enhanced forms re-render through the normal failure target
+ * (SPEC §10.3 lifecycle; Phase 6 TOCTOU primitive).
+ */
+export class KovoConflictError<Code extends string = 'CONFLICT', Payload = unknown> extends Error {
+  readonly [KOVO_CONFLICT_BRAND] = true;
+  readonly code: Code;
+  readonly payload: Payload;
+  readonly status = 409;
+
+  constructor(options: KovoConflictOptions<Code, Payload> = {}) {
+    const code = options.code ?? ('CONFLICT' as Code);
+    super(code);
+    this.name = 'KovoConflictError';
+    this.code = code;
+    this.payload = options.payload as Payload;
+  }
+}
+
+/**
+ * Build a typed optimistic-concurrency conflict. Mutation handlers may return or
+ * throw this value; {@link compareAndSet} throws it automatically for zero-row
+ * guarded updates.
+ */
+export function kovoConflict<const Code extends string = 'CONFLICT', Payload = unknown>(
+  options: KovoConflictOptions<Code, Payload> = {},
+): KovoConflictError<Code, Payload> {
+  return new KovoConflictError(options);
+}
+
+/** Return true for Kovo's structural conflict shape, even across package copies. */
+export function isKovoConflictError(value: unknown): value is KovoConflictError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<string, unknown>)[KOVO_CONFLICT_BRAND] === true &&
+    (value as Record<string, unknown>)['status'] === 409 &&
+    typeof (value as Record<string, unknown>)['code'] === 'string'
+  );
+}
+
+/**
+ * Execute an atomic compare-and-set / version-guarded update and convert a
+ * zero-row outcome into a typed conflict.
+ *
+ * Pass a Drizzle update promise or a thunk returning one. The update must fold
+ * the check into its `WHERE` clause, for example:
+ *
+ * `compareAndSet(db.update(products).set({ stock: sql`${products.stock} - ${qty}` }).where(and(eq(products.id, id), gte(products.stock, qty))).returning({ id: products.id }))`
+ *
+ * The helper understands common driver row-count fields (`rowCount`,
+ * `rowsAffected`, `affectedRows`, `changes`, `count`) and returned-row arrays.
+ * For custom drivers, provide `affectedRows`.
+ */
+export async function compareAndSet<
+  Result,
+  const Code extends string = 'CONFLICT',
+  Payload = unknown,
+>(
+  operation: PromiseLike<Result> | (() => PromiseLike<Result> | Result),
+  options: KovoCompareAndSetOptions<Result, Code, Payload> = {},
+): Promise<Result> {
+  const result = await (typeof operation === 'function' ? operation() : operation);
+  const affected = options.affectedRows?.(result) ?? inferAffectedRows(result);
+
+  if (affected === undefined) {
+    throw new TypeError(
+      'compareAndSet could not infer affected rows; use .returning(...) or pass affectedRows.',
+    );
+  }
+  if (affected === 0n || affected === 0) {
+    throw kovoConflict({
+      ...(options.code === undefined ? {} : { code: options.code }),
+      ...(options.payload === undefined ? {} : { payload: options.payload }),
+    });
+  }
+  return result;
+}
+
 /**
  * Kovo-branded parameterized SQL value accepted by framework-managed DB handles.
  *
@@ -139,4 +235,17 @@ function quoteSqlIdentifier(identifier: string): string {
     .split('.')
     .map((part) => `"${part.replaceAll('"', '""')}"`)
     .join('.');
+}
+
+function inferAffectedRows(result: unknown): bigint | number | undefined {
+  if (Array.isArray(result)) return result.length;
+  if (typeof result === 'number' || typeof result === 'bigint') return result;
+  if (typeof result !== 'object' || result === null) return undefined;
+
+  for (const key of ['rowCount', 'rowsAffected', 'affectedRows', 'changes', 'count']) {
+    const value = (result as Record<string, unknown>)[key];
+    if (typeof value === 'number' || typeof value === 'bigint') return value;
+  }
+
+  return undefined;
 }

@@ -60,6 +60,34 @@ describe('no-JS mutation responses', () => {
     });
   });
 
+  it('renders no-JS TOCTOU conflicts as a full HTML 409 page', async () => {
+    const updateProduct = mutation('product/update', {
+      input: s.object({ productId: s.string(), version: s.number().int().min(0) }),
+      handler(input) {
+        return {
+          __kovoMutationConflict: true,
+          code: 'STALE_PRODUCT',
+          payload: { productId: input.productId, version: input.version },
+          status: 409,
+        };
+      },
+    });
+
+    await expect(
+      renderNoJsMutationResponse(updateProduct, {
+        rawInput: { productId: 'p1', version: 3 },
+        redirectTo: '/products/p1',
+        renderFailurePage: (failure) =>
+          `<html><body><form data-conflict="${failure.error.code}">${(failure.error.payload as { version: number }).version}</form></body></html>`,
+        request: {},
+      }),
+    ).resolves.toEqual({
+      body: '<html><body><form data-conflict="STALE_PRODUCT">3</form></body></html>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 409,
+    });
+  });
+
   it('can render no-JS failures through the same component mutation form state', async () => {
     const addToCartForm = form<
       'cart/add',

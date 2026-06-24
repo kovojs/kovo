@@ -123,7 +123,7 @@ export interface LiveTargetRenderContext<Request = unknown> {
 export interface BufferedMutationWireResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
-  200 | 401 | 403 | 422 | 429 | 500
+  200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
 /**
@@ -181,7 +181,7 @@ export interface MutationWireRequestOptions<
 export interface MutationWireResponse extends ServerResponseBase<
   ReadableStream<Uint8Array> | string,
   MutationResponseHeaders,
-  200 | 401 | 403 | 422 | 429 | 500
+  200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
 /**
@@ -218,7 +218,7 @@ export interface NoJsMutationRequest<
 export interface NoJsMutationResponse extends ServerResponseBase<
   string,
   MutationResponseHeaders,
-  303 | 403 | 422 | 429 | 500
+  303 | 403 | 409 | 422 | 429 | 500
 > {}
 
 /**
