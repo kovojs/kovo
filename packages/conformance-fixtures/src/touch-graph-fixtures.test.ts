@@ -135,6 +135,7 @@ describe('@kovojs/test touch graph fixture seam', () => {
     });
     expect(extractQueryFactsFromProject({ files })).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'product',
           key: 'arg:id',

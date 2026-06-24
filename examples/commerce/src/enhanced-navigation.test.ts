@@ -31,7 +31,7 @@ describe('commerce enhanced navigation', () => {
     const targetHtml = await fetch(`${origin}/cart`).then((response) => response.text());
 
     browser = await chromium.launch({ headless: true });
-    const page = await browser.newPage();
+    const page = await browser.newPage({ bypassCSP: true });
     await page.goto(`${origin}/`, { waitUntil: 'networkidle' });
 
     await page.evaluate(() => {
