@@ -680,7 +680,7 @@ export interface RenderEquivalenceCheck {
 
 /**
  * @internal Structural shape of a query result (primitive kind, array, object, or
- * nullable/optional wrapper) the compiler infers to type and stamp query bindings.
+ * nullable/optional/secret wrapper) the compiler infers to type and stamp query bindings.
  * Lowered-IR fact; in-repo use only (SPEC.md §5.2).
  */
 export type QueryShape =
@@ -695,9 +695,9 @@ export type QueryShape =
       readonly [key: string]: QueryShape;
     };
 
-/** @internal A nullable/optional wrapper around a {@link QueryShape}. In-repo use only. */
+/** @internal A metadata wrapper around a {@link QueryShape}. In-repo use only. */
 export interface QueryShapeWrapper {
-  kind: 'nullable' | 'optional' | 'volatile-time';
+  kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
   shape: QueryShape;
 }
 
@@ -774,7 +774,10 @@ export function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapp
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
   const record = shape as Record<string, unknown>;
   return (
-    (record.kind === 'nullable' || record.kind === 'optional' || record.kind === 'volatile-time') &&
+    (record.kind === 'nullable' ||
+      record.kind === 'optional' ||
+      record.kind === 'secret' ||
+      record.kind === 'volatile-time') &&
     'shape' in shape
   );
 }

@@ -14,6 +14,7 @@ import {
   isKovoExtraConfigCallName,
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
+  type KovoSecretColumnAnnotation,
   type KovoTableAnnotation,
   type KovoViewAnnotation,
 } from '../drizzle-surface.js';
@@ -24,6 +25,7 @@ import {
   type ProjectExtraction,
   type ProjectNamespaceTableNames,
   type QueryShape,
+  type QueryShapeWrapper,
   type SourceFileInput,
   DRIZZLE_CORE_MODULE_SPECIFIERS,
   DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES,
@@ -48,6 +50,7 @@ import {
   projectSourceFileName,
   staticAccessExpression,
   staticAccessName,
+  tableAnnotation,
   unwrappedStaticExpressionNode,
   unwrappedTsExpression,
 } from '../static.js';
@@ -62,13 +65,53 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
   for (const [identifier, entries] of tables) {
     for (const table of entries) {
       for (const [column, shape] of Object.entries(table.columns)) {
-        scoped[`${identifier}.${column}`] = shape;
-        scoped[`${table.annotation.name}.${column}`] = shape;
+        const columnShape = secretAnnotatedShape(shape, table.annotation, column);
+        scoped[`${identifier}.${column}`] = columnShape;
+        scoped[`${table.annotation.name}.${column}`] = columnShape;
       }
     }
   }
 
   return scoped;
+}
+
+function secretAnnotatedShape(
+  shape: QueryShape,
+  annotation: ExtractedTableAnnotation,
+  column: string,
+): QueryShape {
+  if (!('secret' in annotation) || annotation.secret === undefined) return shape;
+  if (!annotationSecretIncludesColumn(annotation.secret, column)) return shape;
+  return secretQueryShape(shape);
+}
+
+function annotationSecretIncludesColumn(
+  secret: KovoSecretColumnAnnotation,
+  column: string,
+): boolean {
+  if (secret === true) return true;
+  const references = Array.isArray(secret) ? secret : [secret];
+  return references.some((reference) => reference === column);
+}
+
+function secretQueryShape(shape: QueryShape): QueryShape {
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'secret') return shape;
+    return { ...shape, shape: secretQueryShape(shape.shape) };
+  }
+  return { kind: 'secret', shape };
+}
+
+function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
+  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
+  return (
+    'kind' in shape &&
+    (shape.kind === 'nullable' ||
+      shape.kind === 'optional' ||
+      shape.kind === 'secret' ||
+      shape.kind === 'volatile-time') &&
+    'shape' in shape
+  );
 }
 
 /** @internal */ export function projectRelationalTableNamesByProperty(
@@ -507,10 +550,27 @@ import { receiverParameterDeclaration } from './receiver-surface.js';
       if (!tableName) continue;
 
       const columns = tableColumnShapes(initializer, 'project');
-      if (Object.keys(columns).length > 0) shapes.set(tableName, columns);
+      const annotation = tableAnnotation(initializer);
+      if (Object.keys(columns).length > 0) {
+        shapes.set(
+          tableName,
+          annotation ? secretAnnotatedColumnShapes(columns, annotation) : columns,
+        );
+      }
     }
   }
 
+  return shapes;
+}
+
+function secretAnnotatedColumnShapes(
+  columns: Record<string, QueryShape>,
+  annotation: ExtractedTableAnnotation,
+): Record<string, QueryShape> {
+  const shapes: Record<string, QueryShape> = {};
+  for (const [column, shape] of Object.entries(columns)) {
+    shapes[column] = secretAnnotatedShape(shape, annotation, column);
+  }
   return shapes;
 }
 

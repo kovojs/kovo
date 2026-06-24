@@ -806,13 +806,16 @@ function stableQueryShapeSignature(shape: QueryShape): string {
 }
 
 function isQueryShapeWrapper(shape: QueryShape): shape is {
-  kind: 'nullable' | 'optional' | 'volatile-time';
+  kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
   shape: QueryShape;
 } {
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
   return (
     'kind' in shape &&
-    (shape.kind === 'nullable' || shape.kind === 'optional' || shape.kind === 'volatile-time') &&
+    (shape.kind === 'nullable' ||
+      shape.kind === 'optional' ||
+      shape.kind === 'secret' ||
+      shape.kind === 'volatile-time') &&
     'shape' in shape
   );
 }

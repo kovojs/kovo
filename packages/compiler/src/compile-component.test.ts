@@ -1279,6 +1279,34 @@ describe('assertRenderPlanTokenMonotonicity — KV416 (D4, SPEC §5.2.2)', () =>
     );
   });
 
+  it('includes secret query shape metadata in the production render-plan token gate', () => {
+    const frozenToken = (_: Record<string, string>) => 'frozen-v1';
+    const result = compileComponentModule({
+      fileName: 'cart-badge.tsx',
+      productionRenderPlanGate: {
+        previous: { cart: '{count:number,token:string}' },
+        tokenFn: frozenToken,
+      },
+      queryShapes: {
+        cart: {
+          count: 'number',
+          token: { kind: 'secret', shape: 'string' },
+        },
+      },
+      source: cartBadgeSource,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV416',
+          severity: 'error',
+          message: expect.stringContaining('render-plan token failed to move'),
+        }),
+      ]),
+    );
+  });
+
   it('exposes a production render-plan gate assertion that throws diagnostic-shaped KV416', () => {
     const result = compileComponentModule({
       fileName: 'cart-badge.tsx',
