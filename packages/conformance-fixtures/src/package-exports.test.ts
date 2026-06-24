@@ -1221,18 +1221,26 @@ describe('@kovojs/test package subpath exports', () => {
         [
           'kovo-explain/v1',
           'ENDPOINTS',
-          'ENDPOINT reports/export method=GET path=/exports/reports.ndjson mount=exact auth=authed csrf=checked writes=-',
+          'ENDPOINT reports/export surface=route-file method=GET path=/exports/reports.ndjson mount=exact auth=authed csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=export:user headers=Content-Type files=reports.ndjson dynamic=- writes=-',
           '',
         ].join('\n'),
       ),
     ).toEqual([
       {
         auth: 'authed',
+        body: 'bytes',
+        bodySize: 'stream',
+        cache: 'private,no-store',
         csrf: 'checked',
+        dynamic: [],
         endpoint: 'reports/export',
+        files: ['reports.ndjson'],
+        headers: ['Content-Type'],
         method: 'GET',
         mount: 'exact',
         path: '/exports/reports.ndjson',
+        rateLimit: 'export:user',
+        surface: 'route-file',
         writes: [],
       },
     ]);

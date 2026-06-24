@@ -17,11 +17,19 @@ export interface KovoExplainUpdateConsumerFact {
 
 export interface KovoExplainEndpointFact {
   auth: string;
+  body: string;
+  bodySize: string;
+  cache: string;
   csrf: string;
+  dynamic: string[];
   endpoint: string;
+  files: string[];
+  headers: string[];
   method: string;
   mount: string;
   path: string;
+  rateLimit: string;
+  surface: string;
   writes: string[];
 }
 
@@ -581,22 +589,30 @@ export function kovoExplainComponentMergeFacts(output: string): KovoExplainCompo
 export function kovoExplainEndpointFacts(output: string): KovoExplainEndpointFact[] {
   return kovoExplainRecords(output, 'ENDPOINT').map((record) => {
     const match =
-      /^(?<endpoint>\S+) method=(?<method>\S+) path=(?<path>\S+) mount=(?<mount>\S+) auth=(?<auth>\S+) csrf=(?<csrf>.*?) writes=(?<writes>\S+)$/.exec(
+      /^(?<endpoint>\S+) surface=(?<surface>\S+) method=(?<method>\S+) path=(?<path>\S+) mount=(?<mount>\S+) auth=(?<auth>\S+) csrf=(?<csrf>.*?) cache=(?<cache>\S+) body=(?<body>\S+) bodySize=(?<bodySize>\S+) rateLimit=(?<rateLimit>\S+) headers=(?<headers>\S+) files=(?<files>\S+) dynamic=(?<dynamic>\S+) writes=(?<writes>\S+)$/.exec(
         record,
       );
     if (!match?.groups) {
       throw new Error(
-        `kovo explain ENDPOINT record is '<endpoint> method=... path=... mount=... auth=... csrf=... writes=...': ${record}`,
+        `kovo explain ENDPOINT record is '<endpoint> surface=... method=... path=... mount=... auth=... csrf=... cache=... body=... bodySize=... rateLimit=... headers=... files=... dynamic=... writes=...': ${record}`,
       );
     }
 
     return {
       auth: requiredMatchGroup(match.groups, 'auth'),
+      body: requiredMatchGroup(match.groups, 'body'),
+      bodySize: requiredMatchGroup(match.groups, 'bodySize'),
+      cache: requiredMatchGroup(match.groups, 'cache'),
       csrf: requiredMatchGroup(match.groups, 'csrf'),
+      dynamic: parseList(requiredMatchGroup(match.groups, 'dynamic')),
       endpoint: requiredMatchGroup(match.groups, 'endpoint'),
+      files: parseList(requiredMatchGroup(match.groups, 'files')),
+      headers: parseList(requiredMatchGroup(match.groups, 'headers')),
       method: requiredMatchGroup(match.groups, 'method'),
       mount: requiredMatchGroup(match.groups, 'mount'),
       path: requiredMatchGroup(match.groups, 'path'),
+      rateLimit: requiredMatchGroup(match.groups, 'rateLimit'),
+      surface: requiredMatchGroup(match.groups, 'surface'),
       writes: parseList(requiredMatchGroup(match.groups, 'writes')),
     };
   });

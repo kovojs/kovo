@@ -100,6 +100,7 @@ export default defineConfig({
           { pattern: 'packages/*/package.json', base: 'workspace' },
           { pattern: 'pnpm-lock.yaml', base: 'workspace' },
           { pattern: 'scripts/prod-emit-check.mjs', base: 'workspace' },
+          { pattern: 'vite.config.ts', base: 'workspace' },
           { pattern: 'packages/*/src/**', base: 'workspace' },
         ],
       },

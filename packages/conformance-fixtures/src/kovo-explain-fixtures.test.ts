@@ -111,18 +111,26 @@ describe('@kovojs/test kovo explain fixture seam', () => {
         [
           'kovo-explain/v1',
           'ENDPOINTS',
-          'ENDPOINT payment/stripe method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe:v1:hmac-sha256 csrf=exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256 writes=order',
+          'ENDPOINT payment/stripe surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe:v1:hmac-sha256 csrf=exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256 cache=no-store body=raw bodySize=1mb rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=stripeEvent writes=order',
           '',
         ].join('\n'),
       ),
     ).toEqual([
       {
         auth: 'verifier:stripe:v1:hmac-sha256',
+        body: 'raw',
+        bodySize: '1mb',
+        cache: 'no-store',
         csrf: 'exempt:payment/stripe webhook verifier stripe:v1:hmac-sha256',
+        dynamic: ['stripeEvent'],
         endpoint: 'payment/stripe',
+        files: [],
+        headers: ['Stripe-Signature'],
         method: 'POST',
         mount: 'exact',
         path: '/webhooks/stripe',
+        rateLimit: 'webhook:stripe',
+        surface: 'webhook',
         writes: ['order'],
       },
     ]);
