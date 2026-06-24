@@ -715,7 +715,11 @@ packages/server/src/hints.test.ts` proves default CSP headers, nonce-bearing doc
 packages/browser/src/response-fragment-apply.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts
 packages/browser/src/inline-loader-build.test.ts` covers CSP emission/opt-out and a TT-enforced fake sink
     that rejects raw strings but accepts Kovo policy output.
-- [ ] Add `frame-ancestors` (clickjacking) and `nosniff` (MIME-confusion) to the minted policy.
+- [x] Add `frame-ancestors` (clickjacking) and `nosniff` (MIME-confusion) to the minted policy.
+  - Evidence: `packages/server/src/csp.ts` emits non-overridable `frame-ancestors 'none'`, and
+    `packages/server/src/document-core.ts` adds `X-Content-Type-Options: nosniff` to document responses.
+    Verified with `vp exec vitest --run packages/server/src/document.test.ts packages/server/src/app-dispatch.test.ts
+packages/server/src/static-export-manifest.test.ts packages/server/src/static-export-replay.test.ts`.
 - [ ] Third-party allowlist config (`script-src`/`frame-src` extras for analytics/payments/widgets), surfaced
       in `kovo explain --capabilities`. Required precisely because there is no report-only ramp — a third-party
       embed is denied until declared (fail-closed).
