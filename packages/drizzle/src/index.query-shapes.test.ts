@@ -1438,6 +1438,62 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('derives relational query shapes from static columns projections, including secret facts', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+          export const users = pgTable("users", {
+            apiToken: text("api_token"),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+            passwordHash: text("password_hash").notNull(),
+          }, kovo({ domain: "user", key: "id", secret: ["passwordHash", "apiToken"] }));
+
+          export const usersQuery = query("users", {
+            load(_input, db: PgDatabase) {
+              return db.query.users.findMany({
+                columns: {
+                  apiToken: true,
+                  id: true,
+                  name: true,
+                  passwordHash: true,
+                },
+                where: eq(users.active, true),
+              });
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'users',
+        reads: ['user'],
+        shape: {
+          apiToken: {
+            kind: 'nullable',
+            shape: {
+              kind: 'secret',
+              shape: 'string',
+            },
+          },
+          id: 'string',
+          name: 'string',
+          passwordHash: {
+            kind: 'secret',
+            shape: 'string',
+          },
+        },
+        site: 'user.queries.ts:9',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('keeps static element-access relational API reads visible as KV406 query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
