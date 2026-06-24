@@ -59,6 +59,31 @@ request before the layout renders, just like route and mutation guards. Layout q
 queries: they appear in `kovo explain page`, carry update plans, and observe the same cache and guard
 rules as page queries.
 
+## Add parallel regions
+
+Use route-level `regions` when a layout needs sibling areas such as a docs page plus a sidebar rail.
+The layout decides placement; the route decides what each named region renders.
+
+```tsx
+const DocsLayout = layout({
+  render: (_queries, _state, { regions }) => (
+    <DocsShell page={regions.page} sidebar={regions.sidebar} />
+  ),
+});
+
+export const guideRoute = route('/guides/:slug', {
+  layout: DocsLayout,
+  regions: {
+    page: ({ params }) => <GuidePage slug={params.slug} />,
+    sidebar: ({ params }) => <DocsSidebar activeSlug={params.slug} />,
+  },
+});
+```
+
+`regions.page` is the route leaf region. Additional names are scoped to that route/layout contract.
+The framework renders every region from the target full document and owns any navigation metadata it
+needs for enhanced navigation, so app TSX stays ordinary JSX.
+
 ## No persistent layout state
 
 In v1, every navigation is still a full document GET. Enhanced navigation may preserve unchanged
@@ -88,9 +113,9 @@ leaf. That makes changes to shared chrome reviewable in CI instead of discovered
 <details>
 <summary>Spec & diagnostics</summary>
 
-First-class layouts, nesting with `parent`, layout `queries`, `guard`, boundaries, stylesheets, and
-`kovo explain page --layouts`: SPEC §4.5 and §6.4. Documents are owned by the request shell:
-SPEC §9.5. Navigation is full-document first; layout persistence is not an app-authored v1 contract:
-SPEC §8. KV420 stateful-island boundary: SPEC §4.5 and §9.1.
+First-class layouts, route-level regions, nesting with `parent`, layout `queries`, `guard`,
+boundaries, stylesheets, and `kovo explain page --layouts`: SPEC §4.5 and §6.4. Documents are owned
+by the request shell: SPEC §9.5. Navigation is full-document first; layout persistence is not an
+app-authored v1 contract: SPEC §8. KV420 stateful-island boundary: SPEC §4.5 and §9.1.
 
 </details>

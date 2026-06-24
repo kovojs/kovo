@@ -4,13 +4,45 @@ import { trustedHtml } from '@kovojs/browser';
 import { createApp } from './app.js';
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 import { respond } from './response.js';
-import { route } from './route.js';
+import { layout, route } from './route.js';
 import { replayStaticExportApp } from './static-export-replay.js';
 import { renderedHtml } from './html.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 
 describe('server static export app replay boundary', () => {
+  it('reconstructs public route-region metadata when the route declaration crosses module instances', async () => {
+    const Shell = layout({
+      render: (_queries, _state, { regions }) =>
+        renderedHtml(`<main data-shell>${regions.header}${regions.page}${regions.sidebar}</main>`),
+    });
+    const docsRoute = route('/docs', {
+      layout: Shell,
+      regions: {
+        header: () => renderedHtml('<header>Docs</header>'),
+        page: () => renderedHtml('<article>Guide</article>'),
+        sidebar: () => renderedHtml('<aside>Nav</aside>'),
+      },
+    });
+    // SPEC §8: route/layout/region segment stamps are compiler-derived or runtime-derived
+    // framework metadata, never app-authored TSX. A shallow copy mimics CLI/Vite export
+    // crossing server module instances, where the authoring-side WeakMap is unavailable.
+    const app = createApp({ routes: [{ ...docsRoute }] });
+
+    const result = await replayStaticExportApp({ app });
+
+    expect(result.artifacts[0]?.body).toContain('kovo-nav-segment="layout:');
+    expect(result.artifacts[0]?.body).toContain(
+      '<header kovo-nav-segment="region:header" kovo-nav-kind="region" kovo-nav-name="header">Docs</header>',
+    );
+    expect(result.artifacts[0]?.body).toContain(
+      '<article kovo-nav-segment="page:/docs" kovo-nav-kind="page" kovo-nav-name="page">Guide</article>',
+    );
+    expect(result.artifacts[0]?.body).toContain(
+      '<aside kovo-nav-segment="region:sidebar" kovo-nav-kind="region" kovo-nav-name="sidebar">Nav</aside>',
+    );
+  });
+
   it('owns replay-time non-exportable skip policy while still replaying discovered client modules', async () => {
     const registry = createMemoryVersionedClientModuleRegistry();
     const href = registry.put({

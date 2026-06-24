@@ -472,6 +472,90 @@ describe('route JSX pages', () => {
     );
   });
 
+  it('renders public route-level parallel regions through layout slots and stamps derived region metadata', async () => {
+    const DocsLayout = layout({
+      render: (_queries, _state, { regions }) => (
+        <main data-docs-shell>
+          {regions.page}
+          {regions.sidebar}
+        </main>
+      ),
+    });
+    const docsRoute = route('/guides/:slug', {
+      layout: DocsLayout,
+      regions: {
+        page: ({ params }) => <article data-slug={params.slug}>Guide {params.slug}</article>,
+        sidebar: ({ params }) => <aside data-current={params.slug}>Sidebar</aside>,
+      },
+    });
+
+    const response = await renderRoutePageResponse(docsRoute, { params: { slug: 'intro' } }, {});
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain('<main data-docs-shell kovo-nav-segment="layout:');
+    expect(response.body).toContain(
+      '<article data-slug="intro" kovo-nav-segment="page:/guides/:slug" kovo-nav-kind="page" kovo-nav-name="page">Guide intro</article>',
+    );
+    expect(response.body).toContain(
+      '<aside data-current="intro" kovo-nav-segment="region:sidebar" kovo-nav-kind="region" kovo-nav-name="sidebar">Sidebar</aside>',
+    );
+  });
+
+  it('uses compiler-derived component metadata for parallel route regions', async () => {
+    const DocsLayout = layout({
+      render: (_queries, _state, { regions }) => (
+        <main>
+          {regions.page}
+          {regions.sidebar}
+        </main>
+      ),
+    });
+    const docsRoute = route('/guides/:slug', {
+      layout: DocsLayout,
+      page: defineCompiledRoutePage(
+        {
+          components: [],
+          fileName: 'src/routes.tsx',
+          navigationSegments: [
+            {
+              id: 'layout:DocsLayout',
+              kind: 'layout',
+              localName: 'DocsLayout',
+              queries: [],
+            },
+            {
+              components: ['GuidePage'],
+              id: 'page:/guides/:slug',
+              kind: 'page',
+              localName: 'page',
+            },
+            {
+              components: ['DocsSidebar'],
+              id: 'region:sidebar',
+              kind: 'region',
+              localName: 'sidebar',
+            },
+          ],
+          route: '/guides/:slug',
+        },
+        () => null,
+      ),
+      regions: {
+        page: () => <article>Guide</article>,
+        sidebar: () => <aside>Sidebar</aside>,
+      },
+    });
+
+    const response = await renderRoutePageResponse(docsRoute, {}, {});
+
+    expect(response.body).toContain(
+      '<article kovo-nav-segment="page:/guides/:slug" kovo-nav-kind="page" kovo-nav-name="page" kovo-nav-components="GuidePage">Guide</article>',
+    );
+    expect(response.body).toContain(
+      '<aside kovo-nav-segment="region:sidebar" kovo-nav-kind="region" kovo-nav-name="sidebar" kovo-nav-components="DocsSidebar">Sidebar</aside>',
+    );
+  });
+
   it('runs layout guards before rendering the route page', async () => {
     const AdminLayout = layout<{ session?: { user?: { id: string } | null } | null }>({
       guard: (request) => (request.session?.user ? true : { kind: 'unauthenticated' }),

@@ -3,41 +3,88 @@ import { describe, expect, it, vi } from 'vitest';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 
 class TestNavSegment {
+  attributes: Array<{ name: string; value: string }>;
+  childNodes: TestNavSegment[] = [];
+  children: TestNavSegment[] = [];
+  readonly tagName: string;
+
   constructor(
-    private readonly attributes: Record<string, string>,
+    initialAttributes: Record<string, string>,
     readonly outerHTML: string,
     private readonly descendants: TestNavSegment[] = [],
-  ) {}
+  ) {
+    this.attributes = Object.entries(initialAttributes).map(([name, value]) => ({ name, value }));
+    this.children = descendants;
+    this.childNodes = descendants;
+    this.tagName = /^<([A-Za-z][A-Za-z0-9:-]*)/.exec(outerHTML)?.[1]?.toUpperCase() ?? 'DIV';
+  }
 
   cloneNode(): {
+    attributes: Array<{ name: string; value: string }>;
+    children: TestNavSegment[];
+    childNodes: TestNavSegment[];
     getAttribute(name: string): string | null;
+    hasAttribute(name: string): boolean;
     outerHTML: string;
     querySelectorAll(selector: string): TestNavSegment[];
+    remove(): void;
+    removeAttribute(name: string): void;
+    replaceChildren(...children: TestNavSegment[]): void;
+    replaceWith(next: TestNavSegment): void;
+    setAttribute(name: string, value: string): void;
+    tagName: string;
   } {
-    return {
-      getAttribute: (name: string) => this.getAttribute(name),
-      outerHTML: this.outerHTML,
-      querySelectorAll: (selector: string) => this.querySelectorAll(selector),
-    };
+    return new TestNavSegment({ ...this.attributesRecord() }, this.outerHTML, this.descendants);
+  }
+
+  contains(segment: TestNavSegment): boolean {
+    return this === segment || this.descendants.some((child) => child.contains(segment));
   }
 
   focus(): void {}
 
   getAttribute(name: string): string | null {
-    return this.attributes[name] ?? null;
+    return this.attributesRecord()[name] ?? null;
+  }
+
+  hasAttribute(name: string): boolean {
+    return Object.hasOwn(this.attributesRecord(), name);
   }
 
   get id(): string | undefined {
-    return this.attributes.id;
+    return this.attributesRecord().id;
   }
 
   querySelectorAll(selector: string): TestNavSegment[] {
     if (selector === '[id]') return this.descendants.filter((child) => child.id);
+    if (selector === '[kovo-c]') return [];
+    if (selector === '[kovo-nav-segment]') return this.descendants;
     return [];
   }
 
+  removeAttribute(name: string): void {
+    this.attributes = this.attributes.filter((attribute) => attribute.name !== name);
+  }
+
+  remove(): void {}
+
+  replaceChildren(...children: TestNavSegment[]): void {
+    this.children = children;
+    this.childNodes = children;
+  }
+
+  replaceWith(): void {}
+
   setAttribute(name: string, value: string): void {
-    this.attributes[name] = value;
+    const existing = this.attributes.find((attribute) => attribute.name === name);
+    if (existing) existing.value = value;
+    else this.attributes.push({ name, value });
+  }
+
+  private attributesRecord(): Record<string, string> {
+    return Object.fromEntries(
+      this.attributes.map((attribute) => [attribute.name, attribute.value]),
+    );
   }
 }
 
@@ -783,6 +830,108 @@ describe('inline loader enhanced navigation fallback', () => {
           expect(replaceWith).toHaveBeenCalledTimes(1);
           expect(replaceWith).not.toHaveBeenCalledWith(slowDocument.body);
           expect(pushState).toHaveBeenCalledTimes(1);
+        },
+      });
+    },
+  );
+
+  it.each(inlineSourceInstallCases)(
+    'morphs multiple changed parallel region segments under a compatible layout through %s',
+    async (_name, installSource) => {
+      const replaceWith = vi.fn();
+      const currentPage = new TestNavSegment(
+        {
+          'kovo-nav-components': 'DocsPage',
+          'kovo-nav-kind': 'page',
+          'kovo-nav-name': 'page',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'page:/guides/intro',
+        },
+        '<article>Intro</article>',
+      );
+      const currentSidebar = new TestNavSegment(
+        {
+          'data-current': 'intro',
+          'kovo-nav-components': 'DocsSidebar',
+          'kovo-nav-kind': 'region',
+          'kovo-nav-name': 'sidebar',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'region:sidebar',
+        },
+        '<aside>Intro nav</aside>',
+      );
+      const currentLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'DocsLayout',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:DocsLayout',
+        },
+        '<main></main>',
+        [currentPage, currentSidebar],
+      );
+      const targetPage = new TestNavSegment(
+        {
+          'kovo-nav-components': 'DocsPage',
+          'kovo-nav-kind': 'page',
+          'kovo-nav-name': 'page',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'page:/guides/install',
+        },
+        '<article>Install</article>',
+      );
+      const targetSidebar = new TestNavSegment(
+        {
+          'data-current': 'install',
+          'kovo-nav-components': 'DocsSidebar',
+          'kovo-nav-kind': 'region',
+          'kovo-nav-name': 'sidebar',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'region:sidebar',
+        },
+        '<aside>Install nav</aside>',
+      );
+      const targetLayout = new TestNavSegment(
+        {
+          'kovo-nav-components': '',
+          'kovo-nav-kind': 'layout',
+          'kovo-nav-name': 'DocsLayout',
+          'kovo-nav-queries': '',
+          'kovo-nav-segment': 'layout:DocsLayout',
+        },
+        '<main></main>',
+        [targetPage, targetSidebar],
+      );
+      const currentDocument = createTestShell({
+        replaceWith,
+        segments: [currentLayout, currentPage, currentSidebar],
+      });
+      const targetDocument = createTestShell({
+        replaceWith,
+        segments: [targetLayout, targetPage, targetSidebar],
+      });
+
+      await withEnhancedNavigationHarness(installSource, {
+        currentDocument,
+        documents: [targetDocument],
+        fetch: vi.fn(async (href: string) => ({
+          headers: { get: () => 'text/html' },
+          text: async () => '<!doctype html><html></html>',
+          url: href,
+        })),
+        href: 'http://app.test/guides/install',
+        locationHref: 'http://app.test/guides/intro',
+        async assert({ assign, dispatchEvent, preventDefault, pushState }) {
+          await vi.waitFor(() => {
+            expect(dispatchEvent).toHaveBeenCalled();
+          });
+          expect(preventDefault).toHaveBeenCalledTimes(1);
+          expect(assign).not.toHaveBeenCalled();
+          expect(replaceWith).not.toHaveBeenCalled();
+          expect(pushState).toHaveBeenCalledWith({}, '', 'http://app.test/guides/install');
+          expect(currentPage.getAttribute('kovo-nav-segment')).toBe('page:/guides/install');
+          expect(currentSidebar.getAttribute('data-current')).toBe('install');
         },
       });
     },

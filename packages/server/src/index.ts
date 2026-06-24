@@ -227,6 +227,7 @@ export type {
   RouteFileOptions,
   RoutePageResponse,
   RoutePageResult,
+  RouteRegionDefinitions,
   RouteRequest,
   RouteRequestInput,
   RouteResponseBody,

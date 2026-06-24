@@ -13,6 +13,7 @@ import type {
   RoutePageComponentPropFact,
   RoutePageFact,
   RoutePageLayoutFact,
+  RouteRegionFact,
   RouteNavigationSegmentFact,
 } from '../types.js';
 import type { StaticLiteralValue } from './object.js';
@@ -133,17 +134,37 @@ function routePageFromCall(
   if (!definitionArg || !ts.isObjectLiteralExpression(definitionArg)) return null;
 
   const pageHandler = objectPageHandler(definitionArg, 'page', sourceFile);
-  if (!pageHandler) return null;
-
-  const components = routePageComponentFacts(
+  const regions = routeRegionFacts(
     fileName,
     source,
     sourceFile,
-    pageHandler.node,
+    definitionArg,
     componentImports,
     diagnostics,
   );
-  if (components.length === 0 && !containsJsx(pageHandler.node)) return null;
+  if (!pageHandler && regions.length === 0) return null;
+
+  const pageComponents = pageHandler
+    ? routePageComponentFacts(
+        fileName,
+        source,
+        sourceFile,
+        pageHandler.node,
+        componentImports,
+        diagnostics,
+      )
+    : [];
+  if (
+    pageHandler &&
+    pageComponents.length === 0 &&
+    regions.length === 0 &&
+    !containsJsx(pageHandler.node)
+  )
+    return null;
+  const components = uniqueRouteComponents([
+    ...pageComponents,
+    ...regions.flatMap((region) => region.components),
+  ]);
   const routeLayouts = routeLayoutFacts(
     fileName,
     source,
@@ -152,7 +173,12 @@ function routePageFromCall(
     layouts,
     diagnostics,
   );
-  const navigationSegments = routeNavigationSegments(pathArg.text, components, routeLayouts);
+  const navigationSegments = routeNavigationSegments(
+    pathArg.text,
+    pageComponents,
+    routeLayouts,
+    regions,
+  );
   const css = routePageCssFact(components, componentImports);
   const fact = {
     ...(css === undefined ? {} : { css }),
@@ -160,17 +186,39 @@ function routePageFromCall(
     fileName,
     ...(routeLayouts.length > 0 ? { layouts: routeLayouts } : {}),
     navigationSegments,
+    ...(regions.length > 0 ? { regions } : {}),
     route: pathArg.text,
   };
 
   return {
     fact,
     pageReplacement: {
-      end: pageHandler.replacementEnd,
-      replacement: `${pageHandler.replacementPrefix}__kovoDefineCompiledRoutePage(${JSON.stringify(fact)}, ${pageHandler.sourceExpression})`,
-      start: pageHandler.replacementStart,
+      end: pageHandler?.replacementEnd ?? definitionArg.properties.pos,
+      replacement: pageHandler
+        ? `${pageHandler.replacementPrefix}__kovoDefineCompiledRoutePage(${JSON.stringify(fact)}, ${pageHandler.sourceExpression})`
+        : `page: __kovoDefineCompiledRoutePage(${JSON.stringify(fact)}, () => null),\n`,
+      start: pageHandler?.replacementStart ?? definitionArg.properties.pos,
     },
   };
+}
+
+function uniqueRouteComponents(
+  components: readonly RoutePageComponentFact[],
+): RoutePageComponentFact[] {
+  const seen = new Set<string>();
+  const facts: RoutePageComponentFact[] = [];
+  for (const component of components) {
+    const key = [
+      component.localName,
+      component.keyExpression ?? '',
+      component.propsExpression,
+      component.serializedPropsExpression,
+    ].join('\0');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    facts.push(component);
+  }
+  return facts;
 }
 
 function routePageCssFact(
@@ -189,8 +237,9 @@ function routePageCssFact(
 
 function routeNavigationSegments(
   routePath: string,
-  components: readonly RoutePageComponentFact[],
+  pageComponents: readonly RoutePageComponentFact[],
   layouts: readonly RoutePageLayoutFact[],
+  regions: readonly RouteRegionFact[] = [],
 ): RouteNavigationSegmentFact[] {
   return [
     ...layouts.map((layout) => ({
@@ -199,13 +248,54 @@ function routeNavigationSegments(
       localName: layout.localName,
       queries: layout.queries,
     })),
-    {
-      components: components.map((component) => component.localName),
-      id: `page:${routePath}`,
-      kind: 'page' as const,
-      localName: 'page',
-    },
+    ...(regions.length > 0
+      ? regions.map((region) => ({
+          components: region.components.map((component) => component.localName),
+          id: region.name === 'page' ? `page:${routePath}` : `region:${region.name}`,
+          kind: region.name === 'page' ? ('page' as const) : ('region' as const),
+          localName: region.name,
+        }))
+      : [
+          {
+            components: pageComponents.map((component) => component.localName),
+            id: `page:${routePath}`,
+            kind: 'page' as const,
+            localName: 'page',
+          },
+        ]),
   ];
+}
+
+function routeRegionFacts(
+  fileName: string,
+  source: string,
+  sourceFile: ts.SourceFile,
+  routeDefinition: ts.ObjectLiteralExpression,
+  componentImports: ReadonlyMap<string, RouteComponentImportModel>,
+  diagnostics: CompilerDiagnostic[],
+): RouteRegionFact[] {
+  const regions = objectPropertyInitializer(routeDefinition, 'regions');
+  if (!regions || !ts.isObjectLiteralExpression(regions)) return [];
+
+  return regions.properties.flatMap((property) => {
+    if (!ts.isPropertyAssignment(property) && !ts.isMethodDeclaration(property)) return [];
+    const name = propertyNameText(property.name);
+    if (!name) return [];
+    const node = ts.isPropertyAssignment(property) ? property.initializer : property;
+    return [
+      {
+        components: routePageComponentFacts(
+          fileName,
+          source,
+          sourceFile,
+          node,
+          componentImports,
+          diagnostics,
+        ),
+        name,
+      },
+    ];
+  });
 }
 
 function componentImportModels(
@@ -768,7 +858,7 @@ function routeAuthoringSurfaceDiagnostics(
         help: [
           diagnosticDefinitions.KV235.help,
           'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-          'Fix: remove the kovo-nav-* attribute and keep the route/layout/component source as authored JSX.',
+          'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
           'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
         ].join('\n'),
         message: `${diagnosticDefinitions.KV235.message} hand-authored navigation segment stamp ${node.name.text}.`,

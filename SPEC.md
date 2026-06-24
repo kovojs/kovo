@@ -254,6 +254,32 @@ owned by the request shell (§9.5). Runtime persistence is not part of v1: every
 renders a full document, so later enhanced-navigation layers must preserve the same authored layout
 declarations. Authoring examples live in `site/content/guides/layouts.md`.
 
+Routes may declare **parallel layout regions** at the route boundary with `regions`, for sibling
+chrome that a layout positions beside the main page without app-authored runtime stamps:
+
+```tsx
+const DocsLayout = layout({
+  render: (_queries, _state, { regions }) => (
+    <DocsShell page={regions.page} sidebar={regions.sidebar} />
+  ),
+});
+
+route('/guides/:slug', {
+  layout: DocsLayout,
+  regions: {
+    page: ({ params }) => <GuidePage slug={params.slug} />,
+    sidebar: ({ params }) => <DocsSidebar activeSlug={params.slug} />,
+  },
+});
+```
+
+`regions.page` is the route leaf region when present; additional names are scoped to the declaring
+route/layout contract. The request shell renders every region from the same route params, search,
+guard-refined request, and JSX context as the page, then passes the rendered map to
+`layout().render` as `slots.regions`. The compiler owns the stable segment ids and dependency
+metadata for those regions. JSX marker components or app-authored `kovo-nav-*` attributes are not
+part of this API.
+
 Route pages that return JSX are **compiler-processed Kovo source**, not opaque runtime JSX. The
 compiler lowers the route page into authorable server IR, records the component calls and
 serializable props, runs the declared component queries for the initial document, and emits the
@@ -740,7 +766,7 @@ Interactions must use the lowest layer that suffices. The compiler enforces L0 s
 - **No client router.** Each page has a complete server document; route handlers are server functions declared with `route()` (§6.4), which carries the path's literal type, param/search schemas, and per-route config. `<Link>`/`href()` are compile-time sugar lowering to plain `<a href>` — typed links whose native URL remains the canonical behavior.
 - **Enhanced navigation is a progressive enhancement, not an app mode.** The loader may intercept only eligible same-origin, unmodified, GET anchor navigations. It fetches the canonical full HTML document, validates render-plan/version and compiler-derived segment metadata, updates or validates document-shell state, and morphs only compatible changed segments. The current document's layout chain is an optimization hint only; the target server document decides the route, guard outcome, layout chain, head, and body. On unsupported content type, cross-origin URL, modified click, target/download/hash-only navigation, redirect/guard uncertainty, shell drift, version mismatch, parse/morph failure, or any missing proof, the loader performs the normal full GET.
 - **Navigation partials are not a v1 protocol.** Enhanced navigation uses the full target document as its oracle. Header-selected navigation fragments, target-chain hints, or route-partial responses remain a possible optimization only after no-JS/full-load versus enhanced-navigation render-equivalence is proven over the corpus; app authors cannot opt into or hand-author a navigation partial response.
-- **Segment persistence is derived.** Only unchanged compiler-stamped layout segments may keep DOM identity. Changed layouts, changed route leaves, active nav/search/auth/query-dependent chrome, inserted islands, removed islands, and route boundaries are morphed from the target document or fall back to full navigation. App TSX never authors navigation segment stamps or persistence policy.
+- **Segment persistence is derived.** Only unchanged compiler-stamped layout/region segments may keep DOM identity. Changed layouts, changed route leaves, changed parallel regions, active nav/search/auth/query-dependent chrome, inserted islands, removed islands, and route boundaries are morphed from the target document or fall back to full navigation. App TSX never authors navigation segment stamps or persistence policy. If a route's declared `regions` cannot be matched to compiler-derived segment metadata in the target full document, enhanced navigation performs the normal full GET rather than preserving uncertain DOM.
 - **Navigation state emulates the browser.** Enhanced navigation owns `pushState`/`replaceState`, `popstate`, scroll restoration, hash scrolling, focus movement, and route-change announcements only for navigations it successfully completes. A newer navigation aborts older fetch/morph work. Pending optimistic state is reconciled from the target server document or discarded by full GET; it must not silently survive into an incompatible document.
 - **bfcache and loader budget stay load-bearing.** Enhanced navigation must not add `unload` handlers or global session heaps that block bfcache. Its code counts against the inline loader's 8.25KB gzip budget. The budget was raised from 8KB on 2026-06-23 to keep reactive attribute writes behind the same XSS sink policy as the rest of the framework; future budget increases require comparable evidence.
 - **Speculation Rules** are opt-in config, never auto-emitted: `prefetch: 'conservative' | 'moderate' | false` per route, declared on the `route()` object (§6.4), **default off**. Auto-prerender has real hazards — analytics firing inside prerendered pages, non-idempotent per-user renders, discarded-render server cost — so apps opt in route-by-route where renders are idempotent and cheap. `prefetch: 'moderate'` (which prerenders the route's `page`/`meta`/queries with the user's credentials on hover) is gated at compile time: it is **KV419** (`error`) to set `moderate` on a route that is guarded, session-dependent, or whose `page`/`meta`/queries are not proven side-effect-free, unless a named justification is supplied at the route (mirroring KV229 export gating and KV320). `conservative` (no eager render) is unaffected. The feature is one `<script type="speculationrules">` tag; the MPA is fast without it.

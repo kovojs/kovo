@@ -1,10 +1,14 @@
 /** @jsxImportSource @kovojs/server */
 import { createApp, createRequestHandler, layout, route, toNodeHandler } from '@kovojs/server';
-import { defineCompiledRoutePage } from '@kovojs/server/internal/route';
 
 import { buildSiteRouteData, type SiteRoutePage } from './app-data.js';
 import { clientHrefs, siteClientModules } from './client/modules.js';
-import { DocsRoutePage } from './components/docs-layout.js';
+import {
+  DocsHeaderRegion,
+  DocsPageRegion,
+  DocsRouteLayoutShell,
+  DocsSidebarRegion,
+} from './components/docs-layout.js';
 import { LandingRoutePage } from './components/landing.js';
 import { siteDocumentTemplate } from './document-template.js';
 import { siteStylesheetsForRoute } from './route-kit.js';
@@ -13,13 +17,9 @@ type SiteRoute = ReturnType<typeof route>;
 
 const siteRouteData = await buildSiteRouteData({ clientModules: siteClientModules });
 
-function SiteRouteLayoutShell({ children }: { children?: unknown }): string {
-  return <div data-site-route-layout>{children}</div>;
-}
-
 const SiteRouteLayout = layout({
-  render: (_queries, _state, { children }) => (
-    <SiteRouteLayoutShell>{children}</SiteRouteLayoutShell>
+  render: (_queries, _state, { children, regions }) => (
+    <DocsRouteLayoutShell regions={regions}>{children}</DocsRouteLayoutShell>
   ),
 });
 
@@ -28,9 +28,9 @@ const routes: SiteRoute[] = [
     layout: SiteRouteLayout,
     meta: siteRouteData.landing.meta,
     stylesheets: siteStylesheetsForRoute('/'),
-    page: siteRoutePage('/', function landingRoute() {
+    page: function landingRoute() {
       return <LandingRoutePage clients={clientHrefs} />;
-    }),
+    },
   }) as SiteRoute,
   ...siteRouteData.pages.map((page) => docsRoute(page)),
 ];
@@ -52,45 +52,10 @@ function docsRoute(page: SiteRoutePage): SiteRoute {
     meta: page.meta,
     modulepreloads,
     stylesheets: siteStylesheetsForRoute(page.routePath),
-    page: siteRoutePage(
-      page.routePath,
-      function pageRoute() {
-        return <DocsRoutePage clients={clientHrefs} page={page.body} />;
-      },
-      { stampPage: false },
-    ),
-  }) as SiteRoute;
-}
-
-function siteRoutePage<Page extends (...args: never[]) => unknown>(
-  routePath: string,
-  page: Page,
-  options: { stampPage?: boolean } = {},
-) {
-  const stampPage = options.stampPage ?? true;
-  return defineCompiledRoutePage(
-    {
-      components: [],
-      fileName: 'site/src/app.tsx',
-      navigationSegments: [
-        {
-          id: 'layout:SiteRouteLayout',
-          kind: 'layout',
-          localName: 'SiteRouteLayout',
-        },
-        ...(stampPage
-          ? [
-              {
-                components: [],
-                id: `page:${routePath}`,
-                kind: 'page' as const,
-                localName: 'page',
-              },
-            ]
-          : []),
-      ],
-      route: routePath,
+    regions: {
+      header: () => <DocsHeaderRegion clients={clientHrefs} page={page.body} />,
+      page: () => <DocsPageRegion page={page.body} />,
+      sidebar: () => <DocsSidebarRegion clients={clientHrefs} page={page.body} />,
     },
-    page,
-  );
+  }) as SiteRoute;
 }

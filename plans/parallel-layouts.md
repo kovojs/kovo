@@ -65,50 +65,71 @@ route-level throughout.
 
 ## Implementation Plan
 
-- [ ] Define the public route-level parallel-region API and update `SPEC.md` §8.
+- [x] Define the public route-level parallel-region API and update `SPEC.md` §8.
   - Evidence needed: SPEC text describes the app-facing primitive, states that runtime stamps remain
     compiler-owned, and defines how route/page/layout regions degrade to full navigation when
     compatibility is unproven.
+  - Evidence: `SPEC.md` §4.5 documents `route({ regions })`; `SPEC.md` §8 states segment stamps
+    stay compiler/framework-owned and missing compatibility proof falls back to full GET navigation.
 
-- [ ] Add compiler metadata for named route/layout regions.
+- [x] Add compiler metadata for named route/layout regions.
   - Evidence needed: compiler tests prove app-authored region declarations lower to
     `CompiledRouteNavigationSegment` metadata, including stable region ids, kind/name fields, and
     component/query dependencies where present.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/compile-component.test.ts`
+    covers route-region metadata and KV235 marker rejection.
 
-- [ ] Teach the server route shell to stamp derived region metadata.
+- [x] Teach the server route shell to stamp derived region metadata.
   - Evidence needed: server route JSX tests show public region declarations render internal
     `kovo-nav-segment`, `kovo-nav-kind`, and `kovo-nav-name` attributes without app-authored marker
     attributes in source.
+  - Evidence: `pnpm exec vitest --run packages/server/src/static-export-replay.test.ts packages/server/src/route-jsx.test.tsx`
+    proves public regions stamp layout/page/sidebar metadata, including copied declarations across
+    CLI/Vite module instances.
 
-- [ ] Reject app-authored navigation marker attributes in app TSX.
+- [x] Reject app-authored navigation marker attributes in app TSX.
   - Evidence needed: compiler/source-sink diagnostic tests reject `kovo-nav-segment`,
     `kovo-nav-kind`, `kovo-nav-name`, `kovo-nav-queries`, and `kovo-nav-components` outside generated
     output, with a teaching message pointing to the public region API.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/route-pages.test.ts packages/compiler/src/compile-component.test.ts`
+    asserts KV235 for every `kovo-nav-*` marker and help text pointing to `route({ regions })`.
 
-- [ ] Update enhanced-navigation segment reconciliation for parallel regions.
+- [x] Update enhanced-navigation segment reconciliation for parallel regions.
   - Evidence needed: browser/runtime tests cover sibling regions where the page region changes, a
     layout region is compatible and preserved, and a route-dependent region changes and is morphed
     rather than patched by site-specific client code.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/inline-loader-navigation.test.ts` covers
+    multiple changed sibling region segments under a compatible preserved layout.
 
-- [ ] Migrate the docs site to the public region API.
+- [x] Migrate the docs site to the public region API.
   - Evidence needed: `site/src/components/docs-layout.tsx` no longer contains hand-authored
     `kovo-nav-*` attributes; `site/src/app.tsx` no longer imports or calls
     `defineCompiledRoutePage()`; docs enhanced navigation still keeps the left rail stable and
     updates current page/section correctly.
+  - Evidence: inspected `site/src/app.tsx` and `site/src/components/docs-layout.tsx`; site build
+    emits stamped docs pages from public `regions`.
 
-- [ ] Remove docs-site sidebar navigation sync that only compensates for preserved stale markup.
+- [x] Remove docs-site sidebar navigation sync that only compensates for preserved stale markup.
   - Evidence needed: `site/src/client/sidebar.js` is removed or narrowed to scroll-only behavior;
     active/current sidebar state comes from the server-rendered target document through framework
     morphing.
+  - Evidence: `site/src/client/sidebar.js` is scroll-only; the static Playwright probe from
+    `/guides/layouts/` to `/guides/request-shell/` showed the page segment and heading update from
+    server-rendered target markup.
 
-- [ ] Verify static export and browser navigation with the docs site as the proving app.
+- [x] Verify static export and browser navigation with the docs site as the proving app.
   - Evidence needed: `pnpm --filter @kovojs/site run build`; focused Playwright navigation probe
     across `/guides/` pages shows enhanced navigation, no full reload, no FOUC, and current sidebar
     section/page visible.
+  - Evidence: site build reported `html=107 client-modules=87 assets=1 diagnostics=0`; Playwright
+    probe against `site/dist` preserved layout/header identity and updated the page segment to
+    `page:/guides/request-shell`.
 
-- [ ] Run focused framework gates and update public docs.
+- [x] Run focused framework gates and update public docs.
   - Evidence needed: relevant compiler/server/browser tests pass; docs explain the public region API
     without exposing internal marker attributes.
+  - Evidence: `pnpm exec vitest --run packages/server/src/static-export-replay.test.ts packages/server/src/route-jsx.test.tsx packages/compiler/src/route-pages.test.ts packages/compiler/src/compile-component.test.ts packages/browser/src/inline-loader-navigation.test.ts`
+    passed 5 files / 139 tests; `site/content/guides/layouts.md` documents parallel regions.
 
 ## Open Design Questions
 
@@ -124,4 +145,16 @@ route-level throughout.
 
 ## Latest Verification
 
-None yet. This is a new active implementation ledger.
+- `pnpm exec vitest --run packages/server/src/static-export-replay.test.ts packages/server/src/route-jsx.test.tsx packages/compiler/src/route-pages.test.ts packages/compiler/src/compile-component.test.ts packages/browser/src/inline-loader-navigation.test.ts`
+  passed 5 files / 139 tests.
+- `pnpm run check` passed after formatting the updated plan ledger.
+- `pnpm --filter @kovojs/browser run check:inline-loader` passed after regenerating
+  `packages/browser/src/inline-loader.ts`.
+- `pnpm run check:api-surface` passed with the existing baseline:
+  `public-exports-needing-attention=1338`, `recursive-publicness-needing-attention=1804`.
+- `pnpm --filter @kovojs/site run build` passed with `html=107 client-modules=87 assets=1
+diagnostics=0`; exported `/guides/layouts/` and `/guides/request-shell/` contain layout, header,
+  page, and sidebar navigation segments.
+- Focused Playwright probe against the static `site/dist` server navigated from `/guides/layouts/`
+  to `/guides/request-shell/`, preserving layout/header DOM identity and updating the page segment
+  to `page:/guides/request-shell`.

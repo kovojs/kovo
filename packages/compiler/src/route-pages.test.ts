@@ -147,6 +147,80 @@ export const home = route('/', {
     );
   });
 
+  it('lowers route-level parallel regions to compiler-owned navigation segment metadata', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { layout, route } from '@kovojs/server';
+import { DocsPage } from './components/docs-page.js';
+import { DocsSidebar } from './components/docs-sidebar.js';
+
+const DocsLayout = layout({
+  render: (_queries, _state, { regions }) => (
+    <main>
+      {regions.page}
+      {regions.sidebar}
+    </main>
+  ),
+});
+
+export const guide = route('/guides/:slug', {
+  layout: DocsLayout,
+  regions: {
+    page: ({ params }) => <DocsPage slug={params.slug} />,
+    sidebar: ({ params }) => <DocsSidebar activePath={params.slug} />,
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.routePageFacts).toEqual([
+      expect.objectContaining({
+        components: [
+          expect.objectContaining({ localName: 'DocsPage' }),
+          expect.objectContaining({ localName: 'DocsSidebar' }),
+        ],
+        layouts: [{ localName: 'DocsLayout', queries: [] }],
+        navigationSegments: [
+          {
+            id: 'layout:DocsLayout',
+            kind: 'layout',
+            localName: 'DocsLayout',
+            queries: [],
+          },
+          {
+            components: ['DocsPage'],
+            id: 'page:/guides/:slug',
+            kind: 'page',
+            localName: 'page',
+          },
+          {
+            components: ['DocsSidebar'],
+            id: 'region:sidebar',
+            kind: 'region',
+            localName: 'sidebar',
+          },
+        ],
+        regions: [
+          {
+            components: [expect.objectContaining({ localName: 'DocsPage' })],
+            name: 'page',
+          },
+          {
+            components: [expect.objectContaining({ localName: 'DocsSidebar' })],
+            name: 'sidebar',
+          },
+        ],
+        route: '/guides/:slug',
+      }),
+    ]);
+    expect(result.files[0]?.source).toContain(
+      '"navigationSegments":[{"id":"layout:DocsLayout","kind":"layout","localName":"DocsLayout","queries":[]},{"components":["DocsPage"],"id":"page:/guides/:slug","kind":"page","localName":"page"},{"components":["DocsSidebar"],"id":"region:sidebar","kind":"region","localName":"sidebar"}]',
+    );
+    expect(result.files[0]?.source).toContain('page: __kovoDefineCompiledRoutePage(');
+  });
+
   it('reports KV303 when a route layout cannot resolve to a local layout declaration', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',
@@ -291,19 +365,36 @@ export const home = route('/', {
 import { route } from '@kovojs/server';
 
 export const home = route('/', {
-  page: () => <main kovo-nav-segment="page:/">Home</main>,
+  page: () => (
+    <main
+      kovo-nav-components="HomePage"
+      kovo-nav-kind="page"
+      kovo-nav-name="page"
+      kovo-nav-queries="viewer"
+      kovo-nav-segment="page:/"
+    >
+      Home
+    </main>
+  ),
 });
 `,
     });
 
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'KV235',
-        help: expect.stringContaining('Navigation segment stamps are compiler-derived'),
-        message:
-          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-segment.',
-      }),
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-components.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-kind.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-name.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-queries.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-segment.',
     ]);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV235',
+          help: expect.stringContaining('route({ regions })'),
+        }),
+      ]),
+    );
   });
 
   it('reports KV244 for defer() used directly as a route JSX child', () => {

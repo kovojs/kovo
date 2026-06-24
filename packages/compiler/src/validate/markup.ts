@@ -87,7 +87,7 @@ export function validateHandAuthoredNavigationSegmentStamps(
         help: [
           diagnosticDefinitions.KV235.help,
           'Navigation segment stamps are compiler-derived from route(), layout(), and the target document used by enhanced navigation.',
-          'Fix: remove the kovo-nav-* attribute and keep the route/layout/component source as authored JSX.',
+          'Fix: remove the kovo-nav-* attribute and declare sibling route/layout regions with the public route({ regions }) API.',
           'SPEC §8 makes enhanced navigation loader-owned; app TSX does not author segment stamps or persistence policy.',
         ].join('\n'),
       });
