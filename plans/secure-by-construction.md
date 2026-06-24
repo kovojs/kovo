@@ -216,7 +216,7 @@ before any consumer feature phase (1–6) begins.** The full multi-consumer API 
 ships an interim lexical check. This front-loads the hardest, least-glamorous work with no user-visible feature
 until Phase 1, accepted deliberately so every gate is sound on arrival.
 
-- [ ] Build one symbol-identity provenance/reachability pass over the sound TS subset.
+- [x] Build one symbol-identity provenance/reachability pass over the sound TS subset.
   - Resolve table/column refs by Drizzle **symbol**, not lexical text, so `alias()`, re-import, and rename
     cannot defeat a check. Reuse the existing symbol machinery (`resolvedSymbolKey`, `aliasedSymbol`,
     `symbolForStaticMemberReference`, `tableNamesBySymbol`) rather than `tableExpressionBase` (which keys on
@@ -224,10 +224,16 @@ until Phase 1, accepted deliberately so every gate is sound on arrival.
   - Lattice `Literal | ServerProvenance | InputProvenance | Unknown`; trace assignments, destructuring
     (`const { x } = input`), shorthand, and operators; join takes the least-safe value; `Unknown` is
     fail-closed for write/leak gates.
-- [ ] Design and freeze the stable consumer API up front (Option A requirement).
+  - Evidence: `packages/drizzle/src/static/symbol-provenance.ts` defines the lattice/context and
+    `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts` passed 7 tests on local
+    `main` at `91988759`.
+- [x] Design and freeze the stable consumer API up front (Option A requirement).
   - Consumers: Phase 1 (confidentiality), Phase 3 (mass-assignment), Phase 5 (egress + read-only handles),
     plus the SQL analyzer in `plans/sql-injection.md`. The API must satisfy all four before Phase 1 starts,
     so no consumer-specific assumptions leak into the engine.
+  - Evidence: `packages/drizzle/src/static.ts` exports `symbolProvenanceForExpression`,
+    `provenServerProvenanceForExpression`, and `provenInputProvenanceForExpression`; the focused provenance
+    test above covers positive and fail-closed proof-helper cases.
 - [ ] Invert the read-side input classifier for write/leak direction.
   - `queryInputKeyOperand` (`summaries.ts:652`) fails open (fine for read-side IDOR, where the WHERE clause
     is separately audited). The write/leak gates must **prove server-provenance** and reject all else.
