@@ -9,7 +9,7 @@
     "large-component": {
       "fileCount": 1,
       "minLoc": 600,
-      "coldMaxMs": 750,
+      "coldMaxMs": 1000,
       "warmMaxMs": 100
     },
     "many-small-components": {

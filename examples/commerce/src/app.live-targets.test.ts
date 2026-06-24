@@ -2,12 +2,7 @@ import '../../../tests/example-generated-graphs.setup.js';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  htmlElementFacts,
-  htmlFormFacts,
-  htmlKeyValues,
-  htmlTextContent,
-} from '@kovojs/test/html-fragment';
+import { htmlElementFacts, htmlFormFacts, kovoQueryJsonValues } from '@kovojs/test/html-fragment';
 
 import { createCommerceScenarioClient } from './app-test-helpers.js';
 import { createCommerceApp } from './app.js';
@@ -24,7 +19,7 @@ describe('commerce authored live-target artifacts', () => {
     ).toHaveLength(1);
   });
 
-  it('renders live-target UI fragments for enhanced addToCart success', async () => {
+  it('renders live-target query chunks for enhanced addToCart success', async () => {
     const client = createCommerceScenarioClient(createCommerceApp());
     const login = await client.signIn({ remoteAddress: '203.0.113.171' });
     expect(login.status).toBe(303);
@@ -37,8 +32,19 @@ describe('commerce authored live-target artifacts', () => {
 
     expect(response.status, body).toBe(200);
     expect(response.headers.get('content-type')).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
-    expect(htmlKeyValues(body)).toContain('order-2');
-    expect(htmlTextContent(body)).toContain('Only 1 left');
+    expect(kovoQueryJsonValues(body, 'orderHistory')).toEqual([
+      {
+        items: [
+          { id: 'order-1', productId: 'p1', qty: 2, total: 2998, userId: 'u1' },
+          { id: 'order-2', productId: 'p2', qty: 1, total: 2599, userId: 'u1' },
+        ],
+      },
+    ]);
+    expect(kovoQueryJsonValues(body, 'productGrid')).toEqual([
+      expect.objectContaining({
+        items: expect.arrayContaining([expect.objectContaining({ id: 'p2', stock: 1 })]),
+      }),
+    ]);
   });
 
   it('renders live-target failure fragments with form helpers', async () => {
@@ -76,8 +82,8 @@ describe('commerce authored live-target artifacts', () => {
         tag: 'output',
       }),
     ).toHaveLength(1);
-    expect(htmlTextContent(body)).toContain('Only 2 available.');
+    expect(body).toContain('Only 2 available.');
     const cart = await client.get('/cart');
-    expect(htmlKeyValues(await cart.text())).not.toContain('order-1');
+    expect(await cart.text()).not.toContain('order-1');
   });
 });

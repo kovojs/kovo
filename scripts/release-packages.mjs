@@ -67,7 +67,7 @@ function workspaceDependencyNames(manifest) {
       }
     }
   }
-  return [...names].sort();
+  return [...names].sort((left, right) => left.localeCompare(right));
 }
 
 export function assertNoWorkspaceProtocols(manifest, label) {

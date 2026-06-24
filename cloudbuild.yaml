@@ -26,7 +26,7 @@ substitutions:
   _REGION: us-central1
   _REPO: kovo
   _TAG: latest
-  _MEMORY: 2Gi
+  _MEMORY: 4Gi
   _CPU: '1'
   _CONCURRENCY: '10'
   _MIN_INSTANCES: '1' # session state lives in instance memory; 0 = scale-to-zero, resets on cold start
@@ -38,6 +38,8 @@ substitutions:
   _COMMERCE_CSRF_SECRET_NAME: 'commerce-csrf-secret'
   _COMMERCE_AUTH_CSRF_SECRET_NAME: 'commerce-auth-csrf-secret'
   _COMMERCE_WEBHOOK_SECRET_NAME: 'commerce-webhook-secret'
+  _CRM_CSRF_SECRET_NAME: 'crm-csrf-secret'
+  _STACKOVERFLOW_CSRF_SECRET_NAME: 'stackoverflow-csrf-secret'
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -53,6 +55,66 @@ steps:
       - -t
       - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
       - .
+
+  - id: smoke-stackoverflow-styles
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
+        CID=$$(docker run -d -e EXAMPLE=stackoverflow -e PORT=8080 -e HOST=0.0.0.0 "$$IMAGE")
+        trap 'docker logs "$$CID" || true; docker rm -f "$$CID" >/dev/null 2>&1 || true' EXIT
+
+        node_check='
+          const http = require("node:http");
+          const path = process.argv[1];
+          const expectedType = process.argv[2];
+          const expectedBody = process.argv[3];
+          const req = http.request(
+            {
+              headers: { host: "kovo-stackoverflow-sfqtuclaza-uc.a.run.app" },
+              host: "127.0.0.1",
+              path,
+              port: 8080,
+            },
+            (res) => {
+              const chunks = [];
+              res.on("data", (chunk) => chunks.push(chunk));
+              res.on("end", () => {
+                const body = Buffer.concat(chunks).toString("utf8");
+                const type = String(res.headers["content-type"] || "");
+                if (
+                  res.statusCode !== 200 ||
+                  !type.startsWith(expectedType) ||
+                  body.includes("Blocked request") ||
+                  (expectedBody && !body.includes(expectedBody))
+                ) {
+                  console.error(`${path} status=${res.statusCode} type=${type}`);
+                  console.error(body.slice(0, 500));
+                  process.exit(1);
+                }
+              });
+            },
+          );
+          req.on("error", (error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          req.end();
+        '
+
+        for _ in $$(seq 1 60); do
+          if docker exec "$$CID" node -e "$$node_check" / 'text/html'; then
+            docker exec "$$CID" node -e "$$node_check" /assets/styles.css 'text/css' 'kv-chrome-'
+            exit 0
+          fi
+          sleep 1
+        done
+
+        docker logs "$$CID"
+        exit 1
 
   - id: push
     name: gcr.io/cloud-builders/docker
@@ -79,6 +141,10 @@ steps:
           fi
           if [[ "$$EX" == "commerce" ]]; then
             SECRET_FLAGS=(--set-secrets "KOVO_COMMERCE_CSRF_SECRET=${_COMMERCE_CSRF_SECRET_NAME}:latest,KOVO_COMMERCE_AUTH_CSRF_SECRET=${_COMMERCE_AUTH_CSRF_SECRET_NAME}:latest,COMMERCE_WEBHOOK_SECRET=${_COMMERCE_WEBHOOK_SECRET_NAME}:latest")
+          elif [[ "$$EX" == "crm" ]]; then
+            SECRET_FLAGS=(--set-secrets "KOVO_CRM_CSRF_SECRET=${_CRM_CSRF_SECRET_NAME}:latest")
+          elif [[ "$$EX" == "stackoverflow" ]]; then
+            SECRET_FLAGS=(--set-secrets "KOVO_STACKOVERFLOW_CSRF_SECRET=${_STACKOVERFLOW_CSRF_SECRET_NAME}:latest")
           fi
           gcloud run deploy kovo-$$EX \
             --project ${_PROJECT_ID} \

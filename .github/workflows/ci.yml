@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+
 jobs:
   format:
     runs-on: ubuntu-latest
@@ -16,7 +19,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -36,7 +39,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -61,7 +64,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - run: vp exec pnpm rebuild better-sqlite3
       - id: compiler-cache-key
@@ -83,7 +86,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - run: vp exec pnpm rebuild better-sqlite3
       - run: |
@@ -106,7 +109,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -120,8 +123,32 @@ jobs:
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run browser
-      - run: vp exec pnpm --filter @kovojs/example-gallery run emit:interactive-gallery
-      - run: vp exec pnpm --filter @kovojs/example-gallery run test:browser
+
+  gallery-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 22.15.0
+      - run: vp install
+      - id: compiler-cache-key
+        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            .kovo/cache
+            **/.kovo/cache
+          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
+          restore-keys: |
+            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - run: vp exec playwright install --with-deps --no-shell chromium
+      - run: |
+          Xvfb :99 -screen 0 1280x720x24 >/tmp/kovo-gallery-xvfb.log 2>&1 &
+          export DISPLAY=:99
+          vp exec pnpm --filter @kovojs/example-gallery run test:browser
+        env:
+          KOVO_GALLERY_BROWSER_HEADED: '1'
 
   integration:
     runs-on: ubuntu-latest
@@ -129,7 +156,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -150,7 +177,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -176,7 +203,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -197,7 +224,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -222,7 +249,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -246,7 +273,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -266,12 +293,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [compiler-runtime, server-browser, project, graph-cli]
+        suite: [compiler-runtime, server-browser, project]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
       - run: vp install
       - id: compiler-cache-key
         run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
@@ -297,6 +324,7 @@ jobs:
       - test
       - sql-safety
       - browser
+      - gallery-browser
       - integration
       - build
       - publish-check

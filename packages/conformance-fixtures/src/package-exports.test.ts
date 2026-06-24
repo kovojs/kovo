@@ -408,7 +408,6 @@ import {
 import {
   executeStarterClientTemplate,
   runPnpmFilterTaskCommand,
-  runStarterTemplateEmitGraph,
   runStarterTemplateGraphAssertions,
   runStarterTemplateViteTaskCommand,
   starterClientTemplateBehaviorFact,
@@ -970,7 +969,6 @@ describe('@kovojs/test package subpath exports', () => {
     expect(starterTemplateAcceptanceFact).toBeTypeOf('function');
     expect(executeStarterClientTemplate).toBeTypeOf('function');
     expect(starterClientTemplateBehaviorFact).toBeTypeOf('function');
-    expect(runStarterTemplateEmitGraph).toBeTypeOf('function');
     expect(runStarterTemplateGraphAssertions).toBeTypeOf('function');
     expect(runStarterTemplateViteTaskCommand).toBeTypeOf('function');
     expect(runPnpmFilterTaskCommand).toBeTypeOf('function');

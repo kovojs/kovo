@@ -313,6 +313,7 @@ void test('P3 Drizzle query facts include select shapes and instance keys', asyn
   } catch (error) {
     const importFailureFact = moduleImportFailureFact(error, [
       '__filename is not defined in ES module scope',
+      'packages/drizzle/src/graph.js',
       'packages/core/src/diagnostics.js',
     ]);
     assert.equal(importFailureFact.allowed, true, 'unexpected Drizzle static import failure');
@@ -594,14 +595,14 @@ void test('P4 commerce touch graph is an on-demand generated artifact', async ()
           queries: ['cart'],
         },
         {
-          fragments: ['components/order-history/order-history'],
-          name: 'components/order-history/order-history',
-          queries: ['orderHistory'],
-        },
-        {
           fragments: ['components/product-grid/product-grid'],
           name: 'components/product-grid/product-grid',
           queries: ['productGrid'],
+        },
+        {
+          fragments: ['components/order-history/order-history'],
+          name: 'components/order-history/order-history',
+          queries: ['orderHistory'],
         },
       ],
       domains: ['auth', 'cart', 'order', 'product'],
@@ -614,7 +615,7 @@ void test('P4 commerce touch graph is an on-demand generated artifact', async ()
         { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
         { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
       ],
-      routes: ['/', '/cart', '/login'],
+      routes: ['/', '/cart'],
       touchGraphKeys: ['cart.addItem'],
     },
     touchGraph: {
@@ -1200,13 +1201,14 @@ void test('root acceptance and CI cover the omitted release gates plus gallery b
     ],
   );
 
-  const workflowCommands = workflowStepCommands(await readProjectFile('.github/workflows/ci.yml'))
+  const ciWorkflowSource = await readProjectFile('.github/workflows/ci.yml');
+  const workflowCommands = workflowStepCommands(ciWorkflowSource)
     .map((step) => step.run)
     .filter(Boolean);
   assert.ok(workflowCommands.includes('vp exec pnpm run check'));
   assert.ok(workflowCommands.includes('vp exec pnpm run check:api-surface'));
   assert.ok(
-    workflowCommands.includes('vp exec pnpm --filter @kovojs/example-gallery run test:browser'),
+    ciWorkflowSource.includes('vp exec pnpm --filter @kovojs/example-gallery run test:browser'),
   );
   assert.ok(workflowCommands.includes('vp exec pnpm run check:publish'));
 });

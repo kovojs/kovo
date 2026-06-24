@@ -89,6 +89,27 @@ describe('demo-session built asset serving', () => {
     }
   });
 
+  it('returns a clear 404 for missing built assets instead of falling through', async () => {
+    const server = await serveAssets(tempDist({}));
+
+    try {
+      const response = await requestAsset(server.origin, '/assets/styles.css', {
+        'Accept-Encoding': 'br,gzip',
+        Host: 'kovo-stackoverflow-sfqtuclaza-uc.a.run.app',
+      });
+
+      expect(response.status).toBe(404);
+      expect(response.headers).toMatchObject({
+        'cache-control': 'no-store',
+        'content-type': 'text/plain; charset=utf-8',
+      });
+      expect(response.body.toString('utf8')).toContain('Built demo asset not found');
+      expect(response.body.toString('utf8')).not.toContain('missing');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('serves a favicon so browsers do not fall through to app dispatch', async () => {
     const server = await serveAssets(tempDist({}));
 

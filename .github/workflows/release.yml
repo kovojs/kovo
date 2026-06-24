@@ -24,6 +24,9 @@ on:
 permissions:
   contents: read
 
+env:
+  NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+
 concurrency:
   group: release-dispatch
   cancel-in-progress: false
@@ -42,7 +45,7 @@ jobs:
 
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
         with:
-          node-version: 24
+          node-version: 22.15.0
 
       - run: vp install
 
@@ -80,4 +83,4 @@ jobs:
         run: vp exec pnpm exec node scripts/publish-packed-packages.mjs --tag "$DIST_TAG"
         env:
           DIST_TAG: ${{ inputs.dist_tag }}
-          NPM_CONFIG_PROVENANCE: "true"
+          NPM_CONFIG_PROVENANCE: 'true'

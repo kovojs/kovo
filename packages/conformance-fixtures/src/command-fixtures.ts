@@ -584,6 +584,10 @@ export async function loadVitePlusConfig(source: string): Promise<VitePlusConfig
       if (specifier === './examples/vite-kovo-compiler.js') {
         return {
           commerceRegistryFacts: {},
+          exampleDrizzleRegistryPlugin: () => ({
+            enforce: 'pre',
+            name: 'kovo-example-drizzle-registry-test-stub',
+          }),
           exampleKovoCompilerPlugin: () => ({ enforce: 'pre', name: 'kovo-compiler-test-stub' }),
         };
       }
