@@ -12,6 +12,48 @@ interface TestFragmentTarget {
 }
 
 describe('response fragment apply primitive', () => {
+  function withTrustedTypesPolicy<T>(run: (created: string[]) => T): T {
+    const state = globalThis as unknown as {
+      __kovo_tt?: unknown;
+      trustedTypes?: {
+        createPolicy(
+          name: 'kovo',
+          rules: { createHTML(html: string): string },
+        ): {
+          createHTML(html: string): { html: string; toString(): string };
+        };
+      };
+    };
+    const previousPolicy = state.__kovo_tt;
+    const previousTrustedTypes = state.trustedTypes;
+    const created: string[] = [];
+    delete state.__kovo_tt;
+    state.trustedTypes = {
+      createPolicy(name, rules) {
+        created.push(name);
+        return {
+          createHTML(html: string) {
+            const value = rules.createHTML(html);
+            return {
+              html: value,
+              toString() {
+                return value;
+              },
+            };
+          },
+        };
+      },
+    };
+    try {
+      return run(created);
+    } finally {
+      if (previousPolicy === undefined) delete state.__kovo_tt;
+      else state.__kovo_tt = previousPolicy;
+      if (previousTrustedTypes === undefined) delete state.trustedTypes;
+      else state.trustedTypes = previousTrustedTypes;
+    }
+  }
+
   it('applies replace and append fragment modes through supplied target operations', () => {
     // SPEC.md §9.1: kovo-fragment patches share one decoded apply primitive
     // across modular morph and the generated inline loader closure.
@@ -100,6 +142,41 @@ describe('response fragment apply primitive', () => {
 
     expect(applied).toEqual(['append-target']);
     expect(targets.get('append-target')?.html).toBe('<li>old</li><li>new</li>');
+  });
+
+  it('routes framework-owned HTML parse sinks through the cached Trusted Types policy', () => {
+    withTrustedTypesPolicy((created) => {
+      const appended: unknown[] = [];
+      const targets = new Map([
+        [
+          'append-target',
+          {
+            insertAdjacentHTML(_position: 'beforeend', html: unknown) {
+              if (typeof html === 'string') throw new TypeError('TrustedHTML required');
+              appended.push(html);
+            },
+          },
+        ],
+      ]);
+      expect(() =>
+        targets.get('append-target')?.insertAdjacentHTML('beforeend', '<li>raw</li>'),
+      ).toThrow('TrustedHTML required');
+
+      const applied = applyHtmlResponseFragments(
+        [
+          { html: '<li>one</li>', mode: 'append', target: 'append-target' },
+          { html: '<li>two</li>', mode: 'append', target: 'append-target' },
+        ],
+        (target) => (targets.get(target) as unknown as HtmlResponseFragmentApplyTarget) ?? null,
+      );
+
+      expect(applied).toEqual(['append-target', 'append-target']);
+      expect(created).toEqual(['kovo']);
+      expect(appended).toEqual([
+        expect.objectContaining({ html: '<li>one</li>' }),
+        expect.objectContaining({ html: '<li>two</li>' }),
+      ]);
+    });
   });
 
   it('exports one shared decoded fragment primitive and HTML adapter', async () => {

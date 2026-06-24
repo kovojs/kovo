@@ -56,9 +56,22 @@ export interface ContentSecurityPolicyOptions {
    * directive is not overridable.
    */
   objectSrc?: readonly string[];
+  /**
+   * Phase 7 / SPEC §6.6 defense-in-depth: Chromium Trusted Types policy names.
+   * Defaults to Kovo's framework-owned sole policy.
+   */
+  trustedTypes?: readonly string[];
+  /**
+   * Phase 7 / SPEC §6.6 defense-in-depth: Trusted Types sink enforcement.
+   * Defaults to Chromium's script sink family.
+   */
+  requireTrustedTypesFor?: readonly string[];
   scriptSrc?: readonly string[];
   styleSrc?: readonly string[];
 }
+
+/** Framework-owned Trusted Types policy name emitted in CSP and installed by the loader. */
+export const kovoTrustedTypesPolicyName = 'kovo';
 
 /**
  * Compute the CSP `sha256-…` source-expression for an inline script/style body, so an
@@ -144,6 +157,11 @@ export function renderContentSecurityPolicy(
     // and clickjacking vectors respectively; emit with secure defaults.
     directive('form-action', ["'self'"]),
     directive('frame-ancestors', ["'none'"]),
+    // Phase 7 / SPEC §6.6: Trusted Types is Chromium-only defense-in-depth. The CSP
+    // admits only the framework policy, and requires TrustedHTML/TrustedScriptURL for
+    // script-family sinks where the browser supports it.
+    directive('trusted-types', options.trustedTypes ?? [kovoTrustedTypesPolicyName]),
+    directive('require-trusted-types-for', options.requireTrustedTypesFor ?? ["'script'"]),
   ].filter((item): item is string => item !== undefined);
 
   return directives.join('; ');

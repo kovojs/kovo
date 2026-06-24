@@ -7,7 +7,23 @@ export interface ResponseFragmentApplyOptions<Target> {
 }
 
 export interface HtmlResponseFragmentApplyTarget extends Element {
-  insertAdjacentHTML(position: 'beforeend', html: string): void;
+  insertAdjacentHTML(position: 'beforeend', html: string | KovoTrustedHTML): void;
+}
+
+interface KovoTrustedHTML {
+  readonly [Symbol.toStringTag]?: 'TrustedHTML';
+  toString(): string;
+}
+
+interface KovoTrustedTypesPolicy {
+  createHTML(html: string): KovoTrustedHTML;
+}
+
+interface KovoTrustedTypesGlobal {
+  __kovo_tt?: KovoTrustedTypesPolicy;
+  trustedTypes?: {
+    createPolicy(name: 'kovo', rules: { createHTML(html: string): string }): KovoTrustedTypesPolicy;
+  };
 }
 
 export function applyResponseFragment<Target>(
@@ -60,7 +76,7 @@ export function p(
     if (!e) continue;
 
     if (x.mode === 'append') {
-      e.insertAdjacentHTML('beforeend', x.html);
+      e.insertAdjacentHTML('beforeend', th(x.html));
     } else {
       d(e, x.html);
     }
@@ -72,7 +88,7 @@ export function p(
 
 function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
   const t = document.createElement('template');
-  t.innerHTML = h;
+  t.innerHTML = th(h) as string;
   const n = firstMorphElement(t.content);
   const s = e.contains(document.activeElement) ? document.activeElement : null;
   const q: HTMLElement[] = [];
@@ -150,4 +166,26 @@ function u(c: Element, n: Element): void {
   });
 
   c.replaceChildren(...r);
+}
+
+function kp(): KovoTrustedTypesPolicy | undefined {
+  const g = globalThis as KovoTrustedTypesGlobal;
+  if (g.__kovo_tt) return g.__kovo_tt;
+  try {
+    const trustedTypes = g.trustedTypes;
+    if (typeof trustedTypes?.createPolicy !== 'function') return undefined;
+    g.__kovo_tt = trustedTypes.createPolicy('kovo', {
+      createHTML: (html: string) => html,
+    });
+    return g.__kovo_tt;
+  } catch {
+    return undefined;
+  }
+}
+
+function th(html: string): string | KovoTrustedHTML {
+  // SPEC §6.6 / Phase 7: Trusted Types is a Chromium-only fail-closed runtime
+  // floor. Kovo owns these parsed fragment sinks; app bindings still write text,
+  // attributes, or explicit trustedHtml sinks per SPEC §4.8/KV236.
+  return kp()?.createHTML(html) ?? html;
 }

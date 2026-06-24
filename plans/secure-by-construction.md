@@ -696,10 +696,17 @@ function. Classified runtime defense-in-depth: makes a slipped-through XSS inert
 packages/server/src/deferred-stream.test.ts packages/server/src/hints.test.ts` proves default CSP headers,
       nonce-bearing document/deferred/hint scripts, `strict-dynamic`, no unsafe script sources, and
       non-overridable hardening directives.
-- [ ] Install a Trusted Types policy with the framework as the SOLE policy (`require-trusted-types-for 'script'`)
+- [x] Install a Trusted Types policy with the framework as the SOLE policy (`require-trusted-types-for 'script'`)
       so any non-framework DOM-write sink (`innerHTML`/`script.src`) throws — kills DOM-XSS sinks outside the
       framework. Chromium-only (one-engine DiD; the CSP carries the cross-browser floor). **Flipped on
       directly** — app/third-party sinks that break must move to a framework-safe path or be allowlisted.
+      - Evidence: `packages/server/src/csp.ts` emits `trusted-types kovo` and
+        `require-trusted-types-for 'script'`; `packages/browser/src/response-fragment-apply.ts` and the generated
+        inline loader route framework HTML parse sinks through the cached `kovo` policy.
+      - Verification: `pnpm vitest --run packages/server/src/document.test.ts
+        packages/browser/src/response-fragment-apply.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts
+        packages/browser/src/inline-loader-build.test.ts` covers CSP emission/opt-out and a TT-enforced fake sink
+        that rejects raw strings but accepts Kovo policy output.
 - [ ] Add `frame-ancestors` (clickjacking) and `nosniff` (MIME-confusion) to the minted policy.
 - [ ] Third-party allowlist config (`script-src`/`frame-src` extras for analytics/payments/widgets), surfaced
       in `kovo explain --capabilities`. Required precisely because there is no report-only ramp — a third-party

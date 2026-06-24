@@ -66,7 +66,7 @@ describe('server app shell document assembly', () => {
         .replaceAll(loaderHash, '<loader-hash>')
         .replaceAll(nonce, '<nonce>'),
     ).toMatchInlineSnapshot(
-      `"default-src 'self'; script-src 'self' 'nonce-<nonce>' 'strict-dynamic' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'"`,
+      `"default-src 'self'; script-src 'self' 'nonce-<nonce>' 'strict-dynamic' 'sha256-hVln6Fvq5HW+LoV7Z7ET2nObn2J5Sk7RfDnzKFwgp6Q=' '<loader-hash>' 'sha256-aupt/mVhmEzcXFTq2E1H0s8p5IJTrigq7yN0BK2tRmE='; style-src 'self' 'sha256-FcQqt3aNlV7AZnGV4zkQRVeCeJOxbMPnQSx258L803E='; base-uri 'self'; object-src 'none'; form-action 'self'; frame-ancestors 'none'; trusted-types kovo; require-trusted-types-for 'script'"`,
     );
     // G2 (bugs-part3 CSP-2): the hardening directives are present so a hash-locked
     // script-src is not bypassable via an injected `<base>`/`<object>`.
@@ -75,6 +75,8 @@ describe('server app shell document assembly', () => {
     expect(policy).toContain("object-src 'none'");
     expect(policy).toContain("form-action 'self'");
     expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain('trusted-types kovo');
+    expect(policy).toContain("require-trusted-types-for 'script'");
     expect(document.html).toContain('<!doctype html><html lang="en-US"><head>');
     expect(document.html).toContain('<title>Cart</title>');
     expect(document.html).toContain(
@@ -94,6 +96,19 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain(
       '<body><main><cart-badge kovo-deps="cart"></cart-badge></main></body></html>',
     );
+  });
+
+  it('lets CSP callers deliberately omit Trusted Types directives for non-document contexts', () => {
+    const policy = renderContentSecurityPolicy(
+      { scripts: [], styles: [] },
+      {
+        requireTrustedTypesFor: [],
+        trustedTypes: [],
+      },
+    );
+
+    expect(policy).not.toContain('trusted-types');
+    expect(policy).not.toContain('require-trusted-types-for');
   });
 
   it('omits the loader script and loader CSP hash for negotiated loader-free documents', () => {

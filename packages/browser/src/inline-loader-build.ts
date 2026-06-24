@@ -532,7 +532,7 @@ function installInlineKovoLoader(im) {
       if (finalUrl.origin !== location.origin || !contentType.toLowerCase().includes('text/html')) {
         throw Error();
       }
-      const nextDoc = new DOMParser().parseFromString(await response.text(), 'text/html');
+      const nextDoc = new DOMParser().parseFromString(th(await response.text()), 'text/html');
       if (navId !== ni) return;
       const nextBody = nextDoc?.body;
       if (!nextBody || kb() !== kb(nextDoc)) throw Error();
