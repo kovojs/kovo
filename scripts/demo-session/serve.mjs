@@ -158,11 +158,17 @@ export async function tryServeBuiltAsset(req, res, distDir) {
     return true;
   }
   if (!pathname.startsWith('/assets/')) return false;
-  const filePath = path.join(distDir, pathname);
-  if (!filePath.startsWith(distDir)) return false;
+  const filePath = path.resolve(distDir, pathname.replace(/^\/+/, ''));
+  if (!insideDirectory(distDir, filePath)) {
+    sendTextAssetResponse(req, res, 403, 'Refusing to serve outside the demo dist directory.\n');
+    return true;
+  }
   try {
     const info = await stat(filePath);
-    if (!info.isFile()) return false;
+    if (!info.isFile()) {
+      sendMissingBuiltAsset(req, res, pathname);
+      return true;
+    }
     const contentType = STATIC_MIME[path.extname(filePath)] ?? 'application/octet-stream';
     const compression = isCompressibleContentType(contentType)
       ? preferredCompression(String(req.headers['accept-encoding'] ?? ''))
@@ -193,8 +199,36 @@ export async function tryServeBuiltAsset(req, res, distDir) {
     body.pipe(res);
     return true;
   } catch {
-    return false;
+    sendMissingBuiltAsset(req, res, pathname);
+    return true;
   }
+}
+
+function insideDirectory(root, filePath) {
+  const relativePath = path.relative(root, filePath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+function sendMissingBuiltAsset(req, res, pathname) {
+  sendTextAssetResponse(
+    req,
+    res,
+    404,
+    `Built demo asset not found: ${pathname}. Run the example build before serving.\n`,
+  );
+}
+
+function sendTextAssetResponse(req, res, status, body) {
+  res.writeHead(status, {
+    'cache-control': 'no-store',
+    'content-length': Buffer.byteLength(body),
+    'content-type': 'text/plain; charset=utf-8',
+  });
+  if (req.method === 'HEAD') {
+    res.end();
+    return;
+  }
+  res.end(body);
 }
 
 function preferredCompression(acceptEncoding) {

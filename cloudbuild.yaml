@@ -56,6 +56,66 @@ steps:
       - ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
       - .
 
+  - id: smoke-stackoverflow-styles
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE=${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_REPO}/examples:${_TAG}
+        CID=$$(docker run -d -e EXAMPLE=stackoverflow -e PORT=8080 -e HOST=0.0.0.0 "$$IMAGE")
+        trap 'docker logs "$$CID" || true; docker rm -f "$$CID" >/dev/null 2>&1 || true' EXIT
+
+        node_check='
+          const http = require("node:http");
+          const path = process.argv[1];
+          const expectedType = process.argv[2];
+          const expectedBody = process.argv[3];
+          const req = http.request(
+            {
+              headers: { host: "kovo-stackoverflow-sfqtuclaza-uc.a.run.app" },
+              host: "127.0.0.1",
+              path,
+              port: 8080,
+            },
+            (res) => {
+              const chunks = [];
+              res.on("data", (chunk) => chunks.push(chunk));
+              res.on("end", () => {
+                const body = Buffer.concat(chunks).toString("utf8");
+                const type = String(res.headers["content-type"] || "");
+                if (
+                  res.statusCode !== 200 ||
+                  !type.startsWith(expectedType) ||
+                  body.includes("Blocked request") ||
+                  (expectedBody && !body.includes(expectedBody))
+                ) {
+                  console.error(`${path} status=${res.statusCode} type=${type}`);
+                  console.error(body.slice(0, 500));
+                  process.exit(1);
+                }
+              });
+            },
+          );
+          req.on("error", (error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          req.end();
+        '
+
+        for _ in $$(seq 1 60); do
+          if docker exec "$$CID" node -e "$$node_check" / 'text/html'; then
+            docker exec "$$CID" node -e "$$node_check" /assets/styles.css 'text/css' 'kv-chrome-'
+            exit 0
+          fi
+          sleep 1
+        done
+
+        docker logs "$$CID"
+        exit 1
+
   - id: push
     name: gcr.io/cloud-builders/docker
     args:
