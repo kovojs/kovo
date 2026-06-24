@@ -290,9 +290,13 @@ design.
   - Evidence: `packages/compiler/src/validate/confidentiality.ts` emits KV435 for component-declared
     query shapes containing `{ kind: "secret" }`; `vp exec vitest --run packages/compiler/src/query-bindings.test.ts packages/core/src/diagnostics.test.ts`
     verifies the blocking diagnostic and registry definition.
-- [ ] Opaque/aliased projection backstop (diagnostic code TBD, **error** severity): a `sql\`\``/spread/computed-key
-projection of a table carrying ≥1 secret column requires an audited brand. Blast radius concentrates on
-`users`/`accounts`/`payments` — invest in the teaching message and make adding the brand the one-line fix.
+- [x] Opaque/aliased projection backstop (KV435, **error** severity): a `sql\`\``/spread/computed-key
+      projection of a table carrying ≥1 secret column must fail closed unless the projection is explicit
+      non-secret data. The audited reveal/redaction surface remains the separate escape-hatch item below.
+  - Evidence: `packages/drizzle/src/static/query-shapes.ts` preserves spread and computed-key projections as
+    unresolved facts, `packages/drizzle/src/static.ts` emits KV435 when opaque/unresolved paths read a
+    secret-classified table, and `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts`
+    verifies `sql<T>` with an output schema plus spread/computed-key backstops on secret tables.
 - [x] Cover Drizzle **relational** queries (`with: { author: { columns: { passwordHash: true } } }`) — a
       different AST shape than `db.select({})` and a primary leak vector. In scope for v1, not a follow-on.
   - Evidence: `packages/drizzle/src/static/query-shapes.ts` recursively derives static

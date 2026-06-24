@@ -792,6 +792,99 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts.map((fact) => fact.query)).toEqual(['cart/computed', 'cart/literal']);
   });
 
+  it('reports KV435 for opaque output-schema projections from secret tables', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+          export const users = pgTable("users", {
+            id: text("id").primaryKey(),
+            passwordHash: text("password_hash").notNull(),
+          }, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));
+
+          export const userStats = query("user", {
+            output: s.object({ count: s.number() }),
+            load(_input, db: PgDatabase) {
+              return db.select({ count: sql<number>\`count(*)\` }).from(users);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection user.count is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.',
+        severity: 'error',
+        site: 'user.queries.ts:7',
+      },
+    ]);
+  });
+
+  it('reports KV435 for spread and computed-key projections from secret tables', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+          export const users = pgTable("users", {
+            id: text("id").primaryKey(),
+            email: text("email").notNull(),
+            passwordHash: text("password_hash").notNull(),
+          }, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));
+
+          export const userList = query("user", {
+            load(_input, db: PgDatabase) {
+              const displayKey = "displayName";
+              const publicColumns = { email: users.email };
+              return db.select({
+                [displayKey]: users.email,
+                ...publicColumns,
+                id: users.id,
+              }).from(users);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection user.computed:[displayKey] is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.',
+        severity: 'error',
+        site: 'user.queries.ts:8',
+      },
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection user.spread:publicColumns is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or use an audited reveal/redaction surface once it lands.',
+        severity: 'error',
+        site: 'user.queries.ts:8',
+      },
+      {
+        code: 'KV406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Query projection user.computed:[displayKey] could not be resolved to a Drizzle column or typed sql<T> expression.',
+        severity: 'error',
+        site: 'user.queries.ts:8',
+      },
+      {
+        code: 'KV406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Query projection user.spread:publicColumns could not be resolved to a Drizzle column or typed sql<T> expression.',
+        severity: 'error',
+        site: 'user.queries.ts:8',
+      },
+    ]);
+  });
+
   it('marks typed SQL time projections as volatile-time query shape fields', () => {
     const facts = extractQueryFactsFromProject({
       files: [

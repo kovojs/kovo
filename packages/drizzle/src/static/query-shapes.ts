@@ -1739,6 +1739,15 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   const prefix = context.prefix ?? '';
 
   for (const property of object.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      // SPEC §11.1 / §11.3 KV435: spread projections are not inspectable enough to
+      // prove they exclude secret columns, so keep them visible to the confidentiality backstop.
+      const expression = unwrappedTsExpression(property.expression);
+      const spread = `spread:${expression.getText(object.getSourceFile())}`;
+      unresolvedPaths.push(prefix ? `${prefix}.${spread}` : spread);
+      continue;
+    }
+
     if (ts.isShorthandPropertyAssignment(property)) {
       // SPEC §10-§11: unsupported projection syntax stays visible instead of disappearing.
       const shorthand = property.name.text;
@@ -1749,7 +1758,13 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
     if (!ts.isPropertyAssignment(property)) continue;
 
     const key = projectionPropertyName(property.name);
-    if (!key) continue;
+    if (!key) {
+      // SPEC §11.1 / §11.3 KV435: a dynamic projection key can rename or hide a
+      // secret-bearing expression; preserve it as an unresolved projection fact.
+      const computed = `computed:${property.name.getText(object.getSourceFile())}`;
+      unresolvedPaths.push(prefix ? `${prefix}.${computed}` : computed);
+      continue;
+    }
 
     const valueNode = unwrappedTsExpression(property.initializer);
     const path = prefix ? `${prefix}.${key}` : key;
