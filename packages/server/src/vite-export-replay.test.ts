@@ -219,6 +219,7 @@ describe('server app shell Vite plugin', () => {
           body: 'export const client = "cart";',
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: '/c/cart.client.js?v=cart-v1',
@@ -229,6 +230,7 @@ describe('server app shell Vite plugin', () => {
           body: expect.stringContaining('installKovoDeferredRuntime'),
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),
@@ -418,6 +420,7 @@ describe('server app shell Vite plugin', () => {
           body: 'export const cartClient = true;',
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: '/c/__v/cart-v1/cart.client.js#Cart$add',
@@ -428,6 +431,7 @@ describe('server app shell Vite plugin', () => {
           body: expect.stringContaining('installKovoDeferredRuntime'),
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),

@@ -196,6 +196,9 @@ export function createMemoryVersionedClientModuleRegistry(
         body: module.source,
         headers: {
           'Cache-Control': 'public, max-age=31536000, immutable',
+          // SPEC §6.6: immutable same-origin client modules are not a cross-origin
+          // resource; CORP:same-origin blocks cross-origin embedding (Spectre/leak DiD).
+          'Cross-Origin-Resource-Policy': 'same-origin',
           'Content-Type': module.contentType ?? 'text/javascript; charset=utf-8',
         },
         status: 200,

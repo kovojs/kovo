@@ -422,6 +422,7 @@ describe('server app shell Vite build seam', () => {
         {
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: '/c/shop.client.js?v=shopclient#Shop$add',
@@ -891,6 +892,7 @@ describe('server app shell Vite build seam', () => {
           {
             headers: {
               'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
               'content-type': 'text/javascript; charset=utf-8',
             },
             href: '/c/docs.client.js?v=docs-v1',
@@ -917,6 +919,7 @@ describe('server app shell Vite build seam', () => {
           {
             headers: {
               'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
               'content-type': 'text/javascript; charset=utf-8',
             },
             href: '/c/docs.client.js?v=docs-v1',

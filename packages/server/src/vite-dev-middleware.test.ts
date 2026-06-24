@@ -269,6 +269,7 @@ describe('server app shell Vite plugin', () => {
         body: 'export const product = true;',
         headers: expect.objectContaining({
           'cache-control': 'public, max-age=31536000, immutable',
+          'cross-origin-resource-policy': 'same-origin',
         }),
         status: 200,
       });

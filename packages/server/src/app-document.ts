@@ -6,6 +6,7 @@ import {
   renderErrorDocument,
   renderRouteDocumentResponse,
 } from './document-core.js';
+import { normalizeForwardedSetCookie } from './cookies.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
 import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
@@ -83,11 +84,15 @@ export async function renderAppRouteDocumentResponse({
   );
 
   const withRefreshCookies = (response: RoutePageResponse): RoutePageResponse => {
-    // SF-WIRE(forward-sink): forwarded better-auth/session Set-Cookie strings should be routed
-    // through `normalizeForwardedSetCookie(cookie, 'session')` (cookies.ts) so a forwarded
-    // credential cookie cannot land below the HttpOnly/Secure(prod)/SameSite floor (SPEC §6.6/§9.1).
+    // Forwarded better-auth/session Set-Cookie strings are routed through the cookie floor
+    // (cookies.ts) so a forwarded credential cookie can never land below the
+    // HttpOnly/Secure(prod)/SameSite floor (SPEC §6.6/§9.1).
     for (const cookie of refreshSetCookies)
-      appendResponseHeader(response.headers, 'Set-Cookie', cookie);
+      appendResponseHeader(
+        response.headers,
+        'Set-Cookie',
+        normalizeForwardedSetCookie(cookie, 'session'),
+      );
     return response;
   };
 
@@ -126,12 +131,20 @@ export async function renderAppRouteDocumentResponse({
     request.headers.get('accept'),
   );
 
+  // SPEC §6.6: HSTS is attached only over a genuine HTTPS request (direct or via a
+  // trusted x-forwarded-proto), so non-HTTPS/localhost dev is never bricked. Conservative
+  // by design — a missing/forged proto header simply omits HSTS (fail-safe).
+  const secure =
+    new URL(request.url).protocol === 'https:' ||
+    request.headers.get('x-forwarded-proto') === 'https';
+
   const documentResponse = renderRouteDocumentResponse(
     routeResponseToDocumentResponse(routeResponse),
     {
       // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
       // always non-empty so the carve-out is no longer needed (DEPLOY-3).
       buildToken,
+      ...(secure ? { secure: true } : {}),
       ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
       hints: mergeAppRouteHints(app, route),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),

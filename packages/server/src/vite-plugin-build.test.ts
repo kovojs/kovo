@@ -108,6 +108,7 @@ describe('server app shell Vite plugin build boundary', () => {
           body: 'export const cartClient = true;',
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: '/c/__v/cart-v1/cart.client.js#Cart$add',
@@ -118,6 +119,7 @@ describe('server app shell Vite plugin build boundary', () => {
           body: expect.stringContaining('installKovoDeferredRuntime'),
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: expect.stringMatching(/^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/),

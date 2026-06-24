@@ -88,6 +88,7 @@ describe('server static export app replay boundary', () => {
           body: 'export const cart = "static";',
           headers: {
             'cache-control': 'public, max-age=31536000, immutable',
+            'cross-origin-resource-policy': 'same-origin',
             'content-type': 'text/javascript; charset=utf-8',
           },
           href: '/c/__v/cart-static/cart.client.js#Cart$open',

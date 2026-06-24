@@ -94,6 +94,7 @@ describe('versioned client modules', () => {
       body: 'export const version = "old";',
       headers: {
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cross-Origin-Resource-Policy': 'same-origin',
         'Content-Type': 'text/javascript; charset=utf-8',
       },
       status: 200,
@@ -162,6 +163,7 @@ describe('versioned client modules', () => {
       body: 'export const version = "build-1";',
       headers: {
         'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cross-Origin-Resource-Policy': 'same-origin',
         'Content-Type': 'text/javascript; charset=utf-8',
       },
       status: 200,
