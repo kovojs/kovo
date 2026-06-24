@@ -16,6 +16,7 @@ export type {
   KovoCheckFamily,
   KovoCheckInput,
   KovoCheckResult,
+  KovoCookiesExplainOptions,
   KovoEndpointExplainOptions,
   KovoExplainInput,
   KovoExplainOptions,
