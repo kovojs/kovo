@@ -4,6 +4,8 @@ import { defineConfig } from 'vitest/config';
 
 import { exampleKovoCompilerPlugin } from '../vite-kovo-compiler.js';
 
+const headed = process.env.KOVO_GALLERY_BROWSER_HEADED === '1';
+
 export default defineConfig({
   optimizeDeps: {
     include: ['@material/material-color-utilities', 'axe-core'],
@@ -22,9 +24,9 @@ export default defineConfig({
   test: {
     browser: {
       enabled: true,
-      headless: true,
+      headless: !headed,
       instances: [{ browser: 'chromium' }],
-      provider: playwright(),
+      provider: playwright({ launchOptions: { channel: 'chromium', headless: !headed } }),
     },
     include: ['src/**/*.browser.test.ts'],
   },
