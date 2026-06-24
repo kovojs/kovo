@@ -14,6 +14,7 @@ export type {
 // `createMemoryVersionedClientModuleRegistry`, so the constructor and its option
 // surface stay public at the root barrel (also available on the internal subpath).
 export { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
+export { signCapabilityUrl, verifyCapabilityUrl } from './capability-url.js';
 export { toNodeHandler } from './node.js';
 export { exportStaticApp } from './static-export.js';
 export { StaticExportError } from './static-export-diagnostics.js';
@@ -24,6 +25,14 @@ export { StaticExportError } from './static-export-diagnostics.js';
  * @experimental
  */
 export { createKovoAppShellViteDevIntegration, kovoAppShellViteDevPlugin } from './vite-dev.js';
+export type {
+  CapabilityUrlScope,
+  CapabilityUrlSecret,
+  CapabilityUrlVerification,
+  CapabilityUrlVerificationResult,
+  SignCapabilityUrlOptions,
+  VerifyCapabilityUrlOptions,
+} from './capability-url.js';
 export type {
   AppDiagnostic,
   AppDocumentOptions,

@@ -561,6 +561,11 @@ packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git 
       sound sink-validation) + **safe-default mitigations** for the inherent URL-as-credential leakage (not a
       proof). Closes a gap the legible wire amplifies (links leak via the readable store, `Referer`, logs, shared
       caches); without it apps hand-roll HMAC URLs and hit the canonical mistakes.
+  - Evidence (2026-06-24 primitive-only slice): `pnpm exec vitest --run packages/server/src/capability-url.test.ts`
+        covers HMAC signing/verification, expiry, method/key/scope tamper failures, prefix scope, and
+        backslash/`//`/dot-segment key rejection in `packages/server/src/capability-url.ts`. Remaining gap:
+        this is not wired to `ctx.signUrl`, a framework-owned download endpoint/storage-read sink, one-time
+        replay, query-cache exclusion policy, or `kovo explain --capabilities`.
   - [ ] HMAC over **canonicalized** bytes (`method+key+expiry+scope`), framework secret (anonymous-CSRF
         machinery), **constant-time verify** (`verifier.ts`) at a framework-owned download endpoint BEFORE any
         storage read; unsigned/tampered/expired → fail closed, object never read.
