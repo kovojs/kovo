@@ -93,6 +93,8 @@ export {
 export {
   createEmptyCompileResult,
   queryShapeFactDiagnostics,
+  queryShapeRegistryTypeFacts,
+  queryShapeTypeExpression,
   queryShapesFromFacts,
 } from './types.js';
 export { collectMinifierReservedNames } from './compile.js';

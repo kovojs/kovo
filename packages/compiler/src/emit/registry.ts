@@ -6,10 +6,12 @@ import type {
   HandlerLowering,
   LiveTargetFact,
   QueryUpdatePlanFact,
+  QueryShapeFact,
   RegistryFacts,
   RegistryTypeFacts,
   ViewTransitionStamp,
 } from '../types.js';
+import { queryShapeRegistryTypeFacts, queryShapesFromFacts } from '../types.js';
 
 export interface EmitRegistryModuleOptions {
   clientFileName: string;
@@ -20,6 +22,7 @@ export interface EmitRegistryModuleOptions {
   handlers: readonly Pick<HandlerLowering, 'exportName'>[];
   liveTargetFacts: readonly LiveTargetFact[];
   platformSubstitutions: readonly PlatformSubstitution[];
+  queryShapeFacts?: readonly QueryShapeFact[];
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   registryFacts?: RegistryFacts;
   registryComponentName: string;
@@ -58,7 +61,12 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
   ]);
   const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');
   const styleRuleLines = options.cssAssets.flatMap(componentStyleRuleLines).join('\n');
-  const queryRegistryLines = registryTypeFactLines(options.registryFacts?.queries);
+  const queryRegistryLines = registryTypeFactLines({
+    ...(options.queryShapeFacts
+      ? queryShapeRegistryTypeFacts(queryShapesFromFacts(options.queryShapeFacts))
+      : {}),
+    ...options.registryFacts?.queries,
+  });
   const mutationRegistryLines = registryTypeFactLines(options.registryFacts?.mutations);
   const routeRegistryLines = routeRegistryFactLines(options.registryFacts?.routes);
   const invalidationSetLines = invalidationSetFactLines(options.registryFacts?.invalidations);
