@@ -216,11 +216,7 @@ function SearchDialog(): string {
         <li data-search-label>Suggested</li>
         {SEARCH_DEFAULT_RESULTS.map(([kind, title, section, url], index) => (
           <li data-active={index === 0 ? 'true' : undefined}>
-            <a
-              href={url}
-              data-search-result-link
-              aria-current={index === 0 ? 'true' : undefined}
-            >
+            <a href={url} data-search-result-link aria-current={index === 0 ? 'true' : undefined}>
               <span data-result-kind={kind}>{kind}</span>
               <span data-result-body>
                 <span data-result-title>{title}</span>

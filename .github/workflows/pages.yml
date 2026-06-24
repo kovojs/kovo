@@ -37,7 +37,6 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - run: vp exec pnpm --filter @kovojs/example-gallery run emit:interactive-gallery
       - run: vp run build
       - run: vp run --no-cache export
         working-directory: site

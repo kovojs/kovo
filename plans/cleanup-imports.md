@@ -46,7 +46,7 @@ export, and docs-site build behavior.
 
 - [ ] Resolve the StackOverflow source live-target renderer exception.
   - Current exception: `examples/stackoverflow/src/interactive-app.tsx ->
-    @kovojs/server/internal/wire`.
+@kovojs/server/internal/wire`.
   - Purpose today: the source-served StackOverflow app manually recreates live-target renderers and
     root stamps that compiled/lowered components normally own.
   - Chosen resolution: stop hand-authoring live-target renderer wiring in app source and run the

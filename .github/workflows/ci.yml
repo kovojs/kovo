@@ -123,7 +123,6 @@ jobs:
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - run: vp exec playwright install --with-deps chromium firefox webkit
       - run: vp run browser
-      - run: vp exec pnpm --filter @kovojs/example-gallery run emit:interactive-gallery
       - run: vp exec pnpm --filter @kovojs/example-gallery run test:browser
 
   integration:

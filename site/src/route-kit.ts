@@ -12,9 +12,7 @@ export const siteStylesheets = [
   }),
 ] as const;
 
-export const siteUiStylesheets = [
-  stylesheet({ href: '/assets/kovo-ui.css' }),
-] as const;
+export const siteUiStylesheets = [stylesheet({ href: '/assets/kovo-ui.css' })] as const;
 
 export function siteStylesheetsForRoute(path: string): readonly (typeof siteStylesheets)[number][] {
   return path === '/components' || path.startsWith('/components/')
