@@ -40,6 +40,7 @@ import { validateOutputContexts } from '../security/output-context.js';
 import { queryShapeFactDiagnostics } from '../types.js';
 import { validateClientHandlerSecretCapture } from './client-capture.js';
 import { validateSecretQueryWire } from './confidentiality.js';
+import { validateNonLiteralPattern } from './redos-pattern.js';
 import {
   validateDeclaredClockReadsInRender,
   validateUntrackedClockReadsInDerives,
@@ -98,6 +99,11 @@ const compilerValidators: readonly CompilerValidator[] = [
   // diagnostic site is the real capture, not a lowered rewrite (peer of the KV435 query-wire gate).
   ({ originalDiagnostics, originalModel }) =>
     validateClientHandlerSecretCapture(originalDiagnostics, originalModel),
+  // SPEC §6.6/§9.5 + secure-framework Phase 6 (Tier 3): KV434 fires on the authored source so the
+  // diagnostic site is the real `s.string().pattern(<non-literal>)` call, the compile-time half of
+  // the ReDoS gate whose runtime half (linear matchers + literal reject + step-budget) already ships.
+  ({ originalDiagnostics, originalModel }) =>
+    validateNonLiteralPattern(originalDiagnostics, originalModel),
   ({ loweredDiagnostics, model, options }) =>
     validateDataBindings(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>
