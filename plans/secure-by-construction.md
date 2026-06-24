@@ -682,13 +682,18 @@ packages/server/src/schema.test.ts` and `vp check` passed.
     and rejects `__proto__`/`constructor`/`prototype`; `packages/server/src/query-endpoint.test.ts` and
     `packages/server/src/route.test.ts` cover `/_q/` args and route params. Verified by
     `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts`.
-- [ ] **Secret-safe logging (12c, CWE-532).** The SOUND defense is the `Secret<T>` brand (Items 1/5 — poisoned
+- [x] **Secret-safe logging (12c, CWE-532).** The SOUND defense is the `Secret<T>` brand (Items 1/5 — poisoned
       `toString`/`toJSON`) plus the Item-1 Scope-B `JsonValue` wire gate: a secret is hard to stringify and is
       inexpressible on the typed wire, which covers the log sink as defense-in-depth. Optional: an opt-in
       structured-logging redactor, explicitly **best-effort, NOT a guarantee** — do NOT build the value-equality
       / key-name scrubber as a security claim (it misses transformed secrets — the unsound runtime-taint the
       plan forbids — and it is the Rails/Django denylist this plan criticizes). Optional advisory lint (KV436,
       verify free) if a secret-provenance value reaches a known logging sink.
+  - Evidence: `packages/core/src/secret.ts` exports `secret()` runtime wrappers whose `toString`,
+    `Symbol.toPrimitive`, and `toJSON` throw while `trustedReveal()` unwraps only with a justification, and
+    `packages/server/src/schema.ts` makes `s.secret()` return those wrappers. Verified by
+    `vp exec vitest --run packages/core/src/index.test.ts packages/server/src/schema.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation.test.ts`,
+    `vp check packages/core/src packages/server/src`, and `pnpm run check:api-surface`.
 
 ## Phase 7: Defense-in-depth the compiler mints for free — CSP / Trusted Types (KV431)
 

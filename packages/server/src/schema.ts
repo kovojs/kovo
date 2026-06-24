@@ -1,4 +1,4 @@
-import type { Secret, StorageCapability, StorageObjectInfo } from '@kovojs/core';
+import { secret, type Secret, type StorageCapability, type StorageObjectInfo } from '@kovojs/core';
 
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
@@ -116,7 +116,7 @@ export const s = {
   secret<Value>(schema: Schema<Value>): Schema<Secret<Value>> {
     return {
       parse(input: unknown): Secret<Value> {
-        return schema.parse(input) as Secret<Value>;
+        return secret(schema.parse(input));
       },
     };
   },

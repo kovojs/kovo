@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
-import type { JsonValue, Secret, StorageCapability } from '@kovojs/core';
+import { trustedReveal, type JsonValue, type Secret, type StorageCapability } from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
@@ -70,7 +70,13 @@ describe('server schemas', () => {
       const _json: JsonValue = parsed.passwordHash;
     };
 
-    expect(parsed.passwordHash).toBe('hash-1');
+    expect(() => String(parsed.passwordHash)).toThrow(
+      'Secret values cannot be coerced to strings.',
+    );
+    expect(() => JSON.stringify(parsed)).toThrow('Secret values cannot be serialized to JSON.');
+    expect(
+      trustedReveal(parsed.passwordHash, { justification: 'one-way digest shown to admins' }),
+    ).toBe('hash-1');
     expect(assertSecretBoundary).toBeTypeOf('function');
   });
 

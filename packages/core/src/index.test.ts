@@ -11,6 +11,7 @@ import {
   query,
   redirect,
   route,
+  secret,
   type Component as KovoComponent,
   type ComponentDefinitionInput,
   type FormFailure,
@@ -207,7 +208,8 @@ describe('core authoring APIs', () => {
   });
 
   it('requires an explicit audited reveal before a Secret can cross JsonValue boundaries', () => {
-    const revealed = trustedReveal('hash-1' as unknown as Secret<string>, {
+    const wrapped = secret('hash-1');
+    const revealed = trustedReveal(wrapped, {
       justification: 'one-way digest shown to admins',
     });
     const assertRevealedString = (value: TrustedRevealValue<Secret<string>>) => value;
@@ -215,6 +217,10 @@ describe('core authoring APIs', () => {
 
     expect(assertRevealedString(revealed)).toBe('hash-1');
     expect(jsonValue).toBe('hash-1');
+    expect(() => String(wrapped)).toThrow('Secret values cannot be coerced to strings.');
+    expect(() => JSON.stringify({ passwordHash: wrapped })).toThrow(
+      'Secret values cannot be serialized to JSON.',
+    );
     expect(() =>
       trustedReveal('hash-1' as unknown as Secret<string>, { justification: '   ' }),
     ).toThrow('trustedReveal requires a non-empty justification.');

@@ -3,7 +3,7 @@ import type { JsonValue } from './json.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
-export { publishToClient, trustedReveal } from './secret.js';
+export { publishToClient, secret, trustedReveal } from './secret.js';
 export type {
   PublishToClientOptions,
   Secret,
