@@ -14,6 +14,7 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
+import * as envApi from '../env.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
@@ -368,6 +369,12 @@ describe('server app-shell public API barrels', () => {
     ]);
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
+      // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
+      // env/secret validation surface — the typed boot error, its guard, and the
+      // committed-secret waiver are public at the root barrel.
+      committedSecretWaiver: envApi.committedSecretWaiver,
+      CreateAppBootError: envApi.CreateAppBootError,
+      isCreateAppBootError: envApi.isCreateAppBootError,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,

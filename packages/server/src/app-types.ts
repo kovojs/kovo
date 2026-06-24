@@ -2,6 +2,7 @@ import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import type { VersionedClientModuleRegistry } from './client-modules.js';
 import type { CsrfValidationOptions } from './csrf.js';
 import type { ServerErrorHandler } from './diagnostics.js';
+import type { Schema } from './schema.js';
 import type { DocumentConfig, DocumentDeclaration } from './document-structured.js';
 import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
@@ -157,6 +158,17 @@ export interface CreateAppOptions<
   csrf?: CsrfValidationOptions<AppRequest>;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
   document?: AppDocumentOptions | DocumentDeclaration;
+  /**
+   * Optional app-declared env schema (any `s.object` validator) validated at the
+   * `createApp` boot chokepoint against `envSource` (default `process.env`). In
+   * production a failure refuses boot with a typed `CreateAppBootError` carrying every
+   * issue at once; in development it warns instead of bricking localhost (SPEC §6.6,
+   * §9.5; `plans/secure-framework.md` Tier 1). Apps declare required env once and fail
+   * fast at boot rather than at the first request that reads a missing var.
+   */
+  env?: Schema<unknown>;
+  /** Record validated against `env`. Defaults to `process.env`. Test/adapter seam. */
+  envSource?: Record<string, unknown>;
   endpoints?: readonly EndpointDeclaration<string, EndpointMethod, EndpointMount>[];
   errorShells?: AppErrorShellOptions;
   liveTargetRenderers?: readonly LiveTargetRenderer<AppRequest>[];

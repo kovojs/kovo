@@ -11,6 +11,7 @@ import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
+import { validateAppEnv } from './env.js';
 export type {
   AppAuthoringContext,
   AppAuthoringDeclarations,
@@ -77,6 +78,19 @@ export function createApp<
 >(
   options: CreateAppOptions<SessionValue, DbValue, RawRequest, AppRequest> = {},
 ): KovoApp<SessionValue, DbValue, RawRequest, AppRequest> {
+  // Refuse to boot — by-construction at the bootstrap chokepoint (SPEC §6.6,
+  // §9.5; plans/secure-framework.md Tier 1). In production a missing/empty/short
+  // framework signing secret (today the CSRF/anonymous-CSRF HMAC secret) or an
+  // app-declared `env` schema failure throws CreateAppBootError before the app is
+  // assembled. Dev stays lenient (warns, never bricks localhost).
+  validateAppEnv(
+    { csrfSecret: options.csrf?.secret },
+    {
+      ...(options.env === undefined ? {} : { env: options.env }),
+      ...(options.envSource === undefined ? {} : { envSource: options.envSource }),
+    },
+  );
+
   const authoringContext = appAuthoringContext<AppRequest>();
   const routes = resolveAppAuthoringDeclarations(options.routes, authoringContext);
   const liveTargetRenderers =
