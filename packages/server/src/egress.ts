@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { lookup } from 'node:dns/promises';
 import type { LookupOneOptions } from 'node:dns';
 import { createRequire } from 'node:module';
@@ -56,6 +57,11 @@ export interface EgressNodeGuardOptions {
 export interface EgressNodeGuard {
   uninstall(): void;
 }
+
+type MetadataCredentialProvider<T> = () => T | Promise<T>;
+
+// SPEC §6.6: outbound egress is a fail-closed runtime floor; cloud identity metadata is privileged.
+const metadataAllowed = new AsyncLocalStorage<{ on: true }>();
 
 /** Error thrown when guarded lifecycle `fetch` blocks a private/special-use destination. */
 export class EgressBlockedError extends Error {
@@ -226,6 +232,12 @@ export function createEgressDispatcher(
   return new GuardedUndiciDispatcher(dispatcher, options);
 }
 
+export function createMetadataCredentialProvider<T>(
+  provider: MetadataCredentialProvider<T>,
+): MetadataCredentialProvider<T> {
+  return () => metadataAllowed.run({ on: true }, provider);
+}
+
 export async function assertEgressAllowed(
   destination: string | URL,
   allowInternal: readonly string[],
@@ -314,10 +326,14 @@ function assertEgressAllowedForHost(
   const destinationKey = `${host}:${port}`;
   const ip = normalizeIp(resolvedIp ?? host);
   const privateDestination = isPrivateOrSpecialIp(ip);
+  const metadataDestination = isMetadataDestination(host, port, ip);
   const decision = { destination: destinationKey, host, ip, port, private: privateDestination };
 
+  if (metadataDestination && metadataAllowed.getStore()?.on === true) return decision;
+  if (metadataDestination)
+    throw new EgressBlockedError({ destination: destinationKey, host, ip, port });
   if (!privateDestination) return decision;
-  if (!isMetadataIp(ip) && allowInternal.includes(destinationKey)) return decision;
+  if (allowInternal.includes(destinationKey)) return decision;
 
   throw new EgressBlockedError({ destination: destinationKey, host, ip, port });
 }
@@ -596,6 +612,22 @@ function isPrivateOrSpecialIp(ip: string): boolean {
 
 function isMetadataIp(ip: string): boolean {
   return ip === '169.254.169.254' || ip === '169.254.170.2' || ip === '169.254.170.23';
+}
+
+function isMetadataDestination(host: string, port: string, ip: string): boolean {
+  return isMetadataIp(ip) || isAzureIdentityEndpoint(host, port);
+}
+
+function isAzureIdentityEndpoint(host: string, port: string): boolean {
+  const endpoint = process.env['IDENTITY_ENDPOINT'];
+  if (endpoint === undefined || endpoint.trim() === '') return false;
+
+  try {
+    const url = new URL(endpoint);
+    return normalizeHostname(url.hostname) === host && destinationPort(url) === port;
+  } catch {
+    return false;
+  }
 }
 
 function isPrivateOrSpecialIpv4(ip: string): boolean {

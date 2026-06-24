@@ -11,6 +11,7 @@ import {
   assertEgressAllowed,
   createEgressDispatcher,
   createEgressFetch,
+  createMetadataCredentialProvider,
   installNodeEgressGuard,
   normalizeAllowInternal,
 } from './egress.js';
@@ -69,6 +70,76 @@ describe('server egress private-network deny floor', () => {
     await expect(
       assertEgressAllowed('http://169.254.170.2/creds', allowInternal),
     ).rejects.toBeInstanceOf(EgressBlockedError);
+  });
+
+  it('allows metadata destinations only inside the framework credential-provider frame', async () => {
+    const readAwsMetadata = async () => {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      return assertEgressAllowed(
+        'http://169.254.169.254/latest/meta-data/iam/security-credentials/',
+        [],
+      );
+    };
+    const wrappedCredential = createMetadataCredentialProvider(readAwsMetadata);
+
+    await expect(readAwsMetadata()).rejects.toBeInstanceOf(EgressBlockedError);
+    await expect(wrappedCredential()).resolves.toMatchObject({
+      destination: '169.254.169.254:80',
+      ip: '169.254.169.254',
+      private: true,
+    });
+    await expect(readAwsMetadata()).rejects.toBeInstanceOf(EgressBlockedError);
+  });
+
+  it('blocks Azure identity endpoints through allowInternal unless a credential provider entered the frame', async () => {
+    const http = require('node:http') as typeof import('node:http');
+    const previousIdentityEndpoint = process.env['IDENTITY_ENDPOINT'];
+    const server = createServer((_request, response) => {
+      response.end('token');
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('expected TCP server');
+
+    const identityEndpoint = `http://127.0.0.1:${address.port}/metadata/identity/oauth2/token`;
+    process.env['IDENTITY_ENDPOINT'] = identityEndpoint;
+    const guard = installNodeEgressGuard({
+      allowInternal: [`127.0.0.1:${address.port}`],
+    });
+    const readAzureIdentityEndpoint = () =>
+      new Promise<string>((resolve, reject) => {
+        try {
+          http
+            .get(identityEndpoint, (response) => {
+              let body = '';
+              response.setEncoding('utf8');
+              response.on('data', (chunk: string) => {
+                body += chunk;
+              });
+              response.on('end', () => resolve(body));
+            })
+            .on('error', reject);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    const wrappedCredential = createMetadataCredentialProvider(readAzureIdentityEndpoint);
+
+    try {
+      await expect(readAzureIdentityEndpoint()).rejects.toBeInstanceOf(EgressBlockedError);
+      await expect(wrappedCredential()).resolves.toBe('token');
+    } finally {
+      guard.uninstall();
+      if (previousIdentityEndpoint === undefined) {
+        delete process.env['IDENTITY_ENDPOINT'];
+      } else {
+        process.env['IDENTITY_ENDPOINT'] = previousIdentityEndpoint;
+      }
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error === undefined ? resolve() : reject(error)));
+      });
+    }
   });
 
   it('normalizes numeric and mapped private IP spellings before deciding', async () => {
@@ -130,6 +201,20 @@ describe('server egress private-network deny floor', () => {
     }
   });
 
+  it('blocks raw global fetch metadata requests before dispatch', async () => {
+    const guard = installNodeEgressGuard({ allowInternal: ['169.254.169.254:80'] });
+
+    try {
+      await expect(
+        globalThis.fetch('http://169.254.169.254/latest/meta-data/'),
+      ).rejects.toMatchObject({
+        cause: expect.any(EgressBlockedError),
+      });
+    } finally {
+      guard.uninstall();
+    }
+  });
+
   it('rechecks raw undici redirect hops before dispatch', async () => {
     const originalDispatcher = getGlobalDispatcher();
     const server = createServer((_request, response) => {
@@ -180,6 +265,17 @@ describe('server egress private-network deny floor', () => {
 
     try {
       expect(() => net.connect({ host: '127.0.0.1', port: 80 })).toThrow(EgressBlockedError);
+    } finally {
+      guard.uninstall();
+    }
+  });
+
+  it('blocks raw net connects to metadata addresses even when allowInternal lists them', () => {
+    const net = require('node:net') as typeof import('node:net');
+    const guard = installNodeEgressGuard({ allowInternal: ['169.254.169.254:80'] });
+
+    try {
+      expect(() => net.connect({ host: '169.254.169.254', port: 80 })).toThrow(EgressBlockedError);
     } finally {
       guard.uninstall();
     }

@@ -462,10 +462,11 @@ packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies ra
         IANA special-use}) → allow iff `host:port ∈ allowInternal`, else deny. Native-TCP DB drivers
         (`pg`/`ioredis`) reach declared internal hosts via `allowInternal`; raw-socket libs are governed only
         at layer (b)'s `net.connect` patch.
-    - Evidence (2026-06-24 partial): `packages/server/src/egress.test.ts` verifies metadata endpoints remain
-      denied even when listed in `allowInternal`, redirect hops are rechecked by lifecycle fetch and raw undici,
-      pooled undici dispatches re-run the decision before socket reuse, and raw `node:http`/`net` decisions use
-      the same private-network floor. Still open: privileged metadata ALS scope.
+    - Evidence (2026-06-24 partial): `vp exec vitest --run packages/server/src/egress.test.ts` verifies metadata
+      endpoints remain denied even when listed in `allowInternal`, privileged credential-provider frame access for
+      AWS-style metadata and Azure `IDENTITY_ENDPOINT`, raw global fetch/undici/`node:http`/`net` metadata denial,
+      redirect-hop rechecks, pooled undici per-dispatch rechecks, and numeric/NAT64 normalization. Still open:
+      exhaustive special-use range coverage if needed beyond the current focused corpus.
   - [ ] Config: `createApp({ egress: { allowInternal: ['otel:4318', 'localhost:11434', '10.0.5.2:6379'] } })`
         — **narrow `host:port` entries only.** The allowlist is provenance-blind (anything allowed is reachable
         by any caller, incl. an SSRF landing there), so broad CIDRs re-open the private space; permit but flag
@@ -495,6 +496,14 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
         frames; can't be acquired by calling through an SDK function) but NOT by-construction. **Never allowlist
         an identity endpoint.** Covers every endpoint: `169.254.169.254`/`.170.2` (ECS)/`.170.23` (EKS Pod
         Identity), Azure loopback `IDENTITY_ENDPOINT`.
+    - [x] Runtime foundation: module-private `metadataAllowed` ALS in `packages/server/src/egress.ts`, entered
+          only by the internal credential-provider wrapper, gates all existing egress decision paths before
+          `allowInternal`.
+      - Evidence: `vp exec vitest --run packages/server/src/egress.test.ts` verifies unwrapped metadata access is
+        denied, wrapped provider access survives an async boundary, Azure loopback `IDENTITY_ENDPOINT` cannot be
+        authorized by `allowInternal`, and raw fetch/http/net/undici metadata paths remain denied outside the frame.
+    - [ ] Public per-cloud `kovo.{aws,gcp,azure}Credential()` factories still need to wrap actual SDK/provider
+          shapes; KV427 SDK-client static detection remains separate.
   - [ ] **Credential API (tiered) + compile-time forgot-it gate (KV427).** Tier 1 — env/WIF/key-file
         deployments touch no identity endpoint, so `new S3Client()`/`new Storage()` need NO Kovo API (starter
         default; floor is free). Tier 2 — metadata-creds deployments declare the cloud once in the shell
