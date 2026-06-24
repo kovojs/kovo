@@ -637,11 +637,11 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         `s.array`, and `entriesToRecord`; focused server schema/query/route Vitest coverage exercises JSON
         nesting, FormData key expansion, `/_q/` arg coercion, and route params; `vp check packages/server/src`
         passed.
-  - [ ] Per-schema overrides (`s.array().max(n)`, `s.string().max(len)`) + a global config ceiling so
+  - [x] Per-schema overrides (`s.array().max(n)`, `s.string().max(len)`) + a global config ceiling so
         legitimate large inputs (bulk imports) declare their bound (declare-once).
-        Partial evidence: `packages/server/src/schema.ts` now exposes immutable `s.array(...).max(n)` and
-        `s.string().max(n)` chains with focused coverage in `packages/server/src/schema.test.ts`; the global
-        config ceiling remains open.
+        Evidence: `packages/server/src/schema.ts` exposes immutable `s.array(...).max(n)`/`s.string().max(n)`
+        chains plus scoped `withSchemaInputBudget(...)`; `vp exec vitest --run packages/server/src/schema.test.ts`
+        covers sync/async budget overrides and invalid ceilings.
   - [ ] KV430 **lint** (not error): flag an unbounded `s.array()`/`s.record()` on a wire-reachable schema with
         no `.max()`; surface in `kovo explain`. Lint because the runtime default already protects — this just
         makes the bound explicit/auditable. Recursive (`s.lazy`) depth is runtime-only.

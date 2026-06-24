@@ -10,6 +10,7 @@ import {
   parseSchemaAsync,
   s,
   unsafeRegex,
+  withSchemaInputBudget,
 } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
@@ -528,6 +529,11 @@ describe('server schemas', () => {
     expect(() => s.array(s.string()).parse(new Array(1_001).fill('tag'))).toThrow(
       'Input exceeds maximum breadth 1000',
     );
+    expect(() =>
+      withSchemaInputBudget({ maxNodes: 4 }, () =>
+        s.object({ payload: s.array(s.string()) }).parse({ payload: ['a', 'b', 'c'] }),
+      ),
+    ).toThrow('Input exceeds maximum node count 4');
   });
 
   it('rejects FormData key expansion that exceeds the shared schema runtime budget', () => {
@@ -538,6 +544,34 @@ describe('server schemas', () => {
 
     expect(() => s.object({ title: s.string() }).parse(form)).toThrow(
       'Input exceeds maximum breadth 1000',
+    );
+  });
+
+  it('applies scoped schema runtime budget overrides to sync and async parsing', async () => {
+    const payload = { tags: ['a', 'b', 'c'] };
+    const schema = s.object({ tags: s.array(s.string()) });
+
+    expect(() => withSchemaInputBudget({ maxBreadth: 2 }, () => schema.parse(payload))).toThrow(
+      'Input exceeds maximum breadth 2',
+    );
+    expect(schema.parse(payload)).toEqual({ tags: ['a', 'b', 'c'] });
+    await expect(
+      withSchemaInputBudget({ maxBreadth: 2 }, () => parseSchemaAsync(schema, payload)),
+    ).rejects.toThrow('Input exceeds maximum breadth 2');
+    await expect(
+      withSchemaInputBudget({ maxBreadth: 4 }, () => parseSchemaAsync(schema, payload)),
+    ).resolves.toEqual({ tags: ['a', 'b', 'c'] });
+  });
+
+  it('rejects invalid schema runtime budget ceilings', () => {
+    expect(() => withSchemaInputBudget({ maxBreadth: 0 }, () => undefined)).toThrow(
+      'Schema input budget maxBreadth must be a positive integer',
+    );
+    expect(() => withSchemaInputBudget({ maxDepth: 1.5 }, () => undefined)).toThrow(
+      'Schema input budget maxDepth must be a positive integer',
+    );
+    expect(() => withSchemaInputBudget({ maxNodes: -1 }, () => undefined)).toThrow(
+      'Schema input budget maxNodes must be a positive integer',
     );
   });
 

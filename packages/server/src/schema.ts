@@ -1,4 +1,5 @@
 import { secret, type Secret, type StorageCapability, type StorageObjectInfo } from '@kovojs/core';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
@@ -18,6 +19,34 @@ const defaultSchemaInputBudget = {
   maxDepth: 32,
   maxNodes: 10_000,
 } as const;
+
+/** Runtime shape budget enforced before `s.*` parsers descend into untrusted input (KV430). */
+export interface SchemaInputBudget {
+  /** Maximum array length, object key count, or FormData field count accepted at one level. */
+  maxBreadth?: number;
+  /** Maximum nested object/array/FormData depth accepted before validation fails. */
+  maxDepth?: number;
+  /** Maximum total traversed values accepted for one schema parse. */
+  maxNodes?: number;
+}
+
+type ResolvedSchemaInputBudget = Required<SchemaInputBudget>;
+
+const schemaInputBudgetStorage = new AsyncLocalStorage<ResolvedSchemaInputBudget>();
+
+/**
+ * Run schema parsing under an explicit shape budget.
+ *
+ * The default budget is intentionally conservative for request paths. Bulk import
+ * or admin-only paths can declare a larger reviewed ceiling for the duration of a
+ * synchronous or async parse without mutating global process state.
+ */
+export function withSchemaInputBudget<Result>(
+  budget: SchemaInputBudget,
+  run: () => Result,
+): Result {
+  return schemaInputBudgetStorage.run(resolveSchemaInputBudget(budget), run);
+}
 
 /**
  * A single field-level validation failure: a human `message` and the `path` of record
@@ -1110,11 +1139,12 @@ export function entriesToRecord(
   // is null-prototype and rejects prototype-pollution keys before assignment.
   const record = Object.create(null) as Record<string, unknown>;
   let entryCount = 0;
+  const budget = currentSchemaInputBudget();
 
   for (const [key, value] of entries) {
     entryCount += 1;
-    if (entryCount > defaultSchemaInputBudget.maxBreadth) {
-      throw validationError(`Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`);
+    if (entryCount > budget.maxBreadth) {
+      throw validationError(`Input exceeds maximum breadth ${budget.maxBreadth}`);
     }
     appendRecordValue(record, key, value);
   }
@@ -1124,17 +1154,16 @@ export function entriesToRecord(
 
 function assertSchemaInputBudget(input: unknown): void {
   const seen = new WeakSet<object>();
+  const budget = currentSchemaInputBudget();
   let nodes = 0;
 
   const visit = (value: unknown, depth: number): void => {
     nodes += 1;
-    if (nodes > defaultSchemaInputBudget.maxNodes) {
-      throw validationError(
-        `Input exceeds maximum node count ${defaultSchemaInputBudget.maxNodes}`,
-      );
+    if (nodes > budget.maxNodes) {
+      throw validationError(`Input exceeds maximum node count ${budget.maxNodes}`);
     }
-    if (depth > defaultSchemaInputBudget.maxDepth) {
-      throw validationError(`Input exceeds maximum depth ${defaultSchemaInputBudget.maxDepth}`);
+    if (depth > budget.maxDepth) {
+      throw validationError(`Input exceeds maximum depth ${budget.maxDepth}`);
     }
     if (value === null || typeof value !== 'object') return;
     if (isFileLike(value)) return;
@@ -1143,33 +1172,49 @@ function assertSchemaInputBudget(input: unknown): void {
 
     if (value instanceof FormData) {
       const entries = [...value.entries()];
-      if (entries.length > defaultSchemaInputBudget.maxBreadth) {
-        throw validationError(
-          `Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`,
-        );
+      if (entries.length > budget.maxBreadth) {
+        throw validationError(`Input exceeds maximum breadth ${budget.maxBreadth}`);
       }
       for (const [, item] of entries) visit(item, depth + 1);
       return;
     }
 
     if (Array.isArray(value)) {
-      if (value.length > defaultSchemaInputBudget.maxBreadth) {
-        throw validationError(
-          `Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`,
-        );
+      if (value.length > budget.maxBreadth) {
+        throw validationError(`Input exceeds maximum breadth ${budget.maxBreadth}`);
       }
       for (const item of value) visit(item, depth + 1);
       return;
     }
 
     const entries = Object.entries(value);
-    if (entries.length > defaultSchemaInputBudget.maxBreadth) {
-      throw validationError(`Input exceeds maximum breadth ${defaultSchemaInputBudget.maxBreadth}`);
+    if (entries.length > budget.maxBreadth) {
+      throw validationError(`Input exceeds maximum breadth ${budget.maxBreadth}`);
     }
     for (const [, item] of entries) visit(item, depth + 1);
   };
 
   visit(input, 0);
+}
+
+function currentSchemaInputBudget(): ResolvedSchemaInputBudget {
+  return schemaInputBudgetStorage.getStore() ?? defaultSchemaInputBudget;
+}
+
+function resolveSchemaInputBudget(budget: SchemaInputBudget): ResolvedSchemaInputBudget {
+  const resolved = {
+    maxBreadth: budget.maxBreadth ?? defaultSchemaInputBudget.maxBreadth,
+    maxDepth: budget.maxDepth ?? defaultSchemaInputBudget.maxDepth,
+    maxNodes: budget.maxNodes ?? defaultSchemaInputBudget.maxNodes,
+  };
+  assertPositiveInteger(resolved.maxBreadth, 'Schema input budget maxBreadth');
+  assertPositiveInteger(resolved.maxDepth, 'Schema input budget maxDepth');
+  assertPositiveInteger(resolved.maxNodes, 'Schema input budget maxNodes');
+  return resolved;
+}
+
+function assertPositiveInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 1) throw new Error(`${label} must be a positive integer`);
 }
 
 function appendRecordValue(record: Record<string, unknown>, key: string, value: unknown): void {

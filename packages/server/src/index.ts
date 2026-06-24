@@ -103,6 +103,7 @@ export {
   stream,
   tag,
   unsafeRegex,
+  withSchemaInputBudget,
   write,
 } from './api/data.js';
 export type {
@@ -147,6 +148,7 @@ export type {
   QueryResult,
   QueryWriteMethod,
   Schema,
+  SchemaInputBudget,
   Secret,
   StringSchema,
   StoredFileSchema,

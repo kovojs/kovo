@@ -48,7 +48,7 @@ export type {
   QueryWriteMethod,
 } from '../query.js';
 export { query } from '../query.js';
-export { s, SchemaValidationError, unsafeRegex } from '../schema.js';
+export { s, SchemaValidationError, unsafeRegex, withSchemaInputBudget } from '../schema.js';
 export type {
   ArraySchema,
   AsyncSchema,
@@ -58,6 +58,7 @@ export type {
   InferSchema,
   NumberSchema,
   Schema,
+  SchemaInputBudget,
   StringSchema,
   StoredFileSchema,
   StoredFileSchemaOptions,
