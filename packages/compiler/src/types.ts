@@ -170,7 +170,13 @@ export interface CompileDependencyReads {
  */
 export type RegistryGraphInput = Pick<
   CoreGraph.KovoExplainInput,
-  'components' | 'mutations' | 'packageComponentPrefixes' | 'pages' | 'queries'
+  | 'access'
+  | 'components'
+  | 'endpoints'
+  | 'mutations'
+  | 'packageComponentPrefixes'
+  | 'pages'
+  | 'queries'
 >;
 
 /** @internal Optional mutation/query type maps threaded into registry-fact derivation. */

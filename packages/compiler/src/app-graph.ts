@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { deriveAccessExplainFacts } from '@kovojs/core/internal/graph';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -48,12 +49,26 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   ]);
   const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
   const derivedRoutePages = derivedPageFactsFromRoutePages(routePages, components);
+  const mergedPages =
+    derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
+      ? mergeGraphPages(options.graph?.pages ?? [], derivedRoutePages)
+      : undefined;
+  // SPEC.md §10.2/§6.6: classify every query/mutation/route-page/endpoint/webhook
+  // surface into a default-deny access fact and populate `graph.access` so the
+  // KV436 consumer (`kovo check`) fires on any surface with no explicit decision,
+  // guard, or machine-auth posture. By-construction: the proof is this static graph
+  // fact, not a TS brand. KV436 proves a decision EXISTS, never that it is correct.
+  const access = deriveAccessExplainFacts({
+    endpoints: options.graph?.endpoints,
+    mutations: options.graph?.mutations,
+    pages: mergedPages ?? options.graph?.pages,
+    queries: options.graph?.queries,
+  });
   const graph: RegistryGraphInput = {
     ...options.graph,
+    ...(access.length > 0 ? { access } : {}),
     components,
-    ...(derivedRoutePages.length > 0 || (options.graph?.pages?.length ?? 0) > 0
-      ? { pages: mergeGraphPages(options.graph?.pages ?? [], derivedRoutePages) }
-      : {}),
+    ...(mergedPages === undefined ? {} : { pages: mergedPages }),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
   };
 

@@ -800,4 +800,111 @@ export const ProductGrid = component({
 
     expect((registryFacts.diagnostics ?? []).filter((d) => d.code === 'KV421')).toEqual([]);
   });
+
+  // SPEC.md §10.2/§6.6: deriveAppGraph populates graph.access so the KV436 consumer
+  // (`kovo check`) fails any surface with no explicit access decision, guard, or
+  // machine-auth posture. By-construction: the proof is this static graph fact.
+  it('derives default-deny access facts for every surface (KV436)', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        endpoints: [
+          { auth: 'none', method: 'GET', path: '/healthz' },
+          {
+            access: { kind: 'verified-machine-auth' },
+            method: 'POST',
+            name: 'stripe',
+            path: '/webhooks/stripe',
+            surface: 'webhook',
+          },
+          { method: 'POST', path: '/api/undecided' },
+        ],
+        mutations: [
+          { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
+          { key: 'cart/clear', writes: ['cart'] },
+        ],
+        pages: [
+          { guards: ['authed'], route: '/cart' },
+          {
+            access: { kind: 'public', reason: 'marketing landing page' },
+            route: '/about',
+          },
+        ],
+        queries: [
+          { domains: ['cart'], guards: ['authed'], query: 'cart' },
+          { domains: ['draft'], query: 'drafts' },
+        ],
+      },
+    });
+
+    expect(derived.graph.access).toEqual([
+      {
+        decision: 'missing',
+        detail: 'method=POST path=/api/undecided mount=exact auth=-',
+        kind: 'endpoint',
+        name: '/api/undecided',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'public',
+        detail: 'method=GET path=/healthz mount=exact auth=none',
+        kind: 'endpoint',
+        name: '/healthz',
+        source: 'auth',
+      },
+      {
+        decision: 'guard',
+        detail: 'guards=authed auth=none',
+        kind: 'mutation',
+        name: 'cart/add',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'missing',
+        detail: 'guard=-',
+        kind: 'mutation',
+        name: 'cart/clear',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'public',
+        detail: 'access=public',
+        justification: 'marketing landing page',
+        kind: 'page',
+        name: '/about',
+        source: 'access',
+      },
+      {
+        decision: 'guard',
+        detail: 'guards=authed',
+        kind: 'page',
+        name: '/cart',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'guard',
+        detail: 'guards=authed',
+        kind: 'query',
+        name: 'cart',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'missing',
+        detail: 'guard=-',
+        kind: 'query',
+        name: 'drafts',
+        source: 'legacy-guard',
+      },
+      {
+        decision: 'verified',
+        detail: 'access=verified-machine-auth method=POST path=/webhooks/stripe mount=exact auth=-',
+        kind: 'webhook',
+        name: 'stripe',
+        source: 'access',
+      },
+    ]);
+
+    // The three undecided surfaces (cart/clear, drafts, /api/undecided) are the
+    // KV436 `missing` set that fails `kovo check`.
+    expect(derived.graph.access?.filter((fact) => fact.decision === 'missing')).toHaveLength(3);
+  });
 });

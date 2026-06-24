@@ -62,6 +62,46 @@ describe('kovo check', () => {
     });
   });
 
+  // SPEC §10.2/§6.6: end-to-end default-deny wiring. deriveAppGraph (compiler) classifies
+  // every surface into graph.access; an undecided query/mutation/page/endpoint fails KV436,
+  // while a guarded/public/verified surface passes. The proof is the static graph fact.
+  it('fails kovo check for guardless/decisionless surfaces and passes decided ones (KV436)', async () => {
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const undecided = deriveAppGraph({
+      graph: {
+        endpoints: [{ method: 'POST', path: '/api/raw' }],
+        mutations: [{ key: 'cart/clear', writes: ['cart'] }],
+        pages: [{ route: '/secret' }],
+        queries: [{ domains: ['draft'], query: 'drafts' }],
+      },
+    });
+    const undecidedResult = kovoCheck(undecided.graph);
+    expect(undecidedResult.exitCode).toBe(1);
+    const kv436Lines = undecidedResult.output
+      .split('\n')
+      .filter((line) => line.startsWith('ERROR KV436'));
+    expect(kv436Lines).toEqual([
+      expect.stringContaining('ERROR KV436 ENDPOINT /api/raw'),
+      expect.stringContaining('ERROR KV436 MUTATION cart/clear'),
+      expect.stringContaining('ERROR KV436 PAGE /secret'),
+      expect.stringContaining('ERROR KV436 QUERY drafts'),
+    ]);
+
+    const decided = deriveAppGraph({
+      graph: {
+        endpoints: [{ access: { kind: 'verified-machine-auth' }, method: 'POST', path: '/api/raw' }],
+        mutations: [{ guards: ['authed'], key: 'cart/clear', writes: ['cart'] }],
+        pages: [{ access: { kind: 'public', reason: 'public landing page' }, route: '/secret' }],
+        queries: [{ domains: ['draft'], guards: ['authed'], query: 'drafts' }],
+      },
+    });
+    const decidedResult = kovoCheck(decided.graph);
+    expect(
+      decidedResult.output.split('\n').filter((line) => line.startsWith('ERROR KV436')),
+    ).toEqual([]);
+  });
+
   // SPEC §10.2/§11.2: the by-construction SQL-safety analyzer (analyzeSqlSafetyFromProject) gates
   // `kovo check` — an error-severity KV422 finding in `sqlSafetyDiagnostics` fails the check.
   it('fails on KV422 SQL-safety diagnostics carried in the check graph', () => {

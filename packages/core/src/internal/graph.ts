@@ -1,4 +1,6 @@
 export type {
+  AccessDecisionFact,
+  AccessDerivationInput,
   AccessExplainFact,
   AttributeMergeExplain,
   CaptureChannel,
@@ -45,4 +47,4 @@ export type {
   VerificationCoverageFact,
   VerificationDiagnosticFact,
 } from '../graph.js';
-export { validateKovoExplainInput } from '../graph.js';
+export { deriveAccessExplainFacts, validateKovoExplainInput } from '../graph.js';

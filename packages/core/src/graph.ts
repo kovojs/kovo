@@ -111,6 +111,18 @@ export interface AccessExplainFact {
   source?: 'access' | 'auth' | 'guard' | 'legacy-guard' | 'webhook';
 }
 
+/**
+ * @internal Structural serialization of a surface's explicit `access:` decision
+ * (SPEC.md §10.2 default-deny). Mirrors `@kovojs/server`'s `AccessDecision` union
+ * without importing it (core cannot depend on server); the static app-graph
+ * derivation reads this off each surface fact to classify guarded/public/verified
+ * before falling back to a guard/auth posture or KV436 `missing`.
+ */
+export type AccessDecisionFact =
+  | { guards: readonly { name: string }[]; kind: 'guard-chain' }
+  | { kind: 'public'; reason: string }
+  | { kind: 'verified-machine-auth' };
+
 /** @internal */
 export interface ComponentExplain {
   attributeMerges?: readonly AttributeMergeExplain[];
@@ -223,6 +235,7 @@ export interface PlatformSubstitutionExplain {
 
 /** @internal */
 export interface MutationExplain {
+  access?: AccessDecisionFact;
   auth?: string;
   enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data';
   fileFields?: readonly string[];
@@ -266,6 +279,7 @@ export interface PageNavigationSegmentExplain {
 
 /** @internal */
 export interface PageExplain {
+  access?: AccessDecisionFact;
   guards?: readonly string[];
   i18n?: readonly string[];
   layouts?: readonly PageLayoutExplain[];
@@ -281,6 +295,7 @@ export interface PageExplain {
 
 /** @internal */
 export interface EndpointExplain {
+  access?: AccessDecisionFact;
   auth?: string;
   body?: string;
   bodySize?: string;
@@ -410,6 +425,7 @@ export interface QueryDataFact {
 
 /** @internal */
 export interface QueryReadSet {
+  access?: AccessDecisionFact;
   domains: readonly string[];
   guards?: readonly string[];
   query: string;
@@ -461,6 +477,162 @@ export interface SourcePosition {
 export interface GraphInputValidationError {
   message: string;
   path: string;
+}
+
+/**
+ * @internal The static surface facts the default-deny access derivation classifies
+ * (SPEC.md §10.2). The compiler's `deriveAppGraph` passes whatever it has assembled;
+ * each list is optional so partial graphs (queries-only, endpoints-only) still derive.
+ */
+export interface AccessDerivationInput {
+  endpoints?: readonly EndpointExplain[];
+  mutations?: readonly MutationExplain[];
+  pages?: readonly PageExplain[];
+  queries?: readonly QueryReadSet[];
+}
+
+/**
+ * @internal By-construction default-deny classifier (SPEC.md §10.2 / §6.6). Every
+ * query/mutation/route-page/endpoint/webhook surface is classified into exactly one
+ * `AccessExplainFact`: an explicit `access:` decision (`public`/`verified`/guard-chain)
+ * wins; otherwise an existing guard or machine-auth posture counts as a decision;
+ * otherwise the surface is `missing` and the KV436 consumer fails `kovo check`.
+ *
+ * This proves a decision EXISTS, never that it is CORRECT — a no-op `return true`
+ * guard satisfies it (KV414 carries IDOR correctness). The proof is the static graph
+ * fact, not a TypeScript brand (the compiler runs no type checker, §6.6).
+ */
+export function deriveAccessExplainFacts(input: AccessDerivationInput): AccessExplainFact[] {
+  return [
+    ...(input.endpoints ?? []).map(endpointAccessFact),
+    ...(input.mutations ?? []).map(mutationAccessFact),
+    ...(input.pages ?? []).map(pageAccessFact),
+    ...(input.queries ?? []).map(queryAccessFact),
+  ].sort(compareAccessExplainFact);
+}
+
+function explicitAccessExplainFact(
+  kind: AccessExplainFact['kind'],
+  name: string,
+  access: AccessDecisionFact | undefined,
+): AccessExplainFact | undefined {
+  if (access === undefined) return undefined;
+
+  if (access.kind === 'public') {
+    return {
+      decision: 'public',
+      detail: 'access=public',
+      justification: access.reason,
+      kind,
+      name,
+      source: 'access',
+    };
+  }
+
+  if (access.kind === 'verified-machine-auth') {
+    return { decision: 'verified', detail: 'access=verified-machine-auth', kind, name, source: 'access' };
+  }
+
+  const guards = access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
+  return { decision: 'guard', detail: `access=guard-chain guards=${guards}`, kind, name, source: 'access' };
+}
+
+function mutationAccessFact(mutation: MutationExplain): AccessExplainFact {
+  const explicit = explicitAccessExplainFact('mutation', mutation.key, mutation.access);
+  if (explicit) return explicit;
+
+  const auth = mutation.auth ?? 'none';
+  const hasGuard = hasAuthGuard(mutation.guards ?? []) || auth !== 'none';
+  return {
+    decision: hasGuard ? 'guard' : 'missing',
+    detail: hasGuard ? `guards=${listFacts(mutation.guards)} auth=${auth}` : 'guard=-',
+    kind: 'mutation',
+    name: mutation.key,
+    source: hasGuard && mutation.auth !== undefined ? 'auth' : 'legacy-guard',
+  };
+}
+
+function queryAccessFact(query: QueryReadSet): AccessExplainFact {
+  const explicit = explicitAccessExplainFact('query', query.query, query.access);
+  if (explicit) return explicit;
+
+  const hasGuard = (query.guards ?? []).length > 0;
+  return {
+    decision: hasGuard ? 'guard' : 'missing',
+    detail: hasGuard ? `guards=${listFacts(query.guards)}` : 'guard=-',
+    kind: 'query',
+    name: query.query,
+    source: 'legacy-guard',
+  };
+}
+
+function pageAccessFact(page: PageExplain): AccessExplainFact {
+  const explicit = explicitAccessExplainFact('page', page.route, page.access);
+  if (explicit) return explicit;
+
+  const hasGuard = (page.guards ?? []).length > 0;
+  return {
+    decision: hasGuard ? 'guard' : 'missing',
+    detail: hasGuard ? `guards=${listFacts(page.guards)}` : 'guard=-',
+    kind: 'page',
+    name: page.route,
+    source: 'legacy-guard',
+  };
+}
+
+function endpointAccessFact(endpoint: EndpointExplain): AccessExplainFact {
+  const kind: AccessExplainFact['kind'] = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
+  const name = endpoint.name ?? endpoint.path;
+  const detail = `method=${endpoint.method ?? 'ANY'} path=${endpoint.path} mount=${endpoint.mount ?? 'exact'} auth=${endpoint.auth ?? '-'}`;
+
+  const explicit = explicitAccessExplainFact(kind, name, endpoint.access);
+  if (explicit) {
+    return {
+      ...explicit,
+      detail: `${explicit.detail} ${detail}`,
+      ...(endpoint.csrfJustification === undefined ? {} : { justification: endpoint.csrfJustification }),
+    };
+  }
+
+  if (endpoint.auth === 'none') {
+    return {
+      decision: 'public',
+      detail,
+      kind,
+      name,
+      source: 'auth',
+      ...(endpoint.csrfJustification === undefined ? {} : { justification: endpoint.csrfJustification }),
+    };
+  }
+
+  if (endpoint.auth?.startsWith('custom:') || endpoint.auth?.startsWith('verifier:')) {
+    return { decision: 'verified', detail, kind, name, source: 'auth' };
+  }
+
+  const hasGuard = hasAuthGuard(endpoint.guards ?? []) || endpoint.auth === 'authed' || endpoint.auth?.startsWith('role:') === true;
+  return {
+    decision: hasGuard ? 'guard' : 'missing',
+    detail,
+    kind,
+    name,
+    source: endpoint.auth === undefined ? 'legacy-guard' : 'auth',
+  };
+}
+
+function hasAuthGuard(guards: readonly string[]): boolean {
+  return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
+}
+
+function listFacts(values: readonly string[] | undefined): string {
+  return values && values.length > 0 ? values.join(',') : '-';
+}
+
+function compareAccessExplainFact(left: AccessExplainFact, right: AccessExplainFact): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.name.localeCompare(right.name) ||
+    left.decision.localeCompare(right.decision)
+  );
 }
 
 const arrayFields = [
