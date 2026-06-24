@@ -600,9 +600,13 @@ compiler). Derivation is fail-closed.
       in prod (no stack trace, no DB/driver error text, no internal detail) + a correlation id; the real error
       is logged server-side, retrievable by id. Dev keeps the §11.3 verbose teaching-error docs. Cover the
       `respond.stream` mid-stream error path too. Runtime safe-default, sound — no new KV code.
-- [ ] **Prototype-pollution-safe coercion (12b).** FormData→object AND JSON-body→object coercion use null-proto
+- [x] **Prototype-pollution-safe coercion (12b).** FormData→object AND JSON-body→object coercion use null-proto
       (`Object.create(null)`, already used) and reject/strip `__proto__`/`constructor`/`prototype` keys before
       assignment; cover `/_q/` args + route params. Runtime safe-default, sound — no new KV code.
+  - Evidence: `packages/server/src/schema.ts` materializes schema/request records as null-prototype objects
+    and rejects `__proto__`/`constructor`/`prototype`; `packages/server/src/query-endpoint.test.ts` and
+    `packages/server/src/route.test.ts` cover `/_q/` args and route params. Verified by
+    `vp exec vitest --run packages/server/src/schema.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/route.test.ts`.
 - [ ] **Secret-safe logging (12c, CWE-532).** The SOUND defense is the `Secret<T>` brand (Items 1/5 — poisoned
       `toString`/`toJSON`) plus the Item-1 Scope-B `JsonValue` wire gate: a secret is hard to stringify and is
       inexpressible on the typed wire, which covers the log sink as defense-in-depth. Optional: an opt-in
