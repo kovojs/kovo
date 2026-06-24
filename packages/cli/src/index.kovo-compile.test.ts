@@ -815,7 +815,7 @@ export const addToCart = mutation('cart/add', {
         expect.objectContaining({
           code: 'KV437',
           message:
-            'Client input reaches a governed column write. Write to accounts.ownerId receives input.ownerId; derive the value on the server or use an audited admin assignment escape once it lands.',
+            'Client input reaches a governed column write. Write to accounts.ownerId receives input.ownerId; derive the value on the server or use audited adminAssign(...).',
           severity: 'error',
           site: 'account.domain.ts:11',
         }),

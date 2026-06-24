@@ -377,14 +377,21 @@ reason)`. Helper false positives are resolved with `kovoAnalyzerSummary`, never 
   - Evidence: `packages/drizzle/src/index.symbol-provenance.test.ts` covers destructured input into an owner
     column plus whole-input/spread/helper-returned governed writes failing closed with KV437. Verified by the
     focused Vitest command above.
-- [ ] Two-tier escape hatch, both surfaced in `kovo explain --capabilities`:
+- [x] Two-tier escape hatch, both surfaced in `kovo explain --capabilities`:
   - `serverValue(value, reason)` discharges **only non-input** arguments — `serverValue(input.x, …)` still
     fails the mass-assignment diagnostic (input provenance inside the brand is not a bypass).
   - `adminAssign(input.x, reason)` is the explicit, louder, audited path for a legitimate admin write that
     intentionally sets a governed column from client input.
-- [ ] Resolve helper false positives with `kovoAnalyzerSummary` (mark `resolveOwner`-style helpers as
+  - Evidence: `packages/drizzle/src/index.symbol-provenance.test.ts` covers `serverValue` non-input discharge,
+    `serverValue(input.x)` still failing KV437, and `adminAssign(input.x, reason)` emitting capability facts;
+    `packages/cli/src/index.kovo-explain.test.ts` covers `kovo explain --capabilities`. Verified by
+    `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/runtime-surface.test.ts packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts packages/core/src/graph.test.ts`.
+- [x] Resolve helper false positives with `kovoAnalyzerSummary` (mark `resolveOwner`-style helpers as
       returning server provenance); document this as THE fix, not reflexive `serverValue`, which would erode
       the gate.
+  - Evidence: `packages/drizzle/src/index.symbol-provenance.test.ts` covers `kovoAnalyzerSummary` proving a
+    resolveOwner-style helper returns private/server provenance without using `serverValue`. Verified by the
+    focused Vitest command above.
 
 ## Phase 4: Server-only secret taint into client modules (diagnostic code TBD)
 
