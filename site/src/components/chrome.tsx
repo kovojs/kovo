@@ -2,7 +2,6 @@
 import { component } from '@kovojs/core';
 import { Code } from '@kovojs/icons/code';
 import { Sun } from '@kovojs/icons/sun';
-import { escapeHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 import type { ApiSidebar as ApiSidebarData, Heading, NavGroup, NavLink } from '../content.js';
@@ -62,11 +61,6 @@ export function sidebarGroupsForPath(groups: NavGroup[], activePath: string): Na
   );
   return filtered.length > 0 ? filtered : groups;
 }
-
-const SEARCH_ICON = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`;
-// The hamburger swaps to an X when its <details> menu is open (CSS-only, the
-// header mobile nav is an L0 disclosure — zero JavaScript).
-const MENU_ICON = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>`;
 
 const chromeStyles = style.create(
   {
@@ -591,7 +585,7 @@ export const SiteHeader = component({
                 href={item.url}
                 style={[chromeStyles.navLink, active && chromeStyles.navLinkActive]}
               >
-                {escapeHtml(item.title)}
+                {item.title}
               </a>
             );
           })}
@@ -611,7 +605,20 @@ export const SiteHeader = component({
             on:click={`${clients.search}#open`}
             aria-label="Search documentation"
           >
-            {SEARCH_ICON}
+            <svg
+              viewBox="0 0 24 24"
+              width="17"
+              height="17"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.9"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
           </button>
           <button
             type="button"
@@ -639,7 +646,18 @@ export const SiteHeader = component({
           </a>
           <details style={chromeStyles.mobileMenu}>
             <summary style={chromeStyles.mobileMenuSummary} aria-label="Menu">
-              {MENU_ICON}
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.9"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M3 6h18M3 12h18M3 18h18" />
+              </svg>
             </summary>
             <nav style={chromeStyles.mobilePanel} aria-label="Site">
               {NAV.map((item) => {
@@ -650,7 +668,7 @@ export const SiteHeader = component({
                     href={item.url}
                     style={[chromeStyles.mobilePanelLink, active && chromeStyles.navLinkActive]}
                   >
-                    {escapeHtml(item.title)}
+                    {item.title}
                   </a>
                 );
               })}
@@ -703,7 +721,7 @@ export const DocsSidebar = component({
     <nav style={chromeStyles.docSidebar} aria-label="Documentation">
       {groups.map((group) => (
         <section style={chromeStyles.sideGroup}>
-          <h2 style={chromeStyles.sideGroupHeading}>{escapeHtml(group.title)}</h2>
+          <h2 style={chromeStyles.sideGroupHeading}>{group.title}</h2>
           <ul style={chromeStyles.sideGroupList}>
             {group.pages.map((page) => (
               <li>
@@ -714,7 +732,7 @@ export const DocsSidebar = component({
                     page.url === activePath && chromeStyles.sideLinkActive,
                   ]}
                 >
-                  {escapeHtml(page.title)}
+                  {page.title}
                 </a>
               </li>
             ))}
@@ -740,8 +758,8 @@ function prevNextCard(page: NavLink | undefined, direction: 'prev' | 'next') {
       <span style={chromeStyles.paginationLabel}>{direction === 'next' ? 'Next' : 'Previous'}</span>
       <span style={chromeStyles.paginationTitle}>
         {direction === 'next'
-          ? `${escapeHtml(page.title)} &rarr;`
-          : `&larr; ${escapeHtml(page.title)}`}
+          ? `${page.title} →`
+          : `← ${page.title}`}
       </span>
     </a>
   );
@@ -774,7 +792,7 @@ export const ApiSidebar = component({
         <details style={chromeStyles.apiNavSubpath} open>
           <summary style={chromeStyles.apiNavSubpathSummary}>
             <span style={chromeStyles.apiSummaryArrow}>&#9656;</span>
-            <span style={chromeStyles.apiNavSubpathTitle}>{escapeHtml(subpath.importPath)}</span>
+            <span style={chromeStyles.apiNavSubpathTitle}>{subpath.importPath}</span>
             <span style={chromeStyles.apiNavCount}>
               {String(
                 subpath.categories.reduce((count, category) => count + category.symbols.length, 0),
@@ -792,20 +810,20 @@ export const ApiSidebar = component({
             <details style={chromeStyles.apiNavGroup} open>
               <summary style={chromeStyles.apiNavGroupSummary}>
                 <span style={chromeStyles.apiSummaryArrow}>&#9656;</span>{' '}
-                {escapeHtml(category.title)}{' '}
+                {category.title}{' '}
                 <span style={chromeStyles.apiNavCount}>{String(category.symbols.length)}</span>
               </summary>
               <ul style={chromeStyles.apiNavList}>
                 {category.symbols.map((symbol) => (
                   <li style={chromeStyles.apiNavItem}>
                     <a href={`#${symbol.anchor}`} style={chromeStyles.apiNavLink}>
-                      {escapeHtml(symbol.name)}
+                      {symbol.name}
                     </a>
                     <a
                       style={chromeStyles.apiNavSource}
                       href={symbol.sourceHref}
                       rel="external"
-                      aria-label={`Source for ${escapeHtml(symbol.name)}`}
+                      aria-label={`Source for ${symbol.name}`}
                     >
                       <Code style={chromeStyles.sourceIcon} />
                     </a>
@@ -835,7 +853,7 @@ export function renderToc(headings: Heading[] = []): string {
               style={[chromeStyles.tocLink, heading.depth === 3 && chromeStyles.tocDepth3]}
               href={`#${heading.id}`}
             >
-              {escapeHtml(heading.text)}
+              {heading.text}
             </a>
           </li>
         ))}
