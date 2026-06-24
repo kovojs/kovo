@@ -50,12 +50,20 @@ re-confirmed by hand** against the cited `file:line`. Every finding below carrie
       entry (`schema.ts`); the 4000-deep array attack is rejected before descent and the check can't itself
       stack-overflow. 7 tests. Commit `52041325`. _Rest of the schema cluster below remains._
 - [ ] **Schema cluster remainder:** KV428 upload inline-XSS gate (remove `.mime()`, sniff-based content-type,
-      attachment-default); KV434 ReDoS-safe validators; per-schema `.max()` overrides; FormData-breadth +
-      sync-parse-entry coverage. _(The agent assigned this session-limited mid-run; worktree discarded.)_
-- [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); **KV436 default-deny wiring + access
-      migration** (breaking — touches every surface); explain rendering (`--cookies`/`--capabilities` + SQL
-      producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups); **§3 interprocedural foundation
-      → mass-assignment / KV429 / KV433** (the big by-construction write lever); **egress/SSRF + capability-URL** (XL).
+  attachment-default); KV434 ReDoS-safe validators; per-schema `.max()` overrides; FormData-breadth +
+  sync-parse-entry coverage. _(The agent assigned this session-limited mid-run; worktree discarded.)_
+- [x] **KV436 default-deny + access migration** (breaking) — merged to `main`. `deriveAppGraph` classifies
+  every surface (guard/public/verified/**missing**); KV436 fails `kovo check` on missing; every app surface
+  migrated with a real decision; SPEC §10.2. By-construction that a decision exists (KV414 keeps IDOR).
+- [x] **Egress/SSRF private-network deny floor + capability-URL core** (XL) — merged to `main`. Dual-layer
+  (undici `dispatch` + `node:http`/`net.connect`), per-hop resolve→normalize→pin-to-IP, module-private
+  `metadataAllowed` ALS via `awsCredential`/`gcpCredential`/`azureCredential`, `allowInternal`,
+  `EgressBlockedError`, bootstrap self-probe; capability-URL HMAC/verify core; SPEC §6.6. Runtime-DiD floor,
+  not a proof. _Open: capability-URL framework download route + `ctx.signUrl` threading._
+- [ ] **Remaining waves:** sources-sinks enforce (KV424/425/426); explain rendering (`--cookies`/
+  `--capabilities` + SQL producer→graph merge + CSP allowlist app config — the SF-WIRE follow-ups);
+  schema cluster remainder (KV428 upload / KV434 ReDoS); **§3 interprocedural foundation → mass-assignment /
+  KV429 / KV433** (the big by-construction write lever).
 
 ### Verified state of branch `agent/implement-secure-framework-20260624-114921` (2026-06-24)
 
