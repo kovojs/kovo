@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 import { expectAxeClean } from './a11y-axe';
 
-test.use({ kovoFixture: 'a11y-tabs-terminal' });
+test.use({ bypassCSP: true, kovoFixture: 'a11y-tabs-terminal' });
 
 test('tabs terminal selected state exposes role and panel relationships', async ({
   page,

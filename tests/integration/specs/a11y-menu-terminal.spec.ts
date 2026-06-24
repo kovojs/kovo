@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 import { expectAxeClean } from './a11y-axe';
 
-test.use({ kovoFixture: 'a11y-menu-terminal' });
+test.use({ bypassCSP: true, kovoFixture: 'a11y-menu-terminal' });
 
 test('menu terminal open state exposes expanded trigger and active item semantics', async ({
   page,

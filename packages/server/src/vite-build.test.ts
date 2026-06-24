@@ -49,6 +49,7 @@ const runtimeClientModuleManifestItem = expect.objectContaining({
   path: expect.stringMatching(runtimeClientModulePath),
   status: 200,
 });
+const defaultDocumentCsp = expect.stringContaining("default-src 'self'");
 
 describe('server app shell Vite build seam', () => {
   it('wires route-entry hints, compiled modules, output files, and static export assets', async () => {
@@ -412,6 +413,7 @@ describe('server app shell Vite build seam', () => {
       expect(inventory).toEqual([
         {
           headers: {
+            'content-security-policy': defaultDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/shop.css>; rel=preload; as=style, </assets/shop.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -788,6 +790,7 @@ describe('server app shell Vite build seam', () => {
       expect(inventory).toEqual([
         {
           headers: {
+            'content-security-policy': defaultDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/catalog.css>; rel=preload; as=style, </assets/catalog.js>; rel=modulepreload',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -908,6 +911,7 @@ describe('server app shell Vite build seam', () => {
         files: [
           {
             headers: {
+              'content-security-policy': defaultDocumentCsp,
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',
@@ -946,6 +950,7 @@ describe('server app shell Vite build seam', () => {
         routeDocuments: [
           {
             headers: {
+              'content-security-policy': defaultDocumentCsp,
               'content-type': 'text/html; charset=utf-8',
               link: '</assets/docs.css>; rel=preload; as=style, </c/docs.client.js?v=docs-v1>; rel=modulepreload, </assets/docs.js>; rel=modulepreload',
               'referrer-policy': 'strict-origin-when-cross-origin',

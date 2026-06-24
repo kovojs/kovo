@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 import { expectAxeClean } from './a11y-axe';
 
-test.use({ kovoFixture: 'a11y-value-controls-terminal' });
+test.use({ bypassCSP: true, kovoFixture: 'a11y-value-controls-terminal' });
 
 test('native value controls expose terminal role name and value semantics', async ({
   page,

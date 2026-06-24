@@ -11,10 +11,20 @@ describe('server schemas', () => {
   it('keeps chained schema constraints immutable', () => {
     const baseNumber = s.number();
     const positiveInteger = baseNumber.int().min(1);
+    const baseString = s.string();
+    const shortSlug = baseString.slug().max(8);
+    const baseArray = s.array(s.string());
+    const shortArray = baseArray.max(2);
 
     expect(baseNumber.parse(0.5)).toBe(0.5);
     expect(() => positiveInteger.parse(0.5)).toThrow('Expected integer');
     expect(() => positiveInteger.parse(0)).toThrow('Expected number >= 1');
+    expect(baseString.parse('Not A Slug')).toBe('Not A Slug');
+    expect(shortSlug.parse('cart-1')).toBe('cart-1');
+    expect(() => shortSlug.parse('cart!')).toThrow('Expected slug');
+    expect(() => shortSlug.parse('cart-item')).toThrow('Expected string length <= 8');
+    expect(baseArray.parse(['a', 'b', 'c'])).toEqual(['a', 'b', 'c']);
+    expect(() => shortArray.parse(['a', 'b', 'c'])).toThrow('Expected array length <= 2');
 
     const file = {
       arrayBuffer: async () => new ArrayBuffer(0),
@@ -27,6 +37,28 @@ describe('server schemas', () => {
 
     expect(baseFile.parse(file)).toBe(file);
     expect(() => imageFile.parse(file)).toThrow('Expected file <= 10 bytes');
+  });
+
+  it('validates blessed string formats without app-provided regular expressions', () => {
+    expect(s.string().email().parse('ada@example.test')).toBe('ada@example.test');
+    expect(() => s.string().email().parse('ada@@example.test')).toThrow('Expected email');
+    expect(() => s.string().email().parse('ada@-example.test')).toThrow('Expected email');
+
+    expect(s.string().url().parse('https://example.test/cart?q=1')).toBe(
+      'https://example.test/cart?q=1',
+    );
+    expect(() => s.string().url().parse('javascript:alert(1)')).toThrow('Expected url');
+
+    expect(s.string().uuid().parse('550e8400-e29b-41d4-a716-446655440000')).toBe(
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    expect(() => s.string().uuid().parse('550e8400-e29b-41d4-a716-44665544000z')).toThrow(
+      'Expected uuid',
+    );
+
+    expect(s.string().slug().parse('cart-item-1')).toBe('cart-item-1');
+    expect(() => s.string().slug().parse('Cart Item')).toThrow('Expected slug');
+    expect(() => s.string().slug().parse('cart--item')).toThrow('Expected slug');
   });
 
   it('wraps schemas as Secret values outside JsonValue client payloads', () => {

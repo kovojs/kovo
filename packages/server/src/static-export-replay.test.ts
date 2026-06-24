@@ -10,6 +10,7 @@ import { replayStaticExportApp } from './static-export-replay.js';
 import { renderedHtml } from './html.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
+const defaultDocumentCsp = expect.stringContaining("default-src 'self'");
 
 describe('server static export app replay boundary', () => {
   it('owns replay-time non-exportable skip policy while still replaying discovered client modules', async () => {
@@ -43,6 +44,7 @@ describe('server static export app replay boundary', () => {
         {
           body: expect.stringContaining('<button on:click="/c/__v/cart-static/cart.client.js'),
           headers: {
+            'content-security-policy': defaultDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             'referrer-policy': 'strict-origin-when-cross-origin',
             'x-content-type-options': 'nosniff',

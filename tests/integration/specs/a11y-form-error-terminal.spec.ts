@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 import { expectAxeClean } from './a11y-axe';
 
-test.use({ kovoFixture: 'a11y-form-error-terminal' });
+test.use({ bypassCSP: true, kovoFixture: 'a11y-form-error-terminal' });
 
 test('enhanced form error terminal state links invalid field to alert text', async ({
   page,

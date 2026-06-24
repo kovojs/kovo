@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 import { expectAxeClean } from './a11y-axe';
 
-test.use({ kovoFixture: 'primitive-state-attrs' });
+test.use({ bypassCSP: true, kovoFixture: 'primitive-state-attrs' });
 
 test('primitive-owned state attrs win initially and update on interaction', async ({
   kovoApp,

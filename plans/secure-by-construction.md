@@ -591,6 +591,9 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         passed.
   - [ ] Per-schema overrides (`s.array().max(n)`, `s.string().max(len)`) + a global config ceiling so
         legitimate large inputs (bulk imports) declare their bound (declare-once).
+        Partial evidence: `packages/server/src/schema.ts` now exposes immutable `s.array(...).max(n)` and
+        `s.string().max(n)` chains with focused coverage in `packages/server/src/schema.test.ts`; the global
+        config ceiling remains open.
   - [ ] KV430 **lint** (not error): flag an unbounded `s.array()`/`s.record()` on a wire-reachable schema with
         no `.max()`; surface in `kovo explain`. Lint because the runtime default already protects — this just
         makes the bound explicit/auditable. Recursive (`s.lazy`) depth is runtime-only.
@@ -624,8 +627,11 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
       Decision (2026-06-23): blessed-formats-first + compile-visible-literal `pattern()` with static reject +
       runtime step-budget; full RE2 engine deferred. Design-the-API-safe-from-day-one (the validator API doesn't
       exist yet — cheap before apps depend on JS `RegExp` semantics, expensive after).
-  - [ ] Blessed linear formats: `email`/`url`/`uuid`/`slug` ship as audited backtracking-free matchers (no
+  - [x] Blessed linear formats: `email`/`url`/`uuid`/`slug` ship as audited backtracking-free matchers (no
         regex) — covers most needs.
+        Evidence: `packages/server/src/schema.ts` implements `s.string().email()`, `.url()`, `.uuid()`, and
+        `.slug()` with parser/URL/character-scan validators and no app-provided `RegExp`; `vp exec vitest --run
+packages/server/src/schema.test.ts` and `vp check` passed.
   - [ ] `s.string().pattern(...)` REQUIRES a compile-visible literal; KV434 statically rejects exponential
         structure (conservative: nested/overlapping quantifiers); execute with a runtime step-budget/timeout as
         the backstop. A non-literal pattern → KV434 (unanalyzable).

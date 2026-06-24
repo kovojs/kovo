@@ -84,40 +84,8 @@ export function isSchemaValidationError(error: unknown): error is SchemaValidati
  * // parsed.quantity === 2, parsed.tags === ['a']
  */
 export const s = {
-  array<Item>(item: Schema<Item>): Schema<Item[]> {
-    // `parseAsync` mirrors `s.object` (SPEC §6): each item flows through
-    // `parseSchemaAsync` so a storing item schema (`s.file().store()`) runs its
-    // async `storage.put`/`normalizeStorageKey` path. Without it, the runtime's
-    // async input parse (`parseSchemaAsync`) would fall back to the sync `parse`
-    // below, which for a storing file schema fabricates a result with no upload
-    // and no key normalization (data loss + traversal-key passthrough; Part 4 M1).
-    const schema: AsyncSchema<Item[]> = {
-      parse(input: unknown): Item[] {
-        assertSchemaInputBudget(input);
-        return arrayValues(input).map((value, index) => {
-          try {
-            return item.parse(value);
-          } catch (error) {
-            throw validationErrorFrom(error, [String(index)]);
-          }
-        });
-      },
-      async parseAsync(input: unknown): Promise<Item[]> {
-        assertSchemaInputBudget(input);
-        const output: Item[] = [];
-
-        for (const [index, value] of arrayValues(input).entries()) {
-          try {
-            output.push(await parseSchemaAsync(item, value));
-          } catch (error) {
-            throw validationErrorFrom(error, [String(index)]);
-          }
-        }
-
-        return output;
-      },
-    };
-    return schema;
+  array<Item>(item: Schema<Item>): ArraySchema<Item> {
+    return new ArraySchemaImpl(item);
   },
   boolean(): Schema<boolean> {
     return {
@@ -139,13 +107,8 @@ export const s = {
   file(options: FileSchemaOptions = {}): FileSchema {
     return new FileSchemaImpl(options);
   },
-  string(): Schema<string> {
-    return {
-      parse(input: unknown): string {
-        if (typeof input !== 'string') throw validationError('Expected string');
-        return input;
-      },
-    };
+  string(): StringSchema {
+    return new StringSchemaImpl();
   },
   number(): NumberSchema {
     return new NumberSchemaImpl();
@@ -238,6 +201,143 @@ export interface StoredFileSchemaOptions {
   key: string | ((file: FileLike) => Promise<string> | string);
   metadata?: (file: FileLike) => Readonly<Record<string, string>>;
   storage: StorageCapability;
+}
+
+/** Array schema produced by `s.array(...)`; chains item parsing plus explicit length bounds (SPEC.md §6). */
+export interface ArraySchema<Item> extends AsyncSchema<Item[]> {
+  max(value: number): ArraySchema<Item>;
+}
+
+interface ArraySchemaOptions {
+  maxLength?: number;
+}
+
+class ArraySchemaImpl<Item> implements ArraySchema<Item> {
+  readonly #item: Schema<Item>;
+  readonly #maxLength: number | undefined;
+
+  constructor(item: Schema<Item>, options: ArraySchemaOptions = {}) {
+    this.#item = item;
+    this.#maxLength = options.maxLength;
+  }
+
+  max(value: number): ArraySchema<Item> {
+    assertNonNegativeInteger(value, 'Array max');
+    return new ArraySchemaImpl(this.#item, { maxLength: value });
+  }
+
+  parse(input: unknown): Item[] {
+    // `parseAsync` mirrors `s.object` (SPEC §6): each item flows through
+    // `parseSchemaAsync` so a storing item schema (`s.file().store()`) runs its
+    // async `storage.put`/`normalizeStorageKey` path. Without it, the runtime's
+    // async input parse (`parseSchemaAsync`) would fall back to the sync `parse`
+    // below, which for a storing file schema fabricates a result with no upload
+    // and no key normalization (data loss + traversal-key passthrough; Part 4 M1).
+    assertSchemaInputBudget(input);
+    const values = arrayValues(input);
+    this.#assertMax(values.length);
+    return values.map((value, index) => {
+      try {
+        return this.#item.parse(value);
+      } catch (error) {
+        throw validationErrorFrom(error, [String(index)]);
+      }
+    });
+  }
+
+  async parseAsync(input: unknown): Promise<Item[]> {
+    assertSchemaInputBudget(input);
+    const values = arrayValues(input);
+    this.#assertMax(values.length);
+    const output: Item[] = [];
+
+    for (const [index, value] of values.entries()) {
+      try {
+        output.push(await parseSchemaAsync(this.#item, value));
+      } catch (error) {
+        throw validationErrorFrom(error, [String(index)]);
+      }
+    }
+
+    return output;
+  }
+
+  #assertMax(length: number): void {
+    if (this.#maxLength !== undefined && length > this.#maxLength) {
+      throw validationError(`Expected array length <= ${this.#maxLength}`);
+    }
+  }
+}
+
+/**
+ * String schema produced by `s.string()`; chains length and audited linear format validators
+ * (SPEC.md §6 and secure-by-construction KV434).
+ */
+export interface StringSchema extends Schema<string> {
+  email(): StringSchema;
+  max(value: number): StringSchema;
+  slug(): StringSchema;
+  url(): StringSchema;
+  uuid(): StringSchema;
+}
+
+type StringFormat = 'email' | 'slug' | 'url' | 'uuid';
+
+interface StringSchemaOptions {
+  format?: StringFormat;
+  maxLength?: number;
+}
+
+class StringSchemaImpl implements StringSchema {
+  readonly #format: StringFormat | undefined;
+  readonly #maxLength: number | undefined;
+
+  constructor(options: StringSchemaOptions = {}) {
+    this.#format = options.format;
+    this.#maxLength = options.maxLength;
+  }
+
+  email(): StringSchema {
+    return this.#with({ format: 'email' });
+  }
+
+  max(value: number): StringSchema {
+    assertNonNegativeInteger(value, 'String max');
+    return this.#with({ maxLength: value });
+  }
+
+  slug(): StringSchema {
+    return this.#with({ format: 'slug' });
+  }
+
+  url(): StringSchema {
+    return this.#with({ format: 'url' });
+  }
+
+  uuid(): StringSchema {
+    return this.#with({ format: 'uuid' });
+  }
+
+  parse(input: unknown): string {
+    if (typeof input !== 'string') throw validationError('Expected string');
+    if (this.#maxLength !== undefined && input.length > this.#maxLength) {
+      throw validationError(`Expected string length <= ${this.#maxLength}`);
+    }
+    if (this.#format !== undefined && !stringFormatValidators[this.#format](input)) {
+      throw validationError(`Expected ${this.#format}`);
+    }
+
+    return input;
+  }
+
+  #with(options: StringSchemaOptions): StringSchema {
+    const format = options.format ?? this.#format;
+    const maxLength = options.maxLength ?? this.#maxLength;
+    return new StringSchemaImpl({
+      ...(format === undefined ? {} : { format }),
+      ...(maxLength === undefined ? {} : { maxLength }),
+    });
+  }
 }
 
 /** Numeric schema produced by `s.number()`; chains int/min/default refinements (SPEC.md §6). */
@@ -404,9 +504,133 @@ function createFileOptions(
   };
 }
 
+const stringFormatValidators: Record<StringFormat, (value: string) => boolean> = {
+  email: isLinearEmail,
+  slug: isLinearSlug,
+  url: isLinearUrl,
+  uuid: isLinearUuid,
+};
+
 function arrayValues(input: unknown): unknown[] {
   if (input === undefined || input === null) return [];
   return Array.isArray(input) ? input : [input];
+}
+
+function assertNonNegativeInteger(value: number, label: string): void {
+  if (!Number.isInteger(value) || value < 0)
+    throw new Error(`${label} must be a non-negative integer`);
+}
+
+function isLinearEmail(value: string): boolean {
+  if (value.length === 0 || value.length > 254) return false;
+  const at = value.indexOf('@');
+  if (at <= 0 || at !== value.lastIndexOf('@') || at === value.length - 1) return false;
+
+  const local = value.slice(0, at);
+  const domain = value.slice(at + 1);
+  if (local.length > 64 || !hasOnlyVisibleEmailLocalCharacters(local)) return false;
+
+  return isDomainName(domain);
+}
+
+function isLinearSlug(value: string): boolean {
+  if (value.length === 0) return false;
+  let previousHyphen = false;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    const lowerAlpha = code >= 0x61 && code <= 0x7a;
+    const digit = code >= 0x30 && code <= 0x39;
+    const hyphen = code === 0x2d;
+    if (!lowerAlpha && !digit && !hyphen) return false;
+    if (hyphen && (index === 0 || index === value.length - 1 || previousHyphen)) return false;
+    previousHyphen = hyphen;
+  }
+
+  return true;
+}
+
+function isLinearUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname.length > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isLinearUuid(value: string): boolean {
+  if (value.length !== 36) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    const shouldBeHyphen = index === 8 || index === 13 || index === 18 || index === 23;
+    if (shouldBeHyphen) {
+      if (code !== 0x2d) return false;
+      continue;
+    }
+    if (!isAsciiHex(code)) return false;
+  }
+
+  return true;
+}
+
+function hasOnlyVisibleEmailLocalCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x20 || code >= 0x7f || code === 0x22 || code === 0x28 || code === 0x29) {
+      return false;
+    }
+    if (code === 0x2c || code === 0x3a || code === 0x3b || code === 0x3c || code === 0x3e) {
+      return false;
+    }
+    if (code === 0x5b || code === 0x5c || code === 0x5d) return false;
+  }
+
+  return true;
+}
+
+function isDomainName(value: string): boolean {
+  if (value.length === 0 || value.length > 253 || value.startsWith('.') || value.endsWith('.')) {
+    return false;
+  }
+
+  let labelLength = 0;
+  let labelStartsWithHyphen = false;
+  let previous = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code === 0x2e) {
+      if (labelLength === 0 || labelLength > 63 || labelStartsWithHyphen || previous === 0x2d) {
+        return false;
+      }
+      labelLength = 0;
+      labelStartsWithHyphen = false;
+      previous = code;
+      continue;
+    }
+
+    const lower = code >= 0x61 && code <= 0x7a;
+    const upper = code >= 0x41 && code <= 0x5a;
+    const digit = code >= 0x30 && code <= 0x39;
+    const hyphen = code === 0x2d;
+    if (!lower && !upper && !digit && !hyphen) return false;
+    if (labelLength === 0 && hyphen) labelStartsWithHyphen = true;
+    labelLength += 1;
+    previous = code;
+  }
+
+  return labelLength > 0 && labelLength <= 63 && !labelStartsWithHyphen && previous !== 0x2d;
+}
+
+function isAsciiHex(code: number): boolean {
+  return (
+    (code >= 0x30 && code <= 0x39) ||
+    (code >= 0x41 && code <= 0x46) ||
+    (code >= 0x61 && code <= 0x66)
+  );
 }
 
 function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {

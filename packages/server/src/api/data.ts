@@ -46,6 +46,7 @@ export type {
 export { query } from '../query.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
+  ArraySchema,
   AsyncSchema,
   FileLike,
   FileSchema,
@@ -53,6 +54,7 @@ export type {
   InferSchema,
   NumberSchema,
   Schema,
+  StringSchema,
   StoredFileSchema,
   StoredFileSchemaOptions,
   StoredFileUpload,

@@ -2,7 +2,7 @@ import { expect, test } from '@kovojs/test/internal/integration';
 
 import { expectAxeClean } from './a11y-axe';
 
-test.use({ kovoFixture: 'a11y-dialog-terminal' });
+test.use({ bypassCSP: true, kovoFixture: 'a11y-dialog-terminal' });
 
 test('dialog terminal open state keeps role name and focus semantics', async ({
   page,

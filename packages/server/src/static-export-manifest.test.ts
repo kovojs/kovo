@@ -37,6 +37,7 @@ const runtimeClientModuleFile = expect.objectContaining({
   path: expect.stringMatching(runtimeClientModulePath),
   status: 200,
 });
+const defaultDocumentCsp = expect.stringContaining("default-src 'self'");
 
 describe('server static export', () => {
   it('summarizes dry-run route, client module, and asset inventory in write order', async () => {
@@ -70,6 +71,7 @@ describe('server static export', () => {
     expect(staticExportInventory(result)).toEqual([
       {
         headers: {
+          'content-security-policy': defaultDocumentCsp,
           'content-type': 'text/html; charset=utf-8',
           link: `<${cartHref}>; rel=modulepreload`,
           'referrer-policy': 'strict-origin-when-cross-origin',
@@ -243,6 +245,7 @@ describe('server static export', () => {
       files: [
         {
           headers: {
+            'content-security-policy': defaultDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -254,6 +257,7 @@ describe('server static export', () => {
         },
         {
           headers: {
+            'content-security-policy': defaultDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -285,6 +289,7 @@ describe('server static export', () => {
       routeDocuments: [
         {
           headers: {
+            'content-security-policy': defaultDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: `<${cartHref}>; rel=modulepreload`,
             'referrer-policy': 'strict-origin-when-cross-origin',
@@ -295,6 +300,7 @@ describe('server static export', () => {
         },
         {
           headers: {
+            'content-security-policy': defaultDocumentCsp,
             'content-type': 'text/html; charset=utf-8',
             link: '</assets/docs.css>; rel=preload; as=style',
             'referrer-policy': 'strict-origin-when-cross-origin',
