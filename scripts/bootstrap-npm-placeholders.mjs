@@ -100,7 +100,8 @@ function writePlaceholderPackage(dir, name) {
   const manifest = {
     name,
     version: PLACEHOLDER_VERSION,
-    description: 'Placeholder package. Real releases are published from https://github.com/kovojs/kovo.',
+    description:
+      'Placeholder package. Real releases are published from https://github.com/kovojs/kovo.',
     repository: {
       type: 'git',
       url: REPOSITORY_URL,

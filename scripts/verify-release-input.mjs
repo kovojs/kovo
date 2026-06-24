@@ -7,7 +7,9 @@ import { releasePackages } from './release-packages.mjs';
 const version = process.argv[2];
 
 if (!version || !parseSemver(version)) {
-  throw new Error(`Expected a valid semver release version argument; received: ${version ?? '(none)'}`);
+  throw new Error(
+    `Expected a valid semver release version argument; received: ${version ?? '(none)'}`,
+  );
 }
 
 const ref = process.env.GITHUB_REF;

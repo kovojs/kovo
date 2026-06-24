@@ -1,12 +1,12 @@
 {
   "name": "@kovojs/icons",
   "version": "0.1.1",
+  "description": "The Lucide icon set as native Kovo SVG components — one tree-shakeable component per icon.",
+  "license": "ISC",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/kovojs/kovo.git"
   },
-  "description": "The Lucide icon set as native Kovo SVG components — one tree-shakeable component per icon.",
-  "license": "ISC",
   "files": [
     "dist"
   ],

@@ -93,13 +93,13 @@ disappears — raw `<script>` text becomes unexpressible).
 ```tsx
 createApp({
   document: {
-    lang: "en",
-    htmlAttrs: { "data-theme": "dark" },          // constrained allowlist
+    lang: 'en',
+    htmlAttrs: { 'data-theme': 'dark' }, // constrained allowlist
     head: [
-      fontPreload("/fonts/inter-latin-wght-normal.woff2"),
-      inlineScript({ id: "theme", run: "beforePaint", source: THEME_SCRIPT }),
+      fontPreload('/fonts/inter-latin-wght-normal.woff2'),
+      inlineScript({ id: 'theme', run: 'beforePaint', source: THEME_SCRIPT }),
     ],
-    bodyEnd: <SearchDialog />,                      // natural JSX, server-escaped
+    bodyEnd: <SearchDialog />, // natural JSX, server-escaped
   },
 });
 ```
@@ -109,11 +109,11 @@ createApp({
     ```ts
     interface AppDocumentOptions {
       lang?: string;
-      htmlAttrs?: DocumentHtmlAttrs;   // lang/dir/class/id/data-*; no on*/style/srcdoc; URL attrs scheme-checked
-      bodyAttrs?: DocumentBodyAttrs;   // class/id/data-*; data-kovo-*/kovo-* reserved
+      htmlAttrs?: DocumentHtmlAttrs; // lang/dir/class/id/data-*; no on*/style/srcdoc; URL attrs scheme-checked
+      bodyAttrs?: DocumentBodyAttrs; // class/id/data-*; data-kovo-*/kovo-* reserved
       head?: readonly DocumentHeadItem[];
-      bodyStart?: DocumentNode;        // injected immediately after <body>
-      bodyEnd?: DocumentNode;          // injected after the route body, before </body>
+      bodyStart?: DocumentNode; // injected immediately after <body>
+      bodyEnd?: DocumentNode; // injected after the route body, before </body>
     }
     ```
   - `DocumentHeadItem` is an opaque branded type returned only by the head helpers; a plain string or
@@ -152,7 +152,7 @@ createApp({
 - [ ] Raw HTML only through `rawHead(trustedHtml(...))` (head) or `trustedHtml(...)` in body JSX.
   - Plain `string` raw HTML is never accepted; both are enrolled in `kovo explain --trust`.
 - [ ] App-authored imports from `@kovojs/server/internal/*` stay invalid (SPEC §5.2 rule 8). The
-  structured helpers remove every current reason to reach for them.
+      structured helpers remove every current reason to reach for them.
 
 ## Compiler And Runtime Work
 
@@ -186,19 +186,19 @@ compiler pass.
     dialog stays a JSX component in `bodyEnd`.
   - Delete the hand-authored frame and all `trustedHtml(parts.*)` threading.
 - [ ] Remove the string `DocumentTemplate` surface and its tests/fixtures; replace with structured
-  equivalents.
+      equivalents.
 - [ ] Update docs/examples and `plans/no-raw-strings.md` (close the `DocumentTemplate` exception).
 
 ## Verification Plan
 
 - [ ] Type-level tests: a plain string / raw JSX / `dangerouslySetInnerHTML` is rejected in a head
-  slot, and the old string `DocumentTemplate` no longer typechecks.
+      slot, and the old string `DocumentTemplate` no longer typechecks.
 - [ ] Server tests: required framework parts (loader, query scripts, build/session meta, route body)
-  are present and correctly ordered without any app-side placeholder.
+      are present and correctly ordered without any app-side placeholder.
 - [ ] Deferred tests: full vs deferred shell parity via the structured model (no `</body>` slicing).
 - [ ] CSP tests: every `inlineScript` hash is merged into the document CSP.
 - [ ] Source/sink tests: document raw-HTML/script/style/URL sinks are inventoried in
-  `kovo explain --trust`.
+      `kovo explain --trust`.
 - [ ] Import-boundary test: app-authored `@kovojs/server/internal/*` document imports fail.
 - [ ] Site build/static-export test after migration.
 - [ ] `git diff --check` + public API gates before checkpoint commits.
