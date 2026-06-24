@@ -1,4 +1,4 @@
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -17,6 +17,7 @@ function renderCardHtml(p: PayloadResult): string {
 }
 
 export const updatePayload = mutation('xss/update', {
+  access: publicAccess('integration fixture mutation xss/update has no runtime guard'),
   csrf: false,
   input: s.object({}),
   registry: {
@@ -33,6 +34,7 @@ export const updatePayload = mutation('xss/update', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const payload = await readPayload(request.db);
     const rendered = renderCardHtml(payload);

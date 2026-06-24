@@ -1,4 +1,4 @@
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 import {
   kovoFixtureStylesheetManifest,
@@ -18,12 +18,14 @@ const lateCardStylesheets =
       : [];
 
 export const revealLateCard = mutation('fragment-style-metadata/reveal', {
+  access: publicAccess('integration fixture mutation fragment-style-metadata/reveal has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: () => ({ ok: true }),
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <h1>Fragment style metadata</h1>
     <section kovo-fragment-target="late-card" kovo-deps="late-card"></section>

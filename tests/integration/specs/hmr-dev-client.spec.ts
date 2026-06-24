@@ -21,7 +21,8 @@ import {
   query,
   route,
   s,
-} from '@kovojs/server';
+
+  publicAccess,} from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
   type KovoAppShellViteMiddleware,
@@ -61,6 +62,7 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
     liveTargetRenderers: [renderer],
     routes: [
       route('/', {
+        access: publicAccess('integration test fixture route / has no runtime guard'),
         page() {
           return `<main>${renderCard()}</main>`;
         },
@@ -123,6 +125,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
   let stock = 7;
   const queryLoads: string[] = [];
   const productQuery = query('product', {
+    access: publicAccess('integration test fixture query product has no runtime guard'),
     args: s.object({ id: s.string() }),
     load(input: { id: string }, context: unknown) {
       const request =
@@ -160,6 +163,7 @@ test('dev HMR client refreshes query-backed live targets from server state', asy
     liveTargetRenderers: [productRenderer],
     routes: [
       route('/', {
+        access: publicAccess('integration test fixture route / has no runtime guard'),
         async page(_context, request) {
           const card = await productRenderer.render({
             input: {},
@@ -227,6 +231,7 @@ test('dev HMR client replaces the document with server diagnostics', async ({ pa
   const app = createApp({
     routes: [
       route('/', {
+        access: publicAccess('integration test fixture route / has no runtime guard'),
         modulepreloads: [failedModule],
         page() {
           return '<main><h1>Healthy route</h1></main>';
@@ -288,6 +293,7 @@ test('dev HMR client full reloads for route-shell changes', async ({ page }) => 
   const app = createApp({
     routes: [
       route('/', {
+        access: publicAccess('integration test fixture route / has no runtime guard'),
         page() {
           return `<main><h1 id="route-version">${routeVersion}</h1></main>`;
         },
@@ -743,7 +749,7 @@ function isKovoCustomHmrPayload(
 function hmrSourceAppShell(options: { routeVersion?: string } = {}): string {
   const routeVersion = options.routeVersion ?? '';
   return `
-import { createApp, route } from '@kovojs/server';
+	import { createApp, publicAccess, route } from '@kovojs/server';
 
 import { HmrSourceCard } from './hmr-card';
 
@@ -760,9 +766,10 @@ const renderer = {
 
 export default createApp({
   liveTargetRenderers: [renderer],
-  routes: [
-    route('/', {
-      page() {
+	  routes: [
+	    route('/', {
+	      access: publicAccess('integration test fixture route / has no runtime guard'),
+	      page() {
         return \`<main>${
           routeVersion ? `<h1 id="hmr-route-version">${routeVersion}</h1>` : ''
         }\${renderCard()}</main>\`;

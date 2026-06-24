@@ -92,7 +92,7 @@ describe('Drizzle pinned subset conformance', () => {
               await db.update(products).set({ stock: -1 });
             }
 
-            export const productQuery = query('product/destructured', {
+            export const productQuery = query('product/destructured', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, { db }: Context) {
                 return db.select({ id: products.id, stock: products.stock }).from(products);
               },
@@ -154,7 +154,7 @@ describe('Drizzle pinned subset conformance', () => {
               await fakeWriter.update(products).set({ stock: 0 });
             }
 
-            export const productQuery = query('product/body-local-alias', {
+            export const productQuery = query('product/body-local-alias', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, context: Context, fake: FakeContext) {
                 const { db: reader } = context;
                 const { db: fakeReader } = fake;
@@ -219,7 +219,7 @@ describe('Drizzle pinned subset conformance', () => {
               await fakeWriter.update(products).set({ stock: 0 });
             }
 
-            export const productQuery = query('product/assignment-alias', {
+            export const productQuery = query('product/assignment-alias', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
                 let reader;
                 reader = db;
@@ -288,7 +288,7 @@ describe('Drizzle pinned subset conformance', () => {
               await fakeWriter.update(products).set({ stock: 0 });
             }
 
-            export const productQuery = query('product/destructuring-assignment-alias', {
+            export const productQuery = query('product/destructuring-assignment-alias', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, context: DrizzleContext, fake: FakeContext) {
                 let reader;
                 ({ db: reader } = context);
@@ -358,7 +358,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  await fakeWriter.update(products).set({ stock: 0 });',
           '}',
           '',
-          "export const productQuery = query('product/tuple-alias', {",
+          "export const productQuery = query('product/tuple-alias', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, context: DrizzleContext, fake: FakeContext) {',
           '    const [reader] = context.receivers;',
           '    let assignedReader;',
@@ -432,7 +432,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  await writerRest[0].update(products).set({ stock: 1 }).where(eq(products.id, productId));',
           '}',
           '',
-          "export const productQuery = query('product/rest-receiver', {",
+          "export const productQuery = query('product/rest-receiver', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, context: DrizzleContext) {',
           '    const [, ...readerRest] = context.receivers;',
           '    const { ...objectRest } = context;',
@@ -527,7 +527,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  await fakeWriter.update(products).set({ stock: 0 });',
           '}',
           '',
-          "export const productQuery = query('product/object-contained-tuple-assignment', {",
+          "export const productQuery = query('product/object-contained-tuple-assignment', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, context: DrizzleContext, fake: FakeContext) {',
           '    let reader;',
           '    ({ wrappers: { receivers: [reader] } } = context);',

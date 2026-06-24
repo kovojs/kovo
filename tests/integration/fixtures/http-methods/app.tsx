@@ -1,7 +1,8 @@
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const record = mutation('methods/record', {
+  access: publicAccess('integration fixture mutation methods/record has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -11,6 +12,7 @@ export const record = mutation('methods/record', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'HTTP Methods' },
   page: () => `<main>
     <h1>HTTP Methods</h1>
@@ -21,6 +23,7 @@ const homeRoute = route('/', {
 });
 
 const doneRoute = route('/done', {
+  access: publicAccess('integration fixture route /done has no runtime guard'),
   page: () => '<main><h1>Recorded</h1></main>',
 });
 

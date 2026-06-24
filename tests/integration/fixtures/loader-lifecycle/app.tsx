@@ -1,6 +1,6 @@
 // SPEC.md §4.4/§4.7: delegated handlers receive ctx.signal, and enhanced
 // fragment morphs that remove an island abort its loader-scoped lifecycle.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type LifecycleStage = 'active' | 'replaced';
@@ -34,6 +34,7 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const swapIsland = mutation('loader-lifecycle/swap', {
+  access: publicAccess('integration fixture mutation loader-lifecycle/swap has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input, request: KovoFixtureRequest) => {
@@ -43,6 +44,7 @@ export const swapIsland = mutation('loader-lifecycle/swap', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <h1>Loader lifecycle</h1>
     <p data-lifecycle-status>idle</p>

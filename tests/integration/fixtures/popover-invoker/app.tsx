@@ -1,9 +1,10 @@
 // L0 platform fixture: native popover IDREF wiring remains light DOM and works
 // without Kovo client handler imports (SPEC §4.6, §7).
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <button type="button" popovertarget="account-popover" popovertargetaction="toggle">
       Toggle account menu

@@ -1,6 +1,6 @@
 // Morph survival fixture: a focused keyed input lives inside a fragment target
 // whose sibling server-truth text changes on enhanced mutation (SPEC §9.1).
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
@@ -21,6 +21,7 @@ async function renderEditor(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const saveDraft = mutation('profile/save-draft', {
+  access: publicAccess('integration fixture mutation profile/save-draft has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -30,6 +31,7 @@ export const saveDraft = mutation('profile/save-draft', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const editor = await renderEditor(request.db);
     return `<main>

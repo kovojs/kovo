@@ -1,4 +1,4 @@
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -30,6 +30,7 @@ function renderStateIsland(): string {
 }
 
 export const fillDeal = mutation('nullable-binding/fill', {
+  access: publicAccess('integration fixture mutation nullable-binding/fill has no runtime guard'),
   csrf: false,
   input: s.object({}),
   registry: {
@@ -44,6 +45,7 @@ export const fillDeal = mutation('nullable-binding/fill', {
 });
 
 export const clearDeal = mutation('nullable-binding/clear', {
+  access: publicAccess('integration fixture mutation nullable-binding/clear has no runtime guard'),
   csrf: false,
   input: s.object({}),
   registry: {
@@ -58,6 +60,7 @@ export const clearDeal = mutation('nullable-binding/clear', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const deal = await readDeal(request.db);
     const rendered = await renderDeal(request.db);

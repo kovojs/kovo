@@ -1,4 +1,4 @@
-import { createApp, createMemoryVersionedClientModuleRegistry, route } from '@kovojs/server';
+import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const clientModules = createMemoryVersionedClientModuleRegistry();
@@ -14,6 +14,7 @@ const moduleHref = clientModules.put({
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Client Module Versioning' },
   page: () => `<main>
     <h1>Client Module Versioning</h1>

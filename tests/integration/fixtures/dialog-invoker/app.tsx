@@ -1,9 +1,10 @@
 // L0 platform fixture: native dialog invoker attributes are ordinary light DOM
 // and need no Kovo client handler import (SPEC §4.2, §5.2).
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <button type="button" commandfor="account-dialog" command="show-modal">Open dialog</button>
     <dialog id="account-dialog" aria-label="Account dialog">

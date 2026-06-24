@@ -1,9 +1,10 @@
-import { createApp, domain, query, route } from '@kovojs/server';
+import { createApp, domain, publicAccess, query, route } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');
 
 const goodReadset = query('readset-good', {
+  access: publicAccess('integration fixture query readset-good has no runtime guard'),
   async load(_input, context) {
     const request = context?.request as KovoFixtureRequest;
     const rows = await request.db.query<{ name: string }>(
@@ -15,6 +16,7 @@ const goodReadset = query('readset-good', {
 });
 
 const badReadset = query('readset-bad', {
+  access: publicAccess('integration fixture query readset-bad has no runtime guard'),
   async load(_input, context) {
     const request = context?.request as KovoFixtureRequest;
     const rows = await request.db.query<{ event: string }>(
@@ -26,6 +28,7 @@ const badReadset = query('readset-bad', {
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => '<main><h1>Readset fixture</h1></main>',
 });
 

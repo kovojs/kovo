@@ -6,7 +6,8 @@ import {
   route,
   s,
   type QueryLoadContext,
-} from '@kovojs/server';
+
+  publicAccess,} from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -22,6 +23,7 @@ async function readCounter(db: KovoFixtureRequest['db']): Promise<NavCounter> {
 const counterDomain = domain('nav_lifecycle_counter');
 
 const counterQuery = query('navCounter', {
+  access: publicAccess('integration fixture query navCounter has no runtime guard'),
   reads: [counterDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;
@@ -38,6 +40,7 @@ async function renderCounterPanel(db: KovoFixtureRequest['db']): Promise<string>
 }
 
 const increment = mutation('nav-lifecycle/increment', {
+  access: publicAccess('integration fixture mutation nav-lifecycle/increment has no runtime guard'),
   csrf: false,
   input: s.object({ quantity: s.number() }),
   handler: async (input: { quantity: number }, request: KovoFixtureRequest, context) => {
@@ -51,6 +54,7 @@ const increment = mutation('nav-lifecycle/increment', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const counter = await readCounter(request.db);
     return `${renderQueryScript({ name: 'navCounter', value: counter })}
@@ -68,6 +72,7 @@ const homeRoute = route('/', {
 });
 
 const awayRoute = route('/away', {
+  access: publicAccess('integration fixture route /away has no runtime guard'),
   page: () => '<main><h1>Away</h1><a href="/">Return</a></main>',
 });
 

@@ -1,8 +1,9 @@
-import { createApp, endpoint, type ResponseHeaders } from '@kovojs/server';
+import { createApp, endpoint, publicAccess, type ResponseHeaders } from '@kovojs/server';
 import { renderDeferredDocument } from '@kovojs/server/internal/html';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const deferredHome = endpoint('/', {
+  access: publicAccess('integration fixture endpoint / has no runtime guard'),
   csrf: false,
   csrfJustification: 'read-only deferred stream fixture',
   method: 'GET',

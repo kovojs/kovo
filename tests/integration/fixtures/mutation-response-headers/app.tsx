@@ -1,5 +1,5 @@
 // SPEC.md §9.1: mutation handlers may attach narrow transport headers.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
@@ -10,6 +10,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const touchHeaders = mutation('mutation-response-headers/touch', {
+  access: publicAccess('integration fixture mutation mutation-response-headers/touch has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -20,6 +21,7 @@ export const touchHeaders = mutation('mutation-response-headers/touch', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="header-status" kovo-deps="headers">${await renderStatus(request.db)}</kovo-fragment>
     <form method="post" action="/_m/mutation-response-headers/touch" enhance data-mutation="mutation-response-headers/touch" kovo-deps="headers">

@@ -1,4 +1,4 @@
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface EngineResult extends Record<string, unknown> {
@@ -13,6 +13,7 @@ export async function readEngineState(db: KovoFixtureRequest['db']): Promise<Eng
 }
 
 export const engineQuery = query('engine', {
+  access: publicAccess('integration fixture query engine has no runtime guard'),
   reads: [engineDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;

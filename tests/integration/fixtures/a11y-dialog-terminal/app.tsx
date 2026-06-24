@@ -1,8 +1,9 @@
 // SPEC §12.1: terminal dialog state keeps role/name/focus semantics in light DOM.
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Dialog terminal state' },
   page: () => `<main>
     <h1>Dialog terminal state</h1>

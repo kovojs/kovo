@@ -1,9 +1,10 @@
 // SPEC.md §9.1: CSRF-exempt endpoints are declared machine ingress with a named
 // justification, not browser mutation forms.
-import { createApp, endpoint, route } from '@kovojs/server';
+import { createApp, endpoint, publicAccess, route, verifiedAccess } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const webhookEndpoint = endpoint('/webhooks/signed-callback', {
+  access: verifiedAccess,
   auth: { kind: 'verifier', name: 'demo-hmac' },
   csrf: false,
   csrfJustification: 'signed callback verifies raw body',
@@ -22,6 +23,7 @@ const webhookEndpoint = endpoint('/webhooks/signed-callback', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => '<main><h1>CSRF Exempt Endpoint</h1></main>',
 });
 

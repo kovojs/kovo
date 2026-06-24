@@ -96,7 +96,7 @@ describe('Drizzle pinned subset conformance', () => {
           '} as const) satisfies unknown);',
           'export const dynamicProductDomain = (domain(dynamicActions) as unknown);',
           '',
-          "export const productQuery = (query('product/wrapped-real', {",
+          "export const productQuery = (query('product/wrapped-real', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, db: PgDatabase<any, any, any>) {',
           '    return db.select({ id: products.id }).from(products);',
           '  },',
@@ -173,7 +173,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  return db.update(products).set({ id: productId }).where(eq(products.id, productId));',
           '}) as unknown;',
           '',
-          "export const productQuery = query('product/wrapped-helper-real', {",
+          "export const productQuery = query('product/wrapped-helper-real', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, db: PgDatabase<any, any, any>) {',
           '    return readProducts(db);',
           '  },',
@@ -342,7 +342,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  await fakeWriter.update(products).set({ stock: 2 });',
           '}',
           '',
-          "export const productQuery = query('product/nested-destructuring-assignment', {",
+          "export const productQuery = query('product/nested-destructuring-assignment', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, context: DrizzleContext, fake: FakeContext) {',
           '    let reader;',
           '    ({ nested: { db: reader } } = context);',
@@ -404,7 +404,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product/shadowed-db', {
+            export const productQuery = query('product/shadowed-db', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
                 {
                   const db = fake;
@@ -449,7 +449,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product/detached-methods', {
+            export const productQuery = query('product/detached-methods', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
                 const { execute, query: relations } = db;
                 const fakeExecute = fake.execute;
@@ -506,7 +506,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  execute(query: unknown): Promise<void>;',
             '}',
             '',
-            "export const productQuery = query('product/detached-symbols', {",
+            "export const productQuery = query('product/detached-symbols', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
             '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
             '    const { execute } = db;',
             "    await execute('select 1');",
@@ -574,7 +574,7 @@ describe('Drizzle pinned subset conformance', () => {
             "  id: text('id').primaryKey(),",
             "}, kovo({ domain: 'product', key: 'id' }));",
             '',
-            "export const productQuery = query('product/spread-carrier', {",
+            "export const productQuery = query('product/spread-carrier', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
             '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
             '    const carrier = { db, fake };',
             '    const spread = { ...carrier };',
@@ -629,7 +629,7 @@ describe('Drizzle pinned subset conformance', () => {
             'declare function makeContext(): { nested: { db: PgDatabase<any, any, any> } };',
             'declare function makeFakeContext(): { nested: { db: FakeDb } };',
             '',
-            "export const productQuery = query('product/factory-carrier', {",
+            "export const productQuery = query('product/factory-carrier', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
             '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
             '    void db;',
             '    void fake;',

@@ -1,10 +1,11 @@
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const shellQuery = { message: 'Shell ready' };
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Document Shell' },
   page: () => `${renderQueryScript({ name: 'shell', value: shellQuery })}
     <main>

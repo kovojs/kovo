@@ -1,4 +1,4 @@
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -16,12 +16,14 @@ async function readInventory(db: KovoFixtureRequest['db']): Promise<InventoryRes
 }
 
 export const inventoryQuery = query('inventory', {
+  access: publicAccess('integration fixture query inventory has no runtime guard'),
   load: (_input: unknown, context?: { request: KovoFixtureRequest }) =>
     readInventory(context?.request.db as KovoFixtureRequest['db']),
   reads: [inventoryDomain],
 });
 
 export const sellOutInventory = mutation('derive-binding/sell-out', {
+  access: publicAccess('integration fixture mutation derive-binding/sell-out has no runtime guard'),
   csrf: false,
   input: s.object({}),
   registry: {
@@ -36,6 +38,7 @@ export const sellOutInventory = mutation('derive-binding/sell-out', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const inventory = await readInventory(request.db);
     return `${renderQueryScript({ name: 'inventory', value: inventory })}

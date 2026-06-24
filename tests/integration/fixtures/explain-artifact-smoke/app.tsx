@@ -1,5 +1,5 @@
 // SPEC.md §5.3 + §11.4: explain output names the behavior surface humans drive.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function renderCartBadge(db: KovoFixtureRequest['db']): Promise<string> {
@@ -15,6 +15,7 @@ async function renderCartSection(db: KovoFixtureRequest['db']): Promise<string> 
 }
 
 export const addToCart = mutation('cart/add', {
+  access: publicAccess('integration fixture mutation cart/add has no runtime guard'),
   csrf: false,
   input: s.object({ sku: s.string() }),
   handler: async (input: { sku: string }, request: KovoFixtureRequest) => {
@@ -29,6 +30,7 @@ const app = createApp({
   mutations: [addToCart],
   routes: [
     route('/', {
+      access: publicAccess('integration fixture route / has no runtime guard'),
       page: async (_context, request: KovoFixtureRequest) => `<main data-page="cart">
         ${await renderCartSection(request.db)}
         <form method="post" action="/_m/cart/add" enhance data-mutation="cart/add" kovo-deps="cart">

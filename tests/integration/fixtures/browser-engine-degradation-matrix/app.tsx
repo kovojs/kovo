@@ -1,6 +1,6 @@
 // SPEC.md §8: the cross-engine degradation contract keeps L0 documents, L1
 // forms, and L2 loader enhancements usable outside Chromium.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -35,6 +35,7 @@ function renderSubmittedReport(rawInput: FormData): string {
 }
 
 export const submitMatrixForm = mutation('engine-matrix/submit', {
+  access: publicAccess('integration fixture mutation engine-matrix/submit has no runtime guard'),
   csrf: false,
   input: s.object({
     includeGift: s.boolean(),
@@ -50,6 +51,7 @@ export const submitMatrixForm = mutation('engine-matrix/submit', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const engine = await readEngineState(request.db);
     return `${renderQueryScript({ name: 'engine', value: engine })}

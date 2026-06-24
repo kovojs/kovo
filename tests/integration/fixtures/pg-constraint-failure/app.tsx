@@ -2,7 +2,7 @@
 // a REAL Postgres constraint violation (unique PK) inside a transactional domain write
 // must surface a sanitized server error, roll the whole transaction back, and leave no
 // partial/stale state — proving PGlite gives real Postgres failure semantics.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type TxLike = {
@@ -14,6 +14,7 @@ type TxLike = {
 };
 
 export const duplicateCharge = mutation('pg-constraint-failure/charge', {
+  access: publicAccess('integration fixture mutation pg-constraint-failure/charge has no runtime guard'),
   csrf: false,
   input: s.object({ id: s.string() }),
   transaction: async (request: KovoFixtureRequest, run) =>
@@ -46,6 +47,7 @@ export const duplicateCharge = mutation('pg-constraint-failure/charge', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <h1>Constraint failure</h1>
     <div kovo-fragment-target="charge-status" kovo-deps="charge">ready</div>

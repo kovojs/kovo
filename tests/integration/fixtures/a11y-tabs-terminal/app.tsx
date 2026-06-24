@@ -1,8 +1,9 @@
 // SPEC §12.1: terminal tab state exposes selected tab and panel relationships.
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Tabs terminal state' },
   page: () => `<main>
     <h1>Tabs terminal state</h1>

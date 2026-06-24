@@ -1,7 +1,7 @@
 // SPEC §11.1/§11.2, KV402 (plans/bugs-and-testing.md C7; testing-audit §5.1): one
 // handler writing TWO domains. The runtime cross-check must pass when both are
 // declared and fail loudly naming the MISSING domain when one is omitted.
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const cart = domain('cart');
@@ -29,6 +29,7 @@ function renderStock(stock: number): string {
 
 // Writes cart_items (cart) AND products (product); declares BOTH (touchGraph below).
 const addBoth = mutation('multi-domain-write/add-both', {
+  access: publicAccess('integration fixture mutation multi-domain-write/add-both has no runtime guard'),
   csrf: false,
   input: s.object({}),
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
@@ -43,6 +44,7 @@ const addBoth = mutation('multi-domain-write/add-both', {
 // Writes both domains but the touchGraph DECLARES ONLY cart — product is the
 // silently-stale domain KV402 must catch.
 const addPartial = mutation('multi-domain-write/add-partial', {
+  access: publicAccess('integration fixture mutation multi-domain-write/add-partial has no runtime guard'),
   csrf: false,
   input: s.object({}),
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
@@ -54,6 +56,7 @@ const addPartial = mutation('multi-domain-write/add-partial', {
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="cart-count">${renderCart(await cartCount(request.db))}</kovo-fragment>
     <kovo-fragment target="product-stock">${renderStock(await productStock(request.db))}</kovo-fragment>

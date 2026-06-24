@@ -6,7 +6,8 @@ import {
   mutation,
   route,
   s,
-} from '@kovojs/server';
+
+  publicAccess,} from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const csrf = {
@@ -22,6 +23,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const recordEntry = mutation('idempotent-mutation/record', {
+  access: publicAccess('integration fixture mutation idempotent-mutation/record has no runtime guard'),
   input: s.object({ note: s.string() }),
   handler: async (input: { note: string }, request: KovoFixtureRequest) => {
     await request.db.exec(
@@ -32,6 +34,7 @@ export const recordEntry = mutation('idempotent-mutation/record', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="idem-status" kovo-deps="idem">${await renderStatus(request.db)}</kovo-fragment>
     <form method="post" action="/_m/idempotent-mutation/record" enhance data-mutation="idempotent-mutation/record" kovo-deps="idem">

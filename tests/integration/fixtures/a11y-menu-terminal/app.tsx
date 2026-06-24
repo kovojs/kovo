@@ -1,8 +1,9 @@
 // SPEC §12.1: terminal menu state exposes expanded trigger and active menu item.
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Menu terminal state' },
   page: () => `<main>
     <h1>Menu terminal state</h1>

@@ -1,6 +1,6 @@
 // Mutation wire fixture for SPEC.md §10.3: enhanced mutation responses rerun
 // invalidated queries after commit, so fragments and <kovo-query> carry truth.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { BalanceBadge } from './balance-badge';
@@ -13,6 +13,7 @@ function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const deposit = mutation('account/deposit', {
+  access: publicAccess('integration fixture mutation account/deposit has no runtime guard'),
   csrf: false,
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
@@ -28,6 +29,7 @@ export const deposit = mutation('account/deposit', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const badge = await renderBadge(request.db);
     return `<main>

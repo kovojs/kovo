@@ -1,4 +1,4 @@
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -42,12 +42,14 @@ async function renderCartList(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const cartQuery = query('cart', {
+  access: publicAccess('integration fixture query cart has no runtime guard'),
   load: (_input: unknown, context?: { request: KovoFixtureRequest }) =>
     readCart(context?.request.db as KovoFixtureRequest['db']),
   reads: [cartDomain],
 });
 
 export const changeCart = mutation('stamp-list-insert-remove/change', {
+  access: publicAccess('integration fixture mutation stamp-list-insert-remove/change has no runtime guard'),
   csrf: false,
   input: s.object({ mode: s.string() }),
   registry: {
@@ -69,6 +71,7 @@ export const changeCart = mutation('stamp-list-insert-remove/change', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const cart = await readCart(request.db);
     return `${renderQueryScript({ name: 'cart', value: cart })}

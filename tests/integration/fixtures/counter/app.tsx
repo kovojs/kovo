@@ -3,7 +3,7 @@
 // leaves its exports — including `export default defineFixture(...)` — intact. NOTE:
 // the plugin claims any module whose source contains the call token for a Kovo
 // component (vite.ts), so keep that token out of comments in non-component modules.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { CountBadge } from './count-badge';
@@ -16,6 +16,7 @@ function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const increment = mutation('counter/increment', {
+  access: publicAccess('integration fixture mutation counter/increment has no runtime guard'),
   // Fixture: skip the CSRF/session dance (plans/integration-test-suite.md).
   csrf: false,
   input: s.object({}),
@@ -27,6 +28,7 @@ export const increment = mutation('counter/increment', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const badge = await renderBadge(request.db);
     return `<main>

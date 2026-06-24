@@ -1,10 +1,11 @@
 // SPEC.md §9.2: post-commit render failures return a stable render-error fragment.
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const receiptDomain = domain('receipt');
 
 export const createReceipt = mutation('render-error-fragment/create', {
+  access: publicAccess('integration fixture mutation render-error-fragment/create has no runtime guard'),
   csrf: false,
   input: s.object({ id: s.string(), secret: s.string() }),
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {
@@ -20,6 +21,7 @@ export const createReceipt = mutation('render-error-fragment/create', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <kovo-fragment target="receipt"><output data-bind="receipt.status">Ready</output></kovo-fragment>
     <form method="post" action="/_m/render-error-fragment/create" enhance data-mutation="render-error-fragment/create">

@@ -7,7 +7,8 @@ import {
   s,
   stream,
   type QueryLoadContext,
-} from '@kovojs/server';
+
+  publicAccess,} from '@kovojs/server';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -20,6 +21,7 @@ interface MessageRow extends Record<string, unknown> {
 const chatDomain = domain('chat');
 
 const chatQuery = query('chatMessages', {
+  access: publicAccess('integration fixture query chatMessages has no runtime guard'),
   load: async (_args: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => ({
     messages: await readMessages(context?.request.db),
   }),
@@ -71,6 +73,7 @@ function renderComposer(errorCode = ''): string {
 }
 
 export const sendMessage = mutation('chat/send', {
+  access: publicAccess('integration fixture mutation chat/send has no runtime guard'),
   csrf: false,
   errors: {
     MODEL_UNAVAILABLE: s.object({}),
@@ -151,6 +154,7 @@ export const sendMessage = mutation('chat/send', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <h1>Streaming chat</h1>
     ${await renderMessages(request.db)}

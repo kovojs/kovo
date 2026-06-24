@@ -1,4 +1,4 @@
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface DealResult {
@@ -16,6 +16,7 @@ export async function readDeal(db: KovoFixtureRequest['db']): Promise<DealResult
 }
 
 export const dealQuery = query('deal', {
+  access: publicAccess('integration fixture query deal has no runtime guard'),
   reads: [dealDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;

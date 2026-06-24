@@ -1,7 +1,7 @@
 // SPEC.md §9.1: webhook idempotency replays the stored response for repeated
 // provider event ids without re-executing the handler.
 import { hmacSignature } from '@kovojs/core';
-import { createApp, domain, s, webhook } from '@kovojs/server';
+import { createApp, domain, s, verifiedAccess, webhook } from '@kovojs/server';
 import type {
   WebhookReplayReservation,
   WebhookReplayStore,
@@ -39,6 +39,7 @@ export default defineFixture({
   app: () => {
     const replayStore = createReplayStore();
     const idempotentWebhook = webhook('stripe-idempotent', {
+      access: verifiedAccess,
       async handler(input, context) {
         const request = context.request as WebhookRequest;
         await request.db.query(

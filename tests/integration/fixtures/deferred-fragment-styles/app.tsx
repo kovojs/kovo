@@ -1,4 +1,4 @@
-import { createApp, endpoint, route, type ResponseHeaders } from '@kovojs/server';
+import { createApp, endpoint, publicAccess, route, type ResponseHeaders } from '@kovojs/server';
 import { renderDeferredDocument } from '@kovojs/server/internal/html';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 import {
@@ -19,6 +19,7 @@ const reviewStylesheets =
       : [];
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <h1>Deferred fragment styles</h1>
     <section kovo-fragment-target="deferred-review">Loading reviews</section>
@@ -27,6 +28,7 @@ const homeRoute = route('/', {
 });
 
 const deferredWire = endpoint('/deferred-wire', {
+  access: publicAccess('integration fixture endpoint /deferred-wire has no runtime guard'),
   csrf: false,
   csrfJustification: 'read-only fixture stream',
   method: 'GET',

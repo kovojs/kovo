@@ -1,6 +1,6 @@
 // SPEC §9.4 + §10.2: typed read endpoints parse args from search params and
 // return chunks keyed by the canonical query instance key.
-import { createApp, domain, query, route, s } from '@kovojs/server';
+import { createApp, domain, publicAccess, query, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { runQuery } from '@kovojs/server/internal/execution';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -20,6 +20,7 @@ interface ProductResult {
 }
 
 export const productQuery = query('product', {
+  access: publicAccess('integration fixture query product has no runtime guard'),
   args: s.object({ id: s.string(), max: s.number().int().min(1).default(9999) }),
   instanceKey: (input) => `product:${(input as ProductArgs).id}`,
   load: async (input: ProductArgs, context?: { request: KovoFixtureRequest }) => {
@@ -33,6 +34,7 @@ export const productQuery = query('product', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   search: s.object({ id: s.string(), max: s.number().int().min(1).default(9999) }),
   page: async ({ search }, request: KovoFixtureRequest) => {
     const result = await runQuery(productQuery, search, request);

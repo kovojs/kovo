@@ -1,7 +1,8 @@
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <h1>Load trigger</h1>
     <output on:load="/client.ts#markLoad" data-status>waiting</output>

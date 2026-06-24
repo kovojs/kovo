@@ -1,7 +1,7 @@
 // SPEC §10.3/§10.4 (plans/bugs-and-testing.md C6; testing-audit §5.2): two DISTINCT
 // mutations writing overlapping data concurrently must both land — no lost update from
 // a read-modify-write race across concurrent request lifecycles/transactions.
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const counterDomain = domain('counter');
@@ -18,6 +18,7 @@ function renderPanel(count: number): string {
 // A small delay before the atomic increment forces the two requests to overlap.
 function bump(key: string, amount: number) {
   return mutation(`concurrent-distinct-writes/${key}`, {
+    access: publicAccess('integration fixture mutation concurrent-distinct-writes/${key} has no runtime guard'),
     csrf: false,
     input: s.object({}),
     handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -33,6 +34,7 @@ const bumpA = bump('a', 10);
 const bumpB = bump('b', 1);
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) =>
     `<main><kovo-fragment target="counter">${renderPanel(await readCount(request.db))}</kovo-fragment></main>`,
 });

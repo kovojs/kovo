@@ -49,7 +49,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  await db.update(products).set({ id: productId });',
           '}',
           '',
-          "export const productQuery = query('product/deferred-mysql', {",
+          "export const productQuery = query('product/deferred-mysql', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, db: MySqlDatabase<any, any, any, any>) {',
           '    return db.select({ id: products.id }).from(products);',
           '  },',
@@ -90,7 +90,7 @@ describe('Drizzle pinned subset conformance', () => {
               stock: integer('stock').notNull(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product', {
+            export const productQuery = query('product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({
                   archived: products['archived'],
@@ -146,7 +146,7 @@ describe('Drizzle pinned subset conformance', () => {
               stock: pgInteger('stock').notNull(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product/aliased-factories', {
+            export const productQuery = query('product/aliased-factories', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>) {
                 return db.select({
                   id: products.id,
@@ -192,7 +192,7 @@ describe('Drizzle pinned subset conformance', () => {
               stock: pgInteger('stock').notNull(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product/barrel-factories', {
+            export const productQuery = query('product/barrel-factories', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>) {
                 return db.select({
                   id: products.id,
@@ -243,7 +243,7 @@ describe('Drizzle pinned subset conformance', () => {
       '  await db.update(products).set({ stock: 1 }).where(eq(products.id, productId));',
       '}',
       '',
-      "export const productQuery = query('product/namespace-factory', {",
+      "export const productQuery = query('product/namespace-factory', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
       '  load(input, db: PgDatabase<any, any, any>) {',
       '    return db.select({ id: products.id, metadata: products.metadata, stock: products.stock }).from(products).where(eq(products.id, input.id));',
       '  },',
@@ -307,7 +307,7 @@ describe('Drizzle pinned subset conformance', () => {
               stock: integer('stock').notNull(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product/wrapped-projection', {
+            export const productQuery = query('product/wrapped-projection', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>) {
                 return db.select({
                   id: (products.id as unknown) as typeof products.id,
@@ -356,13 +356,15 @@ describe('Drizzle pinned subset conformance', () => {
               }).from(products);
             }
 
-            const options = {
+            const options = { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               get load() {
                 return loadProducts;
               },
             };
 
-            export const productQuery = query('product/getter-loader', options);
+            export const productQuery = query('product/getter-loader', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
+              ...options,
+            });
           `,
         },
       ],
@@ -396,7 +398,7 @@ describe('Drizzle pinned subset conformance', () => {
               rating: integer('rating'),
             }, kovo({ domain: 'review', key: 'productId' }));
 
-            export const productQuery = query('product', {
+            export const productQuery = query('product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({
                   name: products.name,
@@ -449,7 +451,7 @@ describe('Drizzle pinned subset conformance', () => {
               rating: integer('rating').notNull(),
             }, kovo({ domain: 'review', key: 'productId' }));
 
-            export const discountQuery = query('discount/full', {
+            export const discountQuery = query('discount/full', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({
                   productName: products.name,
@@ -458,7 +460,7 @@ describe('Drizzle pinned subset conformance', () => {
               },
             });
 
-            export const reviewQuery = query('review/right', {
+            export const reviewQuery = query('review/right', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({
                   product: { name: products.name },

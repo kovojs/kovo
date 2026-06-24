@@ -1,8 +1,9 @@
 // SPEC §6.4 + §7: GET forms coordinate typed route search params through the URL.
-import { createApp, route, s } from '@kovojs/server';
+import { createApp, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const catalogRoute = route('/catalog', {
+  access: publicAccess('integration fixture route /catalog has no runtime guard'),
   search: s.object({
     max: s.number().int().min(1).default(10),
     q: s.string(),

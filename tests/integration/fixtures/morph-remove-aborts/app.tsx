@@ -1,6 +1,6 @@
 // SPEC.md §4.4/§4.7: fragment morphs that remove islands abort their ctx.signal
 // and leave patched/replacement islands inert until a declared trigger or interaction.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type MorphStage = 'active' | 'removed';
@@ -33,6 +33,7 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const removeIsland = mutation('morph-remove-aborts/remove', {
+  access: publicAccess('integration fixture mutation morph-remove-aborts/remove has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input, request: KovoFixtureRequest) => {
@@ -42,6 +43,7 @@ export const removeIsland = mutation('morph-remove-aborts/remove', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <h1>Morph remove aborts</h1>
     <p data-morph-abort-status>idle</p>

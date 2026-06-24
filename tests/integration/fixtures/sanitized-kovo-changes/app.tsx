@@ -1,10 +1,11 @@
 // SPEC.md §9.1: Kovo-Changes exposes sanitized domain/key summaries only.
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const auditRecord = domain('audit-record');
 
 export const saveSecret = mutation('sanitized-kovo-changes/save', {
+  access: publicAccess('integration fixture mutation sanitized-kovo-changes/save has no runtime guard'),
   csrf: false,
   input: s.object({ id: s.string(), secret: s.string() }),
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {
@@ -21,6 +22,7 @@ export const saveSecret = mutation('sanitized-kovo-changes/save', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <form method="post" action="/_m/sanitized-kovo-changes/save" enhance data-mutation="sanitized-kovo-changes/save">
       <input name="id" value="r1">

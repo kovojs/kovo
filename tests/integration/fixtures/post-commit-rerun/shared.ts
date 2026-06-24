@@ -1,4 +1,4 @@
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface BalanceResult {
@@ -13,6 +13,7 @@ export async function readBalance(db: KovoFixtureRequest['db']): Promise<Balance
 }
 
 export const balanceQuery = query('balance', {
+  access: publicAccess('integration fixture query balance has no runtime guard'),
   reads: [account],
   load: (
     _input: unknown,

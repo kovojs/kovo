@@ -2,7 +2,7 @@
 // validates credentials and sets a session cookie; a `guards.authed()` route reads
 // the cookie-derived session (via sessionProvider) and renders the signed-in user.
 // Exercises the public auth surface: sessionProvider, guards.authed, setCookie.
-import { createApp, guards, mutation, route, s } from '@kovojs/server';
+import { createApp, guards, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
@@ -25,6 +25,7 @@ function readSessionCookie(request: Request): AuthSession | null {
 }
 
 export const signIn = mutation('auth/sign-in', {
+  access: publicAccess('integration fixture mutation auth/sign-in has no runtime guard'),
   csrf: false,
   errors: { INVALID_CREDENTIALS: s.object({}) },
   input: s.object({ email: s.string(), password: s.string() }),
@@ -44,6 +45,7 @@ export const signIn = mutation('auth/sign-in', {
 // Clears the session cookie (the logout half of the round-trip). Emptying the value
 // makes readSessionCookie() resolve to null; maxAge:0 also expires it in the browser.
 export const signOut = mutation('auth/sign-out', {
+  access: publicAccess('integration fixture mutation auth/sign-out has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: (_input: unknown, _request, context) => {
@@ -53,6 +55,7 @@ export const signOut = mutation('auth/sign-out', {
 });
 
 const loginRoute = route('/login', {
+  access: publicAccess('integration fixture route /login has no runtime guard'),
   page: () =>
     `<main><h1>Sign in</h1><form method="post" action="/_m/auth/sign-in" enhance data-mutation="auth/sign-in">
       <input name="email" type="email" />
@@ -62,6 +65,7 @@ const loginRoute = route('/login', {
 });
 
 const accountRoute = route('/account', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   guard: guards.authed<AuthRequest>(),
   page: (_context, request: AuthRequest) =>
     `<main><h1>Account</h1><p>Signed in as ${request.session?.user?.id ?? '(anonymous)'}</p>

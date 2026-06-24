@@ -7,7 +7,8 @@ import {
   s,
   type MutationFail,
   type QueryLoadContext,
-} from '@kovojs/server';
+
+  publicAccess,} from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -23,6 +24,7 @@ async function readCart(db: KovoFixtureRequest['db']): Promise<CartSummary> {
 const cartDomain = domain('optimistic_cart');
 
 const cartQuery = query('cart', {
+  access: publicAccess('integration fixture query cart has no runtime guard'),
   reads: [cartDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;
@@ -39,6 +41,7 @@ async function renderCartPanel(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 const addItem = mutation('optimistic-rollback/add', {
+  access: publicAccess('integration fixture mutation optimistic-rollback/add has no runtime guard'),
   csrf: false,
   errors: { OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }) },
   input: s.object({ quantity: s.number() }),
@@ -49,6 +52,7 @@ const addItem = mutation('optimistic-rollback/add', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const cart = await readCart(request.db);
     return `${renderQueryScript({ name: 'cart', value: cart })}

@@ -1,4 +1,4 @@
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -17,6 +17,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const publishProfile = mutation('shared-query-consumers/publish', {
+  access: publicAccess('integration fixture mutation shared-query-consumers/publish has no runtime guard'),
   csrf: false,
   input: s.object({}),
   registry: {
@@ -33,6 +34,7 @@ export const publishProfile = mutation('shared-query-consumers/publish', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const profile = await readProfile(request.db);
     const summary = await renderSummary(request.db);

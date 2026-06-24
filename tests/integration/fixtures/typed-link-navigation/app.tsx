@@ -1,7 +1,7 @@
 // SPEC §6.4 + §8: typed href()/Link() output is plain anchor hrefs; navigation is
 // a real document load, not a client-router transition.
 import { Link, href } from '@kovojs/core';
-import { createApp, route, s } from '@kovojs/server';
+import { createApp, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 declare module '@kovojs/core' {
@@ -17,6 +17,7 @@ declare module '@kovojs/core' {
 }
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => {
     const product = Link('/products/:id', {
       params: { id: 'sku-1' },
@@ -33,6 +34,7 @@ const homeRoute = route('/', {
 });
 
 const productRoute = route('/products/:id', {
+  access: publicAccess('integration fixture route /products/:id has no runtime guard'),
   params: s.object({ id: s.string() }),
   search: s.object({ ref: s.string(), sort: s.string() }),
   page: ({ params, search }) =>
@@ -40,6 +42,7 @@ const productRoute = route('/products/:id', {
 });
 
 const searchRoute = route('/search', {
+  access: publicAccess('integration fixture route /search has no runtime guard'),
   search: s.object({ q: s.string() }),
   page: ({ search }) => `<main><h1>Search</h1><p data-route="search">${search.q}</p></main>`,
 });

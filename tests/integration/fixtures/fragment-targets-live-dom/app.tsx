@@ -1,5 +1,5 @@
 // SPEC.md §9.1: Kovo-Targets is collected from the live DOM, including patched-in targets.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readStage(db: KovoFixtureRequest['db']): Promise<number> {
@@ -30,6 +30,7 @@ async function renderDynamic(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const advance = mutation('fragment-targets-live-dom/advance', {
+  access: publicAccess('integration fixture mutation fragment-targets-live-dom/advance has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -39,6 +40,7 @@ export const advance = mutation('fragment-targets-live-dom/advance', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="launcher">${await renderLauncher(request.db)}</kovo-fragment>
   </main>`,

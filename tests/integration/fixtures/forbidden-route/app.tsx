@@ -23,6 +23,7 @@ function readSessionCookie(request: Request): AuthSession | null {
 }
 
 const adminRoute = route('/admin', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.role' }] },
   guard: guards.role<AuthRequest>('admin'),
   page: (_context, request) =>
     `<main><h1>Admin</h1><p data-secret>classified:${request.session?.user.id ?? 'none'}</p></main>`,

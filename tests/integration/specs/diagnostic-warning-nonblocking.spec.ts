@@ -1,7 +1,7 @@
 // SPEC.md §11.3: non-error diagnostics do not block dev serving.
 import { createServer, type Server } from 'node:http';
 
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
   kovoAppShellVitePlugin,
@@ -16,6 +16,7 @@ test('does not block serving for non-error diagnostics recorded against a route 
   const app = createApp({
     routes: [
       route('/cart', {
+        access: publicAccess('integration test fixture route /cart has no runtime guard'),
         modulepreloads: ['/c/src/components/cart.client.js?v=warn'],
         page: () => '<main><h1>Cart stays available</h1></main>',
       }),
