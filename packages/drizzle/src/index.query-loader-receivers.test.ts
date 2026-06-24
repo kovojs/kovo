@@ -61,7 +61,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}',
             '',
             'export const productQuery = query("product/carrier-direct", {',
-            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '    const carrier = { db, fake };',
             '    await carrier.db.execute("select 1");',
             '    await carrier.db.update(products).set({ id: "p1" });',
@@ -128,7 +128,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}',
             '',
             'export const productQuery = query("product/carrier-nested", {',
-            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '    const carrier = { db, fake };',
             '    const nested = { inner: carrier };',
             '    const overwritten = { ...nested, inner: { db: fake } };',
@@ -214,7 +214,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             }
 
             export const productQuery = query("product/detached-methods", {
-              async load(_input, db: PgDatabase, fake: FakeDb) {
+              async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {
                 const { execute, update: write, query: relations } = db;
                 const carrier = { db, fake };
                 const carrierExecute = carrier.db.execute;
@@ -289,14 +289,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import { pgTable, text, type PgDatabase } from "drizzle-orm/pg-core";',
+            'import { pgTable, text, type PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
             '}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const productQuery = query("product/with-read", {',
-            '  load(_input, db: PgDatabase) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    const active = db.$with("active_products").as(db.select({ id: products.id }).from(products));',
             '    return db.with(active).select({ id: products.id }).from(products);',
             '  },',
@@ -339,7 +339,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}',
             '',
             'export const productQuery = query("product/detached-symbols", {',
-            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '    const { execute } = db;',
             '    await execute("select 1");',
             '    {',
@@ -400,7 +400,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             }
 
             export const productQuery = query("product/bound-methods", {
-              async load(_input, db: PgDatabase, fake: FakeDb, method: string) {
+              async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb, method: string) {
                 const execute = db.execute.bind(db);
                 const computed = db[method].bind(db);
                 const fakeExecute = fake.execute.bind(fake);
@@ -505,7 +505,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'product.queries.ts',
           source: [
             'import { sql } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  execute(query: unknown): Promise<void>;',
@@ -520,7 +520,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const productQuery = query("product/shadowed-db", {',
-            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '    {',
             '      const db = fake;',
             '      await db.execute(sql`select * from audit_log`);',
@@ -562,7 +562,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             declare function readCache(client: unknown): Promise<unknown[]>;
 
             export const productQuery = query("product/helper", {
-              async load(_input, db: PgDatabase) {
+              async load(_input, db: PgAsyncDatabase<any, any>) {
                 await readCache(cache);
                 return loadProducts(db);
               },
@@ -608,7 +608,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             };
 
             export const productQuery = query("product/member-helper", {
-              async load(_input, db: PgDatabase) {
+              async load(_input, db: PgAsyncDatabase<any, any>) {
                 await productServices.readCache(cache);
                 return productServices.loadProducts(db);
               },
@@ -644,7 +644,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: `
-            import type { PgDatabase } from "drizzle-orm/pg-core";
+            import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
 
             interface FakeDb {
               select(value?: unknown): { from(table: unknown): Promise<unknown[]> };
@@ -657,7 +657,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             declare function loadProducts(context: unknown): Promise<unknown[]>;
 
             export const productQuery = query("product/helper-context", {
-              async load(_input, db: PgDatabase, fake: FakeDb) {
+              async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {
                 await loadProducts({ fake });
                 return loadProducts({ db });
               },
@@ -693,9 +693,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
-            'interface DrizzleContext { db: PgDatabase }',
+            'interface DrizzleContext { db: PgAsyncDatabase<any, any> }',
             'interface FakeContext { db: unknown }',
             'declare function loadProducts(context: unknown): Promise<unknown[]>;',
             '',
@@ -736,7 +736,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
@@ -747,7 +747,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}',
             '',
             'export const productQuery = query("product/local-carrier-helper", {',
-            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '    const context = { db };',
             '    const fakeContext = { db: fake };',
             '    await runReport(fakeContext);',
@@ -785,7 +785,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'interface FakeDb {',
             '  select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
@@ -796,7 +796,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}',
             '',
             'export const productQuery = query("product/local-assigned-carrier-helper", {',
-            '  async load(_input, db: PgDatabase, fake: FakeDb) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '    let context;',
             '    context = { db };',
             '    let fakeContext;',
@@ -835,19 +835,19 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
             '  name: text("name").notNull(),',
             '}, kovo({ domain: "product", key: "id" }));',
             '',
-            'function loadProducts(db: PgDatabase<any, any, any>) {',
+            'function loadProducts(db: PgAsyncDatabase<any, any>) {',
             '  return db.select({ name: products.name }).from(products);',
             '}',
             '',
             'export const productQuery = query("product/helper-local", {',
-            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return loadProducts(db);',
             '  },',
             '});',
@@ -873,19 +873,19 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
             '  name: text("name").notNull(),',
             '}, kovo({ domain: "product", key: "id" }));',
             '',
-            'function loadProducts({ db }: { db: PgDatabase<any, any, any> }) {',
+            'function loadProducts({ db }: { db: PgAsyncDatabase<any, any> }) {',
             '  return db.select({ name: products.name }).from(products);',
             '}',
             '',
             'export const productQuery = query("product/helper-carrier-local", {',
-            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    const context = { db };',
             '    return loadProducts(context);',
             '  },',
@@ -911,16 +911,16 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         fileName: 'product.domain.ts',
         source: [
-          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           'export const products = pgTable("products", {',
           '  id: text("id").primaryKey(),',
           '}, kovo({ domain: "product", key: "id" }));',
           '',
-          'function loadProducts(db: PgDatabase<any, any, any>) {',
+          'function loadProducts(db: PgAsyncDatabase<any, any>) {',
           '  return db.select({ id: products.id }).from(products);',
           '}',
-          'function touchProduct(db: PgDatabase<any, any, any>) {',
+          'function touchProduct(db: PgAsyncDatabase<any, any>) {',
           '  return db.update(products).set({ id: "p1" });',
           '}',
           '',
@@ -928,12 +928,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           'const { nested: { loadProducts: loadFromHelper, touchProduct: touchFromHelper } } = helpers;',
           '',
           'export const productQuery = query("product/destructured-local-helper", {',
-          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '  load(_input, db: PgAsyncDatabase<any, any>) {',
           '    return loadFromHelper(db);',
           '  },',
           '});',
           '',
-          'export async function syncProduct(db: PgDatabase<any, any, any>) {',
+          'export async function syncProduct(db: PgAsyncDatabase<any, any>) {',
           '  await touchFromHelper(db);',
           '}',
         ].join('\n'),
@@ -995,18 +995,18 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
             '}, kovo({ domain: "product", key: "id" }));',
             '',
-            'async function writeProducts(db: PgDatabase<any, any, any>) {',
+            'async function writeProducts(db: PgAsyncDatabase<any, any>) {',
             '  await db.update(products).set({ id: "p1" });',
             '}',
             '',
             'export const productQuery = query("product/helper-write", {',
-            '  async load(_input, db: PgDatabase<any, any, any>) {',
+            '  async load(_input, db: PgAsyncDatabase<any, any>) {',
             '    await writeProducts(db);',
             '    return [];',
             '  },',
@@ -1041,7 +1041,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const auditLog = pgTable("audit_log", {',
             '  id: text("id").primaryKey(),',
@@ -1051,12 +1051,12 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const productQuery = query("product/loader-helper", {',
-            '  load(_input, db: PgDatabase<any, any, any>) {',
-            '    function readAudit(reader: PgDatabase<any, any, any>) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    function readAudit(reader: PgAsyncDatabase<any, any>) {',
             '      return reader.select({ id: auditLog.id }).from(auditLog);',
             '    }',
             '',
-            '    function readProducts(reader: PgDatabase<any, any, any>) {',
+            '    function readProducts(reader: PgAsyncDatabase<any, any>) {',
             '      return reader.select({ id: products.id }).from(products);',
             '    }',
             '',
@@ -1085,7 +1085,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'product.queries.ts',
           source: [
             'import { eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const auditLog = pgTable("audit_log", {',
             '  id: text("id").primaryKey(),',
@@ -1095,8 +1095,8 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const productQuery = query("product/nested-predicate", {',
-            '  load(input, db: PgDatabase<any, any, any>) {',
-            '    function readAudit(reader: PgDatabase<any, any, any>) {',
+            '  load(input, db: PgAsyncDatabase<any, any>) {',
+            '    function readAudit(reader: PgAsyncDatabase<any, any>) {',
             '      return reader.select({ id: auditLog.id }).from(auditLog).where(eq(auditLog.id, input.id));',
             '    }',
             '',

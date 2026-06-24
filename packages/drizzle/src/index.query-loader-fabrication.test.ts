@@ -22,7 +22,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               const fixture = ".from(auditLog) db.query.auditLog.findMany(";
               // return db.query.auditLog.findMany({ where: eq(auditLog.productId, products.id) });
               return db.select({ name: products.name }).from(products);
@@ -56,7 +56,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, reader: PgDatabase) {
+            load(_input, reader: PgAsyncDatabase<any, any>) {
               const fixture = { query: { auditLog: { findMany() { return []; } } } };
               fixture.query.auditLog.findMany();
               return reader.select({ name: products.name }).from(products);
@@ -90,7 +90,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(input, reader: PgDatabase) {
+            load(input, reader: PgAsyncDatabase<any, any>) {
               const fixture = {
                 select() { return this; },
                 from() { return this; },
@@ -233,7 +233,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         fileName: 'product.queries.ts',
         source: [
           'import { sql } from "drizzle-orm";',
-          'import type { PgDatabase } from "drizzle-orm/pg-core";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
           'export const auditLog = pgTable("audit_log", {',
           '  id: text("id").primaryKey(),',
@@ -243,11 +243,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           '}, kovo({ domain: "product", key: "id" }));',
           '',
           'export const productQuery = query("product/non-loader-callback", {',
-          '  guard(_input, db: PgDatabase<any, any, any>) {',
+          '  guard(_input, db: PgAsyncDatabase<any, any>) {',
           '    db.execute(sql`select * from audit_log`);',
           '    return db.select({ id: auditLog.id }).from(auditLog);',
           '  },',
-          '  load(_input, db: PgDatabase<any, any, any>) {',
+          '  load(_input, db: PgAsyncDatabase<any, any>) {',
           '    return db.select({ id: products.id }).from(products);',
           '  },',
           '});',
@@ -278,9 +278,9 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           source: [
             'export const auditLog = pgTable("audit_log", { message: text("message").notNull() }, kovo({ domain: "audit", key: "id" }));',
             '',
-            '// export const commentedQuery = query("commented", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });',
-            'const quoted = \'export const quotedQuery = query("quoted", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });\';',
-            'const templated = `export const templatedQuery = query("templated", { load(_input, db: PgDatabase) { return db.select({ message: auditLog.message }).from(auditLog); } });`;',
+            '// export const commentedQuery = query("commented", { load(_input, db: PgAsyncDatabase<any, any>) { return db.select({ message: auditLog.message }).from(auditLog); } });',
+            'const quoted = \'export const quotedQuery = query("quoted", { load(_input, db: PgAsyncDatabase<any, any>) { return db.select({ message: auditLog.message }).from(auditLog); } });\';',
+            'const templated = `export const templatedQuery = query("templated", { load(_input, db: PgAsyncDatabase<any, any>) { return db.select({ message: auditLog.message }).from(auditLog); } });`;',
             'export const keepModule = { quoted, templated };',
             '',
           ].join('\n'),
@@ -315,7 +315,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             import { items } from "./cart.schema";
 
             export const cartQuery = query("cart", {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
               },
             });
@@ -358,7 +358,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             import { items } from "./schema";
 
             export const itemQuery = query("item", {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ qty: items.qty }).from(items).where(eq(items.id, input.id));
               },
             });
@@ -383,7 +383,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             import { items } from "./schema";
 
             export const itemQuery = query("item", {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ qty: items.qty }).from(items).where(eq(items.id, input.id));
               },
             });
@@ -441,7 +441,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             function tableFor<T>(table: T): T { return table; }
 
             export const itemQuery = query("item", {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.select({ id: items.id }).from(tableFor(items));
               },
             });
@@ -486,10 +486,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'import { items } from "./schema";',
             '',
-            'export async function save(writer: PgDatabase, id: string) {',
+            'export async function save(writer: PgAsyncDatabase<any, any>, id: string) {',
             '  await writer.update(items).set({ id }).where(eq(items.id, id));',
             '}',
           ].join('\n'),
@@ -510,10 +510,10 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             'import { items } from "./schema";',
             '',
-            'export async function save(writer: PgDatabase, id: string) {',
+            'export async function save(writer: PgAsyncDatabase<any, any>, id: string) {',
             '  await writer.update(items).set({ id }).where(eq(items.id, id));',
             '}',
           ].join('\n'),

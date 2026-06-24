@@ -22,12 +22,13 @@ function pgDatabaseTypes(methods: readonly string[]): SourceFileInput {
   return {
     fileName: 'drizzle-types.d.ts',
     source: [
+      'import "drizzle-orm/pg-core";',
       'declare module "drizzle-orm/pg-core" {',
-      '  export class PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      '  export interface PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> {',
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
-      'type PgDatabase<TQueryResultHKT = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/pg-core").PgDatabase<TQueryResultHKT, TFullSchema, TSchema>;',
+      'type PgAsyncDatabase<TQueryResultHKT = unknown, TFullSchema = unknown> = import("drizzle-orm/pg-core").PgAsyncDatabase<TQueryResultHKT, TFullSchema>;',
     ].join('\n'),
   };
 }
@@ -36,8 +37,9 @@ function sqliteDatabaseTypes(methods: readonly string[]): SourceFileInput {
   return {
     fileName: 'sqlite-drizzle-types.d.ts',
     source: [
+      'import "drizzle-orm/sqlite-core";',
       'declare module "drizzle-orm/sqlite-core" {',
-      '  export class BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      '  export interface BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {',
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
@@ -53,21 +55,21 @@ describe('@kovojs/test touch graph fixture seam', () => {
         pgDatabaseTypes([
           'delete(table: unknown): { where(value: unknown): Promise<void> };',
           'insert(table: unknown): { values(value: unknown): Promise<void> };',
-          'transaction<T>(callback: (tx: PgDatabase<TQueryResultHKT, TFullSchema, TSchema>) => Promise<T>): Promise<T>;',
+          'transaction<T>(callback: (tx: PgAsyncDatabase<TQueryResultHKT, TFullSchema>) => Promise<T>): Promise<T>;',
           'update(table: unknown): { set(value: unknown): Promise<void> };',
         ]),
         {
           fileName: 'cart.domain.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "productId" }));',
             '',
-            'function saveItem(writer: PgDatabase, productId: string) {',
+            'function saveItem(writer: PgAsyncDatabase<any, any>, productId: string) {',
             '  return writer.insert(cartItems).values({ productId });',
             '}',
             '',
-            'export async function addItems(db: PgDatabase, productIds: string[]) {',
+            'export async function addItems(db: PgAsyncDatabase<any, any>, productIds: string[]) {',
             '  await Promise.all(productIds.map(async (productId) => db.insert(cartItems).values({ productId })));',
             '  productIds.forEach((productId) => db.update(cartItems).set({ productId }));',
             '  await db.transaction(async (tx) => {',

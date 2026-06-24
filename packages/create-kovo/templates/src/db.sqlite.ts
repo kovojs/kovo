@@ -31,7 +31,7 @@ export function createAppDb(): AppDb {
   const client = new Database(':memory:');
   client.exec(SCHEMA_DDL);
   client.exec(SEED_CONTACTS);
-  return drizzle(client, { schema });
+  return drizzle({ client, schema });
 }
 
 /** The running app database. The stateless server reads/writes this per request. */

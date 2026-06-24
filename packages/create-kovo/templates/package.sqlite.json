@@ -20,7 +20,7 @@
     "@kovojs/ui": "workspace:*",
     "better-auth": "1.6.17",
     "better-sqlite3": "^12.0.0",
-    "drizzle-orm": "0.45.2"
+    "drizzle-orm": "1.0.0-rc.3"
   },
   "devDependencies": {
     "@kovojs/cli": "workspace:*",

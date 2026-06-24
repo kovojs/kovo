@@ -1,12 +1,10 @@
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
-import * as schema from './schema.js';
-
 // The CRM demo uses an in-process PGlite database wrapped by Drizzle.
 
-/** The CRM runtime database: Drizzle over PGlite, typed by the schema. */
-export type CrmDb = PgliteDatabase<typeof schema>;
+/** The CRM runtime database: Drizzle over PGlite. */
+export type CrmDb = PgliteDatabase;
 
 const SCHEMA_DDL = [
   // Presentational fields carry defaults so the demo forms can keep their inputs small.
@@ -34,5 +32,5 @@ export async function createCrmDb(): Promise<CrmDb> {
   await client.exec(SCHEMA_DDL);
   await client.exec(SEED_CONTACTS);
   await client.exec(SEED_DEALS);
-  return drizzle(client, { schema });
+  return drizzle({ client });
 }

@@ -9,12 +9,12 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'export const cart = domain({',
-            '  addItem: write(async (writer: PgDatabase<any, any, any>, productId: string) => {',
+            '  addItem: write(async (writer: PgAsyncDatabase<any, any>, productId: string) => {',
             '    await writer.insert(cartItems).values({ productId });',
             '  }),',
             '});',
@@ -46,7 +46,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -54,7 +54,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
-            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -112,10 +112,10 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/callbacks.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { cartItems } from './schema';",
             '',
-            'export function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'export function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
           ].join('\n'),
@@ -177,10 +177,10 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/callbacks.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { cartItems } from './schema';",
             '',
-            'function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  return db.insert(cartItems).values({ productId });',
             '}',
             '',
@@ -238,7 +238,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -247,7 +247,7 @@ describe('Drizzle pinned subset conformance', () => {
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
             'const callbacks = {',
-            '  addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            '  addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '    writer.insert(cartItems).values({ productId });',
             '    db.insert(cartItems).values({ productId });',
             '  },',
@@ -284,7 +284,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -292,7 +292,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
-            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -357,7 +357,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -365,7 +365,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
-            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -434,7 +434,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -442,7 +442,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
-            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -507,7 +507,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -515,7 +515,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
-            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -584,7 +584,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             'interface FakeDb {',
             '  insert(table: unknown): { values(value: unknown): Promise<void> };',
@@ -592,7 +592,7 @@ describe('Drizzle pinned subset conformance', () => {
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
-            'function addItem(writer: PgDatabase<any, any, any>, db: FakeDb, productId: string) {',
+            'function addItem(writer: PgAsyncDatabase<any, any>, db: FakeDb, productId: string) {',
             '  writer.insert(cartItems).values({ productId });',
             '  db.insert(cartItems).values({ productId });',
             '}',
@@ -664,11 +664,11 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/cart.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             '',
             "export const cartItems = pgTable('cart_items', {}, kovo({ domain: 'cart', key: 'productId' }));",
             '',
-            'export async function addItem(db: PgDatabase<any, any, any>, productId: string) {',
+            'export async function addItem(db: PgAsyncDatabase<any, any>, productId: string) {',
             '  await db["insert"](cartItems).values({ productId });',
             '  await db["update"](cartItems).set({ productId }).where(eq(cartItems.productId, productId));',
             '}',

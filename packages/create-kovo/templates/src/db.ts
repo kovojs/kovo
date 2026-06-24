@@ -1,8 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
-import * as schema from './schema.js';
-
 // The app database: Drizzle over an in-process PGlite (real Postgres, compiled to
 // WASM — no external server to run). `createAppDb()` returns a fresh, seeded
 // instance: per request for the stateless demo, fresh per test for isolation.
@@ -10,8 +8,8 @@ import * as schema from './schema.js';
 // It is synchronous: PGlite runs operations in submission order, so the DDL/seed
 // `exec`s enqueue ahead of any later query without blocking construction.
 
-/** The app runtime database, typed by the Drizzle schema. */
-export type AppDb = PgliteDatabase<typeof schema>;
+/** The app runtime database. */
+export type AppDb = PgliteDatabase;
 
 const SCHEMA_DDL = [
   // App domain.
@@ -35,7 +33,7 @@ export function createAppDb(): AppDb {
   // Fire-and-queue: PGlite runs operations in submission order.
   void client.exec(SCHEMA_DDL);
   void client.exec(SEED_CONTACTS);
-  return drizzle(client, { schema });
+  return drizzle({ client });
 }
 
 /** The running app database. The stateless server reads/writes this per request. */

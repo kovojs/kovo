@@ -24,7 +24,7 @@ const ITEMS_C_TABLE = [
 
 const C_COMMON_IMPORTS = [
   "import { and, count, eq, sum } from 'drizzle-orm';",
-  "import { integer, pgTable, text, type PgDatabase } from 'drizzle-orm/pg-core';",
+  "import { integer, pgTable, text, type PgAsyncDatabase } from 'drizzle-orm/pg-core';",
   '',
 ].join('\n');
 
@@ -49,14 +49,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", { cartId: text("cart_id").notNull(), productId: text("product_id").notNull(), qty: integer("qty").notNull() }, kovo({ domain: "cart", key: "cartId" }));',
             'export const products = pgTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));',
             '',
             'export const cartQuery = query("cart", {',
             '  output: s.object({ count: s.number() }),',
-            '  async load(input, db: PgDatabase<any, any, any>) {',
+            '  async load(input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      count: sql<number>`count(*)`,',
             '      productId: products.id,',
@@ -101,7 +101,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const products = pgTable("products", {',
             '  id: text("id").primaryKey(),',
@@ -109,13 +109,13 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "product", key: "id" }));',
             '',
             'export const distinctProducts = query("products/distinct", {',
-            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.selectDistinct({ name: products.name }).from(products);',
             '  },',
             '});',
             '',
             'export const firstProductNames = query("products/distinct-on", {',
-            '  load(_input, db: PgDatabase<any, any, any>) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);',
             '  },',
             '});',
@@ -154,7 +154,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'cart.queries.ts',
           source: [
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const cartItems = pgTable("cart_items", {',
             '  cartId: text("cart_id").notNull(),',
@@ -162,7 +162,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "cart", key: "cartId" }));',
             '',
             'export const cartQuery = query("cart", {',
-            '  load(input, db: PgDatabase<any, any, any>) {',
+            '  load(input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      qty: cartItems.qty,',
             '    }).from(cartItems).where(eq(cartItems["cartId"], input["cartId"]));',
@@ -199,7 +199,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           fileName: 'question.queries.ts',
           source: [
             'import { and, eq } from "drizzle-orm";',
-            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
             '',
             'export const questions = pgTable("questions", {',
             '  sessionId: text("session_id").notNull(),',
@@ -208,7 +208,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "question", key: "sessionId,id" }));',
             '',
             'export const questionDetail = query("questionDetail", {',
-            '  load(input: { id: string }, db: PgDatabase<any, any, any>, context: { request?: { session?: { id?: string } | null } }) {',
+            '  load(input: { id: string }, db: PgAsyncDatabase<any, any>, context: { request?: { session?: { id?: string } | null } }) {',
             '    const sessionId = context.request?.session?.id;',
             '    if (!sessionId) throw new Error("auth required");',
             '    return db.select({ title: questions.title }).from(questions).where(and(eq(questions.sessionId, sessionId), eq(questions.id, input.id)));',
@@ -261,7 +261,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             import * as cartSchema from "./cart.schema";
 
             export const cartProductQuery = query("cart/product", {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   id: cartSchema.products.id,
                 }).from(cartSchema.products).where(eq(cartSchema.products.id, input.id));
@@ -305,7 +305,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             import * as cartSchema from "./cart.schema";
 
             export const cartProductQuery = query("cart/product", {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   id: cartSchema["products"].id,
                 }).from(cartSchema["products"]).where(eq(cartSchema["products"].id, input.id));
@@ -361,7 +361,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             import * as schema from "./schema";
 
             export const cartProductQuery = query("cart/product", {
-              load(input, db: PgDatabase) {
+              load(input, db: PgAsyncDatabase<any, any>) {
                 return db.select({
                   id: schema["cartProducts"].id,
                 }).from(schema.cartProducts).where(eq(schema.cartProducts.id, input.id));
@@ -398,7 +398,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 message: auditLog.message,
                 name: products.name,
@@ -457,7 +457,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const searchQuery = query("search", {
             output: s.object({ name: s.string() }),
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ name: sql<string>\`name\` })
                 .from(productSearch)
                 .leftJoin(productStats, eq(productStats.productId, productSearch.id));
@@ -558,7 +558,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const statsQuery = query("stats", {
             output: s.object({ productId: s.string() }),
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ productId: sql<string>\`product_id\` }).from(productStats);
             },
           });
@@ -592,7 +592,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 note: products.note,
                 stock: products.stock,
@@ -635,7 +635,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 id: products.id,
                 location: products.location,
@@ -685,7 +685,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               const fixture = "return db.select({ message: auditLog.message }).from(auditLog)";
               // return db.select({ message: auditLog.message }).from(auditLog);
               await db.select({ message: auditLog.message }).from(auditLog);
@@ -718,7 +718,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));
 
           export const cartQuery = query("cart", {
-            async load(input, db: PgDatabase) {
+            async load(input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 count: sql<number>\`count(*)\`,
               }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
@@ -773,14 +773,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const literalOutputQuery = query("cart/literal", {
             "output": s.object({ count: s.number() }),
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
 
           export const computedOutputQuery = query("cart/computed", {
             ["output"]: s.object({ count: s.number() }),
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
@@ -806,7 +806,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const userStats = query("user", {
             output: s.object({ count: s.number() }),
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(users);
             },
           });
@@ -840,7 +840,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
             '',
             'export const userDetail = query("user", {',
-            '  load(_input, db: PgDatabase) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      passwordDigest: trustedReveal(users.passwordHash, {',
             '        justification: "one-way digest shown to admins",',
@@ -897,7 +897,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
             '',
             'export const userStats = query("user", {',
-            '  load(_input, db: PgDatabase) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      publicId: core.trustedReveal(users.id, {',
             '        method: "server-projection",',
@@ -955,7 +955,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
             '',
             'export const userStats = query("user", {',
-            '  load(_input, db: PgDatabase) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      passwordDigest: core.trustedReveal(sql<string>`substr(password_hash, 1, 8)`, {',
             '        method: "server-projection",',
@@ -1021,7 +1021,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
             '',
             'export const userDetail = query("user", {',
-            '  load(_input, db: PgDatabase) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      passwordDigest: trustedReveal(users.passwordHash),',
             '    }).from(users);',
@@ -1052,7 +1052,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
             '',
             'export const userDetail = query("user", {',
-            '  load(_input, db: PgDatabase) {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
             '    return db.select({',
             '      passwordDigest: trustedReveal(users.passwordHash, { justification: "   " }),',
             '    }).from(users);',
@@ -1082,7 +1082,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));
 
           export const userList = query("user", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               const displayKey = "displayName";
               const publicColumns = { email: users.email };
               return db.select({
@@ -1141,7 +1141,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const subscriptionQuery = query("subscription", {
             output: s.object({ serverNow: s.string() }),
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ serverNow: sql<string>\`now()\` }).from(subscriptions);
             },
           });
@@ -1176,7 +1176,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const subscriptionQuery = query("subscription", {
             output: s.object({ id: s.string() }),
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               return db
                 .select({ id: subscriptions.id })
                 .from(subscriptions)
@@ -1215,7 +1215,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const cartQuery = query("cart", {
             // output: s.object({ count: s.number() }),
             description: "output: not a schema",
-            async load(input, db: PgDatabase) {
+            async load(input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 count: sql<number>\`count(*)\`,
               }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
@@ -1249,14 +1249,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
           export const dynamicOutputQuery = query("cart/dynamic", {
             [outputKey]: s.object({ count: s.number() }),
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
 
           export const spreadOutputQuery = query("cart/spread", {
             ...sharedQueryConfig,
-            async load(_input, db: PgDatabase) {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({ count: sql<number>\`count(*)\` }).from(cartItems);
             },
           });
@@ -1296,7 +1296,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", { sku: text("sku").notNull() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(input, db: PgDatabase) {
+            load(input, db: PgAsyncDatabase<any, any>) {
               return db.select({ sku: products.sku }).from(products).where(eq(products.sku, input.sku));
             },
           });
@@ -1326,7 +1326,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", { id: text("id").primaryKey(), name: text("name").notNull() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(input, db: PgDatabase) {
+            load(input, db: PgAsyncDatabase<any, any>) {
               const fixture = ".where(eq(products.id, input.id))";
               // return db.select({ name: products.name }).from(products).where(eq(products.id, input.id));
               return db.select({ name: products.name }).from(products);
@@ -1361,7 +1361,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 displayName: formatName(products.name),
                 stock: computeStock(products.id),
@@ -1414,7 +1414,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 "display:name,raw": products.name,
                 "unresolved:value,raw": compute(products.id),
@@ -1461,7 +1461,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 displayName: products["name"],
                 id: products["id"],
@@ -1497,7 +1497,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select({
                 count: "sql<number>\`count(*)\`",
                 id: products.id,
@@ -1541,7 +1541,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               const id = products.id;
               return db.select({ id }).from(products);
             },
@@ -1579,7 +1579,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.select().from(products);
             },
           });
@@ -1625,7 +1625,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const products = pgTable("products", {}, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product/raw", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.execute(sql\`select * from products\`);
             },
           });
@@ -1665,7 +1665,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const productQuery = query("product/raw", {
             output: s.object({ id: s.string(), stock: s.number().int() }),
             reads: [products],
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.execute(sql\`select id, stock from products\`);
             },
           });
@@ -1698,7 +1698,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             type FakeDb = Record<string, (query: unknown) => Promise<void>>;
 
             export const productQuery = query("product/computed-raw", {
-              load(_input, db: PgDatabase, fake: FakeDb) {
+              load(_input, db: PgAsyncDatabase<any, any>, fake: FakeDb) {
                 const method = "execute";
                 db[method](sql\`select * from products\`);
                 fake[method](sql\`select * from products\`);
@@ -1738,7 +1738,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));
 
           export const usersQuery = query("users", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.query.users.findMany({ where: eq(users.active, true) });
             },
           });
@@ -1789,7 +1789,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }, kovo({ domain: "user", key: "id", secret: ["passwordHash", "apiToken"] }));
 
           export const usersQuery = query("users", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.query.users.findMany({
                 columns: {
                   apiToken: true,
@@ -1850,7 +1850,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           }));
 
           export const postsQuery = query("posts", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.query.posts.findMany({
                 columns: {
                   id: true,
@@ -1906,7 +1906,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));
 
           export const usersQuery = query("users", {
-            load(_input, db: PgDatabase) {
+            load(_input, db: PgAsyncDatabase<any, any>) {
               return db.query['users']['findMany']({ where: eq(users.active, true) });
             },
           });
@@ -1949,7 +1949,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             import * as schema from "./schema";
 
             export const usersQuery = query("users/namespace", {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.query.users.findMany({ where: eq(schema.users.active, true) });
               },
             });
@@ -1986,7 +1986,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             export const users = pgTable("users", {}, kovo({ domain: "user", key: "id" }));
 
             export const usersQuery = query("users", {
-              load(_input, db: PgDatabase) {
+              load(_input, db: PgAsyncDatabase<any, any>) {
                 return db.query.archivedUsers.findMany({ where: eq(users.active, true) });
               },
             });
@@ -2031,7 +2031,7 @@ describe('@kovojs/drizzle algebraic field classification — Lane C extractor fi
       C_COMMON_IMPORTS,
       ITEMS_C_TABLE,
       "export const q = query('q', {",
-      '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
+      '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
       '    return { f: db.select({ value: count(items.assignee) }).from(items) };',
       '  },',
       '});',
@@ -2047,7 +2047,7 @@ describe('@kovojs/drizzle algebraic field classification — Lane C extractor fi
       C_COMMON_IMPORTS,
       ITEMS_C_TABLE,
       "export const q = query('q', {",
-      '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
+      '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
       '    return { f: db.select({ value: count() }).from(items) };',
       '  },',
       '});',
@@ -2065,7 +2065,7 @@ describe('@kovojs/drizzle algebraic field classification — Lane C extractor fi
       C_COMMON_IMPORTS,
       ITEMS_C_TABLE,
       "export const q = query('q', {",
-      '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
+      '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
       "    return { f: db.select({ value: count() }).from(items).where(and(eq(items.cartId, 'c1'), eq(items.assignee, 'u1'))) };",
       '  },',
       '});',

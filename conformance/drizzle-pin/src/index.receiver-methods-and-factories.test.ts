@@ -11,12 +11,12 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/catalog.domain.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
             import { pgMaterializedView, text } from 'drizzle-orm/pg-core';
 
             const productSearch = pgMaterializedView('product_search', { id: text('id') });
 
-            export async function refreshCatalog(db: PgDatabase<any, any, any>) {
+            export async function refreshCatalog(db: PgAsyncDatabase<any, any>) {
               await db.refreshMaterializedView(productSearch);
             }
           `,
@@ -46,7 +46,7 @@ describe('Drizzle pinned subset conformance', () => {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: `
             import { eq } from 'drizzle-orm';
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
             import { boolean, pgTable, text } from 'drizzle-orm/pg-core';
 
             const users = pgTable('users', {
@@ -54,7 +54,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'user', key: 'id' }));
 
-            export async function countActiveUsers(db: PgDatabase<any, any, any>) {
+            export async function countActiveUsers(db: PgAsyncDatabase<any, any>) {
               return db.$count(users, eq(users.active, true));
             }
           `,
@@ -83,13 +83,13 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             interface FakeDb {
               $with(name: string): unknown;
             }
 
-            export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb) {
+            export async function configureUsers(db: PgAsyncDatabase<any, any>, fake: FakeDb) {
               db.$with('active_users');
               db['$with']('inactive_users');
               fake.$with('ignored_users');
@@ -125,11 +125,11 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
 
             type FakeDb = Record<string, (query: unknown) => Promise<void>>;
 
-            export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
+            export async function configureUsers(db: PgAsyncDatabase<any, any>, fake: FakeDb, method: string) {
               db[method]('active_users');
               fake[method]('ignored_users');
             }
@@ -159,7 +159,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: `
-            import type { PgDatabase } from 'drizzle-orm/pg-core';
+            import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';
             import { pgTable, text } from 'drizzle-orm/pg-core';
 
             export const users = pgTable('users', {
@@ -171,7 +171,7 @@ describe('Drizzle pinned subset conformance', () => {
               update(table: unknown): { set(value: unknown): Promise<void> };
             }
 
-            export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
+            export async function configureUsers(db: PgAsyncDatabase<any, any>, fake: FakeDb, method: string) {
               const execute = db.execute.bind(db);
               const write = db.update.bind(db);
               const computed = db[method].bind(db);
@@ -217,7 +217,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
             "export const users = pgTable('users', {",
@@ -229,7 +229,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            'export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {',
+            'export async function configureUsers(db: PgAsyncDatabase<any, any>, fake: FakeDb, method: string) {',
             '  let execute;',
             '  execute = db.execute;',
             '  let write;',
@@ -305,7 +305,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
             "export const users = pgTable('users', {",
@@ -317,7 +317,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            'export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {',
+            'export async function configureUsers(db: PgAsyncDatabase<any, any>, fake: FakeDb, method: string) {',
             '  const [execute, write, computed] = [db.execute, db.update, db[method]];',
             '  const [fakeExecute] = [fake.execute];',
             '  let assignedExecute;',
@@ -369,7 +369,7 @@ describe('Drizzle pinned subset conformance', () => {
         {
           fileName: 'conformance/drizzle-pin/src/users.domain.ts',
           source: [
-            "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+            "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
             "import { pgTable, text } from 'drizzle-orm/pg-core';",
             '',
             "export const users = pgTable('users', {",
@@ -382,7 +382,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            'export async function configureUsers(db: PgDatabase<any, any, any>, fake: FakeDb) {',
+            'export async function configureUsers(db: PgAsyncDatabase<any, any>, fake: FakeDb) {',
             '  const carrier = { db, fake };',
             "  await carrier.db.execute('select 1');",
             '  await carrier.db.update(users).set({});',
@@ -438,7 +438,7 @@ describe('Drizzle pinned subset conformance', () => {
       {
         fileName: 'conformance/drizzle-pin/src/users.domain.ts',
         source: [
-          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
           "import { pgTable, text } from 'drizzle-orm/pg-core';",
           '',
           "export const users = pgTable('users', {",
@@ -447,7 +447,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           'declare function makeActions(): { add: ReturnType<typeof write> };',
           'declare function makeQueryOptions(): {',
-          '  load(input: unknown, db: PgDatabase<any, any, any>): Promise<void>;',
+          '  load(input: unknown, db: PgAsyncDatabase<any, any>): Promise<void>;',
           '};',
           '',
           'export const userDomain = domain(makeActions());',
@@ -495,7 +495,7 @@ describe('Drizzle pinned subset conformance', () => {
         fileName: 'conformance/drizzle-pin/src/users.domain.ts',
         source: [
           "import { eq } from 'drizzle-orm';",
-          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
           "import { pgTable, text } from 'drizzle-orm/pg-core';",
           '',
           "export const users = pgTable('users', {",
@@ -503,11 +503,11 @@ describe('Drizzle pinned subset conformance', () => {
           "  name: text('name').notNull(),",
           "}, kovo({ domain: 'user', key: 'id' }));",
           '',
-          'function loadUsers(_input: unknown, db: PgDatabase<any, any, any>) {',
+          'function loadUsers(_input: unknown, db: PgAsyncDatabase<any, any>) {',
           '  return db.select({ id: users.id, name: users.name }).from(users);',
           '}',
           '',
-          'function addUser(db: PgDatabase<any, any, any>, userId: string) {',
+          'function addUser(db: PgAsyncDatabase<any, any>, userId: string) {',
           '  return db.update(users).set({ name: userId }).where(eq(users.id, userId));',
           '}',
           '',
@@ -584,7 +584,7 @@ describe('Drizzle pinned subset conformance', () => {
         fileName: 'conformance/drizzle-pin/src/users.domain.ts',
         source: [
           "import { eq } from 'drizzle-orm';",
-          "import type { PgDatabase } from 'drizzle-orm/pg-core';",
+          "import type { PgAsyncDatabase } from 'drizzle-orm/pg-core';",
           "import { pgTable, text } from 'drizzle-orm/pg-core';",
           '',
           "export const users = pgTable('users', {",
@@ -592,11 +592,11 @@ describe('Drizzle pinned subset conformance', () => {
           "  name: text('name').notNull(),",
           "}, kovo({ domain: 'user', key: 'id' }));",
           '',
-          'function loadUsers(_input: unknown, db: PgDatabase<any, any, any>) {',
+          'function loadUsers(_input: unknown, db: PgAsyncDatabase<any, any>) {',
           '  return db.select({ id: users.id, name: users.name }).from(users);',
           '}',
           '',
-          'function addUser(db: PgDatabase<any, any, any>, userId: string) {',
+          'function addUser(db: PgAsyncDatabase<any, any>, userId: string) {',
           '  return db.update(users).set({ name: userId }).where(eq(users.id, userId));',
           '}',
           '',
