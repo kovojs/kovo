@@ -764,12 +764,14 @@ type TypeExpr =
   | { kind: 'reference'; name: string }
   | { kind: 'union'; members: readonly TypeExpr[] };
 
-const enum TypeExprPrecedence {
-  none = 0,
-  union = 1,
-  array = 2,
-  primary = 3,
-}
+const TypeExprPrecedence = {
+  array: 2,
+  none: 0,
+  primary: 3,
+  union: 1,
+} as const;
+
+type TypeExprPrecedence = (typeof TypeExprPrecedence)[keyof typeof TypeExprPrecedence];
 
 interface TypeExprField {
   key: string;
@@ -882,7 +884,10 @@ function unionTypeExpr(members: readonly TypeExpr[]): TypeExpr {
   return { kind: 'union', members: flattened };
 }
 
-function printTypeExpr(type: TypeExpr, parentPrecedence = TypeExprPrecedence.none): string {
+function printTypeExpr(
+  type: TypeExpr,
+  parentPrecedence: TypeExprPrecedence = TypeExprPrecedence.none,
+): string {
   const precedence = typeExprPrecedence(type);
   let printed: string;
   switch (type.kind) {
