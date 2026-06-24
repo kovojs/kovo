@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { createApp, createRequestHandler, layout, route, toNodeHandler } from '@kovojs/server';
+import { defineCompiledRoutePage } from '@kovojs/server/internal/route';
 
 import { buildSiteRouteData, type SiteRoutePage } from './app-data.js';
 import { clientHrefs, siteClientModules } from './client/modules.js';
@@ -51,8 +52,28 @@ function docsRoute(page: SiteRoutePage): SiteRoute {
     meta: page.meta,
     modulepreloads,
     stylesheets: siteStylesheetsForRoute(page.routePath),
-    page() {
-      return <DocsRoutePage clients={clientHrefs} page={page.body} />;
-    },
+    page: defineCompiledRoutePage(
+      {
+        components: [],
+        fileName: 'site/src/app.tsx',
+        navigationSegments: [
+          {
+            id: 'layout:SiteRouteLayout',
+            kind: 'layout',
+            localName: 'SiteRouteLayout',
+          },
+          {
+            components: [],
+            id: `page:${page.routePath}`,
+            kind: 'page',
+            localName: 'page',
+          },
+        ],
+        route: page.routePath,
+      },
+      function pageRoute() {
+        return <DocsRoutePage clients={clientHrefs} page={page.body} />;
+      },
+    ),
   }) as SiteRoute;
 }

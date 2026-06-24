@@ -38,6 +38,7 @@ const explicitlyAllowedInternalImports = new Set([
   'site/scripts/capture.mjs -> @kovojs/browser/internal/inline-loader',
   'site/scripts/emit-ui-css.mjs -> @kovojs/headless-ui/internal',
   'site/scripts/export-static.mjs -> @kovojs/compiler/package-styles',
+  'site/src/app.tsx -> @kovojs/server/internal/route',
   'site/src/components/chrome.tsx -> @kovojs/server/internal/html',
   'site/src/components/docs-layout.tsx -> @kovojs/server/internal/html',
   'site/src/components/example-split.tsx -> @kovojs/server/internal/html',
