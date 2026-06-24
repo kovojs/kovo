@@ -40,9 +40,10 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 
 ## Current Evidence
 
-- [x] Diagnostic-code ceiling is KV421; new codes start at **KV422**.
-  - Evidence: `rg -o "KV4[0-9][0-9]" packages/core/src/diagnostics.ts | sort -u | tail` ends at KV421
-    (KV421 = duplicate-mutation-key). The SPEC §11.3 table and the system "≈KV419/KV420" hint are stale.
+- [x] Diagnostic-code ceiling is KV435; KV422–KV426 are already live source/sink and SQL-safety codes.
+  - Evidence: `packages/core/src/diagnostics.ts` defines KV422 for SQL text safety, KV423–KV426 for
+    source/sink and trust audits, and KV435 for the Phase 1 secret query-wire gate. The older Phase 1
+    provisional KV422/KV423 allocation was stale and was corrected in this ledger.
 - [x] The compiler has no TS type checker; capture analysis is a name allowlist.
   - Evidence: `grep getTypeChecker packages/compiler/src` empty; `capturesUnserializableReferences`
     (`packages/compiler/src/lower/handlers.ts:294`) is a reference-name allowlist.
@@ -94,8 +95,9 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
   Log/error secret-redaction is explicitly best-effort defense-in-depth, never a by-construction claim.
 - **Default-deny is a mandatory total field, not an injected guard.** The teeth are a required `access:`
   property (omission won't compile), not auto-injecting `authed` (which would violate Constitution #2).
-- **New KV codes start at KV422** and must be re-verified free against `diagnosticDefinitions` before test
-  names land. The provisional allocation in the table below is not authoritative until verified.
+- **New security KV codes must be re-verified free against `diagnosticDefinitions` before test names land.**
+  KV422–KV426 are already live SQL/source-sink codes; Phase 1 uses KV435 for the secret query-wire gate.
+  The remaining provisional allocation in the table below is not authoritative until verified.
 - **Confidentiality is Scope B (decided 2026-06-23).** The secret boundary covers every `JsonValue`-bounded
   client sink — query results, island state, and `fail()` payloads — not just the query wire. This requires
   making `JsonValue` the bound on query results and `fail()` (a deliberate breaking change; the framework is
@@ -106,7 +108,7 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
   (no `public('TODO')` stubs).
 - **Mass assignment is schema-anchored + fail-closed (decided 2026-06-23).** `owner:` columns and PKs are
   auto-governed; `governed: true` marks the rest; a write reaching a governed column from client input is
-  KV425. Escape hatches: `serverValue(v, reason)` (non-input only) and the louder audited
+  a blocking diagnostic. Escape hatches: `serverValue(v, reason)` (non-input only) and the louder audited
   `adminAssign(input.x, reason)`; helper false positives use `kovoAnalyzerSummary`, not `serverValue` waivers.
 - **Egress/SSRF is a runtime private-network deny floor, not a by-construction gate (decided 2026-06-23;
   metadata path workflow-verified).** Public/external egress is unrestricted; private/loopback/link-local
@@ -153,7 +155,7 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
   `--cookies`; app-data sealing is an optional tamper-evidence add. Fixation is a documented obligation +
   optional advisory lint; `rotateSession()` deferred (Kovo doesn't own session identity, §6.5).
 - **Write-reachability-dependent gates require BOTH stages; the by-construction stage is NOT optional (decided
-  2026-06-23).** Read-only query handles (KV433), mass-assignment (KV425), and TOCTOU (KV429) each ship a
+  2026-06-23).** Read-only query handles (KV433), mass-assignment, and TOCTOU (KV429) each ship a
   runtime/primitive safe-default now and a static gate built on the shared §11.1 write-reachability pass. The
   safe-default is a backstop, not a stopping point — the plan is NOT complete until the §11.1 pass and all three
   static gates land. Build the pass once; it serves all three (+ the SQL write analysis).
@@ -183,11 +185,11 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 
 | Code  | Class                                                                                              |
 | ----- | -------------------------------------------------------------------------------------------------- |
-| KV422 | Secret-classified column reaches the client wire projection sink                                   |
-| KV423 | Opaque/aliased projection of a secret-bearing table without a brand                                |
-| KV424 | Missing required `access:` decision on a data-touching surface                                     |
-| KV425 | Input-provenance value reaches a `governed`/protected write column                                 |
-| KV426 | Server-only/secret binding captured into a client module                                           |
+| KV422 | _(already assigned in SPEC §11.3)_ SQL text injection risk                                         |
+| KV423 | _(already assigned in SPEC §11.3)_ raw endpoint audit metadata                                     |
+| KV424 | _(already assigned in SPEC §11.3)_ app-authored dangerous sink lacks a safe Kovo surface           |
+| KV425 | _(already assigned in SPEC §11.3)_ source/sink registry drift                                      |
+| KV426 | _(already assigned in SPEC §11.3)_ trust escape lacks auditable provenance                         |
 | KV427 | Cloud SDK client built without the declared `cloud.*` credential (forgot-it compile gate, Phase 5) |
 | KV428 | Inline rendering of an unverified-content-type upload                                              |
 | KV429 | Read-then-write on a contended column without atomic/version guard                                 |
@@ -196,7 +198,7 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 | KV432 | Insecure cookie downgrade without a recorded justification                                         |
 | KV433 | `query()` loader reaches a write without a `query.elevated` brand                                  |
 | KV434 | Non-linear-safe pattern literal in a wire string validator                                         |
-| KV435 | _(unassigned — auth-response uniformity dropped from this plan 2026-06-23)_                        |
+| KV435 | Secret-classified query result field reaches the client wire projection sink                       |
 | KV436 | _(optional/advisory)_ secret-provenance value reaches a known logging sink (12c)                   |
 
 ## Explicit Non-Goals
@@ -252,7 +254,7 @@ until Phase 1, accepted deliberately so every gate is sound on arrival.
     - Evidence: `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts` passed 7
       tests on local `main` at `1241d168`.
 
-## Phase 1: Confidentiality field boundary (the dual of XSS) — KV422/KV423
+## Phase 1: Confidentiality field boundary (the dual of XSS) — KV435/TBD
 
 Scope decision (2026-06-23): **Scope B — guard every `JsonValue`-bounded client boundary** (query results,
 island `kovo-state`, and `fail()` error payloads), not just the query wire. Breaking changes accepted
@@ -282,10 +284,13 @@ design.
     assertions in `packages/core/src/index.test.ts`, `packages/server/src/query-endpoint.test.ts`, and
     `packages/server/src/mutation.test.ts` reject `Secret<T>` at `JsonValue`, query, state, and `fail()` client
     boundaries. Verified with `vp check` and focused core/server/Drizzle Vitest coverage.
-- [ ] Door 1 (query wire): reject a secret column reaching the `<script kovo-query>` projection sink via the
+- [x] Door 1 (query wire): reject a secret column reaching the `<script kovo-query>` projection sink via the
       Phase 0 symbol pass — the structural dual of KV236 (the proof here is AST provenance, not the type,
       because there is a Drizzle `select` to read).
-- [ ] Opaque/aliased projection backstop (KV423, **error** severity): a `sql\`\``/spread/computed-key
+  - Evidence: `packages/compiler/src/validate/confidentiality.ts` emits KV435 for component-declared
+    query shapes containing `{ kind: "secret" }`; `vp exec vitest --run packages/compiler/src/query-bindings.test.ts packages/core/src/diagnostics.test.ts`
+    verifies the blocking diagnostic and registry definition.
+- [ ] Opaque/aliased projection backstop (diagnostic code TBD, **error** severity): a `sql\`\``/spread/computed-key
 projection of a table carrying ≥1 secret column requires an audited brand. Blast radius concentrates on
 `users`/`accounts`/`payments` — invest in the teaching message and make adding the brand the one-line fix.
 - [ ] Cover Drizzle **relational** queries (`with: { author: { columns: { passwordHash: true } } }`) — a
@@ -294,7 +299,7 @@ projection of a table carrying ≥1 secret column requires an audited brand. Bla
       `trustedReveal`): surface every reveal in `kovo explain --revealed`; arbitrary-`fn` reveals are
       audit-grade, not proof-grade. Prefer a server-side projection that never selects the secret.
 
-## Phase 2: Authorization completeness — default-deny (KV424)
+## Phase 2: Authorization completeness — default-deny (diagnostic code TBD)
 
 Decision (2026-06-23): mandatory `access:` field, **no default and no auto-injected `authed`**; `public()`
 reasons live in a reviewed snapshot (a new public surface is a code-review diff); signature-verified machine
@@ -302,10 +307,10 @@ endpoints use `access: verified`; the migration **assigns a real decision at eve
 `public('TODO')` stubs**. The build staying red until every surface genuinely decides is the migration's value.
 
 - [ ] Make `access:` a **required** field on every query, mutation, route, endpoint, and webhook; omission is
-      KV424 (won't compile). Inhabitants: a guard chain, `public('reason')`, or `access: verified`
+      a blocking diagnostic (code TBD; KV424 is already assigned). Inhabitants: a guard chain, `public('reason')`, or `access: verified`
       (signature-verified machine endpoints). No default; never auto-inject `authed` (Constitution #2 — silent
       behavior-at-a-distance).
-- [ ] Keep KV424 orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
+- [ ] Keep the missing-access diagnostic orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
       no-op `return true` guard satisfies it). Retain KV414 (IDOR) and record every `public()` in a reviewed
       `kovo explain --access` snapshot so each public surface is a diff, not an invisible default.
 - [ ] Migrate by updating call sites with real decisions, not stubs.
@@ -316,7 +321,7 @@ endpoints use `access: verified`; the migration **assigns a real decision at eve
   - Open risk: `public()` reasons are greppable intent leakage (legibility-as-confidentiality footgun);
     reasons must not carry sensitive operational detail.
 
-## Phase 3: Mass assignment — protected columns (write-side dual of IDOR) — KV425
+## Phase 3: Mass assignment — protected columns (write-side dual of IDOR) — diagnostic code TBD
 
 Decision (2026-06-23): **`owner:` columns and primary keys are auto-governed**; explicit `governed: true` for
 the rest (`role`/`balance`/`isAdmin`). **Fail-closed** posture (non-negotiable — it is the guarantee). Two-tier
@@ -325,19 +330,19 @@ reason)`. Helper false positives are resolved with `kovoAnalyzerSummary`, never 
 
 - [ ] Add the `governed` fact: auto-derive for `owner:` columns + primary keys; explicit
       `kovo({ governed: true })` for the rest. A write reaching a governed column with input-provenance is
-      KV425, proven by the Phase 0 inverted (fail-closed) pass.
+      a blocking diagnostic (code TBD; KV425 is already assigned), proven by the Phase 0 inverted (fail-closed) pass.
 - [ ] Trace destructuring/aliasing (Phase 0 bypass corpus): `const { ownerId } = input; .values({ ownerId })`
       is caught; `.values(input)` spread is rejected unless the input type provably lacks governed keys.
 - [ ] Two-tier escape hatch, both surfaced in `kovo explain --capabilities`:
-  - `serverValue(value, reason)` discharges **only non-input** arguments — `serverValue(input.x, …)` is still
-    KV425 (input provenance inside the brand is not a bypass).
+  - `serverValue(value, reason)` discharges **only non-input** arguments — `serverValue(input.x, …)` still
+    fails the mass-assignment diagnostic (input provenance inside the brand is not a bypass).
   - `adminAssign(input.x, reason)` is the explicit, louder, audited path for a legitimate admin write that
     intentionally sets a governed column from client input.
 - [ ] Resolve helper false positives with `kovoAnalyzerSummary` (mark `resolveOwner`-style helpers as
       returning server provenance); document this as THE fix, not reflexive `serverValue`, which would erode
       the gate.
 
-## Phase 4: Server-only secret taint into client modules (KV426)
+## Phase 4: Server-only secret taint into client modules (diagnostic code TBD)
 
 Decision (2026-06-23): the secret gate is **per-binding AST provenance only** — `secret()`/`process.env`,
 **shared with Item 1** (one "secret" concept, two sinks: query wire + client module). **No `.server.ts` suffix
@@ -442,7 +447,7 @@ compiler). Derivation is fail-closed.
 - [ ] **Read-only `query()` handle (KV433).**
       Decision (2026-06-23): two stages, **both required for plan completion** — the runtime safe-default is a
       backstop, not a stopping point. Sequenced (not optional): Stage 1 now; Stage 2 lands with the shared §11.1
-      write-reachability pass (also required by KV425/KV429).
+      write-reachability pass (also required by mass-assignment and KV429).
   - [ ] Stage 1 (now, safe-default): Reader type narrows the loader handle (no `insert`/`update`/`delete`/
         `execute`) + a fail-closed runtime read-only proxy (write verbs throw at the managed handle). Catches a
         direct `req.db.insert` in a loader; the type is `tsc`-time ergonomics (unsound under `as any`); the
@@ -612,7 +617,7 @@ function. Classified runtime defense-in-depth: makes a slipped-through XSS inert
 - [ ] Acceptance: existing security lanes stay green — `plans/fix-security.md` focused suites, the SQL corpus
       once landed, endpoint/webhook conformance, and `git diff --check`.
 - [ ] Acceptance (completion gate): the shared §11.1 write-reachability pass is built AND every by-construction
-      stage built on it lands — KV425 (mass-assignment), KV429 (TOCTOU), KV433 (read-only query). The
+      stage built on it lands — mass-assignment, KV429 (TOCTOU), KV433 (read-only query). The
       runtime/primitive safe-defaults are backstops, not completion; the plan is not green until these static
       gates ship.
 - [ ] Keep this ledger compact: as items land, replace prose with the narrowest verifying command or
@@ -626,7 +631,7 @@ function. Classified runtime defense-in-depth: makes a slipped-through XSS inert
       helper-returned-value escape valve; finalize after measuring false-positive noise on real apps.
 - [ ] Confidentiality reveal hatch: fixed verifiable redactor set vs arbitrary `fn` behind `trustedReveal`?
 - [ ] Default-deny migration: is a sea of `public('TODO')` acceptable as a one-time reviewed audit, or should
-      KV424 require a non-placeholder reason after a grace window?
+      missing-access diagnostic require a non-placeholder reason after a grace window?
 - [ ] Read-only handle: does `query.elevated` stay a GET (and how) or is a write-from-read always pushed to a
       mutation? Resolve against §9.4 before building.
 - [ ] Egress: is the residual `node_modules`/`globalThis` socket path acceptable as a documented boundary
@@ -644,7 +649,7 @@ function. Classified runtime defense-in-depth: makes a slipped-through XSS inert
 - [ ] **Deferred to land WITH each feature (per-feature normative contracts):** §6.2 typed-surface rows
       (confidentiality / authorization-completeness / write-provenance); the confidentiality dual near §4.8/§5.2;
       `access:` default-deny + `governed` in §10.1/§10.3; a new outbound-egress section (classified runtime-DiD);
-      `kovo explain --capabilities`/`--trust` in §11.4; the new KV codes (KV422–KV434, KV436) in §11.3 with the
+      `kovo explain --capabilities`/`--trust` in §11.4; new KV codes in §11.3 with the
       ceiling-note correction. Holding these avoids SPEC promising behavior that is not yet built (CLAUDE.md
       plan/SPEC-conflict rule).
 

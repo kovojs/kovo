@@ -76,6 +76,7 @@ describe('diagnostic registry', () => {
       'KV424',
       'KV425',
       'KV426',
+      'KV435',
     ]);
   });
 
@@ -638,6 +639,15 @@ describe('diagnostic registry', () => {
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
       SPEC §4.8 and §9.1 allow trust escape hatches only when they are explicit and auditable.",
           "message": "Trust escape hatch lacks auditable provenance.",
+          "severity": "error",
+        },
+        "KV435": {
+          "code": "KV435",
+          "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
+      Blocked reason: the projected query shape contains a secret-classified field, so rendering this query would serialize confidential data onto the client wire.
+      Fixes: remove the secret field from the projection, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
+      SPEC §6.2 and §10.2 make query results JsonValue-bounded client wire values; a secret-classified value is ineligible for that boundary.",
+          "message": "Secret query value reaches the client wire.",
           "severity": "error",
         },
       }

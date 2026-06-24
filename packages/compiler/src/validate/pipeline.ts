@@ -38,6 +38,7 @@ import {
 import { validateLiteralHrefs } from './navigation.js';
 import { validateOutputContexts } from '../security/output-context.js';
 import { queryShapeFactDiagnostics } from '../types.js';
+import { validateSecretQueryWire } from './confidentiality.js';
 import {
   validateDeclaredClockReadsInRender,
   validateUntrackedClockReadsInDerives,
@@ -90,6 +91,8 @@ const compilerValidators: readonly CompilerValidator[] = [
   ({ loweredDiagnostics, model }) => validateFragmentTargetChildren(loweredDiagnostics, model),
   ({ loweredDiagnostics, model, options }) =>
     validateNestedStatefulIslandInRefreshTarget(loweredDiagnostics, model, options),
+  ({ originalDiagnostics, originalModel, options }) =>
+    validateSecretQueryWire(originalDiagnostics, originalModel, options),
   ({ loweredDiagnostics, model, options }) =>
     validateDataBindings(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>

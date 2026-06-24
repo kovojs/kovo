@@ -253,6 +253,72 @@ export const UserCard = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('reports KV435 when a component-declared query shape contains a secret field', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapes: {
+        user: {
+          id: 'string',
+          passwordHash: {
+            kind: 'secret',
+            shape: 'string',
+          },
+        },
+      },
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.id">u1</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV435',
+          fileName: 'user-card.tsx',
+          message:
+            'Secret query value reaches the client wire. query="user" path="user.passwordHash"',
+          severity: 'error',
+        }),
+      ]),
+    );
+  });
+
+  it('does not report KV435 for secret shapes that are not component-declared queries', () => {
+    const result = compileComponentModule({
+      fileName: 'user-card.tsx',
+      queryShapes: {
+        audit: {
+          token: {
+            kind: 'secret',
+            shape: 'string',
+          },
+        },
+        user: {
+          id: 'string',
+        },
+      },
+      source: `
+export const UserCard = component({
+  queries: { user: {} },
+  render: () => (
+    <user-card>
+      <span data-bind="user.id">u1</span>
+    </user-card>
+  ),
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toEqual([]);
+  });
+
   it('reports KV227 when binding paths traverse nullable query shape metadata without optional segments', () => {
     const result = compileComponentModule({
       fileName: 'product-card.tsx',
