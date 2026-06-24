@@ -14,6 +14,7 @@ import * as packageInternalWireApi from '@kovojs/server/internal/wire';
 import serverPackage from '../../package.json' with { type: 'json' };
 import * as appApi from '../app.js';
 import * as appGuardsApi from '../app-guards.js';
+import * as capabilityUrlApi from '../capability-url.js';
 import * as egressApi from '../egress.js';
 import * as egressBootstrapApi from '../egress-bootstrap.js';
 import * as egressCredentialsApi from '../egress-credentials.js';
@@ -390,6 +391,13 @@ describe('server app-shell public API barrels', () => {
       gcpCredential: egressCredentialsApi.gcpCredential,
       azureCredential: egressCredentialsApi.azureCredential,
       kovo: publicApi.kovo,
+      // SPEC.md §6.6 / §9.1 / plans/secure-framework.md Phase 5: capability-URL signing/verify
+      // primitive (by-construction at the verify sink). Public at the root barrel; the download
+      // route that hosts the sink is open work.
+      DEFAULT_CAPABILITY_TTL_MS: capabilityUrlApi.DEFAULT_CAPABILITY_TTL_MS,
+      createMemoryCapabilityReplayStore: capabilityUrlApi.createMemoryCapabilityReplayStore,
+      signCapability: capabilityUrlApi.signCapability,
+      verifyCapability: capabilityUrlApi.verifyCapability,
       // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
       // create-kovo starter template's vite.config.ts.
       createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,

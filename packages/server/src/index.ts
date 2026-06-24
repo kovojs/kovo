@@ -18,6 +18,25 @@ export { installEgressFloor, selfProbe } from './egress-bootstrap.js';
 export type { EgressFloorInstall } from './egress-bootstrap.js';
 export { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
 export type { CredentialProvider } from './egress-credentials.js';
+// SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5: capability-URL primitive — sign a
+// short-lived, scope-bound token over a storage object; constant-time verify BEFORE any storage
+// read (by-construction at the verify sink). The framework download *route* that hosts the sink
+// remains open work; these are the signing/verify/one-time-replay core a route mounts.
+export {
+  DEFAULT_CAPABILITY_TTL_MS,
+  createMemoryCapabilityReplayStore,
+  signCapability,
+  verifyCapability,
+} from './capability-url.js';
+export type {
+  CapabilityClaims,
+  CapabilityMethod,
+  CapabilityRejectReason,
+  CapabilityReplayStore,
+  CapabilityVerifyResult,
+  SignCapabilityOptions,
+  SignedCapability,
+} from './capability-url.js';
 import { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
 import { installEgressFloor as installEgressFloorImpl, selfProbe as selfProbeImpl } from './egress-bootstrap.js';
 /**

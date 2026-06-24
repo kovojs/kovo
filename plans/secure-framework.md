@@ -336,6 +336,16 @@ Breaking / Annoys). Items cross-reference `secure-by-construction.md` phases whe
 - [ ] **Capability-URL primitive (`ctx.signUrl`) + framework download route.** HMAC over canonicalized
       `method+key+expiry+scope`, constant-time verify at a framework-owned download endpoint **before** any
       storage read. (`secure-by-construction.md` Phase 5.)
+  - PARTIAL — the cryptographic core landed and is proven: `packages/server/src/capability-url.ts`
+    (`signCapability`/`verifyCapability`/`createMemoryCapabilityReplayStore`), HMAC over canonicalized
+    length-prefixed `(version,method,key,expiry,scope)` (collision-resistant across the key/scope boundary),
+    constant-time verify mirroring `verifier.ts#constantTimeEqual`, fail-closed ordered checks, short-TTL
+    default, and one-time replay. `vp exec vitest --run packages/server/src/capability-url.test.ts` = 13 pass
+    (round-trip; key/method/scope substitution rejected; expiry; tampered/wrong-secret signature; one-time
+    replay; canonicalization collision resistance). Public at the root barrel; SPEC §6.6 capability-URL
+    paragraph added (labeled by-construction at the verify sink). **OPEN (load-bearing gap, as the plan
+    predicted):** there is no framework storage **download route** to host the verify sink, and no
+    `ctx.signUrl` context threading; those remain to be built on top of this core.
   - **Trade-off** — Gain: by-construction at the verify sink (object un-dereferenceable without a valid token);
     closes a gap the legible wire amplifies. Cost: **the load-bearing gap is there is no framework storage
     download route to host the verify sink** — that's the real effort, not the HMAC (which exists). Ceiling:
