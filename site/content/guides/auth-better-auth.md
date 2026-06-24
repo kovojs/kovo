@@ -89,5 +89,5 @@ vp test
 npm run build:prod
 ```
 
-For a larger auth example, read [Commerce walkthrough](/guides/example-commerce/) and the
+For a larger auth example, read [Commerce](/examples/commerce/) and the
 `examples/commerce/src/components/auth-forms.tsx` source.

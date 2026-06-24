@@ -45,3 +45,18 @@ the marker is removed. A public symbol is removed only after a deprecation cycle
 Published packages ship built `dist/` (JavaScript + rolled-up `.d.ts`), so depending on Kovo does
 not couple you to the monorepo's `tsconfig`. The `@internal` boundary is enforced by the generated
 API reference and api-surface gate; rolled-up declarations may still contain implementation details.
+
+## Import boundaries
+
+Use the public roots and subpaths that appear in the generated API reference and
+`public-packages.json`. Do not import private packages, `@internal` symbols, raw `./src/**`, or
+compiler-emitted runtime ABI such as `@kovojs/browser/generated`.
+
+Author-authored browser helpers come from `@kovojs/browser`. The `@kovojs/browser/client` subpath is
+for an app-owned browser entry that manually installs the runtime loader; ordinary app components do
+not import it. `@kovojs/headless-ui` has no public root import; import primitive behavior from
+subpaths such as `@kovojs/headless-ui/select` or `@kovojs/headless-ui/dialog`. `@kovojs/ui` keeps
+component symbols on direct component subpaths such as `@kovojs/ui/button`. The root `@kovojs/ui`
+entry intentionally exports no components.
+
+`create-kovo` is a public CLI package, not an app import surface.

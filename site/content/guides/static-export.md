@@ -45,6 +45,20 @@ Because there is no runtime typed-read surface for exported pages, prefer static
 whose client truth is document-local. A page that needs prior-token `/_q/` recovery after deploy is a
 server page, not a pure static page.
 
+## Checks to run
+
+The site export path exercises the same route data as the Kovo app:
+
+```sh
+pnpm --filter @kovojs/site run build
+pnpm --filter @kovojs/site run check:links
+pnpm --filter @kovojs/site run smoke:navigation
+```
+
+For app projects, pair static export with the graph checks from [Testing with @kovojs/test](/guides/testing/)
+and [Reading kovo check & kovo explain](/guides/kovo-explain/). If a route cannot be replayed
+faithfully, keep it on the server path.
+
 ## Next
 
 - [Deployment](/guides/deployment/) — runtime deploy skew and retention checks.

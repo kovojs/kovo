@@ -87,11 +87,38 @@ vp check
 
 reports the binding error during development instead of letting the mismatch reach production.
 
-## 5. Extend safely
+## 5. Extend the starter safely
 
-Use [From starter to app](/guides/starter-to-app/) for the first larger extension. It walks through
-adding data, routes, guards, queries, mutations, styling, tests, and deploy secrets without
-fighting the scaffold.
+The starter is already an authenticated data app: schema, Better Auth session, typed query, guarded
+mutation, route layout, styled components, test, and production build. Extend that slice in place
+instead of replacing it with an empty shell.
+
+Start with one product concept and add it through the same modules the contact book uses:
+
+| Step | File                   | What changes                                         |
+| ---- | ---------------------- | ---------------------------------------------------- |
+| 1    | `src/schema.ts`        | Add the table and Kovo domain/key metadata.          |
+| 2    | `src/db.ts`            | Seed local rows or connect the real storage path.    |
+| 3    | `src/queries.ts`       | Add one typed read for the first screen.             |
+| 4    | `src/mutations.ts`     | Add one guarded write with validation and CSRF.      |
+| 5    | `src/components/*.tsx` | Render the query and form from TSX.                  |
+| 6    | `src/app.tsx`          | Register the query, mutation, route, and stylesheet. |
+| 7    | `src/app.test.ts`      | Prove the route and mutation path.                   |
+
+Keep auth central in `src/auth.ts`. New product mutations should import the existing CSRF config
+and guard helpers instead of declaring their own auth path. Add routes near the existing `/` and
+`/login` declarations in `src/app.tsx`, keep shared frame in `layout()`, and put access rules in the
+route declaration rather than hiding them in component code.
+
+Run the narrow checks before and after the change:
+
+```sh
+vp check
+vp test
+```
+
+When the feature crosses data domains or relies on optimistic behavior, add a graph assertion or a
+`kovo explain` check the same way the Commerce, CRM, and Stack Overflow examples do.
 
 ## The commands you'll use daily
 
@@ -103,8 +130,8 @@ binary does what - lives in [Installation > The everyday commands](/docs/install
 
 - [Thinking in Kovo](/docs/mental-model/) - how components become self-describing HTML.
 - [Installation](/docs/installation/) - prerequisites and what the scaffold sets up.
-- [From starter to app](/guides/starter-to-app/) - the safe path from the scaffold to real product code.
-- [Commerce walkthrough](/guides/example-commerce/) - a larger authenticated storefront built the same way.
+- [Examples](/examples/) - larger apps built from the same route/query/mutation facts.
+- [Commerce example](/examples/commerce/) - a larger authenticated storefront built the same way.
 
 <details>
 <summary>Spec references</summary>

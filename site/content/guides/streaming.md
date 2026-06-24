@@ -219,7 +219,7 @@ the same reason the no-JS form path stays a real form.
 - [Styling with StyleX](/guides/styling/) — the stylesheet contract these chunks use.
 - [Mutations](/guides/mutations/) — the typed form lifecycle streaming mutations preserve.
 - [Queries & invalidation](/guides/queries/) — the query values deferred chunks deliver.
-- [Package import surfaces](/guides/package-imports/) — when an app entry should import
+- [Stability & Versioning](/docs/stability/#import-boundaries) — when an app entry should import
   `@kovojs/browser/client`.
 
 <details>

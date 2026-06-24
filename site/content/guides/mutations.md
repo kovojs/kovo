@@ -314,6 +314,22 @@ One diffable artifact gives you the guard chain, the input surface, the write se
 invalidations, and every consumer that updates. See
 [reading kovo check & kovo explain](/guides/kovo-explain/).
 
+## Worked add-to-cart path
+
+The smallest complete Kovo dataflow is the add-to-cart path:
+
+1. The cart badge component declares the cart query it reads.
+2. The product list renders a form that posts a named `cart/add` mutation.
+3. The mutation validates input, checks CSRF/idempotency, runs guards, and writes through a domain.
+4. The data-layer graph maps the write to touched domains and row keys.
+5. Kovo intersects those touched domains with visible query-backed targets.
+6. The response sends query JSON, a fragment, or a prod delta, depending on what the update plan can
+   cover.
+
+Every advanced app repeats this pattern with more domains, guards, and layouts. When something
+drifts, the verifier points at the missing read, write, target, or optimistic transform instead of
+making you debug the browser after a stale render ships.
+
 ## Next
 
 - [Optimistic updates](/guides/optimistic/) — make the round-trip feel instant.

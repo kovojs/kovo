@@ -174,10 +174,14 @@ inputs. See the [optimistic guide](/guides/optimistic/) for the transforms thems
 ## What about browser tests?
 
 The framework's own suite owns the irreducibly browser-bound parts — morph's survival contract
-(focus, caret, scroll), L0 platform behaviors. Application wiring is proof-carrying: handler refs,
-form fields, binding paths, fragment targets, and coverage are all checked by `vp check` and
-`kovo check`, so apps need few or no browser tests of their own. The reference commerce app meets
-exactly that bar: its full behavior surface is tested with zero app-level browser tests.
+(focus, caret, scroll), L0 platform behaviors, view transitions, and native platform details. That
+integration suite compiles fixture apps, starts the app shell, drives real requests, and asserts
+that generated graphs, mutation responses, and browser behavior agree.
+
+Application wiring is proof-carrying: handler refs, form fields, binding paths, fragment targets,
+and coverage are all checked by `vp check` and `kovo check`, so apps need few or no browser tests of
+their own. The reference commerce app meets exactly that bar: its full behavior surface is tested
+with zero app-level browser tests.
 
 A practical app suite is therefore:
 

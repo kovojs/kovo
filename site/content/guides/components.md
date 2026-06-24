@@ -45,6 +45,21 @@ subpaths so each symbol has one public home. Styled components use the `@kovojs/
 contract by default, so changing the app theme seed changes their surface, foreground, border, and
 state colors without editing each component.
 
+Headless behavior follows the same subpath rule. `@kovojs/headless-ui` has no public root import;
+import each primitive's attribute builders from its primitive subpath:
+
+```ts
+import { dialogContentAttributes } from '@kovojs/headless-ui/dialog';
+import { selectTriggerAttributes } from '@kovojs/headless-ui/select';
+```
+
+Icons are also one glyph per subpath, with shared props at the root:
+
+```tsx
+import type { IconProps } from '@kovojs/icons';
+import { Search } from '@kovojs/icons/search';
+```
+
 ## Copy-in components
 
 Copy a component when you want to own the component source. The only thing that changes from the
@@ -235,8 +250,7 @@ component is a starting point and future changes should live in your app.
   stylesheet contract.
 - [Accessibility](/guides/accessibility/) — the behavior `@kovojs/headless-ui` bakes into every
   primitive.
-- [Package import surfaces](/guides/package-imports/) — public subpaths for UI, headless
-  primitives, icons, and browser/client helpers.
+- [Stability & Versioning](/docs/stability/) — public package boundaries and import stability.
 
 <details>
 <summary>Spec & diagnostics</summary>

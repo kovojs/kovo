@@ -73,6 +73,11 @@ const exampleSplitStyles = style.create(
       lineHeight: 1.12,
       margin: 0,
     },
+    guide: {
+      lineHeight: 1.7,
+      marginTop: '2.25rem',
+      maxWidth: '48rem',
+    },
     openLink: {
       color: 'var(--teal)',
       fontFamily: 'var(--font-mono)',
@@ -154,6 +159,8 @@ export interface ExampleSplitInput {
   appHref?: string | undefined;
   blurb: string;
   files: ExampleSourceFile[];
+  /** Optional pre-rendered walkthrough/pattern notes for this example. */
+  guideHtml?: string | undefined;
   /** Unique radio-group/id prefix for this page's tabs. */
   idBase: string;
   title: string;
@@ -161,7 +168,7 @@ export interface ExampleSplitInput {
 
 /** Example split route page content. */
 export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
-  const { appHref, blurb, files, idBase, title } = input;
+  const { appHref, blurb, files, guideHtml, idBase, title } = input;
   // CSS-only tab activation: the checked radio reveals its matching panel and
   // highlights its label. We emit the per-index selector rules in a <style> block
   // because they reference dynamic ids.
@@ -243,6 +250,15 @@ export function ExampleSplit({ input }: { input: ExampleSplitInput }): string {
           </div>
         </section>
       </div>
+      {guideHtml ? (
+        <article
+          style={exampleSplitStyles.guide}
+          data-prose
+          rawHtml={trustedHtml(guideHtml)}
+        />
+      ) : (
+        ''
+      )}
     </div>
   );
 }
