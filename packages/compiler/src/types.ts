@@ -725,6 +725,130 @@ export function queryShapesFromFacts(facts: readonly QueryShapeFact[]): Record<s
   return shapes;
 }
 
+/** @internal Convert projected query-shape facts into QueryRegistry type entries. */
+export function queryShapeRegistryTypeFacts(
+  shapes: Readonly<Record<string, QueryShape>>,
+): RegistryTypeFacts {
+  return Object.fromEntries(
+    Object.entries(shapes)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([query, shape]) => [query, queryShapeTypeExpression(shape)]),
+  );
+}
+
+/** @internal Convert one projected query shape into an emitted TypeScript type expression. */
+export function queryShapeTypeExpression(shape: QueryShape): string {
+  return printTypeExpr(typeExprFromQueryShape(shape));
+}
+
+type TypeExpr =
+  | { kind: 'array'; item: TypeExpr }
+  | { kind: 'import-generic'; args: readonly TypeExpr[]; importPath: string; name: string }
+  | { kind: 'object'; fields: readonly TypeExprField[] }
+  | { kind: 'reference'; name: string }
+  | { kind: 'union'; members: readonly TypeExpr[] };
+
+interface TypeExprField {
+  key: string;
+  optional: boolean;
+  type: TypeExpr;
+}
+
+function typeExprFromQueryShape(shape: QueryShape): TypeExpr {
+  if (typeof shape === 'string') return primitiveQueryShapeTypeExpr(shape);
+  if (Array.isArray(shape))
+    return { kind: 'array', item: typeExprFromQueryShape(shape[0] ?? 'object') };
+  if (isQueryShapeWrapper(shape)) return wrapperQueryShapeTypeExpr(shape);
+
+  const fields = Object.entries(shape)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => queryShapeTypeExprField(key, value));
+  return fields.length === 0
+    ? { kind: 'reference', name: 'Record<string, unknown>' }
+    : { kind: 'object', fields };
+}
+
+function primitiveQueryShapeTypeExpr(shape: string): TypeExpr {
+  switch (shape) {
+    case 'array':
+      return { kind: 'array', item: { kind: 'reference', name: 'unknown' } };
+    case 'boolean':
+    case 'number':
+    case 'string':
+      return { kind: 'reference', name: shape };
+    case 'object':
+      return { kind: 'reference', name: 'Record<string, unknown>' };
+    default:
+      return { kind: 'reference', name: 'unknown' };
+  }
+}
+
+function wrapperQueryShapeTypeExpr(shape: QueryShapeWrapper): TypeExpr {
+  const inner = typeExprFromQueryShape(shape.shape);
+  switch (shape.kind) {
+    case 'nullable':
+      return unionTypeExpr([inner, { kind: 'reference', name: 'null' }]);
+    case 'optional':
+      return unionTypeExpr([inner, { kind: 'reference', name: 'undefined' }]);
+    case 'secret':
+      return {
+        args: [inner],
+        importPath: '@kovojs/core',
+        kind: 'import-generic',
+        name: 'Secret',
+      };
+    case 'volatile-time':
+      return inner;
+  }
+}
+
+function queryShapeTypeExprField(key: string, shape: QueryShape): TypeExprField {
+  const optional = isQueryShapeWrapper(shape) && shape.kind === 'optional';
+  return {
+    key,
+    optional,
+    type: typeExprFromQueryShape(optional ? shape.shape : shape),
+  };
+}
+
+function unionTypeExpr(members: readonly TypeExpr[]): TypeExpr {
+  const flattened = members.flatMap((member) =>
+    member.kind === 'union' ? member.members : [member],
+  );
+  return { kind: 'union', members: flattened };
+}
+
+function printTypeExpr(type: TypeExpr, parent: 'array' | 'none' | 'union' = 'none'): string {
+  switch (type.kind) {
+    case 'array': {
+      const item = printTypeExpr(type.item, 'array');
+      return `${item}[]`;
+    }
+    case 'import-generic':
+      return `import('${type.importPath}').${type.name}<${type.args
+        .map((arg) => printTypeExpr(arg))
+        .join(', ')}>`;
+    case 'object':
+      return `{ ${type.fields.map(printTypeExprField).join(' ')} }`;
+    case 'reference':
+      return type.name;
+    case 'union': {
+      const printed = type.members.map((member) => printTypeExpr(member, 'union')).join(' | ');
+      return parent === 'array' ? `(${printed})` : printed;
+    }
+  }
+}
+
+function printTypeExprField(field: TypeExprField): string {
+  return `${quotedTypePropertyKey(field.key)}${field.optional ? '?' : ''}: ${printTypeExpr(
+    field.type,
+  )};`;
+}
+
+function quotedTypePropertyKey(key: string): string {
+  return /^[$A-Z_a-z][$\w]*$/u.test(key) ? key : JSON.stringify(key);
+}
+
 /**
  * @internal Report duplicate query-shape graph facts before indexing them by query name.
  * SPEC §4.8 validation needs one authoritative shape per query; last-write-wins would

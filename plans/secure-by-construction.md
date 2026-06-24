@@ -268,15 +268,13 @@ design.
     `Date`/function payloads fail at compile time while named readonly JSON DTOs compile. SPEC §6.2/§9.2/§10.2
     now records the JsonValue-bound query/fail contract. Verified with `vp check`, `pnpm run check:api-surface`,
     and focused query/mutation Vitest coverage.
-- [ ] Add a column-level confidentiality fact: `kovo({ secret: true })` / `s.secret()`, declared once on the
+- [x] Add a column-level confidentiality fact: `kovo({ secret: true })` / `s.secret()`, declared once on the
       schema (mirrors `owner:`); generated query result types surface the column as `Secret<T>`.
-  - Partial evidence: `@kovojs/core` now exposes `Secret<T>` as non-`JsonValue`, `s.secret(schema)` produces
-    `Schema<Secret<T>>`, and Drizzle `kovo({ secret })` annotations preserve `true` or resolved column refs in
-    extracted table facts. Drizzle projected query shapes now wrap selected secret columns in
-    `{ kind: "secret", shape }` while preserving nullable wrappers; verified with
-    `vp exec vitest --run packages/drizzle/src/index.columns-keys-predicates.test.ts packages/compiler/src/query-bindings.test.ts packages/compiler/src/compile-component.test.ts`
-    and `vp exec vitest --run packages/drizzle/src`. Remaining gap: generated query result types do not yet
-    surface projected secret columns as `Secret<T>`.
+  - Evidence: `packages/drizzle/src/static/schema.ts` wraps secret-annotated projected columns in
+    `{ kind: "secret", shape }`, `packages/core/src/secret.ts` defines non-`JsonValue` `Secret<T>`, and
+    `packages/compiler/src/types.ts` converts generated `QueryShapeFact` metadata into `QueryRegistry`
+    result types where secret wrappers print as `import('@kovojs/core').Secret<T>`. Verified with
+    `vp exec vitest --run packages/compiler/src/query-bindings.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/compile-component.test.ts`.
 - [x] Define `Secret<T>` as a brand **not assignable to `JsonValue`**, so Door 2 (`fail()`) and Door 3
       (island state) become type errors by construction. The wire/log poison (`toString`/`toJSON`) rides on
       top as defense-in-depth, not the proof.

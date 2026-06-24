@@ -242,6 +242,7 @@ export function compileComponentModule(options: CompileComponentOptions): Compil
     handlers: versionedHandlers,
     liveTargetFacts,
     platformSubstitutions: structuralLowering.platformSubstitutions,
+    ...(options.queryShapeFacts ? { queryShapeFacts: options.queryShapeFacts } : {}),
     queryUpdatePlans,
     ...(options.registryFacts ? { registryFacts: options.registryFacts } : {}),
     viewTransitions: structuralLowering.viewTransitionStamps,

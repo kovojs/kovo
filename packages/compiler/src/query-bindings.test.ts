@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
-import { queryShapeFactDiagnostics, queryShapesFromFacts } from './internal.js';
+import {
+  queryShapeFactDiagnostics,
+  queryShapeRegistryTypeFacts,
+  queryShapesFromFacts,
+  queryShapeTypeExpression,
+} from './internal.js';
 
 describe('compiler query binding diagnostics', () => {
   it('accepts data-bind paths present in declared query shapes', () => {
@@ -66,6 +71,96 @@ export const CartBadge = component({
       },
     });
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('emits QueryRegistry result types from generated query shape facts', () => {
+    const queryShapeFacts = [
+      {
+        query: 'account',
+        shape: {
+          id: 'string',
+          name: 'string',
+          profile: {
+            kind: 'nullable',
+            shape: {
+              token: { kind: 'secret', shape: 'string' },
+              updatedAt: { kind: 'volatile-time', shape: 'string' },
+            },
+          },
+          'two-factor': { kind: 'optional', shape: 'boolean' },
+        },
+        source: 'generated/queries/account.shape.ts',
+      },
+      {
+        query: 'audit',
+        shape: [
+          {
+            id: 'string',
+            payload: { kind: 'secret', shape: { kind: 'nullable', shape: 'string' } },
+          },
+        ],
+        source: 'generated/queries/audit.shape.ts',
+      },
+    ] as const;
+
+    expect(queryShapeRegistryTypeFacts(queryShapesFromFacts(queryShapeFacts))).toEqual({
+      account: `{ id: string; name: string; profile: { token: import('@kovojs/core').Secret<string>; updatedAt: string; } | null; "two-factor"?: boolean; }`,
+      audit: `{ id: string; payload: import('@kovojs/core').Secret<string | null>; }[]`,
+    });
+  });
+
+  it('emits generated QueryRegistry entries from query shape facts', () => {
+    const result = compileComponentModule({
+      fileName: 'account-card.tsx',
+      queryShapeFacts: [
+        {
+          query: 'account',
+          shape: {
+            id: 'string',
+            token: { kind: 'secret', shape: 'string' },
+          },
+          source: 'generated/queries/account.shape.ts',
+        },
+      ],
+      source: `
+export const AccountCard = component({
+  render: () => <span data-bind="account.id">acct_1</span>,
+});
+`,
+    });
+
+    const registry = result.files[2]?.source ?? '';
+    expect(registry).toContain(`export interface QueryRegistry {
+  'account': { id: string; token: import('@kovojs/core').Secret<string>; };
+}`);
+    expect(registry).toContain(`declare module '@kovojs/core' {
+  interface QueryRegistry {
+  'account': { id: string; token: import('@kovojs/core').Secret<string>; };
+  }`);
+  });
+
+  it('emits fallback TypeScript for primitive query shape placeholders', () => {
+    expect(queryShapeTypeExpression('array')).toBe('unknown[]');
+    expect(queryShapeTypeExpression('object')).toBe('Record<string, unknown>');
+    expect(queryShapeTypeExpression({})).toBe('Record<string, unknown>');
+    expect(
+      queryShapeTypeExpression([{ kind: 'nullable', shape: { kind: 'secret', shape: 'number' } }]),
+    ).toBe(`(import('@kovojs/core').Secret<number> | null)[]`);
+  });
+
+  it.each([
+    ['secret', { kind: 'secret', shape: 'string' }, `import('@kovojs/core').Secret<string>`],
+    ['nullable', { kind: 'nullable', shape: 'string' }, 'string | null'],
+    ['optional', { value: { kind: 'optional', shape: 'number' } }, '{ value?: number; }'],
+    ['array-of-union', [{ kind: 'nullable', shape: 'number' }], '(number | null)[]'],
+    [
+      'nested-object',
+      { parent: { child: { kind: 'secret', shape: 'boolean' } } },
+      `{ parent: { child: import('@kovojs/core').Secret<boolean>; }; }`,
+    ],
+    ['quoted-key', { 'two-factor': 'boolean' }, '{ "two-factor": boolean; }'],
+  ] as const)('prints QueryShape type expression for %s', (_name, shape, expected) => {
+    expect(queryShapeTypeExpression(shape)).toBe(expected);
   });
 
   it('reports KV240 when duplicate query-shape facts have different shapes', () => {
