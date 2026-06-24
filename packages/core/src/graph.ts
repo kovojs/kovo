@@ -259,7 +259,7 @@ export interface PageLayoutExplain {
 export interface PageNavigationSegmentExplain {
   components?: readonly string[];
   id: string;
-  kind: 'layout' | 'page';
+  kind: 'layout' | 'page' | 'region';
   name: string;
   queries?: readonly string[];
 }

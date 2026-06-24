@@ -416,10 +416,7 @@ function navGroups(sections: DocSection[], guideGroups: NavGroup[]): NavGroup[] 
   }
   const docsIndex = groups.find((group) => group.key === 'docs');
   if (docsIndex) docsIndex.indexUrl = '/docs/';
-  const guideInsertIndex = Math.max(
-    groups.findIndex((group) => group.key === 'tutorial') + 1,
-    0,
-  );
+  const guideInsertIndex = Math.max(groups.findIndex((group) => group.key === 'tutorial') + 1, 0);
   groups.splice(guideInsertIndex, 0, ...guideGroups);
   groups.push({
     key: 'components',
@@ -452,7 +449,7 @@ function buildGuideGroups(section: DocSection | undefined): NavGroup[] {
   if (!section) return [];
   const pagesBySlug = new Map(section.pages.map((page) => [page.slug, page]));
   const used = new Set<string>();
-  const groups = GUIDE_GROUPS.map((group) => {
+  const groups: NavGroup[] = GUIDE_GROUPS.map((group) => {
     const pages = group.slugs.flatMap((slug) => {
       const page = pagesBySlug.get(slug);
       if (!page) return [];

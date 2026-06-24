@@ -222,66 +222,96 @@ const docsLayoutStyles = style.create(
 
 export type { DocsRouteContent, DocsRoutePageData, SectionIndexInput };
 
-/** TSX route page for docs-chrome pages. Markdown/API prose remains the single
- * route-boundary HTML input; all surrounding route composition is authored TSX. */
-export function DocsRoutePage({
+/** Public route-layout shell for docs pages. Route regions are stamped by the framework. */
+export function DocsRouteLayoutShell({
+  children,
+  regions,
+}: {
+  children?: unknown;
+  regions?: Readonly<Record<string, unknown>>;
+}): string {
+  const hasDocsRegions = regions?.page !== undefined || regions?.sidebar !== undefined;
+  return (
+    <div data-site-route-layout>
+      {regions?.header ?? ''}
+      {hasDocsRegions ? (
+        <div style={docsLayoutStyles.docsShell}>
+          {regions?.page ?? children}
+          {regions?.sidebar ?? ''}
+        </div>
+      ) : (
+        children
+      )}
+      {hasDocsRegions
+        ? (regions?.footer ?? SiteFooter.definition.render())
+        : (regions?.footer ?? '')}
+    </div>
+  );
+}
+
+export function DocsHeaderRegion({
   clients,
   page,
 }: {
   clients: ClientHrefs;
   page: DocsRoutePageData;
 }): string {
+  return (
+    <div data-docs-header>
+      {SiteHeader.definition.render({ activePath: page.activePath, clients })}
+    </div>
+  );
+}
+
+/** TSX route page region for docs-chrome pages. Markdown/API prose remains the
+ * single route-boundary HTML input; all surrounding route composition is authored TSX. */
+export function DocsPageRegion({ page }: { page: DocsRoutePageData }): string {
   const { activePath, apiSidebar, content, eyebrow, groups, headings = [], next, prev } = page;
   // Show only the sidebar family for this page: the learning path (Getting
   // Started + Tutorial + Guides) together, or Components/Examples/reference
   // together — so the rail stays scoped to what the reader is browsing.
   const sidebarGroups = sidebarGroupsForPath(groups, activePath);
-  const desktopSidebar = DocsSidebar.definition.render({
-    activePath,
-    groups: sidebarGroups,
-    mode: 'desktop',
-    syncHref: clients.sidebar,
-  });
   const mobileSidebar = DocsSidebar.definition.render({
     activePath,
     groups: sidebarGroups,
     mode: 'mobile',
   });
   const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
-  const pageSegment = `page:${activePath.replace(/\/+$/, '') || '/'}`;
 
   return (
-    <div data-docs-route-page>
-      {SiteHeader.definition.render({ activePath, clients })}
-      <div style={docsLayoutStyles.docsShell}>
-        <div
-          style={docsLayoutStyles.pageFrame}
-          kovo-nav-segment={pageSegment}
-          kovo-nav-kind="page"
-          kovo-nav-name="page"
-        >
-          <main style={docsLayoutStyles.main}>
-            <details style={docsLayoutStyles.mobileMenu}>
-              <summary style={docsLayoutStyles.mobileSummary}>Menu</summary>
-              <div style={docsLayoutStyles.mobileBody}>{mobileSidebar}</div>
-            </details>
-            {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{escapeHtml(eyebrow)}</p> : ''}
-            <DocsRouteContentView content={content} />
-            {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
-          </main>
-          <aside style={docsLayoutStyles.tocRail}>{toc}</aside>
-        </div>
-        <aside
-          style={docsLayoutStyles.sidebarRail}
-          kovo-nav-segment="layout:DocsSidebar"
-          kovo-nav-kind="layout"
-          kovo-nav-name="DocsSidebar"
-        >
-          {desktopSidebar}
-        </aside>
-      </div>
-      {SiteFooter.definition.render()}
+    <div data-docs-page-region style={docsLayoutStyles.pageFrame}>
+      <main style={docsLayoutStyles.main}>
+        <details style={docsLayoutStyles.mobileMenu}>
+          <summary style={docsLayoutStyles.mobileSummary}>Menu</summary>
+          <div style={docsLayoutStyles.mobileBody}>{mobileSidebar}</div>
+        </details>
+        {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{escapeHtml(eyebrow)}</p> : ''}
+        <DocsRouteContentView content={content} />
+        {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
+      </main>
+      <aside style={docsLayoutStyles.tocRail}>{toc}</aside>
     </div>
+  );
+}
+
+export function DocsSidebarRegion({
+  clients,
+  page,
+}: {
+  clients: ClientHrefs;
+  page: DocsRoutePageData;
+}): string {
+  const { activePath, groups } = page;
+  const sidebarGroups = sidebarGroupsForPath(groups, activePath);
+  return (
+    <aside data-docs-sidebar-region style={docsLayoutStyles.sidebarRail}>
+      {DocsSidebar.definition.render({
+        activePath,
+        groups: sidebarGroups,
+        mode: 'desktop',
+        syncHref: clients.sidebar,
+      })}
+    </aside>
   );
 }
 
@@ -325,20 +355,14 @@ export function SectionIndex({ section }: { section: SectionIndexInput }): strin
       <div style={docsLayoutStyles.sectionHead}>
         <h1 style={docsLayoutStyles.sectionHeadTitle}>{section.title}</h1>
         {SECTION_INTROS[section.key] ? (
-          <p style={docsLayoutStyles.sectionHeadIntro}>
-            {SECTION_INTROS[section.key]!}
-          </p>
+          <p style={docsLayoutStyles.sectionHeadIntro}>{SECTION_INTROS[section.key]!}</p>
         ) : (
           ''
         )}
       </div>
       {groups.map((group, groupIndex) => (
         <section style={groupIndex === 0 ? null : docsLayoutStyles.sectionGroup}>
-          {section.groups ? (
-            <h2 style={docsLayoutStyles.sectionGroupTitle}>{group.title}</h2>
-          ) : (
-            ''
-          )}
+          {section.groups ? <h2 style={docsLayoutStyles.sectionGroupTitle}>{group.title}</h2> : ''}
           <ul style={docsLayoutStyles.sectionGrid}>
             {group.pages.map((page, index) => {
               const title = numbered ? page.title.replace(/^\d+\.\s*/, '') : page.title;

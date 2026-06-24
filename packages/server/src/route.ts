@@ -87,6 +87,8 @@ export type LayoutQueryResults<Queries> = {
 export interface LayoutRenderSlots<Request> {
   /** The child layout or route page output this layout wraps. */
   children: unknown;
+  /** Named route-level sibling regions rendered before layout composition (SPEC §4.5/§8). */
+  regions: Readonly<Record<string, unknown>>;
   /** The request after configured app lifecycle providers have run. */
   request: Request;
 }
@@ -195,9 +197,21 @@ export interface RouteDefinition<
     | RouteResponseOutcome
     | Promise<Page | NotFound | Redirect | RouteResponseOutcome>;
   params?: ParamsSchema;
+  regions?: RouteRegionDefinitions<
+    RouteRequest<Path, ParamsSchema, SearchSchema>,
+    GuardedRequest,
+    Page
+  >;
   search?: SearchSchema;
   staticPaths?: readonly string[];
 }
+
+/** Public route-level sibling region declarations for layout composition (SPEC §4.5/§8). */
+export type RouteRegionDefinitions<
+  Context = unknown,
+  Request = unknown,
+  Page extends RoutePageResult = RoutePageResult,
+> = Readonly<Record<string, (context: Context, request: Request) => Page | Promise<Page>>>;
 
 /** A `RouteDefinition` with its `path` attached, as returned by `route()`. */
 export interface RouteDeclaration<
@@ -302,8 +316,9 @@ function fallbackRoutePageMetadata<Path extends string>(
   path: Path,
   definition: RouteDefinition<Path, any, any, any, any, any>,
 ): CompiledRoutePageMetadata | undefined {
-  if (!definition.page || !definition.layout) return undefined;
+  if ((!definition.page && !definition.regions) || !definition.layout) return undefined;
   const layouts = routeLayoutChain(definition.layout);
+  const regionSegments = routeRegionSegments(path, Object.keys(definition.regions ?? {}));
   return {
     components: [],
     fileName: '',
@@ -319,15 +334,31 @@ function fallbackRoutePageMetadata<Path extends string>(
           ).map((queryDefinition) => queryDefinition.key),
         };
       }),
-      {
-        components: [],
-        id: `page:${path}`,
-        kind: 'page',
-        localName: 'page',
-      },
+      ...(regionSegments.length > 0
+        ? regionSegments
+        : [
+            {
+              components: [],
+              id: `page:${path}`,
+              kind: 'page' as const,
+              localName: 'page',
+            },
+          ]),
     ],
     route: path,
   };
+}
+
+function routeRegionSegments(
+  path: string,
+  regionNames: readonly string[],
+): CompiledRouteNavigationSegment[] {
+  return regionNames.map((name) => ({
+    components: [],
+    id: name === 'page' ? `page:${path}` : `region:${name}`,
+    kind: name === 'page' ? 'page' : 'region',
+    localName: name,
+  }));
 }
 
 function layoutNavigationSegmentId(layoutDeclaration: LayoutDeclaration<any, any, any>): string {
@@ -466,11 +497,19 @@ async function runRoutePageInternal<
         if (isNotFound(pageValue) || isRedirect(pageValue) || isRouteResponseOutcome(pageValue))
           return pageValue;
         const metadata = getRoutePageMetadata(definition);
+        const regions = await renderRouteRegions(
+          definition,
+          routeRequest,
+          lifecycleRequest as GuardedRequest,
+          metadata,
+        );
+        const childValue = pageValue ?? regions.page;
         return renderLayoutChain(
           layouts,
-          stampRoutePageSegment(metadata, pageValue),
+          stampRoutePageSegment(metadata, childValue),
           lifecycleRequest,
           metadata,
+          regions,
         );
       },
     );
@@ -515,9 +554,17 @@ function getRoutePageMetadata(
 ): CompiledRoutePageMetadata | undefined {
   const metadata =
     routePageMetadata.get(definition) ??
-    (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage;
+    (definition.page as CompiledRoutePageFunction | undefined)?.kovoRoutePage ??
+    fallbackRouteDeclarationMetadata(definition);
   if (metadata) routePageMetadata.set(definition, metadata);
   return metadata;
+}
+
+function fallbackRouteDeclarationMetadata(
+  definition: RouteDefinition<any, any, any, any, any, any>,
+): CompiledRoutePageMetadata | undefined {
+  if (!('path' in definition) || typeof definition.path !== 'string') return undefined;
+  return fallbackRoutePageMetadata(definition.path, definition);
 }
 
 function routeLayoutChain(
@@ -544,6 +591,7 @@ async function renderLayoutChain<Request>(
   pageValue: unknown,
   request: Request,
   metadata: CompiledRoutePageMetadata | undefined,
+  regions: Readonly<Record<string, unknown>> = {},
 ): Promise<unknown> {
   const layoutSegments = routeLayoutSegments(metadata);
   let value = pageValue;
@@ -555,6 +603,7 @@ async function renderLayoutChain<Request>(
       const queries = await loadLayoutQueries(layoutDeclaration, request);
       value = await layoutDeclaration.render(queries, undefined, {
         children: value,
+        regions,
         request,
       });
       value = stampLayoutLiveTarget(layoutDeclaration, value);
@@ -567,6 +616,30 @@ async function renderLayoutChain<Request>(
     }
   }
   return value;
+}
+
+async function renderRouteRegions<
+  const Path extends string,
+  ParamsSchema extends MaybeSchema<Record<string, string>>,
+  SearchSchema extends MaybeSchema<Record<string, JsonValue>>,
+  Request,
+  Page extends RoutePageResult,
+  GuardedRequest extends Request,
+>(
+  definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page, GuardedRequest>,
+  routeRequest: RouteRequest<Path, ParamsSchema, SearchSchema>,
+  request: GuardedRequest,
+  metadata: CompiledRoutePageMetadata | undefined,
+): Promise<Readonly<Record<string, unknown>>> {
+  const entries = Object.entries(definition.regions ?? {});
+  if (entries.length === 0) return {};
+  const rendered: Record<string, unknown> = {};
+  const segments = routeRegionNavigationSegments(metadata);
+  for (const [name, render] of entries) {
+    const value = await render(routeRequest, request);
+    rendered[name] = stampRouteNavigationSegment(segments.get(name), value);
+  }
+  return rendered;
 }
 
 async function loadLayoutQueries<Request>(
@@ -598,6 +671,17 @@ function stampRoutePageSegment(
     metadata?.navigationSegments?.find((segment) => segment.kind === 'page'),
     value,
   );
+}
+
+function routeRegionNavigationSegments(
+  metadata: CompiledRoutePageMetadata | undefined,
+): ReadonlyMap<string, CompiledRouteNavigationSegment> {
+  const segments = new Map<string, CompiledRouteNavigationSegment>();
+  for (const segment of metadata?.navigationSegments ?? []) {
+    if (segment.kind === 'layout') continue;
+    segments.set(segment.localName, segment);
+  }
+  return segments;
 }
 
 function routeLayoutSegments(

@@ -25,7 +25,7 @@ export interface CompiledRoutePageLayout {
 export interface CompiledRouteNavigationSegment {
   components?: readonly string[];
   id: string;
-  kind: 'layout' | 'page';
+  kind: 'layout' | 'page' | 'region';
   localName: string;
   queries?: readonly string[];
 }

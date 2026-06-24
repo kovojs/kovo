@@ -822,19 +822,36 @@ export const CartBadge = component({
 import { component } from '@kovojs/core';
 
 export const CartBadge = component({
-  render: () => <cart-badge kovo-nav-segment="layout:AppLayout">2</cart-badge>,
+  render: () => (
+    <cart-badge
+      kovo-nav-components="CartBadge"
+      kovo-nav-kind="layout"
+      kovo-nav-name="AppLayout"
+      kovo-nav-queries="cart"
+      kovo-nav-segment="layout:AppLayout"
+    >
+      2
+    </cart-badge>
+  ),
 });
 `,
     });
 
-    expect(result.diagnostics).toEqual([
-      expect.objectContaining({
-        code: 'KV235',
-        help: expect.stringContaining('Navigation segment stamps are compiler-derived'),
-        message:
-          'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-segment.',
-      }),
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-components.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-kind.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-name.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-queries.',
+      'App source hand-authors lowered IR/string-rendered components; write TSX and let the compiler emit IR. hand-authored navigation segment stamp kovo-nav-segment.',
     ]);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV235',
+          help: expect.stringContaining('route({ regions })'),
+        }),
+      ]),
+    );
   });
 
   it('reports KV244 for defer() used directly as a JSX child', () => {

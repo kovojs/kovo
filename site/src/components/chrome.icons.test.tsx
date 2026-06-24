@@ -8,7 +8,7 @@ describe('site chrome @kovojs/icons adoption', () => {
     const html = String(
       SiteHeader.definition.render({
         activePath: '/',
-        clients: { code: '/c/code', search: '/c/search', theme: '/c/theme' },
+        clients: { code: '/c/code', search: '/c/search', sidebar: '/c/sidebar', theme: '/c/theme' },
       }),
     );
     expect(html).toContain('<svg');

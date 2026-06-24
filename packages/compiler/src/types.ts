@@ -234,6 +234,7 @@ export interface RoutePageFact {
   fileName: string;
   layouts?: readonly RoutePageLayoutFact[];
   navigationSegments?: readonly RouteNavigationSegmentFact[];
+  regions?: readonly RouteRegionFact[];
   route: string;
 }
 
@@ -253,9 +254,15 @@ export interface RoutePageLayoutFact {
 export interface RouteNavigationSegmentFact {
   components?: readonly string[];
   id: string;
-  kind: 'layout' | 'page';
+  kind: 'layout' | 'page' | 'region';
   localName: string;
   queries?: readonly string[];
+}
+
+/** One public route-level parallel region declared under `route({ regions })`. */
+export interface RouteRegionFact {
+  components: readonly RoutePageComponentFact[];
+  name: string;
 }
 
 /** One component invocation found under a JSX-authored route page. */

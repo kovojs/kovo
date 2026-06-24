@@ -81,6 +81,7 @@ export type {
   RouteDeclaration,
   RouteDefinition,
   RoutePageResult,
+  RouteRegionDefinitions,
   RouteRequest,
   RouteRequestInput,
 } from '../route.js';

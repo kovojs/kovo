@@ -540,27 +540,31 @@ function installInlineKovoLoader(im) {
       const nextSegments = ns(nextBody);
       if (!nextSegments.length) throw Error();
       let triggerRoot;
-
-      let index = 0;
-      for (
-        ;
-        index < currentSegments.length &&
-        index < nextSegments.length &&
-        nk(currentSegments[index]) === nk(nextSegments[index]) &&
-        nc(currentSegments[index]) === nc(nextSegments[index]);
-        index += 1
-      );
-
-      if (!currentSegments.length || index === 0) {
+      if (!currentSegments.length || currentSegments.length !== nextSegments.length) {
         for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
         triggerRoot = rbd(nextBody);
-      } else if (index < currentSegments.length && index < nextSegments.length) {
-        if (dc(pi(currentSegments, index), nextSegments[index])) throw Error();
-        for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
-        m(currentSegments[index], nextSegments[index]);
-        triggerRoot = currentSegments[index];
-      } else if (currentSegments.length !== nextSegments.length) {
-        throw Error();
+      } else {
+        const same = currentSegments.map(
+          (segment, index) => nk(segment) === nk(nextSegments[index]) && nc(segment) === nc(nextSegments[index]),
+        );
+        if (!same[0]) {
+          for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
+          triggerRoot = rbd(nextBody);
+        } else {
+          const preservedIds = pi(
+            currentSegments.filter((_segment, index) => same[index]),
+            currentSegments.filter((_segment, index) => same[index]).length,
+          );
+          const changed = new Set();
+          for (let index = 1; index < currentSegments.length; index += 1) {
+            if (same[index]) continue;
+            if (currentSegments.some((segment, other) => other < index && changed.has(other) && segment.contains?.(currentSegments[index]))) continue;
+            if (dc(preservedIds, nextSegments[index])) throw Error();
+            changed.add(index);
+            for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
+            triggerRoot = m(currentSegments[index], nextSegments[index]) || triggerRoot;
+          }
+        }
       }
 
       ch(nextDoc.head);
