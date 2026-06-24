@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build",
+    "build": "vp build && node scripts/materialize-demo-css.mjs",
     "dev": "vp dev",
     "start": "node scripts/serve.mjs",
     "test": "vitest --run"

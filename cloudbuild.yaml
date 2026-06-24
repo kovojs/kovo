@@ -71,6 +71,7 @@ steps:
           const http = require("node:http");
           const path = process.argv[1];
           const expectedType = process.argv[2];
+          const expectedBody = process.argv[3];
           const req = http.request(
             {
               headers: { host: "kovo-stackoverflow-sfqtuclaza-uc.a.run.app" },
@@ -84,7 +85,12 @@ steps:
               res.on("end", () => {
                 const body = Buffer.concat(chunks).toString("utf8");
                 const type = String(res.headers["content-type"] || "");
-                if (res.statusCode !== 200 || !type.startsWith(expectedType) || body.includes("Blocked request")) {
+                if (
+                  res.statusCode !== 200 ||
+                  !type.startsWith(expectedType) ||
+                  body.includes("Blocked request") ||
+                  (expectedBody && !body.includes(expectedBody))
+                ) {
                   console.error(`${path} status=${res.statusCode} type=${type}`);
                   console.error(body.slice(0, 500));
                   process.exit(1);
@@ -101,7 +107,7 @@ steps:
 
         for _ in $$(seq 1 60); do
           if docker exec "$$CID" node -e "$$node_check" / 'text/html'; then
-            docker exec "$$CID" node -e "$$node_check" /assets/styles.css 'text/css'
+            docker exec "$$CID" node -e "$$node_check" /assets/styles.css 'text/css' 'kv-chrome-'
             exit 0
           fi
           sleep 1
