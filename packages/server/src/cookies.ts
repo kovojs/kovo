@@ -1,4 +1,8 @@
+import { createHmac } from 'node:crypto';
+
 const unsafeCookieTokens = new WeakSet<UnsafeCookieDowngrade>();
+const textEncoder = new TextEncoder();
+const APP_DATA_COOKIE_SEAL_PREFIX = 'kovo-app-data-v1';
 
 /**
  * Cookie safety class used to derive the secure attribute floor required by
@@ -14,12 +18,26 @@ export interface CookieAttributeFloor {
 
 export type CookieAuditSource = 'builder' | 'forwarded';
 
+/** Secret bytes used to HMAC-seal app-data cookies for tamper evidence. */
+export type CookieSealSecret = string | Uint8Array;
+
+/** Optional HMAC sealing applied only to app-data cookies. */
+export interface CookieSealOptions {
+  secret: CookieSealSecret;
+}
+
+/** Result of verifying a sealed app-data cookie value. */
+export type AppDataCookieVerificationResult =
+  | { ok: true; value: string }
+  | { ok: false; reason: 'invalid' | 'malformed' };
+
 export interface CookieAuditFact {
   class: CookieClass;
   downgraded?: readonly UnsafeCookieDowngrade['downgrade'][];
   floor: string;
   justification?: string;
   name: string;
+  sealed?: 'hmac-sha256';
   site?: string;
   source: CookieAuditSource;
 }
@@ -45,6 +63,7 @@ export interface CookieOptions {
   // RFC 6265bis cookie priority. Modeled so the typed builder re-emits it instead of
   // silently dropping an attribute Better Auth set (part-3 I1).
   priority?: 'high' | 'low' | 'medium';
+  seal?: CookieSealOptions;
   sameSite?: 'lax' | 'none' | 'strict';
   secure?: boolean;
   unsafe?: UnsafeCookieDowngrade;
@@ -106,7 +125,9 @@ export function serializeCookieWithAudit(
   // second cookie or add unintended attributes (B2).
   assertNoHeaderControlCharacters(value, 'cookie value');
   const normalized = normalizeCookieOptions(name, options);
-  const encodedValue = encodeURIComponent(value);
+  const encodedValue = encodeURIComponent(
+    normalized.seal === undefined ? value : sealAppDataCookieValue(name, value, normalized.seal),
+  );
   return {
     audit: cookieAuditFact(name, options, normalized, {
       ...auditOptions,
@@ -165,8 +186,45 @@ export function cookieClassFloor(cookieClass: CookieClass = 'app-data'): CookieA
   return { httpOnly: true, sameSite: 'lax', secure: true };
 }
 
+/**
+ * Verify a sealed app-data cookie value and recover the original payload when
+ * the HMAC matches the signed `name + payload` bytes.
+ */
+export function verifyAppDataCookie(
+  name: string,
+  value: string,
+  options: { secret: CookieSealSecret },
+): AppDataCookieVerificationResult {
+  assertCookieName(name);
+  assertNoHeaderControlCharacters(value, 'cookie value');
+
+  const parts = value.split('.');
+  if (
+    parts.length !== 3 ||
+    parts[0] !== APP_DATA_COOKIE_SEAL_PREFIX ||
+    parts[1] === undefined ||
+    parts[1].length === 0 ||
+    parts[2] === undefined ||
+    parts[2].length === 0
+  ) {
+    return { ok: false, reason: 'malformed' };
+  }
+
+  const payload = parts[1];
+  const signature = decodeBase64Url(parts[2]);
+  if (signature === undefined) return { ok: false, reason: 'malformed' };
+
+  const expected = hmacCookieSeal(options.secret, canonicalAppDataCookieSealPayload(name, payload));
+  if (!constantTimeEqual(expected, signature)) return { ok: false, reason: 'invalid' };
+
+  const decoded = decodeBase64Url(payload);
+  if (decoded === undefined) return { ok: false, reason: 'malformed' };
+  return { ok: true, value: new TextDecoder().decode(decoded) };
+}
+
 function normalizeCookieOptions(name: string, options: CookieOptions): CookieOptions {
   assertHostPrefix(name, options);
+  assertCookieSealSupport(options);
   const floor = cookieClassFloor(options.class);
   const normalized: CookieOptions = {
     ...options,
@@ -196,6 +254,7 @@ function cookieAuditFact(
     floor: cookieFloorLabel(normalized),
     ...(original.unsafe === undefined ? {} : { justification: original.unsafe.justification }),
     name,
+    ...(original.seal === undefined ? {} : { sealed: 'hmac-sha256' as const }),
     ...(options.site === undefined ? {} : { site: options.site }),
     source: options.source,
   };
@@ -273,6 +332,13 @@ function assertCookieFloor(name: string, original: CookieOptions, normalized: Co
   }
   if (name.startsWith('__Host-') && normalized.secure !== true) {
     throw new Error('__Host- cookies require Secure');
+  }
+}
+
+function assertCookieSealSupport(options: CookieOptions): void {
+  if (options.seal === undefined) return;
+  if ((options.class ?? 'app-data') !== 'app-data') {
+    throw new Error('App-data cookie sealing is only supported for class="app-data"');
   }
 }
 
@@ -396,4 +462,42 @@ function assertNoHeaderControlCharacters(value: string, label: string): void {
       throw new Error(`${label} must not contain control characters`);
     }
   }
+}
+
+function sealAppDataCookieValue(name: string, value: string, options: CookieSealOptions): string {
+  const payload = encodeBase64Url(textEncoder.encode(value));
+  const signature = encodeBase64Url(
+    hmacCookieSeal(options.secret, canonicalAppDataCookieSealPayload(name, payload)),
+  );
+  return `${APP_DATA_COOKIE_SEAL_PREFIX}.${payload}.${signature}`;
+}
+
+function canonicalAppDataCookieSealPayload(name: string, payload: string): string {
+  return `${APP_DATA_COOKIE_SEAL_PREFIX}\nname=${name}\npayload=${payload}`;
+}
+
+function hmacCookieSeal(secret: CookieSealSecret, payload: string): Uint8Array {
+  return createHmac('sha256', secret).update(payload).digest();
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('base64url');
+}
+
+function decodeBase64Url(value: string): Uint8Array | undefined {
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) return undefined;
+  try {
+    return Buffer.from(value, 'base64url');
+  } catch {
+    return undefined;
+  }
+}
+
+function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
+  const length = Math.max(left.length, right.length);
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < length; index += 1) {
+    difference |= (left[index] ?? 0) ^ (right[index] ?? 0);
+  }
+  return difference === 0;
 }

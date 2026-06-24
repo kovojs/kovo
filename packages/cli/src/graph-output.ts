@@ -1772,6 +1772,7 @@ function cookieExplainLine(cookie: CoreGraph.CookieExplainFact): string {
     `class=${cookie.class}`,
     `source=${cookie.source}`,
     `floor=${stableValue(cookie.floor)}`,
+    `sealed=${cookie.sealed ?? '-'}`,
     `downgraded=${list(cookie.downgraded)}`,
     `site=${cookie.site ?? '-'}`,
     `justification=${stableValue(cookie.justification)}`,
@@ -1781,7 +1782,8 @@ function cookieExplainLine(cookie: CoreGraph.CookieExplainFact): string {
 function cookieSummary(cookies: readonly CoreGraph.CookieExplainFact[]): string {
   const downgraded = cookies.filter((cookie) => (cookie.downgraded ?? []).length > 0).length;
   const forwarded = cookies.filter((cookie) => cookie.source === 'forwarded').length;
-  return `SUMMARY total=${cookies.length} forwarded=${forwarded} downgraded=${downgraded}`;
+  const sealed = cookies.filter((cookie) => cookie.sealed !== undefined).length;
+  return `SUMMARY total=${cookies.length} forwarded=${forwarded} downgraded=${downgraded} sealed=${sealed}`;
 }
 
 function revealExplainLine(reveal: CoreGraph.RevealExplainFact): string {

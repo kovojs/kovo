@@ -212,12 +212,16 @@ export {
   route,
   session,
   unsafeCookie,
+  verifyAppDataCookie,
   webhook,
 } from './api/routing.js';
 export type {
   AuthenticatedRequest,
+  AppDataCookieVerificationResult,
   CookieClass,
   CookieOptions,
+  CookieSealOptions,
+  CookieSealSecret,
   DeferredFragmentChunk,
   DeferredPriority,
   DeferredQueryChunk,

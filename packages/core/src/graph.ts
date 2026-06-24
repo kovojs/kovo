@@ -148,6 +148,7 @@ export interface CookieExplainFact {
   floor: string;
   justification?: string;
   name: string;
+  sealed?: 'hmac-sha256';
   site?: string;
   source: 'builder' | 'forwarded';
 }

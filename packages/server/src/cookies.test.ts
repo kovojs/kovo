@@ -8,7 +8,10 @@ import {
   serializeCookieWithAudit,
   unsafeCookie,
   validateRawSetCookie,
+  verifyAppDataCookie,
 } from './cookies.js';
+
+const sealSecret = 'app-data-cookie-test-secret';
 
 describe('cookie header helpers', () => {
   it('serializes structured Set-Cookie values with the secure default floor', () => {
@@ -143,6 +146,58 @@ describe('cookie header helpers', () => {
     ).toBe('embed_sid=tok; HttpOnly; Secure; SameSite=None');
   });
 
+  it('optionally HMAC-seals app-data cookies for tamper evidence', () => {
+    const sealed = serializeCookie('prefs', 'compact:view', {
+      class: 'app-data',
+      path: '/',
+      seal: { secret: sealSecret },
+    });
+    expect(sealed).toMatch(
+      /^prefs=kovo-app-data-v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+; Path=\/; HttpOnly; Secure; SameSite=Lax$/,
+    );
+
+    const cookieValue = sealed.split(';')[0]!.split('=').slice(1).join('=');
+    expect(verifyAppDataCookie('prefs', cookieValue, { secret: sealSecret })).toEqual({
+      ok: true,
+      value: 'compact:view',
+    });
+  });
+
+  it('fails closed for tampered or malformed sealed app-data cookies', () => {
+    const sealed = serializeCookie('prefs', 'compact:view', {
+      class: 'app-data',
+      seal: { secret: sealSecret },
+    });
+    const cookieValue = sealed.split(';')[0]!.split('=').slice(1).join('=');
+
+    const tamperedSignature = cookieValue.replace(/\.[A-Za-z0-9_-]+$/u, '.not-the-signature');
+    expect(verifyAppDataCookie('prefs', tamperedSignature, { secret: sealSecret })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+
+    expect(verifyAppDataCookie('theme', cookieValue, { secret: sealSecret })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+
+    expect(
+      verifyAppDataCookie('prefs', 'kovo-app-data-v1.only-two-parts', { secret: sealSecret }),
+    ).toEqual({
+      ok: false,
+      reason: 'malformed',
+    });
+  });
+
+  it('rejects sealing non-app-data cookie classes', () => {
+    expect(() =>
+      serializeCookie('sid', 'tok', {
+        class: 'session',
+        seal: { secret: sealSecret },
+      }),
+    ).toThrow('App-data cookie sealing is only supported for class="app-data"');
+  });
+
   it('enforces __Host- prefix constraints', () => {
     expect(serializeCookie('__Host-sid', 'tok')).toBe(
       '__Host-sid=tok; Path=/; HttpOnly; Secure; SameSite=Lax',
@@ -191,7 +246,7 @@ describe('cookie header helpers', () => {
       serializeCookieWithAudit(
         'prefs',
         'compact',
-        { class: 'app-data', path: '/' },
+        { class: 'app-data', path: '/', seal: { secret: sealSecret } },
         { site: 'app/cookies.ts:4' },
       ),
     ).toEqual({
@@ -199,10 +254,13 @@ describe('cookie header helpers', () => {
         class: 'app-data',
         floor: 'HttpOnly; Secure; SameSite=Lax',
         name: 'prefs',
+        sealed: 'hmac-sha256',
         site: 'app/cookies.ts:4',
         source: 'builder',
       },
-      setCookie: 'prefs=compact; Path=/; HttpOnly; Secure; SameSite=Lax',
+      setCookie: expect.stringMatching(
+        /^prefs=kovo-app-data-v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+; Path=\/; HttpOnly; Secure; SameSite=Lax$/,
+      ),
     });
 
     expect(

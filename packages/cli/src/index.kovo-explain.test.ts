@@ -838,6 +838,7 @@ describe('kovo explain', () => {
             floor: 'HttpOnly; Secure; SameSite=None',
             justification: 'embedded cross-site login requires CHIPS',
             name: 'embed_sid',
+            sealed: 'hmac-sha256',
             site: 'auth/embed.ts:12',
             source: 'builder',
           },
@@ -850,9 +851,9 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       COOKIES
-      COOKIE name=embed_sid class=auth source=builder floor="HttpOnly; Secure; SameSite=None" downgraded=sameSiteNone site=auth/embed.ts:12 justification="embedded cross-site login requires CHIPS"
-      COOKIE name=sid class=session source=forwarded floor="HttpOnly; Secure; SameSite=Lax" downgraded=- site=auth/callback.ts:18 justification=-
-      SUMMARY total=2 forwarded=1 downgraded=1
+      COOKIE name=embed_sid class=auth source=builder floor="HttpOnly; Secure; SameSite=None" sealed=hmac-sha256 downgraded=sameSiteNone site=auth/embed.ts:12 justification="embedded cross-site login requires CHIPS"
+      COOKIE name=sid class=session source=forwarded floor="HttpOnly; Secure; SameSite=Lax" sealed=- downgraded=- site=auth/callback.ts:18 justification=-
+      SUMMARY total=2 forwarded=1 downgraded=1 sealed=1
       "
     `);
   });
@@ -1018,8 +1019,8 @@ describe('kovo explain', () => {
       [
         'kovo-explain/v1',
         'COOKIES',
-        'COOKIE name=better-auth.session_token class=session source=forwarded floor="HttpOnly; Secure; SameSite=Lax" downgraded=- site=auth/callback.ts:18 justification=-',
-        'SUMMARY total=1 forwarded=1 downgraded=0',
+        'COOKIE name=better-auth.session_token class=session source=forwarded floor="HttpOnly; Secure; SameSite=Lax" sealed=- downgraded=- site=auth/callback.ts:18 justification=-',
+        'SUMMARY total=1 forwarded=1 downgraded=0 sealed=0',
         '',
       ].join('\n'),
     );

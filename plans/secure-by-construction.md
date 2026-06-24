@@ -608,8 +608,12 @@ packages/server/src/query-endpoint.test.ts` verifies default query writes still 
       class-derived floor, `packages/core/src/graph.ts` accepts `cookies`, and
       `packages/cli/src/graph-output.ts` renders `kovo explain --cookies`; verified with
       `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/commands-manifest.test.ts`.
-  - [ ] Optional sound add: HMAC sealing (constant-time verify via `verifier.ts`, framework secret) for
+  - [x] Optional sound add: HMAC sealing (constant-time verify via `verifier.ts`, framework secret) for
         **app-data** cookies — framed honestly as tamper-evidence, NOT the session-id defense (`HttpOnly` is that).
+    - Evidence: `packages/server/src/cookies.ts` now seals only `class: 'app-data'` values and
+      `verifyAppDataCookie(...)` rejects tampered/wrong-name/malformed values; verified with
+      `pnpm exec vitest run src/cookies.test.ts` in `packages/server` and
+      `pnpm exec vitest run src/index.kovo-explain.test.ts` in `packages/cli`.
   - [ ] Fixation: **documented obligation** (app/auth layer rotates the session id on login; `better-auth`
         already does) + an OPTIONAL advisory lint flagging a mutation writing `req.session.user` with no visible
         rotate (hint, not KV-error — recognition is unsound, better-auth is opaque). A real `rotateSession()`
