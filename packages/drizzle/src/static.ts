@@ -2183,6 +2183,7 @@ export {
 export {
   appendSymbolProvenancePath,
   joinSymbolProvenance,
+  provenInputProvenanceForExpression,
   provenServerProvenanceForExpression,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
