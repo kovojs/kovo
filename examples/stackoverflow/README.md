@@ -19,8 +19,8 @@ and questions) is **derived by the compiler**, with no hand-written merge code.
   the query read set (SPEC §10.2 / §11.1). No hand-written merges.
 - **Components** (`src/components/`): `question-list`, `question-detail`,
   `chrome` — styled with `@kovojs/style` tokens (`src/theme.ts`).
-- **Behavior graph** (`src/graph.ts`, `src/kovo-graph.test.ts`) the compiler
-  proves and CI can check.
+- **Interactive app tests** (`src/interactive-app.test.ts`) cover routes and
+  mutation refresh behavior through compiler-emitted live targets.
 
 `src/generated/**` are compiler **artifacts** (lowered components, optimistic
 stamps, `graph.json`) — author the TSX/TS sources, not the lowered IR (SPEC §5.2).

@@ -1,11 +1,7 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { escapeHtml } from './html.js';
-import {
-  renderDocument,
-  type DocumentRoutePageResponse,
-  type DocumentTemplate,
-} from './document-core.js';
+import { renderDocument, type DocumentRoutePageResponse } from './document-core.js';
 
 /** @internal */
 export interface DiagnosticDocumentDiagnostic {
@@ -32,7 +28,6 @@ export interface DiagnosticDocumentOptions {
   diagnostics: readonly DiagnosticDocumentDiagnostic[];
   lang?: string;
   source?: DiagnosticDocumentSource | string;
-  template?: DocumentTemplate;
 }
 
 /**
@@ -67,7 +62,6 @@ export function renderDiagnosticDocument(
       meta: { title },
     },
     ...(options.lang === undefined ? {} : { lang: options.lang }),
-    ...(options.template === undefined ? {} : { template: options.template }),
   });
 
   return {

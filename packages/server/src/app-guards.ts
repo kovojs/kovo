@@ -1,4 +1,5 @@
 import type { KovoApp } from './app-types.js';
+import { isDocumentConfig } from './document-structured.js';
 
 /**
  * Return whether a dynamically loaded value is a closed Kovo app aggregate.
@@ -85,7 +86,8 @@ function isAppDocumentOptions(value: unknown): value is KovoApp['document'] {
   return (
     isRecord(value) &&
     (value.lang === undefined || typeof value.lang === 'string') &&
-    isOptionalFunction(value.template)
+    (value.structured === undefined || isDocumentConfig(value.structured)) &&
+    value.template === undefined
   );
 }
 

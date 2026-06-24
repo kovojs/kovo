@@ -724,6 +724,43 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('prints the structured document shell audit view', () => {
+    const result = kovoExplain(
+      {
+        trustEscapes: [
+          {
+            justification: 'reviewed document rich text island',
+            kind: 'trustedHtml',
+            owner: 'document.shell.output',
+            safePath: 'InlineScript|InlineStyle|structured document primitives',
+            site: 'app/document.tsx:12',
+            source: 'cms.documentChrome',
+          },
+          {
+            justification: 'route content sanitizer',
+            kind: 'trustedHtml',
+            owner: 'html.dom.output',
+            safePath: 'trustedHtml',
+            site: 'app/page.tsx:5',
+            source: 'cms.page',
+          },
+        ],
+      },
+      { document: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('kovo-explain/v1\nDOCUMENT\n');
+    expect(result.output).toContain(
+      'SINK source=app-document-TSX|inline-script-source|inline-style-source|font-preload-url|modulepreload-url|body-end-ui sink=document.shell.output',
+    );
+    expect(result.output).toContain(
+      'TRUST kind=trustedHtml site=app/document.tsx:12 source=cms.documentChrome owner=document.shell.output safePath=InlineScript|InlineStyle|structured document primitives justification="reviewed document rich text island"',
+    );
+    expect(result.output).not.toContain('cms.page');
+    expect(result.output).toContain('SUMMARY sinks=1 trustEscapes=1');
+  });
+
   it('prints confidentiality reveals with stable explain output', () => {
     const result = kovoExplain(
       {
@@ -850,6 +887,42 @@ describe('kovo explain', () => {
         '',
       ].join('\n'),
     );
+  });
+
+  it('accepts kovo explain document as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-document-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          trustEscapes: [
+            {
+              justification: 'reviewed document shell escape',
+              kind: 'trustedHtml',
+              owner: 'document.shell.output',
+              safePath: 'structured document primitive',
+              site: 'app/document.tsx:3',
+              source: 'cms.chrome',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', 'document', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toContain('kovo-explain/v1\nDOCUMENT\n');
+    expect(output).toContain('SUMMARY sinks=1 trustEscapes=1\n');
   });
 
   it('accepts kovo explain --unguarded as a CLI audit mode', () => {

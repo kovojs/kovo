@@ -1,6 +1,10 @@
 import { defineConfig } from 'vite-plus';
 
-import { commerceRegistryFacts, exampleKovoCompilerPlugin } from './examples/vite-kovo-compiler.js';
+import {
+  commerceRegistryFacts,
+  exampleDrizzleRegistryPlugin,
+  exampleKovoCompilerPlugin,
+} from './examples/vite-kovo-compiler.js';
 
 const repoRoot = workspaceRootFromCwd();
 const exampleGeneratedGraphsGlobalSetup = repoRoot
@@ -24,6 +28,30 @@ export default defineConfig({
     exampleKovoCompilerPlugin({
       include: ['examples/commerce/src/components'],
       registryFacts: commerceRegistryFacts,
+    }),
+    exampleDrizzleRegistryPlugin({
+      appEntries: ['examples/crm/src/app-shell.ts', 'examples/crm/src/interactive-app.tsx'],
+      sourceRoot: 'examples/crm/src',
+    }),
+    exampleKovoCompilerPlugin({ include: ['examples/crm/src/components'] }),
+    exampleDrizzleRegistryPlugin({
+      appEntries: [
+        'examples/stackoverflow/src/app-shell.ts',
+        'examples/stackoverflow/src/interactive-app.tsx',
+      ],
+      mutationTouchGraphKeys: {
+        postAnswer: 'postAnswer',
+        postQuestion: 'postQuestion',
+        voteUp: 'voteUp',
+      },
+      sourceRoot: 'examples/stackoverflow/src',
+    }),
+    exampleKovoCompilerPlugin({
+      include: [
+        'examples/stackoverflow/src/components/question-card.tsx',
+        'examples/stackoverflow/src/components/question-detail.tsx',
+        'examples/stackoverflow/src/components/question-list.tsx',
+      ],
     }),
   ],
   lint: {

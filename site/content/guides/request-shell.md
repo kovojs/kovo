@@ -1,6 +1,6 @@
 ---
 title: Request shell
-description: Configure createApp(), dispatch order, document templates, adapters, error shells, and pre-dispatch load shedding.
+description: Configure createApp(), dispatch order, structured documents, adapters, error shells, and pre-dispatch load shedding.
 order: 4.7
 ---
 
@@ -13,6 +13,22 @@ serves framework endpoints, and runs guards before route/query/mutation code.
 ## The app aggregate
 
 ```ts
+import { BodyEnd, Document, FontPreload, Head, InlineScript } from '@kovojs/server';
+
+const appDocument = (
+  <Document lang="en">
+    <Head>
+      <FontPreload href="/fonts/inter.woff2" />
+      <InlineScript id="theme" run="beforePaint">
+        {themeScript}
+      </InlineScript>
+    </Head>
+    <BodyEnd>
+      <SearchDialog />
+    </BodyEnd>
+  </Document>
+);
+
 export default createApp({
   routes,
   mutations,
@@ -21,7 +37,7 @@ export default createApp({
   db: () => db,
   sessionProvider,
   csrf: { secret: process.env.CSRF_SECRET! },
-  document: { template: appDocument },
+  document: appDocument,
   errors: {
     notFound: NotFoundShell,
     forbidden: ForbiddenShell,
@@ -72,8 +88,14 @@ composes with shell limits; it does not replace them, especially for anonymous f
 
 The shell owns document assembly: doctype, `<html lang>`, route/query meta, stylesheets,
 modulepreloads, optional Speculation Rules, initial `<kovo-query>` data before consumers, page body,
-and the inline loader. A custom `document.template` receives assembled parts; it is not a blank
-string builder that can silently drop the loader or query contracts.
+deferred stream close framing, and the inline loader. Apps add path-independent document facts with
+structured primitives such as `Document`, `Head`, `FontPreload`, `InlineScript`, `InlineStyle`,
+`BodyStart`, and `BodyEnd`.
+
+`document.template` is not an app authoring surface. Full-document string templates cannot preserve
+Kovo's framework-owned shell contracts safely enough for v1, so app document customization goes
+through structured document primitives only. Scripts, styles, URLs, shell attributes, and body-end UI
+stay visible to Kovo's document assembly and CSP accounting.
 
 Unexpected-error shells are app configuration with safe defaults. Apps may provide 404, 403, and 500
 documents. Unexpected failures still use no-internals bodies when no shell is supplied, and enhanced

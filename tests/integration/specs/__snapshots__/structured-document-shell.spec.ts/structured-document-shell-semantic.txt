@@ -1,0 +1,19 @@
+<html data-document="structured">
+  <head>
+    <meta>
+    <meta name="viewport">
+    <meta name="kovo-document">
+    <meta name="kovo-build">
+    <title>
+      "Structured Document Shell"
+    <script>
+  <body>
+    <header role="banner">
+      "Custom Chrome"
+    <main>
+      <h1>
+        "Structured Document Shell"
+      <button on:click="/client.ts#mark" type="button">
+        "Run client handler"
+      <output>
+        "handler ran"

@@ -11,6 +11,18 @@ import {
   renderRouteDocumentResponse,
 } from './document-core.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
+import {
+  BodyAttrs,
+  BodyEnd,
+  BodyStart,
+  Document,
+  FontPreload,
+  Head,
+  HtmlAttrs,
+  InlineScript,
+  InlineStyle,
+  Stylesheet,
+} from './document-structured.js';
 
 // G1 (bugs-part3 CSP-1): the deferred apply/cleanup scripts now carry a CSP hash attr.
 const deferredApplyScriptBody =
@@ -135,69 +147,71 @@ describe('server app shell document assembly', () => {
     expect(withoutData.html).toContain('<main>Product</main>');
   });
 
-  it('lets document templates receive assembled parts without losing required shell parts', () => {
-    const document = renderDocument({
-      body: '<main>Account</main>',
-      lang: 'fr',
-      queries: [{ name: 'account', value: { userId: 'u1' } }],
-      template({ parts }) {
-        return [
-          '<!doctype html>',
-          `<html data-lang="${parts.lang}">`,
-          `<head>${parts.head}${parts.queryScripts.join('')}</head>`,
-          `<body data-shell>${parts.body}</body>`,
-          '</html>',
-        ].join('');
-      },
+  it('assembles structured document facts without exposing required shell slots', () => {
+    const themeScript = 'document.documentElement.dataset.theme="dark";';
+    const themeHash = cspSha256(themeScript);
+    const criticalCss = 'body{color:red}';
+    const styleHash = cspSha256(criticalCss);
+    const structured = Document({
+      children: [
+        HtmlAttrs({ 'data-doc': 'structured' }),
+        BodyAttrs({ class: 'app-shell' }),
+        Head({
+          children: [
+            InlineScript({ children: themeScript, id: 'theme', run: 'beforePaint' }),
+            InlineStyle({ children: criticalCss, id: 'critical', source: 'test/document.test.ts' }),
+            FontPreload({ href: '/fonts/inter.woff2' }),
+            Stylesheet({ href: '/assets/site.css' }),
+          ],
+        }),
+        BodyStart({ children: '<banner>escaped</banner>' }),
+        BodyEnd({ children: '<dialog>escaped</dialog>' }),
+      ],
+      lang: 'en-US',
     });
 
-    expect(document.html).toContain('<html data-lang="fr">');
-    expect(document.html).toContain('installInlineKovoLoader');
-    expect(document.html).toContain('kovo-query="account"');
-    expect(document.html).toContain('<body data-shell><main>Account</main></body>');
+    const document = renderDocument({
+      body: '<main>Home</main>',
+      document: structured,
+      queries: [{ name: 'home', value: { ok: true } }],
+    });
+
+    expect(document.html).toContain('<html lang="en-US" data-doc="structured">');
+    expect(document.html).toContain('<body class="app-shell">');
+    expect(document.html).toContain(
+      `<script id="theme" data-kovo-run="beforePaint" data-kovo-csp-hash="${themeHash}">${themeScript}</script>`,
+    );
+    expect(document.html).toContain(
+      `<style id="critical" data-kovo-style-source="test/document.test.ts" data-kovo-csp-hash="${styleHash}">${criticalCss}</style>`,
+    );
+    expect(document.html).toContain(
+      '<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>',
+    );
+    expect(document.html).toContain('<link rel="stylesheet" href="/assets/site.css">');
+    expect(document.html).toContain('&lt;banner&gt;escaped&lt;/banner&gt;<main>Home</main>');
+    expect(document.html).toContain('<main>Home</main>&lt;dialog&gt;escaped&lt;/dialog&gt;');
+    expect(document.html.indexOf('kovo-query="home"')).toBeLessThan(
+      document.html.indexOf('<body class="app-shell">'),
+    );
+    expect(document.csp.scripts).toContain(themeHash);
+    expect(document.csp.styles).toContain(styleHash);
   });
 
-  it('rejects document templates that drop assembled shell contracts', () => {
-    expect(() =>
-      renderDocument({
-        body: '<main>Account</main>',
-        template() {
-          return '<!doctype html><html><head></head><body></body></html>';
-        },
-      }),
-    ).toThrow(
-      'DocumentTemplate omitted required assembled document part(s): parts.head, parts.body.',
+  it('rejects invalid structured document sinks with teaching errors', () => {
+    expect(() => InlineScript({ children: 'console.log(1)', id: '', run: 'beforePaint' })).toThrow(
+      'InlineScript requires a stable non-empty id',
     );
-
-    expect(() =>
-      renderDeferredDocument({
-        body: '<main>Deferred</main>',
-        chunks: [],
-        template({ parts }) {
-          return {
-            closeHtml: '</body></html>',
-            shell: `<!doctype html><html><head>${parts.head}</head><body>`,
-          };
-        },
-      }),
-    ).toThrow('DeferredDocumentTemplate omitted required assembled document part(s): parts.body.');
-
-    expect(() =>
-      renderDocument({
-        body: '<main>Account</main>',
-        queries: [{ name: 'account', value: { userId: 'u1' } }],
-        template({ parts }) {
-          return [
-            '<!doctype html>',
-            '<html>',
-            `<head>${parts.head}</head>`,
-            `<body>${parts.body}</body>`,
-            '</html>',
-          ].join('');
-        },
-      }),
-    ).toThrow(
-      'DocumentTemplate omitted required assembled document part(s): parts.queryScripts[0].',
+    expect(() => FontPreload({ href: 'javascript:alert(1)' })).toThrow(
+      '<Link href> received an unsafe URL scheme',
+    );
+    expect(() => HtmlAttrs({ onclick: 'alert(1)' })).toThrow(
+      '<html> attribute "onclick" is not supported',
+    );
+    expect(() => Head({ children: '<script>alert(1)</script>' })).toThrow(
+      '<Head> only accepts structured head primitives',
+    );
+    expect(() => Document({ children: '<html></html>' })).toThrow(
+      '<Document> only accepts structured document primitives',
     );
   });
 
@@ -332,6 +346,29 @@ describe('server app shell document assembly', () => {
     expect(policy).toContain(`'${deferredApplyHash}'`);
     expect(policy).toContain(`'${deferredCleanupHash}'`);
     expect(response.body).toContain(`data-kovo-csp-hash="${deferredApplyHash}"`);
+  });
+
+  it('places structured BodyEnd content in the deferred close frame', () => {
+    const response = renderDeferredDocument({
+      body: '<main><kovo-defer target="reviews:p1"></kovo-defer></main>',
+      chunks: [
+        {
+          fragments: [{ html: '<section>Ready</section>', target: 'reviews:p1' }],
+        },
+      ],
+      document: Document({
+        children: BodyEnd({ children: '<dialog>Search</dialog>' }),
+      }),
+    });
+
+    expect(response.body.indexOf('<kovo-fragment target="reviews:p1">')).toBeLessThan(
+      response.body.indexOf('&lt;dialog&gt;Search&lt;/dialog&gt;'),
+    );
+    expect(
+      response.body.endsWith(
+        `${deferredCleanupScript}\n&lt;dialog&gt;Search&lt;/dialog&gt;</body></html>`,
+      ),
+    ).toBe(true);
   });
 
   it('renders stable error documents with escaped content', () => {

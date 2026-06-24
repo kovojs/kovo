@@ -10,7 +10,7 @@ import {
   DocsSidebarRegion,
 } from './components/docs-layout.js';
 import { LandingRoutePage } from './components/landing.js';
-import { siteDocumentTemplate } from './document-template.js';
+import { siteDocument } from './document-template.js';
 import { siteStylesheetsForRoute } from './route-kit.js';
 
 type SiteRoute = ReturnType<typeof route>;
@@ -37,7 +37,7 @@ const routes: SiteRoute[] = [
 
 export const siteStaticExportApp = createApp({
   clientModules: siteClientModules,
-  document: { lang: 'en', template: siteDocumentTemplate },
+  document: siteDocument,
   routes,
 });
 

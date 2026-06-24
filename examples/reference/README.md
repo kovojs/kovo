@@ -14,10 +14,8 @@ sessions, CSRF, guards, and the scope-audit graph — is easy to read in full.
   `CsrfValidationOptions`, threaded through the login and logout forms.
 - **Route guards**: `authed<...>()` on `/account` and `role<...>('admin')` on
   `/admin`, so authorization is checked at the route boundary.
-- **The explain graph** (`referenceGraph`, typed `KovoExplainInput`): declares
-  each mutation's writes/invalidations, per-page guards, owner domains, and
-  **scope audits** the compiler proves against — e.g. that the account page only
-  reads the active mapped session user.
+- **Reference shell tests** exercise the same auth and scope behavior through
+  routes, forms, and mutations instead of hand-authored graph fixtures.
 - **App shell** (`src/app-shell.ts`): a `createApp()` wiring the routes,
   mutations, mutation responses (redirects + failure re-render), and a public
   shell with a `/c/` client module — including synthetic-replay export.

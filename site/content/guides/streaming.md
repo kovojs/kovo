@@ -115,16 +115,12 @@ the starter's `client.ts` wires it for programmatic use:
 
 ```ts
 import { createQueryStore, installKovoLoader } from '@kovojs/browser/client';
-import { applyDeferredStreamResponseToRuntime } from '@kovojs/browser/generated';
 
 const store = createQueryStore();
 installKovoLoader({ importModule: (s) => import(s), root: document, queryStore: store });
 
-applyDeferredStreamResponseToRuntime({
-  body, // the streamed document text
-  root: document,
-  store, // <kovo-query> chunks land here and run their update plans
-});
+// Server-rendered documents install the stream and mutation fragment runtime.
+// Compiler-emitted modules own deferred stream application details.
 ```
 
 Each applied chunk behaves exactly like a mutation response landing: query values update their

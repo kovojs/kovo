@@ -1,16 +1,12 @@
 /** @jsxImportSource @kovojs/server */
-import { trustedHtml } from '@kovojs/browser';
-import type { DocumentTemplate } from '@kovojs/server';
+import { BodyEnd, Document, FontPreload, Head, InlineScript } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { clientHrefs } from './client/modules.js';
 
-// The app-wide document shell (SPEC §9.5). createApp() assembles `parts.head`
-// (route meta, stylesheets, modulepreloads) and the inline 8KB loader (SPEC
-// §4.4) for us; this template only adds what is path-independent and must run
-// before first paint: the no-flash theme script, font preloads, and the global
-// ⌘K search dialog island. Header/footer/sidebar are rendered per route inside
-// parts.body so the active path stays exact.
+// The app-wide structured document additions (SPEC §9.5). createApp() still owns
+// the document frame, route meta, stylesheets, modulepreloads, query scripts,
+// and inline loader; this declaration adds only path-independent head/body facts.
 
 // Apply `.dark` before first paint from localStorage('theme') ?? prefers-color
 // so there is no light-mode flash; the header toggle (theme.js) only records an
@@ -161,45 +157,27 @@ const SEARCH_HOTKEY = `(()=>{addEventListener('keydown',e=>{if((e.metaKey||e.ctr
 // Install one document-level observer and re-bind it after Kovo swaps pages.
 const API_NAV_SCRIPT = `(()=>{let observer,setActive;const all=(selector,root=document)=>Array.from(root.querySelectorAll(selector));const decode=(value)=>{try{return decodeURIComponent(value)}catch{return value}};const targetFor=(hash)=>{const raw=hash.slice(1);const decoded=decode(raw);return document.getElementById(decoded)||document.getElementById(raw)||document.getElementsByName(decoded)[0]||document.getElementsByName(raw)[0]};const stickyOffset=()=>document.querySelector('[data-site-bar]')?.getBoundingClientRect().bottom||0;const scrollHash=(hash)=>{const target=targetFor(hash);if(!target)return false;const rect=target.getBoundingClientRect();scrollTo(scrollX,scrollY+rect.top-stickyOffset());return true};function init(){observer?.disconnect();observer=undefined;const nav=document.querySelector('[data-api-nav]');if(!nav){setActive=undefined;return}const links={};all('a[href^="#"]',nav).forEach((link)=>{const raw=link.getAttribute('href').slice(1);links[raw]=link;links[decode(raw)]=link});let current;function set(id){if(!id||id===current)return;links[current]?.removeAttribute('data-active');const link=links[id]||links[decode(id)];if(link){link.setAttribute('data-active','true');for(let parent=link.parentElement;parent&&parent!==nav.parentElement;parent=parent.parentElement){if(parent.tagName==='DETAILS')parent.open=true}link.scrollIntoView({block:'nearest'})}current=id}setActive=set;function syncHash(){if(!location.hash)return false;const raw=location.hash.slice(1);const id=decode(raw);if(links[id]||links[raw]){set(id);return true}return false}const headings=all('[data-prose] h2[id],[data-prose] h3[id],[data-prose] h4[id]');if(!syncHash()&&headings[0])set(headings[0].id);if(!headings.length||!('IntersectionObserver'in window))return;observer=new IntersectionObserver((entries)=>{entries.forEach((entry)=>{if(entry.isIntersecting)set(entry.target.id)})},{rootMargin:'-72px 0px -75% 0px'});headings.forEach((heading)=>observer.observe(heading))}addEventListener('click',(event)=>{if(event.defaultPrevented||event.metaKey||event.ctrlKey||event.shiftKey||event.altKey)return;const link=event.target?.closest?.('[data-api-nav] a[href^="#"]');if(!link)return;const hash=link.getAttribute('href');if(!hash||!scrollHash(hash))return;event.preventDefault();history.pushState(null,'',hash);setActive?.(decode(hash.slice(1)))},{capture:true});addEventListener('kovo:navigate',()=>setTimeout(init));addEventListener('hashchange',()=>setTimeout(()=>{scrollHash(location.hash);init()}));if(document.readyState==='loading')addEventListener('DOMContentLoaded',init,{once:true});else init()})()`;
 
-export const siteDocumentTemplate: DocumentTemplate = ({ parts }) =>
-  `<!doctype html>${String(
-    <html lang={parts.lang}>
-      <head>
-        <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <script rawHtml={trustedHtml(THEME_SCRIPT)} />
-        <script rawHtml={trustedHtml(SEARCH_HOTKEY)} />
-        <script rawHtml={trustedHtml(API_NAV_SCRIPT)} />
-        <link
-          rel="preload"
-          href="/fonts/source-serif-4-latin-wght-normal.woff2"
-          as="font"
-          type="font/woff2"
-          crossorigin
-        />
-        <link
-          rel="preload"
-          href="/fonts/inter-latin-wght-normal.woff2"
-          as="font"
-          type="font/woff2"
-          crossorigin
-        />
-        <link
-          rel="preload"
-          href="/fonts/jetbrains-mono-latin-wght-normal.woff2"
-          as="font"
-          type="font/woff2"
-          crossorigin
-        />
-        {trustedHtml(parts.head)}
-        {trustedHtml(parts.queryScripts.join(''))}
-      </head>
-      <body>
-        {trustedHtml(parts.body)}
-        <SearchDialog />
-      </body>
-    </html>,
-  )}`;
+export const siteDocument = (
+  <Document lang="en">
+    <Head>
+      <InlineScript id="theme" run="beforePaint">
+        {THEME_SCRIPT}
+      </InlineScript>
+      <InlineScript id="search-hotkey" run="beforePaint">
+        {SEARCH_HOTKEY}
+      </InlineScript>
+      <InlineScript id="api-nav" run="afterInteractive">
+        {API_NAV_SCRIPT}
+      </InlineScript>
+      <FontPreload href="/fonts/source-serif-4-latin-wght-normal.woff2" />
+      <FontPreload href="/fonts/inter-latin-wght-normal.woff2" />
+      <FontPreload href="/fonts/jetbrains-mono-latin-wght-normal.woff2" />
+    </Head>
+    <BodyEnd>
+      <SearchDialog />
+    </BodyEnd>
+  </Document>
+);
 
 function SearchDialog(): string {
   return (

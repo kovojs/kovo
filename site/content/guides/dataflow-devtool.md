@@ -17,8 +17,8 @@ Example apps keep graph assertions in tests:
 
 ```sh
 pnpm --filter @kovojs/example-commerce run build:demo
-pnpm --filter @kovojs/example-crm test -- src/graph.test.ts
-pnpm --filter @kovojs/example-stackoverflow test -- src/kovo-graph.test.ts
+pnpm --filter @kovojs/example-crm test -- src/interactive-app.test.ts
+pnpm --filter @kovojs/example-stackoverflow test -- src/interactive-app.test.ts
 ```
 
 For a visual devtool host, pass the graph object or a build-produced graph file into

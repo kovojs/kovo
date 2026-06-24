@@ -4,14 +4,12 @@ import { memoryAdapter } from 'better-auth/adapters/memory';
 import { runMutation } from '@kovojs/server/internal/execution';
 import { renderRoutePageResponse } from '@kovojs/server/internal/route';
 
-import { kovoCheck, kovoExplain } from '../../../packages/cli/src/index.js';
 import {
   accountRoute,
   adminRoute,
   createReferenceAuth,
   referenceAuth,
   referenceAuthCsrf,
-  referenceGraph,
   referenceAuthRequest,
   referenceAuthToken,
   referenceSessionProvider,
@@ -122,65 +120,6 @@ function renderReferenceAdminRoute(
 }
 
 describe('reference auth adoption', () => {
-  it('represents authenticated reference flows in the graph audits', () => {
-    expect(kovoCheck(referenceGraph)).toEqual({
-      exitCode: 0,
-      output: 'kovo-check/v1\nOK\n',
-    });
-    expect(kovoExplain(referenceGraph, { kind: 'page', target: '/account' })).toEqual({
-      exitCode: 0,
-      output: [
-        'kovo-explain/v1',
-        'PAGE /account',
-        'prefetch: false',
-        'modulepreloads: -',
-        'stylesheets: -',
-        'queries: -',
-        'view-transitions: -',
-        '',
-      ].join('\n'),
-    });
-    expect(kovoExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-out' })).toEqual({
-      exitCode: 0,
-      output: [
-        'kovo-explain/v1',
-        'MUTATION auth/sign-out',
-        'guards: authed',
-        'session: referenceSession',
-        'input-fields: -',
-        'writes: auth',
-        'invalidates: auth',
-        'manual-invalidates: -',
-        'updates: -',
-        '',
-      ].join('\n'),
-    });
-    expect(kovoExplain(referenceGraph, { kind: 'mutation', target: 'auth/sign-in' })).toEqual({
-      exitCode: 0,
-      output: [
-        'kovo-explain/v1',
-        'MUTATION auth/sign-in',
-        'guards: -',
-        'auth: custom:better-auth-credential',
-        'session: referenceSession',
-        'input-fields: email,password,next',
-        'writes: auth',
-        'invalidates: auth',
-        'manual-invalidates: -',
-        'updates: -',
-        '',
-      ].join('\n'),
-    });
-    expect(kovoExplain(referenceGraph, { unguarded: true })).toEqual({
-      exitCode: 0,
-      output: 'kovo-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
-    });
-    expect(kovoExplain(referenceGraph, { unscoped: true })).toEqual({
-      exitCode: 0,
-      output: 'kovo-explain/v1\nUNSCOPED\nSUMMARY total=0\n',
-    });
-  });
-
   it('ships no-JS login and logout forms backed by Kovo credential mutations', () => {
     const request = referenceAuthRequest();
 

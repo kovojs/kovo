@@ -15,7 +15,6 @@ import {
   type RoutePageResult,
   type StylesheetAsset,
 } from '@kovojs/server';
-import { componentLiveTargetRenderer, type LiveTargetRenderer } from '@kovojs/server/internal/wire';
 import { eq } from 'drizzle-orm';
 
 import { QuestionDetailRegion } from './components/question-detail.js';
@@ -64,86 +63,6 @@ const soLayout = (active: NavSection) =>
 const QuestionsLayout = soLayout('questions');
 const TagsLayout = soLayout('tags');
 const UsersLayout = soLayout('users');
-
-// SPEC.md §4.2: the source-served route still needs the same derived component
-// identities as lowered components so runtime root stamps advertise morphable
-// live targets in the full GET document.
-const questionDetailComponentName = 'components/question-detail/question-detail-region';
-const questionListComponentName = 'components/question-list/question-list-region';
-QuestionDetailRegion.name = questionDetailComponentName;
-QuestionListRegion.name = questionListComponentName;
-
-function sourceLiveTargetRenderers(
-  manifest: StackOverflowStylesheetManifest,
-): readonly LiveTargetRenderer<Request>[] {
-  return [
-    stampSourceLiveTargetRenderer(
-      componentLiveTargetRenderer({
-        component: QuestionListRegion,
-        componentId: questionListComponentName,
-      }),
-      { deps: 'questionList questionScore', target: 'question-list-region' },
-      stackOverflowFragmentStylesheets(manifest, questionListComponentName),
-    ),
-    stampSourceLiveTargetRenderer(
-      componentLiveTargetRenderer({
-        component: QuestionDetailRegion,
-        componentId: questionDetailComponentName,
-      }),
-      { deps: 'questionAnswers questionDetail', target: 'question-detail-region' },
-      stackOverflowFragmentStylesheets(manifest, questionDetailComponentName),
-    ),
-  ];
-}
-
-function stampSourceLiveTargetRenderer<Request>(
-  renderer: LiveTargetRenderer<Request>,
-  attrs: { deps: string; target: string },
-  stylesheets: readonly StylesheetAsset[] = [],
-): LiveTargetRenderer<Request> {
-  return {
-    ...renderer,
-    ...(stylesheets.length === 0 ? {} : { stylesheets }),
-    async render(context) {
-      const html = await renderer.render(context);
-      const props =
-        Object.keys(context.props).length === 0 ? undefined : JSON.stringify(context.props);
-      return stampSourceRegionRoot(html, {
-        component: renderer.component,
-        deps: attrs.deps,
-        ...(props === undefined ? {} : { props }),
-        target: attrs.target,
-      });
-    },
-  };
-}
-
-function stampSourceRegionRoot(
-  html: string,
-  attrs: { component: string; deps: string; props?: string; target: string },
-): string {
-  const opening = /^<([A-Za-z][A-Za-z0-9:-]*)([^>]*)>/.exec(html);
-  if (!opening) return html;
-  const renderedAttrs = [
-    `kovo-c="${attrs.target}"`,
-    `kovo-deps="${attrs.deps}"`,
-    `kovo-fragment-target="${attrs.target}"`,
-    `kovo-live-component="${attrs.component}"`,
-    attrs.props === undefined ? '' : `kovo-props="${escapeSourceAttribute(attrs.props)}"`,
-  ]
-    .filter(Boolean)
-    .join(' ');
-
-  return `<${opening[1]} ${renderedAttrs}${opening[2]}>${html.slice(opening[0].length)}`;
-}
-
-function escapeSourceAttribute(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
 
 interface StackOverflowStylesheetManifest {
   app: readonly StylesheetAsset[];
@@ -210,13 +129,6 @@ function stackOverflowRouteStylesheets(
     ...stackOverflowBaseStylesheets(manifest),
     ...deferredStylesheetRefs(manifest.routes[routePath] ?? []),
   ];
-}
-
-function stackOverflowFragmentStylesheets(
-  manifest: StackOverflowStylesheetManifest,
-  component: string,
-): readonly StylesheetAsset[] {
-  return manifest.fragments[component] ?? [];
 }
 
 function stylesheetAssetMap(value: unknown): Readonly<Record<string, readonly StylesheetAsset[]>> {
@@ -340,7 +252,6 @@ export async function buildSoInteractiveApp(
       return database;
     },
     document: { lang: 'en-US' },
-    liveTargetRenderers: sourceLiveTargetRenderers(stylesheetManifest),
     mutations: [voteUpMutation, postAnswerMutation, postQuestionMutation],
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     queries: [questionList, answerList, questionDetail, questionAnswers, questionScore],

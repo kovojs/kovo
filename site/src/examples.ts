@@ -95,7 +95,7 @@ compiler-derived and hand-written optimistic updates.
 | \`examples/crm/src/components/deal-detail.tsx\` | Parameterized route/detail rendering. |
 | \`examples/crm/src/queries.ts\` | Aggregate and detail reads over Drizzle. |
 | \`examples/crm/src/mutations.ts\` | Create/move/close deal writes and optimistic behavior. |
-| \`examples/crm/src/graph.test.ts\` | Assertions over the emitted app graph. |
+| \`examples/crm/src/interactive-app.test.ts\` | HTTP and mutation coverage over the real app shell. |
 
 ### Dashboard pattern
 
@@ -117,7 +117,7 @@ pnpm --filter @kovojs/example-crm dev
 pnpm --filter @kovojs/example-crm test
 pnpm --filter @kovojs/example-crm build
 pnpm --filter @kovojs/example-crm start
-pnpm --filter @kovojs/example-crm test -- src/graph.test.ts
+pnpm --filter @kovojs/example-crm test -- src/interactive-app.test.ts
 \`\`\`
 `,
   stackoverflow: `
@@ -135,7 +135,7 @@ detail, votes, and answer posting. It demonstrates the fully compiler-derived en
 | \`examples/stackoverflow/src/components/tags-page.tsx\` | Tag navigation pattern. |
 | \`examples/stackoverflow/src/queries.ts\` | Reads for list, detail, tags, users, and session-shaped data. |
 | \`examples/stackoverflow/src/mutations.ts\` | Vote, answer, and question writes. |
-| \`examples/stackoverflow/src/kovo-graph.test.ts\` | Graph assertions for query/mutation coverage. |
+| \`examples/stackoverflow/src/interactive-app.test.ts\` | HTTP and mutation coverage over compiler-emitted live targets. |
 
 ### Forum/Q&A pattern
 
@@ -157,7 +157,7 @@ pnpm --filter @kovojs/example-stackoverflow dev
 pnpm --filter @kovojs/example-stackoverflow test
 pnpm --filter @kovojs/example-stackoverflow build
 pnpm --filter @kovojs/example-stackoverflow start
-pnpm --filter @kovojs/example-stackoverflow test -- src/kovo-graph.test.ts
+pnpm --filter @kovojs/example-stackoverflow test -- src/interactive-app.test.ts
 \`\`\`
 `,
 };

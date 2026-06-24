@@ -129,10 +129,10 @@ export async function renderAppRouteDocumentResponse({
       // SPEC §5.2.1 rule 2(b): stamp every full page render; buildToken() is now
       // always non-empty so the carve-out is no longer needed (DEPLOY-3).
       buildToken,
+      ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
       hints: mergeAppRouteHints(app, route),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
       loaderRuntimeHref,
-      ...(app.document.template === undefined ? {} : { template: app.document.template }),
       // bugs-1 F34: a guarded route renders session-dependent content; mark its
       // document no-store so a Back/bfcache restore can't show it after logout.
       // part-4 G1: also no-store when a per-principal refresh `Set-Cookie` rode this
@@ -246,10 +246,10 @@ export async function renderAppErrorDocumentResponse(
   // still fall back to a stable no-internals document.
   return renderErrorDocument({
     ...(app.stylesheets.length > 0 ? { hints: { stylesheets: app.stylesheets } } : {}),
+    ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
     ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
     loaderRuntimeHref: ensureKovoLoaderRuntimeClientModule(app.clientModules),
     status,
-    ...(app.document.template === undefined ? {} : { template: app.document.template }),
   });
 }
 

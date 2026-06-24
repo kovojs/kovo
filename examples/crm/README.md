@@ -17,8 +17,8 @@ optimism spectrum: it mixes **compiler-derived** optimistic updates with a few
   summaries and explicit `await-fragment` choices.
 - **Components** (`src/components/`): `pipeline`, `contacts`, `deal-detail`,
   `chrome` — styled with `@kovojs/style` tokens (`src/theme.ts`).
-- **Behavior graph** (`src/graph.ts`, `src/graph.test.ts`) the compiler proves and
-  CI can check.
+- **Interactive app tests** (`src/interactive-app.test.ts`) cover the routes and
+  mutation refresh behavior through the real app shell.
 
 `src/generated/**` are compiler **artifacts** (lowered components, stamps,
 `graph.json`) — author the TSX/TS sources, not the lowered IR (SPEC §5.2).

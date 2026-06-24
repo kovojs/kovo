@@ -1,5 +1,5 @@
-// Public demo surface for the Stack Overflow clone: schema, queries, mutations,
-// and the authored app graph helper. Generated artifacts stay compiler-owned.
+// Public demo surface for the Stack Overflow clone: schema, queries, and
+// mutations. Generated graph artifacts stay compiler-owned.
 
 export { createSoDb, type SoDb } from './db.js';
 export {
@@ -26,5 +26,3 @@ export {
   voteUp,
   voteUpMutation,
 } from './mutations.js';
-
-export { createSoGraph, soGraphDeclarations } from './graph.js';
