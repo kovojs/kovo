@@ -74,7 +74,10 @@ describe('server static export', () => {
         status: 200,
       }),
     ]);
-    await expect(handled.text()).resolves.toBe(exported.artifacts[0]?.body);
+    const handledBody = await handled.text();
+    expect(normalizeCspNonce(handledBody)).toBe(
+      normalizeCspNonce(exported.artifacts[0]?.body ?? ''),
+    );
     expect(exported.artifacts[0]?.body).toContain('<main data-url="/">from-page</main>');
     expect(exported.artifacts[0]?.body).toContain('installInlineKovoBootstrap');
     expect(exported.artifacts[0]?.body).toContain('/kovo-runtime.client.js');
@@ -121,3 +124,7 @@ describe('server static export', () => {
     }
   });
 });
+
+function normalizeCspNonce(value: string): string {
+  return value.replaceAll(/nonce="[^"]+"/g, 'nonce="<nonce>"');
+}

@@ -45,8 +45,8 @@ describe('credential mutation helpers', () => {
       ok: true,
       responseHeaders: {
         'Set-Cookie': [
-          'kovo_session=session-1; Path=/; HttpOnly; SameSite=Lax',
-          'kovo_session_data=user-1; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_session=session-1; Path=/; HttpOnly; Secure; SameSite=Lax',
+          'kovo_session_data=user-1; Path=/; HttpOnly; Secure; SameSite=Lax',
         ],
       },
       value: {
@@ -100,7 +100,7 @@ describe('credential mutation helpers', () => {
     ).resolves.toMatchObject({
       ok: true,
       responseHeaders: {
-        'Set-Cookie': ['kovo_session=session-2; Path=/; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_session=session-2; Path=/; HttpOnly; Secure; SameSite=Lax'],
       },
       value: {
         redirectTo: '/welcome',
@@ -154,8 +154,8 @@ describe('credential mutation helpers', () => {
       // canonicalizes attribute order (Max-Age before Path). Functionally identical clearing cookies.
       responseHeaders: {
         'Set-Cookie': [
-          'kovo_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax',
-          'kovo_session_data=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax',
+          'kovo_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax',
+          'kovo_session_data=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax',
         ],
       },
       value: {
@@ -400,7 +400,7 @@ describe('credential success is positively classified', () => {
     expect(result).toMatchObject({
       ok: true,
       responseHeaders: {
-        'Set-Cookie': ['better-auth.session_token=tok-1; Path=/; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['better-auth.session_token=tok-1; Path=/; HttpOnly; Secure; SameSite=Lax'],
       },
       value: { redirectTo: '/home', status: 'signed-in' },
     });

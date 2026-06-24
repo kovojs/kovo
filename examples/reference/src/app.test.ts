@@ -255,7 +255,7 @@ describe('reference auth adoption', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/admin',
-        'Set-Cookie': ['kovo_reference_session=session-u1; Path=/; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': ['kovo_reference_session=session-u1; Path=/; HttpOnly; Secure; SameSite=Lax'],
       },
       status: 303,
     });
@@ -320,7 +320,9 @@ describe('reference auth adoption', () => {
       headers: {
         'Cache-Control': 'no-store',
         Location: '/login',
-        'Set-Cookie': ['kovo_reference_session=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax'],
+        'Set-Cookie': [
+          'kovo_reference_session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax',
+        ],
       },
       status: 303,
     });

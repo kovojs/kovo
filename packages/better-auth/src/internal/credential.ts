@@ -6,6 +6,7 @@ import type {
   MutationDefinition,
   MutationFail,
 } from '@kovojs/server';
+import { unsafeCookie } from '@kovojs/server';
 
 import type { BetterAuthRoleSession } from '../guards.js';
 import type { BetterAuthCredentialMutationOptions } from '../internal.js';
@@ -93,6 +94,12 @@ function parseSetCookieHeader(
         const sameSite = attrValue.toLowerCase();
         if (sameSite === 'lax' || sameSite === 'none' || sameSite === 'strict') {
           options.sameSite = sameSite;
+          if (sameSite === 'none') {
+            options.unsafe = unsafeCookie({
+              downgrade: 'sameSiteNone',
+              justification: 'Forwarding upstream Better Auth cross-site cookie attributes.',
+            });
+          }
         }
         break;
       }
