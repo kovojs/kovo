@@ -85,6 +85,8 @@ afterEach(() => {
   document.body.replaceChildren();
   localStorage.removeItem('theme');
   inlineImportModule = async () => ({});
+  delete (globalThis as typeof globalThis & { __navDeferredApplied?: number })
+    .__navDeferredApplied;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   history.replaceState({}, '', initialUrl);
@@ -159,6 +161,71 @@ describe('browser inline loader enhanced navigation', () => {
     } finally {
       removeEventListener('kovo:navigate', navigated);
     }
+  });
+
+  it('executes deferred body scripts from full-document enhanced navigation targets', async () => {
+    document.head.innerHTML = [
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Products</title>',
+    ].join('');
+    document.body.innerHTML = [
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/products" kovo-nav-kind="page" kovo-nav-name="page">Products</section>',
+      '</main>',
+    ].join('');
+    const targetHtml = [
+      '<!doctype html><html><head>',
+      '<meta name="kovo-build" content="build-a">',
+      '<title>Cart</title>',
+      '</head><body>',
+      '<main kovo-nav-segment="layout:Shop" kovo-nav-kind="layout" kovo-nav-name="Shop">',
+      '<a id="to-cart" href="/cart">Cart</a>',
+      '<section kovo-nav-segment="page:/cart" kovo-nav-kind="page" kovo-nav-name="page">',
+      '<kovo-defer target="cart-rail">Loading rail</kovo-defer>',
+      '<script type="application/json" id="cart-data">{"ok":true}</script>',
+      '</section>',
+      '</main>',
+      '\n--kovo-boundary\n',
+      '<kovo-fragment target="cart-rail"><aside id="cart-rail">Deferred rail</aside></kovo-fragment>',
+      '<script data-kovo-csp-hash="sha256-apply">',
+      'var s=document.currentScript,n=s.previousSibling,e=[];',
+      'for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}',
+      'globalThis.__navDeferredApplied = (globalThis.__navDeferredApplied || 0) + 1;',
+      'globalThis.__kovo_a?.(e.join("\\n"));s.remove();',
+      '</script>',
+      '\n--kovo-boundary--\n',
+      '<script data-kovo-csp-hash="sha256-cleanup">',
+      'for (const node of [...document.body.childNodes]) if ((node.textContent || "").includes("--kovo-boundary")) node.remove();',
+      'document.currentScript.remove();',
+      '</script>',
+      '</body></html>',
+    ].join('');
+    const fetch = vi.fn(async () => ({
+      headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
+      async text() {
+        return targetHtml;
+      },
+      url: new URL('/cart', location.href).href,
+    }));
+    vi.stubGlobal('fetch', fetch);
+    vi.stubGlobal('scrollTo', vi.fn());
+
+    installNavigationLoader();
+
+    dispatchAnchorLikeClick('/cart');
+
+    await vi.waitFor(() => expect(document.title).toBe('Cart'));
+    await vi.waitFor(() =>
+      expect(document.querySelector('#cart-rail')?.textContent).toBe('Deferred rail'),
+    );
+
+    expect(
+      (globalThis as typeof globalThis & { __navDeferredApplied?: number }).__navDeferredApplied,
+    ).toBe(1);
+    expect(document.body.textContent).not.toContain('--kovo-boundary');
+    expect(comparableBodyMarkup(document)).not.toContain('kovo-fragment');
+    expect(document.querySelector('#cart-data')?.textContent).toBe('{"ok":true}');
   });
 
   it('updates head, html, and body shell fields from the target document', async () => {

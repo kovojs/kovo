@@ -436,6 +436,16 @@ function installInlineKovoLoader(im) {
     }
     return nextBody;
   };
+  const ks = 'script[data-kovo-csp-hash]';
+  const rscr = (root) => {
+    for (const old of qa(root, ks)) {
+      if (!old.isConnected) continue;
+      const fresh = doc.createElement('script');
+      for (const attr of old.attributes) fresh.setAttribute(attr.name, attr.value);
+      fresh.textContent = old.textContent;
+      old.replaceWith(fresh);
+    }
+  };
   const ng = (href) => {
     if (location.assign) location.assign(href);
     else location.href = href;
@@ -540,7 +550,7 @@ function installInlineKovoLoader(im) {
       const nextSegments = ns(nextBody);
       if (!nextSegments.length) throw Error();
       let triggerRoot;
-      if (!currentSegments.length || currentSegments.length !== nextSegments.length) {
+      if (qa(nextBody, ks).length || !currentSegments.length || currentSegments.length !== nextSegments.length) {
         for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
         triggerRoot = rbd(nextBody);
       } else {
@@ -573,6 +583,7 @@ function installInlineKovoLoader(im) {
       const body = doc.body || triggerRoot;
       if (!body) throw Error();
       xa(body, nextBody);
+      rscr(body);
       if (!pop) globalThis.history?.pushState?.({}, '', finalUrl.href);
       const focusTarget = doc.querySelector('main,h1') ?? doc.querySelector('[kovo-nav-segment]');
       focusTarget?.setAttribute?.('tabindex', '-1');
