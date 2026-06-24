@@ -1,8 +1,6 @@
-// CSP-3 (bugs-part3): apps opt into the framework's own CSP by passing `document.csp`
-// (the inline-script/style hashes surfaced by `renderRouteDocumentResponse` /
-// `renderDeferredDocument`) to `renderContentSecurityPolicy` and setting the result as
-// their `Content-Security-Policy` header. `cspSha256` lets apps hash any additional
-// inline script/style they author so it can be admitted by the same policy.
+// Phase 7: Kovo emits its own document CSP by default from framework-generated
+// inline-script/style hashes. `renderContentSecurityPolicy` and `cspSha256` remain
+// public for custom renderers that need to inspect or extend compatible hash metadata.
 export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export { Defer } from '../deferred-region.js';

@@ -100,6 +100,27 @@ describe('server app shell document assembly', () => {
     expect(document.html).toContain('kovo-query="product"');
   });
 
+  it('keeps CSP hardening directives non-overridable', () => {
+    const policy = renderContentSecurityPolicy(
+      { scripts: [], styles: [] },
+      {
+        baseUri: ['https://base.example.test'],
+        formAction: ['https://forms.example.test'],
+        frameAncestors: ['https://frames.example.test'],
+        objectSrc: ['https://objects.example.test'],
+      },
+    );
+
+    expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("form-action 'self'");
+    expect(policy).toContain("frame-ancestors 'none'");
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).not.toContain('base.example.test');
+    expect(policy).not.toContain('forms.example.test');
+    expect(policy).not.toContain('frames.example.test');
+    expect(policy).not.toContain('objects.example.test');
+  });
+
   // F2 (bugs-part3 L2-early-hints-2): the document head path threads rendered query
   // values into the meta factory so `metaFromQuery(...)` resolves; an absent query
   // must drop only the derived tags rather than 500 the whole document.
@@ -239,9 +260,9 @@ describe('server app shell document assembly', () => {
     expect(renderRouteDocumentResponse(binary)).toBe(binary);
   });
 
-  // CSP-3 (bugs-part3): HTML document responses carry baseline security headers and
-  // surface the assembled CSP so the dispatch path can emit a Content-Security-Policy.
-  it('attaches baseline security headers and plumbs document.csp on HTML responses (CSP-3)', () => {
+  // Phase 7 / SPEC §9.5: HTML document responses carry baseline security headers,
+  // surface the assembled CSP metadata, and emit the hash-based CSP by default.
+  it('attaches baseline security headers and default CSP on HTML responses', () => {
     const wrapped = renderRouteDocumentResponse({
       body: '<main>Orders</main>',
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
@@ -251,13 +272,19 @@ describe('server app shell document assembly', () => {
     expect(wrapped.headers['X-Content-Type-Options']).toBe('nosniff');
     expect(wrapped.headers['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
 
-    // `document.csp` is surfaced (previously discarded) — the loader hash is present so
-    // an app can render and attach a Content-Security-Policy header.
+    expect(wrapped.headers['Content-Security-Policy']).toBeDefined();
+
+    // `document.csp` is still surfaced for compatibility; the default header uses the
+    // same metadata so the framework's inline loader is admitted without app opt-in.
     expect(wrapped.csp).toBeDefined();
     expect(wrapped.csp?.scripts.length).toBeGreaterThan(0);
     const policy = renderContentSecurityPolicy(wrapped.csp!);
+    expect(wrapped.headers['Content-Security-Policy']).toBe(policy);
     expect(policy).toContain("script-src 'self'");
     expect(policy).toContain("base-uri 'self'");
+    expect(policy).toContain("object-src 'none'");
+    expect(policy).toContain("form-action 'self'");
+    expect(policy).toContain("frame-ancestors 'none'");
 
     // An author-set nosniff header is preserved rather than duplicated.
     const authorNosniff = renderRouteDocumentResponse({
@@ -271,10 +298,27 @@ describe('server app shell document assembly', () => {
     expect(nosniffKeys).toHaveLength(1);
   });
 
+  it('appends the default CSP to an author CSP instead of replacing it', () => {
+    const wrapped = renderRouteDocumentResponse({
+      body: '<main>Orders</main>',
+      headers: {
+        'Content-Security-Policy': 'img-src https://cdn.example.test',
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+      status: 200,
+    });
+
+    expect(wrapped.headers['Content-Security-Policy']).toEqual([
+      'img-src https://cdn.example.test',
+      renderContentSecurityPolicy(wrapped.csp!),
+    ]);
+  });
+
   it('attaches baseline security headers to error documents (CSP-3)', () => {
     const error = renderErrorDocument({ status: 404 });
     expect(error.headers).toMatchObject({
       'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy': renderContentSecurityPolicy(error.csp),
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'X-Content-Type-Options': 'nosniff',
     });
