@@ -97,7 +97,11 @@ function importBoundaryTier(specifier) {
   return nonPublicKovoImportTier(specifier) ?? appLocalGeneratedImportTier(specifier);
 }
 
-function allowedImportBoundaryException(tier, allowKey, { generatedExceptions, internalExceptions }) {
+function allowedImportBoundaryException(
+  tier,
+  allowKey,
+  { generatedExceptions, internalExceptions },
+) {
   if (tier === 'internal') return internalExceptions.has(allowKey);
   if (tier === 'generated') return generatedExceptions.has(allowKey);
   if (tier === 'app-local-generated') return false;

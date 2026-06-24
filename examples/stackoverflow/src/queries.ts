@@ -2,11 +2,7 @@ import { query, s, type QueryLoadContext } from '@kovojs/server';
 import { and, asc, eq, sum } from 'drizzle-orm';
 
 import type { SoDb } from './db.js';
-import {
-  type QuestionAnswersResult,
-  type QuestionDetailResult,
-  type SoRequest,
-} from './model.js';
+import { type QuestionAnswersResult, type QuestionDetailResult, type SoRequest } from './model.js';
 import { answers, questions, votes } from './schema.js';
 
 // Drizzle selects stay inline so the generated StackOverflow artifacts can

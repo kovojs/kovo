@@ -403,7 +403,7 @@ export const compilerSpecCoverageMap = [
       },
       {
         file: 'examples/reference/src/app.test.ts',
-        testName: 'represents authenticated reference flows in the graph audits',
+        testName: 'renders authed and role guards through the reference app flow',
       },
     ],
   },
