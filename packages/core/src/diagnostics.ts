@@ -69,7 +69,13 @@ export type DiagnosticCode =
   | 'KV424'
   | 'KV425'
   | 'KV426'
+  | 'KV427'
+  | 'KV428'
+  | 'KV429'
+  | 'KV430'
   | 'KV431'
+  | 'KV432'
+  | 'KV433'
   | 'KV434'
   | 'KV435'
   | 'KV436'
@@ -865,6 +871,50 @@ export const diagnosticDefinitions = {
     severity: 'error',
     message: 'Trust escape hatch lacks auditable provenance.',
   },
+  KV427: {
+    code: 'KV427',
+    help: [
+      'Blocked reason: a cloud SDK client was constructed without the declared Kovo cloud credential wrapper, so metadata credentials could be fetched through an untracked path.',
+      'Fixes: declare the cloud provider capability, construct clients with the corresponding kovo cloud credential helper, or remove the SDK client.',
+      'Escape: provider-specific credential helpers enter the framework metadata capability frame; arbitrary metadata egress remains blocked.',
+      'The secure-by-construction Phase 5 egress model requires cloud credentials to flow through framework-owned credential factories instead of raw SDK defaults.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Cloud SDK client is missing its declared framework credential.',
+  },
+  KV428: {
+    code: 'KV428',
+    help: [
+      'Blocked reason: uploaded attacker-controlled bytes would be rendered inline without a verified-safe content type or framework re-encode step.',
+      'Fixes: serve the upload as attachment with nosniff, re-encode it through a safe framework transform, or use an audited inline-upload escape with provenance.',
+      'Escape: an explicit inline upload escape is audit-grade only and must appear in kovo explain capabilities.',
+      'The secure-by-construction Phase 6 upload gate protects the active-content boundary; user filenames and client MIME claims are metadata, not proof.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Unverified uploaded content cannot be rendered inline.',
+  },
+  KV429: {
+    code: 'KV429',
+    help: [
+      'Blocked reason: a mutation reads and then writes a declared atomic/versioned value without a compare-and-set, version check, row lock, or serializable transaction proof.',
+      'Fixes: use the Kovo optimistic version helper, compare-and-set primitive, forUpdate/SERIALIZABLE transaction, or remove the stale read-before-write dependency.',
+      'Escape: explicit lock/serializable primitives document the concurrency boundary; a plain mutation transaction is not enough under READ COMMITTED.',
+      'SPEC §11.1 and secure-by-construction Phase 6 require contended writes to carry an atomicity proof instead of relying on timing.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Read-then-write on an atomic value lacks an atomicity guard.',
+  },
+  KV430: {
+    code: 'KV430',
+    help: [
+      'Blocked reason: an untrusted wire schema admits recursive depth, array length, record breadth, or total node count without an explicit budget.',
+      'Fixes: add max depth/length/keys limits to the schema, rely on the default parser budget when appropriate, or raise the app-level budget with a reviewed reason.',
+      'Escape: schema or app-level budget overrides are audited capacity decisions, not proof that the input is small.',
+      'The secure-by-construction Phase 6 parser budget closes small-body/large-work inputs before schema descent across JSON, FormData, query, and route params.',
+    ].join('\n'),
+    severity: 'lint',
+    message: 'Wire schema has no explicit shape budget.',
+  },
   KV431: {
     code: 'KV431',
     help: [
@@ -875,6 +925,28 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Client module reference is absent from the CSP/export manifest.',
+  },
+  KV432: {
+    code: 'KV432',
+    help: [
+      'Blocked reason: a session/auth-reachable cookie weakens HttpOnly, Secure, or SameSite floors without a recorded unsafeCookie justification.',
+      'Fixes: keep the class-derived cookie floor, route forwarded Set-Cookie values through the normalizer, or attach unsafeCookie downgrade metadata with a specific justification.',
+      'Escape: unsafeCookie records the downgrade in kovo explain --cookies; it does not make the cookie attribute safe.',
+      'SPEC §6.5 and secure-by-construction Phase 5 require cookie security floors to be explicit and auditable rather than copied from app or provider strings.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Insecure cookie downgrade lacks an unsafeCookie justification.',
+  },
+  KV433: {
+    code: 'KV433',
+    help: [
+      'Blocked reason: a query loader reaches a write-capable database operation without the explicit elevated query capability.',
+      'Fixes: keep query loaders on the read-only DB handle, move writes to a mutation, or use query.elevated with a reviewed reason when the read path must hold a write capability.',
+      'Escape: query.elevated is an audited capability and should remain rare because GET/query execution is expected to be read-only.',
+      'SPEC §10.2 and secure-by-construction Phase 5 require read surfaces to lack write authority by default, with a static write-reachability gate as the completion target.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Query loader reaches a write without an elevated query capability.',
   },
   KV434: {
     code: 'KV434',
