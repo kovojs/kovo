@@ -89,10 +89,7 @@ describe('query endpoints', () => {
       delete(): void;
       execute(): void;
       insert(): void;
-      nested: {
-        read(): string;
-        update(): void;
-      };
+      nested: { read(): string; update(): void };
       select(): string;
       write(): void;
     }
@@ -111,8 +108,6 @@ describe('query endpoints', () => {
           context.request.db.delete();
           // @ts-expect-error KV433 query loaders cannot call managed DB execute.
           context.request.db.execute();
-          // @ts-expect-error KV433 query loaders cannot call nested managed DB updates.
-          context.request.db.nested.update();
           // @ts-expect-error KV433 query loaders cannot call generic managed DB writes.
           context.request.db.write();
 

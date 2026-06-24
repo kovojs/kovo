@@ -416,12 +416,8 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   options: RequestLifecycleOptions<Request, SessionValue, DbValue> = {},
 ): Promise<LifecycleRequest<Request, SessionValue, DbValue>> {
   let lifecycleRequest: unknown = request;
-  if (options.egressFetch !== undefined || !hasRequestFetch(lifecycleRequest)) {
-    lifecycleRequest = requestWithProperty(
-      lifecycleRequest,
-      'fetch',
-      options.egressFetch ?? globalThis.fetch.bind(globalThis),
-    );
+  if (options.egressFetch !== undefined) {
+    lifecycleRequest = requestWithProperty(lifecycleRequest, 'fetch', options.egressFetch);
   }
 
   if (options.sessionProvider) {
@@ -452,14 +448,6 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
   }
 
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
-}
-
-function hasRequestFetch(value: unknown): value is { fetch: typeof fetch } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { fetch?: unknown }).fetch === 'function'
-  );
 }
 
 export async function renderHttpGuardFailureResponse<Request>(

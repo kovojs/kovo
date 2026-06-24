@@ -1,6 +1,6 @@
 import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
 import { type StructuralMorphNode } from '@kovojs/browser/client';
-import { csrfToken } from '@kovojs/server';
+import { csrfToken, type QueryReaderDb } from '@kovojs/server';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
 
@@ -93,8 +93,12 @@ export async function seedCommerceState(
 export function queryContext(db = createCommerceDb()) {
   return {
     db,
-    request: { db, session: { id: 's-query', user: { id: 'u-query' } } },
+    request: { db: queryReaderDb(db), session: { id: 's-query', user: { id: 'u-query' } } },
   };
+}
+
+export function queryReaderDb(db: CommerceDb): QueryReaderDb<CommerceDb> {
+  return db as QueryReaderDb<CommerceDb>;
 }
 
 export function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {

@@ -30,6 +30,9 @@ function appModuleSource(options: {
     '  diagnostics: [],',
     '  document: {},',
     '  endpoints: [],',
+    ...(options.closed === false
+      ? []
+      : ['  egress: { allowInternal: [], fetch: globalThis.fetch.bind(globalThis) },']),
     '  errorShells: {},',
     '  liveTargetRenderers: [],',
     '  mutations: [],',

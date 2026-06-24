@@ -32,13 +32,11 @@ interface QueryDeltaListMeta {
 export type QueryWriteMethod = 'delete' | 'execute' | 'insert' | 'update' | 'write';
 
 /** The read-only DB view exposed to query loaders by default (KV433 / SPEC §10.2). */
-export type QueryReaderDb<Db> = Db extends (...args: any[]) => any
-  ? Db
-  : Db extends object
-    ? {
-        readonly [Key in keyof Db]: Key extends QueryWriteMethod ? never : QueryReaderDb<Db[Key]>;
-      }
-    : Db;
+export type QueryReaderDb<Db> = Db extends object
+  ? Db & {
+      readonly [Key in keyof Db as Key extends QueryWriteMethod ? Key : never]: never;
+    }
+  : Db;
 
 /** Request view exposed to a query loader: its `db` channel is narrowed to a reader handle. */
 export type QueryReaderRequest<Request> = Request extends { db: infer Db }

@@ -1,4 +1,4 @@
-import { isKovoApp } from '@kovojs/server';
+import { isKovoApp, type QueryReaderDb } from '@kovojs/server';
 import { describe, expect, it } from 'vitest';
 
 import app, { requestHandler } from './app.js';
@@ -27,7 +27,10 @@ describe('starter app', () => {
 
   it('reads seeded contacts through the typed query', async () => {
     const db = createAppDb();
-    const result = await contactsQuery.load(undefined, { db, request: { db } });
+    const result = await contactsQuery.load(undefined, {
+      db,
+      request: { db: db as QueryReaderDb<typeof db> },
+    });
     expect(result.items.map((contact) => contact.id)).toContain('c1');
   });
 });

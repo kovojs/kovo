@@ -18,6 +18,7 @@ import {
 import {
   productGridInput,
   queryContext,
+  queryReaderDb,
   readCartItems,
   readOrders,
   resetProducts,
@@ -165,7 +166,10 @@ describe('commerce example queries', () => {
           {},
           {
             db,
-            request: { db, session: { id: 's-custom', user: { id: 'u-custom-query' } } },
+            request: {
+              db: queryReaderDb(db),
+              session: { id: 's-custom', user: { id: 'u-custom-query' } },
+            },
             session: { id: 's-custom', user: { id: 'u-custom-query' } },
           },
         ),

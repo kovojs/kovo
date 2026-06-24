@@ -1,4 +1,10 @@
-import { guards, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
+import {
+  guards,
+  publicAccess,
+  query,
+  type QueryLoadContext,
+  type QueryReaderDb,
+} from '@kovojs/server';
 import { eq, gt, sum } from 'drizzle-orm';
 import { domain } from '@kovojs/server';
 
@@ -117,14 +123,14 @@ export const orderHistoryQuery = query('orderHistory', {
 });
 
 export async function loadCartQuery(db: CommerceDb): Promise<CartQueryResult> {
-  return cartQuery.load(undefined, { db, request: { db } });
+  return cartQuery.load(undefined, { db, request: { db: queryReaderDb(db) } });
 }
 
 export async function loadProductGrid(
   db: CommerceDb,
   input: ProductGridInput = {},
 ): Promise<ProductGridResult> {
-  return productGridQuery.load(input, { db, request: { db } });
+  return productGridQuery.load(input, { db, request: { db: queryReaderDb(db) } });
 }
 
 // SECURITY (SECURITY_FINDINGS.md M9): the order-history loader now requires the
@@ -135,7 +141,15 @@ export async function loadOrderHistory(
   userId: string,
 ): Promise<OrderHistoryResult> {
   const session = { id: userId, user: { id: userId } };
-  return orderHistoryQuery.load(undefined, { db, request: { db, session }, session });
+  return orderHistoryQuery.load(undefined, {
+    db,
+    request: { db: queryReaderDb(db), session },
+    session,
+  });
+}
+
+function queryReaderDb(db: CommerceDb): QueryReaderDb<CommerceDb> {
+  return db as QueryReaderDb<CommerceDb>;
 }
 
 function requireCommerceQueryDb(context?: CommerceQueryLoadContext): CommerceDb {

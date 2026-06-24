@@ -598,7 +598,7 @@ describe('server app document boundary', () => {
     expect(onError).toHaveBeenCalledWith(routeError, {
       correlationId: expect.stringMatching(/^kovo-/),
       operation: 'route-page',
-      request,
+      request: expect.objectContaining({ fetch: app.egress.fetch }),
       routePath: '/broken',
     });
   });

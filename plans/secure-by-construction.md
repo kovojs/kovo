@@ -461,18 +461,16 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
         — **narrow `host:port` entries only.** The allowlist is provenance-blind (anything allowed is reachable
         by any caller, incl. an SSRF landing there), so broad CIDRs re-open the private space; permit but flag
         them. Starter ships a dev `allowInternal` with common localhost entries; policy is uniform across envs.
-        Partial evidence (2026-06-24): `packages/server/src/app.ts`/`app-types.ts` now accept and normalize
-        `createApp({ egress: { allowInternal } })`; `packages/server/src/app.test.ts` verifies normalized
-        `localhost:11434` config and route lifecycle `request.fetch`. Still open: starter defaults and any
-        broad-CIDR diagnostic/flagging.
+    - Evidence (2026-06-24 partial): `packages/server/src/app.ts`/`app-types.ts` accept and normalize
+      `createApp({ egress: { allowInternal } })`; `packages/server/src/app.test.ts` verifies normalized
+      `localhost:11434` config and route lifecycle `request.fetch`. Still open: starter defaults and any
+      broad-CIDR diagnostic/flagging.
   - [ ] Fail-closed: a blocked connection throws a typed `EgressBlockedError` (502-class) logged with the
-        destination + "add to `egress.allowInternal` if intended."
-        Partial evidence (2026-06-24): `packages/server/src/egress.ts` adds typed `EgressBlockedError`
-        and a guarded lifecycle fetch wrapper; `pnpm exec vitest --run packages/server/src/egress.test.ts
-        packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies default-deny
-        private/loopback/link-local/metadata decisions, exact `host:port` allowance, numeric/NAT64
-        normalization, and redirect-hop rechecks. Still open: logging and non-fetch socket/global-dispatcher
-        enforcement.
+        destination plus "add to `egress.allowInternal` if intended." - Evidence (2026-06-24 partial): `packages/server/src/egress.ts` adds typed `EgressBlockedError` and a
+        guarded lifecycle fetch wrapper. `pnpm exec vitest --run packages/server/src/egress.test.ts
+packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies default-deny private,
+        loopback, link-local, metadata, exact `host:port` allowance, numeric/NAT64 normalization, and redirect-hop
+        rechecks. Still open: logging and non-fetch socket/global-dispatcher enforcement.
   - [ ] **Managed-identity wrinkle — RESOLVED via a privileged metadata ALS capability (workflow-verified
         2026-06-23).** The capability to reach an identity endpoint is "running inside the framework-owned
         credential ALS frame" — NOT a `host:port` allowlist (provenance-blind, SSRF-reachable) and NOT a stack
@@ -571,11 +569,12 @@ packages/server/src/app-document.test.ts`; `vp check packages/server/src`; `git 
       sound sink-validation) + **safe-default mitigations** for the inherent URL-as-credential leakage (not a
       proof). Closes a gap the legible wire amplifies (links leak via the readable store, `Referer`, logs, shared
       caches); without it apps hand-roll HMAC URLs and hit the canonical mistakes.
-  - Evidence (2026-06-24 primitive-only slice): `pnpm exec vitest --run packages/server/src/capability-url.test.ts`
-        covers HMAC signing/verification, expiry, method/key/scope tamper failures, prefix scope, and
-        backslash/`//`/dot-segment key rejection in `packages/server/src/capability-url.ts`. Remaining gap:
-        this is not wired to `ctx.signUrl`, a framework-owned download endpoint/storage-read sink, one-time
-        replay, query-cache exclusion policy, or `kovo explain --capabilities`.
+  - Evidence (2026-06-24 primitive-only slice):
+    `pnpm exec vitest --run packages/server/src/capability-url.test.ts` covers HMAC signing/verification,
+    expiry, method/key/scope tamper failures, prefix scope, and backslash/`//`/dot-segment key rejection in
+    `packages/server/src/capability-url.ts`. Remaining gap: this is not wired to `ctx.signUrl`, a
+    framework-owned download endpoint/storage-read sink, one-time replay, query-cache exclusion policy, or
+    `kovo explain --capabilities`.
   - [ ] HMAC over **canonicalized** bytes (`method+key+expiry+scope`), framework secret (anonymous-CSRF
         machinery), **constant-time verify** (`verifier.ts`) at a framework-owned download endpoint BEFORE any
         storage read; unsigned/tampered/expired → fail closed, object never read.
@@ -702,21 +701,20 @@ function. Classified runtime defense-in-depth: makes a slipped-through XSS inert
       `unsafe-inline`/`unsafe-eval`; the nonce flows through the request shell onto every emitted script tag.
       Build on `packages/server/src/csp.ts` (keep its non-overridable `base-uri`/`object-src`/`form-action`/
       `frame-ancestors`).
-      Evidence: `pnpm vitest --run packages/server/src/document.test.ts
-packages/server/src/deferred-stream.test.ts packages/server/src/hints.test.ts` proves default CSP headers,
-      nonce-bearing document/deferred/hint scripts, `strict-dynamic`, no unsafe script sources, and
-      non-overridable hardening directives.
+  - Evidence: `pnpm vitest --run packages/server/src/document.test.ts packages/server/src/deferred-stream.test.ts
+packages/server/src/hints.test.ts` proves default CSP headers, nonce-bearing document/deferred/hint scripts,
+    `strict-dynamic`, no unsafe script sources, and non-overridable hardening directives.
 - [x] Install a Trusted Types policy with the framework as the SOLE policy (`require-trusted-types-for 'script'`)
       so any non-framework DOM-write sink (`innerHTML`/`script.src`) throws — kills DOM-XSS sinks outside the
       framework. Chromium-only (one-engine DiD; the CSP carries the cross-browser floor). **Flipped on
       directly** — app/third-party sinks that break must move to a framework-safe path or be allowlisted.
-      - Evidence: `packages/server/src/csp.ts` emits `trusted-types kovo` and
-        `require-trusted-types-for 'script'`; `packages/browser/src/response-fragment-apply.ts` and the generated
-        inline loader route framework HTML parse sinks through the cached `kovo` policy.
-      - Verification: `pnpm vitest --run packages/server/src/document.test.ts
-        packages/browser/src/response-fragment-apply.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts
-        packages/browser/src/inline-loader-build.test.ts` covers CSP emission/opt-out and a TT-enforced fake sink
-        that rejects raw strings but accepts Kovo policy output.
+  - Evidence: `packages/server/src/csp.ts` emits `trusted-types kovo` and
+    `require-trusted-types-for 'script'`; `packages/browser/src/response-fragment-apply.ts` and the generated
+    inline loader route framework HTML parse sinks through the cached `kovo` policy.
+  - Verification: `pnpm vitest --run packages/server/src/document.test.ts
+packages/browser/src/response-fragment-apply.test.ts packages/browser/src/inline-loader-artifact-minifier.test.ts
+packages/browser/src/inline-loader-build.test.ts` covers CSP emission/opt-out and a TT-enforced fake sink
+    that rejects raw strings but accepts Kovo policy output.
 - [ ] Add `frame-ancestors` (clickjacking) and `nosniff` (MIME-confusion) to the minted policy.
 - [ ] Third-party allowlist config (`script-src`/`frame-src` extras for analytics/payments/widgets), surfaced
       in `kovo explain --capabilities`. Required precisely because there is no report-only ramp — a third-party
