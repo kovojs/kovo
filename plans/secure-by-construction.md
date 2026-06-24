@@ -358,18 +358,25 @@ endpoints use `access: verified`; the migration **assigns a real decision at eve
   - Open risk: `public()` reasons are greppable intent leakage (legibility-as-confidentiality footgun);
     reasons must not carry sensitive operational detail.
 
-## Phase 3: Mass assignment — protected columns (write-side dual of IDOR) — diagnostic code TBD
+## Phase 3: Mass assignment — protected columns (write-side dual of IDOR) — KV437
 
 Decision (2026-06-23): **`owner:` columns and primary keys are auto-governed**; explicit `governed: true` for
 the rest (`role`/`balance`/`isAdmin`). **Fail-closed** posture (non-negotiable — it is the guarantee). Two-tier
 escape hatch: `serverValue(v, reason)` (non-input args only) and the louder audited `adminAssign(input.x,
 reason)`. Helper false positives are resolved with `kovoAnalyzerSummary`, never reflexive `serverValue`.
 
-- [ ] Add the `governed` fact: auto-derive for `owner:` columns + primary keys; explicit
+- [x] Add the `governed` fact: auto-derive for `owner:` columns + primary keys; explicit
       `kovo({ governed: true })` for the rest. A write reaching a governed column with input-provenance is
-      a blocking diagnostic (code TBD; KV425 is already assigned), proven by the Phase 0 inverted (fail-closed) pass.
-- [ ] Trace destructuring/aliasing (Phase 0 bypass corpus): `const { ownerId } = input; .values({ ownerId })`
+      a blocking diagnostic (KV437; KV425 is already assigned), proven by the Phase 0 inverted (fail-closed) pass.
+  - Evidence: `packages/drizzle/src/static/derivation.ts` auto-governs owner and primary-key columns, honors
+    explicit `governed`, and emits KV437 through `kovo compile drizzle-static` `verificationDiagnostics`.
+    Verified by `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts packages/core/src/diagnostics.test.ts packages/cli/src/index.kovo-compile.test.ts`
+    and `vp check packages/drizzle/src packages/core/src packages/cli/src`.
+- [x] Trace destructuring/aliasing (Phase 0 bypass corpus): `const { ownerId } = input; .values({ ownerId })`
       is caught; `.values(input)` spread is rejected unless the input type provably lacks governed keys.
+  - Evidence: `packages/drizzle/src/index.symbol-provenance.test.ts` covers destructured input into an owner
+    column plus whole-input/spread/helper-returned governed writes failing closed with KV437. Verified by the
+    focused Vitest command above.
 - [ ] Two-tier escape hatch, both surfaced in `kovo explain --capabilities`:
   - `serverValue(value, reason)` discharges **only non-input** arguments — `serverValue(input.x, …)` still
     fails the mass-assignment diagnostic (input provenance inside the brand is not a bypass).

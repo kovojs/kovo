@@ -1159,6 +1159,7 @@ interface DrizzleStaticCommandInput {
     | 'sqlSafetyDiagnostics'
     | 'symbolicEffects'
     | 'touchGraph'
+    | 'verificationDiagnostics'
   )[];
   files?: readonly unknown[];
   invalidation?: {
@@ -1182,6 +1183,7 @@ async function runCompileDrizzleStaticCommand(
     deriveInvalidationRegistry,
     deriveMutationTouchRegistry,
     extractAlgebraicShapesFromProject,
+    governedWriteDiagnosticsFromProject,
     extractMaterializedViewRefreshFactsFromProject,
     extractOwnerAuditFromProject,
     extractQueryFactsFromProject,
@@ -1209,6 +1211,7 @@ async function runCompileDrizzleStaticCommand(
         'sqlSafetyDiagnostics',
         'symbolicEffects',
         'touchGraph',
+        'verificationDiagnostics',
       ],
     );
     let queryFacts: ReturnType<typeof extractQueryFactsFromProject> | undefined;
@@ -1239,6 +1242,9 @@ async function runCompileDrizzleStaticCommand(
     }
     if (extract.has('symbolicEffects'))
       output.symbolicEffects = extractSymbolicEffectsFromProject({ files });
+    if (extract.has('verificationDiagnostics')) {
+      output.verificationDiagnostics = governedWriteDiagnosticsFromProject({ files });
+    }
     if (extract.has('algebraicShapes'))
       output.algebraicShapes = extractAlgebraicShapesFromProject({ files });
   }
