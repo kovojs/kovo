@@ -305,6 +305,41 @@ describe('server schemas', () => {
     });
   });
 
+  it('generates opaque stored-upload keys when no key override is provided', async () => {
+    const storage = createMemoryStorage();
+    const upload = s.file().store({ storage });
+    const file = formDataFile([pngBytes()], '../../avatar.png', 'image/png');
+
+    const result = await parseSchemaAsync(upload, file);
+
+    expect(result.key).toMatch(
+      /^uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+    );
+    expect(result.key).not.toContain('avatar.png');
+    await expect(storage.get(result.key)).resolves.toMatchObject({
+      contentType: 'image/png',
+      key: result.key,
+      metadata: { filename: '../../avatar.png' },
+      size: 8,
+    });
+  });
+
+  it('allows a reviewed generated upload key prefix without using the filename as the key', async () => {
+    const storage = createMemoryStorage();
+    const upload = s.file().store({ keyPrefix: '/tenant-a/uploads/', storage });
+    const file = formDataFile([pngBytes()], 'avatar.png', 'image/png');
+
+    const result = await parseSchemaAsync(upload, file);
+
+    expect(result.key).toMatch(
+      /^tenant-a\/uploads\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+    );
+    await expect(storage.get(result.key)).resolves.toMatchObject({
+      key: result.key,
+      metadata: { filename: 'avatar.png' },
+    });
+  });
+
   it('falls back to application/octet-stream for unsniffed upload bytes', async () => {
     const storage = createMemoryStorage();
     const upload = s.file().store({

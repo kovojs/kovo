@@ -1,5 +1,6 @@
 import { secret, type Secret, type StorageCapability, type StorageObjectInfo } from '@kovojs/core';
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 
 /** A validator that parses unknown input into a typed value (throwing `SchemaValidationError` on failure). */
 export interface Schema<T> {
@@ -246,9 +247,15 @@ export interface StoredFileUpload {
 /** Stored-upload schema produced by `s.file().store(...)` (SPEC.md §6). */
 export interface StoredFileSchema extends AsyncSchema<StoredFileUpload> {}
 
-/** Options for `s.file().store(...)`: storage capability, object key, and metadata (SPEC.md §6). */
+/** Options for `s.file().store(...)`: storage capability, optional opaque key prefix, and metadata (SPEC.md §6). */
 export interface StoredFileSchemaOptions {
-  key: string | ((file: FileLike) => Promise<string> | string);
+  /**
+   * Explicit storage key override. Omit this for the safe default: a server-generated
+   * opaque UUID key under `keyPrefix`, with the user filename stored only as metadata.
+   */
+  key?: string | ((file: FileLike) => Promise<string> | string);
+  /** Prefix for generated opaque keys. Defaults to `uploads`. */
+  keyPrefix?: string;
   metadata?: (file: FileLike) => Readonly<Record<string, string>>;
   storage: StorageCapability;
 }
@@ -544,10 +551,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
       throw validationError(`Expected file type ${this.#fileOptions.mime.join(', ')}`);
     }
 
-    const key =
-      typeof this.#storageOptions.key === 'string'
-        ? this.#storageOptions.key
-        : await this.#storageOptions.key(file);
+    const key = await storedUploadKey(file, this.#storageOptions);
     const storage = await this.#storageOptions.storage.put(key, bytes, {
       contentType,
       metadata: {
@@ -568,6 +572,19 @@ function createFileOptions(
     ...(maxBytes === undefined ? {} : { maxBytes }),
     ...(mime === undefined ? {} : { mime }),
   };
+}
+
+async function storedUploadKey(file: FileLike, options: StoredFileSchemaOptions): Promise<string> {
+  if (typeof options.key === 'string') return options.key;
+  if (typeof options.key === 'function') return await options.key(file);
+
+  const prefix = generatedUploadKeyPrefix(options.keyPrefix);
+  const id = randomUUID();
+  return prefix === '' ? id : `${prefix}/${id}`;
+}
+
+function generatedUploadKeyPrefix(prefix: string | undefined): string {
+  return (prefix ?? 'uploads').replaceAll(/^\/+|\/+$/g, '');
 }
 
 const stringFormatValidators: Record<StringFormat, (value: string) => boolean> = {

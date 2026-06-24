@@ -674,8 +674,9 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
       `image/svg+xml` object as attachment with `nosniff`.
   - [ ] **Server-generated random/opaque storage keys** by construction; the user filename is sanitized
         metadata used only for the download `filename`, never the key — kills path traversal/overwrite.
-    - Gap: `s.file().store({ key })` still accepts caller-provided strings/functions; this slice did not add a
-      random key generator because no narrow opaque-key upload abstraction exists yet.
+    - Partial evidence: `s.file().store({ storage })` now defaults to an opaque `uploads/<uuid>` key and keeps
+      the user filename in metadata only; `vp exec vitest --run packages/server/src/schema.test.ts` covers the
+      generated key and prefix path. Gap: explicit `key` string/function overrides still exist.
   - [ ] **Remove `.mime()`** (pre-release breaking change): the only verbatim-client-MIME path becomes the
         explicit `accept.unverified()` opt-out, listed in `kovo explain --capabilities`.
   - Honest scope: the common `respond.storedFile(key)` path takes a bare string key, so the static
