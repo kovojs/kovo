@@ -61,6 +61,7 @@ export type {
 export type {
   ExplainKind,
   KovoAuditOptions,
+  KovoAccessExplainOptions,
   KovoCheckFamily,
   KovoCheckInput,
   KovoEndpointExplainOptions,

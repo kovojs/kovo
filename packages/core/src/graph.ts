@@ -50,6 +50,7 @@ export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 
 /** @internal */
 export interface KovoCheckInput {
+  access?: readonly AccessExplainFact[];
   derivedMutations?: readonly DerivedMutationDomainSet[];
   derivedQueries?: readonly QueryReadSet[];
   diagnostics?: readonly StaticDiagnosticFact[];
@@ -97,6 +98,17 @@ export interface RequestProviderExplain {
   fields?: readonly string[];
   kind: 'db' | 'session';
   source?: string;
+}
+
+/** @internal */
+export interface AccessExplainFact {
+  decision: 'guard' | 'missing' | 'public' | 'verified';
+  detail?: string;
+  justification?: string;
+  kind: 'endpoint' | 'mutation' | 'page' | 'query' | 'webhook';
+  name: string;
+  site?: string;
+  source?: 'access' | 'auth' | 'guard' | 'legacy-guard' | 'webhook';
 }
 
 /** @internal */
@@ -452,6 +464,7 @@ export interface GraphInputValidationError {
 }
 
 const arrayFields = [
+  'access',
   'components',
   'derivedMutations',
   'derivedQueries',

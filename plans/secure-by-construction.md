@@ -199,7 +199,7 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 | KV433 | `query()` loader reaches a write without a `query.elevated` brand                                  |
 | KV434 | Non-linear-safe pattern literal in a wire string validator                                         |
 | KV435 | Secret-classified query result field reaches the client wire projection sink                       |
-| KV436 | _(optional/advisory)_ secret-provenance value reaches a known logging sink (12c)                   |
+| KV436 | Missing explicit access decision on a query, mutation, route/page, endpoint, or webhook            |
 
 ## Explicit Non-Goals
 
@@ -330,9 +330,14 @@ endpoints use `access: verified`; the migration **assigns a real decision at eve
 `public('TODO')` stubs**. The build staying red until every surface genuinely decides is the migration's value.
 
 - [ ] Make `access:` a **required** field on every query, mutation, route, endpoint, and webhook; omission is
-      a blocking diagnostic (code TBD; KV424 is already assigned). Inhabitants: a guard chain, `public('reason')`, or `access: verified`
+      a blocking diagnostic (KV436). Inhabitants: a guard chain, `public('reason')`, or `access: verified`
       (signature-verified machine endpoints). No default; never auto-inject `authed` (Constitution #2 — silent
       behavior-at-a-distance).
+  - Foundation evidence: `packages/core/src/graph.ts` defines structured `AccessExplainFact` rows,
+    `packages/cli/src/graph-output.ts` adds `kovo explain --access` from explicit facts plus legacy
+    guard/auth derivation, and `packages/core/src/diagnostics.ts` assigns KV436 so explicit missing-access
+    facts fail `kovo check`. Remaining gap: the public `access:` definition API is not yet required or
+    migrated across call sites.
 - [ ] Keep the missing-access diagnostic orthogonal to correctness: it proves a decision _exists_, never that it is _correct_ (a
       no-op `return true` guard satisfies it). Retain KV414 (IDOR) and record every `public()` in a reviewed
       `kovo explain --access` snapshot so each public surface is a diff, not an invisible default.

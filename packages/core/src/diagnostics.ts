@@ -69,7 +69,8 @@ export type DiagnosticCode =
   | 'KV424'
   | 'KV425'
   | 'KV426'
-  | 'KV435';
+  | 'KV435'
+  | 'KV436';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -870,5 +871,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Secret query value reaches the client wire.',
+  },
+  KV436: {
+    code: 'KV436',
+    help: [
+      'Would lower to: a query, mutation, route, endpoint, or webhook with a total access decision recorded in the app graph.',
+      'Blocked reason: the surface has no explicit access decision, so review cannot distinguish an intentional public or machine-verified entry from an accidentally reachable handler.',
+      'Fixes: add an access guard chain, public("reason"), or verified machine-auth decision; use kovo explain --access to inspect the ledger before enabling the strict gate.',
+      'SPEC §10.2/§11.3 and the secure-by-construction Phase 2 plan require authorization to be default-deny through explicit access decisions, not through inferred defaults.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Missing explicit access decision.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

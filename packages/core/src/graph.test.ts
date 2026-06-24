@@ -46,4 +46,34 @@ describe('kovo graph input validation', () => {
       },
     ]);
   });
+
+  it('requires access facts to be an array', () => {
+    expect(
+      validateKovoExplainInput({
+        access: { decision: 'missing', kind: 'query', name: 'cart' },
+      }),
+    ).toEqual([
+      {
+        message: 'access must be an array',
+        path: 'access',
+      },
+    ]);
+  });
+
+  it('accepts access facts as graph arrays', () => {
+    expect(
+      validateKovoExplainInput({
+        access: [
+          {
+            decision: 'missing',
+            detail: 'guards=-',
+            kind: 'query',
+            name: 'cart',
+            site: 'cart.query.ts:7',
+            source: 'access',
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
 });

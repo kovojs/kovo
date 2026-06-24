@@ -511,6 +511,77 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('audits access decisions with stable explain output', () => {
+    const result = kovoExplain(
+      {
+        access: [
+          {
+            decision: 'missing',
+            detail: 'no access property',
+            kind: 'query',
+            name: 'explicit-missing',
+            site: 'queries.ts:4',
+            source: 'access',
+          },
+        ],
+        endpoints: [
+          {
+            auth: 'verifier:stripe-signature',
+            csrf: 'exempt',
+            csrfJustification: 'signed stripe webhook',
+            method: 'POST',
+            name: 'stripe/webhook',
+            path: '/webhooks/stripe',
+            surface: 'webhook',
+          },
+          {
+            auth: 'none',
+            csrf: 'checked',
+            method: 'GET',
+            name: 'health',
+            path: '/healthz',
+          },
+          {
+            method: 'GET',
+            name: 'raw',
+            path: '/raw',
+          },
+        ],
+        mutations: [
+          { guards: ['authed'], key: 'cart/add', writes: ['cart'] },
+          { key: 'inventory/sync', writes: ['product'] },
+        ],
+        pages: [
+          { guards: ['authed'], queries: ['cart'], route: '/cart' },
+          { queries: [], route: '/login' },
+        ],
+        queries: [
+          { domains: ['cart'], guards: ['authed'], query: 'cart' },
+          { domains: ['product'], query: 'catalog' },
+        ],
+      },
+      { access: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      ACCESS
+      ACCESS ENDPOINT health decision=public source=auth site=- detail="method=GET path=/healthz mount=exact auth=none csrf=checked" justification=-
+      ACCESS ENDPOINT raw decision=missing source=legacy-guard site=- detail="method=GET path=/raw mount=exact auth=- csrf=checked" justification=-
+      ACCESS MUTATION cart/add decision=guard source=legacy-guard site=- detail="guards=authed writes=cart invalidates=- manual-invalidates=-" justification=-
+      ACCESS MUTATION inventory/sync decision=missing source=legacy-guard site=- detail="guards=- writes=product invalidates=- manual-invalidates=-" justification=-
+      ACCESS PAGE /cart decision=guard source=legacy-guard site=- detail="guards=authed queries=cart" justification=-
+      ACCESS PAGE /login decision=missing source=legacy-guard site=- detail="guards=- queries=-" justification=-
+      ACCESS QUERY cart decision=guard source=legacy-guard site=- detail="guards=authed reads=cart" justification=-
+      ACCESS QUERY catalog decision=missing source=legacy-guard site=- detail="guards=- reads=product" justification=-
+      ACCESS QUERY explicit-missing decision=missing source=access site=queries.ts:4 detail="no access property" justification=-
+      ACCESS WEBHOOK stripe/webhook decision=verified source=auth site=- detail="method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook" justification="signed stripe webhook"
+      SUMMARY total=10 guard=3 verified=1 public=1 missing=5
+      "
+    `);
+  });
+
   it('prints all endpoints with stable explain output', () => {
     const result = kovoExplain(
       {
@@ -812,6 +883,88 @@ describe('kovo explain', () => {
       UNGUARDED
       MUTATION cart/add guards=rateLimit:session writes=cart invalidates=- manual-invalidates=-
       SUMMARY total=1
+      "
+    `);
+  });
+
+  it('accepts kovo explain --access as a CLI audit mode', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stdout.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          access: [
+            {
+              decision: 'public',
+              justification: 'marketing landing page',
+              kind: 'page',
+              name: '/',
+              site: 'routes/index.tsx:3',
+              source: 'access',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--access', graphPath])).toBe(0);
+    } finally {
+      stdoutWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      ACCESS
+      ACCESS PAGE / decision=public source=access site=routes/index.tsx:3 detail=- justification="marketing landing page"
+      SUMMARY total=1 guard=0 verified=0 public=1 missing=0
+      "
+    `);
+  });
+
+  it('fails kovo explain --access when requested and missing decisions exist', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'kovo-cli-'));
+    const graphPath = join(tempDir, 'graph.json');
+    let output = '';
+    const stderrWrite = vi.spyOn(process.stderr, 'write').mockImplementation(((chunk) => {
+      output += chunk.toString();
+      return true;
+    }) as typeof process.stderr.write);
+
+    try {
+      writeFileSync(
+        graphPath,
+        JSON.stringify({
+          access: [
+            {
+              decision: 'missing',
+              detail: 'no access property',
+              kind: 'query',
+              name: 'cart',
+              site: 'cart.query.ts:4',
+              source: 'access',
+            },
+          ],
+        }),
+      );
+
+      expect(main(['explain', '--access', '--fail-on-findings', graphPath])).toBe(1);
+    } finally {
+      stderrWrite.mockRestore();
+      rmSync(tempDir, { force: true, recursive: true });
+    }
+
+    expect(output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      ACCESS
+      ACCESS QUERY cart decision=missing source=access site=cart.query.ts:4 detail="no access property" justification=-
+      SUMMARY total=1 guard=0 verified=0 public=0 missing=1
       "
     `);
   });

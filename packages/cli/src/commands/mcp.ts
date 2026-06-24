@@ -534,6 +534,12 @@ function assertCompileComponentV1Input(args: unknown): CompileComponentV1Input {
 function assertKovoExplainOptions(value: unknown): KovoExplainOptions {
   if (!isRecord(value)) throw new Error('kovo_explain options must be an object');
 
+  if (value.access === true) {
+    return {
+      ...(value.failOnFindings === true ? { failOnFindings: true } : {}),
+      access: true,
+    };
+  }
   if (value.endpoints === true) return { endpoints: true };
   if (value.unguarded === true) {
     return {

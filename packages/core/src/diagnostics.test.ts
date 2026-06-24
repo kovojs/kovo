@@ -77,6 +77,7 @@ describe('diagnostic registry', () => {
       'KV425',
       'KV426',
       'KV435',
+      'KV436',
     ]);
   });
 
@@ -648,6 +649,15 @@ describe('diagnostic registry', () => {
       Fixes: remove the secret field or opaque projection, select explicit non-secret columns, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
       SPEC §6.2, §10.2, and §11.3 make query results JsonValue-bounded client wire values; a secret-classified or unprovable secret-table projection is ineligible for that boundary.",
           "message": "Secret query value reaches the client wire.",
+          "severity": "error",
+        },
+        "KV436": {
+          "code": "KV436",
+          "help": "Would lower to: a query, mutation, route, endpoint, or webhook with a total access decision recorded in the app graph.
+      Blocked reason: the surface has no explicit access decision, so review cannot distinguish an intentional public or machine-verified entry from an accidentally reachable handler.
+      Fixes: add an access guard chain, public("reason"), or verified machine-auth decision; use kovo explain --access to inspect the ledger before enabling the strict gate.
+      SPEC §10.2/§11.3 and the secure-by-construction Phase 2 plan require authorization to be default-deny through explicit access decisions, not through inferred defaults.",
+          "message": "Missing explicit access decision.",
           "severity": "error",
         },
       }

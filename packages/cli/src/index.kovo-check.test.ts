@@ -41,6 +41,27 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails explicit missing-access facts with KV436', () => {
+    expect(
+      kovoCheck({
+        access: [
+          {
+            decision: 'missing',
+            detail: 'no access property',
+            kind: 'query',
+            name: 'cart',
+            site: 'cart.query.ts:4',
+            source: 'access',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR KV436 QUERY cart site=cart.query.ts:4 Missing explicit access decision. no access property\n',
+    });
+  });
+
   it('fails on KV310 optimistic coverage gaps', () => {
     expect(
       kovoCheck({
