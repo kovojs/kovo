@@ -177,12 +177,12 @@ export async function runMutation<
     fail<const Code extends Extract<keyof Errors, string>>(
       code: Code,
       payload: JsonSerializable<InferSchema<Errors[Code]>>,
-    ): MutationFail<Code, InferSchema<Errors[Code]>> {
+    ): MutationFail<Code, JsonSerializable<InferSchema<Errors[Code]>>> {
       return {
         error: { code, payload },
         ok: false,
         status: 422,
-      } as MutationFail<Code, InferSchema<Errors[Code]>>;
+      } as MutationFail<Code, JsonSerializable<InferSchema<Errors[Code]>>>;
     },
     invalidate(domain, options) {
       const record = invalidate(domain, options);

@@ -54,7 +54,7 @@ export interface MutationContext<Errors extends Record<string, Schema<unknown>>>
   fail<const Code extends Extract<keyof Errors, string>>(
     code: Code,
     payload: JsonSerializable<InferSchema<Errors[Code]>>,
-  ): MutationFail<Code, InferSchema<Errors[Code]>>;
+  ): MutationFail<Code, JsonSerializable<InferSchema<Errors[Code]>>>;
   invalidate<const DomainKey extends string, Input = unknown>(
     domain: Domain<DomainKey>,
     options?: InvalidateOptions<Input>,
