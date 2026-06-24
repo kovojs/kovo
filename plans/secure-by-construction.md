@@ -454,7 +454,7 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
 packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies raw undici metadata denial,
         raw undici redirect-hop denial, pooled-socket per-dispatch recheck, raw `node:http` metadata denial, raw
         `net` private denial, exact allowed internal `node:http`, and lifecycle `request.fetch`.
-  - [ ] Decision rule (both layers, per request AND per redirect hop): resolve → normalize (IPv4-mapped
+  - [x] Decision rule (both layers, per request AND per redirect hop): resolve → normalize (IPv4-mapped
         `::ffff:`, decimal/octal/hex, NAT64) → pin to the exact validated IP. Public IP → allow. **Identity/
         metadata endpoint** (`169.254.169.254`/`.170.2`/`.170.23`, Azure loopback `IDENTITY_ENDPOINT`) → allow
         ONLY if the privileged metadata ALS scope is active (below), else deny — **never** via `allowInternal`.
@@ -462,11 +462,11 @@ packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies ra
         IANA special-use}) → allow iff `host:port ∈ allowInternal`, else deny. Native-TCP DB drivers
         (`pg`/`ioredis`) reach declared internal hosts via `allowInternal`; raw-socket libs are governed only
         at layer (b)'s `net.connect` patch.
-    - Evidence (2026-06-24 partial): `vp exec vitest --run packages/server/src/egress.test.ts` verifies metadata
-      endpoints remain denied even when listed in `allowInternal`, privileged credential-provider frame access for
-      AWS-style metadata and Azure `IDENTITY_ENDPOINT`, raw global fetch/undici/`node:http`/`net` metadata denial,
-      redirect-hop rechecks, pooled undici per-dispatch rechecks, and numeric/NAT64 normalization. Still open:
-      exhaustive special-use range coverage if needed beyond the current focused corpus.
+    - Evidence: `vp exec vitest --run packages/server/src/egress.test.ts` verifies metadata endpoints remain
+      denied even when listed in `allowInternal`, privileged credential-provider frame access for AWS-style
+      metadata and Azure `IDENTITY_ENDPOINT`, raw global fetch/undici/`node:http`/`net` metadata denial,
+      redirect-hop rechecks, pooled undici per-dispatch rechecks, numeric/NAT64 normalization, and representative
+      private/special-use IPv4 and IPv6 ranges.
   - [ ] Config: `createApp({ egress: { allowInternal: ['otel:4318', 'localhost:11434', '10.0.5.2:6379'] } })`
         — **narrow `host:port` entries only.** The allowlist is provenance-blind (anything allowed is reachable
         by any caller, incl. an SSRF landing there), so broad CIDRs re-open the private space; permit but flag

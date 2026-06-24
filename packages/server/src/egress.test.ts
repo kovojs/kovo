@@ -50,6 +50,24 @@ describe('server egress private-network deny floor', () => {
     });
   });
 
+  it('blocks representative private and special-use IPv4 and IPv6 ranges', async () => {
+    const blocked = [
+      'http://0.0.0.0/',
+      'http://10.0.5.2/',
+      'http://100.64.0.1/',
+      'http://127.0.0.1/',
+      'http://172.16.0.1/',
+      'http://192.168.1.1/',
+      'http://[::1]/',
+      'http://[fe80::1]/',
+      'http://[fc00::1]/',
+    ];
+
+    for (const url of blocked) {
+      await expect(assertEgressAllowed(url, [])).rejects.toBeInstanceOf(EgressBlockedError);
+    }
+  });
+
   it('allows only exact configured internal host:port pairs', async () => {
     const allowInternal = normalizeAllowInternal(['LOCALHOST:11434', '10.0.5.2:6379']);
 
