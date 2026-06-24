@@ -665,6 +665,13 @@ function. Classified runtime defense-in-depth: makes a slipped-through XSS inert
       `unsafe-inline`/`unsafe-eval`; the nonce flows through the request shell onto every emitted script tag.
       Build on `packages/server/src/csp.ts` (keep its non-overridable `base-uri`/`object-src`/`form-action`/
       `frame-ancestors`).
+  - Partial evidence: branch `agent/secure-phase7-csp-default-20260624-033222` emits the existing hash-based
+    document CSP by default in `renderRouteDocumentResponse`/`renderErrorDocument`, appends Kovo's policy to
+    author CSP headers, and keeps `base-uri`/`object-src`/`form-action`/`frame-ancestors` fixed; verified by
+    `vp exec vitest --run packages/server/src/document.test.ts packages/server/src/app-dispatch.test.ts` and
+    `vp check packages/server/src`.
+  - Remaining gap: nonce propagation and `strict-dynamic` default-on are still open; this slice intentionally
+    stays on existing hash metadata.
 - [ ] Install a Trusted Types policy with the framework as the SOLE policy (`require-trusted-types-for 'script'`)
       so any non-framework DOM-write sink (`innerHTML`/`script.src`) throws — kills DOM-XSS sinks outside the
       framework. Chromium-only (one-engine DiD; the CSP carries the cross-browser floor). **Flipped on

@@ -5,12 +5,14 @@ import {
   mergeVaryHeader,
   renderErrorDocument,
   renderRouteDocumentResponse,
+  withDefaultDocumentSecurityHeaders,
 } from './document-core.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
 import { isRenderedHtml, renderHtmlValue, unwrapCoercedRenderedHtml } from './html.js';
 import {
   appendResponseHeader,
+  readHeader,
   routeResponseToDocumentResponse,
   type RoutePageResponse,
 } from './response.js';
@@ -234,7 +236,11 @@ export async function renderAppErrorDocumentResponse(
   if (renderer) {
     try {
       const response = await renderer({ request, status });
-      return withServerErrorReport(response, status, report);
+      return withServerErrorReport(
+        withDefaultHtmlErrorShellSecurityHeaders(response),
+        status,
+        report,
+      );
     } catch (error) {
       report = reportServerError(app.onError, error, {
         operation: 'error-shell',
@@ -270,6 +276,18 @@ function withServerErrorReport(
   return {
     ...response,
     headers: { ...response.headers, ...serverErrorHeaders(report) },
+  };
+}
+
+function withDefaultHtmlErrorShellSecurityHeaders(response: RoutePageResponse): RoutePageResponse {
+  const contentType = readHeader(response.headers, 'Content-Type');
+  if (contentType === undefined || !contentType.toLowerCase().includes('text/html')) {
+    return response;
+  }
+
+  return {
+    ...response,
+    headers: withDefaultDocumentSecurityHeaders(response.headers),
   };
 }
 

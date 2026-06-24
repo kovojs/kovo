@@ -285,6 +285,12 @@ describe('server app matched dispatch boundary', () => {
     const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
 
     expect(response.status).toBe(404);
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'self'");
+    expect(response.headers.get('content-security-policy')).toContain("base-uri 'self'");
+    expect(response.headers.get('content-security-policy')).toContain("object-src 'none'");
+    expect(response.headers.get('content-security-policy')).toContain("form-action 'self'");
+    expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     await expect(response.text()).resolves.toBe('<h1>Missing</h1>');
   });
 

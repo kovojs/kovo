@@ -5,7 +5,9 @@ import {
 import {
   cspHashAttribute,
   cspSha256,
+  emptyCspInlineMetadata,
   mergeCspInlineMetadata,
+  renderContentSecurityPolicy,
   type CspInlineMetadata,
 } from './csp.js';
 import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
@@ -308,26 +310,18 @@ export function renderRouteDocumentResponse(
 
   return {
     body: document.html,
-    // CSP-3 (bugs-part3): surface the assembled CSP so the dispatch path can attach a
-    // `Content-Security-Policy` header when the app opts in (previously discarded).
+    // Phase 7 / SPEC §9.5: surface the assembled CSP metadata for compatibility, while
+    // emitting the framework hash-based CSP by default below.
     csp: document.csp,
-    headers: {
-      ...mergeDocumentHeaders(response.headers, document.earlyHints),
-      'Content-Type': 'text/html; charset=utf-8',
-      // CSP-3 (bugs-part3): baseline security headers on every HTML document, matching
-      // the file/stream posture (response.ts routeOutcomeHeaders). `nosniff` stops
-      // content-type sniffing; `Referrer-Policy` limits cross-origin referrer leakage.
-      // Authors may override by setting these headers on the route response (preserved
-      // by `mergeDocumentHeaders` above, which keeps the existing header name).
-      ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
-        ? { 'X-Content-Type-Options': 'nosniff' }
-        : {}),
-      ...(findHeaderRecordName(response.headers, 'Referrer-Policy') === undefined
-        ? { 'Referrer-Policy': 'strict-origin-when-cross-origin' }
-        : {}),
-      // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
-      ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
-    },
+    headers: withDefaultDocumentSecurityHeaders(
+      {
+        ...mergeDocumentHeaders(response.headers, document.earlyHints),
+        'Content-Type': 'text/html; charset=utf-8',
+        // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
+        ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
+      },
+      document.csp,
+    ),
     status: response.status,
   };
 }
@@ -361,7 +355,9 @@ export type { QueryScriptRenderOptions };
  *
  * @internal
  */
-export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRoutePageResponse {
+export function renderErrorDocument(
+  options: ErrorDocumentOptions,
+): DocumentRoutePageResponseWithCsp {
   const title = options.title ?? fallbackTitles[options.status];
   const message = options.message ?? title;
   const document = renderDocument({
@@ -379,16 +375,40 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
 
   return {
     body: document.html,
-    headers: {
-      ...document.earlyHints,
-      'Content-Type': 'text/html; charset=utf-8',
-      // CSP-3 (bugs-part3): error documents are HTML responses too; carry the same
-      // baseline security headers as successful documents.
-      'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-    },
+    csp: document.csp,
+    headers: withDefaultDocumentSecurityHeaders(
+      {
+        ...document.earlyHints,
+        'Content-Type': 'text/html; charset=utf-8',
+      },
+      document.csp,
+    ),
     status: options.status,
   };
+}
+
+/** @internal */
+export function withDefaultDocumentSecurityHeaders(
+  headers: ResponseHeaders,
+  csp: CspInlineMetadata = emptyCspInlineMetadata(),
+): ResponseHeaders {
+  const secured: ResponseHeaders = { ...headers };
+
+  // Phase 7: documents emit the framework-owned hash CSP by default. If an app set
+  // its own CSP, append Kovo's policy as a second enforcing policy so the fixed
+  // base-uri/object-src/form-action/frame-ancestors floor remains non-overridable.
+  appendHeaderValue(secured, 'Content-Security-Policy', renderContentSecurityPolicy(csp));
+
+  // Baseline document security headers match the file/stream posture:
+  // `nosniff` prevents MIME confusion; Referrer-Policy limits cross-origin leakage.
+  if (findHeaderRecordName(secured, 'X-Content-Type-Options') === undefined) {
+    secured['X-Content-Type-Options'] = 'nosniff';
+  }
+  if (findHeaderRecordName(secured, 'Referrer-Policy') === undefined) {
+    secured['Referrer-Policy'] = 'strict-origin-when-cross-origin';
+  }
+
+  return secured;
 }
 
 function defaultDocumentTemplate({ parts }: DocumentTemplateContext): string {
@@ -569,6 +589,17 @@ function mergeDocumentHeaders(
 
 function headerValueArray(value: string | readonly string[]): readonly string[] {
   return typeof value === 'string' ? [value] : value;
+}
+
+function appendHeaderValue(headers: ResponseHeaders, name: string, value: string): void {
+  const existingName = findHeaderRecordName(headers, name);
+  if (existingName === undefined) {
+    headers[name] = value;
+    return;
+  }
+
+  const existing = headers[existingName];
+  headers[existingName] = [...headerValueArray(existing ?? []), value];
 }
 
 export function mergeVaryHeader(headers: ResponseHeaders, token: string): ResponseHeaders {

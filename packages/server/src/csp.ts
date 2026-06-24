@@ -18,6 +18,9 @@ export interface ContentSecurityPolicyOptions {
    * `/c/__v/.../module.js` modulepreload/`<script src>` to an attacker origin and
    * execute attacker JS despite the hash-locked `script-src` (`base-uri` has no
    * `default-src` fallback).
+   *
+   * @deprecated Kovo's document CSP always emits `base-uri 'self'`; this hardening
+   * directive is not overridable.
    */
   baseUri?: readonly string[];
   connectSrc?: readonly string[];
@@ -25,17 +28,26 @@ export interface ContentSecurityPolicyOptions {
   /**
    * G2 (bugs-part3 CSP-2): `form-action` source list. Defaults to `'self'` so an
    * injected `<form action>` cannot exfiltrate to an attacker origin.
+   *
+   * @deprecated Kovo's document CSP always emits `form-action 'self'`; this hardening
+   * directive is not overridable.
    */
   formAction?: readonly string[];
   /**
    * G2 (bugs-part3 CSP-2): `frame-ancestors` source list. Defaults to `'none'`
    * (clickjacking defense; X-Frame-Options is also absent on documents — see CSP-3).
+   *
+   * @deprecated Kovo's document CSP always emits `frame-ancestors 'none'`; this
+   * hardening directive is not overridable.
    */
   frameAncestors?: readonly string[];
   imgSrc?: readonly string[];
   /**
    * G2 (bugs-part3 CSP-2): `object-src` source list. Defaults to `'none'` and is
    * emitted unconditionally (legacy `<object>`/`<embed>` plugin-content vector).
+   *
+   * @deprecated Kovo's document CSP always emits `object-src 'none'`; this hardening
+   * directive is not overridable.
    */
   objectSrc?: readonly string[];
   scriptSrc?: readonly string[];
@@ -87,7 +99,7 @@ export function hasCspInlineMetadata(metadata: CspInlineMetadata): boolean {
  * always includes the non-overridable hardening directives `base-uri 'self'`,
  * `object-src 'none'`, `form-action 'self'`, and `frame-ancestors 'none'` so a
  * hash-locked `script-src` cannot be bypassed by an injected `<base>`/`<object>`/`<form>`
- * (bugs-part3 CSP-2/CSP-3). Override any directive via {@link ContentSecurityPolicyOptions}.
+ * (bugs-part3 CSP-2/CSP-3).
  *
  * @param metadata - Inline-script/style CSP hashes surfaced on the rendered document.
  * @param options - Optional per-directive source-list overrides.
@@ -111,12 +123,12 @@ export function renderContentSecurityPolicy(
     // `<base href="//evil">` (markup injection, no script execution) reroutes every
     // relative module URL to an attacker origin and runs attacker JS despite the
     // hash-locked `script-src`. Emit them unconditionally with secure defaults.
-    directive('base-uri', options.baseUri ?? ["'self'"]),
-    directive('object-src', options.objectSrc ?? ["'none'"]),
+    directive('base-uri', ["'self'"]),
+    directive('object-src', ["'none'"]),
     // `form-action`/`frame-ancestors` close the injected-`<form action>` exfiltration
     // and clickjacking vectors respectively; emit with secure defaults.
-    directive('form-action', options.formAction ?? ["'self'"]),
-    directive('frame-ancestors', options.frameAncestors ?? ["'none'"]),
+    directive('form-action', ["'self'"]),
+    directive('frame-ancestors', ["'none'"]),
   ].filter((item): item is string => item !== undefined);
 
   return directives.join('; ');
