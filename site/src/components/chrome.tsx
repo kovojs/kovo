@@ -503,22 +503,22 @@ const chromeStyles = style.create(
       ':hover': {
         color: 'var(--ink)',
       },
-    },
-    sideGroupHeadingActive: {
-      borderLeftColor: 'var(--teal)',
-      borderLeftStyle: 'solid',
-      borderLeftWidth: 1,
-      color: 'var(--ink)',
-      marginLeft: '-0.66rem',
-      paddingLeft: '0.65rem',
+      '[data-current-section="true"]': {
+        borderLeftColor: 'var(--teal)',
+        borderLeftStyle: 'solid',
+        borderLeftWidth: 1,
+        color: 'var(--ink)',
+        marginLeft: '-0.66rem',
+        paddingLeft: '0.65rem',
+      },
     },
     sideGroupHeadingArrow: {
       color: 'var(--faint)',
       fontSize: '0.58rem',
       letterSpacing: 0,
-    },
-    sideGroupHeadingArrowActive: {
-      color: 'var(--teal)',
+      '[data-current-section="true"]': {
+        color: 'var(--teal)',
+      },
     },
     sideGroupLink: {
       borderLeftColor: 'transparent',
@@ -534,6 +534,10 @@ const chromeStyles = style.create(
         borderColor: 'var(--faint)',
         color: 'var(--ink)',
       },
+      '[data-current-page="true"]': {
+        borderColor: 'var(--teal)',
+        color: 'var(--teal)',
+      },
     },
     sideGroupList: {
       borderLeftColor: 'var(--edge)',
@@ -542,10 +546,6 @@ const chromeStyles = style.create(
       listStyle: 'none',
       margin: 0,
       padding: 0,
-    },
-    sideLinkActive: {
-      borderColor: 'var(--teal)',
-      color: 'var(--teal)',
     },
     siteLogo: {
       alignItems: 'center',
@@ -776,18 +776,13 @@ export const DocsSidebar = component({
           <details style={chromeStyles.sideGroupDisclosure} open={openGroup ? true : undefined}>
             <summary
               data-current-section={activeSection ? 'true' : undefined}
-              style={[
-                chromeStyles.sideGroupHeading,
-                activeSection && chromeStyles.sideGroupHeadingActive,
-              ]}
+              style={chromeStyles.sideGroupHeading}
             >
               <span>{group.title}</span>
               <span
                 aria-hidden="true"
-                style={[
-                  chromeStyles.sideGroupHeadingArrow,
-                  activeSection && chromeStyles.sideGroupHeadingArrowActive,
-                ]}
+                data-current-section={activeSection ? 'true' : undefined}
+                style={chromeStyles.sideGroupHeadingArrow}
               >
                 ▾
               </span>
@@ -798,10 +793,7 @@ export const DocsSidebar = component({
                   <a
                     href={page.url}
                     data-current-page={page.url === activePath ? 'true' : undefined}
-                    style={[
-                      chromeStyles.sideGroupLink,
-                      page.url === activePath && chromeStyles.sideLinkActive,
-                    ]}
+                    style={chromeStyles.sideGroupLink}
                     aria-current={page.url === activePath ? 'page' : undefined}
                   >
                     {page.title}

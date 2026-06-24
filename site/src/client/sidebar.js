@@ -12,10 +12,40 @@ function currentSidebarItem(nav) {
   return nav.querySelector(CURRENT_SELECTOR);
 }
 
+function normalizePath(path) {
+  return path.replace(/\/+$/, '') || '/';
+}
+
+function updateCurrentSidebar(nav) {
+  const currentPath = normalizePath(location.pathname);
+  for (const link of nav.querySelectorAll('a[href]')) {
+    const linkPath = normalizePath(new URL(link.getAttribute('href'), location.href).pathname);
+    const current = linkPath === currentPath;
+    if (current) {
+      link.setAttribute('data-current-page', 'true');
+      link.setAttribute('aria-current', 'page');
+    } else {
+      link.removeAttribute('data-current-page');
+      link.removeAttribute('aria-current');
+    }
+  }
+
+  for (const details of nav.querySelectorAll('details')) {
+    const current = details.querySelector('[data-current-page="true"]') !== null;
+    const summary = details.querySelector('summary');
+    if (current) summary?.setAttribute('data-current-section', 'true');
+    else summary?.removeAttribute('data-current-section');
+    const arrow = summary?.querySelector('[aria-hidden="true"]');
+    if (current) arrow?.setAttribute('data-current-section', 'true');
+    else arrow?.removeAttribute('data-current-section');
+  }
+}
+
 function syncNow(target) {
   const nav = target?.matches?.(SIDEBAR_SELECTOR) ? target : document.querySelector(SIDEBAR_SELECTOR);
   if (!nav || nav.clientHeight === 0) return;
 
+  updateCurrentSidebar(nav);
   const current = currentSidebarItem(nav);
   if (!current) return;
 

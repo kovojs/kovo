@@ -40,6 +40,12 @@ const docsLayoutStyles = style.create(
       flex: 1,
       minWidth: 0,
     },
+    pageFrame: {
+      display: 'flex',
+      flex: 1,
+      gap: '3rem',
+      minWidth: 0,
+    },
     pageEyebrow: {
       color: 'var(--teal)',
       fontFamily: 'var(--font-mono)',
@@ -197,6 +203,7 @@ const docsLayoutStyles = style.create(
     // so it wins at every width and the rail never collapses on mobile.
     sidebarRail: {
       display: 'none',
+      order: -1,
       '@media (min-width: 64rem)': {
         display: 'block',
       },
@@ -241,22 +248,37 @@ export function DocsRoutePage({
     mode: 'mobile',
   });
   const toc = apiSidebar ? ApiSidebar.definition.render({ apiSidebar }) : renderToc(headings);
+  const pageSegment = `page:${activePath.replace(/\/+$/, '') || '/'}`;
 
   return (
     <div data-docs-route-page>
       {SiteHeader.definition.render({ activePath, clients })}
       <div style={docsLayoutStyles.docsShell}>
-        <aside style={docsLayoutStyles.sidebarRail}>{desktopSidebar}</aside>
-        <main style={docsLayoutStyles.main}>
-          <details style={docsLayoutStyles.mobileMenu}>
-            <summary style={docsLayoutStyles.mobileSummary}>Menu</summary>
-            <div style={docsLayoutStyles.mobileBody}>{mobileSidebar}</div>
-          </details>
-          {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{escapeHtml(eyebrow)}</p> : ''}
-          <DocsRouteContentView content={content} />
-          {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
-        </main>
-        <aside style={docsLayoutStyles.tocRail}>{toc}</aside>
+        <div
+          style={docsLayoutStyles.pageFrame}
+          kovo-nav-segment={pageSegment}
+          kovo-nav-kind="page"
+          kovo-nav-name="page"
+        >
+          <main style={docsLayoutStyles.main}>
+            <details style={docsLayoutStyles.mobileMenu}>
+              <summary style={docsLayoutStyles.mobileSummary}>Menu</summary>
+              <div style={docsLayoutStyles.mobileBody}>{mobileSidebar}</div>
+            </details>
+            {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{escapeHtml(eyebrow)}</p> : ''}
+            <DocsRouteContentView content={content} />
+            {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
+          </main>
+          <aside style={docsLayoutStyles.tocRail}>{toc}</aside>
+        </div>
+        <aside
+          style={docsLayoutStyles.sidebarRail}
+          kovo-nav-segment="layout:DocsSidebar"
+          kovo-nav-kind="layout"
+          kovo-nav-name="DocsSidebar"
+        >
+          {desktopSidebar}
+        </aside>
       </div>
       {SiteFooter.definition.render()}
     </div>

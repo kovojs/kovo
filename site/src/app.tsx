@@ -54,11 +54,16 @@ function docsRoute(page: SiteRoutePage): SiteRoute {
     stylesheets: siteStylesheetsForRoute(page.routePath),
     page: siteRoutePage(page.routePath, function pageRoute() {
       return <DocsRoutePage clients={clientHrefs} page={page.body} />;
-    }),
+    }, { stampPage: false }),
   }) as SiteRoute;
 }
 
-function siteRoutePage<Page extends (...args: never[]) => unknown>(routePath: string, page: Page) {
+function siteRoutePage<Page extends (...args: never[]) => unknown>(
+  routePath: string,
+  page: Page,
+  options: { stampPage?: boolean } = {},
+) {
+  const stampPage = options.stampPage ?? true;
   return defineCompiledRoutePage(
     {
       components: [],
@@ -69,12 +74,16 @@ function siteRoutePage<Page extends (...args: never[]) => unknown>(routePath: st
           kind: 'layout',
           localName: 'SiteRouteLayout',
         },
-        {
-          components: [],
-          id: `page:${routePath}`,
-          kind: 'page',
-          localName: 'page',
-        },
+        ...(stampPage
+          ? [
+              {
+                components: [],
+                id: `page:${routePath}`,
+                kind: 'page' as const,
+                localName: 'page',
+              },
+            ]
+          : []),
       ],
       route: routePath,
     },
