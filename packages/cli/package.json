@@ -1,6 +1,10 @@
 {
   "name": "@kovojs/cli",
   "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kovojs/kovo.git"
+  },
   "bin": {
     "kovo": "./src/bin.ts"
   },
