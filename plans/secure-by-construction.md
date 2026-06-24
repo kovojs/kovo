@@ -402,12 +402,19 @@ and no `// kovo:server` pragma** — Kovo already splits server/client by constr
 false positives. `ServerOnly<T>` is at most `tsc`-time sugar, never the enforcement (no type checker in the
 compiler). Derivation is fail-closed.
 
-- [ ] Add AST-origin secret provenance on handler-closure captures + an emit filter. The live hole is the
-      named-import channel (`clientImportDependencies`, `handlers.ts:197`) and `publishToClient` derivations;
-      same-module non-literal consts already fire KV201. Provenance reuses the Phase 1 `secret()` lattice —
-      one concept, second sink.
-- [ ] Fail-closed derivation: any reference to a secret-provenance binding taints the result
+- [x] Add AST-origin secret provenance on handler-closure captures + an emit filter. The live hole is the
+      named-import channel (`clientImportDependencies`, `handlers.ts:197`) and same-module non-literal consts.
+      Provenance reuses the Phase 1 `secret()` lattice — one concept, second sink.
+  - Evidence: `packages/compiler/src/scan/parse.ts`, `packages/compiler/src/lower/handlers.ts`, and
+    `packages/compiler/src/emit/client.ts` record `process.env`/`secret()` provenance, fail closed on imported
+    data captures with KV201, and redact blocked client handler bodies. Verified by
+    `vp exec vitest --run packages/compiler/src/handler-lowering.test.ts`, `vp check packages/compiler/src packages/core/src`,
+    and `git diff --check`.
+- [x] Fail-closed derivation: any reference to a secret-provenance binding taints the result
       (`KEY.slice(0,4)`, `{ k: KEY }`, `cond ? KEY : ''`); the only escape is `publishToClient`.
+  - Evidence: `packages/compiler/src/handler-lowering.test.ts` covers `process.env` and `secret()` direct
+    captures plus `slice`, object, and conditional derivations; verified by
+    `vp exec vitest --run packages/compiler/src/handler-lowering.test.ts`.
 - [ ] `publishToClient(derive, { reason })` is the audited, recorded escape — an author assertion (a loud
       `as`), surfaced in `kovo explain --capabilities`; the derivation is NOT checked. Frame honestly.
 - [ ] `ServerOnly<T>` brand, if shipped, is `tsc`-time ergonomic sugar only.
