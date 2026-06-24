@@ -73,6 +73,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:cartId',
@@ -175,6 +176,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:cartId',
@@ -221,6 +223,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'question',
           key: 'arg:id',
@@ -274,6 +277,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -318,6 +322,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -374,6 +379,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -740,6 +746,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             site: 'cart.queries.ts:4',
           },
         ],
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:cartId',
@@ -1307,6 +1314,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         query: 'product',
         reads: ['product'],
         shape: {

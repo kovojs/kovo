@@ -253,4 +253,149 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       { name: 'ordersMine', scope: 'session' },
     ]);
   });
+
+  // KV414 join-keyed bypass (SPEC §10.3, fail-closed). Reading an owner table through a
+  // JOIN keyed on the JOINED (non-owner) table emitted NO scope audit and shipped green:
+  // the arg predicate (`input.itemId`) resolves to `items` (non-owner), so the owner read
+  // of `order` was neither arg-keyed nor session-scoped → no fact. An authenticated
+  // attacker supplies any item id and reads another principal's order rows. The owner read
+  // must now fail closed to scope:'args' (→ KV414).
+  it('flags scope:args for an owner read joined in and keyed only through a non-owner table arg', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { innerJoin(table: unknown, on: unknown): { where(value: unknown): Promise<unknown[]> } } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              'export const items = pgTable("items", { id: text("id").primaryKey(), orderId: text("order_id").notNull() }, kovo({ domain: "item", key: (t) => t.id }));',
+              '',
+              'export const orderViaItem = query("orderViaItem", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { itemId: string }, db: PgAsyncDatabase<any, any>) {',
+              '    return db.select({ id: orders.id }).from(orders).innerJoin(items, eq(items.orderId, orders.id)).where(eq(items.id, input.itemId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.ownerDomains).toEqual([{ domain: 'order', owner: 'userId' }]);
+    expect(auditScopes(audit)).toContainEqual({ domain: 'order', kind: 'query', scope: 'args' });
+  });
+
+  // Positive (no regression): the SAME owner read scoped by `eq(orders.userId, req.session.userId)`
+  // — even when the query also joins/filters by a client arg — stays session-scoped (no KV414).
+  it('keeps a join-bearing owner read scope:session when the owner table is session-scoped', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { innerJoin(table: unknown, on: unknown): { where(value: unknown): Promise<unknown[]> } } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { and, eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              'export const items = pgTable("items", { id: text("id").primaryKey(), orderId: text("order_id").notNull() }, kovo({ domain: "item", key: (t) => t.id }));',
+              '',
+              'export const orderViaItem = query("orderViaItem", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(input: { itemId: string }, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    return db.select({ id: orders.id }).from(orders).innerJoin(items, eq(items.orderId, orders.id)).where(and(eq(orders.userId, req.session.userId), eq(items.id, input.itemId)));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope })),
+    ).toEqual([{ domain: 'order', scope: 'session' }]);
+  });
+
+  // Session-via-local-variable tracing (SPEC §11.1, KV414). A non-nullable session value
+  // bound to a local `const` and then used in the scoping predicate must be recognized as
+  // session-scoped — otherwise the join-keyed bypass branch above would false-positive the
+  // app's own correct fix. `const uid = req.session.userId; …eq(orders.userId, uid)` → session.
+  it('traces a non-nullable session value through a local const so the read stays scope:session', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const ordersMine = query("ordersMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, req: { session: { userId: string } }) {',
+              '    const uid = req.session.userId;',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, uid));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope })),
+    ).toEqual([{ domain: 'order', scope: 'session' }]);
+  });
+
+  // Fail-closed boundary check: the join-keyed branch fires only when the query is
+  // client-arg-reachable. An owner read with NO `input.*` predicate (a literal-keyed local,
+  // mirroring the existing `orderMine` case) is NOT the client-pivotable bypass and must
+  // still emit no fact — guarding against over-flagging legitimate unscoped/admin reads.
+  it('does not flag an owner read keyed only by a literal local (no client arg → no fact)', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export const orderMine = query("orderMine", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+              '    const mineId = "u1";',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, mineId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.scopeAudits).toEqual([]);
+  });
 });

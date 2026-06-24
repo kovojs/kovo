@@ -326,6 +326,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -394,6 +395,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(first).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'cart',
           key: 'arg:id',
@@ -408,6 +410,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
     expect(second).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'order',
           key: 'arg:id',

@@ -199,6 +199,17 @@ export {
    */
   argScopedReads?: readonly string[];
   diagnostics?: readonly TouchGraphDiagnostic[];
+  /**
+   * The query's `where()`/join predicate selects rows by a client-visible `input.*`
+   * arg keying ANY table (owner or not) — the IDOR vector regardless of which table
+   * the arg lands on (SPEC §10.3, KV414 join-keyed bypass). When an owner domain is
+   * read but is itself neither directly arg-keyed nor session/`owns()`-scoped, this
+   * arg-reachability is what makes the unscoped owner read an IDOR candidate: an
+   * authenticated attacker supplies any client key and reads another principal's owner
+   * rows joined in through a non-owner table (e.g.
+   * `from(orders).innerJoin(items, eq(items.orderId, orders.id)).where(eq(items.id, input.itemId))`).
+   */
+  hasClientArgPredicate?: boolean;
   instanceKey?: {
     domain: string;
     key: string;
@@ -286,10 +297,24 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
  * `args` for an arg-keyed read (the IDOR candidate the CLI enforces unless an
  * `owns()` guard discharges it) and `session` for a directly `req.session`-anchored
  * read (safe). A read that is **neither** — e.g. one keyed by a local bound from
- * the session (`const userId = …session…; where(eq(col, userId))`) — emits **no
- * fact**: it is not a client-controlled key, so it is not the IDOR pattern, and
- * skipping it avoids false-positiving a safe app without needing inter-procedural
- * session data-flow tracing.
+ * the session (`const userId = …session…; where(eq(col, userId))`) — emits a
+ * `session` fact when the session-via-local tracing (`querySessionAnchoredDomains`)
+ * proves the binding, and otherwise emits **no fact** UNLESS the query is also
+ * arg-reachable: see the join-keyed bypass branch below.
+ *
+ * **Join-keyed bypass (SPEC §10.3, KV414 fail-closed).** Reading an owner table
+ * through a JOIN keyed on the JOINED (non-owner) table — e.g.
+ * `from(orders).innerJoin(items, eq(items.orderId, orders.id)).where(eq(items.id, input.itemId))`
+ * — brings owner domain `order` into the read set while the only client-arg
+ * predicate (`input.itemId`) lands on the non-owner `items` table. The owner rows
+ * are therefore selected by a client-controlled key but are NOT directly arg-keyed
+ * NOR session/`owns()`-scoped, so an authenticated attacker reads another
+ * principal's owner rows. We emit `scope:'args'` (→ KV414) for such an arg-reachable
+ * unscoped owner read. This is fail-closed/by-construction: an owner read that the
+ * analyzer cannot prove is session/`owns()`-scoped, but that a client arg can pivot
+ * into, is treated as IDOR. A non-arg-reachable unscoped owner read (no `input.*`
+ * predicate anywhere, e.g. a literal-keyed or fully-unfiltered list) emits no fact
+ * here — it is not the client-pivotable bypass this branch closes.
  */
 /** @internal */ export function scopeAuditsFromQueryFacts(
   facts: readonly QueryFact[],
@@ -314,8 +339,17 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
         continue;
       }
 
-      if ((fact.sessionAnchoredReads ?? []).includes(domain)) {
+      const sessionScoped = (fact.sessionAnchoredReads ?? []).includes(domain);
+      if (sessionScoped) {
         audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
+        continue;
+      }
+
+      // Join-keyed bypass: an owner read that is neither directly arg-keyed nor
+      // session/`owns()`-scoped, but is reachable from a client `input.*` predicate
+      // (on this or a joined non-owner table). Fail-closed to `args`/KV414.
+      if (fact.hasClientArgPredicate) {
+        audits.push({ domain, kind: 'query', name: fact.query, scope: 'args', site: fact.site });
       }
     }
   }
@@ -1098,9 +1132,16 @@ function extractQueryFactsFromPreparedFiles(
             instanceKey.instanceKey.key.startsWith('arg:')
           ),
       );
+      // SPEC §10.3 / KV414 join-keyed bypass: does the predicate key any table column
+      // (owner or not) by a client `input.*` arg? An owner table joined into the read
+      // set but keyed only through a non-owner table's arg is still client-pivotable;
+      // `scopeAuditsFromQueryFacts` fails it closed to `args` when the owner domain is
+      // neither directly arg-keyed nor session/`owns()`-scoped.
+      const hasClientArgPredicate = queryHasClientArgPredicate(query.instanceKeyComparisons);
       facts.push({
         ...(argScopedReads.length > 0 ? { argScopedReads } : {}),
         ...(diagnostics.length > 0 ? { diagnostics } : {}),
+        ...(hasClientArgPredicate ? { hasClientArgPredicate } : {}),
         ...instanceKey,
         query: query.query,
         reads: allReads,
@@ -2205,6 +2246,7 @@ import {
   queryArgScopedDomains,
   queryBodyCallExpressions,
   queryCallChainReceiver,
+  queryHasClientArgPredicate,
   queryInputKeyOperand,
   queryInstanceKey,
   queryInstanceKeyComparisons,
@@ -2285,6 +2327,7 @@ export {
   queryArgScopedDomains,
   queryBodyCallExpressions,
   queryCallChainReceiver,
+  queryHasClientArgPredicate,
   queryInputKeyOperand,
   queryInstanceKey,
   queryInstanceKeyComparisons,

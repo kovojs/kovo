@@ -655,6 +655,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       extractQueryFactsFromProject({ files: [{ fileName: 'product.domain.ts', source }] }),
     ).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'product',
           key: 'arg:id',

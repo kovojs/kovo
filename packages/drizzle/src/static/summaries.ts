@@ -18,6 +18,7 @@ import {
 import {
   isQueryReceiverIdentifier,
   queryCallbackBodies,
+  staticAccessSegments,
   type QueryShapeSelection,
 } from './query-shapes.js';
 import {
@@ -448,6 +449,33 @@ import {
   return [...domains].sort();
 }
 
+/**
+ * SPEC §10.3 / KV414 (join-keyed bypass): true when any `eq(...)` operand pair in the
+ * predicate tree (incl. `or(...)` branches) compares a TABLE COLUMN against a
+ * client-visible `input.*` arg — regardless of which table the column belongs to
+ * (owner or not). This is the arg-reachability signal `scopeAuditsFromQueryFacts` uses
+ * to close the join-keyed IDOR bypass: an owner table joined into the read set, keyed
+ * only through a non-owner table's `input.*` predicate, is still client-pivotable and
+ * must fail closed. Contrast `queryArgScopedDomains`, which only fires when the arg key
+ * lands on an OWNER table's own column.
+ */
+/** @internal */ export function queryHasClientArgPredicate(
+  comparisons: QueryInstanceKeyComparisons,
+): boolean {
+  return comparisons.argCandidates.some(
+    (comparison) =>
+      eqOperandsAreTableColumnArgKeyed(comparison.left, comparison.right) ||
+      eqOperandsAreTableColumnArgKeyed(comparison.right, comparison.left),
+  );
+}
+
+function eqOperandsAreTableColumnArgKeyed(
+  tableOperand: QueryInstanceKeyOperand,
+  argOperand: QueryInstanceKeyOperand,
+): boolean {
+  return tableOperand.tableKey !== undefined && argOperand.inputKey !== undefined;
+}
+
 /** @internal */ export function argScopedDomainFromEqOperands(
   left: QueryInstanceKeyOperand,
   right: QueryInstanceKeyOperand,
@@ -623,11 +651,88 @@ import {
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
 ): Pick<QueryInstanceKeyOperand, 'privateKey' | 'sessionKey'> {
   const provenance = privateScopeForExpression(expression, sessionContext);
-  if (!provenance) return {};
+  if (!provenance) {
+    // SPEC §11.1 / KV414 (minimal session-via-local tracing): recognize a session
+    // value bound to a local const and then used in the scoping predicate, e.g.
+    // `const uid = req.session.userId; …where(eq(orders.userId, uid))`. The shared
+    // session-provenance alias table conservatively marks every alias `requiresGuard`,
+    // so an alias of a NON-NULLABLE session access (no guard genuinely required) is
+    // dropped and the read falls through to the `args`/IDOR branch — a false KV414 on
+    // a properly-scoped app. Recover it here, fail-closed: only a DIRECT,
+    // non-nullable session access discharges; a nullable session local still requires
+    // (and is gated by) the dominating guard the shared tracer already enforces.
+    const local = localBoundNonNullableSessionScope(expression);
+    if (!local) return {};
+    return { privateKey: `session:${local}`, sessionKey: local };
+  }
   return {
     privateKey: privateScopeKey(provenance),
     ...(provenance.kind === 'session' ? { sessionKey: provenance.path } : {}),
   };
+}
+
+/**
+ * The session path of a local `const` bound DIRECTLY to a non-nullable session access
+ * (SPEC §11.1, KV414 session-via-local tracing). Returns e.g. `userId` for
+ * `const uid = req.session.userId` and then matches a later `eq(col, uid)`. Fail-closed:
+ * returns undefined for any nullable/optional-chained session access, a reassigned
+ * binding, a destructuring pattern, or a non-`session` segment — those keep the
+ * shared session-provenance guard requirement instead of being silently discharged.
+ */
+function localBoundNonNullableSessionScope(expression: Node): string | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isIdentifier(node)) return undefined;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declaration = symbol?.getDeclarations()?.[0];
+  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+  // `const` only — a `let`/`var` binding can be reassigned away from the session value.
+  const declarationList = declaration.getParent();
+  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
+  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
+  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
+
+  const initializer = declaration.getInitializer();
+  if (!initializer) return undefined;
+  return directNonNullableSessionScopePath(initializer);
+}
+
+/**
+ * The `session.<path>` of a DIRECT, non-nullable session access expression, or
+ * undefined. Mirrors the shared `directPrivateScope`/`requiresGuard` semantics but is
+ * restricted to the `session` scope and the non-nullable case (no `?.`, no
+ * `null`/`undefined` in the accessed scope's static type), so this fallback never
+ * discharges an access that genuinely needs a dominating guard.
+ */
+function directNonNullableSessionScopePath(node: Node): string | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  const segments = staticAccessSegments(node);
+  if (!segments) return undefined;
+  const index = segments.path.indexOf('session');
+  if (index < 0) return undefined;
+  const path = segments.path.slice(index + 1).join('.');
+  if (path.length === 0) return undefined;
+  if (sessionAccessRequiresGuard(expression)) return undefined;
+  return path;
+}
+
+function sessionAccessRequiresGuard(node: Node): boolean {
+  if (node.getText().includes('?.')) return true;
+  const sessionExpression = sessionSegmentExpression(node);
+  if (!sessionExpression) return true;
+  const type = sessionExpression.getType();
+  const nullable = (type as { isNullable?: () => boolean }).isNullable?.();
+  if (nullable) return true;
+  return /\bnull\b|\bundefined\b/.test(type.getText());
+}
+
+function sessionSegmentExpression(node: Node): Node | undefined {
+  const expression = unwrappedStaticExpressionNode(node);
+  if (staticAccessName(expression) === 'session') return expression;
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    return sessionSegmentExpression(expression.getExpression());
+  }
+  return undefined;
 }
 
 /** @internal */ export function queryTableKeyOperand(

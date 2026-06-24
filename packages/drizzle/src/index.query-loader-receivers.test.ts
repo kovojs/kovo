@@ -1110,6 +1110,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        hasClientArgPredicate: true,
         instanceKey: {
           domain: 'product',
           key: 'arg:id',
