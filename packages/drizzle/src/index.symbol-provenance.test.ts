@@ -791,6 +791,122 @@ describe('@kovojs/drizzle symbol provenance', () => {
       },
     ]);
   });
+
+  it('accepts imported same-project helper summaries for guarded KV429 writes', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        ]),
+        {
+          fileName: 'inventory.helpers.ts',
+          source: [
+            'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export async function writeReservation(db: PgDatabase, input: { id: string; stock: number; version: number }) {',
+            '  void db;',
+            '  void input;',
+            '}',
+            '',
+            'kovoAnalyzerSummary(writeReservation, {',
+            '  atomicity: { writes: [{ table: "products", columns: ["stock", "version"], guard: "version", zeroRowConflict: "compareAndSet" }] },',
+            '});',
+          ].join('\n'),
+        },
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { writeReservation as writeStock } from "./inventory.helpers";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: ["stock"], version: "version" }));',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number; version: number }) {',
+            '  const [product] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  await writeStock(db, { id: input.id, stock: product.stock - input.quantity, version: input.version });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('accepts node_modules helper summaries for guarded KV429 writes', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+            'import { writeReservation } from "inventory-helpers";',
+            '',
+            'kovoAnalyzerSummary(writeReservation, {',
+            '  atomicity: { writes: [{ table: "products", columns: ["stock"], guard: "version", zeroRowConflict: "kovoConflict" }] },',
+            '});',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: ["stock"], version: "version" }));',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number; version: number }) {',
+            '  const [product] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  await writeReservation(db, { id: input.id, stock: product.stock - input.quantity, version: input.version });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('reports KV429 for helper writes with no atomicity summary', () => {
+    const diagnostics = atomicityDiagnosticsFromProject({
+      files: [
+        pgDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+        ]),
+        {
+          fileName: 'inventory.domain.ts',
+          source: [
+            'import type { PgDatabase } from "drizzle-orm/pg-core";',
+            'import { writeReservation } from "inventory-helpers";',
+            '',
+            'export const products = pgTable("products", {',
+            '  id: text("id").primaryKey(),',
+            '  stock: integer("stock").notNull(),',
+            '  version: integer("version").notNull(),',
+            '}, kovo({ domain: "product", key: "id", atomic: ["stock"], version: "version" }));',
+            '',
+            'export async function reserve(db: PgDatabase, input: { id: string; quantity: number }) {',
+            '  const [product] = await db.select({ stock: products.stock }).from(products).where(eq(products.id, input.id));',
+            '  if (product.stock < input.quantity) return;',
+            '  await writeReservation(db, { id: input.id, stock: product.stock - input.quantity });',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnostics.map(({ code, site }) => ({ code, site }))).toEqual([
+      { code: 'KV429', site: 'inventory.domain.ts:13' },
+    ]);
+  });
 });
 
 function source(sourceText: string) {

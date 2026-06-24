@@ -35,7 +35,15 @@ export type KovoAnalyzerPrivateScopeKind = 'guard' | 'session' | 'tenant';
  * for provenance; the static analyzer consumes this typed declaration instead.
  */
 export interface KovoAnalyzerFunctionSummary {
-  returns: {
+  atomicity?: {
+    writes: readonly {
+      columns: readonly string[];
+      guard: string;
+      table: string;
+      zeroRowConflict: 'compareAndSet' | 'kovoConflict';
+    }[];
+  };
+  returns?: {
     kind: KovoAnalyzerPrivateScopeKind;
     path: string;
   };

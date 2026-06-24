@@ -49,6 +49,7 @@ import {
   projectDrizzleReceivers,
   projectNamespaceTableNamesByLocal,
   projectObjectLiteralCallbacks,
+  projectReceiverReferenceInArgument,
   projectTableNameForNode,
   projectTablesBySyntheticName,
   propertyAccessCallName,
@@ -358,6 +359,9 @@ export function atomicityDiagnosticsFromProject(
   const extraction = createDeriveExtraction(options);
   try {
     const diagnostics: TouchGraphDiagnostic[] = [];
+    const declaredHelperSummaries = atomicDeclaredHelperSummariesForSourceFiles(
+      extraction.sourceFiles,
+    );
     extraction.sourceFiles.forEach((sourceFile, index) => {
       const file = extraction.files[index];
       if (!file) return;
@@ -381,6 +385,7 @@ export function atomicityDiagnosticsFromProject(
       const callbacks = deriveWriteCallbacks(sourceFile);
       const atomicSummaries = atomicCallbackSummaries(callbacks, {
         atomicColumnsByRealTable: extraction.atomicColumnsByRealTable,
+        declaredHelperSummaries,
         file,
         receivers: projectDrizzleReceivers(sourceFile),
         resolveTable,
@@ -391,6 +396,7 @@ export function atomicityDiagnosticsFromProject(
         diagnostics.push(
           ...atomicityDiagnosticsForCallback(callback, {
             atomicColumnsByRealTable: extraction.atomicColumnsByRealTable,
+            declaredHelperSummaries,
             file,
             helperSummaries: atomicSummaries,
             receivers,
@@ -516,6 +522,7 @@ interface GovernedWriteContext extends Omit<WriteCallContext, 'writeKey'> {
 
 interface AtomicityContext {
   atomicColumnsByRealTable: ReadonlyMap<string, readonly string[]>;
+  declaredHelperSummaries?: ReadonlyMap<string, AtomicDeclaredHelperSummary>;
   file: SourceFileInput;
   helperSummaries?: ReadonlyMap<string, AtomicCallbackSummary>;
   receivers: ProjectDrizzleReceivers;
@@ -545,6 +552,17 @@ interface AtomicCallbackSummary {
 interface AtomicHelperCall {
   call: CallExpression;
   target: AtomicCallbackSummary;
+}
+
+interface AtomicDeclaredHelperSummary {
+  writes: readonly AtomicDeclaredWriteSummary[];
+}
+
+interface AtomicDeclaredWriteSummary {
+  columns: readonly string[];
+  guard: string;
+  table: string;
+  zeroRowConflict: 'compareAndSet' | 'kovoConflict';
 }
 
 function symbolicEffectForWriteCall(
@@ -776,6 +794,103 @@ function atomicCallbackSummaries(
   return summaries;
 }
 
+function atomicDeclaredHelperSummariesForSourceFiles(
+  sourceFiles: readonly SourceFile[],
+): ReadonlyMap<string, AtomicDeclaredHelperSummary> {
+  const summaries = new Map<string, AtomicDeclaredHelperSummary>();
+  for (const sourceFile of sourceFiles) {
+    for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (callExpressionName(call) !== 'kovoAnalyzerSummary') continue;
+
+      const [helper, summary] = call.getArguments();
+      if (!helper || !summary) continue;
+
+      const atomicity = atomicDeclaredHelperSummary(summary);
+      if (!atomicity) continue;
+
+      for (const key of atomicHelperSummaryLookupKeys(helper)) {
+        summaries.set(key, atomicity);
+      }
+    }
+  }
+  return summaries;
+}
+
+function atomicDeclaredHelperSummary(node: Node): AtomicDeclaredHelperSummary | undefined {
+  const object = unwrappedStaticExpressionNode(node);
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+  const atomicity = objectPropertyInitializer(object, 'atomicity');
+  const atomicityObject = atomicity ? unwrappedStaticExpressionNode(atomicity) : undefined;
+  if (!atomicityObject || !Node.isObjectLiteralExpression(atomicityObject)) return undefined;
+
+  const writes = objectPropertyInitializer(atomicityObject, 'writes');
+  const writesArray = writes ? unwrappedStaticExpressionNode(writes) : undefined;
+  if (!writesArray || !Node.isArrayLiteralExpression(writesArray)) return undefined;
+
+  const summaries: AtomicDeclaredWriteSummary[] = [];
+  for (const element of writesArray.getElements()) {
+    const summary = atomicDeclaredWriteSummary(element);
+    if (summary) summaries.push(summary);
+  }
+  return summaries.length > 0 ? { writes: summaries } : undefined;
+}
+
+function atomicDeclaredWriteSummary(node: Node): AtomicDeclaredWriteSummary | undefined {
+  const object = unwrappedStaticExpressionNode(node);
+  if (!Node.isObjectLiteralExpression(object)) return undefined;
+
+  const table = stringPropertyFromObject(object, 'table');
+  const guard = stringPropertyFromObject(object, 'guard');
+  const zeroRowConflict = stringPropertyFromObject(object, 'zeroRowConflict');
+  const columns = stringArrayPropertyFromObject(object, 'columns');
+  if (
+    table === undefined ||
+    guard === undefined ||
+    columns.length === 0 ||
+    (zeroRowConflict !== 'compareAndSet' && zeroRowConflict !== 'kovoConflict')
+  ) {
+    return undefined;
+  }
+
+  return { columns, guard, table, zeroRowConflict };
+}
+
+function stringPropertyFromObject(
+  object: ObjectLiteralExpression,
+  name: string,
+): string | undefined {
+  const value = objectPropertyInitializer(object, name);
+  const expression = value ? unwrappedStaticExpressionNode(value) : undefined;
+  return Node.isStringLiteral(expression) ? expression.getLiteralText() : undefined;
+}
+
+function stringArrayPropertyFromObject(
+  object: ObjectLiteralExpression,
+  name: string,
+): readonly string[] {
+  const value = objectPropertyInitializer(object, name);
+  const expression = value ? unwrappedStaticExpressionNode(value) : undefined;
+  if (!Node.isArrayLiteralExpression(expression)) return [];
+
+  const strings: string[] = [];
+  for (const element of expression.getElements()) {
+    const literal = unwrappedStaticExpressionNode(element);
+    if (!Node.isStringLiteral(literal)) return [];
+    strings.push(literal.getLiteralText());
+  }
+  return strings;
+}
+
+function atomicHelperSummaryLookupKeys(node: Node): readonly string[] {
+  const expression = unwrappedStaticExpressionNode(node);
+  const keys = new Set<string>();
+  const symbolKey = resolvedSymbolKey(expression.getSymbol());
+  if (symbolKey) keys.add(symbolKey);
+  const name = Node.isIdentifier(expression) ? expression.getText() : staticAccessName(expression);
+  if (name) keys.add(`name:${name}`);
+  return [...keys];
+}
+
 function atomicReadSitesForCallback(body: Node, context: AtomicityContext): AtomicReadSite[] {
   const sites: AtomicReadSite[] = [];
   for (const call of touchBodyCallExpressions(body)) {
@@ -816,11 +931,17 @@ function atomicityDiagnosticsForHelperCall(
 ): TouchGraphDiagnostic[] {
   const name = callExpressionName(call);
   if (!name) return [];
-  if (seen.has(name)) return [];
   const target = context.helperSummaries?.get(name);
-  if (!target) return [];
   const priorReads = reads.filter((read) => read.index < call.getStart());
   if (priorReads.length === 0) return [];
+  if (!target) {
+    const declared = atomicDeclaredHelperSummaryForCall(call, context);
+    if (declared) {
+      return atomicityDiagnosticsForDeclaredHelperCall(call, priorReads, declared, context);
+    }
+    return atomicityDiagnosticsForUnknownHelperCall(call, priorReads, context);
+  }
+  if (seen.has(name)) return [];
 
   const diagnostics: TouchGraphDiagnostic[] = [];
   const helperReads = priorReads.map((read) => ({ ...read, index: Number.NEGATIVE_INFINITY }));
@@ -837,6 +958,102 @@ function atomicityDiagnosticsForHelperCall(
   }
   seen.delete(name);
   return diagnostics;
+}
+
+function atomicDeclaredHelperSummaryForCall(
+  call: CallExpression,
+  context: AtomicityContext,
+): AtomicDeclaredHelperSummary | undefined {
+  for (const key of atomicHelperSummaryLookupKeys(call.getExpression())) {
+    const summary = context.declaredHelperSummaries?.get(key);
+    if (summary) return summary;
+  }
+  return undefined;
+}
+
+function atomicityDiagnosticsForDeclaredHelperCall(
+  call: CallExpression,
+  reads: readonly AtomicReadSite[],
+  summary: AtomicDeclaredHelperSummary,
+  context: AtomicityContext,
+): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (const read of reads) {
+    const table = read.table;
+    const atomicColumns = context.atomicColumnsByRealTable.get(table) ?? [];
+    const versionColumn = context.versionColumnByRealTable.get(table);
+    if (atomicColumns.length === 0 && !versionColumn) continue;
+
+    const writes = summary.writes.filter((write) => write.table === table);
+    if (writes.length === 0) {
+      diagnostics.push(
+        atomicityDiagnosticForUnknownHelperCall(call, table, atomicColumns, versionColumn, context),
+      );
+      continue;
+    }
+
+    for (const write of writes) {
+      const contendedColumns = write.columns.filter(
+        (column) => atomicColumns.includes(column) || versionColumn !== undefined,
+      );
+      if (contendedColumns.length === 0) continue;
+
+      const guardColumns = new Set(contendedColumns);
+      if (versionColumn) guardColumns.add(versionColumn);
+      if (guardColumns.has(write.guard)) continue;
+
+      const site = `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`;
+      diagnostics.push(
+        atomicityDiagnostic(site, table, contendedColumns, versionColumn, {
+          hasAtomicityGuard: false,
+        }),
+      );
+    }
+  }
+  return diagnostics;
+}
+
+function atomicityDiagnosticsForUnknownHelperCall(
+  call: CallExpression,
+  reads: readonly AtomicReadSite[],
+  context: AtomicityContext,
+): TouchGraphDiagnostic[] {
+  if (!helperCallReceivesDrizzleReceiver(call, context)) return [];
+
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (const read of reads) {
+    const table = read.table;
+    const atomicColumns = context.atomicColumnsByRealTable.get(table) ?? [];
+    const versionColumn = context.versionColumnByRealTable.get(table);
+    if (atomicColumns.length === 0 && !versionColumn) continue;
+    diagnostics.push(
+      atomicityDiagnosticForUnknownHelperCall(call, table, atomicColumns, versionColumn, context),
+    );
+  }
+  return diagnostics;
+}
+
+function atomicityDiagnosticForUnknownHelperCall(
+  call: CallExpression,
+  table: string,
+  atomicColumns: readonly string[],
+  versionColumn: string | undefined,
+  context: AtomicityContext,
+): TouchGraphDiagnostic {
+  const columns = atomicColumns.length > 0 ? atomicColumns : versionColumn ? [versionColumn] : [];
+  const site = `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`;
+  return atomicityDiagnostic(site, table, columns, versionColumn, {
+    hasAtomicityGuard: false,
+  });
+}
+
+function helperCallReceivesDrizzleReceiver(
+  call: CallExpression,
+  context: AtomicityContext,
+): boolean {
+  return call
+    .getArguments()
+    .some((argument) => projectReceiverReferenceInArgument(argument, context.receivers, new Set()));
 }
 
 function queryCallChainReceiverForAtomicity(call: CallExpression): Node | undefined {
