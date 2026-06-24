@@ -1,4 +1,4 @@
-import { route } from '@kovojs/server';
+import { publicAccess, route, type RoutePageResult } from '@kovojs/server';
 
 import { createShopDb, type ShopDb } from './db.js';
 import { CartBadge } from './components/cart-badge.js';
@@ -19,7 +19,8 @@ export function renderShopPage(db: ShopDb = createShopDb()): string {
 // /snippet
 
 export const homeRoute = route('/', {
+  access: publicAccess('public tutorial shop page'),
   page() {
-    return renderShopPage();
+    return renderShopPage() as unknown as RoutePageResult;
   },
 });

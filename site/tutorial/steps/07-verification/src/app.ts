@@ -1,6 +1,15 @@
 import { form, type FormInput } from '@kovojs/core';
 import type { OptimisticFor } from '@kovojs/browser';
-import { guards, mutation, route, s, session, type MutationFail } from '@kovojs/server';
+import {
+  guards,
+  mutation,
+  publicAccess,
+  route,
+  s,
+  session,
+  type MutationFail,
+  type RoutePageResult,
+} from '@kovojs/server';
 
 import './registries.js';
 import { createShopDb, type ShopDb, type ShopRequest } from './db.js';
@@ -92,6 +101,7 @@ export const shopTouchGraph = {
 
 // snippet:add-to-cart
 export const addToCart = mutation('cart/add', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }, { name: 'rateLimit:session' }] },
   csrf: shopCsrf,
   input: s.object({
     productId: s.string(),
@@ -212,8 +222,9 @@ export function renderShopPage(
 }
 
 export const homeRoute = route('/', {
+  access: publicAccess('public tutorial shop page'),
   page() {
-    return renderShopPage();
+    return renderShopPage() as unknown as RoutePageResult;
   },
 });
 

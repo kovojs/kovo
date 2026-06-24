@@ -4,6 +4,7 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   layout,
+  publicAccess,
   route,
   s,
   stylesheet,
@@ -91,6 +92,7 @@ export async function buildCrmInteractiveApp(
 
   // One parameterized detail route keeps newly created deals viewable.
   const dealDetailRoute = route('/deals/:id', {
+    access: publicAccess('public CRM demo deal detail route'),
     meta: { description: 'CRM deal detail.', title: 'Deal · Atlas CRM' },
     params: s.object({ id: s.string() }),
     staticPaths: crmStaticDealPaths,
@@ -116,6 +118,7 @@ export async function buildCrmInteractiveApp(
     ],
     routes: [
       route('/', {
+        access: publicAccess('public CRM demo pipeline route'),
         meta: {
           description: 'Sales pipeline by stage with open deals.',
           title: 'Pipeline · Atlas CRM',
@@ -127,6 +130,7 @@ export async function buildCrmInteractiveApp(
         stylesheets: crmStylesheets,
       }),
       route('/contacts', {
+        access: publicAccess('public CRM demo contacts route'),
         meta: { description: 'The CRM contact book.', title: 'Contacts · Atlas CRM' },
         page() {
           return <ContactsRegion />;

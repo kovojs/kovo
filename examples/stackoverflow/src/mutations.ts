@@ -133,6 +133,7 @@ async function findExistingQuestionTitle(
 }
 
 export const postQuestionMutation = mutation('postQuestion', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   input: s.object({
     id: s.string(),
     title: s.string(),
@@ -147,6 +148,7 @@ export const postQuestionMutation = mutation('postQuestion', {
 });
 
 export const postAnswerMutation = mutation('postAnswer', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   input: s.object({
     id: s.string(),
     questionId: s.string(),
@@ -158,6 +160,7 @@ export const postAnswerMutation = mutation('postAnswer', {
 });
 
 export const voteUpMutation = mutation('voteUp', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
   input: s.object({
     id: s.string(),
     targetId: s.string(),

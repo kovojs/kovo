@@ -1,4 +1,4 @@
-import { query, type QueryLoadContext } from '@kovojs/server';
+import { publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 
 import type { AppDb } from './db.js';
 import { contacts } from './schema.js';
@@ -24,6 +24,7 @@ type AppQueryLoadContext = QueryLoadContext<AppQueryRequest> & { db?: AppDb };
 // extracted from this loader so the compiler knows it depends on the `contact`
 // domain and refreshes after `contacts/add`.
 export const contactsQuery = query('contacts', {
+  access: publicAccess('starter contact list is read by the demo app shell'),
   async load(_input: unknown, context?: AppQueryLoadContext): Promise<ContactListResult> {
     const db = requireDb(context);
     const items = await db

@@ -1,3 +1,4 @@
+import { publicAccess, type AccessDecision } from '@kovojs/server';
 import { count, eq, sql } from 'drizzle-orm';
 
 import type { CrmDb } from './db.js';
@@ -8,6 +9,7 @@ import { activities, contacts, deals } from './schema.js';
 type CrmQueryLoadContext = CrmDb | { db?: CrmDb; request?: { db?: CrmDb } };
 
 interface QueryDefinition<Key extends string, Value> {
+  access: AccessDecision;
   key: Key;
   load: (input: unknown, context: CrmQueryLoadContext) => Promise<Value>;
 }
@@ -15,10 +17,12 @@ interface QueryDefinition<Key extends string, Value> {
 function query<const Key extends string, Value>(
   key: Key,
   definition: {
+    access: AccessDecision;
     load: (input: unknown, db: CrmDb) => Promise<Value>;
   },
 ): QueryDefinition<Key, Value> {
   return {
+    access: definition.access,
     key,
     load(input, context) {
       return definition.load(input, crmQueryDb(context));
@@ -83,6 +87,7 @@ export interface ActivityListResult {
 
 /** AGG(contacts) — the full contact book, ordered by id (a derivable rowset). */
 export const contactListQuery = query('contactList', {
+  access: publicAccess('public CRM demo contact list'),
   load: async (_input: unknown, db: CrmDb): Promise<ContactListResult> => {
     const items = await db
       .select({
@@ -100,6 +105,7 @@ export const contactListQuery = query('contactList', {
 
 /** AGG(deals) ordered by id — the full pipeline list (a derivable rowset). */
 export const dealListQuery = query('dealList', {
+  access: publicAccess('public CRM demo pipeline list'),
   load: async (_input: unknown, db: CrmDb): Promise<DealListResult> => {
     const items = await db
       .select({
@@ -117,6 +123,7 @@ export const dealListQuery = query('dealList', {
 
 /** COUNT(deals) — the scalar count of deals across the pipeline (derivable). */
 export const contactDealCountQuery = query('contactDealCount', {
+  access: publicAccess('public CRM demo deal count'),
   load: async (_input: unknown, db: CrmDb): Promise<ContactDealCountResult> => {
     const rows = await db.select({ value: count() }).from(deals);
     return { count: Number(rows[0]?.value ?? 0) };
@@ -125,6 +132,7 @@ export const contactDealCountQuery = query('contactDealCount', {
 
 /** AGG(deals WHERE stage = 'open') — the open pipeline (a filtered rowset). */
 export const openDealsQuery = query('openDeals', {
+  access: publicAccess('public CRM demo open-deal list'),
   load: async (_input: unknown, db: CrmDb): Promise<OpenDealsResult> => {
     const items = await db
       .select({
@@ -145,6 +153,7 @@ export const openDealsQuery = query('openDeals', {
  * SUM(amount) GROUP BY stage — the pipeline value per stage.
  */
 export const pipelineByStageQuery = query('pipelineByStage', {
+  access: publicAccess('public CRM demo pipeline summary'),
   load: async (_input: unknown, db: CrmDb): Promise<PipelineByStageResult> => {
     const buckets = await db
       .select({ stage: deals.stage, total: sql<number>`coalesce(sum(${deals.amount}), 0)::int` })
@@ -157,6 +166,7 @@ export const pipelineByStageQuery = query('pipelineByStage', {
 
 /** AGG(activities) ordered by id — timeline rows for deal-detail regions. */
 export const activityListQuery = query('activityList', {
+  access: publicAccess('public CRM demo activity timeline'),
   load: async (_input: unknown, db: CrmDb): Promise<ActivityListResult> => {
     const items = await db
       .select({

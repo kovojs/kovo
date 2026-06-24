@@ -1,4 +1,4 @@
-import { query } from '@kovojs/server';
+import { publicAccess, query } from '@kovojs/server';
 
 import { createShopDb, type ShopDb, type ShopProduct } from './db.js';
 import { cart, product } from './domains.js';
@@ -30,11 +30,13 @@ export function loadProducts(db: ShopDb): ProductsResult {
 
 // snippet:queries
 export const cartQuery = query('cart', {
+  access: publicAccess('public tutorial cart count'),
   load: (_input: unknown) => loadCart(createShopDb()),
   reads: [cart],
 });
 
 export const productsQuery = query('products', {
+  access: publicAccess('public tutorial product catalog'),
   load: (_input: unknown) => loadProducts(createShopDb()),
   reads: [product],
 });

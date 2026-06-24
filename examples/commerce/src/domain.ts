@@ -212,6 +212,7 @@ export const addToCartForm = form('cart/add');
 export type AddToCartInput = FormInput<typeof addToCartForm>;
 
 export const addToCart = mutation('cart/add', {
+  access: { kind: 'guard-chain', guards: [{ name: 'authed' }, { name: 'rateLimit:session' }] },
   csrf: commerceCsrf,
   defaultRedirectTo: '/cart',
   errors: {

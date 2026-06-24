@@ -1,4 +1,4 @@
-import { query, type QueryLoadContext } from '@kovojs/server';
+import { publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 
 import {
   createShopDb,
@@ -45,16 +45,19 @@ function dbFrom(context?: QueryLoadContext<ShopRequest>): ShopDb {
 
 // snippet:queries
 export const cartQuery = query('cart', {
+  access: publicAccess('public tutorial cart count'),
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadCart(dbFrom(context)),
   reads: [cart],
 });
 
 export const productsQuery = query('products', {
+  access: publicAccess('public tutorial product catalog'),
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) => loadProducts(dbFrom(context)),
   reads: [product],
 });
 
 export const orderHistoryQuery = query('orderHistory', {
+  access: publicAccess('public tutorial order history fixture'),
   load: (_input: unknown, context?: QueryLoadContext<ShopRequest>) =>
     loadOrderHistory(dbFrom(context)),
   reads: [order],
