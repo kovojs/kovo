@@ -79,7 +79,9 @@ export async function renderAppRouteDocumentResponse({
         : { mutationFailure: jsxContext.mutationFailure }),
       onCsrfSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
       ...(app.db === undefined ? {} : { db: app.db }),
-      ...(app.capabilityUrls === undefined ? {} : { capabilityUrls: app.capabilityUrls }),
+      ...(routeCanMintCapabilityUrls(route) && app.capabilityUrls !== undefined
+        ? { capabilityUrls: app.capabilityUrls }
+        : {}),
       egressFetch: app.egress.fetch,
       onCapabilityUrlMint: (fact) => recordAppCapability(app, fact),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
@@ -225,6 +227,13 @@ function firstCookieValue(cookie: string): string | undefined {
 
 function appErrorDocumentResponseBody(response: RoutePageResponse): string {
   return typeof response.body === 'string' ? response.body : '';
+}
+
+function routeCanMintCapabilityUrls(route: AnyRouteDeclaration): boolean {
+  // Capability URLs are bearer credentials. Public anonymous documents remain
+  // cacheable by default, so only private/no-store route documents receive
+  // request.signUrl; endpoints and mutations keep their own audited mint paths.
+  return route.guard !== undefined;
 }
 
 export async function renderAppErrorDocumentResponse(

@@ -67,7 +67,11 @@ export interface AppSignCapabilityUrlOptions {
   oneTime?: boolean;
   /** Scope classification. Defaults to exact `key + method`. */
   scope?: CapabilityUrlScope;
-  /** Relative expiry in seconds. Defaults to a short 300-second lifetime. */
+  /**
+   * Relative expiry in seconds. Defaults to a short 300-second lifetime. Stateless
+   * capability URLs cannot be revoked before expiry unless `oneTime` is enabled
+   * with a replay store.
+   */
   expiresIn?: number;
   /** Optional source site for audit output. Defaults to `request.signUrl`. */
   site?: string;

@@ -256,6 +256,7 @@ describe('capability URL app wiring', () => {
       routes: [
         route('/exports', {
           access: publicAccess('test fixture'),
+          guard: () => true,
           page(_context, request) {
             const href = request.signUrl?.({
               expiresIn: 60,
@@ -271,6 +272,7 @@ describe('capability URL app wiring', () => {
     const handler = createRequestHandler(app);
 
     const page = await handler(new Request('https://example.test/exports'));
+    expect(page.headers.get('cache-control')).toBe('no-store');
     const href = (await page.text()).match(/https:\/\/example\.test\/_cap\/storage[^"<]*/u)?.[0];
     expect(href).toBeDefined();
     const signed = new URL(href);
@@ -290,6 +292,34 @@ describe('capability URL app wiring', () => {
       site: 'routes/exports.tsx:12',
       source: 'request.signUrl',
     });
+  });
+
+  it('does not install request.signUrl on cacheable public route documents', async () => {
+    const app = createApp({
+      capabilityUrls: { secret },
+      routes: [
+        route('/public-downloads', {
+          access: publicAccess('test fixture'),
+          page(_context, request: Request & { signUrl?: unknown }) {
+            return renderedHtml(
+              JSON.stringify({
+                hasSignUrl: 'signUrl' in request,
+                signUrlType: typeof request.signUrl,
+              }),
+            );
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    const page = await handler(new Request('https://example.test/public-downloads'));
+
+    expect(page.headers.get('cache-control')).toBeNull();
+    const body = await page.text();
+    expect(body).toContain('"hasSignUrl":false');
+    expect(body).toContain('"signUrlType":"undefined"');
+    expect(app.capabilities.some((fact) => fact.source === 'request.signUrl')).toBe(false);
   });
 
   it('fails closed without reading storage for missing, tampered, expired, or wrong-method caps', async () => {

@@ -618,7 +618,7 @@ packages/server/src/query-endpoint.test.ts` verifies default query writes still 
         already does) + an OPTIONAL advisory lint flagging a mutation writing `req.session.user` with no visible
         rotate (hint, not KV-error — recognition is unsound, better-auth is opaque). A real `rotateSession()`
         helper is **deferred** to a possible later session-ownership item (Kovo does not own session identity, §6.5).
-- [ ] **Capability-URL primitive.**
+- [x] **Capability-URL primitive.**
       Decision (2026-06-23): typed `ctx.signUrl({ key, method, scope?, expiresIn, oneTime? })` dual to the cookie
       builder. **By-construction at the verify sink** (an object is un-dereferenceable without a valid token —
       sound sink-validation) + **safe-default mitigations** for the inherent URL-as-credential leakage (not a
@@ -640,14 +640,13 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         `packages/server/src/capability-url.ts` signs a one-time nonce into the HMAC payload and consumes it with
         `capabilityUrls.replayStore.reserve(...)` before storage dereference; focused capability URL/app-dispatch
         coverage verifies first-use success, replay rejection, and no storage read on replay.
-  - [ ] Do NOT embed signed URLs in the legible query store / cacheable contexts by default; list mints in
+  - [x] Do NOT embed signed URLs in the legible query store / cacheable contexts by default; list mints in
         `kovo explain --capabilities`. Revocation tradeoff documented (stateless → can't revoke pre-expiry
         unless `oneTime`; default short expiry). No new KV code — it's a provided safe API, not a static gate.
-    - Current evidence/gap: `packages/server/src/query.ts` strips `request.signUrl` from all query loader
-      request views, `packages/server/src/capability-url.ts` records runtime `request.signUrl` mints as
-      `capabilityUrl` facts with method/scope/oneTime audit detail, and
-      `packages/server/src/capability-url.test.ts` / `app-dispatch.test.ts` verify route mints are recorded
-      while `/_q/` cannot mint or record signed URLs. Still open: broader cacheable-route policy.
+    - Evidence: `packages/server/src/query.ts` strips `request.signUrl` from query loaders, and
+      `packages/server/src/app-document.ts` installs route `request.signUrl` only for guarded/no-store
+      documents; `packages/server/src/capability-url.ts` documents the stateless revocation tradeoff. Verified
+      by `vp exec vitest --run packages/server/src/capability-url.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-document.test.ts`.
 
 ## Phase 6: Concurrency, resource, and uploads
 
