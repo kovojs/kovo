@@ -178,6 +178,12 @@ const generatedStyles = style.create({ root: { color: 'red' } });
           criticalCss: expect.stringContaining('padding:8px'),
           href: '/assets/app.css',
           sourceFileName: 'app.css',
+          styleRuleUsages: expect.arrayContaining([
+            expect.objectContaining({
+              source: expect.stringContaining('app.tsx#root'),
+              styleRef: 'appStyles.root',
+            }),
+          ]),
         }),
       ]);
     } finally {
