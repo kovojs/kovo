@@ -200,6 +200,8 @@ facts (verified, Current Evidence) determine _how_ that machine must be built an
 | KV434 | Non-linear-safe pattern literal in a wire string validator                                         |
 | KV435 | Secret-classified query result field reaches the client wire projection sink                       |
 | KV436 | Missing explicit access decision on a query, mutation, route/page, endpoint, or webhook            |
+| KV437 | Client input reaches a governed column write                                                       |
+| KV438 | Broad egress.allowInternal CIDR opens private-network reachability                                 |
 
 ## Explicit Non-Goals
 
@@ -442,7 +444,7 @@ packages/core/src/index.test.ts`, `vp check packages/compiler/src packages/core/
 
 ## Phase 5: Least authority — capabilities you only hold if you declared them
 
-- [ ] **Egress / SSRF — private-network deny (runtime floor; no compile-time channel ban).**
+- [x] **Egress / SSRF — private-network deny (runtime floor; no compile-time channel ban).**
       Decision (2026-06-23): the threat is SSRF _network position_ (cloud metadata, localhost sidecars, internal
       services), not reaching public sites. **Public/external egress is UNRESTRICTED; private/loopback/link-local/
       metadata destinations are DENIED by default, reachable only via a narrow `host:port` allowlist.** The
@@ -476,22 +478,19 @@ packages/server/src/app.test.ts packages/server/src/api/app.test.ts` verifies ra
       metadata and Azure `IDENTITY_ENDPOINT`, raw global fetch/undici/`node:http`/`net` metadata denial,
       redirect-hop rechecks, pooled undici per-dispatch rechecks, numeric/NAT64 normalization, and representative
       private/special-use IPv4 and IPv6 ranges.
-  - [ ] Config: `createApp({ egress: { allowInternal: ['otel:4318', 'localhost:11434', '10.0.5.2:6379'] } })`
+  - [x] Config: `createApp({ egress: { allowInternal: ['otel:4318', 'localhost:11434', '10.0.5.2:6379'] } })`
         — **narrow `host:port` entries only.** The allowlist is provenance-blind (anything allowed is reachable
         by any caller, incl. an SSRF landing there), so broad CIDRs re-open the private space; permit but flag
         them. Starter ships a dev `allowInternal` with common localhost entries; policy is uniform across envs.
-    - Evidence (2026-06-24 partial): `packages/server/src/app.ts`/`app-types.ts` accept and normalize
-      `createApp({ egress: { allowInternal } })`; `packages/server/src/app.test.ts` verifies normalized
-      `localhost:11434` config and route lifecycle `request.fetch`. Still open: starter defaults and any
-      broad-CIDR diagnostic/flagging.
-  - [ ] Fail-closed: a blocked connection throws a typed `EgressBlockedError` (502-class) logged with the
-        destination plus "add to `egress.allowInternal` if intended." - Evidence (2026-06-24 partial): `packages/server/src/egress.ts` adds typed `EgressBlockedError`, guarded
-        lifecycle fetch, raw undici dispatcher, and raw `node:http`/`net` enforcement. `vp exec vitest --run
-packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/server/src/api/app.test.ts`
-        verifies default-deny private, loopback, link-local, metadata, exact `host:port` allowance,
-        numeric/NAT64 normalization, redirect-hop rechecks, raw undici fail-closed behavior, raw `node:http`, and
-        `net` fail-closed behavior. Still open: logging and global bootstrap install/freeze.
-  - [ ] **Managed-identity wrinkle — RESOLVED via a privileged metadata ALS capability (workflow-verified
+    - Evidence: `packages/create-kovo/templates/src/app.tsx` ships localhost `11434`/`4318` starter entries;
+      `packages/server/src/egress.test.ts` verifies CIDR entries are permitted but surfaced as KV438 warnings.
+      Verified with `vp exec vitest --run packages/core/src/diagnostics.test.ts packages/server/src/egress.test.ts packages/server/src/app.test.ts`.
+  - [x] Fail-closed: a blocked connection throws a typed `EgressBlockedError` (502-class) logged with the
+        destination plus "add to `egress.allowInternal` if intended."
+    - Evidence: `packages/server/src/egress.ts` logs blocked `EgressBlockedError` guidance and detects unsafe
+      Node hook re-patching; `packages/server/src/egress.test.ts` covers both. Verified with the focused
+      egress/core/app Vitest command above.
+  - [x] **Managed-identity wrinkle — RESOLVED via a privileged metadata ALS capability (workflow-verified
         2026-06-23).** The capability to reach an identity endpoint is "running inside the framework-owned
         credential ALS frame" — NOT a `host:port` allowlist (provenance-blind, SSRF-reachable) and NOT a stack
         frame (forgeable). A module-private `AsyncLocalStorage` (`metadataAllowed`, mirroring `jsx-context.ts:28`
@@ -523,7 +522,7 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
         credential at construction: `new S3Client({ credentials: cloud.aws })`,
         `new Storage({ authClient: cloud.gcp })` (declare-once + shared value, not per-call-site re-derivation).
         Tier 3 — optional pre-wired accessors (`cloud.aws.s3({ region })`) for the popular SDKs.
-  - [ ] KV427 high-confidence compile gate (reuses the code freed by dropping the channel ban — verify free):
+  - [x] KV427 high-confidence compile gate (reuses the code freed by dropping the channel ban — verify free):
         when the app declares `cloud.<x>`, a `new X(...)` whose `X` is imported from
         `@aws-sdk/*`/`@google-cloud/*`/`@azure/*` with the credential option **entirely absent** is a compile
         error (it would fail closed at runtime on refresh — catch it at build, per the plan's #1 philosophy).
@@ -547,17 +546,22 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
           that cloud provider.
       - Evidence: `packages/compiler/src/validate/cloud-sdk-credentials.ts` emits KV427 when a module references
         an undeclared `cloud.<provider>` credential; verified by the focused cloud SDK credential test above.
-  - [ ] Fallback when a cloud SDK isn't factory-integrated: the floor **fails closed** (refresh →
+  - [x] Fallback when a cloud SDK isn't factory-integrated: the floor **fails closed** (refresh →
         `EgressBlockedError` naming the endpoint + the fix). Prefer workload-identity-federation (IRSA/WIF) or
         env/sidecar creds so the app never HTTP-fetches an identity endpoint (floor is then free; starter
         default); IMDSv2 (token + hop-limit-1) is independent belt-and-suspenders. The wrinkle only bites
         managed-identity deployments (EC2 instance profile, ECS/Fargate, GKE/Cloud Run default SA, Azure MI),
         never Lambda/PaaS/on-prem (env creds).
-  - [ ] Residual holes (document as limitations, since this is runtime-DiD not a proof): same-process app code
+    - Evidence: `docs/egress-security.md` documents non-integrated SDK metadata refresh as fail-closed and
+      recommends WIF/env/sidecar/framework-wrapped providers; egress tests verify raw metadata requests fail
+      with `EgressBlockedError`.
+  - [x] Residual holes (document as limitations, since this is runtime-DiD not a proof): same-process app code
         can call its own `setGlobalDispatcher`, re-patch `net.connect`/`tls.connect`, or build its own
         credential provider → mitigate by freezing the dispatcher/`net`/`dns`/`tls` prototypes early at
         bootstrap and detecting re-patching (hardening, not proof); worker threads/child processes don't inherit
         the hooks (install in every worker bootstrap); GCP/Azure provider-shape drift is ongoing maintenance.
+    - Evidence: `docs/egress-security.md` documents the residual runtime-DiD limits; `packages/server/src/egress.test.ts`
+      verifies global Node hook re-patching detection.
   - [x] Audit: `kovo explain --capabilities` lists `allowInternal` (the internal-reachability holes — the
         high-value question); external egress is unrestricted, so there is nothing to enumerate.
 
@@ -566,9 +570,11 @@ packages/server/src/egress.test.ts packages/server/src/app.test.ts packages/serv
         packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.test.ts` verifies the
         app-level fact and the `CAPABILITIES` renderer.
 
-  - [ ] Out of scope (documented): external data exfiltration (needs a full egress allowlist — an infra/network
+  - [x] Out of scope (documented): external data exfiltration (needs a full egress allowlist — an infra/network
         concern) and confused-deputy proxying. Optional typed-client sugar (`egress('https://api.stripe.com')`)
         may remain as convenience but is not a security boundary.
+    - Evidence: `docs/egress-security.md` records public-egress and confused-deputy proxying as explicit
+      non-goals for this runtime floor.
 
 - [x] **Read-only `query()` handle (KV433).**
       Decision (2026-06-23): two stages, **both required for plan completion** — the runtime safe-default is a
@@ -925,8 +931,11 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
       mutation? Resolve against §9.4 before building.
   - Evidence: resolved by the Phase 5 KV433 `query.elevated` item above: elevated query loaders keep the typed
     read endpoint and carry the documented idempotency warning.
-- [ ] Egress: is the residual `node_modules`/`globalThis` socket path acceptable as a documented boundary
+- [x] Egress: is the residual `node_modules`/`globalThis` socket path acceptable as a documented boundary
       (like KV406's `node_modules` hole), or does it need a runtime dispatcher interposition?
+  - Evidence: `docs/egress-security.md` documents the residual same-process/runtime-DiD boundary, while
+    `packages/server/src/egress.ts` installs both undici and Node hook interposition and detects unsafe
+    re-patching. Verified by `vp exec vitest --run packages/server/src/egress.test.ts`.
 
 ## SPEC Alignment
 
@@ -943,7 +952,7 @@ packages/server/src/app-document.test.ts packages/cli/src/index.kovo-explain.tes
       `kovo explain --capabilities`/`--trust` in §11.4; new KV codes in §11.3 with the
       ceiling-note correction. Holding these avoids SPEC promising behavior that is not yet built (CLAUDE.md
       plan/SPEC-conflict rule).
-  - Partial evidence: SPEC §11.3 now lists KV427-KV436, including KV428-KV434 rows with severities matching
+  - Partial evidence: SPEC §11.3 now lists KV427-KV438, including KV428-KV434 rows with severities matching
     `packages/core/src/diagnostics.ts`. Still open: broader typed-surface/outbound-egress/capability normative
     prose after remaining implementation gates finish.
 
