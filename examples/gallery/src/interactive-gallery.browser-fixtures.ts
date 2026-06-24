@@ -4,76 +4,6 @@ import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/checkbox';
 import { expect, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as accordionClient from './generated/interactive/accordion-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as alertDialogClient from './generated/interactive/alert-dialog-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as autocompleteClient from './generated/interactive/autocomplete-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as checkboxClient from './generated/interactive/checkbox-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as checkboxGroupClient from './generated/interactive/checkbox-group-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as collapsibleClient from './generated/interactive/collapsible-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as comboboxClient from './generated/interactive/combobox-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as commandClient from './generated/interactive/command-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as contextMenuClient from './generated/interactive/context-menu-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as disclosureClient from './generated/interactive/disclosure-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as dialogClient from './generated/interactive/dialog-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as drawerClient from './generated/interactive/drawer-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as dropdownMenuClient from './generated/interactive/dropdown-menu-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as fieldClient from './generated/interactive/field-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as hoverCardClient from './generated/interactive/hover-card-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as menubarClient from './generated/interactive/menubar-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as meterClient from './generated/interactive/meter-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as navigationMenuClient from './generated/interactive/navigation-menu-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as numberFieldClient from './generated/interactive/number-field-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as otpFieldClient from './generated/interactive/otp-field-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as popoverClient from './generated/interactive/popover-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as progressClient from './generated/interactive/progress-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as pureMarkupClient from './generated/interactive/pure-markup-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as radioGroupClient from './generated/interactive/radio-group-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as scrollAreaClient from './generated/interactive/scroll-area-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as selectClient from './generated/interactive/select-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as sheetClient from './generated/interactive/sheet-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as sliderClient from './generated/interactive/slider-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as switchClient from './generated/interactive/switch-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as tabsClient from './generated/interactive/tabs-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toolbarClient from './generated/interactive/toolbar-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toggleClient from './generated/interactive/toggle-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toggleGroupClient from './generated/interactive/toggle-group-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as toastClient from './generated/interactive/toast-demo.client.js';
-// @ts-expect-error authored virtual client modules are compiler artifacts without declarations.
-import * as tooltipClient from './generated/interactive/tooltip-demo.client.js';
 import accordionStaticRouteHtml from './visual-fixtures/accordion.html.txt?raw';
 import alertStaticRouteHtml from './visual-fixtures/alert.html.txt?raw';
 import alertDialogStaticRouteHtml from './visual-fixtures/alert-dialog.html.txt?raw';
@@ -125,6 +55,57 @@ export interface InteractiveDemoComponent {
     state: () => unknown;
   };
 }
+
+type InteractiveClientModule = Record<string, unknown>;
+
+declare global {
+  interface ImportMeta {
+    glob<TModule>(pattern: string, options: { eager: true }): Record<string, TModule>;
+  }
+}
+
+const generatedInteractiveClientModules = import.meta.glob<InteractiveClientModule>(
+  './generated/interactive/*-demo.client.js',
+  { eager: true },
+);
+
+const interactiveClientModuleNames = [
+  'accordion-demo',
+  'alert-dialog-demo',
+  'autocomplete-demo',
+  'checkbox-demo',
+  'checkbox-group-demo',
+  'collapsible-demo',
+  'combobox-demo',
+  'command-demo',
+  'context-menu-demo',
+  'disclosure-demo',
+  'dialog-demo',
+  'drawer-demo',
+  'dropdown-menu-demo',
+  'field-demo',
+  'hover-card-demo',
+  'menubar-demo',
+  'meter-demo',
+  'navigation-menu-demo',
+  'number-field-demo',
+  'otp-field-demo',
+  'popover-demo',
+  'progress-demo',
+  'pure-markup-demo',
+  'radio-group-demo',
+  'scroll-area-demo',
+  'select-demo',
+  'sheet-demo',
+  'slider-demo',
+  'switch-demo',
+  'tabs-demo',
+  'toolbar-demo',
+  'toggle-demo',
+  'toggle-group-demo',
+  'toast-demo',
+  'tooltip-demo',
+] as const;
 
 export type StaticVisualFixturePath =
   | '/components/accordion'
@@ -219,43 +200,12 @@ export const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = 
   '/components/tooltip': tooltipStaticRouteHtml,
 };
 
-export const interactiveClientModules: Record<string, Record<string, unknown>> = {
-  '/c/src/interactive/accordion-demo.client.js': accordionClient,
-  '/c/src/interactive/alert-dialog-demo.client.js': alertDialogClient,
-  '/c/src/interactive/autocomplete-demo.client.js': autocompleteClient,
-  '/c/src/interactive/checkbox-demo.client.js': checkboxClient,
-  '/c/src/interactive/checkbox-group-demo.client.js': checkboxGroupClient,
-  '/c/src/interactive/collapsible-demo.client.js': collapsibleClient,
-  '/c/src/interactive/combobox-demo.client.js': comboboxClient,
-  '/c/src/interactive/command-demo.client.js': commandClient,
-  '/c/src/interactive/context-menu-demo.client.js': contextMenuClient,
-  '/c/src/interactive/disclosure-demo.client.js': disclosureClient,
-  '/c/src/interactive/dialog-demo.client.js': dialogClient,
-  '/c/src/interactive/drawer-demo.client.js': drawerClient,
-  '/c/src/interactive/dropdown-menu-demo.client.js': dropdownMenuClient,
-  '/c/src/interactive/field-demo.client.js': fieldClient,
-  '/c/src/interactive/hover-card-demo.client.js': hoverCardClient,
-  '/c/src/interactive/menubar-demo.client.js': menubarClient,
-  '/c/src/interactive/meter-demo.client.js': meterClient,
-  '/c/src/interactive/navigation-menu-demo.client.js': navigationMenuClient,
-  '/c/src/interactive/number-field-demo.client.js': numberFieldClient,
-  '/c/src/interactive/otp-field-demo.client.js': otpFieldClient,
-  '/c/src/interactive/popover-demo.client.js': popoverClient,
-  '/c/src/interactive/progress-demo.client.js': progressClient,
-  '/c/src/interactive/pure-markup-demo.client.js': pureMarkupClient,
-  '/c/src/interactive/radio-group-demo.client.js': radioGroupClient,
-  '/c/src/interactive/scroll-area-demo.client.js': scrollAreaClient,
-  '/c/src/interactive/select-demo.client.js': selectClient,
-  '/c/src/interactive/sheet-demo.client.js': sheetClient,
-  '/c/src/interactive/slider-demo.client.js': sliderClient,
-  '/c/src/interactive/switch-demo.client.js': switchClient,
-  '/c/src/interactive/tabs-demo.client.js': tabsClient,
-  '/c/src/interactive/toolbar-demo.client.js': toolbarClient,
-  '/c/src/interactive/toggle-demo.client.js': toggleClient,
-  '/c/src/interactive/toggle-group-demo.client.js': toggleGroupClient,
-  '/c/src/interactive/toast-demo.client.js': toastClient,
-  '/c/src/interactive/tooltip-demo.client.js': tooltipClient,
-};
+export const interactiveClientModules: Record<string, InteractiveClientModule> = Object.fromEntries(
+  interactiveClientModuleNames.map((name) => [
+    `/c/src/interactive/${name}.client.js`,
+    requiredInteractiveClientModule(name),
+  ]),
+);
 
 export async function mountInteractiveDemo(
   component: InteractiveDemoComponent,
@@ -309,6 +259,15 @@ function normalizeInteractiveClientModulePath(url: string): string {
   const versioned = /^\/c\/__v\/[^/]+\/(.+)$/.exec(modulePath);
 
   return versioned ? `/c/${versioned[1]}` : modulePath;
+}
+
+function requiredInteractiveClientModule(name: string): InteractiveClientModule {
+  const modulePath = `./generated/interactive/${name}.client.js`;
+  const mod = generatedInteractiveClientModules[modulePath];
+  if (mod === undefined)
+    throw new Error(`Missing interactive gallery client module: ${modulePath}`);
+
+  return mod;
 }
 
 export function required<ElementType extends Element>(element: ElementType | null): ElementType {
