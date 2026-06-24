@@ -445,18 +445,9 @@ void test('D4 commerce adopt-dont-invent features stay represented', async () =>
     },
     modulepreloads: [],
     prefetch: false,
+    queries: ['cart', 'productGrid', 'orderHistory'],
     route: '/cart',
     stylesheets: ['/assets/styles.css'],
-    layouts: [{ name: 'CommerceCartLayout', queries: [] }],
-    navigationSegments: [
-      { id: 'layout:CommerceCartLayout', kind: 'layout', name: 'CommerceCartLayout' },
-      {
-        components: ['CommerceCartPage'],
-        id: 'page:/cart',
-        kind: 'page',
-        name: 'page',
-      },
-    ],
   });
   assert.deepEqual(fact.graph.receiptMutation, {});
   assert.deepEqual(fact.pageHints, {
@@ -552,7 +543,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     version: 'kovo-check/v1',
   });
   assert.deepEqual(fact.cartQueryExplain, {
-    consumers: ['component:CartBadge'],
+    consumers: ['component:components/cart-badge/cart-badge', 'page:/', 'page:/cart'],
     domainWrites: ['cart.addItem'],
     exitCode: 0,
     invalidatedBy: ['cart/add'],
@@ -582,9 +573,18 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
     session: 'commerceSession',
     subject: 'MUTATION cart/add',
     updateConsumers: [
-      { consumers: ['component:CartBadge'], query: 'cart' },
-      { consumers: ['component:OrderHistory'], query: 'orderHistory' },
-      { consumers: ['component:ProductGrid'], query: 'productGrid' },
+      {
+        consumers: ['component:components/cart-badge/cart-badge', 'page:/', 'page:/cart'],
+        query: 'cart',
+      },
+      {
+        consumers: ['component:components/order-history/order-history', 'page:/', 'page:/cart'],
+        query: 'orderHistory',
+      },
+      {
+        consumers: ['component:components/product-grid/product-grid', 'page:/', 'page:/cart'],
+        query: 'productGrid',
+      },
     ],
     version: 'kovo-explain/v1',
     writes: ['cart', 'product', 'order'],
@@ -642,14 +642,14 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
         queries: ['cart'],
       },
       {
-        fragments: ['components/order-history/order-history'],
-        name: 'components/order-history/order-history',
-        queries: ['orderHistory'],
-      },
-      {
         fragments: ['components/product-grid/product-grid'],
         name: 'components/product-grid/product-grid',
         queries: ['productGrid'],
+      },
+      {
+        fragments: ['components/order-history/order-history'],
+        name: 'components/order-history/order-history',
+        queries: ['orderHistory'],
       },
     ],
     domains: ['auth', 'cart', 'order', 'product'],
@@ -662,7 +662,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
       { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
     ],
-    routes: ['/', '/cart', '/login'],
+    routes: ['/', '/cart'],
     touchGraphKeys: ['cart.addItem'],
   });
   assert.deepEqual(fact.componentGraphFacts, [

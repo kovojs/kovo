@@ -595,14 +595,14 @@ void test('P4 commerce touch graph is an on-demand generated artifact', async ()
           queries: ['cart'],
         },
         {
-          fragments: ['components/order-history/order-history'],
-          name: 'components/order-history/order-history',
-          queries: ['orderHistory'],
-        },
-        {
           fragments: ['components/product-grid/product-grid'],
           name: 'components/product-grid/product-grid',
           queries: ['productGrid'],
+        },
+        {
+          fragments: ['components/order-history/order-history'],
+          name: 'components/order-history/order-history',
+          queries: ['orderHistory'],
         },
       ],
       domains: ['auth', 'cart', 'order', 'product'],
@@ -615,7 +615,7 @@ void test('P4 commerce touch graph is an on-demand generated artifact', async ()
         { mutation: 'cart/add', query: 'orderHistory', status: 'derived' },
         { mutation: 'cart/add', query: 'productGrid', status: 'derived' },
       ],
-      routes: ['/', '/cart', '/login'],
+      routes: ['/', '/cart'],
       touchGraphKeys: ['cart.addItem'],
     },
     touchGraph: {

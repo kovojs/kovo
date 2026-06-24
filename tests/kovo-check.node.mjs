@@ -1634,14 +1634,14 @@ void test('D2 commerce validates keyed append and optimistic reorder', async () 
           queries: ['cart'],
         },
         {
-          fragments: ['components/order-history/order-history'],
-          name: 'components/order-history/order-history',
-          queries: ['orderHistory'],
-        },
-        {
           fragments: ['components/product-grid/product-grid'],
           name: 'components/product-grid/product-grid',
           queries: ['productGrid'],
+        },
+        {
+          fragments: ['components/order-history/order-history'],
+          name: 'components/order-history/order-history',
+          queries: ['orderHistory'],
         },
       ],
       optimistic: [
