@@ -675,7 +675,7 @@ describe('diagnostic registry', () => {
       Fixes: declare the legitimate bound with .max(n) (the runtime depth/breadth/node budget already protects by default — this lint just makes the bound explicit and auditable).
       SPEC §6.6/§9.5 and secure-framework Phase 6: the runtime budget is the protection; KV430 is an auditable lint nudging an explicit bound, not an error.",
           "message": "Schema admits unbounded breadth/depth on an untrusted source.",
-          "severity": "warning",
+          "severity": "warn",
         },
         "KV431": {
           "code": "KV431",
@@ -684,7 +684,7 @@ describe('diagnostic registry', () => {
       Fixes: add the module to the manifest/allowlist, or remove the dangling reference. Note: this is an advisory completeness/provenance audit, not byte-integrity — browser import() has no SRI gate.
       SPEC §6.6 and secure-framework Phase 7: the real module-tamper defense is immutable versioned URLs + same-origin + the CSP self restriction, not SRI.",
           "message": "Referenced client module is absent from the integrity/CSP manifest.",
-          "severity": "warning",
+          "severity": "warn",
         },
         "KV432": {
           "code": "KV432",
