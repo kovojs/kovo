@@ -148,6 +148,20 @@ const docsLayoutStyles = style.create(
         gridTemplateColumns: 'repeat(2, 1fr)',
       },
     },
+    sectionGroup: {
+      marginTop: '2.35rem',
+    },
+    sectionGroupTitle: {
+      borderBottomColor: 'var(--edge)',
+      borderBottomStyle: 'solid',
+      borderBottomWidth: 1,
+      color: 'var(--ink)',
+      fontSize: '1.05rem',
+      fontWeight: 720,
+      letterSpacing: '-0.01em',
+      margin: '0 0 1rem',
+      paddingBottom: '0.55rem',
+    },
     sectionHead: {
       marginBottom: '2.4rem',
       maxWidth: '44rem',
@@ -275,6 +289,7 @@ function DocsRouteContentView({ content }: { content: DocsRouteContent }): strin
 /** Section landing pages: a card grid in the ledger style. */
 export function SectionIndex({ section }: { section: SectionIndexInput }): string {
   const numbered = section.key === 'tutorial';
+  const groups = section.groups ?? [{ pages: section.pages, title: section.title }];
   return (
     <div data-section-index>
       <div style={docsLayoutStyles.sectionHead}>
@@ -287,40 +302,58 @@ export function SectionIndex({ section }: { section: SectionIndexInput }): strin
           ''
         )}
       </div>
-      <ul style={docsLayoutStyles.sectionGrid}>
-        {section.pages.map((page, index) => {
-          const title = numbered ? page.title.replace(/^\d+\.\s*/, '') : page.title;
-          return (
-            <li>
-              <a href={page.url} style={docsLayoutStyles.sectionCard}>
-                {numbered ? (
-                  <span style={docsLayoutStyles.sectionNumber}>
-                    {String(index + 1).padStart(2, '0')}
-                  </span>
-                ) : (
-                  ''
-                )}
-                <h2
-                  style={[
-                    docsLayoutStyles.sectionCardTitle,
-                    section.key === 'api' ? docsLayoutStyles.sectionMonoTitle : null,
-                  ]}
-                >
-                  {title}
-                </h2>
-                {page.description ? (
-                  <p style={docsLayoutStyles.sectionCardDescription}>
-                    {page.description}
-                  </p>
-                ) : (
-                  ''
-                )}
-                <span style={docsLayoutStyles.sectionCardRead}>Read &rarr;</span>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
+      {groups.map((group, groupIndex) => (
+        <section style={groupIndex === 0 ? null : docsLayoutStyles.sectionGroup}>
+          {section.groups ? (
+            <h2 style={docsLayoutStyles.sectionGroupTitle}>{group.title}</h2>
+          ) : (
+            ''
+          )}
+          <ul style={docsLayoutStyles.sectionGrid}>
+            {group.pages.map((page, index) => {
+              const title = numbered ? page.title.replace(/^\d+\.\s*/, '') : page.title;
+              return (
+                <li>
+                  <a href={page.url} style={docsLayoutStyles.sectionCard}>
+                    {numbered ? (
+                      <span style={docsLayoutStyles.sectionNumber}>
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                    ) : (
+                      ''
+                    )}
+                    {section.groups ? (
+                      <h3
+                        style={[
+                          docsLayoutStyles.sectionCardTitle,
+                          section.key === 'api' ? docsLayoutStyles.sectionMonoTitle : null,
+                        ]}
+                      >
+                        {title}
+                      </h3>
+                    ) : (
+                      <h2
+                        style={[
+                          docsLayoutStyles.sectionCardTitle,
+                          section.key === 'api' ? docsLayoutStyles.sectionMonoTitle : null,
+                        ]}
+                      >
+                        {title}
+                      </h2>
+                    )}
+                    {page.description ? (
+                      <p style={docsLayoutStyles.sectionCardDescription}>{page.description}</p>
+                    ) : (
+                      ''
+                    )}
+                    <span style={docsLayoutStyles.sectionCardRead}>Read &rarr;</span>
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }

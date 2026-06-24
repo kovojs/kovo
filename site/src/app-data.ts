@@ -28,7 +28,7 @@ export async function buildSiteRouteData({
   clientModules,
 }: SiteRouteDataDeps): Promise<SiteRouteData> {
   const content = await loadSiteContent();
-  const { groups, loaderGzipBytes, sections, spec } = content;
+  const { groups, guideGroups, loaderGzipBytes, sections, spec } = content;
   const pages: SiteRoutePage[] = [];
 
   for (const section of sections) {
@@ -47,7 +47,7 @@ export async function buildSiteRouteData({
               title: 'Reference · Kovo',
             },
           )
-        : sectionIndexPage(section, groups),
+        : sectionIndexPage(section, groups, section.key === 'guides' ? guideGroups : undefined),
     );
 
     for (const [position, page] of section.pages.entries()) {
@@ -115,12 +115,30 @@ export async function buildSiteRouteData({
   };
 }
 
-function sectionIndexPage(section: DocSection, groups: DocsRoutePageData['groups']): SiteRoutePage {
+function sectionIndexPage(
+  section: DocSection,
+  groups: DocsRoutePageData['groups'],
+  guideGroups?: DocsRoutePageData['groups'],
+): SiteRoutePage {
+  const index = sectionIndexInput(section);
+  if (guideGroups && guideGroups.length > 0) {
+    index.groups = guideGroups.map((group) => ({
+      pages: group.pages.map((page) => {
+        const doc = section.pages.find((candidate) => candidate.url === page.url);
+        return {
+          ...(doc?.description ? { description: doc.description } : {}),
+          title: page.title,
+          url: page.url,
+        };
+      }),
+      title: group.title,
+    }));
+  }
   return docsPage(
     `/${section.key}/`,
     {
       activePath: `/${section.key}/`,
-      content: { kind: 'section-index', section: sectionIndexInput(section) },
+      content: { kind: 'section-index', section: index },
       groups,
     },
     {

@@ -42,7 +42,11 @@ const NAV: NavItem[] = [
 // path (Getting Started + Tutorial + Guides) should not also see the whole
 // Components/Examples/API/Reference tree, and vice versa. Group keys map to one
 // of two families; the sidebar renders only the family of the active page.
-const LEARN_FAMILY = new Set(['docs', 'tutorial', 'guides']);
+const LEARN_FAMILY = new Set(['docs', 'tutorial']);
+
+function isLearnGroup(group: NavGroup): boolean {
+  return LEARN_FAMILY.has(group.key) || group.key.startsWith('guides-');
+}
 
 function sidebarFamilyForPath(activePath: string): 'learn' | 'reference' {
   return ['/docs', '/tutorial', '/guides'].some(
@@ -57,7 +61,7 @@ function sidebarFamilyForPath(activePath: string): 'learn' | 'reference' {
 export function sidebarGroupsForPath(groups: NavGroup[], activePath: string): NavGroup[] {
   const family = sidebarFamilyForPath(activePath);
   const filtered = groups.filter(
-    (group) => (LEARN_FAMILY.has(group.key) ? 'learn' : 'reference') === family,
+    (group) => (isLearnGroup(group) ? 'learn' : 'reference') === family,
   );
   return filtered.length > 0 ? filtered : groups;
 }
@@ -738,7 +742,9 @@ export const DocsSidebar = component({
     <nav style={chromeStyles.docSidebar} aria-label="Documentation">
       {groups.map((group) => {
         const activeGroup =
-          activePath === `/${group.key}/` || group.pages.some((page) => page.url === activePath);
+          activePath === group.indexUrl ||
+          activePath === `/${group.key}/` ||
+          group.pages.some((page) => page.url === activePath);
         return (
           <details style={chromeStyles.sideGroupDisclosure} open={activeGroup ? true : undefined}>
             <summary style={chromeStyles.sideGroupHeading}>

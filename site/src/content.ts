@@ -94,10 +94,13 @@ export interface NavLink {
 }
 
 export interface NavGroup {
-  /** Section key (docs/tutorial/guides/api/reference/components/examples). Drives
-   * the context-dependent sidebar split: "learn" sections group together, the
-   * rest group together, so a reader only sees the family they're browsing. */
+  /** Section key or presentation group key. Drives the context-dependent sidebar
+   * split: learning sections group together, the rest group together, so a
+   * reader only sees the family they're browsing. */
   key: string;
+  /** Optional section landing that should open the group even when it is not one
+   * of the group's page links. Used for presentation groups that share /guides/. */
+  indexUrl?: string;
   pages: NavLink[];
   title: string;
 }
@@ -122,6 +125,7 @@ export interface SpecContent {
 
 export interface SiteContent {
   groups: NavGroup[];
+  guideGroups: NavGroup[];
   loaderGzipBytes: number;
   search: SearchEntry[];
   sections: DocSection[];
@@ -136,6 +140,49 @@ const SECTIONS = [
   { dir: 'gen/reference', key: 'reference', title: 'Reference' },
 ] as const;
 
+const GUIDE_GROUPS = [
+  {
+    key: 'pages-routing',
+    slugs: ['routing', 'layouts', 'request-shell'],
+    title: 'Pages & Routing',
+  },
+  {
+    key: 'data-mutations',
+    slugs: ['data-layer', 'queries', 'mutations', 'endpoints-webhooks'],
+    title: 'Data & Mutations',
+  },
+  {
+    key: 'live-async-ui',
+    slugs: ['live-queries', 'optimistic', 'streaming'],
+    title: 'Live & Async UI',
+  },
+  {
+    key: 'ui',
+    slugs: ['components', 'styling', 'islands', 'accessibility'],
+    title: 'UI',
+  },
+  {
+    key: 'security-auth',
+    slugs: ['security', 'auth-better-auth'],
+    title: 'Security & Auth',
+  },
+  {
+    key: 'testing-tooling',
+    slugs: ['testing', 'dataflow-devtool', 'cli', 'kovo-explain'],
+    title: 'Testing & Tooling',
+  },
+  {
+    key: 'deployment',
+    slugs: ['static-export', 'deployment'],
+    title: 'Deployment',
+  },
+  {
+    key: 'internals',
+    slugs: ['compiler-internals'],
+    title: 'Reference',
+  },
+] as const;
+
 export const SECTION_INTROS: Record<string, string> = {
   api: 'Generated reference for every public package — types, functions, and the contracts they keep.',
   components:
@@ -143,7 +190,8 @@ export const SECTION_INTROS: Record<string, string> = {
   docs: 'Install Kovo, absorb the mental model, and find your way around a project.',
   examples:
     'Complete Kovo apps you can run in the browser, embedded beside the authored source that renders them.',
-  guides: 'Task-focused deep dives into each part of the framework, from queries to deployment.',
+  guides:
+    'Task-focused deep dives grouped by the surfaces you actually build: pages, data, live UI, security, tooling, and deployment.',
   reference:
     'Everything generated from the framework itself — the per-package API reference, the diagnostics catalog, and the normative specification.',
   tutorial:
@@ -338,8 +386,11 @@ async function buildSiteContent(): Promise<SiteContent> {
   });
   search.push(...componentSearchEntries(), ...exampleSearchEntries());
 
+  const guideGroups = buildGuideGroups(sections.find((section) => section.key === 'guides'));
+
   return {
-    groups: navGroups(sections),
+    groups: navGroups(sections, guideGroups),
+    guideGroups,
     loaderGzipBytes: Number(captures['loader-gzip-bytes'] ?? 0),
     search,
     sections,
@@ -350,16 +401,29 @@ async function buildSiteContent(): Promise<SiteContent> {
 /** Global sidebar groups: every content section plus the Components + Examples
  * section landings (their per-page lists are owned by those route modules). Each
  * group carries its section `key` so the chrome can split the sidebar by family. */
-function navGroups(sections: DocSection[]): NavGroup[] {
+function navGroups(sections: DocSection[], guideGroups: NavGroup[]): NavGroup[] {
   const groups: NavGroup[] = sections
-    .filter((section) => section.pages.length > 0)
+    .filter((section) => section.pages.length > 0 && section.key !== 'guides')
     .map((section) => ({
       key: section.key,
+      indexUrl: `/${section.key}/`,
       pages: section.pages.map((page) => ({ title: page.title, url: page.url })),
       title: section.title,
     }));
+  const tutorialIndex = groups.find((group) => group.key === 'tutorial');
+  if (tutorialIndex) {
+    tutorialIndex.pages = [{ title: 'Tutorial', url: '/tutorial/' }, ...tutorialIndex.pages];
+  }
+  const docsIndex = groups.find((group) => group.key === 'docs');
+  if (docsIndex) docsIndex.indexUrl = '/docs/';
+  const guideInsertIndex = Math.max(
+    groups.findIndex((group) => group.key === 'tutorial') + 1,
+    0,
+  );
+  groups.splice(guideInsertIndex, 0, ...guideGroups);
   groups.push({
     key: 'components',
+    indexUrl: '/components/',
     pages: [
       { title: 'Components', url: '/components/' },
       ...galleryComponentCatalog.map((entry) => ({
@@ -371,6 +435,7 @@ function navGroups(sections: DocSection[]): NavGroup[] {
   });
   groups.push({
     key: 'examples',
+    indexUrl: '/examples/',
     pages: [
       { title: 'Examples', url: '/examples/' },
       ...(EXAMPLES as ExampleSearchManifest[]).map((example) => ({
@@ -380,6 +445,37 @@ function navGroups(sections: DocSection[]): NavGroup[] {
     ],
     title: 'Examples',
   });
+  return groups;
+}
+
+function buildGuideGroups(section: DocSection | undefined): NavGroup[] {
+  if (!section) return [];
+  const pagesBySlug = new Map(section.pages.map((page) => [page.slug, page]));
+  const used = new Set<string>();
+  const groups = GUIDE_GROUPS.map((group) => {
+    const pages = group.slugs.flatMap((slug) => {
+      const page = pagesBySlug.get(slug);
+      if (!page) return [];
+      used.add(slug);
+      return [{ title: page.title, url: page.url }];
+    });
+    return {
+      key: `guides-${group.key}`,
+      indexUrl: '/guides/',
+      pages,
+      title: group.title,
+    };
+  }).filter((group) => group.pages.length > 0);
+
+  const ungrouped = section.pages.filter((page) => !used.has(page.slug));
+  if (ungrouped.length > 0) {
+    groups.push({
+      key: 'guides-more',
+      indexUrl: '/guides/',
+      pages: ungrouped.map((page) => ({ title: page.title, url: page.url })),
+      title: 'More Guides',
+    });
+  }
   return groups;
 }
 
