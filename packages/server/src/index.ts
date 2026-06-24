@@ -102,6 +102,7 @@ export {
   SchemaValidationError,
   stream,
   tag,
+  unsafeRegex,
   write,
 } from './api/data.js';
 export type {
@@ -152,6 +153,7 @@ export type {
   StoredFileSchemaOptions,
   StoredFileUpload,
   Tag,
+  UnsafeRegexPattern,
   ValidationFailurePayload,
   ValidationIssue,
   WriteDefinition,

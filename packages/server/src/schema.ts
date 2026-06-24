@@ -165,6 +165,27 @@ export const s = {
   },
 };
 
+/** Audited escape for string validators that genuinely need app-owned RegExp semantics. */
+export interface UnsafeRegexPattern {
+  readonly __kovoUnsafeRegex: true;
+  readonly justification: string;
+  readonly regex: RegExp;
+}
+
+/**
+ * Declare an app-owned regular expression for `s.string().pattern(...)`.
+ *
+ * Kovo's safe path accepts compile-visible string literals and rejects known
+ * non-linear structures (secure-by-construction KV434). This escape is explicit:
+ * the caller owns ReDoS review for the supplied `RegExp`, and the compiler can
+ * surface the justification in `kovo explain --capabilities`.
+ */
+export function unsafeRegex(regex: RegExp, justification: string): UnsafeRegexPattern {
+  if (!(regex instanceof RegExp)) throw new Error('unsafeRegex requires a RegExp.');
+  if (!justification.trim()) throw new Error('unsafeRegex requires a non-empty justification.');
+  return { __kovoUnsafeRegex: true, justification, regex };
+}
+
 /** Minimal uploaded-file shape accepted by `s.file()` schemas (SPEC.md §6). */
 export interface FileLike {
   arrayBuffer(): Promise<ArrayBuffer>;
@@ -276,25 +297,32 @@ class ArraySchemaImpl<Item> implements ArraySchema<Item> {
 export interface StringSchema extends Schema<string> {
   email(): StringSchema;
   max(value: number): StringSchema;
+  pattern(pattern: string | UnsafeRegexPattern): StringSchema;
   slug(): StringSchema;
   url(): StringSchema;
   uuid(): StringSchema;
 }
 
 type StringFormat = 'email' | 'slug' | 'url' | 'uuid';
+type StringPattern =
+  | { kind: 'safe'; regex: RegExp; source: string }
+  | { kind: 'unsafe'; regex: RegExp; justification: string };
 
 interface StringSchemaOptions {
   format?: StringFormat;
   maxLength?: number;
+  pattern?: StringPattern;
 }
 
 class StringSchemaImpl implements StringSchema {
   readonly #format: StringFormat | undefined;
   readonly #maxLength: number | undefined;
+  readonly #pattern: StringPattern | undefined;
 
   constructor(options: StringSchemaOptions = {}) {
     this.#format = options.format;
     this.#maxLength = options.maxLength;
+    this.#pattern = options.pattern;
   }
 
   email(): StringSchema {
@@ -304,6 +332,10 @@ class StringSchemaImpl implements StringSchema {
   max(value: number): StringSchema {
     assertNonNegativeInteger(value, 'String max');
     return this.#with({ maxLength: value });
+  }
+
+  pattern(pattern: string | UnsafeRegexPattern): StringSchema {
+    return this.#with({ pattern: stringPatternFrom(pattern) });
   }
 
   slug(): StringSchema {
@@ -326,6 +358,9 @@ class StringSchemaImpl implements StringSchema {
     if (this.#format !== undefined && !stringFormatValidators[this.#format](input)) {
       throw validationError(`Expected ${this.#format}`);
     }
+    if (this.#pattern !== undefined && !matchesStringPattern(this.#pattern, input)) {
+      throw validationError('Expected pattern');
+    }
 
     return input;
   }
@@ -333,9 +368,11 @@ class StringSchemaImpl implements StringSchema {
   #with(options: StringSchemaOptions): StringSchema {
     const format = options.format ?? this.#format;
     const maxLength = options.maxLength ?? this.#maxLength;
+    const pattern = options.pattern ?? this.#pattern;
     return new StringSchemaImpl({
       ...(format === undefined ? {} : { format }),
       ...(maxLength === undefined ? {} : { maxLength }),
+      ...(pattern === undefined ? {} : { pattern }),
     });
   }
 }
@@ -510,6 +547,319 @@ const stringFormatValidators: Record<StringFormat, (value: string) => boolean> =
   url: isLinearUrl,
   uuid: isLinearUuid,
 };
+
+const maxPatternInputLength = 4_096;
+
+function stringPatternFrom(pattern: string | UnsafeRegexPattern): StringPattern {
+  if (typeof pattern === 'string') {
+    assertSafeRegexSource(pattern);
+    return { kind: 'safe', regex: regexFromPatternSource(pattern), source: pattern };
+  }
+  if (!isUnsafeRegexPattern(pattern))
+    throw new Error('Expected string pattern or unsafeRegex(...).');
+  return {
+    kind: 'unsafe',
+    justification: pattern.justification,
+    regex: cloneRegExp(pattern.regex),
+  };
+}
+
+function matchesStringPattern(pattern: StringPattern, input: string): boolean {
+  if (input.length > maxPatternInputLength) {
+    throw validationError(`Pattern input exceeds maximum length ${maxPatternInputLength}`);
+  }
+  pattern.regex.lastIndex = 0;
+  return pattern.regex.test(input);
+}
+
+function regexFromPatternSource(source: string): RegExp {
+  try {
+    return new RegExp(`^(?:${source})$`, 'u');
+  } catch (error) {
+    throw new Error(
+      `Invalid string pattern: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function cloneRegExp(regex: RegExp): RegExp {
+  return new RegExp(regex.source, regex.flags);
+}
+
+function isUnsafeRegexPattern(value: unknown): value is UnsafeRegexPattern {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Partial<UnsafeRegexPattern>).__kovoUnsafeRegex === true &&
+    (value as Partial<UnsafeRegexPattern>).regex instanceof RegExp &&
+    typeof (value as Partial<UnsafeRegexPattern>).justification === 'string'
+  );
+}
+
+function assertSafeRegexSource(source: string): void {
+  const result = analyzeRegexSafety(source);
+  if (!result.safe) throw new Error(`Unsafe string pattern: ${result.reason}`);
+  regexFromPatternSource(source);
+}
+
+interface RegexSafetyResult {
+  reason?: string;
+  safe: boolean;
+}
+
+interface RegexAtom {
+  quantified: boolean;
+  set: CharacterSet;
+}
+
+interface RegexGroup {
+  alternatives: CharacterSet[];
+  current: CharacterSet;
+  quantifiedInside: boolean;
+  start: number;
+}
+
+interface CharacterSet {
+  any?: boolean;
+  chars?: ReadonlySet<string>;
+  unknown?: boolean;
+}
+
+/**
+ * Conservative ReDoS screen for KV434: reject backreferences and the two common
+ * exponential families, nested quantifiers and adjacent overlapping quantified atoms.
+ */
+export function analyzeRegexSafety(source: string): RegexSafetyResult {
+  const groups: RegexGroup[] = [newRegexGroup(0)];
+  let lastAtom: RegexAtom | undefined;
+  let inClass = false;
+  let classChars = new Set<string>();
+  let classNegated = false;
+  let escaped = false;
+  let previousQuantifiedAtom: RegexAtom | undefined;
+
+  const reject = (reason: string): RegexSafetyResult => ({ reason, safe: false });
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index] ?? '';
+
+    if (inClass) {
+      if (escaped) {
+        addEscapedClassChar(classChars, char);
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        escaped = true;
+        continue;
+      }
+      if (char === ']') {
+        inClass = false;
+        lastAtom = addRegexAtom(groups, {
+          quantified: false,
+          set: classNegated ? { unknown: true } : { chars: classChars },
+        });
+        if (!isQuantifierStart(source[index + 1] ?? '')) previousQuantifiedAtom = undefined;
+        classChars = new Set<string>();
+        classNegated = false;
+        continue;
+      }
+      addClassChar(classChars, char, source[index + 1], source[index + 2]);
+      continue;
+    }
+
+    if (escaped) {
+      if (/[1-9]/u.test(char) || char === 'k') return reject('backreferences are not linear-safe');
+      lastAtom = addRegexAtom(groups, { quantified: false, set: escapedAtomSet(char) });
+      if (!isQuantifierStart(source[index + 1] ?? '')) previousQuantifiedAtom = undefined;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (char === '[') {
+      inClass = true;
+      classNegated = source[index + 1] === '^';
+      if (classNegated) index += 1;
+      lastAtom = undefined;
+      continue;
+    }
+    if (char === '(') {
+      if (source[index + 1] === '?' && ['=', '!', '<'].includes(source[index + 2] ?? '')) {
+        return reject('lookaround assertions are not accepted in safe patterns');
+      }
+      groups.push(newRegexGroup(index));
+      lastAtom = undefined;
+      previousQuantifiedAtom = undefined;
+      if (source[index + 1] === '?' && source[index + 2] === ':') index += 2;
+      continue;
+    }
+    if (char === ')') {
+      if (groups.length === 1) return reject('unbalanced group close');
+      const group = groups.pop() ?? newRegexGroup(index);
+      group.alternatives.push(group.current);
+      const next = source[index + 1] ?? '';
+      const quantified = isQuantifierStart(next);
+      if (quantified && group.quantifiedInside) {
+        return reject('nested quantified groups can backtrack exponentially');
+      }
+      if (quantified && next === '{') index = skipCountQuantifier(source, index + 1);
+      else if (quantified) index += 1;
+      const atom = {
+        quantified,
+        set: unionCharacterSets(group.alternatives),
+      };
+      if (
+        quantified &&
+        previousQuantifiedAtom &&
+        characterSetsOverlap(previousQuantifiedAtom.set, atom.set)
+      ) {
+        return reject('adjacent or overlapping quantified atoms can backtrack exponentially');
+      }
+      lastAtom = addRegexAtom(groups, atom);
+      previousQuantifiedAtom = quantified ? atom : undefined;
+      continue;
+    }
+    if (char === '|') {
+      currentRegexGroup(groups).alternatives.push(currentRegexGroup(groups).current);
+      currentRegexGroup(groups).current = {};
+      lastAtom = undefined;
+      previousQuantifiedAtom = undefined;
+      continue;
+    }
+    if (isQuantifierStart(char)) {
+      if (!lastAtom) return reject('quantifier has no literal atom');
+      if (
+        previousQuantifiedAtom &&
+        characterSetsOverlap(previousQuantifiedAtom.set, lastAtom.set)
+      ) {
+        return reject('adjacent or overlapping quantified atoms can backtrack exponentially');
+      }
+      lastAtom = { ...lastAtom, quantified: true };
+      currentRegexGroup(groups).quantifiedInside = true;
+      previousQuantifiedAtom = lastAtom;
+      if (char === '{') index = skipCountQuantifier(source, index);
+      continue;
+    }
+    if (char === '^' || char === '$') {
+      lastAtom = undefined;
+      previousQuantifiedAtom = undefined;
+      continue;
+    }
+
+    lastAtom = addRegexAtom(groups, {
+      quantified: false,
+      set: { chars: new Set([char]) },
+    });
+    if (!isQuantifierStart(source[index + 1] ?? '')) previousQuantifiedAtom = undefined;
+  }
+
+  if (escaped) return reject('dangling escape');
+  if (inClass) return reject('unterminated character class');
+  if (groups.length !== 1) return reject('unbalanced group open');
+  return { safe: true };
+}
+
+function newRegexGroup(start: number): RegexGroup {
+  return { alternatives: [], current: {}, quantifiedInside: false, start };
+}
+
+function currentRegexGroup(groups: RegexGroup[]): RegexGroup {
+  return groups[groups.length - 1] ?? newRegexGroup(0);
+}
+
+function addRegexAtom(groups: RegexGroup[], atom: RegexAtom): RegexAtom {
+  const group = currentRegexGroup(groups);
+  group.current = unionCharacterSets([group.current, atom.set]);
+  if (atom.quantified) group.quantifiedInside = true;
+  return atom;
+}
+
+function addClassChar(
+  chars: Set<string>,
+  char: string,
+  next: string | undefined,
+  after: string | undefined,
+): void {
+  if (next === '-' && after !== undefined && after !== ']') {
+    const start = char.codePointAt(0) ?? 0;
+    const end = after.codePointAt(0) ?? 0;
+    for (let code = Math.min(start, end); code <= Math.max(start, end); code += 1) {
+      chars.add(String.fromCodePoint(code));
+    }
+    return;
+  }
+  if (char !== '-') chars.add(char);
+}
+
+function addEscapedClassChar(chars: Set<string>, char: string): void {
+  for (const value of escapedCharacterSet(char).chars ?? [char]) chars.add(value);
+}
+
+function escapedAtomSet(char: string): CharacterSet {
+  if (char === 'b' || char === 'B') return {};
+  return escapedCharacterSet(char);
+}
+
+function escapedCharacterSet(char: string): CharacterSet {
+  if (char === 'd') return { chars: asciiRange('0', '9') };
+  if (char === 'D') return { unknown: true };
+  if (char === 's') return { chars: new Set([' ', '\t', '\n', '\r', '\f', '\v']) };
+  if (char === 'S') return { unknown: true };
+  if (char === 'w')
+    return {
+      chars: new Set([
+        ...asciiRange('a', 'z'),
+        ...asciiRange('A', 'Z'),
+        ...asciiRange('0', '9'),
+        '_',
+      ]),
+    };
+  if (char === 'W') return { unknown: true };
+  return { chars: new Set([char]) };
+}
+
+function asciiRange(start: string, end: string): Set<string> {
+  const chars = new Set<string>();
+  const first = start.charCodeAt(0);
+  const last = end.charCodeAt(0);
+  for (let code = first; code <= last; code += 1) chars.add(String.fromCharCode(code));
+  return chars;
+}
+
+function isQuantifierStart(char: string): boolean {
+  return char === '*' || char === '+' || char === '?' || char === '{';
+}
+
+function skipCountQuantifier(source: string, start: number): number {
+  let index = start + 1;
+  while (index < source.length && source[index] !== '}') index += 1;
+  return index < source.length ? index : start;
+}
+
+function unionCharacterSets(sets: readonly CharacterSet[]): CharacterSet {
+  if (sets.some((set) => set.any)) return { any: true };
+  if (sets.some((set) => set.unknown)) return { unknown: true };
+  const chars = new Set<string>();
+  for (const set of sets) {
+    for (const char of set.chars ?? []) chars.add(char);
+  }
+  return chars.size === 0 ? {} : { chars };
+}
+
+function characterSetsOverlap(left: CharacterSet, right: CharacterSet): boolean {
+  if (left.any || right.any || left.unknown || right.unknown) return true;
+  const leftChars = left.chars;
+  const rightChars = right.chars;
+  if (!leftChars || !rightChars) return false;
+  for (const char of leftChars) {
+    if (rightChars.has(char)) return true;
+  }
+  return false;
+}
 
 function arrayValues(input: unknown): unknown[] {
   if (input === undefined || input === null) return [];

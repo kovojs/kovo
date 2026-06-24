@@ -77,6 +77,7 @@ describe('diagnostic registry', () => {
       'KV425',
       'KV426',
       'KV431',
+      'KV434',
       'KV435',
       'KV436',
       'KV437',
@@ -653,6 +654,15 @@ describe('diagnostic registry', () => {
           "message": "Client module reference is absent from the CSP/export manifest.",
           "severity": "error",
         },
+        "KV434": {
+          "code": "KV434",
+          "help": "Blocked reason: s.string().pattern(...) accepts only compile-visible string literals whose regex structure is conservatively linear-safe; dynamic patterns and nested or overlapping quantified structures can cause catastrophic backtracking.
+      Fixes: use a blessed validator such as email(), url(), uuid(), or slug(); replace the pattern with a simpler literal-safe expression; or wrap a reviewed RegExp in unsafeRegex(re, justification) so the ReDoS risk is explicit in kovo explain --capabilities.
+      Escape: unsafeRegex(re, justification) is audited and makes the app-owned ReDoS risk explicit.
+      SPEC §6.3 and the secure-by-construction Phase 6 plan require request wire validators to avoid app-provided exponential regular expressions by default.",
+          "message": "Non-linear-safe pattern literal in a wire string validator.",
+          "severity": "error",
+        },
         "KV435": {
           "code": "KV435",
           "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
@@ -687,7 +697,8 @@ describe('diagnostic registry', () => {
   it('requires class-specific teaching help for every compiler-owned diagnostic', () => {
     type CompilerTeachingCode = keyof typeof compilerDiagnosticTeachingSchemas;
     const compilerDiagnosticCodes = Object.keys(diagnosticDefinitions).filter(
-      (code): code is CompilerTeachingCode => code === 'KV201' || /^KV[23]\d\d$/.test(code),
+      (code): code is CompilerTeachingCode =>
+        code === 'KV201' || code === 'KV434' || /^KV[23]\d\d$/.test(code),
     );
 
     expect(compilerDiagnosticCodes).not.toEqual([]);

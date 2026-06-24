@@ -70,6 +70,7 @@ export type DiagnosticCode =
   | 'KV425'
   | 'KV426'
   | 'KV431'
+  | 'KV434'
   | 'KV435'
   | 'KV436'
   | 'KV437';
@@ -184,6 +185,7 @@ export const compilerDiagnosticTeachingSchemas = {
   KV317: { blockedReason: true, escapePosture: 'none', loweredForm: 'required' },
   KV320: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
   KV330: { blockedReason: true, escapePosture: 'none', loweredForm: 'not-applicable' },
+  KV434: { blockedReason: true, escapePosture: 'documented', loweredForm: 'not-applicable' },
 } as const satisfies Partial<Record<DiagnosticCode, DiagnosticTeachingSchema>>;
 
 /** The frozen registry of every `KV###` diagnostic: code → definition (message, severity, help). */
@@ -873,6 +875,17 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'Client module reference is absent from the CSP/export manifest.',
+  },
+  KV434: {
+    code: 'KV434',
+    help: [
+      'Blocked reason: s.string().pattern(...) accepts only compile-visible string literals whose regex structure is conservatively linear-safe; dynamic patterns and nested or overlapping quantified structures can cause catastrophic backtracking.',
+      'Fixes: use a blessed validator such as email(), url(), uuid(), or slug(); replace the pattern with a simpler literal-safe expression; or wrap a reviewed RegExp in unsafeRegex(re, justification) so the ReDoS risk is explicit in kovo explain --capabilities.',
+      'Escape: unsafeRegex(re, justification) is audited and makes the app-owned ReDoS risk explicit.',
+      'SPEC §6.3 and the secure-by-construction Phase 6 plan require request wire validators to avoid app-provided exponential regular expressions by default.',
+    ].join('\n'),
+    severity: 'error',
+    message: 'Non-linear-safe pattern literal in a wire string validator.',
   },
   KV435: {
     code: 'KV435',

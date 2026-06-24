@@ -43,6 +43,7 @@ import {
   validateDeclaredClockReadsInRender,
   validateUntrackedClockReadsInDerives,
 } from './temporal.js';
+import { validateStringPatterns } from './redos-validators.js';
 
 interface ValidatorContext {
   componentName: string;
@@ -93,6 +94,8 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateNestedStatefulIslandInRefreshTarget(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>
     validateSecretQueryWire(originalDiagnostics, originalModel, options),
+  ({ originalDiagnostics, originalModel }) =>
+    validateStringPatterns(originalDiagnostics, originalModel),
   ({ loweredDiagnostics, model, options }) =>
     validateDataBindings(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>

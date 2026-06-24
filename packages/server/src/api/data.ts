@@ -48,7 +48,7 @@ export type {
   QueryWriteMethod,
 } from '../query.js';
 export { query } from '../query.js';
-export { s, SchemaValidationError } from '../schema.js';
+export { s, SchemaValidationError, unsafeRegex } from '../schema.js';
 export type {
   ArraySchema,
   AsyncSchema,
@@ -62,6 +62,7 @@ export type {
   StoredFileSchema,
   StoredFileSchemaOptions,
   StoredFileUpload,
+  UnsafeRegexPattern,
   ValidationFailurePayload,
   ValidationIssue,
 } from '../schema.js';

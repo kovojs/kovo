@@ -4,7 +4,13 @@ import { trustedReveal, type JsonValue, type Secret, type StorageCapability } fr
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
-import { SchemaValidationError, entriesToRecord, parseSchemaAsync, s } from './schema.js';
+import {
+  SchemaValidationError,
+  entriesToRecord,
+  parseSchemaAsync,
+  s,
+  unsafeRegex,
+} from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('server schemas', () => {
@@ -59,6 +65,36 @@ describe('server schemas', () => {
     expect(s.string().slug().parse('cart-item-1')).toBe('cart-item-1');
     expect(() => s.string().slug().parse('Cart Item')).toThrow('Expected slug');
     expect(() => s.string().slug().parse('cart--item')).toThrow('Expected slug');
+  });
+
+  it('validates safe literal string patterns as full-string matches', () => {
+    const sku = s.string().pattern('[A-Z]{3}-\\d{4}');
+
+    expect(sku.parse('ABC-1234')).toBe('ABC-1234');
+    expect(() => sku.parse('xABC-1234')).toThrow('Expected pattern');
+    expect(() => sku.parse('ABC-1234x')).toThrow('Expected pattern');
+  });
+
+  it('rejects non-linear string patterns unless explicitly escaped', () => {
+    expect(() => s.string().pattern('(a+)+')).toThrow(
+      'Unsafe string pattern: nested quantified groups can backtrack exponentially',
+    );
+    expect(() => s.string().pattern('a+a+')).toThrow(
+      'Unsafe string pattern: adjacent or overlapping quantified atoms can backtrack exponentially',
+    );
+
+    const escaped = s
+      .string()
+      .pattern(unsafeRegex(/^(a+)+$/u, 'legacy import accepts a reviewed bounded token'));
+    expect(escaped.parse('aaa')).toBe('aaa');
+  });
+
+  it('bounds pattern inputs before executing a regex backstop', () => {
+    const schema = s.string().pattern('[a-z]+');
+
+    expect(() => schema.parse('a'.repeat(4_097))).toThrow(
+      'Pattern input exceeds maximum length 4096',
+    );
   });
 
   it('wraps schemas as Secret values outside JsonValue client payloads', () => {

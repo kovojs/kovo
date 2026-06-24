@@ -691,11 +691,17 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
         Evidence: `packages/server/src/schema.ts` implements `s.string().email()`, `.url()`, `.uuid()`, and
         `.slug()` with parser/URL/character-scan validators and no app-provided `RegExp`; `vp exec vitest --run
 packages/server/src/schema.test.ts` and `vp check` passed.
-  - [ ] `s.string().pattern(...)` REQUIRES a compile-visible literal; KV434 statically rejects exponential
+  - [x] `s.string().pattern(...)` REQUIRES a compile-visible literal; KV434 statically rejects exponential
         structure (conservative: nested/overlapping quantifiers); execute with a runtime step-budget/timeout as
         the backstop. A non-literal pattern → KV434 (unanalyzable).
-  - [ ] `unsafeRegex(re, justification)` is the audited escape for genuinely dynamic patterns ("you own the
+        Evidence: `packages/server/src/schema.test.ts` covers full-string safe patterns, runtime rejection of
+        nested/overlapping quantified patterns, and the 4096-character runtime backstop; `packages/compiler/src/redos-validators.test.ts`
+        verifies KV434 for dynamic and nested pattern literals.
+  - [x] `unsafeRegex(re, justification)` is the audited escape for genuinely dynamic patterns ("you own the
         ReDoS risk"), surfaced in `kovo explain --capabilities`.
+        Evidence: `packages/server/src/schema.test.ts` verifies `unsafeRegex(...)` bypasses the safe-pattern
+        constructor with a required justification; `packages/compiler/src/redos-validators.test.ts` verifies no
+        KV434 is emitted for the escape and that an `unsafeRegex` capability fact is produced.
   - [ ] Full linear (RE2-style/DFA) engine deferred unless static-reject + step-budget proves insufficient
         (avoids a heavy dep in v1). Honest: by-construction-ish (compile gate + runtime backstop); airtight only
         with the deferred engine.

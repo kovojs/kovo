@@ -357,18 +357,32 @@ export function publishToClientCapabilityFacts(
   model: ComponentModuleModel,
   fileName: string,
 ): CoreGraph.CapabilityExplainFact[] {
-  return model.moduleScopeBindings.flatMap((binding) =>
-    binding.publishToClient
-      ? [
-          {
-            kind: 'publishToClient',
-            reason: binding.publishToClient.reason,
-            site: `${fileName}#${binding.name}`,
-            source: binding.publishToClient.source,
-          },
-        ]
-      : [],
-  );
+  return [
+    ...model.moduleScopeBindings.flatMap((binding) =>
+      binding.publishToClient
+        ? [
+            {
+              kind: 'publishToClient' as const,
+              reason: binding.publishToClient.reason,
+              site: `${fileName}#${binding.name}`,
+              source: binding.publishToClient.source,
+            },
+          ]
+        : [],
+    ),
+    ...model.calls.flatMap((call) => {
+      if (call.name !== 'unsafeRegex') return [];
+      const reason = call.argumentStaticValues[1];
+      return [
+        {
+          kind: 'unsafeRegex' as const,
+          ...(typeof reason === 'string' ? { reason } : {}),
+          site: `${fileName}#${call.start}`,
+          source: call.arguments[0] ?? '-',
+        },
+      ];
+    }),
+  ];
 }
 
 function callableNamedImportReferences(
