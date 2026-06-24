@@ -80,7 +80,7 @@ export class EgressBlockedError extends Error {
       ? `${args.destination} (resolved to ${args.resolvedIp})`
       : args.destination;
     const remediation = args.metadata
-      ? 'Cloud instance-metadata is reachable only inside a kovo.awsCredential()/gcpCredential()/' +
+      ? 'Cloud instance-metadata is reachable only inside an awsCredential()/gcpCredential()/' +
         'azureCredential() frame, never via egress.allowInternal.'
       : `If this internal destination is intended, add "${args.destination}" to ` +
         'createApp({ egress: { allowInternal: [...] } }).';

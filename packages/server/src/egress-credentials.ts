@@ -33,7 +33,7 @@ export type CredentialProvider<C> = () => Promise<C>;
  *
  * @example
  *   import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
- *   const credentials = kovo.awsCredential(fromNodeProviderChain());
+ *   const credentials = awsCredential(fromNodeProviderChain());
  *   const s3 = new S3Client({ credentials });
  */
 export function awsCredential<C>(provider: CredentialProvider<C>): CredentialProvider<C> {

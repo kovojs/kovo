@@ -390,7 +390,6 @@ describe('server app-shell public API barrels', () => {
       awsCredential: egressCredentialsApi.awsCredential,
       gcpCredential: egressCredentialsApi.gcpCredential,
       azureCredential: egressCredentialsApi.azureCredential,
-      kovo: publicApi.kovo,
       // SPEC.md §6.6 / §9.1 / plans/secure-framework.md Phase 5: capability-URL signing/verify
       // primitive (by-construction at the verify sink). Public at the root barrel; the download
       // route that hosts the sink is open work.

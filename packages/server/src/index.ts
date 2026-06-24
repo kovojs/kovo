@@ -11,7 +11,8 @@ export { publicAccess, verifiedAccess } from './access.js';
 // (runtime defense-in-depth, NOT a by-construction proof). `EgressBlockedError` is the typed
 // 502-class error a blocked outbound connection throws; `installEgressFloor`/`selfProbe` let a
 // worker/child bootstrap re-install + verify the floor (it does not cross worker boundaries).
-// `kovo.{aws,gcp,azure}Credential` are the ONLY entry points to the metadata-allowed frame.
+// The flat `awsCredential`/`gcpCredential`/`azureCredential` factories below are the ONLY entry
+// points to the metadata-allowed frame.
 export { EgressBlockedError, EgressConfigError } from './egress.js';
 export type { EgressOptions, PrivateAddressClass } from './egress.js';
 export { installEgressFloor, selfProbe } from './egress-bootstrap.js';
@@ -37,20 +38,6 @@ export type {
   SignCapabilityOptions,
   SignedCapability,
 } from './capability-url.js';
-import { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
-import { installEgressFloor as installEgressFloorImpl, selfProbe as selfProbeImpl } from './egress-bootstrap.js';
-/**
- * The `kovo` capability namespace (SPEC §6.6). The cloud credential factories are accessed as
- * `kovo.awsCredential(...)` / `kovo.gcpCredential(...)` / `kovo.azureCredential(...)` — the only
- * way to enter the metadata-allowed frame. Also carries the egress-floor bootstrap helpers.
- */
-export const kovo = Object.freeze({
-  awsCredential,
-  gcpCredential,
-  azureCredential,
-  installEgressFloor: installEgressFloorImpl,
-  egressSelfProbe: selfProbeImpl,
-});
 export type {
   AccessDecision,
   GuardAccessStep,
