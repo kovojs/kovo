@@ -696,9 +696,12 @@ packages/server/src/app-dispatch.test.ts` verifies route-context minting, reserv
       version/atomic guards to return or throw a typed `kovoConflict(...)`/`compareAndSet(...)` zero-row outcome;
       verified by `vp exec vitest --run packages/drizzle/src/index.symbol-provenance.test.ts packages/drizzle/src/runtime-surface.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts`.
       Still open: imported/node_modules helper summaries and full versioned-read lifecycle coverage.
-  - [ ] DB-constraint backstop (recommended, fail-closed under everything): `CHECK stock >= 0`, unique
+  - [x] DB-constraint backstop (recommended, fail-closed under everything): `CHECK stock >= 0`, unique
         constraints. Multi-row/aggregate invariants need `forUpdate`/`SERIALIZABLE` — documented as NOT
         by-construction (provide the tool + guidance; do not pretend CAS covers them).
+    - Evidence: `docs/toctou-atomicity.md` documents DB constraints as the fail-closed backstop under
+      `compareAndSet`/version guards, distinguishes single-row invariants from multi-row/aggregate invariants,
+      and SPEC §10.1 records that plain mutation transactions are not an atomicity proof.
 - [x] **Input-shape DoS (KV430).**
       Decision (2026-06-23): the **runtime budget is the protection** (a safe-default, not a compile-time proof);
       KV430 is an auditable lint, not an error. Closes the small-body-huge-work class the byte+rate limiter misses;
