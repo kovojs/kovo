@@ -171,6 +171,81 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
 }
 
 /**
+ * SPEC §6.6 (runtime defense-in-depth, NOT a by-construction proof): the
+ * conservative, LOW-false-positive isolation/hardening header baseline carried
+ * on every framework-rendered DOCUMENT response. These are fail-closed runtime
+ * floors layered on top of (and independent of) the opt-in Content-Security-Policy
+ * channel; they harden the document against clickjacking, cross-window scripting
+ * (COOP), and ambient-capability abuse without breaking ordinary same-origin apps.
+ *
+ * Companion to `routeOutcomeHeaders` above (`X-Content-Type-Options: nosniff`,
+ * which file/stream responses already carry). Each header is chosen for a near-zero
+ * false-positive rate on a typical SSR app:
+ *
+ * - `X-Frame-Options: DENY` — clickjacking defense and pre-CSP3 companion to CSP
+ *   `frame-ancestors`. Django ships this by default; Kovo otherwise has ZERO
+ *   clickjacking defense because CSP is opt-in. Apps that intentionally embed their
+ *   own pages in frames override this on the route response.
+ * - `Cross-Origin-Opener-Policy: same-origin-allow-popups` — severs the
+ *   `window.opener` reference for cross-origin navigations (cross-window scripting /
+ *   tabnabbing) while still allowing same-origin OAuth/payment popups to talk back.
+ *   Deliberately NOT the stricter `same-origin` (which breaks popup-based flows) and
+ *   NOT paired with `Cross-Origin-Embedder-Policy: require-corp` (breaks cross-origin
+ *   subresources — explicitly out of scope).
+ * - `Permissions-Policy` — deny-by-default for the high-risk ambient capabilities a
+ *   content app virtually never needs. A conservative deny-all baseline; an app that
+ *   uses one of these overrides the header on the route response.
+ * - `Referrer-Policy: strict-origin-when-cross-origin` — limits cross-origin referrer
+ *   leakage (also present on the non-document/error paths; included here so this helper
+ *   is the single source of the document baseline).
+ *
+ * `Strict-Transport-Security` (HSTS) and `Cross-Origin-Resource-Policy` (CORP) are
+ * NOT included here: HSTS is gated on prod+HTTPS at the document call site (it would
+ * brick localhost/non-HTTPS dev), and CORP belongs on the immutable client-module
+ * asset responses (see the `SF-WIRE` note below), not on documents.
+ *
+ * Every header is applied only when the route response did not already set it
+ * (case-insensitively), so an author opt-out is always preserved.
+ */
+export const DOCUMENT_ISOLATION_HEADERS: Readonly<Record<string, string>> = {
+  'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'DENY',
+};
+
+/**
+ * SPEC §6.6 (runtime defense-in-depth): the HSTS value applied to document responses
+ * ONLY when the request was served over HTTPS in production. Two years with
+ * `includeSubDomains` is the conservative widely-deployed baseline (no `preload`,
+ * which is an irreversible registry opt-in the framework must not assume).
+ */
+export const DOCUMENT_HSTS_VALUE = 'max-age=63072000; includeSubDomains';
+
+/**
+ * Decide whether `Strict-Transport-Security` may be attached to a document response.
+ * Gated on BOTH production (existing `NODE_ENV` prod detection, matching
+ * `guards.ts`) AND an HTTPS request/response, so a non-HTTPS deploy or any
+ * `localhost`/dev request never receives an HSTS header that would otherwise pin the
+ * browser to https for two years and brick plain-http local development.
+ *
+ * @param secureRequest - `true` when the originating request was served over HTTPS.
+ * @internal
+ */
+export function shouldEmitDocumentHsts(secureRequest: boolean): boolean {
+  return secureRequest && process.env.NODE_ENV === 'production';
+}
+
+// SF-WIRE (SPEC §6.6, Cross-Origin-Resource-Policy): immutable client-module asset
+// responses are served by `client-modules.ts` (`createVersionedClientModuleRegistry`'s
+// `resolve(...)`, the `/c/__v/<version>/<module>` 200 with
+// `Cache-Control: public, max-age=31536000, immutable`), which is NOT owned by this
+// slice. Add `'Cross-Origin-Resource-Policy': 'same-origin'` to that response's
+// `headers` object so a cross-origin page cannot pull the app's immutable JS as a
+// no-cors subresource. Documents intentionally do NOT carry CORP (it would block
+// legitimate cross-origin embedding of the page where an app opts into that).
+
+/**
  * Build a non-document route response from a route `page` handler: `respond.file`
  * for an attachment download, `respond.stream` for a streamed body. Both set the
  * content type and disposition; return the result instead of a page value

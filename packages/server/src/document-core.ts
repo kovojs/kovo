@@ -18,7 +18,10 @@ import {
   type RouteMetaSource,
 } from './hints.js';
 import {
+  DOCUMENT_HSTS_VALUE,
+  DOCUMENT_ISOLATION_HEADERS,
   readHeader,
+  shouldEmitDocumentHsts,
   type DocumentRouteResponseBase,
   type ResponseHeaders,
   type ServerResponseBase,
@@ -106,6 +109,23 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
    * authenticated page after logout/expiry without re-running the route guard.
    */
   noStore?: boolean;
+  /**
+   * SPEC §6.6 (runtime defense-in-depth): `true` when the originating request was
+   * served over HTTPS. Gates `Strict-Transport-Security` so it is attached ONLY on
+   * a prod+HTTPS document (see `shouldEmitDocumentHsts`); a non-HTTPS or dev/
+   * localhost request never receives HSTS, which would otherwise pin the browser to
+   * https for two years and brick plain-http local development. The static isolation
+   * headers (`X-Frame-Options`, COOP, `Permissions-Policy`, `Referrer-Policy`) do not
+   * depend on this and are always applied.
+   *
+   * SF-WIRE: the document call site (`app-document.ts` `renderAppRouteDocumentResponse`,
+   * NOT owned by this slice) must compute this from the request — e.g.
+   * `new URL(request.url).protocol === 'https:' || request.headers.get('x-forwarded-proto') === 'https'`
+   * (mirroring `csrf.ts` `requestIsHttps` and `node.ts`/`build.ts` forwarded-proto
+   * handling) — and pass it as `secure`. Until wired, HSTS stays off (fail-safe: a
+   * missing/false flag simply omits the header).
+   */
+  secure?: boolean;
 }
 
 /** @internal */
@@ -268,7 +288,7 @@ export function renderRouteDocumentResponse(
   response: DocumentRoutePageResponse,
   options: DocumentResponseOptions = {},
 ): DocumentRoutePageResponseWithCsp {
-  const { noStore, ...assemblyOptions } = options;
+  const { noStore, secure, ...assemblyOptions } = options;
   const contentType = readHeader(response.headers, 'Content-Type');
   if (
     response.status !== 200 ||
@@ -310,14 +330,43 @@ export function renderRouteDocumentResponse(
       ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
         ? { 'X-Content-Type-Options': 'nosniff' }
         : {}),
-      ...(findHeaderRecordName(response.headers, 'Referrer-Policy') === undefined
-        ? { 'Referrer-Policy': 'strict-origin-when-cross-origin' }
+      // SPEC §6.6 (runtime defense-in-depth, NOT a by-construction proof): the
+      // conservative LOW-false-positive isolation/hardening baseline
+      // (`X-Frame-Options: DENY` clickjacking defense, COOP cross-window-scripting
+      // severance, `Permissions-Policy` ambient-capability deny-all, `Referrer-Policy`).
+      // Each is applied only when the route response didn't already set it, so an author
+      // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
+      ...documentIsolationHeaders(response.headers),
+      // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
+      // dev/localhost request is never pinned to https. Gated by the call site's
+      // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
+      ...(secure !== undefined && shouldEmitDocumentHsts(secure) &&
+      findHeaderRecordName(response.headers, 'Strict-Transport-Security') === undefined
+        ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
         : {}),
       // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
       ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
     },
     status: response.status,
   };
+}
+
+/**
+ * SPEC §6.6 (runtime defense-in-depth): the static document isolation/hardening
+ * header baseline (`DOCUMENT_ISOLATION_HEADERS`), filtered to only the headers the
+ * route response did not already set (case-insensitively) so any author opt-out is
+ * preserved. `Referrer-Policy` is included here so the document baseline has a single
+ * source; the explicit `Referrer-Policy` carve-out above is therefore redundant and
+ * collapsed into this helper.
+ *
+ * @internal
+ */
+function documentIsolationHeaders(existing: ResponseHeaders): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(DOCUMENT_ISOLATION_HEADERS)) {
+    if (findHeaderRecordName(existing, name) === undefined) headers[name] = value;
+  }
+  return headers;
 }
 
 function standardDocumentResult(document: DocumentRenderResult): {
@@ -373,7 +422,12 @@ export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRout
       // CSP-3 (bugs-part3): error documents are HTML responses too; carry the same
       // baseline security headers as successful documents.
       'X-Content-Type-Options': 'nosniff',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      // SPEC §6.6 (runtime defense-in-depth): the same conservative isolation/hardening
+      // baseline as successful documents (X-Frame-Options/COOP/Permissions-Policy/
+      // Referrer-Policy). Error documents have no route response to carry an author
+      // opt-out, so the static baseline applies unconditionally. HSTS is intentionally
+      // omitted here: error documents render without the request's secure context.
+      ...DOCUMENT_ISOLATION_HEADERS,
     },
     status: options.status,
   };

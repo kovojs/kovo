@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { inlineKovoLoaderInstallerSource } from '@kovojs/browser/internal/inline-loader';
 
@@ -291,6 +291,84 @@ describe('server app shell document assembly', () => {
       'Content-Type': 'text/html; charset=utf-8',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'X-Content-Type-Options': 'nosniff',
+    });
+  });
+
+  // SPEC §6.6 (runtime defense-in-depth): the conservative LOW-false-positive
+  // isolation/hardening baseline rides every framework-rendered document.
+  describe('isolation/hardening headers (SPEC §6.6)', () => {
+    const htmlResponse = () => ({
+      body: '<main>Orders</main>',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 200 as const,
+    });
+
+    it('carries X-Frame-Options/COOP/Permissions-Policy/Referrer-Policy by default', () => {
+      const wrapped = renderRouteDocumentResponse(htmlResponse());
+      expect(wrapped.headers).toMatchObject({
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+        'Referrer-Policy': 'strict-origin-when-cross-origin',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      });
+    });
+
+    it('also stamps the isolation baseline on error documents', () => {
+      const error = renderErrorDocument({ status: 403 });
+      expect(error.headers).toMatchObject({
+        'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+        'X-Frame-Options': 'DENY',
+      });
+    });
+
+    it('preserves an author opt-out instead of duplicating a header', () => {
+      const wrapped = renderRouteDocumentResponse({
+        body: '<main>Embeddable</main>',
+        // An app that intentionally embeds its own page sets a permissive frame policy.
+        headers: { 'Content-Type': 'text/html', 'x-frame-options': 'SAMEORIGIN' },
+        status: 200,
+      });
+      const frameKeys = Object.keys(wrapped.headers).filter(
+        (name) => name.toLowerCase() === 'x-frame-options',
+      );
+      expect(frameKeys).toHaveLength(1);
+      expect(wrapped.headers[frameKeys[0]!]).toBe('SAMEORIGIN');
+    });
+
+    describe('Strict-Transport-Security gating', () => {
+      const originalNodeEnv = process.env.NODE_ENV;
+      afterEach(() => {
+        if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+        else process.env.NODE_ENV = originalNodeEnv;
+      });
+
+      it('is present only under prod + HTTPS', () => {
+        process.env.NODE_ENV = 'production';
+        const secure = renderRouteDocumentResponse(htmlResponse(), { secure: true });
+        expect(secure.headers['Strict-Transport-Security']).toBe(
+          'max-age=63072000; includeSubDomains',
+        );
+      });
+
+      it('is absent in production over plain HTTP (non-HTTPS request)', () => {
+        process.env.NODE_ENV = 'production';
+        const insecure = renderRouteDocumentResponse(htmlResponse(), { secure: false });
+        expect(insecure.headers['Strict-Transport-Security']).toBeUndefined();
+      });
+
+      it('is absent in dev even over HTTPS (would brick localhost http)', () => {
+        process.env.NODE_ENV = 'development';
+        const dev = renderRouteDocumentResponse(htmlResponse(), { secure: true });
+        expect(dev.headers['Strict-Transport-Security']).toBeUndefined();
+      });
+
+      it('is absent when the call site never wired the secure flag', () => {
+        process.env.NODE_ENV = 'production';
+        const unwired = renderRouteDocumentResponse(htmlResponse());
+        expect(unwired.headers['Strict-Transport-Security']).toBeUndefined();
+      });
     });
   });
 
