@@ -1914,6 +1914,152 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('reports KV435 when relational with projections select nested secret columns', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'post.queries.ts',
+          source: `
+          export const users = pgTable("users", {
+            id: text("id").primaryKey(),
+            passwordHash: text("password_hash").notNull(),
+          }, kovo({ domain: "user", key: "id", secret: ["passwordHash"], secretTable: true }));
+          export const posts = pgTable("posts", {
+            id: text("id").primaryKey(),
+          }, kovo({ domain: "post", key: "id" }));
+          export const postsRelations = relations(posts, ({ one }) => ({
+            author: one(users),
+          }));
+
+          export const postsQuery = query("posts", {
+            load(_input, db: PgDatabase) {
+              return db.query.posts.findMany({
+                columns: {
+                  id: true,
+                },
+                with: {
+                  author: {
+                    columns: {
+                      passwordHash: true,
+                    },
+                  },
+                },
+              });
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection posts.author.passwordHash selects a secret field from secret-classified table(s): users.',
+        severity: 'error',
+        site: 'post.queries.ts:12',
+      },
+    ]);
+  });
+
+  it('reports KV435 for renamed secret-table imports in relational query projections', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const users = pgTable("users", {
+              id: text("id").primaryKey(),
+              passwordHash: text("password_hash").notNull(),
+            }, kovo({ domain: "user", key: "id", secret: ["passwordHash"], secretTable: true }));
+          `,
+        },
+        {
+          fileName: 'user.queries.ts',
+          source: `
+            import { users as accounts } from "./schema";
+
+            export const usersQuery = query("users/alias-import", {
+              load(_input, db: PgDatabase) {
+                return db.query.users.findMany({
+                  columns: {
+                    passwordHash: true,
+                  },
+                  where: eq(accounts.id, "u_1"),
+                });
+              },
+            });
+          `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection users/alias-import.passwordHash selects a secret field from secret-classified table(s): users.',
+        severity: 'error',
+        site: 'user.queries.ts:4',
+      },
+    ]);
+  });
+
+  it('reports KV435 for Drizzle table aliases targeting secret-classified tables', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'drizzle-pg-core-extra.d.ts',
+          source: [
+            'declare module "drizzle-orm/pg-core" {',
+            '  export function alias(table: unknown, name: string): unknown;',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'schema.ts',
+          source: `
+            export const users = pgTable("users", {
+              id: text("id").primaryKey(),
+              passwordHash: text("password_hash").notNull(),
+            }, kovo({ domain: "user", key: "id", secret: ["passwordHash"], secretTable: true }));
+          `,
+        },
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import { alias, type PgDatabase } from "drizzle-orm/pg-core";',
+            'import { users } from "./schema";',
+            '',
+            'const userAlias = alias(users, "u");',
+            '',
+            'export const usersQuery = query("users/table-alias", {',
+            '  load(_input, db: PgDatabase) {',
+            '    return db.query.users.findMany({',
+            '      columns: {',
+            '        passwordHash: true,',
+            '      },',
+            '      where: eq(userAlias.id, "u_1"),',
+            '    });',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection users/table-alias.passwordHash selects a secret field from secret-classified table(s): users.',
+        severity: 'error',
+        site: 'user.queries.ts:6',
+      },
+    ]);
+  });
+
   it('keeps static element-access relational API reads visible as KV406 query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

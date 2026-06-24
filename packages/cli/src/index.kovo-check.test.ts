@@ -62,6 +62,57 @@ describe('kovo check', () => {
     });
   });
 
+  it('formats KV436 consistently for mutation, route, endpoint, and webhook access gaps', () => {
+    expect(
+      kovoCheck({
+        access: [
+          {
+            decision: 'missing',
+            detail: 'access=- guard=-',
+            kind: 'mutation',
+            name: 'cart/add',
+            site: 'cart.mutation.ts:9',
+            source: 'access',
+          },
+          {
+            decision: 'missing',
+            detail: 'access=- legacyGuard=layout.guard',
+            kind: 'page',
+            name: '/account',
+            site: 'app/routes.tsx:14',
+            source: 'access',
+          },
+          {
+            decision: 'missing',
+            detail: 'access=- method=POST path=/api/missing mount=exact auth=custom:api-key',
+            kind: 'endpoint',
+            name: '/api/missing',
+            site: 'app/api.ts:7',
+            source: 'access',
+          },
+          {
+            decision: 'missing',
+            detail: 'access=- method=POST path=/webhooks/github mount=exact auth=none',
+            kind: 'webhook',
+            name: 'github',
+            site: 'app/webhooks.ts:11',
+            source: 'access',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR KV436 ENDPOINT /api/missing site=app/api.ts:7 Missing explicit access decision. access=- method=POST path=/api/missing mount=exact auth=custom:api-key',
+        'ERROR KV436 MUTATION cart/add site=cart.mutation.ts:9 Missing explicit access decision. access=- guard=-',
+        'ERROR KV436 PAGE /account site=app/routes.tsx:14 Missing explicit access decision. access=- legacyGuard=layout.guard',
+        'ERROR KV436 WEBHOOK github site=app/webhooks.ts:11 Missing explicit access decision. access=- method=POST path=/webhooks/github mount=exact auth=none',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('keeps public access decisions separate from KV414 owner-scope correctness', () => {
     expect(
       kovoCheck({

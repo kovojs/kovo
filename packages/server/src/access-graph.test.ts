@@ -68,6 +68,13 @@ describe('app access graph extraction', () => {
       reason: 'signed API sync',
       response: rawJsonResponse,
     });
+    const missingEndpoint = endpoint('/api/missing', {
+      auth: { kind: 'custom', name: 'internal-token' },
+      handler: () => Response.json({ ok: true }),
+      method: 'POST',
+      reason: 'internal sync without explicit access fixture',
+      response: rawJsonResponse,
+    } as any);
     const signedWebhook = webhook('stripe', {
       access: verifiedAccess,
       handler: () => ({}),
@@ -79,15 +86,29 @@ describe('app access graph extraction', () => {
         secret: 'test_secret',
       }),
     });
+    const missingWebhook = webhook('github', {
+      handler: () => ({}),
+      input: s.object({ id: s.string() }),
+      path: '/webhooks/github',
+      verify: 'none',
+      verifyJustification: 'test fixture',
+    } as any);
 
     const app = createApp({
-      endpoints: [health, api, signedWebhook],
+      endpoints: [health, api, missingEndpoint, signedWebhook, missingWebhook],
       mutations: [guardedMutation, missingMutation],
       queries: [guardedQuery, publicQuery, missingQuery],
       routes: [guardedRoute, explicitGuardRoute, missingRoute],
     });
 
     expect(accessFactsFromApp(app)).toEqual([
+      {
+        decision: 'missing',
+        detail: 'access=- method=POST path=/api/missing mount=exact auth=custom:internal-token',
+        kind: 'endpoint',
+        name: '/api/missing',
+        source: 'access',
+      },
       {
         decision: 'verified',
         detail:
@@ -159,6 +180,13 @@ describe('app access graph extraction', () => {
         detail: 'access=- guard=-',
         kind: 'query',
         name: 'drafts',
+        source: 'access',
+      },
+      {
+        decision: 'missing',
+        detail: 'access=- method=POST path=/webhooks/github mount=exact auth=none',
+        kind: 'webhook',
+        name: 'github',
         source: 'access',
       },
       {
