@@ -2181,6 +2181,18 @@ export {
 } from './static/session-provenance.js';
 /** @internal */
 export {
+  appendSymbolProvenancePath,
+  joinSymbolProvenance,
+  provenServerProvenanceForExpression,
+  symbolProvenanceContextForNodes,
+  symbolProvenanceForExpression,
+  type SymbolProvenance,
+  type SymbolProvenanceContext,
+  type SymbolProvenanceContextOptions,
+  type SymbolProvenanceKind,
+} from './static/symbol-provenance.js';
+/** @internal */
+export {
   computedPropertyNameExpression,
   isDrizzleDatabaseTypeAnnotation,
   isDrizzleWriteCall,

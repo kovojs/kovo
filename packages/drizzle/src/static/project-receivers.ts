@@ -1226,7 +1226,13 @@ import {
     }
   }
 
-  return projectTableNameForSymbol(node, tableNamesBySymbol);
+  const tableName = projectTableNameForSymbol(node, tableNamesBySymbol);
+  if (tableName) return tableName;
+
+  const aliasInitializer = localIdentifierInitializer(node);
+  return aliasInitializer && aliasInitializer !== node
+    ? projectTableNameForNode(aliasInitializer, tableNamesBySymbol, namespaceTableNames)
+    : undefined;
 }
 
 /** @internal */ export function projectTableNameForSymbol(
@@ -1236,6 +1242,17 @@ import {
   const symbolKey = resolvedSymbolKey(node.getSymbol());
   if (!symbolKey) return undefined;
   return tableNamesBySymbol.get(symbolKey);
+}
+
+function localIdentifierInitializer(node: Node): Node | undefined {
+  if (!Node.isIdentifier(node)) return undefined;
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (!Node.isVariableDeclaration(declaration)) continue;
+    const initializer = declaration.getInitializer();
+    if (initializer) return initializer;
+  }
+  return undefined;
 }
 
 /** @internal */ export type ProjectNamespaceTableNames = ReadonlyMap<

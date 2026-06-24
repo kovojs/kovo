@@ -55,6 +55,8 @@ import {
   resolvedSymbolKey,
   selectProjectionArgument,
   sessionProvenanceContextForNodes,
+  symbolProvenanceContextForNodes,
+  symbolProvenanceForExpression,
   staticAccessExpression,
   staticAccessName,
   staticExpressionRootIdentifier,
@@ -70,6 +72,7 @@ import {
   type QueryShapeWrapper,
   type SessionProvenanceContext,
   type SourceFileInput,
+  type SymbolProvenanceContext,
   type TouchGraphProjectOptions,
 } from '../static.js';
 
@@ -159,6 +162,9 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
         const receivers = projectDrizzleReceivers(callback.fn);
         const paramSymbolKeys = callbackParameterSymbolKeys(callback.fn);
         const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
+        const symbolContext = symbolProvenanceContextForNodes([callback.body], {
+          inputRoots: callbackInputRootNodes(callback.fn),
+        });
         for (const call of touchBodyCallExpressions(callback.body)) {
           const fact = symbolicEffectForWriteCall(call, {
             file,
@@ -166,6 +172,7 @@ function createDeriveExtraction(options: TouchGraphProjectOptions): DeriveExtrac
             receivers,
             resolveTable,
             sessionContext,
+            symbolContext,
             ...(callback.key ? { writeKey: callback.key } : {}),
           });
           if (fact) facts.push(fact);
@@ -226,6 +233,7 @@ interface WriteCallContext {
   receivers: ProjectDrizzleReceivers;
   resolveTable: (node: Node) => string | undefined;
   sessionContext: SessionProvenanceContext;
+  symbolContext: SymbolProvenanceContext;
   writeKey?: string;
 }
 
@@ -256,9 +264,21 @@ function symbolicEffectForWriteCall(
     return base && context.resolveTable(base) === table ? column : undefined;
   };
   const toValue = (node: Node): SymbolicValue =>
-    symbolicValueFromExpression(node, context.paramSymbolKeys, context.sessionContext);
+    symbolicValueFromExpression(
+      node,
+      context.paramSymbolKeys,
+      context.sessionContext,
+      undefined,
+      context.symbolContext,
+    );
   const toSetValue = (node: Node): SymbolicValue =>
-    symbolicValueFromExpression(node, context.paramSymbolKeys, context.sessionContext, selfColumn);
+    symbolicValueFromExpression(
+      node,
+      context.paramSymbolKeys,
+      context.sessionContext,
+      selfColumn,
+      context.symbolContext,
+    );
   const writeKeyEntry = context.writeKey ? { writeKey: context.writeKey } : {};
 
   if (operation === 'insert') {
@@ -270,6 +290,7 @@ function symbolicEffectForWriteCall(
         context.resolveTable,
         context.paramSymbolKeys,
         context.sessionContext,
+        context.symbolContext,
       );
       return {
         effect: { match, op: 'upsert', sets: conflict, table, values },
@@ -287,6 +308,7 @@ function symbolicEffectForWriteCall(
       context.resolveTable,
       context.paramSymbolKeys,
       context.sessionContext,
+      context.symbolContext,
     );
     return { effect: { match, op: 'update', sets, table }, site, ...writeKeyEntry };
   }
@@ -297,6 +319,7 @@ function symbolicEffectForWriteCall(
       context.resolveTable,
       context.paramSymbolKeys,
       context.sessionContext,
+      context.symbolContext,
     );
     return { effect: { match, op: 'delete', table }, site, ...writeKeyEntry };
   }
@@ -374,6 +397,7 @@ function chainMatch(
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
+  symbolContext: SymbolProvenanceContext,
 ): SymbolicMatch {
   const whereCall = chainCallByName(chain, 'where');
   const predicate = whereCall?.getArguments()[0];
@@ -384,6 +408,7 @@ function chainMatch(
     resolveTable,
     paramSymbolKeys,
     sessionContext,
+    symbolContext,
   );
   if (eqMatches?.kind === 'matches') return { eq: eqMatches.matches, kind: 'keys' };
   if (eqMatches?.kind === 'or') return { arms: eqMatches.arms, kind: 'or' };
@@ -411,12 +436,14 @@ function keyEqMatchesFromPredicate(
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
+  symbolContext: SymbolProvenanceContext,
 ): KeyEqMatchParseResult | null {
   return keyEqMatchesFromPnf(
     predicatePnf(predicate),
     resolveTable,
     paramSymbolKeys,
     sessionContext,
+    symbolContext,
   );
 }
 
@@ -425,12 +452,25 @@ function keyEqMatchesFromPnf(
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
+  symbolContext: SymbolProvenanceContext,
 ): KeyEqMatchParseResult | null {
   if (pnf.kind === 'or') {
-    return keyEqDisjunctionMatchesFromPnf(pnf, resolveTable, paramSymbolKeys, sessionContext);
+    return keyEqDisjunctionMatchesFromPnf(
+      pnf,
+      resolveTable,
+      paramSymbolKeys,
+      sessionContext,
+      symbolContext,
+    );
   }
 
-  return keyEqConjunctionMatchesFromPnf(pnf, resolveTable, paramSymbolKeys, sessionContext);
+  return keyEqConjunctionMatchesFromPnf(
+    pnf,
+    resolveTable,
+    paramSymbolKeys,
+    sessionContext,
+    symbolContext,
+  );
 }
 
 function keyEqDisjunctionMatchesFromPnf(
@@ -438,6 +478,7 @@ function keyEqDisjunctionMatchesFromPnf(
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
+  symbolContext: SymbolProvenanceContext,
 ): KeyEqMatchParseResult {
   const arms: { eq: { column: string; value: SymbolicValue }[] }[] = [];
   for (const arm of pnf.nodes) {
@@ -446,6 +487,7 @@ function keyEqDisjunctionMatchesFromPnf(
       resolveTable,
       paramSymbolKeys,
       sessionContext,
+      symbolContext,
     );
     if (!parsed || parsed.kind !== 'matches') {
       return {
@@ -470,6 +512,7 @@ function keyEqConjunctionMatchesFromPnf(
   resolveTable: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
+  symbolContext: SymbolProvenanceContext,
 ): KeyEqMatchParseResult | null {
   const conjuncts = pnfExactConjuncts(pnf);
   if (!conjuncts) return null;
@@ -482,7 +525,13 @@ function keyEqConjunctionMatchesFromPnf(
     const valueNode = leftColumn ? right : left;
     if (!column || !valueNode) return null;
 
-    const value = symbolicValueFromExpression(valueNode, paramSymbolKeys, sessionContext);
+    const value = symbolicValueFromExpression(
+      valueNode,
+      paramSymbolKeys,
+      sessionContext,
+      undefined,
+      symbolContext,
+    );
     if (value.kind === 'opaque') {
       return value.expr.startsWith('unsummarized-helper:')
         ? { expr: value.expr, kind: 'opaque' }
@@ -524,6 +573,7 @@ function symbolicValueFromExpression(
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
   selfColumn?: SelfColumnResolver,
+  symbolContext: SymbolProvenanceContext = symbolProvenanceContextForNodes([]),
 ): SymbolicValue {
   const expression = unwrappedStaticExpressionNode(node);
 
@@ -544,12 +594,14 @@ function symbolicValueFromExpression(
         paramSymbolKeys,
         sessionContext,
         selfColumn,
+        symbolContext,
       );
       const right = symbolicValueFromExpression(
         expression.getRight(),
         paramSymbolKeys,
         sessionContext,
         selfColumn,
+        symbolContext,
       );
       if (left.kind !== 'opaque' && right.kind !== 'opaque') {
         return { kind: 'arith', left, op, right };
@@ -568,9 +620,22 @@ function symbolicValueFromExpression(
   const opaqueAliasReason = opaqueAliasReasonForExpression(expression, sessionContext);
   if (opaqueAliasReason) return { kind: 'opaque', expr: opaqueAliasReason };
 
+  const symbolProvenance = symbolProvenanceForExpression(expression, symbolContext);
+  if (symbolProvenance.kind === 'input') {
+    return symbolProvenance.path !== undefined
+      ? { kind: 'param', path: symbolProvenance.path }
+      : { kind: 'opaque', expr: expression.getText() };
+  }
+
   // Runtime-valid column arithmetic: `sql`${t.col} - ${quantity}`` (the way real
   // drizzle expresses a self-referential SET, since JS `-` on a column is invalid).
-  const sqlArith = sqlTemplateArith(expression, paramSymbolKeys, sessionContext, selfColumn);
+  const sqlArith = sqlTemplateArith(
+    expression,
+    paramSymbolKeys,
+    sessionContext,
+    selfColumn,
+    symbolContext,
+  );
   if (sqlArith) return sqlArith;
 
   if (Node.isCallExpression(expression)) {
@@ -592,6 +657,7 @@ function sqlTemplateArith(
   paramSymbolKeys: ReadonlySet<string>,
   sessionContext: SessionProvenanceContext,
   selfColumn?: SelfColumnResolver,
+  symbolContext: SymbolProvenanceContext = symbolProvenanceContextForNodes([]),
 ): SymbolicValue | undefined {
   if (!Node.isTaggedTemplateExpression(node)) return undefined;
   const tag = node.getTag();
@@ -613,12 +679,14 @@ function sqlTemplateArith(
     paramSymbolKeys,
     sessionContext,
     selfColumn,
+    symbolContext,
   );
   const right = symbolicValueFromExpression(
     second.getExpression(),
     paramSymbolKeys,
     sessionContext,
     selfColumn,
+    symbolContext,
   );
   if (left.kind === 'opaque' || right.kind === 'opaque') return undefined;
   return { kind: 'arith', left, op, right };
@@ -673,6 +741,12 @@ function callbackParameterSymbolKeys(fn: Node): Set<string> {
     if (symbolKey) keys.add(symbolKey);
   }
   return keys;
+}
+
+function callbackInputRootNodes(fn: Node): Node[] {
+  return queryCallbackParameterNodes(fn)
+    .filter((parameter) => !isDrizzleDatabaseTypeAnnotation(parameter))
+    .map((parameter) => parameter.getNameNode());
 }
 
 function arithOperator(token: string): ArithOp | undefined {
