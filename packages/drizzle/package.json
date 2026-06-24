@@ -1,6 +1,10 @@
 {
   "name": "@kovojs/drizzle",
   "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kovojs/kovo.git"
+  },
   "files": [
     "dist"
   ],

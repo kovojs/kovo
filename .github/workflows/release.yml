@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version already committed in public package manifests, for example 0.2.0
+        required: true
+        type: string
+      dist_tag:
+        description: npm dist-tag
+        required: true
+        default: latest
+        type: choice
+        options:
+          - latest
+          - next
+      dry_run:
+        description: Build and pack without publishing
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-dispatch
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          fetch-depth: 0
+
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 24
+
+      - run: vp install
+
+      - name: Ensure trusted-publishing npm CLI
+        run: npm install -g npm@latest
+
+      - name: Verify release input
+        run: vp exec pnpm exec node scripts/verify-release-input.mjs "$VERSION"
+        env:
+          VERSION: ${{ inputs.version }}
+
+      # TODO: Verify the required CI workflow succeeded for this exact commit
+      # before publishing. Keep release-local checks below focused on the package
+      # artifacts that this workflow is about to publish.
+
+      - name: Build publish artifacts
+        run: vp exec pnpm run check:publish
+
+      - name: Pack public packages
+        run: vp exec pnpm exec node scripts/pack-public-packages.mjs
+
+      - name: Verify release metadata did not drift
+        run: |
+          git diff --check
+          git diff --exit-code -- \
+            package.json \
+            pnpm-lock.yaml \
+            public-packages.json \
+            packages/*/package.json \
+            scripts \
+            .github/workflows/release.yml
+
+      - name: Publish packed packages
+        if: ${{ !inputs.dry_run }}
+        run: vp exec pnpm exec node scripts/publish-packed-packages.mjs --tag "$DIST_TAG"
+        env:
+          DIST_TAG: ${{ inputs.dist_tag }}
+          NPM_CONFIG_PROVENANCE: "true"
