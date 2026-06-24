@@ -126,9 +126,7 @@ export const GalleryToastDemo = component({
                 if (!result?.changed) return;
                 state.previousOpen = result.open;
               }}
-            >
-              Dismiss
-            </ToastClose>
+            />
           </Toast>
           <Toast
             {...activeToastState}
@@ -194,9 +192,7 @@ export const GalleryToastDemo = component({
                 if (!result?.changed) return;
                 state.activeOpen = result.open;
               }}
-            >
-              Dismiss
-            </ToastClose>
+            />
             <ToastAction
               {...activeToastState}
               actionValue="blocked"

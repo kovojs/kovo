@@ -335,6 +335,51 @@ describe('kovo build', () => {
     }
   });
 
+  it('keeps structured document style.create CSS in the shared build stylesheet', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-document-css-'));
+    const appPath = join(root, 'app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/style'), join(root, 'node_modules/@kovojs/style'));
+      writeReactJsxRuntimeStub(root);
+      writeFileSync(appPath, documentShellRouteSplitAppModuleSource(), 'utf8');
+      writeDocumentShellTemplate(root);
+      writeSplitStyleCreateComponentClientEntry(root);
+
+      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const baseCssAssets = neutralClientAssets(outDir, (href) =>
+        /^\/assets\/base-[a-f0-9]{8}\.css$/.test(href),
+      );
+      const baseCss = baseCssAssets.find((asset) =>
+        readFileSync(asset.filePath, 'utf8').includes('kv-document-search-'),
+      );
+      expect(baseCss).toBeDefined();
+      const baseCssText = readFileSync(baseCss!.filePath, 'utf8');
+      expect(baseCssText).toContain('kv-document-search-bg-');
+      expect(baseCssText).toContain('background-color:white');
+
+      const homeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
+      expect(homeDocument).toContain('id="search"');
+      expect(homeDocument).toContain('kv-document-search-bg-');
+      expect(homeDocument).toContain(`<link rel="stylesheet" href="${baseCss!.href}">`);
+      expect(homeDocument).toContain(`data-kovo-critical-href="${baseCss!.href}"`);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('references build fragment CSS chunks from enhanced mutation live targets', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fragment-css-'));
     const appPath = join(root, 'app.tsx');
@@ -1092,6 +1137,30 @@ export default createApp({
 `;
 }
 
+function documentShellRouteSplitAppModuleSource(): string {
+  return `
+/** @jsxImportSource @kovojs/server */
+import { createApp, route, stylesheet } from '@kovojs/server';
+import { HomePanel } from './src/home-panel.js';
+import { LoginPanel } from './src/login-panel.js';
+import { SharedCard } from './src/shared-card.js';
+import { siteDocument } from './document-template.js';
+
+export default createApp({
+  document: siteDocument,
+  routes: [
+    route('/', {
+      page: () => <><SharedCard /><HomePanel /></>,
+    }),
+    route('/login', {
+      page: () => <><SharedCard /><LoginPanel /></>,
+    }),
+  ],
+  stylesheets: [stylesheet('./styles.css')],
+});
+`;
+}
+
 function splitSrcStylesheetRouteAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
@@ -1308,6 +1377,43 @@ function writeSplitStyleCreateComponentClientEntry(root: string): void {
   );
 }
 
+function writeDocumentShellTemplate(root: string): void {
+  writeFileSync(
+    join(root, 'document-template.tsx'),
+    `
+/** @jsxImportSource @kovojs/server */
+import { BodyEnd, Document } from '@kovojs/server';
+import * as style from '@kovojs/style';
+
+const searchStyles = style.create(
+  {
+    dialog: {
+      backgroundColor: 'white',
+      color: 'black',
+      padding: 12,
+    },
+  },
+  { namespace: 'document-search', source: 'document-template.tsx' },
+);
+
+const searchDialogClass = style.attrs(searchStyles.dialog).class ?? '';
+
+export const siteDocument = (
+  <Document lang="en">
+    <BodyEnd>
+      <SearchDialog />
+    </BodyEnd>
+  </Document>
+);
+
+function SearchDialog(): string {
+  return <dialog id="search" class={searchDialogClass}>Search</dialog>;
+}
+`,
+    'utf8',
+  );
+}
+
 function styledHostComponentSource(
   name: string,
   host: string,
@@ -1490,8 +1596,19 @@ function neutralClientAsset(
   outDir: string,
   predicate: (href: string) => boolean,
 ): { filePath: string; href: string } {
+  const [asset] = neutralClientAssets(outDir, predicate);
+  if (asset) return asset;
+
+  throw new Error(`Expected neutral client asset in ${outDir}`);
+}
+
+function neutralClientAssets(
+  outDir: string,
+  predicate: (href: string) => boolean,
+): { filePath: string; href: string }[] {
   const clientDir = join(outDir, '.kovo/client');
   const stack = ['assets'];
+  const assets: { filePath: string; href: string }[] = [];
 
   for (let index = 0; index < stack.length; index += 1) {
     const relativeDir = stack[index];
@@ -1505,11 +1622,11 @@ function neutralClientAsset(
       if (!entry.isFile()) continue;
 
       const href = `/${relativePath}`;
-      if (predicate(href)) return { filePath: join(clientDir, relativePath), href };
+      if (predicate(href)) assets.push({ filePath: join(clientDir, relativePath), href });
     }
   }
 
-  throw new Error(`Expected neutral client asset in ${outDir}`);
+  return assets;
 }
 
 function inlinedCriticalCssBytes(document: string): number {

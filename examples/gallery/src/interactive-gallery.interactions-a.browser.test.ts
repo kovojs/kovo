@@ -1036,7 +1036,8 @@ describe('compiled interactive gallery demos in the browser', () => {
       );
     });
 
-    // Backspace on the now-focused filled slot deletes that digit.
+    // Backspace on the now-focused filled slot deletes that digit and moves DOM
+    // focus to the previous slot.
     required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2')).dispatchEvent(
       new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Backspace' }),
     );
@@ -1045,6 +1046,9 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(
         required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-2')).value,
       ).toBe('');
+      expect(document.activeElement).toBe(
+        required(root.querySelector<HTMLInputElement>('#gallery-interactive-otp-slot-1')),
+      );
     });
   });
 

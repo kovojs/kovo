@@ -52,18 +52,11 @@ export const hoverCardStyles = style.create({
     borderWidth: 1,
     color: uiTheme.color.foreground,
     fontSize: 14,
-    // SPEC.md §5.2 / better-components-ux: the native popover='manual' content is
-    // promoted to the top layer; without anchor positioning the UA centers it on
-    // screen. Re-anchor it to the trigger via CSS anchor positioning: override the
-    // UA centering (inset:auto + margin:0) and place it below the trigger. A 6px
-    // gap is added via the top margin (honored inside the position-area).
-    inset: 'auto',
+    left: 0,
     margin: 0,
-    marginTop: 6,
     padding: 12,
     position: 'absolute',
-    positionAnchor: '--kovo-hover-card-anchor',
-    positionArea: 'bottom span-right',
+    top: 'calc(100% + 8px)',
     width: 288,
     zIndex: 50,
     '[data-state=closed]': {
@@ -82,8 +75,6 @@ export const hoverCardStyles = style.create({
   },
   trigger: {
     alignItems: 'center',
-    // Anchor target for the top-layer HoverCardContent (see content rule).
-    anchorName: '--kovo-hover-card-anchor',
     borderRadius: uiTheme.radius.md,
     color: uiTheme.color.foreground,
     display: 'inline-flex',

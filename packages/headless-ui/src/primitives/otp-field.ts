@@ -276,7 +276,10 @@ export function otpFieldKeyDown(
       restoreOtpFieldSlotTargetValue(event.currentTarget ?? null, state, result.value);
     }
     event.preventDefault();
-    return result;
+    return {
+      ...result,
+      focusIndex: event.key === 'Backspace' ? Math.max(0, slotIndex - 1) : slotIndex,
+    };
   }
 
   const move = otpFieldMoveFocus(state, state.slotIndex, event.key);

@@ -940,7 +940,6 @@ export function ToastDemo(): string {
           variant: 'success',
         })}
         {ToastClose.definition.render({
-          children: 'Dismiss',
           id: 'gallery-toast',
           variant: 'success',
         })}

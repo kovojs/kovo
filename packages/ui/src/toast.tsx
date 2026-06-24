@@ -11,6 +11,7 @@ import {
   type ToastPoliteness,
   type ToastVariant,
 } from '@kovojs/headless-ui/toast';
+import { X } from '@kovojs/icons/x';
 import * as style from '@kovojs/style';
 
 import { passThroughProps } from './pass-through.js';
@@ -151,6 +152,10 @@ export const toastStyles = style.create({
       color: uiTheme.color.foreground,
     },
   },
+  closeIcon: {
+    height: 16,
+    width: 16,
+  },
   description: {
     color: uiTheme.color.foregroundMuted,
     // Content lives in the leading column (see toastStyles.root).
@@ -158,15 +163,11 @@ export const toastStyles = style.create({
   },
   root: {
     // "sonner"-like: every variant sits on the neutral surface; the variant
-    // semantics read as a thin left-edge accent (see [data-variant=*] below)
-    // instead of flooding the whole toast with a pastel hue. Keeps the Material
-    // skin (per MEMORY ui-shadcn-parity-material-skin) but at a calmer intensity.
+    // semantics read through a full 1px border instead of flooding the whole
+    // toast with a pastel hue.
     backgroundColor: uiTheme.color.background,
-    // Variant accent rides the left border; reset to neutral here so a left edge
-    // without a [data-variant] doesn't show a stray colored stripe.
     borderColor: uiTheme.color.border,
     borderLeftColor: uiTheme.color.border,
-    borderLeftWidth: 3,
     borderRadius: uiTheme.radius.lg,
     borderStyle: 'solid',
     borderWidth: 1,
@@ -197,18 +198,18 @@ export const toastStyles = style.create({
     '[data-state=closed]': {
       display: 'none',
     },
-    // Variant semantics expressed as a left-edge accent only; background stays neutral.
+    // Variant semantics expressed as a border only; background stays neutral.
     '[data-variant=error]': {
-      borderLeftColor: uiTheme.color.danger.border,
+      borderColor: uiTheme.color.danger.border,
     },
     '[data-variant=info]': {
-      borderLeftColor: uiTheme.color.info.border,
+      borderColor: uiTheme.color.info.border,
     },
     '[data-variant=success]': {
-      borderLeftColor: uiTheme.color.success.border,
+      borderColor: uiTheme.color.success.border,
     },
     '[data-variant=warning]': {
-      borderLeftColor: uiTheme.color.warning.border,
+      borderColor: uiTheme.color.warning.border,
     },
   },
   title: {
@@ -393,6 +394,7 @@ export const ToastClose = component({
       <button
         {...styleAttrs}
         {...passThroughProps(props)}
+        aria-label={props.children === undefined ? 'Dismiss notification' : undefined}
         data-disabled={attrs['data-disabled']}
         data-dismiss={attrs['data-dismiss']}
         data-state={attrs['data-state']}
@@ -400,7 +402,7 @@ export const ToastClose = component({
         disabled={attrs.disabled}
         type={attrs.type}
       >
-        {props.children ?? 'Close'}
+        {props.children ?? X({ style: toastStyles.closeIcon })}
       </button>
     );
   },
