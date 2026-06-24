@@ -641,6 +641,46 @@ export const Recommendations = component({
     });
   });
 
+  it('places unattributed document-shell CSS in the shared base chunk', () => {
+    const documentCss = '.document-dialog{background:white}';
+    const homeCss = '.home-panel{color:teal}';
+    const loginCss = '.login-panel{color:purple}';
+    const homeRoute = {
+      route: '/',
+      sourceFileNames: ['routes/home.css'],
+    };
+    const loginRoute = {
+      route: '/login',
+      sourceFileNames: ['routes/login.css'],
+    };
+    const manifest = collectCssAssetManifest(
+      {
+        cssAssets: [
+          cssAccountingAsset('document-template.css', 'document-dialog', documentCss, true),
+          cssAccountingAsset('routes/home.css', 'home-panel', homeCss, true),
+          cssAccountingAsset('routes/login.css', 'login-panel', loginCss, true),
+        ],
+      },
+      { split: { routes: [homeRoute, loginRoute] } },
+    );
+
+    const baseCss = manifest.chunks?.base[0];
+    expect(baseCss?.criticalCss).toContain('document-dialog');
+    expect(baseCss?.criticalCss).not.toContain('home-panel');
+    expect(baseCss?.criticalCss).not.toContain('login-panel');
+    expect(cssRouteDeliveryGate(manifest, homeRoute).diagnostics).toEqual([]);
+    expect(cssRouteByteAccounting(manifest, homeRoute)).toMatchObject({
+      linkedCssBytes: Buffer.byteLength(documentCss, 'utf8') + Buffer.byteLength(homeCss, 'utf8'),
+      linkedSourceFileNames: [
+        expect.stringMatching(/^base-[a-f0-9]{8}\.css$/),
+        expect.stringMatching(/^routes\/index-[a-f0-9]{8}\.css$/),
+      ],
+      reachableCssBytes: Buffer.byteLength(homeCss, 'utf8'),
+      reachableSourceFileNames: ['routes/home.css'],
+      route: '/',
+    });
+  });
+
   it('carries preload policy for late fragment stylesheet delivery', () => {
     const result = compileComponentModule({
       fileName: './components/reviews.tsx',

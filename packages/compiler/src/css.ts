@@ -316,10 +316,11 @@ export function cssRouteDeliveryGate(
   route: CssRouteSplitTarget,
   deliveredAssets: readonly ComponentCssAsset[] = defaultDeliveredRouteCssAssets(manifest, route),
 ): CssRouteDeliveryGateResult {
+  const reachableAssets = manifest.chunks
+    ? dedupeComponentCssAssets([...manifest.chunks.base, ...selectRouteCssAssets(manifest, route)])
+    : selectRouteCssAssets(manifest, route);
   const reachableUsages = new Set(
-    selectRouteCssAssets(manifest, route)
-      .flatMap((asset) => asset.styleRuleUsages ?? [])
-      .map(styleRuleUsageKey),
+    reachableAssets.flatMap((asset) => asset.styleRuleUsages ?? []).map(styleRuleUsageKey),
   );
   const diagnostics: CssRouteOvershipDiagnostic[] = [];
 
@@ -354,9 +355,22 @@ function computeCssSplitChunks(
     routeSelections.set(route.route, selectRouteCssAssets(manifest, route));
   }
 
-  const baseAssets = split.baseSourceFileNames
+  const sharedAssets = split.baseSourceFileNames
     ? selectCssAssets(manifest, split.baseSourceFileNames)
     : sharedRouteCssAssets(routeSelections);
+  const selectedRouteNames = new Set(
+    [...routeSelections.values()].flatMap((assets) => assets.map((asset) => asset.sourceFileName)),
+  );
+  const explicitBaseNames = new Set(sharedAssets.map((asset) => asset.sourceFileName));
+  const unownedAssets =
+    selectedRouteNames.size === 0
+      ? []
+      : manifest.stylesheets.filter(
+          (asset) =>
+            !selectedRouteNames.has(asset.sourceFileName) &&
+            !explicitBaseNames.has(asset.sourceFileName),
+        );
+  const baseAssets = dedupeComponentCssAssets([...sharedAssets, ...unownedAssets]);
   const baseNames = new Set(baseAssets.map((asset) => asset.sourceFileName));
   const base =
     baseAssets.length > 0

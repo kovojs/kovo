@@ -188,6 +188,7 @@ function extractComponentCssFromFiles(
           options.rootDir,
           extraction.css,
           fragmentTargetsForSource(relativeToRoot(options.rootDir, fileName), model),
+          extraction.ruleUsages,
         ),
       );
     } else {
@@ -234,6 +235,7 @@ function componentCssAssetForSource(
   rootDir: string,
   css: string,
   fragmentTargets: readonly string[] = [],
+  styleRuleUsages: ReturnType<typeof extractKovoStyles>['ruleUsages'] = [],
 ): ComponentCssAsset {
   const sourceFileName = replaceSourceExtension(relativeToRoot(rootDir, fileName), '.css');
   return {
@@ -242,6 +244,7 @@ function componentCssAssetForSource(
     fragmentTargets,
     href: `/assets/${sourceFileName}`,
     sourceFileName,
+    ...(styleRuleUsages.length === 0 ? {} : { styleRuleUsages }),
   };
 }
 
