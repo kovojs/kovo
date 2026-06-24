@@ -1,9 +1,5 @@
-// v1-cleanup item 1: kept whole intentionally. This is the framework's single
-// node:test acceptance surface (`check:kovo`): it runs against built `../dist/**`
-// artifacts and drives cross-package behavior end-to-end, so its tests share
-// build/setup context and a coherent pass/fail story. Splitting would fragment a
-// deliberately holistic acceptance gate. Reusable mechanics already live in
-// @kovojs/test (source-fixtures, harness); this file is the executable surface.
+// Server/browser kovo-check suite. `scripts/kovo-check.mjs` can run this file
+// alone in CI or alongside the other suite files for the local aggregate gate.
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';

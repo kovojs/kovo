@@ -1,6 +1,5 @@
-// This remains the `check:kovo` entrypoint. Scenario modules register additional
-// node:test cases by import so the acceptance command stays one coherent gate
-// while keeping each authored file under the big-module threshold.
+// Project-level kovo-check suite. `scripts/kovo-check.mjs` can run this file alone
+// in CI or alongside the other suite files for the local aggregate gate.
 import assert from 'node:assert/strict';
 import { execFile, execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -311,8 +310,6 @@ const loadProjectVitePlusConfig = async (configPath = 'vite.config.ts') =>
   loadVitePlusConfig(await readProjectFile(configPath));
 
 const projectRootPath = fileURLToPath(new URL('..', import.meta.url));
-await import('./kovo-check.compiler-runtime.node.mjs');
-await import('./kovo-check.server-browser.node.mjs');
 
 void test('kovo-check wrapper explains the production build prerequisite', () => {
   assert.equal(
