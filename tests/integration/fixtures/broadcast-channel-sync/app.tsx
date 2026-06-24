@@ -6,7 +6,8 @@ import {
   route,
   s,
   type QueryLoadContext,
-} from '@kovojs/server';
+
+  publicAccess,} from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -22,6 +23,7 @@ async function readPresence(db: KovoFixtureRequest['db']): Promise<Presence> {
 }
 
 const presenceQuery = query('presence', {
+  access: publicAccess('integration fixture query presence has no runtime guard'),
   reads: [presenceDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;
@@ -38,6 +40,7 @@ async function renderPresence(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 const publishPresence = mutation('broadcast-channel-sync/publish', {
+  access: publicAccess('integration fixture mutation broadcast-channel-sync/publish has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -48,6 +51,7 @@ const publishPresence = mutation('broadcast-channel-sync/publish', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const presence = await readPresence(request.db);
     return `${renderQueryScript({ name: 'presence', value: presence })}

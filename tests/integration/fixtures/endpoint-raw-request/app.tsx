@@ -1,7 +1,7 @@
 // SPEC.md §9.1 and §9.5: raw endpoint handlers receive the original Request
 // before body parsing, without ambient session, and dispatch before page routes.
 import { hmacSignature } from '@kovojs/core';
-import { createApp, endpoint, route } from '@kovojs/server';
+import { createApp, endpoint, publicAccess, route, verifiedAccess } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface RawSession {
@@ -16,6 +16,7 @@ function readSessionCookie(request: Request): RawSession | null {
 }
 
 const exactEndpoint = endpoint('/machine/exact', {
+  access: verifiedAccess,
   auth: {
     kind: 'verifier',
     name: 'endpoint-raw:v1:hmac-sha256',
@@ -43,6 +44,7 @@ const exactEndpoint = endpoint('/machine/exact', {
 });
 
 const prefixEndpoint = endpoint('/machine/prefix', {
+  access: publicAccess('integration fixture endpoint /machine/prefix has no runtime guard'),
   csrf: false,
   csrfJustification: 'machine prefix mount',
   async handler(request) {
@@ -59,6 +61,7 @@ const prefixEndpoint = endpoint('/machine/prefix', {
 });
 
 const exactRoute = route('/machine/exact', {
+  access: publicAccess('integration fixture route /machine/exact has no runtime guard'),
   page: () => '<main><h1>Route Fallback</h1></main>',
 });
 

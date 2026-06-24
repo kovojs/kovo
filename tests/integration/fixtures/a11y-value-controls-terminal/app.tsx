@@ -1,8 +1,9 @@
 // SPEC §12.1: terminal value controls expose native value roles and names.
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Value controls' },
   page: () => `<main>
     <h1>Value controls</h1>

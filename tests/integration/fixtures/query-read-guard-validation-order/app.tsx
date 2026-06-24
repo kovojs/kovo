@@ -25,6 +25,7 @@ function readSessionCookie(request: Request): AuthSession | null {
 }
 
 export const secretQuery = query('secret', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   args: s.object({ id: s.string() }),
   guard: guards.authed<AuthRequest>(),
   instanceKey: (input) => `secret:${(input as { id?: string }).id ?? ''}`,

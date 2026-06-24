@@ -1,4 +1,4 @@
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const cart = domain('cart');
@@ -13,6 +13,7 @@ function renderCartCount(count: number): string {
 }
 
 const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
+  access: publicAccess('integration fixture mutation touch-graph-runtime-crosscheck/add has no runtime guard'),
   csrf: false,
   input: s.object({ productId: s.string() }),
   async handler(input, request: KovoFixtureRequest, context) {
@@ -23,6 +24,7 @@ const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
 });
 
 const smuggleAuditWrite = mutation('touch-graph-runtime-crosscheck/smuggle', {
+  access: publicAccess('integration fixture mutation touch-graph-runtime-crosscheck/smuggle has no runtime guard'),
   csrf: false,
   input: s.object({ productId: s.string() }),
   async handler(input, request: KovoFixtureRequest, context) {
@@ -33,6 +35,7 @@ const smuggleAuditWrite = mutation('touch-graph-runtime-crosscheck/smuggle', {
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `
     <main>
       <kovo-fragment target="cart-count">${renderCartCount(await cartCount(request.db))}</kovo-fragment>

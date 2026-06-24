@@ -44,6 +44,7 @@ async function readInvoice(
 }
 
 export const ownerInvoiceQuery = query('owner-invoice', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   args: s.object({ id: s.string() }),
   guard: guards.authed<OwnerRequest>(),
   instanceKey: (input) => `owner-invoice:${(input as { id?: string }).id ?? ''}`,
@@ -56,6 +57,7 @@ export const ownerInvoiceQuery = query('owner-invoice', {
 });
 
 const invoiceRoute = route('/invoice', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   guard: guards.authed<OwnerRequest>(),
   search: s.object({ id: s.string() }),
   async page({ search }, request: OwnerRequest) {

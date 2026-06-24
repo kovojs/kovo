@@ -1,10 +1,11 @@
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { renderBalanceShell } from './balance-shell';
 import { account, balanceQuery } from './shared';
 
 export const deposit = mutation('fragment-slot-hoist/deposit', {
+  access: publicAccess('integration fixture mutation fragment-slot-hoist/deposit has no runtime guard'),
   csrf: false,
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
@@ -20,6 +21,7 @@ export const deposit = mutation('fragment-slot-hoist/deposit', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const shell = await renderBalanceShell(request.db);
     return `<main>

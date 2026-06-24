@@ -1,4 +1,4 @@
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface RefetchResult {
@@ -14,6 +14,7 @@ export async function readRefetch(db: KovoFixtureRequest['db']): Promise<Refetch
 }
 
 export const refetchQuery = query('refetch', {
+  access: publicAccess('integration fixture query refetch has no runtime guard'),
   reads: [refetchDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;

@@ -1,6 +1,6 @@
 // SPEC §6.5: null/undefined sessionProvider results mean anonymous, not a
 // malformed session value.
-import { createApp, guards, route } from '@kovojs/server';
+import { createApp, guards, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 interface AppSession {
@@ -9,11 +9,13 @@ interface AppSession {
 type AppRequest = Request & { session?: AppSession | null };
 
 const publicRoute = route('/public', {
+  access: publicAccess('integration fixture route /public has no runtime guard'),
   page: (_context, request: AppRequest) =>
     `<main><h1>Public</h1><p data-session>${request.session?.user.id ?? 'anonymous'}</p></main>`,
 });
 
 const accountRoute = route('/account', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   guard: guards.authed<AppRequest>(),
   page: (_context, request: AppRequest) =>
     `<main><h1>Account</h1><p data-user>${request.session?.user.id}</p></main>`,

@@ -91,7 +91,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  await db.select({ stock: productAlias.stock }).from(productAlias);',
           '}',
           '',
-          "export const productQuery = query('product/alias', {",
+          "export const productQuery = query('product/alias', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(input, db: PgDatabase<any, any, any>) {',
           '    return db.select({ stock: productAlias.stock }).from(productAlias).where(eq(productAlias.id, input.id));',
           '  },',
@@ -234,13 +234,13 @@ describe('Drizzle pinned subset conformance', () => {
             import { sql } from 'drizzle-orm';
             import { items } from './cart.schema';
 
-            export const cartQuery = query('cart', {
+            export const cartQuery = query('cart', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(input, db: PgDatabase) {
                 return db.select({ id: items.id }).from(items).where(eq(items.id, input.id));
               },
             });
 
-            export const cartCountQuery = query('cart/count', {
+            export const cartCountQuery = query('cart/count', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({ count: sql<number>\`count(*)\` }).from(items);
               },
@@ -304,7 +304,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product/with-read', {
+            export const productQuery = query('product/with-read', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 const active = db.$with('active_products').as(db.select({ id: products.id }).from(products));
                 return db.with(active).select({ id: products.id }).from(products);
@@ -360,7 +360,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             import * as cartSchema from './cart.schema';
 
-            export const cartProductQuery = query('cart/product', {
+            export const cartProductQuery = query('cart/product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(input, db: PgDatabase) {
                 return db.select({
                   id: cartSchema.products.id,
@@ -404,7 +404,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             import * as cartSchema from './cart.schema';
 
-            export const cartProductQuery = query('cart/product', {
+            export const cartProductQuery = query('cart/product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(input, db: PgDatabase) {
                 return db.select({
                   id: cartSchema['products'].id,
@@ -463,7 +463,7 @@ describe('Drizzle pinned subset conformance', () => {
             import { eq } from 'drizzle-orm';
             import * as schema from './schema';
 
-            export const cartProductQuery = query('cart/product', {
+            export const cartProductQuery = query('cart/product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(input, db: PgDatabase) {
                 return db.select({
                   id: schema['cartProducts'].id,
@@ -508,13 +508,13 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             import { products } from './product.schema';
 
-            export const distinctProducts = query('products/distinct', {
+            export const distinctProducts = query('products/distinct', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.selectDistinct({ name: products.name }).from(products);
               },
             });
 
-            export const firstProductNames = query('products/distinct-on', {
+            export const firstProductNames = query('products/distinct-on', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.selectDistinctOn([products.id], { id: products.id, name: products.name }).from(products);
               },
@@ -565,7 +565,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             import { products } from './product.schema';
 
-            export const productQuery = query('product', {
+            export const productQuery = query('product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({
                   note: products.note,
@@ -620,7 +620,7 @@ describe('Drizzle pinned subset conformance', () => {
               location: point('location'),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product', {
+            export const productQuery = query('product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({
                   id: products.id,
@@ -666,7 +666,7 @@ describe('Drizzle pinned subset conformance', () => {
               name: text('name').notNull(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product', {
+            export const productQuery = query('product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 const fixture = ".from(auditLog) db.query.auditLog.findMany(";
                 // return db.query.auditLog.findMany({ where: eq(auditLog.productId, products.id) });
@@ -709,7 +709,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             function tableFor<T>(table: T): T { return table; }
 
-            export const productQuery = query('product', {
+            export const productQuery = query('product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.select({ id: products.id }).from(tableFor(products));
               },
@@ -886,7 +886,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users/raw', {
+            export const usersQuery = query('users/raw', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.execute(sql\`select * from users\`);
               },
@@ -927,7 +927,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             declare function runReport(context: unknown): Promise<unknown[]>;
 
-            export const usersQuery = query('users/fake-db-like', {
+            export const usersQuery = query('users/fake-db-like', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabaseLike) {
                 db.execute(sql\`select * from users\`);
                 return runReport({ db });
@@ -954,7 +954,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             type FakeDb = Record<string, (query: unknown) => Promise<void>>;
 
-            export const usersQuery = query('users/computed-raw', {
+            export const usersQuery = query('users/computed-raw', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase, fake: FakeDb) {
                 const method = 'execute';
                 db[method](sql\`select * from users\`);
@@ -1001,7 +1001,7 @@ describe('Drizzle pinned subset conformance', () => {
               execute(query: unknown): Promise<void>;
             }
 
-            export const usersQuery = query('users/bound-raw', {
+            export const usersQuery = query('users/bound-raw', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
                 const execute = db.execute.bind(db);
                 const computed = db[method].bind(db);
@@ -1110,7 +1110,7 @@ describe('Drizzle pinned subset conformance', () => {
               execute(query: unknown): Promise<void>;
             }
 
-            export const usersQuery = query('users/array-detached-raw', {
+            export const usersQuery = query('users/array-detached-raw', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>, fake: FakeDb, method: string) {
                 const [execute, computed] = [db.execute, db[method]];
                 const [fakeExecute] = [fake.execute];
@@ -1182,7 +1182,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  update(table: unknown): { set(value: unknown): Promise<void> };',
             '}',
             '',
-            "export const usersQuery = query('users/carrier-direct', {",
+            "export const usersQuery = query('users/carrier-direct', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
             '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
             '    const carrier = { db, fake };',
             '    await carrier.db.execute(sql`select * from users`);',
@@ -1250,7 +1250,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users/non-loader-callback', {
+            export const usersQuery = query('users/non-loader-callback', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               guard(_input, db: PgDatabase<any, any, any>) {
                 db.execute(sql\`select * from audit_log\`);
                 return db.select({ id: auditLog.id }).from(auditLog);
@@ -1289,7 +1289,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users/transaction-write', {
+            export const usersQuery = query('users/transaction-write', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               async load(_input, db: PgDatabase<any, any, any>) {
                 await db.transaction(async (tx) => {
                   await tx.update(users).set({ id: 'u1' });
@@ -1343,7 +1343,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users/nested-helper', {
+            export const usersQuery = query('users/nested-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>) {
                 function readAudit(reader: PgDatabase<any, any, any>) {
                   return reader.select({ id: auditLog.id }).from(auditLog);
@@ -1379,7 +1379,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users', {
+            export const usersQuery = query('users', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.query['users']['findMany']({ where: eq(users.active, true) });
               },
@@ -1416,7 +1416,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users/template-access', {
+            export const usersQuery = query('users/template-access', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.query[\`users\`][\`findFirst\`]({ where: eq(users.active, true) });
               },
@@ -1459,7 +1459,7 @@ describe('Drizzle pinned subset conformance', () => {
               id: text('id').primaryKey(),
             }, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users/shadowed-relational', {
+            export const usersQuery = query('users/shadowed-relational', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase<any, any, any>, fake: { users: unknown }) {
                 {
                   const { users } = fake;
@@ -1500,7 +1500,7 @@ describe('Drizzle pinned subset conformance', () => {
           source: `
             export const users = pgTable('users', {}, kovo({ domain: 'user', key: 'id' }));
 
-            export const usersQuery = query('users', {
+            export const usersQuery = query('users', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, db: PgDatabase) {
                 return db.query.archivedUsers.findMany({ where: eq(users.active, true) });
               },
@@ -1548,7 +1548,7 @@ describe('Drizzle pinned subset conformance', () => {
               name: text('name').notNull(),
             }, kovo({ domain: 'product', key: 'id' }));
 
-            export const productQuery = query('product', {
+            export const productQuery = query('product', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               load(_input, reader: PgDatabase) {
                 const fixture = { query: { auditLog: { findMany() { return []; } } } };
                 fixture.query.auditLog.findMany();

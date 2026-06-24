@@ -1,4 +1,4 @@
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -23,6 +23,7 @@ function renderStateIsland(): string {
 }
 
 export const updateCard = mutation('binding-text-attr/update', {
+  access: publicAccess('integration fixture mutation binding-text-attr/update has no runtime guard'),
   csrf: false,
   input: s.object({}),
   registry: {
@@ -39,6 +40,7 @@ export const updateCard = mutation('binding-text-attr/update', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const card = await readCard(request.db);
     const rendered = await renderCard(request.db);

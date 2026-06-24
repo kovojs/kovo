@@ -1,4 +1,4 @@
-import { createApp, domain, query, route, s, type Schema } from '@kovojs/server';
+import { createApp, domain, publicAccess, query, route, s, type Schema } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { runQuery } from '@kovojs/server/internal/execution';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -11,6 +11,7 @@ const projectionOutput = s.object({
 });
 
 const matchingProjection = query('projection-good', {
+  access: publicAccess('integration fixture query projection-good has no runtime guard'),
   async load(_input, context) {
     const request = context?.request as KovoFixtureRequest;
     const rows = await request.db.query<{ label: string; stock: number }>(
@@ -24,6 +25,7 @@ const matchingProjection = query('projection-good', {
 });
 
 const driftProjection = query('projection-drift', {
+  access: publicAccess('integration fixture query projection-drift has no runtime guard'),
   async load(_input, context) {
     const request = context?.request as KovoFixtureRequest;
     const rows = await request.db.query<{ label: string; stock: string }>(
@@ -37,6 +39,7 @@ const driftProjection = query('projection-drift', {
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   async page(_params, request: KovoFixtureRequest) {
     const result = await runQuery(matchingProjection, {}, request);
     if (!result.ok) throw new Error(`Projection query failed: ${result.error.code}`);

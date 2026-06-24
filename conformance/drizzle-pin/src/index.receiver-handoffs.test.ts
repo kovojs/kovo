@@ -185,7 +185,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             declare function runReport(db: PgDatabase<any, any, any>): Promise<unknown[]>;
 
-            export const productQuery = query('product/helper', {
+            export const productQuery = query('product/helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               async load(_input, db: PgDatabase<any, any, any>) {
                 return runReport(db);
               },
@@ -232,7 +232,7 @@ describe('Drizzle pinned subset conformance', () => {
               warm(cache: unknown): Promise<void>;
             };
 
-            export const productQuery = query('product/member-helper', {
+            export const productQuery = query('product/member-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               async load(_input, db: PgDatabase<any, any, any>) {
                 await reports.warm(cache);
                 return reports.run(db);
@@ -331,7 +331,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  },',
           '};',
           '',
-          "export const productQuery = query('product/inline-member-local-helper', {",
+          "export const productQuery = query('product/inline-member-local-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
           '    helpers.fakeLoad(fake);',
           '    return helpers.loadProducts(db);',
@@ -412,7 +412,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  }',
           '}',
           '',
-          "export const productQuery = query('product/static-class-local-helper', {",
+          "export const productQuery = query('product/static-class-local-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(input, db: PgDatabase<any, any, any>) {',
           '    ProductHelpers.opaqueRead(input, db);',
           '    return ProductHelpers.visibleRead(input, db);',
@@ -521,7 +521,7 @@ describe('Drizzle pinned subset conformance', () => {
           "  id: text('id').primaryKey(),",
           "}, kovo({ domain: 'product', key: 'id' }));",
           '',
-          "export const productQuery = query('product/destructured-receiver', {",
+          "export const productQuery = query('product/destructured-receiver', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
           '    const context = { db, nested: { db }, tuple: [db] as [PgDatabase<any, any, any>] };',
           '    const { nested: { db: reader } } = context;',
@@ -586,7 +586,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             declare function runReport(context: unknown): Promise<unknown[]>;
 
-            export const productQuery = query('product/container-helper', {
+            export const productQuery = query('product/container-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
                 await runReport({ fake });
                 return runReport({ db });
@@ -662,7 +662,7 @@ describe('Drizzle pinned subset conformance', () => {
             'interface FakeContext { db: unknown }',
             'declare function runReport(context: unknown): Promise<unknown[]>;',
             '',
-            "export const productQuery = query('product/typed-context-helper', {",
+            "export const productQuery = query('product/typed-context-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
             '  async load(_input, context: ProductContext, fake: FakeContext) {',
             '    await runReport({ fake });',
             '    return runReport({ context });',
@@ -744,7 +744,7 @@ describe('Drizzle pinned subset conformance', () => {
 
             declare function runReport(context: unknown): Promise<unknown[]>;
 
-            export const productQuery = query('product/nested-carrier', {
+            export const productQuery = query('product/nested-carrier', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),
               async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {
                 const carrier = { db, fake };
                 const nested = { inner: carrier };
@@ -917,7 +917,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  return Promise.resolve([]);',
             '}',
             '',
-            "export const productQuery = query('product/local-carrier-helper', {",
+            "export const productQuery = query('product/local-carrier-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
             '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
             '    const context = { db };',
             '    const fakeContext = { db: fake };',
@@ -965,7 +965,7 @@ describe('Drizzle pinned subset conformance', () => {
             '  return Promise.resolve([]);',
             '}',
             '',
-            "export const productQuery = query('product/local-assigned-carrier-helper', {",
+            "export const productQuery = query('product/local-assigned-carrier-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
             '  async load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
             '    let context;',
             '    context = { db };',
@@ -1031,7 +1031,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           'const helpers = { loadProducts, touchProduct, fakeLoad, fakeTouch };',
           '',
-          "export const productQuery = query('product/member-local-helper', {",
+          "export const productQuery = query('product/member-local-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, db: PgDatabase<any, any, any>, fake: FakeDb) {',
           '    helpers.fakeLoad(fake);',
           '    return helpers.loadProducts(db);',
@@ -1116,7 +1116,7 @@ describe('Drizzle pinned subset conformance', () => {
           'const helpers = { nested: { loadProducts, touchProduct } };',
           'const { nested: { loadProducts: loadFromHelper, touchProduct: touchFromHelper } } = helpers;',
           '',
-          "export const productQuery = query('product/destructured-local-helper', {",
+          "export const productQuery = query('product/destructured-local-helper', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input, db: PgDatabase<any, any, any>) {',
           '    return loadFromHelper(db);',
           '  },',
@@ -1221,10 +1221,10 @@ describe('Drizzle pinned subset conformance', () => {
           '  addOverridden: write(domainOverridden.nested.addItem),',
           '});',
           '',
-          "export const productQuery = query('product/nested-callback-container', {",
+          "export const productQuery = query('product/nested-callback-container', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load: querySpread["nested"]["loadProducts"],',
           '});',
-          "export const emptyQuery = query('product/overridden-nested-callback-container', {",
+          "export const emptyQuery = query('product/overridden-nested-callback-container', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load: queryOverridden.nested.loadProducts,',
           '});',
         ].join('\n'),
@@ -1303,7 +1303,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  static loadProduct = (_input: unknown, db: PgDatabase<any, any, any>) => {',
           '    return db.select({ id: products.id }).from(products);',
           '  };',
-          '  static options = { load: ProductLoaders.loadProduct };',
+          "  static options = { access: publicAccess('drizzle conformance query fixture has no runtime guard'), load: ProductLoaders.loadProduct };",
           '}',
           '',
           'class ProductActions {',
@@ -1313,7 +1313,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           'export const productDomain = domain(ProductActions.actions);',
           '',
-          "export const productQuery = query('product/static-property-loader', ProductLoaders.options);",
+          "export const productQuery = query('product/static-property-loader', { access: publicAccess('drizzle conformance query fixture has no runtime guard'), ...ProductLoaders.options });",
         ].join('\n'),
       },
     ];
@@ -1378,7 +1378,7 @@ describe('Drizzle pinned subset conformance', () => {
           '  };',
           '}',
           '',
-          "export const productQuery = query('product/static-class-helper-loader', {",
+          "export const productQuery = query('product/static-class-helper-loader', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(input: unknown, db: PgDatabase<any, any, any>) {',
           '    return ProductHelpers.loadProducts(input, db);',
           '  },',
@@ -1442,7 +1442,7 @@ describe('Drizzle pinned subset conformance', () => {
           '    };',
           '  }',
           '  static get options() {',
-          '    return { load: ProductLoaders.loadProduct };',
+          "    return { access: publicAccess('drizzle conformance query fixture has no runtime guard'), load: ProductLoaders.loadProduct };",
           '  }',
           '}',
           '',
@@ -1459,7 +1459,7 @@ describe('Drizzle pinned subset conformance', () => {
           '',
           'export const productDomain = domain(ProductActions.actions);',
           '',
-          "export const productQuery = query('product/static-accessor-loader', ProductLoaders.options);",
+          "export const productQuery = query('product/static-accessor-loader', { access: publicAccess('drizzle conformance query fixture has no runtime guard'), ...ProductLoaders.options });",
         ].join('\n'),
       },
     ];

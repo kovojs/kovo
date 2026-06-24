@@ -1,4 +1,4 @@
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface CardResult {
@@ -18,6 +18,7 @@ export async function readCard(db: KovoFixtureRequest['db']): Promise<CardResult
 }
 
 export const cardQuery = query('card', {
+  access: publicAccess('integration fixture query card has no runtime guard'),
   reads: [cardDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;

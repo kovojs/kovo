@@ -1,7 +1,7 @@
 // SPEC.md §9.1: webhook() captures raw bytes, verifies before parsing, accepts
 // loose provider fields, writes Kovo-owned data, and emits unified changes.
 import { hmacSignature } from '@kovojs/core';
-import { createApp, domain, s, webhook } from '@kovojs/server';
+import { createApp, domain, s, verifiedAccess, webhook } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type WebhookRequest = Request & KovoFixtureRequest;
@@ -17,6 +17,7 @@ function providerAmount(input: unknown): number | null {
 }
 
 const stripeLite = webhook('stripe-lite', {
+  access: verifiedAccess,
   async handler(input, context) {
     const request = context.request as WebhookRequest;
     await request.db.query(

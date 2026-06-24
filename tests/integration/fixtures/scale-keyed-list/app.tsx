@@ -1,7 +1,7 @@
 // SPEC §4.8 keyed stamps at volume (plans/bugs-and-testing.md P3 scale; testing-audit §5.6):
 // a 300-row keyed list reconciled through a fragment patch must keep identity correct at
 // scale — the right row removed, order preserved, no mis-keying or duplicate keys.
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -38,12 +38,14 @@ async function renderCartList(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const cartQuery = query('cart', {
+  access: publicAccess('integration fixture query cart has no runtime guard'),
   load: (_input: unknown, context?: { request: KovoFixtureRequest }) =>
     readCart(context?.request.db as KovoFixtureRequest['db']),
   reads: [cartDomain],
 });
 
 export const changeCart = mutation('scale-keyed-list/change', {
+  access: publicAccess('integration fixture mutation scale-keyed-list/change has no runtime guard'),
   csrf: false,
   input: s.object({}),
   registry: { queries: [cartQuery], touches: [cartDomain] },
@@ -57,6 +59,7 @@ export const changeCart = mutation('scale-keyed-list/change', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const cart = await readCart(request.db);
     return `${renderQueryScript({ name: 'cart', value: cart })}

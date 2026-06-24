@@ -1,4 +1,4 @@
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -11,6 +11,7 @@ async function renderCard(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const refetch = await readRefetch(request.db);
     const card = await renderCard(request.db);

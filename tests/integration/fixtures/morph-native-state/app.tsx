@@ -2,7 +2,7 @@
 // fragment morph preserves user-agent/DOM-resident state. This fixture opens a
 // <details> by user action, then triggers an UNRELATED morph of the enclosing
 // fragment (an incremented counter) and asserts the open state survives.
-import { createApp, domain, mutation, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const panelDomain = domain('panel');
@@ -21,6 +21,7 @@ function renderPanel(value: number): string {
 }
 
 export const bump = mutation('morph-native-state/bump', {
+  access: publicAccess('integration fixture mutation morph-native-state/bump has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
@@ -31,6 +32,7 @@ export const bump = mutation('morph-native-state/bump', {
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <kovo-fragment target="panel">${renderPanel(await count(request.db))}</kovo-fragment>
     <form method="post" action="/_m/morph-native-state/bump" enhance data-mutation="morph-native-state/bump" kovo-deps="panel">

@@ -7,10 +7,12 @@ import {
   s,
   type MutationFail,
   type ValidationFailurePayload,
-} from '@kovojs/server';
+
+  publicAccess,} from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const reserve = mutation('validation/reserve', {
+  access: publicAccess('integration fixture mutation validation/reserve has no runtime guard'),
   csrf: false,
   input: s.object({
     quantity: s.number().int().min(1),
@@ -41,6 +43,7 @@ function renderReservationForm(failure?: MutationFail): string {
 }
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <h1>Reserve inventory</h1>
     ${renderReservationForm()}

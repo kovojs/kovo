@@ -25,6 +25,7 @@ function textStream(chunks: readonly string[]): ReadableStream<Uint8Array> {
 }
 
 const streamRoute = route('/reports/live.txt', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   guard: guards.authed<StreamRequest>(),
   page: () =>
     respond.stream(textStream(['alpha\n', 'beta\n']), {

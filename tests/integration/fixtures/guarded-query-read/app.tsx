@@ -1,6 +1,6 @@
 // SPEC §6.5 + §9.4: query guards run for initial render callers and typed-read
 // endpoint callers; the query endpoint must not leak protected data anonymously.
-import { createApp, domain, guards, query, route, s } from '@kovojs/server';
+import { createApp, domain, guards, publicAccess, query, route, s } from '@kovojs/server';
 import { runQuery } from '@kovojs/server/internal/execution';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
@@ -25,6 +25,7 @@ function readSessionCookie(request: Request): AuthSession | null {
 }
 
 export const accountQuery = query('account', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   args: s.object({ view: s.string() }),
   guard: guards.authed<AuthRequest>(),
   instanceKey: (input) => `account:${(input as { view?: string }).view ?? ''}`,
@@ -36,6 +37,7 @@ export const accountQuery = query('account', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   search: s.object({ view: s.string() }),
   page: async ({ search }, request: AuthRequest) => {
     const result = await runQuery(accountQuery, search, request);

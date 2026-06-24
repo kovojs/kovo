@@ -1,5 +1,5 @@
 // SPEC.md §9.5: static export replays L0/L1 routes through the app shell.
-import { createApp, createMemoryVersionedClientModuleRegistry, route } from '@kovojs/server';
+import { createApp, createMemoryVersionedClientModuleRegistry, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export interface StaticExportRenderCounter {
@@ -25,6 +25,7 @@ export function createStaticExportL0L1App(counter: StaticExportRenderCounter = {
     renderRoute: (value) => String(value),
     routes: [
       route('/', {
+        access: publicAccess('integration fixture route / has no runtime guard'),
         meta: { title: 'Static Export Home' },
         modulepreloads: [analyticsHref],
         page: () => {
@@ -40,6 +41,7 @@ export function createStaticExportL0L1App(counter: StaticExportRenderCounter = {
         },
       }),
       route('/docs', {
+        access: publicAccess('integration fixture route /docs has no runtime guard'),
         meta: { title: 'Static Export Docs' },
         page: () => {
           counter.renders += 1;
@@ -47,6 +49,7 @@ export function createStaticExportL0L1App(counter: StaticExportRenderCounter = {
         },
       }),
       route('/search', {
+        access: publicAccess('integration fixture route /search has no runtime guard'),
         meta: { title: 'Static Export Search' },
         page: () => {
           counter.renders += 1;

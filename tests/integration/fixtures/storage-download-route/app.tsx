@@ -31,6 +31,7 @@ function readSessionCookie(request: Request): StorageSession | null {
 }
 
 const downloadRoute = route('/files/download', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   guard: guards.authed<StorageRequest>(),
   search: s.object({ key: s.string() }),
   async page({ search }, request: StorageRequest) {

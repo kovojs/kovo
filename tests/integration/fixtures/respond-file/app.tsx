@@ -14,6 +14,7 @@ function readSessionCookie(request: Request): FileSession | null {
 }
 
 const exportRoute = route('/downloads/orders.pdf', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   guard: guards.authed<FileRequest>(),
   page: () =>
     respond.file('%PDF-1.7\n', {

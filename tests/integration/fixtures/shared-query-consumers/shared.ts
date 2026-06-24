@@ -1,4 +1,4 @@
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface ProfileResult {
@@ -15,6 +15,7 @@ export async function readProfile(db: KovoFixtureRequest['db']): Promise<Profile
 }
 
 export const profileQuery = query('profile', {
+  access: publicAccess('integration fixture query profile has no runtime guard'),
   reads: [profileDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;

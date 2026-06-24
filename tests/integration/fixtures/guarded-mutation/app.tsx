@@ -1,7 +1,7 @@
 // SPEC §6.5 + §10.3: mutation guards run before the transaction/write path.
 // Unauthenticated enhanced failures return Kovo-Reauth; authenticated
 // authorization failures stay on typed mutation error fragments.
-import { createApp, guards, mutation, route, s } from '@kovojs/server';
+import { createApp, guards, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface AuthSession {
@@ -34,6 +34,7 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const guardedIncrement = mutation('guarded-mutation/increment', {
+  access: { kind: 'guard-chain', guards: [{ name: 'guards.authed' }] },
   csrf: false,
   guard: guards.authed<AuthRequest>(),
   input: s.object({}),
@@ -45,6 +46,7 @@ export const guardedIncrement = mutation('guarded-mutation/increment', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const status = await renderStatus(request.db);
     return `<main>

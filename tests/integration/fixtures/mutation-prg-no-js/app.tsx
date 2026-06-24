@@ -1,9 +1,10 @@
 // Mutation wire fixture for SPEC.md §9.1 and §9.2: without Kovo-Fragment, the
 // mutation endpoint uses POST-redirect-GET on success and full-page errors.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const subscribe = mutation('newsletter/subscribe', {
+  access: publicAccess('integration fixture mutation newsletter/subscribe has no runtime guard'),
   csrf: false,
   errors: { ALREADY_SUBSCRIBED: s.object({ email: s.string() }) },
   input: s.object({
@@ -23,6 +24,7 @@ export const subscribe = mutation('newsletter/subscribe', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <h1>Newsletter</h1>
     <form method="post" action="/_m/newsletter/subscribe" data-mutation="newsletter/subscribe">
@@ -34,6 +36,7 @@ const homeRoute = route('/', {
 });
 
 const thanksRoute = route('/thanks', {
+  access: publicAccess('integration fixture route /thanks has no runtime guard'),
   page: () => '<main><h1>Subscribed</h1></main>',
 });
 

@@ -1,4 +1,4 @@
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 // Output-safety conformance fixture (SPEC §4.8/§5.2 #10 / KV236, §9.1 script-data
@@ -21,6 +21,7 @@ export async function readPayload(db: KovoFixtureRequest['db']): Promise<Payload
 }
 
 export const payloadQuery = query('payload', {
+  access: publicAccess('integration fixture query payload has no runtime guard'),
   reads: [xssDomain],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>) => {
     const db = context?.request?.db;

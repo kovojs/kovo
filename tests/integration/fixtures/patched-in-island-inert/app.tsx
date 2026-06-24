@@ -1,6 +1,6 @@
 // Morph application fixture: an island patched in by a fragment is discovered by
 // delegated future events, but its handler module is not imported eagerly (SPEC §4.4, §9.1).
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readInstalled(db: KovoFixtureRequest['db']): Promise<boolean> {
@@ -25,6 +25,7 @@ async function renderZone(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const addIsland = mutation('island/add', {
+  access: publicAccess('integration fixture mutation island/add has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -34,6 +35,7 @@ export const addIsland = mutation('island/add', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const zone = await renderZone(request.db);
     return `<main>

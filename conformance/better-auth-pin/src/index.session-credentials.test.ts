@@ -190,10 +190,12 @@ describe('Better Auth pinned conformance', () => {
     // SPEC.md §6.5/§10.3: route guards consume the typed session populated by
     // the request lifecycle, and anonymous vs unauthorized failures are distinct.
     const accountRoute = route('/account', {
+      access: { kind: 'guard-chain', guards: [{ name: 'authed' }] },
       guard: authed<ReferenceRequest>(),
       page: (_context, request) => trustedHtml(`account:${request.session.user.email}`),
     });
     const adminRoute = route('/admin', {
+      access: { kind: 'guard-chain', guards: [{ name: 'role' }] },
       guard: role<ReferenceRequest>('admin'),
       page: (_context, request) => trustedHtml(`admin:${request.session?.user.email ?? 'missing'}`),
     });

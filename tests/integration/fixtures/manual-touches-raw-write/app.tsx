@@ -1,4 +1,4 @@
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -10,6 +10,7 @@ async function readCartCount(db: KovoFixtureRequest['db']): Promise<{ count: num
 }
 
 const cartQuery = query('cart', {
+  access: publicAccess('integration fixture query cart has no runtime guard'),
   async load(_input, context) {
     const request = context?.request as KovoFixtureRequest;
     return readCartCount(request.db);
@@ -22,6 +23,7 @@ function renderCartCount(count: number): string {
 }
 
 const addOpaqueCartItem = mutation('manual-touches-raw-write/add', {
+  access: publicAccess('integration fixture mutation manual-touches-raw-write/add has no runtime guard'),
   csrf: false,
   input: s.object({ productId: s.string() }),
   registry: {
@@ -35,6 +37,7 @@ const addOpaqueCartItem = mutation('manual-touches-raw-write/add', {
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const cartState = await readCartCount(request.db);
     return `${renderQueryScript({ name: 'cart', value: cartState })}

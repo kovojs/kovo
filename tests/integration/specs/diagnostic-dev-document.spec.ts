@@ -1,8 +1,8 @@
 // SPEC.md §11.3: error diagnostics block dev page requests with teaching documents.
 import { createServer, type Server } from 'node:http';
 
-import type { DiagnosticCode } from '@kovojs/core';
-import { createApp, route } from '@kovojs/server';
+import { DiagnosticCode } from '@kovojs/core';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import {
   createKovoAppShellDevDiagnosticLedger,
   kovoAppShellVitePlugin,
@@ -17,6 +17,7 @@ test('serves a teaching diagnostic document for a route depending on an error mo
   const app = createApp({
     routes: [
       route('/cart', {
+        access: publicAccess('integration test fixture route /cart has no runtime guard'),
         modulepreloads: ['/c/src/components/cart.client.js?v=failed'],
         page: () => '<main><h1>Cart</h1></main>',
       }),
@@ -80,6 +81,7 @@ for (const entry of ERROR_CODES) {
     const app = createApp({
       routes: [
         route('/cart', {
+          access: publicAccess('integration test fixture route /cart has no runtime guard'),
           modulepreloads: [`/c/src/components/cart.client.js?v=${entry.code}`],
           page: () => '<main><h1>Cart</h1></main>',
         }),

@@ -1,9 +1,10 @@
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 import { FixpointRenderEquivalenceCard, type FixpointState } from './fixpoint-card';
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Fixpoint render equivalence fixture' },
   page: () => {
     const definition = FixpointRenderEquivalenceCard.definition as unknown as {

@@ -28,6 +28,7 @@ function recordingAuthed(kind: string) {
 }
 
 export const sessionOnceQuery = query('session-once', {
+  access: { kind: 'guard-chain', guards: [{ name: 'recordingAuthed' }] },
   args: s.object({ case: s.string() }),
   guard: recordingAuthed('query'),
   instanceKey: (input) => `session-once:${(input as { case: string }).case}`,
@@ -39,6 +40,7 @@ export const sessionOnceQuery = query('session-once', {
 });
 
 export const sessionOnceMutation = mutation('session-once/mutate', {
+  access: { kind: 'guard-chain', guards: [{ name: 'recordingAuthed' }] },
   csrf: false,
   guard: recordingAuthed('mutation'),
   input: s.object({}),
@@ -49,6 +51,7 @@ export const sessionOnceMutation = mutation('session-once/mutate', {
 });
 
 const routeCase = route('/route', {
+  access: { kind: 'guard-chain', guards: [{ name: 'recordingAuthed' }] },
   guard: recordingAuthed('route'),
   page: async (_context, request: AppRequest) => {
     await record(request, 'page:route');

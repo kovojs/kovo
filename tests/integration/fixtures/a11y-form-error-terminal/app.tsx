@@ -1,8 +1,9 @@
 // SPEC §9.2 + §12.1: enhanced validation errors retain field/error relationships.
-import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s, type MutationFail } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 export const subscribe = mutation('a11y-form-error/subscribe', {
+  access: publicAccess('integration fixture mutation a11y-form-error/subscribe has no runtime guard'),
   csrf: false,
   errors: { INVALID_EMAIL: s.object({ field: s.string() }) },
   input: s.object({ email: s.string() }),
@@ -28,6 +29,7 @@ function renderForm(failure?: MutationFail): string {
 }
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   meta: { title: 'Newsletter error state' },
   page: () => `<main>
     <h1>Newsletter</h1>

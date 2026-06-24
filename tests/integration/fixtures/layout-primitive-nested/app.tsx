@@ -2,7 +2,7 @@
 // testing-audit §5.6): the real layout() primitive attached via route({ layout }),
 // with a nested parent, composes chrome around the page in the right order. (The
 // existing layout-function-composition fixture only exercises a plain wrapper fn.)
-import { createApp, layout, route, type LayoutRenderSlots } from '@kovojs/server';
+import { createApp, layout, publicAccess, route, type LayoutRenderSlots } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const ShellLayout = layout({
@@ -17,6 +17,7 @@ const SectionLayout = layout({
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   layout: SectionLayout,
   page: () => `<main data-route="page">Page body</main>`,
 });

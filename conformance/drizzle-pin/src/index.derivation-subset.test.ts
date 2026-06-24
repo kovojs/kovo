@@ -305,7 +305,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
           "    return { f: db.select({ stock: items.stock }).from(items).where(eq(items.id, 'x')) };",
           '  },',
@@ -328,7 +328,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
           "    return { f: db.select({ value: count() }).from(items).where(eq(items.cartId, 'c1')) };",
           '  },',
@@ -351,7 +351,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
           '    return { f: db.select({ value: sum(items.qty) }).from(items) };',
           '  },',
@@ -368,7 +368,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
       const shape = shapeOf(
         COMMON_IMPORTS,
         ITEMS_TABLE,
-        "export const q = query('grid', {",
+        "export const q = query('grid', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
         '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
         '    return { items: db.select({ id: items.id, stock: items.stock }).from(items).orderBy(items.id) };',
         '  },',
@@ -404,7 +404,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
       const shape = shapeOf(
         COMMON_IMPORTS,
         ITEMS_TABLE,
-        "export const q = query('grid', {",
+        "export const q = query('grid', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
         '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
         '    const rows = db.select({ id: items.id }).from(items).orderBy(items.id).limit(20);',
         '    return { items: rows, nextCursor: rows.at(-1)?.id };',
@@ -427,7 +427,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
           '    return { f: db.selectDistinct({ tag: items.tag }).from(items) };',
           '  },',
@@ -441,7 +441,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
           '    return { f: db.select({ value: count() }).from(items).groupBy(items.tag) };',
           '  },',
@@ -455,7 +455,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
           '    return { f: db.select({ value: count().over() }).from(items) };',
           '  },',
@@ -469,7 +469,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
           '    return { f: db.select({ id: items.id, total: sql<number>`sum(qty)` }).from(items) };',
           '  },',
@@ -488,7 +488,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load: async (_input: unknown, db: PgDatabase<any, any, any>) => {',
           '    const rows = await db.select({ value: sum(items.qty) }).from(items);',
           '    return { f: Number(rows[0]?.value ?? 0) };',
@@ -507,7 +507,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
         singleField(
           COMMON_IMPORTS,
           ITEMS_TABLE,
-          "export const q = query('q', {",
+          "export const q = query('q', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
           '  load: async (_input: unknown, db: PgDatabase<any, any, any>) =>',
           '    ({ f: await db.select({ id: items.id, stock: items.stock }).from(items).orderBy(items.id) }),',
           '});',
@@ -559,7 +559,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
     const sumShape = shapeOf(
       COMMON_IMPORTS,
       ITEMS_TABLE,
-      "export const q = query('cart', {",
+      "export const q = query('cart', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
       '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
       "    return { total: db.select({ value: sum(items.qty) }).from(items).where(eq(items.cartId, 'c1')) };",
       '  },',
@@ -568,7 +568,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
     const gridShape = shapeOf(
       COMMON_IMPORTS,
       ITEMS_TABLE,
-      "export const q = query('grid', {",
+      "export const q = query('grid', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
       '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
       '    return { items: db.select({ id: items.id, stock: items.stock }).from(items).orderBy(items.id) };',
       '  },',
@@ -577,7 +577,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
     const countShape = shapeOf(
       COMMON_IMPORTS,
       ITEMS_TABLE,
-      "export const q = query('count', {",
+      "export const q = query('count', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
       '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
       '    const rows = db.select({ id: items.id }).from(items);',
       '    return { items: rows, total: db.select({ value: count() }).from(items) };',
@@ -662,7 +662,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
       const scalarShape = shapeOf(
         COMMON_IMPORTS,
         ITEMS_TABLE,
-        "export const q = query('scalar', {",
+        "export const q = query('scalar', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
         '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
         "    return { stock: db.select({ stock: items.stock }).from(items).where(eq(items.id, 'x')) };",
         '  },',
@@ -678,7 +678,7 @@ describe('Drizzle pinned subset conformance — §10.5 derivation subset', () =>
       const distinctShape = shapeOf(
         COMMON_IMPORTS,
         ITEMS_TABLE,
-        "export const q = query('distinct', {",
+        "export const q = query('distinct', { access: publicAccess('drizzle conformance query fixture has no runtime guard'),",
         '  load(_input: unknown, db: PgDatabase<any, any, any>) {',
         '    return { tags: db.selectDistinct({ tag: items.tag }).from(items) };',
         '  },',

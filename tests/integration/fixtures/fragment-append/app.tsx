@@ -1,6 +1,6 @@
 // Append-mode fixture: a mutation returns a kovo-fragment with mode="append",
 // so existing keyed rows stay connected while the new row is added (SPEC §9.1).
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface FeedRow {
@@ -34,6 +34,7 @@ async function renderLastRow(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const loadMore = mutation('feed/load-more', {
+  access: publicAccess('integration fixture mutation feed/load-more has no runtime guard'),
   csrf: false,
   input: s.object({}),
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
@@ -47,6 +48,7 @@ export const loadMore = mutation('feed/load-more', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const feed = await renderFeed(request.db);
     return `<main>

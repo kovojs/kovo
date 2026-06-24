@@ -2,7 +2,7 @@
 // stock, or returns a typed OUT_OF_STOCK failure when empty. On success the stock
 // badge re-renders; on failure the app's renderFailureFragment morphs an error
 // region carrying the compiler/runtime error channel attrs (data-error-code).
-import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s, type MutationFail } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { readStock } from './shared';
@@ -15,6 +15,7 @@ function renderBadge(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 export const buy = mutation('stock/buy', {
+  access: publicAccess('integration fixture mutation stock/buy has no runtime guard'),
   csrf: false,
   errors: { OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }) },
   input: s.object({}),
@@ -27,6 +28,7 @@ export const buy = mutation('stock/buy', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const badge = await renderBadge(request.db);
     return `<main>

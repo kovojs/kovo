@@ -1,4 +1,4 @@
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
 import { runQuery } from '@kovojs/server/internal/execution';
 import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -25,6 +25,7 @@ async function readProduct(db: KovoFixtureRequest['db'], id: string): Promise<Pr
 }
 
 export const productQuery = query('product', {
+  access: publicAccess('integration fixture query product has no runtime guard'),
   args: s.object({ id: s.string(), restock: s.number().int().min(0).default(0) }),
   instanceKey: (input) => `product:${(input as ProductArgs).id}`,
   load: (input: ProductArgs, context?: { request: KovoFixtureRequest }) =>
@@ -41,6 +42,7 @@ async function renderCard(db: KovoFixtureRequest['db'], id: string): Promise<str
 }
 
 export const restockProduct = mutation('multi-instance-query/restock', {
+  access: publicAccess('integration fixture mutation multi-instance-query/restock has no runtime guard'),
   csrf: false,
   input: s.object({ id: s.string(), restock: s.number().int().min(1) }),
   registry: {
@@ -57,6 +59,7 @@ export const restockProduct = mutation('multi-instance-query/restock', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const p1 = await runQuery(productQuery, { id: 'p1', restock: 0 }, request);
     const p2 = await runQuery(productQuery, { id: 'p2', restock: 0 }, request);

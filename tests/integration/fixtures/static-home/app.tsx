@@ -1,7 +1,7 @@
 // I0 fixture: the smallest possible Kovo app — one static route. Proves the boot →
 // serve → dispatch path end to end without depending on the compiler. A fixture is
 // a single file: `export default defineFixture(...)`.
-import { createApp, route } from '@kovojs/server';
+import { createApp, publicAccess, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const app = createApp({
@@ -9,6 +9,7 @@ const app = createApp({
   renderRoute: (value) => String(value),
   routes: [
     route('/', {
+      access: publicAccess('integration fixture route / has no runtime guard'),
       meta: { title: 'Static Home' },
       page: () =>
         '<main data-testid="home"><h1>Hello Kovo</h1><p data-bind="greeting">Welcome</p></main>',

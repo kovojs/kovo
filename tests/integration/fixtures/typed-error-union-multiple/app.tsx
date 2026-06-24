@@ -1,9 +1,10 @@
 // Mutation wire fixture for SPEC.md §6.3 and §9.2: one mutation can expose
 // multiple declared typed errors and render the selected branch on the wire.
-import { createApp, mutation, route, s, type MutationFail } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s, type MutationFail } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const checkout = mutation('checkout/submit', {
+  access: publicAccess('integration fixture mutation checkout/submit has no runtime guard'),
   csrf: false,
   errors: {
     CARD_DECLINED: s.object({}),
@@ -27,6 +28,7 @@ export const checkout = mutation('checkout/submit', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: () => `<main>
     <h1>Checkout</h1>
     <div kovo-fragment-target="checkout-error"></div>

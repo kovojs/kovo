@@ -1,4 +1,4 @@
-import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');
@@ -22,6 +22,7 @@ async function readProductPanel(
 }
 
 const productP1Query = query('product', {
+  access: publicAccess('integration fixture query product has no runtime guard'),
   instanceKey: 'product:p1',
   async load(_input, context) {
     const request = context?.request as KovoFixtureRequest;
@@ -31,6 +32,7 @@ const productP1Query = query('product', {
 });
 
 const productP2Query = query('product', {
+  access: publicAccess('integration fixture query product has no runtime guard'),
   instanceKey: 'product:p2',
   async load(_input, context) {
     const request = context?.request as KovoFixtureRequest;
@@ -51,6 +53,7 @@ function renderInitialQueryScript(name: string, key: string, value: unknown): st
 }
 
 const bulkRestock = mutation('table-level-invalidation/restock', {
+  access: publicAccess('integration fixture mutation table-level-invalidation/restock has no runtime guard'),
   csrf: false,
   input: s.object({ category: s.string(), threshold: s.number().int().min(0) }),
   registry: {
@@ -69,6 +72,7 @@ const bulkRestock = mutation('table-level-invalidation/restock', {
 });
 
 const home = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => {
     const p1 = await readProductPanel(request.db, 'p1', 'Pen');
     const p2 = await readProductPanel(request.db, 'p2', 'Notebook');

@@ -1,6 +1,6 @@
 // SPEC.md §6.3/§9.1: enhanced submission preserves real POST form markup, and
 // schema-coerced inputs remain observable on the server after enhancement.
-import { createApp, mutation, route, s } from '@kovojs/server';
+import { createApp, mutation, publicAccess, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 interface SubmissionRow {
@@ -36,6 +36,7 @@ function submittedValue(rawInput: FormData, name: string): string {
 }
 
 export const submitOrder = mutation('enhanced-submit-controls/submit', {
+  access: publicAccess('integration fixture mutation enhanced-submit-controls/submit has no runtime guard'),
   csrf: false,
   input: s.object({
     includeGift: s.boolean(),
@@ -51,6 +52,7 @@ export const submitOrder = mutation('enhanced-submit-controls/submit', {
 });
 
 const homeRoute = route('/', {
+  access: publicAccess('integration fixture route / has no runtime guard'),
   page: async (_context, request: KovoFixtureRequest) => `<main>
     <h1>Enhanced submit controls</h1>
     <form method="post" action="/_m/enhanced-submit-controls/submit" enhance

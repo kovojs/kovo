@@ -1,6 +1,6 @@
 // Shared query + domain for the stock (error-union) fixture. Declares no Kovo
 // components, so the compiler plugin leaves it untouched.
-import { domain, query, type QueryLoadContext } from '@kovojs/server';
+import { domain, publicAccess, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export interface StockResult {
@@ -15,6 +15,7 @@ export async function readStock(db: KovoFixtureRequest['db']): Promise<StockResu
 }
 
 export const itemQuery = query('item', {
+  access: publicAccess('integration fixture query item has no runtime guard'),
   reads: [item],
   load: (_input: unknown, context?: QueryLoadContext<KovoFixtureRequest>): Promise<StockResult> => {
     const db = context?.request?.db;
