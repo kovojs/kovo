@@ -30,16 +30,21 @@ export { adminAssign, kovo, kovoAnalyzerSummary, serverValue } from './drizzle-s
 
 const KOVO_CONFLICT_BRAND = '__kovoMutationConflict';
 
+/** Options for creating a typed optimistic-concurrency mutation conflict. */
 export interface KovoConflictOptions<Code extends string = 'CONFLICT', Payload = unknown> {
+  /** Application-specific conflict code surfaced in the mutation failure payload. */
   code?: Code;
+  /** Optional structured payload passed through to enhanced/no-JS mutation failure renderers. */
   payload?: Payload;
 }
 
+/** Options for `compareAndSet`, including custom affected-row extraction. */
 export interface KovoCompareAndSetOptions<
   Result,
   Code extends string = 'CONFLICT',
   Payload = unknown,
 > extends KovoConflictOptions<Code, Payload> {
+  /** Return the number of affected rows when the driver result shape is not recognized. */
   affectedRows?: (result: Result) => number | bigint;
 }
 
