@@ -3,9 +3,10 @@ import type { JsonValue } from './json.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
-export { trustedReveal } from './secret.js';
+export { isSecret, revealSecret, secret, trustedReveal } from './secret.js';
 export type {
   Secret,
+  SecretValue,
   TrustedRevealMethod,
   TrustedRevealOptions,
   TrustedRevealValue,
