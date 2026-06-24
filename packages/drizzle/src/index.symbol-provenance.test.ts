@@ -5,6 +5,7 @@ import {
   UNRESOLVED_READ_SOURCE_EXPRESSION,
   extractSymbolicEffectsFromProject,
   joinSymbolProvenance,
+  provenInputProvenanceForExpression,
   provenServerProvenanceForExpression,
   symbolProvenanceContextForNodes,
   symbolProvenanceForExpression,
@@ -46,6 +47,16 @@ describe('@kovojs/drizzle symbol provenance', () => {
     expect(provenance(sourceFile, context, 'mixed')).toEqual({ kind: 'input' });
     expect(provenance(sourceFile, context, 'computed')).toEqual({ kind: 'unknown' });
     expect(provenance(sourceFile, context, 'payload')).toEqual({ kind: 'input' });
+    expect(provenInputProvenanceForExpression(returned(sourceFile, 'ownerId'), context)).toEqual({
+      kind: 'input',
+      path: 'ownerId',
+    });
+    expect(
+      provenInputProvenanceForExpression(returned(sourceFile, 'sessionUserId'), context),
+    ).toBeUndefined();
+    expect(
+      provenInputProvenanceForExpression(returned(sourceFile, 'computed'), context),
+    ).toBeUndefined();
     expect(
       provenServerProvenanceForExpression(returned(sourceFile, 'sessionUserId'), context),
     ).toEqual({

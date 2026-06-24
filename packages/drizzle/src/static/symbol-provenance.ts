@@ -169,6 +169,15 @@ export function provenServerProvenanceForExpression(
 }
 
 /** @internal */
+export function provenInputProvenanceForExpression(
+  node: Node,
+  context: SymbolProvenanceContext,
+): Extract<SymbolProvenance, { kind: 'input' }> | undefined {
+  const provenance = symbolProvenanceForExpression(node, context);
+  return provenance.kind === 'input' ? provenance : undefined;
+}
+
+/** @internal */
 export function joinSymbolProvenance(
   first: SymbolProvenance,
   ...rest: readonly SymbolProvenance[]
