@@ -12,6 +12,7 @@ import {
   type ZeroArgArrowModel,
 } from '../scan/parse.js';
 import { replaceExtension } from '../shared.js';
+import { emitAllowedImportLocalNames } from '../validate/client-capture.js';
 import type {
   ClientImportDependency,
   ClientConstantDependency,
@@ -32,6 +33,12 @@ export function lowerEventHandlers(
 ): HandlerLowering[] {
   const handlers: HandlerLowering[] = [];
   const anonymousNameCounts = new Map<string, number>();
+  // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: fail-closed, whole-channel emit gate.
+  // Only re-emit a captured cross-module import into `*.client.js` when its every value-position use
+  // is callee-only (client code) or publishToClient-wrapped (audited escape). Any other captured
+  // import is WITHHELD here so the secret specifier never reaches the bundler; the matching KV437
+  // teaching diagnostic is produced by validate/client-capture.ts over the authored source.
+  const emitAllowedImports = emitAllowedImportLocalNames(model);
 
   for (const eventAttribute of eventAttributes(model)) {
     const { attributeEnd, attributeStart, eventName, tag } = eventAttribute;
@@ -105,7 +112,11 @@ export function lowerEventHandlers(
         model.moduleScopeBindings,
         handlerReferenceNames(eventAttribute),
       ),
-      ...clientImportDependencies(model.namedImports, handlerReferenceNames(eventAttribute)),
+      ...clientImportDependencies(
+        model.namedImports,
+        handlerReferenceNames(eventAttribute),
+        emitAllowedImports,
+      ),
       ...(primaryDiagnostic ? { diagnostic: primaryDiagnostic, diagnostics } : {}),
       expression,
       exportName,
@@ -197,8 +208,17 @@ function handlerReferenceNames(eventAttribute: {
 function clientImportDependencies(
   namedImports: readonly NamedImportModel[],
   references: ReadonlySet<string>,
+  emitAllowedImports: ReadonlySet<string>,
 ): { clientImports: readonly ClientImportDependency[] } | {} {
-  const clientImports = namedImports.filter((item) => references.has(item.localName));
+  // Fail-closed: a referenced named import is re-emitted ONLY when the whole-channel capture analysis
+  // proved it client-safe (callee-only or publishToClient-wrapped). A captured server-only binding
+  // (`() => sendPayment(STRIPE_SECRET_KEY)`) is value-position, so it is excluded from
+  // `emitAllowedImports` and its `import { STRIPE_SECRET_KEY } from "…"` line is never written into
+  // `*.client.js` — the bundler can no longer inline the evaluated secret. (KV437 from
+  // validate/client-capture.ts.)
+  const clientImports = namedImports.filter(
+    (item) => references.has(item.localName) && emitAllowedImports.has(item.localName),
+  );
 
   return clientImports.length > 0 ? { clientImports } : {};
 }

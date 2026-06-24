@@ -91,6 +91,12 @@ export function install${componentName}ClockUpdates(root) {
 }`;
 }
 
+// SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0 item 3: this emitter is the single sink that
+// writes captured cross-module import lines into `*.client.js`. The fail-closed secret-emit gate is
+// applied UPSTREAM in lower/handlers.ts (`clientImportDependencies` filters by the whole-channel
+// `emitAllowedImportLocalNames` analysis), so by the time imports reach here they are already proven
+// client-safe (callee-only or publishToClient-wrapped). A value-position capture of a server-only
+// import is withheld before this point and its specifier never reaches the bundler.
 function emitClientImportDependencies(imports: readonly ClientImportDependency[]): string {
   const entriesByModule = new Map<string, ClientImportDependency[]>();
 

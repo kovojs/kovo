@@ -38,6 +38,7 @@ import {
 import { validateLiteralHrefs } from './navigation.js';
 import { validateOutputContexts } from '../security/output-context.js';
 import { queryShapeFactDiagnostics } from '../types.js';
+import { validateClientHandlerSecretCapture } from './client-capture.js';
 import { validateSecretQueryWire } from './confidentiality.js';
 import {
   validateDeclaredClockReadsInRender,
@@ -93,6 +94,10 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateNestedStatefulIslandInRefreshTarget(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>
     validateSecretQueryWire(originalDiagnostics, originalModel, options),
+  // SPEC §6.6/§6.2 + secure-framework Phase 4 / Tier 0: KV437 fires on the authored source so the
+  // diagnostic site is the real capture, not a lowered rewrite (peer of the KV435 query-wire gate).
+  ({ originalDiagnostics, originalModel }) =>
+    validateClientHandlerSecretCapture(originalDiagnostics, originalModel),
   ({ loweredDiagnostics, model, options }) =>
     validateDataBindings(loweredDiagnostics, model, options),
   ({ originalDiagnostics, originalModel, options }) =>

@@ -152,6 +152,41 @@ export function revealSecret<T>(value: Secret<T>): T {
   return isSecret(value) ? (value as SecretValue<T>).reveal() : (value as unknown as T);
 }
 
+/** Options for {@link publishToClient}. */
+export interface PublishToClientOptions {
+  /**
+   * Why this captured cross-module value is safe to ship into the client bundle. Keep the text
+   * reviewable and non-sensitive; the compiler records it (with the capture site) for
+   * `kovo explain --capabilities`.
+   */
+  reason: string;
+}
+
+/**
+ * Audited escape for the client-handler secret-emit gate (SPEC §6.6/§6.2; secure-framework Phase 4 /
+ * Tier 0 item 3, KV437).
+ *
+ * A client event handler that captures a cross-module import in **value position**
+ * (`() => sendPayment(STRIPE_SECRET_KEY)`) would otherwise leak the binding's evaluated value into
+ * the browser bundle, so the compiler refuses to emit it (fail-closed, whole-channel). Wrapping the
+ * value in `publishToClient(value, { reason })` is an explicit author assertion — **audit-grade,
+ * NOT statically verified** — that this specific value is safe to ship. The compiler then allows the
+ * capture to emit and records the site + reason for `kovo explain --capabilities`.
+ *
+ * This is the analogue of {@link trustedReveal} for the closure-capture channel: an assertion the
+ * reviewer can see, not a proof. Reach for it only for genuinely public values the handler needs in
+ * the browser (a publishable Stripe key, a public base URL); never to ship a real secret.
+ *
+ * Runtime behavior is identity: it returns `value` unchanged. The wrapper exists for the compiler's
+ * static recognition and for the audit ledger, not to transform the value.
+ */
+export function publishToClient<T>(value: T, options: PublishToClientOptions): T {
+  if (!options.reason.trim()) {
+    throw new Error('publishToClient requires a non-empty reason.');
+  }
+  return value;
+}
+
 /** Constant-time string compare (no early-exit on mismatch; mixes in any length difference). */
 function timingSafeStringEqual(a: string, b: string): boolean {
   const length = Math.max(a.length, b.length);
