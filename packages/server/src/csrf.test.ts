@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { csrfField, csrfToken, renderMutationCsrfField, validateCsrfToken } from './csrf.js';
+import {
+  csrfField,
+  csrfToken,
+  renderMutationCsrfField,
+  validateCsrfToken,
+  verifyCsrfRequestOriginFloor,
+} from './csrf.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import {
   mutation as defineMutation,
@@ -282,5 +288,95 @@ describe('mutation CSRF enforcement', () => {
     expect(storeTouches).toBe(0);
     expect(response.status).toBe(422);
     expect(response.body).toContain('data-error-code="CSRF"');
+  });
+});
+
+// SF Tier 1 (SPEC §6.6/§9.1): the header-based CSRF floor — runs BEFORE the synchronizer-token
+// check on unsafe-verb requests, fail-closed against cross-site, with a compat fallback for clients
+// that send neither header. Catches Kovo up to SvelteKit/Remix/Rails.
+describe('CSRF Origin / Sec-Fetch-Site floor', () => {
+  const csrf = { trustedOrigins: [] as readonly string[] };
+
+  function post(headers: Record<string, string>): Request {
+    return new Request('https://shop.example.test/_m/cart/add', { headers, method: 'POST' });
+  }
+
+  it('rejects an unsafe-verb cross-site request', () => {
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'cross-site' }), csrf)).toBe(false);
+  });
+
+  it('allows same-origin / same-site / none Sec-Fetch-Site', () => {
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-origin' }), csrf)).toBe(true);
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'same-site' }), csrf)).toBe(true);
+    expect(verifyCsrfRequestOriginFloor(post({ 'sec-fetch-site': 'none' }), csrf)).toBe(true);
+  });
+
+  it('rejects a cross-origin Origin not in trustedOrigins', () => {
+    expect(
+      verifyCsrfRequestOriginFloor(post({ origin: 'https://evil.example.test' }), csrf),
+    ).toBe(false);
+  });
+
+  it('allows a same-origin Origin', () => {
+    expect(
+      verifyCsrfRequestOriginFloor(post({ origin: 'https://shop.example.test' }), csrf),
+    ).toBe(true);
+  });
+
+  it('honors the trustedOrigins allowlist for a cross-origin Origin', () => {
+    expect(
+      verifyCsrfRequestOriginFloor(post({ origin: 'https://app.example.test' }), {
+        trustedOrigins: ['https://app.example.test'],
+      }),
+    ).toBe(true);
+  });
+
+  it('COMPAT: falls through (allows the floor) when BOTH headers are absent', () => {
+    expect(verifyCsrfRequestOriginFloor(post({}), csrf)).toBe(true);
+  });
+
+  it('does not gate safe verbs', () => {
+    const get = new Request('https://shop.example.test/_q/cart', {
+      headers: { 'sec-fetch-site': 'cross-site' },
+      method: 'GET',
+    });
+    expect(verifyCsrfRequestOriginFloor(get, csrf)).toBe(true);
+  });
+
+  it('does not gate plain-object request shapes (direct runMutation API)', () => {
+    expect(verifyCsrfRequestOriginFloor({ session: { id: 's1' } }, csrf)).toBe(true);
+  });
+
+  // Integration through validateCsrfToken: the floor rejects a cross-site POST even with a token
+  // that would otherwise pass, and same-origin requests still need a valid token (no regression).
+  it('validateCsrfToken rejects a cross-site unsafe-verb request before the token check', () => {
+    const anonymousCsrf = {
+      field: 'csrf',
+      secret: 'anon',
+      sessionId: () => undefined,
+    };
+    const setCookies: string[] = [];
+    const pageRequest = new Request('https://shop.example.test/login');
+    const html = runWithJsxRequestContext(
+      pageRequest,
+      { onCsrfSetCookie: (c) => setCookies.push(c) },
+      () => renderMutationCsrfField({ csrf: anonymousCsrf, key: 'auth/sign-in' }),
+    );
+    if (typeof html !== 'string') throw new TypeError('expected synchronous CSRF field render');
+    const cookiePair = setCookies[0]!.split(';')[0]!;
+    const token = /value="([^"]+)"/.exec(html)![1]!;
+
+    const crossSite = new Request('https://shop.example.test/_m/auth/sign-in', {
+      headers: { Cookie: cookiePair, 'sec-fetch-site': 'cross-site' },
+      method: 'POST',
+    });
+    // Token would otherwise validate; the header floor rejects first.
+    expect(validateCsrfToken({ csrf: token }, crossSite, anonymousCsrf)).toBe(false);
+
+    const sameOrigin = new Request('https://shop.example.test/_m/auth/sign-in', {
+      headers: { Cookie: cookiePair, 'sec-fetch-site': 'same-origin' },
+      method: 'POST',
+    });
+    expect(validateCsrfToken({ csrf: token }, sameOrigin, anonymousCsrf)).toBe(true);
   });
 });

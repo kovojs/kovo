@@ -22,6 +22,13 @@ export interface CsrfOptions<Request> {
   anonymousCookie?: CsrfAnonymousCookieOptions | false;
   secret: string;
   sessionId: (request: Request) => string | undefined;
+  /**
+   * Allowlist of cross-origin origins permitted to make unsafe-verb requests (SPEC §6.6/§9.1). Each
+   * entry is an absolute origin (e.g. `'https://app.example.com'`). The same-origin host is always
+   * trusted; this list adds the legitimate cross-origin callers (split front-end, native shell) that
+   * the header-based CSRF floor would otherwise reject. Flows from `createApp({ csrf })`.
+   */
+  trustedOrigins?: readonly string[];
 }
 
 /** `CsrfOptions` plus the optional form `field` name to validate against. */
@@ -109,11 +116,80 @@ export function renderMutationIdemField(): string {
   return `<input type="hidden" name="${escapeAttribute(KOVO_IDEM_FIELD_NAME)}" value="${escapeAttribute(mintIdemToken())}">`;
 }
 
+/**
+ * The unsafe HTTP verbs (state-changing) that the CSRF floor applies to (SPEC §6.6/§9.1). Safe verbs
+ * (GET/HEAD/OPTIONS/TRACE) are not gated by the header floor.
+ */
+function isUnsafeVerb(method: string | undefined): boolean {
+  if (method === undefined) return false;
+  const upper = method.toUpperCase();
+  return upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
+}
+
+/**
+ * Header-based CSRF floor (SPEC §6.6/§9.1): a fail-closed second floor that runs BEFORE the
+ * synchronizer-token check on unsafe-verb requests, catching up to SvelteKit/Remix/Rails which all
+ * ship an Origin/`Sec-Fetch-Site` floor in addition to a token.
+ *
+ * Decision (runtime defense-in-depth, sound at this sink):
+ * - Reject when `Sec-Fetch-Site: cross-site` (the browser asserts the request crossed a site boundary
+ *   to a non-trusted target). `same-origin`/`same-site`/`none` are allowed by this header.
+ * - When an `Origin` header is present, reject unless it equals the request's own origin OR is in the
+ *   `trustedOrigins` allowlist.
+ * - COMPAT FALLBACK: when BOTH `Sec-Fetch-Site` and `Origin` are absent (old clients, non-browser
+ *   callers, server-to-server), do NOT reject on this floor — fall through to the token check so we do
+ *   not break those clients.
+ *
+ * Only a real `Request` carrying an unsafe verb is gated; plain-object request shapes (used by the
+ * direct `runMutation` API) have no method/headers, so they fall through to the token check.
+ *
+ * @returns `true` when the request passes (or the floor does not apply), `false` to reject.
+ */
+export function verifyCsrfRequestOriginFloor<Request>(
+  request: Request,
+  options: Pick<CsrfOptions<Request>, 'trustedOrigins'>,
+): boolean {
+  if (!(request instanceof globalThis.Request)) return true;
+  if (!isUnsafeVerb(request.method)) return true;
+
+  const secFetchSite = request.headers.get('sec-fetch-site');
+  const origin = request.headers.get('origin');
+
+  // COMPAT FALLBACK: neither header present → defer to the token check.
+  if (secFetchSite === null && (origin === null || origin === '' || origin === 'null')) {
+    return true;
+  }
+
+  // Sec-Fetch-Site: only `cross-site` is a hard reject. `same-origin`/`same-site`/`none` are allowed.
+  if (secFetchSite === 'cross-site') return false;
+
+  // Origin allowlist check (when the browser sent a usable Origin).
+  if (origin !== null && origin !== '' && origin !== 'null') {
+    let requestOrigin: string | undefined;
+    try {
+      requestOrigin = new URL(request.url).origin;
+    } catch {
+      requestOrigin = undefined;
+    }
+    if (origin === requestOrigin) return true;
+    if (options.trustedOrigins?.includes(origin)) return true;
+    return false;
+  }
+
+  // Sec-Fetch-Site present and not cross-site, with no Origin to contradict it → allow.
+  return true;
+}
+
 export function validateCsrfToken<Request>(
   rawInput: unknown,
   request: Request,
   options: CsrfValidationOptions<Request>,
 ): boolean {
+  // SPEC §6.6/§9.1: run the fail-closed header floor BEFORE the synchronizer-token check so an
+  // unsafe-verb cross-site request is rejected even if it somehow carries a valid token. Uniform
+  // across mutations + endpoints + the /_q/ channel because every path routes through here.
+  if (!verifyCsrfRequestOriginFloor(request, options)) return false;
+
   const binding = resolveCsrfBinding(request, options);
   if (!binding) return false;
 

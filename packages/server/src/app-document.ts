@@ -83,6 +83,9 @@ export async function renderAppRouteDocumentResponse({
   );
 
   const withRefreshCookies = (response: RoutePageResponse): RoutePageResponse => {
+    // SF-WIRE(forward-sink): forwarded better-auth/session Set-Cookie strings should be routed
+    // through `normalizeForwardedSetCookie(cookie, 'session')` (cookies.ts) so a forwarded
+    // credential cookie cannot land below the HttpOnly/Secure(prod)/SameSite floor (SPEC §6.6/§9.1).
     for (const cookie of refreshSetCookies)
       appendResponseHeader(response.headers, 'Set-Cookie', cookie);
     return response;

@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { serializeCookie, validateRawSetCookie } from './cookies.js';
+import {
+  CookieDowngradeError,
+  drainCookieDowngradeFacts,
+  normalizeForwardedSetCookie,
+  serializeCookie,
+  unsafeCookie,
+  validateRawSetCookie,
+} from './cookies.js';
 
 describe('cookie header helpers', () => {
   it('serializes structured Set-Cookie values', () => {
@@ -93,5 +100,147 @@ describe('cookie header helpers', () => {
     expect(() => validateRawSetCookie('a=b\0')).toThrow(
       'Set-Cookie must not contain control characters',
     );
+  });
+
+  // SF Phase 5 (SPEC §6.6/§9.1): a caller that passes no `class` keeps exact legacy behavior so the
+  // floor is opt-in by declaring a class (no surprise attribute injection on existing callers).
+  it('leaves classless cookies as a pure legacy passthrough (no forced floor)', () => {
+    expect(serializeCookie('sid', 'tok', { partitioned: true })).toBe('sid=tok; Partitioned');
+    expect(serializeCookie('theme', 'dark')).toBe('theme=dark');
+  });
+});
+
+describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+    drainCookieDowngradeFacts();
+  });
+
+  it('forces HttpOnly + SameSite=Lax on a session cookie by default; no Secure in dev', () => {
+    process.env.NODE_ENV = 'development';
+    const cookie = serializeCookie('sid', 'abc', { class: 'session' });
+    // Dev: HttpOnly + SameSite present, but NO Secure (else localhost-http login breaks) and so no
+    // __Host- prefix (which requires Secure).
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).not.toContain('Secure');
+    expect(cookie.startsWith('sid=')).toBe(true);
+    expect(cookie).toContain('Path=/');
+  });
+
+  it('forces Secure + a __Host- prefix on a session cookie in production', () => {
+    process.env.NODE_ENV = 'production';
+    const cookie = serializeCookie('sid', 'abc', { class: 'session' });
+    expect(cookie.startsWith('__Host-sid=')).toBe(true);
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('Secure');
+    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).toContain('Path=/');
+  });
+
+  it('uses __Secure- (not __Host-) when a Domain is set in production', () => {
+    process.env.NODE_ENV = 'production';
+    const cookie = serializeCookie('sid', 'abc', { class: 'auth', domain: 'example.com' });
+    expect(cookie.startsWith('__Secure-sid=')).toBe(true);
+    expect(cookie).toContain('Secure');
+  });
+
+  it('honors productionSecure override to force Secure independent of NODE_ENV', () => {
+    process.env.NODE_ENV = 'development';
+    const cookie = serializeCookie('sid', 'abc', { class: 'session', productionSecure: true });
+    expect(cookie).toContain('Secure');
+    expect(cookie.startsWith('__Host-sid=')).toBe(true);
+  });
+
+  it('defaults SameSite for app-data class but does not force HttpOnly/Secure', () => {
+    process.env.NODE_ENV = 'production';
+    const cookie = serializeCookie('theme', 'dark', { class: 'app-data' });
+    expect(cookie).toContain('SameSite=Lax');
+    expect(cookie).not.toContain('HttpOnly');
+    expect(cookie).not.toContain('Secure');
+    expect(cookie.startsWith('theme=')).toBe(true);
+  });
+
+  // KV432: an explicit insecure downgrade of a credential cookie without the audited escape rejects.
+  it('emits KV432 (rejects) on an HttpOnly=false downgrade without unsafeCookie', () => {
+    expect(() => serializeCookie('sid', 'abc', { class: 'session', httpOnly: false })).toThrow(
+      CookieDowngradeError,
+    );
+    expect(() => serializeCookie('sid', 'abc', { class: 'session', httpOnly: false })).toThrow(
+      'KV432',
+    );
+  });
+
+  it('emits KV432 on a SameSite=None downgrade without unsafeCookie', () => {
+    expect(() => serializeCookie('sid', 'abc', { class: 'auth', sameSite: 'none' })).toThrow(
+      CookieDowngradeError,
+    );
+  });
+
+  it('emits KV432 on a Secure=false downgrade in production without unsafeCookie', () => {
+    process.env.NODE_ENV = 'production';
+    expect(() => serializeCookie('sid', 'abc', { class: 'session', secure: false })).toThrow(
+      'KV432',
+    );
+  });
+
+  it('does NOT treat secure:false in dev as a downgrade (dev login must keep working)', () => {
+    process.env.NODE_ENV = 'development';
+    expect(() =>
+      serializeCookie('sid', 'abc', { class: 'session', secure: false }),
+    ).not.toThrow();
+  });
+
+  it('allows a downgrade with unsafeCookie and records a justification fact', () => {
+    drainCookieDowngradeFacts();
+    const cookie = serializeCookie('embed_sid', 'abc', {
+      class: 'session',
+      sameSite: 'none',
+      productionSecure: true,
+      unsafe: unsafeCookie({
+        downgrade: { sameSite: 'none' },
+        justification: 'third-party checkout iframe',
+      }),
+    });
+    expect(cookie).toContain('SameSite=None');
+    const facts = drainCookieDowngradeFacts();
+    expect(facts).toHaveLength(1);
+    expect(facts[0]).toMatchObject({
+      class: 'session',
+      justification: 'third-party checkout iframe',
+      name: 'embed_sid',
+    });
+  });
+
+  it('rejects unsafeCookie without a justification', () => {
+    expect(() => unsafeCookie({ downgrade: { httpOnly: false }, justification: '   ' })).toThrow(
+      'KV432',
+    );
+  });
+
+  // Forwarded better-auth Set-Cookie normalization through the floor (preserve Partitioned/Priority).
+  it('normalizes a forwarded Set-Cookie up to the session floor, preserving Partitioned/Priority', () => {
+    process.env.NODE_ENV = 'production';
+    const normalized = normalizeForwardedSetCookie(
+      'better-auth.session=tok; Path=/; Priority=High; Partitioned',
+      'session',
+    );
+    expect(normalized).toContain('better-auth.session=tok');
+    expect(normalized).toContain('HttpOnly');
+    expect(normalized).toContain('Secure');
+    expect(normalized).toContain('SameSite=Lax');
+    expect(normalized).toContain('Priority=High');
+    expect(normalized).toContain('Partitioned');
+  });
+
+  it('preserves an upstream SameSite=None embed cookie and pairs it with Secure', () => {
+    const normalized = normalizeForwardedSetCookie(
+      'session=tok; Path=/; SameSite=None; Partitioned',
+      'session',
+    );
+    expect(normalized).toContain('SameSite=None');
+    expect(normalized).toContain('Secure');
+    expect(normalized).toContain('Partitioned');
   });
 });
