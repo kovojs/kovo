@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { Secret } from '@kovojs/core';
 
 import { invalidate } from './change-record.js';
 import { domain, tag } from './domain.js';
@@ -139,6 +140,16 @@ describe('server mutation lifecycle', () => {
         handler(_input, _request, context) {
           // @ts-expect-error SPEC §9.2 fail() payloads are JsonValue-bound client wire payloads.
           return context.fail('BAD_DATE', new Date());
+        },
+      });
+      mutation('cart/secret-fail', {
+        errors: {
+          BAD_SECRET: s.secret(s.string()),
+        },
+        input: s.object({ productId: s.string() }),
+        handler(_input, _request, context) {
+          // @ts-expect-error SPEC §9.2 secret values cannot enter fail() payloads.
+          return context.fail('BAD_SECRET', 'hash-1' as unknown as Secret<string>);
         },
       });
     };

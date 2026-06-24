@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractQueryFactsFromProject as extractQueryFactsFromProjectBase } from '@kovojs/drizzle/internal/static';
+import {
+  createProjectExtraction,
+  extractQueryFactsFromProject as extractQueryFactsFromProjectBase,
+  projectTablesBySyntheticName,
+} from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
 const extractQueryFactsFromProject = (
@@ -56,5 +60,43 @@ describe('@kovojs/drizzle kovo({ key }) column selector (SPEC §10.1)', () => {
     const stringForm = factsForCartKey('"cartId"');
     expect(factsForCartKey('(t) => { return t.cartId; }')).toEqual(stringForm);
     expect(factsForCartKey("(t) => t['cartId']")).toEqual(stringForm);
+  });
+
+  it('extracts secret column annotations from strings and selectors', () => {
+    const extraction = createProjectExtraction(
+      withPgDatabaseTypes({
+        files: [
+          {
+            fileName: 'user.schema.ts',
+            source: `
+              import { kovo } from "@kovojs/drizzle";
+              import { pgTable, text } from "drizzle-orm/pg-core";
+
+              export const users = pgTable("users", {
+                apiToken: text("api_token").notNull(),
+                id: text("id").primaryKey(),
+                passwordHash: text("password_hash").notNull(),
+              }, kovo({ domain: "user", key: "id", secret: ["passwordHash", (t) => t.apiToken] }));
+              export const vault = pgTable("vault", {
+                id: text("id").primaryKey(),
+                payload: text("payload").notNull(),
+              }, kovo({ domain: "vault", key: "id", secret: true }));
+            `,
+          },
+        ],
+      }),
+    );
+    const tables = [...projectTablesBySyntheticName(extraction).values()];
+    const userTable = tables.find((table) => table.annotation.name === 'users');
+    const vaultTable = tables.find((table) => table.annotation.name === 'vault');
+
+    expect(userTable?.annotation).toMatchObject({
+      domain: 'user',
+      secret: ['passwordHash', 'apiToken'],
+    });
+    expect(vaultTable?.annotation).toMatchObject({
+      domain: 'vault',
+      secret: true,
+    });
   });
 });

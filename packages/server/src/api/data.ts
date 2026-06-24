@@ -1,3 +1,4 @@
+export type { Secret } from '@kovojs/core';
 export { csrfField, csrfToken } from '../csrf.js';
 export type { CsrfAnonymousCookieOptions, CsrfOptions, CsrfValidationOptions } from '../csrf.js';
 export { domain, tag } from '../domain.js';

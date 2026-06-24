@@ -114,6 +114,7 @@ export type {
   QueryLoadContext,
   QueryResult,
   Schema,
+  Secret,
   StoredFileSchema,
   StoredFileSchemaOptions,
   StoredFileUpload,

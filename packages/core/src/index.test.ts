@@ -16,6 +16,7 @@ import {
   type FormInput,
   type FormValidationFailure,
   type JsonValue,
+  type Secret,
 } from './index.js';
 import * as coreRoot from './index.js';
 import { event, type EventPayload } from './internal/event.js';
@@ -179,10 +180,27 @@ describe('core authoring APIs', () => {
         state: () => ({ selected: new Map<string, string>() }),
       });
     };
+    const assertSecretState = () => {
+      component({
+        render: () => null,
+        // @ts-expect-error component state must satisfy JsonValue; Secret<T> cannot be serialized.
+        state: () => ({ passwordHash: {} as Secret<string> }),
+      });
+    };
 
     expect(assertLegacyNameArgument).toBeTypeOf('function');
     expect(assertDateState).toBeTypeOf('function');
     expect(assertMapState).toBeTypeOf('function');
+    expect(assertSecretState).toBeTypeOf('function');
+  });
+
+  it('keeps Secret values outside JsonValue client boundaries', () => {
+    const assertSecretRejected = () => {
+      // @ts-expect-error SPEC §6.2/§10.2: Secret<T> is not a JsonValue client payload.
+      const _value: JsonValue = {} as Secret<string>;
+    };
+
+    expect(assertSecretRejected).toBeTypeOf('function');
   });
 
   it('preserves query and form keys as typed authoring facts', () => {

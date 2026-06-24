@@ -76,6 +76,9 @@ describe('@kovojs/drizzle runtime surface', () => {
     const staticSource = drizzleStaticSource();
 
     expect(runtime.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
+    expect(runtime.kovo({ domain: 'user', key: 'id', secret: ['passwordHash'] }).secret).toEqual([
+      'passwordHash',
+    ]);
     expect('extractTouchGraphFromSource' in runtime).toBe(false);
     expect(compatibilityBarrel.kovo({ domain: 'cart', key: 'id' }).domain).toBe('cart');
     expect('extractTouchGraphFromSource' in compatibilityBarrel).toBe(false);
