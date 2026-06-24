@@ -491,24 +491,32 @@ function installInlineKovoLoader(im) {
     }
 
     const kept = new Set();
-    let cursor = doc.head.firstChild;
+    const pending = [];
+    const flush = (anchor) => {
+      for (const next of pending.splice(0)) doc.head.insertBefore(next.cloneNode(true), anchor);
+    };
+    for (const el of [...doc.head.childNodes]) {
+      if (!hk(el)) el.remove();
+    }
     for (const next of [...nextHead.childNodes]) {
       const key = hk(next);
-      const match = key && pool.get(key)?.shift();
+      if (!key) {
+        pending.push(next);
+        continue;
+      }
+      const match = pool.get(key)?.shift();
       const node = match || next.cloneNode(true);
       kept.add(node);
-      if (node === cursor) {
-        cursor = cursor.nextSibling;
-      } else {
-        doc.head.insertBefore(node, cursor);
-        cursor = node.nextSibling;
-      }
+      // SPEC.md §4.4: enhanced navigation must not create a transient unstyled
+      // document. Moving a connected stylesheet can briefly detach its rules in
+      // Chromium, so matched head assets keep their physical DOM position.
+      if (!match) doc.head.appendChild(node);
+      flush(node);
     }
-    while (cursor) {
-      const next = cursor.nextSibling;
-      if (!kept.has(cursor)) cursor.remove();
-      cursor = next;
+    for (const el of [...doc.head.childNodes]) {
+      if (hk(el) && !kept.has(el)) el.remove();
     }
+    flush(null);
   };
   const an = async (href, pop = false) => {
     const navId = (ni += 1);
@@ -908,7 +916,7 @@ function installInlineKovoLoader(im) {
         const href = el.getAttribute?.('href');
         if (!href) continue;
         const existing = qa(doc, 'link[rel="stylesheet"][href]').some(
-          (link) => link !== el && link.getAttribute?.('href') === href,
+          (link) => link !== el && !link.closest?.('noscript') && link.getAttribute?.('href') === href,
         );
         if (existing) {
           el.remove?.();
@@ -972,7 +980,7 @@ function installInlineKovoBootstrap(runtimeUrl, runtimeImport) {
         const href = el.getAttribute?.('href');
         if (!href) continue;
         const existing = qa(doc, 'link[rel="stylesheet"][href]').some(
-          (link) => link !== el && link.getAttribute?.('href') === href,
+          (link) => link !== el && !link.closest?.('noscript') && link.getAttribute?.('href') === href,
         );
         if (existing) {
           el.remove?.();

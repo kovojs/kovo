@@ -240,6 +240,14 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const stylesheet = document.querySelector('link[rel="stylesheet"][href="/assets/site.css"]');
     const modulepreload = document.querySelector('link[rel="modulepreload"][href="/c/shared.js"]');
+    const movedAssets: string[] = [];
+    const insertBefore = document.head.insertBefore.bind(document.head);
+    vi.spyOn(document.head, 'insertBefore').mockImplementation((node, child) => {
+      if (node === stylesheet || node === modulepreload) {
+        movedAssets.push((node as Element).getAttribute('href') || (node as Element).tagName);
+      }
+      return insertBefore(node, child);
+    });
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
@@ -275,6 +283,7 @@ describe('browser inline loader enhanced navigation', () => {
     expect(document.querySelector('link[rel="modulepreload"][href="/c/shared.js"]')).toBe(
       modulepreload,
     );
+    expect(movedAssets).toEqual([]);
     expect(document.head.innerHTML).not.toContain('data-kovo-head-preserve');
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe(
       'Cart',
@@ -296,6 +305,18 @@ describe('browser inline loader enhanced navigation', () => {
     ].join('');
     const stylesheet = document.querySelector('link[rel="stylesheet"][href="/assets/site.css"]');
     const criticalStyle = document.querySelector('style[data-kovo-critical-href="/assets/site.css"]');
+    const movedAssets: string[] = [];
+    const insertBefore = document.head.insertBefore.bind(document.head);
+    vi.spyOn(document.head, 'insertBefore').mockImplementation((node, child) => {
+      if (node === stylesheet || node === criticalStyle) {
+        movedAssets.push(
+          (node as Element).getAttribute('href') ||
+            (node as Element).getAttribute('data-kovo-critical-href') ||
+            (node as Element).tagName,
+        );
+      }
+      return insertBefore(node, child);
+    });
     const fetch = vi.fn(async () => ({
       headers: { get: (name: string) => (name === 'content-type' ? 'text/html' : null) },
       async text() {
@@ -332,6 +353,7 @@ describe('browser inline loader enhanced navigation', () => {
     );
     expect(preserved?.getAttribute('rel')).toBe('stylesheet');
     expect(preserved?.hasAttribute('data-kovo-deferred-style')).toBe(false);
+    expect(movedAssets).toEqual([]);
     expect(document.head.innerHTML).not.toContain('data-kovo-head-preserve');
   });
 
