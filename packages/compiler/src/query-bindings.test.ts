@@ -159,6 +159,14 @@ export const AccountCard = component({
       `{ parent: { child: import('@kovojs/core').Secret<boolean>; }; }`,
     ],
     ['quoted-key', { 'two-factor': 'boolean' }, '{ "two-factor": boolean; }'],
+    [
+      'revealed-secret',
+      {
+        kind: 'revealed',
+        shape: { kind: 'nullable', shape: { kind: 'secret', shape: 'string' } },
+      },
+      'string | null',
+    ],
   ] as const)('prints QueryShape type expression for %s', (_name, shape, expected) => {
     expect(queryShapeTypeExpression(shape)).toBe(expected);
   });

@@ -798,6 +798,8 @@ function wrapperQueryShapeTypeExpr(shape: QueryShapeWrapper): TypeExpr {
       return unionTypeExpr([inner, { kind: 'reference', name: 'null' }]);
     case 'optional':
       return unionTypeExpr([inner, { kind: 'reference', name: 'undefined' }]);
+    case 'revealed':
+      return typeExprFromRevealedQueryShape(shape.shape);
     case 'secret':
       return {
         args: [inner],
@@ -808,6 +810,43 @@ function wrapperQueryShapeTypeExpr(shape: QueryShapeWrapper): TypeExpr {
     case 'volatile-time':
       return inner;
   }
+}
+
+function typeExprFromRevealedQueryShape(shape: QueryShape): TypeExpr {
+  if (Array.isArray(shape)) {
+    return { item: typeExprFromRevealedQueryShape(shape[0] ?? 'object'), kind: 'array' };
+  }
+  if (isQueryShapeWrapper(shape)) {
+    switch (shape.kind) {
+      case 'nullable':
+        return unionTypeExpr([
+          typeExprFromRevealedQueryShape(shape.shape),
+          { kind: 'reference', name: 'null' },
+        ]);
+      case 'optional':
+        return unionTypeExpr([
+          typeExprFromRevealedQueryShape(shape.shape),
+          { kind: 'reference', name: 'undefined' },
+        ]);
+      case 'revealed':
+      case 'secret':
+      case 'volatile-time':
+        return typeExprFromRevealedQueryShape(shape.shape);
+    }
+  }
+  if (typeof shape === 'object' && shape !== null) {
+    const fields = Object.entries(shape).map(([key, value]) => {
+      const optional = isQueryShapeWrapper(value) && value.kind === 'optional';
+      return {
+        key,
+        optional,
+        type: typeExprFromRevealedQueryShape(optional ? value.shape : value),
+      };
+    });
+    if (fields.length === 0) return { kind: 'reference', name: 'Record<string, unknown>' };
+    return { fields, kind: 'object' };
+  }
+  return typeExprFromQueryShape(shape);
 }
 
 function queryShapeTypeExprField(key: string, shape: QueryShape): TypeExprField {
